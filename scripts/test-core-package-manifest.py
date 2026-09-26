@@ -69,16 +69,20 @@ class PackageNativeVariantsTest(unittest.TestCase):
                 core_package_manifest.package_scalar_link(module)
 
     def test_safe_scalars_retain_safety_and_reject_pointer_or_interruptible_calls(self):
-        def make(rep, safety):
+        def make(rep, safety, result='WordRep'):
             module = self.module([rep])
             module['packageNativeLink']['abi'][0]['safety'] = safety
             imported = module['staticForeignImports']['imports'][0]
             imported['safety'] = imported['emitted']['safety'] = safety
+            module['packageNativeLink']['abi'][0]['result'] = result
+            imported['emitted']['result'] = ['void', result]
             return module
         accepted = make('WordRep', 'safe')
         link, proved = core_package_manifest.package_scalar_link(accepted)
         self.assertEqual('safe', link['abi'][0]['safety'])
         self.assertEqual({link['abi'][0]['entry']}, proved)
+        with self.assertRaises(ValueError):
+            core_package_manifest.package_scalar_link(make('WordRep', 'safe', 'AddrRep'))
         for where in ('declaration', 'emitted'):
             altered = make('WordRep', 'safe')
             imported = altered['staticForeignImports']['imports'][0]

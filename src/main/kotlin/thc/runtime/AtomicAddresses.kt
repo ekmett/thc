@@ -53,19 +53,19 @@ internal enum class AtomicAddressOp(val primitive: String, val width: Int = 8,
 
     fun numeric(address: ManagedAddress, operand: Long = 0, replacement: Long = 0): Long {
         if (pointer) fault("Pointer atomic requires address operands")
-        if (address.nativeAllocation() != null) return address.withNativeSegment { segment ->
-            address.requireRange(0, width.toLong(), writable = this != READ)
+        if (address.hasNativeStorage()) return address.withNativeSegment { segment ->
+            address.requireByteRegion(width.toLong(), writable = this != READ)
             if (segment.address() % width != 0L) fault("Misaligned native atomic Addr#")
             native(segment, operand, replacement)
         }
         return address.withAtomicBytes(width, this != READ) { bytes, start ->
             var old = 0L
-            for (i in 0 until width) old = old or ((bytes[start + i].toLong() and 255L) shl
+            for (i in 0 until width) old = old or ((bytes.get(ValueLayout.JAVA_BYTE, start.toLong() + i).toLong() and 255L) shl
                 (8 * if (little) i else width - i - 1))
             if (this != READ) {
                 val value = update(old, operand, replacement)
-                for (i in 0 until width) bytes[start + i] =
-                    (value ushr (8 * if (little) i else width - i - 1)).toByte()
+                for (i in 0 until width) bytes.set(ValueLayout.JAVA_BYTE, start.toLong() + i,
+                    (value ushr (8 * if (little) i else width - i - 1)).toByte())
             }
             old
         }

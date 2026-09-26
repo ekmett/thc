@@ -41,17 +41,20 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
     // representation or the contract a future native-limb provider implements.
     private fun LimbRegion.preflight() {
         validate()
-        address.cbitsBacking() // Reject pointer-bearing storage before native execution.
+        address.cbitsSegment() // Reject pointer-bearing storage before native execution.
     }
     private fun LimbRegion.snapshot(scope: NativeLimbScope): NativeLimbScope.Pointer =
-        synchronized(address.cbitsOwner() ?: address.cbitsBacking()) {
+        synchronized(address.cbitsOwner() ?: address.cbitsStorageKey()) {
             address.requireRange(0, byteSize)
-            scope.snapshot(address.cbitsBacking(), address.cbitsOffset().toInt(), byteSize.toInt())
+            if (address.cbitsOwner()?.isPinned == true) scope.borrow(address, byteSize)
+            else scope.snapshot(address.cbitsBacking(), address.cbitsOffset().toInt(), byteSize.toInt())
         }
+    private fun LimbRegion.destination(scope: NativeLimbScope): NativeLimbScope.Pointer =
+        if (address.cbitsOwner()?.isPinned == true) scope.borrow(address, byteSize) else scope.allocate(byteSize)
     private fun LimbRegion.copyFrom(pointer: NativeLimbScope.Pointer) {
-        synchronized(address.cbitsOwner() ?: address.cbitsBacking()) {
+        synchronized(address.cbitsOwner() ?: address.cbitsStorageKey()) {
             requireOutput(limbs)
-            pointer.copyTo(address.cbitsBacking(), address.cbitsOffset().toInt(), byteSize.toInt())
+            if (!pointer.aliases(address)) pointer.copyTo(address.cbitsSegment(), address.cbitsOffset(), byteSize)
         }
     }
 
@@ -81,7 +84,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         exactAlias(output, left); exactAlias(output, right)
         return owned(output, left, right) { scope ->
             val first = left.snapshot(scope); val second = right.snapshot(scope)
-            val destination = scope.allocate(output.byteSize)
+            val destination = output.destination(scope)
             val result = interop.asLong(interop.execute(operation, destination, first, left.limbs, second, right.limbs))
             output.copyFrom(destination)
             result
@@ -94,7 +97,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
     private fun wordOperation(output: LimbRegion, input: LimbRegion, value: Long, operation: Any): Long {
         input.requirePositive(); output.requireOutput(input.limbs)
         return owned(output, input) { scope ->
-            val source = input.snapshot(scope); val destination = scope.allocate(output.byteSize)
+            val source = input.snapshot(scope); val destination = output.destination(scope)
             val result = interop.asLong(interop.execute(operation, destination, source, input.limbs, value))
             output.copyFrom(destination)
             result
@@ -116,7 +119,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         disjoint(output, left); disjoint(output, right)
         return owned(output, left, right) { scope ->
             val first = left.snapshot(scope); val second = right.snapshot(scope)
-            val destination = scope.allocate(output.byteSize)
+            val destination = output.destination(scope)
             val result = interop.asLong(interop.execute(multiply, destination, first, left.limbs, second, right.limbs))
             output.copyFrom(destination)
             result
@@ -134,7 +137,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         output.requireOutput(input.limbs + fractionalLimbs)
         exactAlias(output, input)
         return owned(output, input) { scope ->
-            val source = input.snapshot(scope); val destination = scope.allocate(output.byteSize)
+            val source = input.snapshot(scope); val destination = output.destination(scope)
             val result = interop.asLong(interop.execute(divideWord, destination, fractionalLimbs, source, input.limbs, divisor))
             output.copyFrom(destination)
             result
@@ -159,7 +162,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         owned(quotient, remainder, numerator, divisor) { scope ->
             val first = numerator.snapshot(scope); val second = divisor.snapshot(scope)
             normalized(divisor, second)
-            val q = scope.allocate(quotient.byteSize); val r = scope.allocate(remainder.byteSize)
+            val q = quotient.destination(scope); val r = remainder.destination(scope)
             interop.execute(divide, q, r, fractionalLimbs, first, numerator.limbs, second, divisor.limbs)
             // Both capacities were preflighted before native execution. No
             // native pointer writes into guest storage, even on bad input.
@@ -173,7 +176,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         owned(output, numerator, divisor) { scope ->
             val first = numerator.snapshot(scope); val second = divisor.snapshot(scope)
             normalized(divisor, second)
-            val destination = scope.allocate(output.byteSize); val scratch = scope.allocate(divisor.byteSize)
+            val destination = output.destination(scope); val scratch = scope.allocate(divisor.byteSize)
             interop.execute(quotient, destination, scratch, first, numerator.limbs, second, divisor.limbs)
             output.copyFrom(destination)
         }
@@ -185,7 +188,7 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         owned(output, numerator, divisor) { scope ->
             val first = numerator.snapshot(scope); val second = divisor.snapshot(scope)
             normalized(divisor, second)
-            val destination = scope.allocate(output.byteSize)
+            val destination = output.destination(scope)
             val scratch = scope.allocate((numerator.limbs - divisor.limbs + 1) * 8)
             interop.execute(remainder, destination, scratch, first, numerator.limbs, second, divisor.limbs)
             output.copyFrom(destination)

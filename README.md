@@ -91,9 +91,10 @@ current Linux configuration and cache. A file-lifecycle test also matches native
 GHC on UTF-8 reads and writes, append, seeking, EOF, caught missing-file errors,
 and shutdown flushing. Binary `hPutBuf`/`hGetBuf` tests match native GHC on
 offset buffers, short reads, EOF, and cleanup after exceptions. General file IO
-remains incomplete. [Synchronous STM/TVar transactions](docs/stm.md) work in both
-backends with buffered writes, atomic commit and real retry wakeups; asynchronous
-transaction continuations and GC deadlock detection remain explicit limits.
+remains incomplete. [STM/TVar transactions](docs/stm.md) work in both backends
+with buffered writes, atomic commit and real retry wakeups. Asynchronous
+interruption aborts the attempt and saves a fresh transaction restart;
+delimited transaction capture and GC deadlock detection remain explicit limits.
 The independent single-package `.cabal` path still excludes
 internal library and build-tool dependencies; use a `cabal.project` directory
 for the tested multi-package path. `thc build` and `thc repl` are future commands.
@@ -114,10 +115,13 @@ All prefetch hints and the three user trace primops have
 [JVM target implementations](docs/hints-and-tracing.md): hints are no-ops,
 and trace records use the context's stderr diagnostic stream.
 
-The bytecode backend also supports [asynchronous exceptions](docs/async-exceptions.md)
-between Haskell threads. An interrupted shared thunk keeps its continuation, so
-another thread can resume it without repeating completed work. Thread identities
-are Java thread IDs scoped to their THC context.
+Both backends support [asynchronous exceptions](docs/async-exceptions.md)
+between Haskell threads. Public load requests accept a Boolean `asyncExceptions`:
+`true` enables resumable delivery; when omitted, it defaults to `false` for AST
+and `true` for bytecode. AST capture covers ordinary calls, cases, lets, local
+joins, mask/catch scopes and shared-thunk updates. An interrupted shared thunk
+keeps its continuation, so another thread can resume it without repeating
+completed work. Thread identities are Java thread IDs scoped to their THC context.
 
 `forkOn#` requests best-effort CPU affinity; ordinary `fork#` clears an inherited
 pin, and capability queries report available CPU capacity rather than guest-thread

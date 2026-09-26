@@ -304,8 +304,12 @@ class PinnedAddressTest {
         }
     }
     @Test fun allocationChecksFullWidthSizeAndPowerOfTwoAlignment() {
-        for (size in listOf(0L, 1L, 16L, 129L)) for (alignment in listOf(1L, 2L, 8L, 64L, 1L shl 40, 1L shl 62))
-            assertEquals(size, PinnedMemory.allocate(size, alignment).size)
+        for (size in listOf(0L, 1L, 16L, 129L)) for (alignment in listOf(1L, 2L, 8L, 64L, 4096L)) {
+            val allocation = PinnedMemory.allocate(size, alignment)
+            assertEquals(size, allocation.size)
+            assertTrue(allocation.isPinned)
+            assertEquals(0L, allocation.nativeSegment()!!.address() and (alignment - 1))
+        }
         for (size in listOf(Long.MIN_VALUE, -1L, Int.MAX_VALUE.toLong() + 1, 1L shl 32, Long.MAX_VALUE))
             assertThrows(RuntimeFault::class.java) { PinnedMemory.allocate(size, 8) }
         for (alignment in listOf(Long.MIN_VALUE, -1L, 0L, 3L, 7L, Long.MAX_VALUE))

@@ -739,7 +739,8 @@ class Audit:
                         or symbol in core_original_foreign.SIGSET_OPERATIONS
                         or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
-                                      'getOrSetGHCConcSignalSignalHandlerStore')
+                                      'getOrSetGHCConcSignalSignalHandlerStore',
+                                      'getOrSetLibHSghcFastStringTable', 'keepCAFsForGHCi')
                         or symbol in ('shutdownHaskellAndExit', 'shutdownHaskellAndSignal', 'stg_sig_install', 'reportStackOverflow', 'reportHeapOverflow', 'errorBelch2', 'malloc', 'realloc', 'free', 'rts_setMainThread', 'rtsSupportsBoundThreads', 'rts_isThreaded', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
                                       'stg_getThreadAllocationCounterzh', 'base_strerror_r', 'memmove', 'memcpy', 'strlen', 'getProgArgv', 'setProgArgv', 'getenv', 'putenv', '__hsbase_unsetenv', '__hscore_environ', 'unlink')):
                     for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.operation(target)[2])):

@@ -6,6 +6,7 @@ import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
+import com.oracle.truffle.api.exception.AbstractTruffleException
 import java.util.concurrent.Callable
 import thc.Language
 
@@ -47,35 +48,85 @@ internal enum class STMOp(val primitive: String, val arguments: List<String>, va
     }
 }
 
+/** An aborted STM scope leaves no child continuation or mutable log behind. The
+ * enclosing backend saves a fresh invocation of the original callback scope. */
+internal class STMRestart(val request: AsyncRequest) :
+    AbstractTruffleException("Restart interrupted STM scope", null, 0, null)
+
+/** A callback yielded before writing its result. Kept distinct from synchronous
+ * exceptions so catchSTM and catchRetry cannot intercept asynchronous delivery. */
+private class STMActionSuspended(val request: AsyncRequest) :
+    AbstractTruffleException("Interrupted STM callback", null, 0, null)
+
+private fun stmRequest(marker: Any?): AsyncRequest = when (marker) {
+    is AsyncRequest -> marker
+    is ThunkSuspended -> marker.asyncRequest
+    is CallSegmentSuspended -> marker.asyncRequest
+    else -> null
+} ?: fault("STM cannot save a non-asynchronous transaction continuation")
+
+private class STMAsyncDestination(private val destination: TupleDestination) : TupleDestination(destination.shape) {
+    override fun delimitedResult(frame: VirtualFrame, node: Node): Any? = destination.delimitedResult(frame, node)
+    override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
+        val saved = savedGuestContinuation(if (result is TailYield) result.continuation else result)
+        if (saved != null) throw STMActionSuspended(stmRequest(saved.yielded))
+        destination.consume(frame, node, result)
+    }
+}
+
 /** Shared callback boundary, with a backend-native tuple destination. */
-internal class STMCall(private val operation: STMOp, destination: TupleDestination, metrics: Metrics) : Node() {
-    @Child private var force = Force(metrics)
-    @Child private var actionCall = TupleDispatch(destination, metrics, 1, false)
-    @Child private var otherCall = TupleDispatch(destination, metrics, if (operation == STMOp.CATCH) 2 else 1, false)
+internal class STMCall @JvmOverloads constructor(private val operation: STMOp, destination: TupleDestination,
+    metrics: Metrics, private val async: Boolean = false) : Node() {
+    @Child private var force = Force(metrics, async)
+    @Child private var actionCall = TupleDispatch(if (async) STMAsyncDestination(destination) else destination, metrics, 1, false)
+    @Child private var otherCall = TupleDispatch(if (async) STMAsyncDestination(destination) else destination,
+        metrics, if (operation == STMOp.CATCH) 2 else 1, false)
     fun execute(frame: VirtualFrame, action: Any?, alternative: Any?, nested: Any?) {
         val stm = Language.currentState(this).stm
-        when (operation) {
-            STMOp.ATOMICALLY -> stm.atomically(this, { throw GuestException(nested, this) }) {
-                actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+        val mask = if (async) SynchronousMasking.current(this) else null
+        val annotations = if (async) StackAnnotations.current(this) else null
+        try {
+            when (operation) {
+                STMOp.ATOMICALLY ->
+                    stm.atomically(this, { throw GuestException(nested, this) }, async) {
+                        actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                    }
+                STMOp.OR_ELSE -> stm.orElse({
+                    actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                }, {
+                    otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(Unit))
+                })
+                STMOp.CATCH -> stm.catchSTM({
+                    actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                }, { payload ->
+                    otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(payload, Unit))
+                })
+                else -> error("Not an STM callback: $operation")
             }
-            STMOp.OR_ELSE -> stm.orElse({
-                actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
-            }, {
-                otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(Unit))
-            })
-            STMOp.CATCH -> stm.catchSTM({
-                actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
-            }, { payload ->
-                otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(payload, Unit))
-            })
-            else -> error("Not an STM callback: $operation")
+        } catch (failure: Throwable) {
+            if (!async) throw failure
+            // ManagedSTM's finally has already detached this scope's log and
+            // restored its parent (if any). Do not retain the yielded child:
+            // Force follows those children before reaching an outer restart.
+            val request = when (failure) {
+                is STMRestart -> failure.request
+                is STMActionSuspended -> failure.request
+                is AsyncBlocked -> failure.request
+                is AstCapture -> stmRequest(failure.yielded)
+                is ThunkSuspended -> stmRequest(failure)
+                is CallSegmentSuspended -> stmRequest(failure)
+                else -> throw failure
+            }
+            SynchronousMasking.set(this, mask!!)
+            StackAnnotations.set(this, annotations!!)
+            throw STMRestart(request)
         }
     }
 }
 
 internal class STMExpression(private val operation: STMOp, proof: CoreRepresentation,
     @field:Children private var operands: Array<Expr>, private val shape: TupleShape?,
-    private val metrics: Metrics, @field:Child private var nested: Expr?) : Expr() {
+    private val metrics: Metrics, @field:Child private var nested: Expr?, private val async: Boolean = false) : Expr() {
     @Child @Volatile private var call: STMCall? = null
     @field:CompilationFinal(dimensions = 1) private var destinationSlots: IntArray? = null
     @CompilationFinal private var destinationOffset = -1
@@ -97,13 +148,13 @@ internal class STMExpression(private val operation: STMOp, proof: CoreRepresenta
                 CompilerDirectives.transferToInterpreterAndInvalidate()
                 atomic(Callable {
                     if (call == null) {
-                        call = insert(STMCall(operation, AstTupleDestination(checkNotNull(shape), slots, offset), metrics))
+                        call = insert(STMCall(operation, AstTupleDestination(checkNotNull(shape), slots, offset), metrics, async))
                         destinationSlots = slots; destinationOffset = offset
                     }
                 })
             }
             check(destinationSlots === slots && destinationOffset == offset)
-            call!!.execute(frame, first, second, nested?.execute(frame))
+            invoke(frame, first, second, nested?.execute(frame))
         } else {
             val stm = Language.currentState(this).stm
             val value = when (operation) {
@@ -116,5 +167,20 @@ internal class STMExpression(private val operation: STMOp, proof: CoreRepresenta
             FrameAccess.write(frame, slots[offset], value)
         }
         return null
+    }
+
+    private fun invoke(frame: VirtualFrame, action: Any?, alternative: Any?, nested: Any?) {
+        try {
+            call!!.execute(frame, action, alternative, nested)
+        } catch (restart: STMRestart) {
+            // This is deliberately a NEW capture. Resuming the abandoned child
+            // first would run transactional operations without any attempt.
+            throw AstCapture(restart.request, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                    invoke(frame, action, alternative, nested)
+                    return null
+                }
+            })
+        }
     }
 }

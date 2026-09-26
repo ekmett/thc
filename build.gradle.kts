@@ -101,10 +101,16 @@ require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "th
 val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
 application {
     mainClass.set("thc.MainKt")
-    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption)
+    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption) +
+        // The Linux standalone guest owns GHC's INT/QUIT/HUP/TERM handlers.
+        // Embedders do not inherit these launcher JVM arguments.
+        if (System.getProperty("os.name") == "Linux") listOf("-Xrs") else emptyList()
 }
 tasks.withType<Test>().configureEach {
     useJUnitPlatform()
+    // Isolated native-signal controls need a child JVM with the actual test
+    // classpath; modern Gradle workers need not use URLClassLoader.
+    doFirst { systemProperty("thc.testRuntimeClasspath", classpath.asPath) }
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
@@ -378,6 +384,22 @@ configurations[fullCoreTests.implementationConfigurationName].extendsFrom(config
 configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+
+for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRtsFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine compiler RTS declarations and unique cells against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.CompilerRtsNativeTest") }
+        inputs.files(fileTree("build/compiler-rts") { include("*.json", "*.tsv", "UniqueOracle.hs", "unique-oracle") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/compiler-rts/manifest.json").isFile) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
 tasks.register<Test>("graphWorkloadTest") {
@@ -490,7 +512,7 @@ for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "comp
         }
     }
 }
-tasks.register<Test>("stmFullCoreTest") {
+for ((taskName, dense) in listOf("stmFullCoreTest" to false, "stmDenseFullCoreTest" to true)) tasks.register<Test>(taskName) {
     group = "verification"
     description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."
     maxHeapSize = "4g"
@@ -501,6 +523,7 @@ tasks.register<Test>("stmFullCoreTest") {
     })
     useJUnitPlatform()
     filter { includeTestsMatching("thc.runtime.STMFullCoreTest") }
+    systemProperty("thc.handoffSlabs", dense.toString())
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Original STM native/first-entry evidence requires a fresh process") { true }
     doFirst {
@@ -522,6 +545,26 @@ tasks.register<Test>("packageScalarFullCoreTest") {
     doFirst {
         check(file("build/package-scalar-cbits/manifest.json").isFile) {
             "Missing scalar cbits fixture: select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- package-scalar-cbits"
+        }
+    }
+}
+for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stablePtrFfiFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests ordinary Foreign.StablePtr through genuine package-owned ccall/capi imports."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/stableptr-ffi") { include("**/*.json", "logs/*.stdout", "logs/*.stderr") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.StablePtrFfiFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native StablePtr C and compiled evidence requires a fresh process") { true }
+        doFirst {
+            check(file("build/stableptr-ffi/manifest.json").isFile) {
+                "Select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- stableptr-ffi"
+            }
         }
     }
 }

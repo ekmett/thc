@@ -49,7 +49,7 @@ import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, fini
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
-import THC.Driver.Run (RunOptions(..))
+import THC.Driver.Run (RunOptions(..), FfiMode, runtimeLaunchArguments)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes,
                          exportPinnedCore, probeTargetLayout)
@@ -72,7 +72,8 @@ data Component = Component
   }
 
 data Bundle = Bundle { bundlePath :: FilePath, bundleHash :: String
-                     , bundleModules :: [Value], bundleBuildKey :: String }
+                     , bundleModules :: [Value], bundleBuildKey :: String
+                     , bundleReexports :: [(String, String, String)] }
 
 data InstalledBundle = InstalledBundle
   { installedOwner :: String, installedBundle :: Bundle }
@@ -144,7 +145,7 @@ runProject opts target = do
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runArguments opts)
+                    source registeredLibrary (runFfiMode opts) (runArguments opts)
 
 -- Resolve the actual selected compiler's companion before Cabal sees the
 -- forwarding wrapper. The wrapper directory is not a GHC installation.
@@ -178,9 +179,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Maybe FfiMode -> [String] -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary ffiMode guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -293,6 +294,14 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
           (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
           (Map.lookup (unitId unit) globalBundles)
         else pure (installedBundle . snd <$> Map.lookup (unitId unit) installed)
+    forM_ (maybe [] bundleReexports bundle) $ \(_, provider, name) -> do
+      dependencies <- dependencyClosure byId (unitId unit)
+      let owner = maybe provider (installedOwner . snd) (Map.lookup provider installed)
+          exported = [moduleName | record <- acc, jsonField record "id" == Just owner,
+            moduleRef <- maybe [] id (jsonField record "modules" :: Maybe [Value]),
+            Just moduleName <- [jsonField moduleRef "name" :: Maybe String]]
+      require (provider `elem` map unitId dependencies && name `elem` exported)
+        ("missing concrete store reexport provider " ++ provider ++ ":" ++ name ++ " for " ++ unitId unit)
     let modules = maybe [] bundleModules bundle
         fields = ["id" .= unitId unit, "depends" .= unitDepends unit, "modules" .= modules] ++
                  maybe [] (\item -> ["bundle" .= object ["path" .= bundlePath item,
@@ -321,9 +330,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   -- Full-Core main and shutdown share one program and its Handle CAFs.
   -- Execute relative paths from the Cabal project just as the native binary does.
   let programName = reverse (takeWhile (/= ':') (reverse executable))
-  runCommand False runtime ((if lifecycle
+  runCommand False runtime (runtimeLaunchArguments ffiMode (if lifecycle
       then ["--run-executable", '@' : manifest, entry, shutdown]
-      else ["--run-io", '@' : manifest, entry]) ++ ["--", programName] ++ guestArguments) project
+      else ["--run-io", '@' : manifest, entry]) programName guestArguments) project
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do
@@ -534,7 +543,7 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
                  ("inplace-manifest.json", receiptBytes) : members))
               -- Keep an existing file intact until the complete replacement is ready.
               atomicBytes destination (BL.toStrict archive)
-              pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey))
+              pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
               `finally` removePathForcibly temporary
       let result = InstalledBundle unit bundle
       remember result inputs modules
@@ -663,7 +672,7 @@ wiredGhcInternal context thcRoot = do
             (("manifest.json", BL.toStrict (encode inner)) :
              ("inplace-manifest.json", inputsBytes) : members))
           atomicBytes destination (BL.toStrict archive)
-          pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey))
+          pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
           `finally` cleanup
   pure (object ["id" .= unit, "depends" .= ([] :: [String]),
                 "modules" .= bundleModules bundle,
@@ -861,9 +870,9 @@ packGlobalBundle store capture unit buildKey exportKey destination = do
     bytes <- case registrations of
       [path] -> BS.readFile path
       _ -> fail ("isolated Cabal store lacks a unique registration for " ++ unitId unit)
-    require (emptyRegistration (unitId unit) (unitDepends unit) bytes)
-      ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)
-    pure ["emptyRegistration" .= Text.decodeUtf8 bytes]
+    reexports <- maybe (fail ("Cabal store build did not export Core for nonempty unit " ++ unitId unit)) pure
+      (modulelessRegistration (unitId unit) (unitDepends unit) bytes)
+    pure [(if null reexports then "emptyRegistration" else "reexportRegistration") .= Text.decodeUtf8 bytes]
   checked <- forM exported $ \path -> do
     value <- readJson path
     foundUnit <- field value "unit"
@@ -898,9 +907,16 @@ readGlobalBundle path unit dependencies buildKey exportKey = do
     raw <- lookup "manifest.json" entries
     inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
     modules <- jsonField inner "modules" :: Maybe [Value]
-    let validInventory = case jsonField inner "emptyRegistration" :: Maybe Text.Text of
-          Nothing -> not (null modules)
-          Just receipt -> null modules && emptyRegistration unit dependencies (Text.encodeUtf8 receipt)
+    let emptyReceipt = jsonField inner "emptyRegistration" :: Maybe Text.Text
+        reexportReceipt = jsonField inner "reexportRegistration" :: Maybe Text.Text
+    reexports <- case reexportReceipt of
+      Nothing -> Just []
+      Just receipt -> modulelessRegistration unit dependencies (Text.encodeUtf8 receipt)
+    let validInventory = case (emptyReceipt, reexportReceipt) of
+          (Nothing, Nothing) -> not (null modules)
+          (Just receipt, Nothing) -> null modules && emptyRegistration unit dependencies (Text.encodeUtf8 receipt)
+          (Nothing, Just _) -> null modules && not (null reexports)
+          _ -> False
         names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
         paths = [member | Just member <- map (`jsonField` "path") modules :: [Maybe String]]
         validModule item = do
@@ -924,7 +940,7 @@ readGlobalBundle path unit dependencies buildKey exportKey = do
         length paths == length modules && length names == length (nub names) &&
         sort (map fst entries) == sort ("manifest.json" : paths) &&
         all (== Just True) (map validModule modules))
-      then Just (Bundle path (shaHex bytes) modules buildKey)
+      then Just (Bundle path (shaHex bytes) modules buildKey reexports)
       else Nothing
 
 exportUnit :: ExportContext -> [FilePath] -> Map.Map String String -> Unit -> IO Bundle
@@ -1086,7 +1102,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     archive <- either fail pure (encodeZip
       (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
     atomicBytes destination (BL.toStrict archive)
-    pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)) `finally` cleanup
+    pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
 
 -- Source late-plugin JSON has no typed annotations. Recover the exact emitted
 -- full-Core interfaces through the selected GHC helper and Cabal's actual
@@ -1173,7 +1189,7 @@ readBundle receipt path unit buildKey exportKey buildInputs expected = do
         length names == length (nub names) && sort names == expected &&
         sort (map fst entries) == sort ("manifest.json" : inputPath : paths) &&
         all (== Just True) (map validModule modules))
-      then Just (Bundle path (shaHex bytes) modules buildKey)
+      then Just (Bundle path (shaHex bytes) modules buildKey [])
       else Nothing
 
 validTargetLayout :: Value -> Bool

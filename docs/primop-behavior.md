@@ -28,8 +28,8 @@ test commands.
 | `spark#` | Discards the hint and returns the identical, unforced payload. |
 | `numSparks#` | Always returns `0`; there is no spark queue. |
 | `getSpark#` | Always returns failure flag `0` and the pinned GHC boxed `False` filler; no work is dequeued. |
-| `fork#` | Creates a real Java platform thread rather than a lightweight GHC scheduler thread. Thread creation must be allowed by the embedding. Attempts to clear inherited CPU affinity to the context baseline. Ordinary AST children do not support externally delivered asynchronous exceptions; see `killThread#` below. |
-| `forkOn#` | Same thread and AST restrictions as `fork#`. Chooses a dense logical capability modulo the context's snapshotted CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
+| `fork#` | Creates a real Java platform thread rather than a lightweight GHC scheduler thread. Thread creation must be allowed by the embedding. Attempts to clear inherited CPU affinity to the context baseline. Resumable external delivery requires `asyncExceptions: true`; see `killThread#` below. |
+| `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's snapshotted CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
 | `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and host carriers between guest invocations can appear; ordering is unspecified. |
 | `isCurrentThreadBound#` | Always returns `0`. Platform threads and CPU affinity do not provide GHC's bound-thread/foreign-TLS contract. |
@@ -60,6 +60,12 @@ Details: [scheduling and affinity](thread-scheduling.md),
 
 ## Exceptions, blocking and transactions
 
+Public load requests accept a Boolean `asyncExceptions`. When omitted, it
+defaults to `false` for AST and `true` for bytecode. Enabling it supports ordinary
+AST calls, cases, lets, local joins, mask/catch scopes and shared-thunk updates
+across asynchronous suspension. The representation and composition limits below
+still apply.
+
 | Primop | Current behavior and consequence |
 | --- | --- |
 | `catch#` | Supports lifted boxed action results, but rejects valid single-word unboxed results such as `Int#`, `Word#` or `Addr#`. This is separate from the asynchronous-delivery restrictions below. |
@@ -67,16 +73,16 @@ Details: [scheduling and affinity](thread-scheduling.md),
 | `maskAsyncExceptions#` | Implements interruptible masking/restoration, but action results must be lifted boxed; valid single-word unboxed results reject. |
 | `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same lifted-boxed result restriction. |
 | `unmaskAsyncExceptions#` | Implements unmasking/restoration, with the same lifted-boxed result restriction. |
-| `killThread#` | Ordinary AST callers support self-delivery but reject external sends before enqueueing. Ordinary AST children also reject external delivery from other backends. General resumable delivery uses bytecode saved guest continuations; the restricted captured-AST route is not general AST support. Arbitrary Java/native foreign frames do not gain resumable interruption. Sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
+| `killThread#` | With `asyncExceptions: true`, both backends support `throwTo` through saved guest continuations. With `false`, AST supports self-delivery but rejects external sends and delivery; bytecode rejects `killThread#` during lowering, including self-delivery. Arbitrary Java/native foreign frames do not gain resumable interruption. Sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
 | `takeMVar#` | Blocking transfers and supported interruption work, but no GC-driven `BlockedIndefinitelyOnMVar` detection. A wait with no future producer needs supported interruption or embedding cancellation to end. |
 | `putMVar#` | Same missing deadlock exception for a blocked put; FIFO handoff and cancellation-before-commit are implemented. |
 | `readMVar#` | Same missing deadlock exception for a blocked read; reader broadcast is implemented. |
-| `atomically#` | Synchronous transactions work. Transaction frames cannot travel with saved asynchronous/delimited continuations: resumable bytecode async/checkpoint mode and captured AST lowering reject them. |
-| `retry#` | Same transaction-continuation restriction. No GC-driven `BlockedIndefinitelyOnSTM`: retries with no possible future wakeup, including empty read sets, wait until cancellation/disposal. |
-| `catchRetry#` | Synchronous alternative/rollback behavior works; transaction-continuation restriction above applies. |
-| `catchSTM#` | Synchronous catch/rollback behavior works; transaction-continuation restriction above applies. |
-| `readTVar#` | Validated transactional reads work; transaction-continuation restriction above applies. |
-| `writeTVar#` | Buffered writes and atomic commit work; transaction-continuation restriction above applies. |
+| `atomically#` | Async interruption aborts the attempt. An abandoned shared thunk restarts the original action under a fresh carrier-local transaction; it does not restore an old log. Explicit checkpoint/delimited capture across transactions remains unsupported. |
+| `retry#` | Async delivery cancels the wait before leaving the attempt. No GC-driven `BlockedIndefinitelyOnSTM`: retries with no possible future wakeup, including empty read sets, wait until cancellation/disposal. |
+| `catchRetry#` | A retry rolls back the failed branch and runs the alternative. Async delivery aborts nested state and continues outward without running that alternative. Explicit checkpoint/delimited capture remains unsupported. |
+| `catchSTM#` | Catches synchronous Haskell exceptions with nested rollback. Async delivery aborts nested state and continues outward without invoking this handler. Explicit checkpoint/delimited capture remains unsupported. |
+| `readTVar#` | Validated reads belong to the current attempt, not to saved continuation state. Explicit checkpoint/delimited capture remains unsupported. |
+| `writeTVar#` | Writes remain private until atomic commit and are discarded on async abort. Explicit checkpoint/delimited capture remains unsupported. |
 | `raiseDivZero#` | Raises the original GHC exception closure for scalar and concrete tuple bottom results; direct vector and unboxed-sum results are rejected. |
 | `raiseOverflow#` | Same result-shape restriction, with the original overflow exception. |
 | `raiseUnderflow#` | Same result-shape restriction, with the original underflow exception. |
@@ -115,21 +121,22 @@ addresses; byte reinterpretation and foreign exposure therefore have limits.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `addr2Int#` | Returns real native/numeric bits. Immutable literals and pointer-free immutable images may acquire an owned native image when native access is enabled. Mutable managed storage and opaque stable/heap handles cannot be projected numerically. Integer values do not root the allocation. |
-| `int2Addr#` | Preserves machine bits, including null. Recovers registered immutable native-image aliases; otherwise returns an opaque numeric address. In particular, converting an owned malloc address to an integer and back does not itself recover dereferenceability. |
+| `addr2Int#` | Returns real native/numeric bits. Explicitly pinned arrays expose their original native allocation without copying; static literals may materialize a read-only native image and StablePtr handles may acquire persistent opaque native identities. Moving heap arrays reject projection even after unsafe freeze. Native authority is required; integer values do not root allocations or extend StablePtr lifetime after free. |
+| `int2Addr#` | Preserves machine bits, including null. Recovers registered pinned-array and literal-image aliases and exact live current-context StablePtr identities; otherwise returns an opaque numeric address. Converting an owned malloc address to an integer and back does not itself recover dereferenceability. |
+| `makeStablePtr#`, `deRefStablePtr#`, `eqStablePtr#` | Context-owned roots preserve lazy referents and live identity. Ordinary unsafe C imports can retain and return an opaque native identity; `freeStablePtr` or disposal releases it. Tokens expose no guest byte storage or native GHC closure ABI; safe calls and callback re-entry remain separate work. |
 | `minusAddr#` | Managed addresses can be subtracted only within the same backing allocation. Native/numeric addresses retain machine-word subtraction; unrelated managed allocations have no synthetic numeric separation. |
 | `remAddr#` | Uses unsigned remainder of the allocation-relative byte offset for managed addresses, real address bits for native/numeric addresses. It is not a physical-address alignment query for managed storage. |
 | `ltAddr#`, `leAddr#`, `gtAddr#`, `geAddr#` | Order aliases within one managed allocation, or compare numeric/native bits. Unrelated managed allocations do not acquire a fabricated total address order. |
-| `newPinnedByteArray#` | Supplies a stable managed address guarantee, not a physical JVM heap pin or an automatically usable C pointer. |
-| `newAlignedPinnedByteArray#` | Same managed guarantee; power-of-two alignment is logical, not a promise of a physically aligned native allocation. |
+| `newPinnedByteArray#` | Allocates real stable native storage from creation, reclaimed with its last live owner/view. No copy-to-pin or per-call repinning. Ordinary `newByteArray#` remains moving heap storage. |
+| `newAlignedPinnedByteArray#` | Same native storage guarantee with actual requested power-of-two alignment. |
 | `byteArrayContents#` | Returns an alias retaining its backing storage, not an unconditional raw native address. Native projection has the `addr2Int#` restrictions above. |
-| `mutableByteArrayContents#` | Returns a stable managed alias without copying. It cannot be projected to raw native bits just because the array is pinned. |
-| `isByteArrayPinned#`, `isMutableByteArrayPinned#` | Report explicit managed pinning. Do not emulate GHC large-object or compact-region automatic pinning policy. |
+| `mutableByteArrayContents#` | Returns an alias without copying or pinning; explicitly pinned backing has a real stable native address, moving heap backing does not. |
+| `isByteArrayPinned#`, `isMutableByteArrayPinned#` | Report explicit native-backed pinning. Do not emulate GHC large-object or compact-region automatic pinning policy. |
 | `isByteArrayWeaklyPinned#`, `isMutableByteArrayWeaklyPinned#` | Currently report the same explicit pinning flag as the strong queries; no separate GHC weak-pinning allocation policy. |
 | `anyToAddr#` | Returns a weak opaque heap-identity handle. Equality/roundtrip work, but raw bytes, native projection and general pointer arithmetic do not. The caller must keep the evaluated referent alive, as required by GHC. |
 | `addrToAny#` | Recovers a live context-owned heap handle, not an arbitrary GHC heap object at native address bits. |
 | `shrinkMutableByteArray#` | Shrinks logical size in place and preserves aliases, but retains backing capacity. Partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place. |
-| `resizeMutableByteArray#` | Copies the retained prefix into a replacement owner, preserving pinning. Partial truncation of a managed pointer cell is rejected. No extra promise about old aliases beyond GHC's contract. |
+| `resizeMutableByteArray#` | Shrinks in place without copying; growth copies the prefix into a new **unpinned** heap allocation. Partial truncation of a managed pointer cell is rejected. No extra promise about old aliases beyond GHC's contract. |
 
 The following names spell out the pointer-cell boundary; they are not missing
 implementations of numeric reads/writes or atomics.
@@ -139,13 +146,13 @@ implementations of numeric reads/writes or atomics.
 | `indexAddrArray#`, `readAddrArray#`, `writeAddrArray#`, `indexWord8ArrayAsAddr#`, `readWord8ArrayAsAddr#`, `writeWord8ArrayAsAddr#` | Managed pointer cells require allocation-owned storage, not a raw host `byte[]`. Whole-cell copies preserve references; numeric reads/partial overwrites of those cells reject. A raw/Sulong buffer exposure prevents later managed pointer-cell writes. Disjoint numeric fields remain usable. |
 | `indexStablePtrArray#`, `readStablePtrArray#`, `writeStablePtrArray#`, `indexWord8ArrayAsStablePtr#`, `readWord8ArrayAsStablePtr#`, `writeWord8ArrayAsStablePtr#` | Same cell restrictions, retaining opaque stable-pointer handles. Storing a handle does not extend the stable-pointer registry lifetime after explicit release. |
 | `indexAddrOffAddr#`, `readAddrOffAddr#`, `writeAddrOffAddr#`, `indexWord8OffAddrAsAddr#`, `readWord8OffAddrAsAddr#`, `writeWord8OffAddrAsAddr#` | Managed storage uses the cell rules above. Live owned native storage can contain real address bits, but native stores reject mutable-managed/opaque handle values with no native projection. Unknown read bits remain opaque numeric addresses. |
-| `indexStablePtrOffAddr#`, `readStablePtrOffAddr#`, `writeStablePtrOffAddr#`, `indexWord8OffAddrAsStablePtr#`, `readWord8OffAddrAsStablePtr#`, `writeWord8OffAddrAsStablePtr#` | Live stable-pointer values are opaque managed handles without raw native bits; native stable-pointer cell interchange is unsupported. Managed cells work. |
-| `atomicExchangeAddrAddr#`, `atomicCasAddrAddr#` | Managed cells retain/compare pointer identities; owned native storage requires real bits. Mutable-managed pointers and opaque stable-pointer handles cannot be stored as native bits. |
+| `indexStablePtrOffAddr#`, `readStablePtrOffAddr#`, `writeStablePtrOffAddr#`, `indexWord8OffAddrAsStablePtr#`, `readWord8OffAddrAsStablePtr#`, `writeWord8OffAddrAsStablePtr#` | Managed cells retain handles; owned native cells store opaque native identities and recover exact live handles in the current context. Neither a cell nor a C copy extends lifetime after `freeStablePtr`. Tokens remain non-byte-addressable and are not native GHC heap addresses. |
+| `atomicExchangeAddrAddr#`, `atomicCasAddrAddr#` | Managed cells retain/compare pointer identities; owned native storage requires real bits, including pinned storage addresses and opaque live StablePtr identities. Moving heap pointers cannot be stored as native bits. |
 | `atomicCasWord8Addr#`, `atomicCasWord16Addr#`, `atomicCasWord32Addr#` | Managed storage works; owned-native narrow CAS requires the packaged Linux x86_64 helper. This is a native-path platform restriction, not a lack of managed atomic semantics. |
 
 `newArray#`, `newSmallArray#`, `newByteArray#`, `newPinnedByteArray#`,
-`newAlignedPinnedByteArray#`, and `resizeMutableByteArray#` use Int-indexable JVM
-backing storage: requested lengths cannot exceed `Int.MAX_VALUE`, with actual
+`newAlignedPinnedByteArray#`, and `resizeMutableByteArray#` retain Int-indexable
+buffer bounds: requested lengths cannot exceed `Int.MAX_VALUE`, with actual
 allocation limits lower. This is a target allocation limit, not a 64-bit
 arithmetic limitation. Atomic implementations using locks/full fences are
 implementations, not semantic gaps merely because they are not lock-free.
@@ -182,7 +189,7 @@ Details: [compact regions and serialization](compact-regions.md),
 | `prompt#` | Synchronous reusable/multi-shot IO continuations work. Capturing applications with unboxed tuple/vector inputs and composing delimited capture with one-shot asynchronous suspension are not yet established. |
 | `control0#` | Same supported control slice and composition/input restrictions as `prompt#`; saved frames share heap effects rather than rolling them back. |
 | `annotateStack#` | Real lazy annotations follow dynamic stack extent and supported saved continuations. Snapshots are managed metadata, not raw GHC `ANN_FRAME` memory. Mixed async/delimited composition has the restriction above. |
-| `keepAlive#` | Retains the reference through actual completion (including supported bytecode suspension), then issues a reachability fence. Direct vector continuation results reject; scalar, tuple and supported sum results work. This boundary is not by itself a GHC parity defect: GHC's continuation-style primops also restrict callback results to one machine word despite their polymorphic signatures. |
+| `keepAlive#` | Retains the reference through actual completion, including supported AST and bytecode suspension, with reachability fences on ordinary and exceptional exits. Direct vector continuation results reject; scalar, tuple and supported sum results work. This boundary is not by itself a GHC parity defect: GHC's continuation-style primops also restrict callback results to one machine word despite their polymorphic signatures. |
 | `closureSize#` | Returns the size of THC's detached 64-bit-word closure image, not measured JVM allocation size or GHC RTS layout size. |
 | `unpackClosure#` | Returns a detached THC word image plus separate lazy pointer fields. Pointer words in the byte image are zero; the info address identifies a THC descriptor, not a native GHC info table. Opaque host values have a one-word image. |
 | `getApStackVal#` | Always reports non-`AP_STACK`: flag `0` and the original argument. Private THC continuation records are not exposed as GHC `AP_STACK` closures. |
@@ -265,6 +272,13 @@ bound `forkOS`/foreign TLS, general native RTS memory/stack decoding, arbitrary
 FFI callbacks and full GHC eventlog/profiling services are separate runtime work.
 The original allocation-counter getter reports the same target bytes as the
 setter primops above. Context disposal is not GHC shutdown-finalizer execution.
+Compiler-library shared FastStrings, CAF retention and unique-counter data cells
+are documented separately in [compiler RTS services](compiler-rts.md); their
+support does not imply a native GHC object loader or complete GHC API coverage.
+Original `stg_sig_install` supports GHC's INT/QUIT/HUP/TERM handlers in the
+Linux x86_64 bytecode launcher with `-Xrs`; other signals, non-null masks, AST
+delivery and ordinary embedding contexts remain outside that service. See
+[process signal ownership and JVM consequences](process-signals.md).
 
 Core transport also has restrictions independent of any one primop: see the
 [coverage guide](README.md#tuples-and-sums) for aggregate inputs/captures and the

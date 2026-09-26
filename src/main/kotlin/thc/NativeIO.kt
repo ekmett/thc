@@ -21,6 +21,6 @@ object NativeIO {
     internal fun supportedHost(): Boolean = System.getProperty("os.name") == "Linux" &&
         System.getProperty("os.arch") in setOf("amd64", "x86_64")
 
-    internal fun commandLineContext(): Context =
-        NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.LAUNCHER)
+    internal fun commandLineContext(ffiMode: FfiMode): Context =
+        NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.LAUNCHER, ffiMode)
 }

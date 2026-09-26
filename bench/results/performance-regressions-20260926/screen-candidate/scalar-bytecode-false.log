@@ -1,0 +1,43 @@
+WARNING: Using incubator modules: jdk.incubator.vector
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+{"phase":"context","elapsedNs":182294885,"callingThreadAllocatedBytes":17622776,"heapUsedBytes":27262976,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"phase":"load","elapsedNs":299791649,"callingThreadAllocatedBytes":48089976,"heapUsedBytes":11559944,"gcCount":6,"gcTimeMs":8,"failure":null}
+{"phase":"firstResult","elapsedNs":61355574,"callingThreadAllocatedBytes":1577584,"heapUsedBytes":8033808,"gcCount":3,"gcTimeMs":3,"failure":null}
+[To redirect Truffle log output to a file use one of the following options:
+* '--log.file=<path>' if the option is passed using a guest language launcher.
+* '-Dpolyglot.log.file=<path>' if the option is passed using the host Java launcher.
+* Configure logging using the polyglot embedding API.]
+[engine] opt done   engine=1  id=3     lambda x, acc                                      |Tier 2|Time   134( 122+12  )ms|AST    2|Inlined   0Y   0N|IR    262/  1048|CodeSize    5474|Addr 0x7d2ad62c3180|CompId 2627   |UTC 2026-09-26T15:40:47.156|Src examples/THC/Fixtures.hs:17 0x22caa2fa
+{"phase":"training200","elapsedNs":197880432,"callingThreadAllocatedBytes":4154832,"heapUsedBytes":14325264,"gcCount":0,"gcTimeMs":0,"failure":null}
+[engine] opt done   engine=1  id=4     lambda n                                           |Tier 2|Time   113(  93+20  )ms|AST    2|Inlined   1Y   0N|IR    457/  1434|CodeSize    6377|Addr 0x7d2ad62d7a80|CompId 2875   |UTC 2026-09-26T15:40:47.287|Src examples/THC/Fixtures.hs:16 0x22caa2fa
+[engine] opt done   engine=1  id=6     EntryRoot@3e2b8492                                 |Tier 2|Time    40(  19+21  )ms|AST   21|Inlined   2Y   0N|IR    482/  1573|CodeSize    6546|Addr 0x7d2ad62d9d00|CompId 2879   |UTC 2026-09-26T15:40:47.329|Src n/a
+{"phase":"compile","elapsedNs":164660835,"callingThreadAllocatedBytes":357320,"heapUsedBytes":14325264,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"phase":"firstCompiledResult","elapsedNs":93977,"callingThreadAllocatedBytes":896,"heapUsedBytes":14325264,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"backend":"bytecode","bytecodeRootCount":3,"sourceNotesEnabled":true,"sourceSpanCount":343,"sourceRootCount":2,"localJoinCount":0,"localJoinTransfers":0,"instrumented":true,"thunkEvaluationsByLabel":{},"compiledEntries":201,"leadingCaseReturns":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":2,"indirectCalls":0,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"context-owned Java threads; resumable asynchronous delivery"}
+{"phase":"close","elapsedNs":1923479,"callingThreadAllocatedBytes":183680,"heapUsedBytes":14325264,"gcCount":0,"gcTimeMs":0,"failure":null}
+	Command being timed: "/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -Xmx4g -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true -cp build/performance-regressions/candidate/lib/*:build/performance-regressions/candidate/thc-tools.jar thc.PhaseProbeKt build/core/THC.Prim.json,build/core/THC.Fixtures.json sumLoop 10000 50005000"
+	User time (seconds): 2.29
+	System time (seconds): 0.17
+	Percent of CPU this job got: 245%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:01.00
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 395148
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 111078
+	Voluntary context switches: 13356
+	Involuntary context switches: 80
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 96
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

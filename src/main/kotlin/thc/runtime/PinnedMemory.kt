@@ -4,16 +4,15 @@
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import java.lang.foreign.ValueLayout
 
-/** Managed allocation addresses, not physical JVM heap or native process pointers. */
+/** Explicit pinning allocates stable, aligned native storage exactly once. */
 internal object PinnedMemory {
-    @JvmStatic fun allocate(size: Long, alignment: Long): ManagedAllocation {
-        // A managed allocation's base is aligned in its own address space. No
-        // address-to-integer/native-pointer operation is provided by this slice.
+    @JvmStatic @TruffleBoundary fun allocate(size: Long, alignment: Long): ManagedAllocation {
         if (alignment <= 0 || alignment and (alignment - 1) != 0L)
             fault("Pinned ByteArray# alignment must be a positive power of two")
-        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt(), pinned = true)
+        return ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt(), pinned = true, alignment = alignment)
     }
 
     private fun pointerArray(value: Any?): ManagedAllocation = value as? ManagedAllocation

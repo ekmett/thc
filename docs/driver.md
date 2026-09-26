@@ -25,6 +25,33 @@ Embedded callers can still read the `diagnostics` member directly. This output
 setting does not change instrumentation, strict admission, or shutdown behavior.
 The low-level integer-kernel launcher retains its diagnostic report.
 
+The driver and JVM launcher accept `--ffi native` or `--ffi managed`. Native is
+the default and preserves the current Sulong execution with native-library
+access; C bitcode still runs through Sulong. Managed execution is **not supported
+by the tested distribution**. The pinned `llvm-community` 25.3.4.1 runtime has no
+`llvm.managed` option. A managed request fails with that exact reason before
+native providers initialize or an entry executes. If another LLVM installation
+exposes the option, THC instead reports its remaining provider/artifact
+incompatibility: native file/GMP libraries and the packaged bitcode have not
+been ported and verified for managed execution. There is no native fallback.
+
+[GraalVM's LLVM options](https://www.graalvm.org/jdk25.4/reference-manual/llvm/Options/)
+describe managed availability and its potentially different LLVM toolchain.
+This selector does not claim managed execution merely because a guest buffer
+has a managed interop view, and it does not introduce another allocation arena.
+
+This is a runtime-only option on both the single-package and project paths: it
+does not change GHC flags, Core export, native build settings, or cache identities.
+When the option is omitted, the driver passes no override. The launcher selects
+the explicit option first, then `-Dthc.ffiMode`, then `THC_FFI_MODE`, then native.
+Values are exactly `native` or `managed`; malformed values fail. Selection is
+local to each launch and does not modify environment variables or JVM properties.
+The `executionContext` embedding factory follows the same property/environment
+defaults; the explicit `NativeIO` factory retains its native policy. Put a guest's
+own `--ffi` argument after the literal `--`, where it is preserved without
+interpretation. The low-level JVM launcher accepts this selector before its
+entry command and also supports `--ffi=native` / `--ffi=managed`.
+
 Pass guest command-line arguments after a literal `--`:
 
 ```sh
@@ -61,6 +88,99 @@ actual guest execution and reporting original-package closure blockers.
 `array` freeze/thaw and `bytestring` CString paths exposed by these applications,
 using the same full-Core environment and backend/startup distinction above.
 
+## Run real applications
+
+The following Linux x86_64 examples run the original **Happy 2.2.1** parser
+generator and **HsColour 1.25** highlighter inside THC. Their generated files
+have been compared byte-for-byte with native GHC in both backends and both
+handoff modes. These command lines select bytecode, which runs the complete
+executable startup/shutdown. The AST checks use the original raw `Main.main`
+instead; they are not a general executable-lifecycle claim. See the
+[application results and pinned source hashes](../examples/standard-apps/README.md).
+
+Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
+and matching `ghc-pkg` on `PATH`. Set `GHC_SOURCE` to its matching configured
+source tree as described in [GHC library Core](ghc-core.md). These are ordinary
+project-directory runs; the default partial installed-library provider is not
+enough for these programs.
+
+```sh
+export THC_ROOT="$PWD"
+export GHC="$(command -v ghc)"
+export GHC_PKG="$(command -v ghc-pkg)"
+export GHC_SOURCE=/absolute/path/to/configured/ghc-9.14.1
+THC_DRIVER=$(cabal list-bin exe:thc)
+THC_APPS="$THC_ROOT/build/real-programs"
+THC_OUTPUT="$THC_APPS/output"
+mkdir -p "$THC_OUTPUT"
+
+cabal get happy-2.2.1 happy-lib-2.2.1 hscolour-1.25 \
+  --index-state=2026-09-24T12:38:18Z --destdir="$THC_APPS"
+for package in happy-2.2.1 hscolour-1.25; do
+  printf '%s\n' 'packages: .' 'tests: False' 'benchmarks: False' \
+    'index-state: 2026-09-24T12:38:18Z' > "$THC_APPS/$package/cabal.project"
+done
+```
+
+Run that source preparation once in a fresh directory; keep the downloaded
+licenses and the generated build/cache directories for subsequent runs.
+
+### Happy: generate a parser
+
+Point Happy at its original packaged templates, then run its real command line:
+
+```sh
+export happy_lib_datadir="$THC_APPS/happy-lib-2.2.1/data"
+THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/happy-2.2.1" \
+  --exe happy --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/happy-guest" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --installed-core required --ghc-source "$GHC_SOURCE" -- \
+  -o "$THC_OUTPUT/Parser.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+
+"$GHC" -O1 -outputdir "$THC_OUTPUT/parser-objects" \
+  "$THC_OUTPUT/Parser.hs" -o "$THC_OUTPUT/parser"
+"$THC_OUTPUT/parser"
+```
+
+The parser prints `3`. Happy itself runs in THC; the last two commands use
+native GHC to compile and run the Haskell source Happy generated. To check its
+version, use the same `thc run` command with `-- --version` as its suffix.
+
+Once acquired, its exact Core manifest can also be launched directly without
+invoking Cabal or the exporter again:
+
+```sh
+THC_BACKEND=bytecode "$THC_ROOT/build/install/thc/bin/thc" \
+  --run-executable "@$THC_APPS/happy-guest/packages.json" \
+  main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
+  happy -o "$THC_OUTPUT/Parser-again.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+```
+
+Keep `happy_lib_datadir` set and retain the manifest's referenced Core bundles.
+
+### HsColour: generate HTML
+
+HsColour needs the checked metadata-only patch listing its existing home
+modules. Apply it to the freshly unpacked copy; no Haskell source is changed:
+
+```sh
+(cd "$THC_APPS/hscolour-1.25" && \
+  git apply "$THC_ROOT/examples/standard-apps/hscolour-1.25-home-modules.patch")
+THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/hscolour-1.25" \
+  --exe HsColour --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/hscolour-guest" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --installed-core required --ghc-source "$GHC_SOURCE" -- \
+  -html "-o$THC_OUTPUT/TinyMath.html" "$THC_ROOT/examples/standard-apps/TinyMath.hs"
+```
+
+Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
+An unchanged HsColour package still has the declared-module inventory limitation;
+the patch is explicit, not an automatic source rewrite by THC.
+
+Doctest and Pandoc remain development targets, not demonstrated runnable commands
+here. Native baselines, strict Core admission and actual THC execution are
+reported separately in the application notes.
+
 ## Build and exercise
 
 Use GHC 9.14.1 with its bundled Cabal/Cabal-syntax 3.16. The API bounds are narrow
@@ -88,6 +208,19 @@ cabal run thc -- run test/fixtures/run-pure/run-pure.cabal \
   --exe completed --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 cabal test driver-tests --test-show-details=direct
 ```
+
+The runtime-selection parser and argument-forwarding checks can run without
+building or exporting the application fixtures:
+
+```sh
+cabal test driver-tests --test-options=--run-options-only --test-show-details=direct
+```
+
+After `./gradlew installDist`, `--test-options=--run-ffi-only` also runs the
+ordinary single-package fixture through both backends with explicit native
+selection and checks that a managed request fails without guest output.
+The JVM `FfiModeTest` and `LauncherDiagnosticsTest` cover both IO entry protocols,
+mode precedence, unchanged guest arguments, and rejection before entry loading.
 
 `run` requires a real Cabal executable and its `Main.main :: IO ()`. It builds
 an explicit `.cabal` component with Cabal's own `LocalBuildInfo`, then invokes
@@ -172,6 +305,17 @@ The empty Core bundle retains the complete registration, including native librar
 metadata, and revalidates it on cache reads. Referenced foreign calls still pass
 the normal strict audit. A missing capture for a library with Haskell modules
 still fails; no replacement Core is invented.
+
+A reexport-only store library, such as the top-level `happy-lib` component,
+also owns no Core. Its bundle retains the original registration separately as
+`reexportRegistration`. The driver accepts only definite reexports, preserves
+their exposed names and original provider unit/module identities, and checks
+each provider against the resolved dependency closure and captured module
+inventory before writing the executable manifest. Renaming an exposed module
+does not rename or synthesize its provider's Core. Hidden or ordinary owned
+modules still require actual exports. `cabal test driver-tests
+--test-options=--store-inventory-only --test-show-details=direct` exercises empty,
+C-only and renamed-reexport store dependencies, both backends, and cache reuse.
 
 This is a bounded executable path. Native code remains necessary for Template
 Haskell and build tools. THC still rejects unsupported runtime dependencies;

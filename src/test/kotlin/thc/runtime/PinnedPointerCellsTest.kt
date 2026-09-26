@@ -5,6 +5,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -54,6 +55,16 @@ class PinnedPointerCellsTest {
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
+    private fun compile(target: RootCallTarget) {
+        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        valid(target, "installed target")
+        // Match EntryValue.compile: restore the shared entry stub without
+        // executing a settling guest call or replacing invalid target code.
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+            .invoke(runtime, target)
+        valid(target, "restored entry boundary")
+    }
     private fun released(language: Language) {
         val pools = language.handoffState.get()
         assertEquals(0, pools.arguments.depth); assertEquals(0, pools.results.depth)
@@ -272,7 +283,7 @@ class PinnedPointerCellsTest {
                         val targets = activeTargets(target)
                         assertTrue(targets.size >= 2, "Retain the original runRW lambda")
                         targets.forEach {
-                            it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
+                            compile(it)
                             valid(it, "$stage/$backend/$entry/${it.rootNode.name} installation")
                         }
                         targets.forEach { valid(it, "$stage/$backend/$entry/${it.rootNode.name} installed graph") }
@@ -328,9 +339,11 @@ class PinnedPointerCellsTest {
                     repeat(3) { aliases() }
                     val boundsOwner = PinnedMemory.allocate(32, 1)
                     for (offset in listOf(-1L, 33L, Long.MIN_VALUE, Long.MAX_VALUE))
-                        assertThrows(RuntimeFault::class.java) { address(boundsOwner, offset) }
+                        // plusAddr# may form before-start/end sentinels; the
+                        // memory access, not pointer arithmetic, checks bounds.
+                        assertThrows(RuntimeFault::class.java) { address(boundsOwner, offset).readWord8(0) }
                     assertThrows(RuntimeFault::class.java) { address(boundsOwner, 32).readWord8(0) }
-                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    compile(target)
                     valid(target, "mutableContentsAt installation")
                     compiled = true
                     val (retained, owner) = aliases()
@@ -460,7 +473,7 @@ class PinnedPointerCellsTest {
 
         // An exposed raw alias still names the same allocation. Never infer
         // disjointness merely from the distinct managed carrier classes.
-        val rawOwner = PinnedMemory.allocate(32, 1)
+        val rawOwner = ManagedAllocation.mutable(32, 8)
         val owned = ManagedAddress.fromAllocation(rawOwner)
         val rawAlias = ManagedAddress.fromByteArray(rawOwner.rawBytesIfPointerFree())
         assertThrows(RuntimeFault::class.java) {
@@ -537,7 +550,7 @@ class PinnedPointerCellsTest {
                     // measured too. Public compilation then installs the bridge
                     // and restores its shared entry prerequisite without a call.
                     targets.forEach {
-                        it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
+                        compile(it)
                         valid(it, "$label/${it.rootNode.name} installation")
                     }
                     assertTrue(function.invokeMember("compile").asBoolean(), "$label compile")

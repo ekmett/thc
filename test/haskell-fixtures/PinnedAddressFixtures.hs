@@ -450,7 +450,7 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
     "limits" .= (["Public Storable roots remain native evidence and explicit exported frontiers, not THC support.",
       "Primitive fingerprintByte is byte-layout conformance, not a replacement Storable implementation.",
       "Defined native domains only; malformed/bounds failures are non-native runtime tests.",
-      "Managed pinning is not physical JVM pinning; no general foreign calls or raw process pointers.",
+      "Explicit pinned arrays use native storage; moving heap arrays retain managed buffer transport; arbitrary numeric pointers remain opaque.",
       "The existing shared Python audit-core.py proof implementation remains an explicit dependency."] :: [String])]
   putStrLn ("Pinned addresses: mode=" ++ mode ++ "; nativeRows=" ++ show nativeRows ++
     "; modelRows=7269; strictAccepted=" ++ show strict)

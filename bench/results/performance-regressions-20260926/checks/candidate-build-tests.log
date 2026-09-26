@@ -1,0 +1,553 @@
+Resource gate: waiting for another gated job.
+Resource run log: /home/ekmett/.codex/worktrees/98d0/cult/build-agent-logs/20260926-113927-7_jjmzns/output.log
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :generateSimdFamilies UP-TO-DATE
+
+> Task :compileCbits
+Compiled C resources package-pointer.bc, md5.bc, libdw-unavailable.bc, strerror.bc, strerror-locale.bc, iconv.bc, gmp-api.so for x86_64-unknown-linux-gnu
+
+> Task :generateStdioAbi
+Probed original stdio ABI and errno values for x86_64-unknown-linux-gnu
+
+> Task :compileNativeAtomics UP-TO-DATE
+> Task :compileNativeFiles UP-TO-DATE
+> Task :compileNativeOpenRequests UP-TO-DATE
+> Task :compileNativeProcessSignals UP-TO-DATE
+> Task :compileNativeSignals UP-TO-DATE
+> Task :generatePosixStatAbi
+> Task :kaptGenerateStubsKotlin
+> Task :generateSigsetAbi
+> Task :generateTermiosAbi
+> Task :processResources UP-TO-DATE
+> Task :processDiagnosticsResources NO-SOURCE
+> Task :processTestResources
+
+> Task :kaptKotlin
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:7: warning: This node is a candidate for node object inlining. The memory footprint is estimated to be reduced from 24 to 5 byte(s). Add @GenerateInline(true) to enable object inlining for this node or @GenerateInline(false) to disable this warning. Also consider disabling cached node generation with @GenerateCached(false) if all usages will be inlined. This warning may be suppressed using @SuppressWarnings("truffle-inlining").
+public abstract class BloomValue extends com.oracle.truffle.api.nodes.Node {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/BloomValue.java:20: warning: The @Cached(neverDefault=true|false) property is not needed to be set. Remove the property to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+    long cachedMask, @com.oracle.truffle.api.dsl.Cached(value = "box(cachedMask)", neverDefault = true)
+                                                                                                  ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/runtime/Dispatch.java:106: warning: For this specialization with inlined cache parameters it is recommended to use the static modifier. The method should be static to avoid accidently passing the wrong node parameter to inlined cached nodes. To resolve this add the static keyword to the specialization method.  This warning may be suppressed using @SuppressWarnings("truffle-static-method").
+    @com.oracle.truffle.api.dsl.Specialization(guards = {"function.arity < argsSize"}, replaces = {"directOverapplied"})
+    ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/ManagedExportNamespace.java:6: warning: The following message(s) of library InteropLibrary are abstract and should be exported using:
+@com.oracle.truffle.api.library.ExportLibrary(value = com.oracle.truffle.api.interop.InteropLibrary.class)
+^
+    @ExportMessage boolean hasLanguageId() { return false; }
+    @ExportMessage String getLanguageId() throws UnsupportedMessageException { return null; }
+   This warning may be suppressed using @SuppressWarnings("truffle-abstract-export").
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/ManagedExportNamespace.java:52: warning: The message 'hasLanguage' from library 'InteropLibrary' is deprecated. Please refer to the library documentation on how to resolve this problem. This warning may be suppressed using @SuppressWarnings("deprecation").
+    @com.oracle.truffle.api.library.ExportMessage()
+    ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/ManagedExportNamespace.java:57: warning: The message 'getLanguage' from library 'InteropLibrary' is deprecated. Please refer to the library documentation on how to resolve this problem. This warning may be suppressed using @SuppressWarnings("deprecation").
+    @com.oracle.truffle.api.library.ExportMessage()
+    ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/EntryValue.java:46: warning: The cached parameter may be shared with: 
+    java.lang.Object[] arguments, @com.oracle.truffle.api.dsl.Cached(value = "create()", uncached = "create()", neverDefault = true)
+                                  ^
+    - invokeMember(..., @Cached(...) HostDispatch dispatch)
+   Annotate the parameter with @Shared("group") or @Exclusive to allow or deny sharing of the parameter. This warning may be suppressed using @SuppressWarnings("truffle-sharing").
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/EntryValue.java:88: warning: The cached parameter may be shared with: 
+    java.lang.Object[] arguments, @com.oracle.truffle.api.dsl.Cached(value = "create()", uncached = "create()", neverDefault = true)
+                                  ^
+    - execute(..., @Cached(...) HostDispatch dispatch)
+   Annotate the parameter with @Shared("group") or @Exclusive to allow or deny sharing of the parameter. This warning may be suppressed using @SuppressWarnings("truffle-sharing").
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/ManagedExportValue.java:6: warning: The following message(s) of library InteropLibrary are abstract and should be exported using:
+@com.oracle.truffle.api.library.ExportLibrary(value = com.oracle.truffle.api.interop.InteropLibrary.class)
+^
+    @ExportMessage boolean hasLanguageId() { return false; }
+    @ExportMessage String getLanguageId() throws UnsupportedMessageException { return null; }
+   This warning may be suppressed using @SuppressWarnings("truffle-abstract-export").
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/ManagedExportValue.java:66: warning: The message 'hasLanguage' from library 'InteropLibrary' is deprecated. Please refer to the library documentation on how to resolve this problem. This warning may be suppressed using @SuppressWarnings("deprecation").
+    @com.oracle.truffle.api.library.ExportMessage()
+    ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/tmp/kapt3/stubs/main/thc/ManagedExportValue.java:71: warning: The message 'getLanguage' from library 'InteropLibrary' is deprecated. Please refer to the library documentation on how to resolve this problem. This warning may be suppressed using @SuppressWarnings("deprecation").
+    @com.oracle.truffle.api.library.ExportMessage()
+    ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3132: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3804: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, long index, long operand, long replacement, Object state, @Bind("$node") Node node) {
+                                                                                        ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:144: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+                                                                                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3385: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3119: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object replacement, Object state, @Bind("$node") Node node) {
+                                                                    ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5700: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, IntVector raw, @Bind("$node") Node node) {
+                                                                                                                                                                                                                                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1169: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object snapshot, long offset, @Bind("$node") Node node) {
+                                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5640: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, IntVector raw, @Bind("$node") Node node) {
+                                                                                                                                                                                                                                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2724: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2895: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3069: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static Object execute(Object reference, long size, Object state, @Bind("$node") Node node) {
+                                                                                                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:812: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor remainder, long high, long low, long divisor, @Bind("$node") Node node) {
+                                                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2988: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3000: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2258: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                DataValue value, @Bind("$node") Node node) {
+                                 ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1756: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Metrics metrics, Closure function, @Bind("$node") Node node,
+                                                   ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5082: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ByteVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                      ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3673: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1325: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3189: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object key, Object value, Object state, @Bind("$node") Node node) {
+                                                        ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1957: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5765: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, IntVector raw, @Bind("$node") Node node) {
+                                                                                                               ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1519: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long fd, long offset, long mode, Object state, @Bind("$node") Node node) {
+                                                               ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:383: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:118: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Cached(value = "createAccess()", neverDefault = true) PolyglotAccess access, @Bind("$node") Node node) {
+                                                                                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3216: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object weak, Object state, @Bind("$node") Node node) {
+                                           ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:909: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:866: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3316: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2126: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:6569: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ShortVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:171: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor destination, @Bind("$node") Node node,
+                                           ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1572: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long fd, Object state, @Bind("$node") Node node) {
+                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:4607: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor third, LocalAccessor fourth, IntVector value, @Bind("$node") Node node) {
+                                                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3283: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3328: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:4514: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor seventh, LocalAccessor eighth, ShortVector value, @Bind("$node") Node node) {
+                                                                                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:185: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node,
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:675: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1255: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long size, Object state, @Bind("$node") Node node) {
+                                         ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:6187: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, LongVector raw, @Bind("$node") Node node) {
+                                                                                                                                                                                                                                                             ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1709: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                TailCall transfer, @Bind("$node") Node node) {
+                                   ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:457: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1691: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1370: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                CapiCall call, long word, ManagedAddress address, Object state, @Bind("$node") Node node) {
+                                                                                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:761: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor mantissa, LocalAccessor exponent, double value, @Bind("$node") Node node) {
+                                                                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3394: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object second, Object state, @Bind("$node") Node node) {
+                                             ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:271: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3257: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void free(ManagedAddress address, Object state, @Bind("$node") Node node) {
+                                                                                      ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3630: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object state, @Bind("$node") Node node) {
+                                                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1294: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor destination, @Bind("$node") Node node,
+                                           ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:6642: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ShortVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1508: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2954: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5289: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ByteVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                      ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2941: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                boolean remove, Object value, Object state, @Bind("$node") Node node) {
+                                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3041: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                boolean fromAddress, Object value, Object state, @Bind("$node") Node node) {
+                                                                 ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1700: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1534: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long fd, Object state, @Bind("$node") Node node) {
+                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:658: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                MaskingState rootEntry, MaskingState callerActive, @Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:4366: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                ByteVector value, @Bind("$node") Node node) {
+                                  ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2928: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, Object state, @Bind("$node") Node node) {
+                                            ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1278: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor destination, @Bind("$node") Node node,
+                                           ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:424: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                ThunkSuspended suspended, ChildResume resumed, @Bind("$node") Node node) {
+                                                               ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1782: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Bind("$node") Node node,
+                                  ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2696: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static MaskingState enter(@Bind("$node") Node node) {
+                                                         ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3431: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long signal, long action, ManagedAddress mask, Object state, @Bind("$node") Node node) {
+                                                                             ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:612: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static StackAnnotationState current(@Bind("$node") Node node) {
+                                                                   ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3582: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2751: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                LocalAccessor bytes, LocalAccessor pointers, Object value, @Bind("$node") Node node) {
+                                                                           ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1382: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                OriginalStdioOp operation, long fd, ManagedAddress address, Object state, @Bind("$node") Node node) {
+                                                                                          ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1591: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object state, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3079: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object value, Object state, @Bind("$node") Node node) {
+                                                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5407: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ShortVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1337: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(ManagedAddress address, Object state, @Bind("$node") Node node) {
+                                                                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1682: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object value, @Bind("$node") Node node) {
+                              ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1425: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                OriginalStdioOp operation, long fd, long writing, long milliseconds, long socket, Object state, @Bind("$node") Node node) {
+                                                                                                                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:951: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                @Bind("$node") Node node) {
+                ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5753: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static IntVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                     ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:5168: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ByteVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                      ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1226: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
+                                                                           ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3155: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Object reference, Object function, Object state, @Bind("$node") Node node,
+                                                                 ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:4993: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static ByteVector apply(VirtualFrame frame, BytecodeVectorLanes lanes, @Bind("$node") Node node) {
+                                                                                                      ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:6387: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor lane0, LocalAccessor lane1, LocalAccessor lane2, LocalAccessor lane3, LocalAccessor lane4, LocalAccessor lane5, LocalAccessor lane6, LocalAccessor lane7, DoubleVector raw, @Bind("$node") Node node) {
+                                                                                                                                                                                                                                                               ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:1825: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                long count, Object state, @Bind("$node") Node node) {
+                                          ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:3245: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                StablePointerOp operation, Object value, Object state, @Bind("$node") Node node) {
+                                                                       ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:6654: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+        @Specialization public static void apply(VirtualFrame frame, BytecodeVectorLanes lanes, ShortVector raw, @Bind("$node") Node node) {
+                                                                                                                 ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/java/thc/runtime/BytecodeRoot.java:2024: warning: Bind expression '$node' is redundant and can be automatically be resolved from the parameter type. Remove the expression to resolve this warning. This warning may be suppressed using @SuppressWarnings("truffle-unused").
+                Closure function, @Variadic Object[] arguments, @Bind("$node") Node node,
+                                                                ^
+
+> Task :compileKotlin
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestThreads.kt:310:28 'class ThreadDeath : Error' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestThreads.kt:470:28 'class ThreadDeath : Error' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/main/kotlin/thc/runtime/GuestThreads.kt:507:37 This class is not recommended for use in Kotlin. Use 'kotlin.Any' instead.
+
+> Task :compileJava
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/generated/source/kapt/main/thc/runtime/BytecodeRootGen.java:75386: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+2 warnings
+
+> Task :classes
+> Task :jar
+> Task :startScripts
+> Task :installDist
+> Task :kaptGenerateStubsDiagnosticsKotlin
+
+> Task :kaptDiagnosticsKotlin
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+
+> Task :compileDiagnosticsKotlin
+> Task :compileDiagnosticsJava NO-SOURCE
+> Task :diagnosticsClasses UP-TO-DATE
+> Task :toolsJar UP-TO-DATE
+> Task :kaptGenerateStubsTestKotlin
+
+> Task :kaptTestKotlin
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+
+> Task :compileTestKotlin
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/CoreForeignArtifactsTest.kt:53:46 Unchecked cast of 'Any?' to 'Map<String, Any?>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/CoreForeignArtifactsTest.kt:117:31 Unchecked cast of 'Any?' to 'List<Map<*, *>>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/CoreZipBundleTest.kt:360:43 Unchecked cast of 'Any?' to 'List<Map<String, Any?>>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/CoreZipBundleTest.kt:418:48 Unchecked cast of 'Any?' to 'List<Map<String, Any?>>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/RealCoreCallDemandTest.kt:22:71 Cast is redundant.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/BytecodeVectorTransportTest.kt:192:44 Unnecessary non-null assertion (!!) on a non-null receiver of type 'HandoffStorage'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/BytecodeVectorTransportTest.kt:193:96 Unnecessary non-null assertion (!!) on a non-null receiver of type 'HandoffStorage'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/BytecodeVectorTransportTest.kt:193:136 Unnecessary non-null assertion (!!) on a non-null receiver of type 'HandoffStorage'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/CoreContinuationNativeTest.kt:163:43 Unchecked cast of 'Any?' to 'List<Map<String, Any?>>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/CoreFunctionIdentityTest.kt:56:61 Unchecked cast of 'Any?' to 'Map<String, Any?>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/LibdwUnavailableTest.kt:69:23 Cast is redundant.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ManagedAddressReadTest.kt:242:120 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ManagedAddressRead'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ManagedAddressReadTest.kt:250:60 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ManagedAddressRead'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ManagedFilesTest.kt:560:74 Unnecessary non-null assertion (!!) on a non-null receiver of type 'ManagedFiles'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/MutableByteArrayContentsTest.kt:48:66 Cast is redundant.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/NativeFileBuffersTest.kt:152:25 'constructor(): ThreadDeath' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/NativeFileBuffersTest.kt:168:58 'class ThreadDeath : Error' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/OriginalHandleReadinessNativeTest.kt:167:51 Unchecked cast of 'Any?' to 'List<Map<String, Any?>>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/OriginalHandleReadinessNativeTest.kt:174:40 Unchecked cast of 'Any?' to 'List<Map<String, Any?>>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/OriginalStdioReadTest.kt:43:72 Redundant call of conversion method.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/PinnedAddressTest.kt:296:73 Redundant call of conversion method.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:94:13 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/PointerEqualityTest.kt:94:52 This class is not recommended for use in Kotlin. Use 'kotlin.Long' instead.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ProcessSignalsTest.kt:67:21 'constructor(): ThreadDeath' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ProcessSignalsTest.kt:71:37 'class ThreadDeath : Error' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ProcessSignalsTest.kt:83:26 'constructor(): ThreadDeath' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/ProcessSignalsTest.kt:86:45 'class ThreadDeath : Error' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/RtsShutdownTest.kt:155:88 'constructor(): ThreadDeath' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/RtsShutdownTest.kt:168:43 'class ThreadDeath : Error' is deprecated. Deprecated in Java.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdCallNativeTest.kt:136:29 Unnecessary safe call on a non-null receiver of type 'List<*>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdCallNativeTest.kt:139:31 Unnecessary safe call on a non-null receiver of type 'Map<*, *>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdCallNativeTest.kt:141:30 Unnecessary safe call on a non-null receiver of type 'Map<*, *>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdCallNativeTest.kt:142:30 Unnecessary safe call on a non-null receiver of type 'Map<*, *>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:86:127 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:87:50 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdDoubleVectorTest.kt:91:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdFamiliesTest.kt:130:43 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdFloatVectorTest.kt:58:123 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:57:120 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:62:97 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt16VectorTest.kt:66:93 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:58:119 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:63:95 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdInt8VectorTest.kt:67:91 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:60:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:65:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord16VectorTest.kt:73:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:59:125 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:64:105 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord32VectorTest.kt:72:101 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:61:124 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:66:103 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SimdWord8VectorTest.kt:74:99 Unnecessary non-null assertion (!!) on a non-null receiver of type 'List<CoreRepresentation>'.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SmallArrayTest.kt:42:71 Cast is redundant.
+w: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/src/test/kotlin/thc/runtime/SumProtocolTest.kt:54:45 Cast is redundant.
+
+> Task :compileTestJava
+warning: [incubating] using incubating module(s): jdk.incubator.vector
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/generated/source/kapt/test/thc/runtime/ThunkYieldProofRootGen.java:3847: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/generated/source/kapt/test/thc/runtime/ThunkYieldProofRootGen.java:5086: warning: [removal] ThreadDeath in java.lang has been deprecated and marked for removal
+                if (throwable instanceof java.lang.ThreadDeath) {
+                                                  ^
+3 warnings
+
+> Task :testClasses
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :testDefault
+WARNING: Using incubator modules: jdk.incubator.vector
+
+CallMaskSegmentsTest > resumedGuestFailureRestoresEachCallerMaskAndCarrierAmbient() PASSED
+
+CallMaskSegmentsTest > parkingKeepsTheRequestEvenIfAnotherEvaluatorHasFinishedTheSegment() PASSED
+
+CallMaskSegmentsTest > ordinaryNestedMaskedApplicationRunsCompiledWithoutSuspension() PASSED
+
+CallMaskSegmentsTest > aClonedThunkTargetKeepsItsContinuationBodyIdentity() PASSED
+
+CallMaskSegmentsTest > malformedOrdinaryCalleeRestoresCallerMaskBeforeFailingClosed() PASSED
+
+CallMaskSegmentsTest > maskedUnmaskedMaskedChainParksAndResumesAcrossCarrierThreads() PASSED
+
+CallMaskSegmentsTest > invalidResumedMaskFailsClosedWithoutChangingCarrierAmbient() PASSED
+
+GuestThreadsTest > targetCompletionBetweenEnqueueAndWakeIsSuccessfulNoop() PASSED
+
+GuestThreadsTest > foreignOriginCrossesContextsWithoutSharingTheirMailboxesOrMasks() PASSED
+
+GuestThreadsTest > interruptedSenderPausesOnlyUnclaimedOutboundAndResumesSameToken() PASSED
+
+GuestThreadsTest > foreignCallDefersDeliveryButNestedGuestCallbackUsesTheSameThreadAndMask() PASSED
+
+GuestThreadsTest > cancellationAndTargetCompletionWakePendingSenders() PASSED
+
+GuestThreadsTest > wakeFailureAfterClaimCannotRevokeSendOrResumedSend() PASSED
+
+GuestThreadsTest > javaThreadIdAndMaskingGateQueuedDelivery() PASSED
+
+GuestThreadsTest > selfThrowClaimsImmediatelyEvenUnderUninterruptibleMask() PASSED
+
+GuestThreadsTest > uncaughtPublicBoundaryRetainsExactPayloadAndAcknowledgesOnlyThisTarget() PASSED
+
+GuestThreadsTest > nestedEntryRetainsTargetAndInheritedMaskUntilOuterExit() PASSED
+
+GuestThreadsTest > exactUnliftedThreadIdAndLazyKillPayloadContract() PASSED
+
+GuestThreadsTest > foreignScopeBeforeRegistrationAndExceptionalCallbackExitRestorePermission() PASSED
+
+GuestThreadsTest > nonresumableForkRejectsExternalSendBeforeWakeButAllowsSelfAndDeadTargets() PASSED
+
+HostEntryCompilationTest > bytecodeHostCompilationFollowsTheActiveSplit() PASSED
+
+HostEntryCompilationTest > astHostCompilationFollowsTheActiveSplit() PASSED
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime (file:/home/ekmett/ai/thc-sequence-current-main-01a0cdeb/.gradle-user-home/caches/modules-2/files-2.1/org.graalvm.truffle/truffle-runtime/25.3.4.1/5f9818cd0413f63bdf1fe52ba4f2fc2786f4cbb7/truffle-runtime-25.3.4.1.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.runtime.hotspot.HotSpotTruffleRuntime
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+
+> Task :testDense
+WARNING: Using incubator modules: jdk.incubator.vector
+
+CallMaskSegmentsTest > resumedGuestFailureRestoresEachCallerMaskAndCarrierAmbient() PASSED
+
+CallMaskSegmentsTest > parkingKeepsTheRequestEvenIfAnotherEvaluatorHasFinishedTheSegment() PASSED
+
+CallMaskSegmentsTest > ordinaryNestedMaskedApplicationRunsCompiledWithoutSuspension() PASSED
+
+CallMaskSegmentsTest > aClonedThunkTargetKeepsItsContinuationBodyIdentity() PASSED
+
+CallMaskSegmentsTest > malformedOrdinaryCalleeRestoresCallerMaskBeforeFailingClosed() PASSED
+
+CallMaskSegmentsTest > maskedUnmaskedMaskedChainParksAndResumesAcrossCarrierThreads() PASSED
+
+CallMaskSegmentsTest > invalidResumedMaskFailsClosedWithoutChangingCarrierAmbient() PASSED
+
+GuestThreadsTest > targetCompletionBetweenEnqueueAndWakeIsSuccessfulNoop() PASSED
+
+GuestThreadsTest > foreignOriginCrossesContextsWithoutSharingTheirMailboxesOrMasks() PASSED
+
+GuestThreadsTest > interruptedSenderPausesOnlyUnclaimedOutboundAndResumesSameToken() PASSED
+
+GuestThreadsTest > foreignCallDefersDeliveryButNestedGuestCallbackUsesTheSameThreadAndMask() PASSED
+
+GuestThreadsTest > cancellationAndTargetCompletionWakePendingSenders() PASSED
+
+GuestThreadsTest > wakeFailureAfterClaimCannotRevokeSendOrResumedSend() PASSED
+
+GuestThreadsTest > javaThreadIdAndMaskingGateQueuedDelivery() PASSED
+
+GuestThreadsTest > selfThrowClaimsImmediatelyEvenUnderUninterruptibleMask() PASSED
+
+GuestThreadsTest > uncaughtPublicBoundaryRetainsExactPayloadAndAcknowledgesOnlyThisTarget() PASSED
+
+GuestThreadsTest > nestedEntryRetainsTargetAndInheritedMaskUntilOuterExit() PASSED
+
+GuestThreadsTest > exactUnliftedThreadIdAndLazyKillPayloadContract() PASSED
+
+GuestThreadsTest > foreignScopeBeforeRegistrationAndExceptionalCallbackExitRestorePermission() PASSED
+
+GuestThreadsTest > nonresumableForkRejectsExternalSendBeforeWakeButAllowsSelfAndDeadTargets() PASSED
+
+HostEntryCompilationTest > bytecodeHostCompilationFollowsTheActiveSplit() PASSED
+
+HostEntryCompilationTest > astHostCompilationFollowsTheActiveSplit() PASSED
+
+[Incubating] Problems report is available at: file:///home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.7.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 45s
+30 actionable tasks: 22 executed, 8 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.1/userguide/configuration_cache_enabling.html

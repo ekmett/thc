@@ -52,6 +52,41 @@ class ManagedExportsNativeTest {
         .option("engine.SingleTierCompilationThreshold", "10000000")
         .option("compiler.Inlining", "false").build()
 
+    @Test fun namespaceMetadataRetainsExactNamesAndContextOwnership() {
+        val first = context()
+        val second = context()
+        try {
+            first.initialize("thc")
+            second.initialize("thc")
+            first.enter()
+            val namespace = try {
+                val registry = Language.currentState().managedExports
+                ManagedExportNamespace(registry, "metadata probe") {
+                    linkedMapOf("unit:Module.export" to 42L, "distinct_alias" to 43L)
+                }.also { raw ->
+                    val value = first.asValue(raw)
+                    assertEquals(setOf("unit:Module.export", "distinct_alias"), value.memberKeys)
+                    assertEquals(42L, value.getMember("unit:Module.export").asLong())
+                    assertEquals(43L, value.getMember("distinct_alias").asLong())
+                    assertFalse(value.hasMember("export"))
+                    assertThrows(com.oracle.truffle.api.interop.UnknownIdentifierException::class.java) {
+                        InteropLibrary.getUncached().readMember(raw, "export")
+                    }
+                }
+            } finally { first.leave() }
+            second.enter()
+            try {
+                val interop = InteropLibrary.getUncached()
+                assertThrows(RuntimeFault::class.java) { interop.getMembers(namespace) }
+                assertThrows(RuntimeFault::class.java) { interop.isMemberReadable(namespace, "distinct_alias") }
+                assertThrows(RuntimeFault::class.java) { interop.readMember(namespace, "distinct_alias") }
+            } finally { second.leave() }
+        } finally {
+            second.close()
+            first.close()
+        }
+    }
+
     @Test fun genuineRetainedExportsMatchNativeAndShareTheirProgramAndCaf() {
         val native = verifiedFile(File(directory, "logs/managed-export-native-oracle.stdout")).trim().lines()
         assertEquals(listOf("-18", "2.25", "-1.5", "17", "3", "7", "9223372036854775828"), native)

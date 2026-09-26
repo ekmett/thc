@@ -53,6 +53,7 @@ internal object WindowsMd5 {
                 fault("Native Windows MD5 requires native access")
         }
         fun image(address: ManagedAddress): MemorySegment {
+            if (address.cbitsOwner()?.isPinned == true) return address.cbitsSegment()
             val bytes = address.cbitsBacking()
             return images[bytes] ?: arena.allocate(maxOf(1L, bytes.size.toLong()), 8).also {
                 MemorySegment.copy(MemorySegment.ofArray(bytes), 0, it, 0, bytes.size.toLong())
@@ -60,6 +61,7 @@ internal object WindowsMd5 {
             }
         }
         fun copyBack(address: ManagedAddress, image: MemorySegment, size: Long) {
+            if (address.cbitsOwner()?.isPinned == true) { Reference.reachabilityFence(address); return }
             val offset = address.cbitsOffset()
             MemorySegment.copy(image, offset, MemorySegment.ofArray(address.cbitsBacking()), offset, size)
             Reference.reachabilityFence(address)

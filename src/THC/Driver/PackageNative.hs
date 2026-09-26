@@ -85,7 +85,7 @@ nativeSignatures unit modules = do
         "package native call requires static C/CAPI; safe calls require only scalar inputs, interruptible calls are unsupported"
       result <- case results of
         ["void"] -> Right "void"
-        ["void", value] | scalarCarrier value && value /= "AddrRep" -> Right value
+        ["void", value] | scalarCarrier value && (safety /= "safe" || value /= "AddrRep") -> Right value
         _ -> Left "package native call requires State with zero or one scalar result"
       pure (symbol,convention,safety,init arguments,result)
 
@@ -113,7 +113,7 @@ validateNativeIR source = require (not (any forbidden (lines source)))
 nativeWrapperSource :: [(Signature, String)] -> Either String String
 nativeWrapperSource entries = fmap concat $ forM entries $ \((symbol,convention,_,arguments,result), entry) -> do
   require (identifier symbol && identifier entry && all inputCarrier arguments &&
-    (result == "void" || scalarCarrier result && result /= "AddrRep"))
+    (result == "void" || scalarCarrier result))
     "invalid native wrapper ABI"
   let types = map cType arguments
       parameters = if null types then "void" else join ", " [ty ++ " a" ++ show index | (index,ty) <- zip [0::Int ..] types]

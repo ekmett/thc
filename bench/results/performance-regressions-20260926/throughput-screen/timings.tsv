@@ -1,0 +1,6 @@
+engine	fork	entry	sample	repetitions	inputBase	checksum	elapsedNs
+baseline	1	mapAggregate	1	1280	10000	72167577840	2185765044
+baseline	1	mapAggregate	2	1280	10000	72167577840	2137076089
+baseline	1	mapAggregate	3	1280	10000	72167577840	2115946749
+baseline	1	mapAggregate	4	1280	10000	72167577840	2123165558
+baseline	1	mapAggregate	5	1280	10000	72167577840	2128781054

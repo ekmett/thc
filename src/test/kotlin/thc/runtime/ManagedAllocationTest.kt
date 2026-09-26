@@ -71,9 +71,9 @@ class ManagedAllocationTest {
                     }
                 }
                 assertFalse(Thread.holdsLock(storage))
-                assertEquals(32, storage.accessVector(0, scalarOffset, width, writable) {
+                assertEquals(32L, storage.accessVector(0, scalarOffset, width, writable) {
                     assertTrue(Thread.holdsLock(storage))
-                    it.size
+                    it.byteSize()
                 })
                 assertFalse(Thread.holdsLock(storage))
             }

@@ -70,11 +70,15 @@ class DataLayout private constructor(
     private val classOwnerToken = Any()
     private val ownedCarrier: Class<*>?
 
-    private fun buildShape(language: TruffleLanguage<*>, properties: Array<Field>, fieldless: Boolean): StaticShape<DataValueFactory> =
-        StaticShape.newBuilder(language).also { builder ->
+    private fun buildShape(language: TruffleLanguage<*>, properties: Array<Field>, fieldless: Boolean): StaticShape<DataValueFactory> {
+        val builder = StaticShape.newBuilder(language).also { builder ->
             builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
             properties.forEach { it.register(builder) }
-        }.build(if (fieldless) DataValue::class.java else LayoutDataValue::class.java, DataValueFactory::class.java)
+        }
+        // Native Image registers each superclass/factory pair at this call site.
+        return if (fieldless) builder.build(DataValue::class.java, DataValueFactory::class.java)
+        else builder.build(LayoutDataValue::class.java, DataValueFactory::class.java)
+    }
 
     private val classIdentityEnabled = java.lang.Boolean.getBoolean(CONSTRUCTOR_CLASS_IDENTITY_PROPERTY)
     private val constructorClass: ConstructorClassIdentity

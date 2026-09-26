@@ -32,13 +32,14 @@ unforced result, inherited masking, and uncaught self-directed child death.
 `parkedFork` deliberately leaves a child blocked for embedding shutdown tests;
 it is not a standalone program that completes all its child work.
 
-Ordinary AST forks do not receive external `killThread#`: their general bodies
-cannot capture resumable continuations. The registry rejects such a send before
-enqueueing or waking the child, including across nested guest entries. Self
-delivery still reaches the original handler or terminates the child as `DIED`.
-Bytecode forks retain their existing captured async delivery. Both kinds are
-real Truffle-managed threads cancelled by `Context.close(true)`; context-wide
-cancellation does not imply that a shared AST thunk can later be resumed.
+Forks inherit their program's `asyncExceptions` mode. With it enabled, both
+backends capture external `killThread#` delivery, including lazy action-head
+evaluation and shared thunk resumption. With it disabled, the registry rejects
+external delivery before enqueueing or waking the child, including across nested
+guest entries. AST still permits self-delivery to the original handler or child
+termination as `DIED`; synchronous bytecode rejects `killThread#` at load time.
+Both kinds are real Truffle-managed threads cancelled by `Context.close(true)`;
+context-wide cancellation is distinct from resumable guest async delivery.
 
 ```sh
 cabal run exe:thc-fixtures --offline -- thread-inventory
@@ -63,10 +64,10 @@ See [scheduling](thread-scheduling.md). `numSparks#` is not a Java thread count.
 
 A speculative evaluator can diverge or block without its result ever being
 demanded. A managed-thread pool must therefore abandon speculative work safely
-at shutdown and preserve shared-thunk resumability. Ordinary AST evaluation has
-no general captured cancellation continuation; an interrupted owned thunk can
-enter the unresumable state. Merely adding worker threads would either hang
-context shutdown or damage a subsequently demanded thunk. The current bytecode
-async machinery does not establish the missing both-backend spark scheduler.
+at shutdown and preserve shared-thunk resumability. Opt-in guest async capture
+now exists on both backends, but neither synchronous-mode evaluation nor
+context-wide cancellation becomes resumable through that option. The capture
+machinery does not establish spark admission, abandoned-result management or a
+both-backend spark scheduler.
 Logical capability indices describe available CPU capacity and can be shared by
 many guest threads. No spark admission or parallel-speedup claim is made here.

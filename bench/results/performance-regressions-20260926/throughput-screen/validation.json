@@ -1,0 +1,51 @@
+{
+  "passed": false,
+  "error": "Command '['/home/ekmett/thc-benchmarks/2026-09-23-083914/toolchains/graalvm-25.3.4.1+1.1/bin/java', '-XX:+UseCompactObjectHeaders', '-Xmx4g', '-Dthc.handoffSlabs=false', '--add-modules=jdk.incubator.vector', '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true', '-Dthc.diagnosticUnsupported=true', '-Dthc.minimumWarmCalls=12000', '-Dthc.backend=bytecode', '-cp', '/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/annotations-13.0.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/antlr4-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/collections-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/jniutils-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/kotlin-stdlib-2.4.20.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-native-resources-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/llvm-language-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/nativeimage-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/polyglot-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/thc-0.1-experiment.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-api-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-compiler-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-libffi-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-nfi-panama-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/truffle-runtime-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/lib/word-25.3.4.1.jar:/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/performance-regressions/candidate/thc-tools.jar', 'thc.ProbeKt', '/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.BitQueue.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.Prelude.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.PtrEquality.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictMaybe.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.StrictPair.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Utils.Containers.Internal.EqOrdUtil.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Set.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Internal.Debug.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.Internal.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/Data.Map.Strict.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.MapWorkload.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/THC.InterfaceClosure.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.CString.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.Internal.Err.json,/home/ekmett/ai/agents/worktrees/thc/performance-regressions-01a0cdeb/build/map/core/GHC.InterfaceClosure.json', 'mapAggregate', '--steady', '15', '2', '5', '10000']' returned non-zero exit status 1.",
+  "validatedWindows": 5,
+  "processes": [
+    {
+      "engine": "baseline",
+      "fork": 1,
+      "lastTierVerified": true,
+      "warmup": {
+        "calls": 12032,
+        "elapsedNs": 21249985606,
+        "checksum": 678375231696
+      },
+      "diagnostics": {
+        "backend": "bytecode",
+        "bytecodeRootCount": 57,
+        "sourceNotesEnabled": true,
+        "sourceSpanCount": 8656,
+        "sourceRootCount": 15,
+        "localJoinCount": 10,
+        "localJoinTransfers": 0,
+        "instrumented": false,
+        "thunkEvaluationsByLabel": {},
+        "compiledEntries": 0,
+        "leadingCaseReturns": 0,
+        "thunkEvaluations": 0,
+        "thunkHits": 0,
+        "blackholes": 0,
+        "directCacheMisses": 0,
+        "indirectCalls": 0,
+        "tailBounces": 0,
+        "selfTailReentries": 0,
+        "trampolineIterations": 0,
+        "papAllocations": 0,
+        "unsupportedPolicy": "diagnostic-traps",
+        "deferredUnsupported": [
+          "Unresolved external binding ghc-internal:GHC.Internal.Stack.withFrozenCallStack1",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.$fExceptionErrorCall_$ctoException",
+          "Unresolved external binding ghc-internal:GHC.Internal.Exception.Backtrace.collectExceptionAnnotationMechanismRef"
+        ],
+        "unsupportedTraps": 0,
+        "frames": "Bytecode DSL primitive locals; selective StaticShape captures",
+        "stackPolicy": "tail-safe; non-tail calls and nested thunk forcing use host stack",
+        "threadPolicy": "single guest thread"
+      },
+      "measuredCompilationEvents": [],
+      "finalVerificationEvents": []
+    }
+  ]
+}

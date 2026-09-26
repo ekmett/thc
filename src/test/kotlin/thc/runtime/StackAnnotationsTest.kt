@@ -119,8 +119,20 @@ class StackAnnotationsTest {
         probe.suspend = true
         val saved = Calls.target(ast.entryTarget("entry"), arrayOf(0L, "inside", action, Unit)) as AstContinuation
         assertSame(outside, StackAnnotations.current(null))
+        val astSuspended = saved.yielded as CallSegmentSuspended
+        // The same ownership driver used below completes the action segment
+        // before giving the annotated caller its validated ChildResume.
+        val astThunk = Thunk(ast.entryTarget("entry"), null).also { it.value = saved; it.state = 5 }
+        val astDriver = object : GuestRoot(language, FrameLayout().build()) {
+            @Child private var force = Force(Metrics(false))
+            override fun bloom(frame: VirtualFrame) = 0L
+            override fun execute(frame: VirtualFrame): Any? = force.execute(frame, astThunk)
+        }
         StackAnnotations.set(null, resumer)
-        assertEquals(listOf("inside", "original"), shape.layout.getObject(ownedTupleResult(saved.continueWith(Unit), shape), 0))
+        val astResult = Calls.target(astDriver.callTarget, arrayOf(0L))
+        assertEquals(listOf("inside", "original"), shape.layout.getObject(ownedTupleResult(astResult, shape), 0))
+        assertEquals(2, astSuspended.segment.state)
+        assertEquals(2, astThunk.state)
         assertSame(resumer, StackAnnotations.current(null))
         probe.suspend = false
 

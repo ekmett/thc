@@ -11,7 +11,7 @@ scripts/prepare-tests.sh
 python3 scripts/prepare-library-tests.py
 ./gradlew --no-daemon test installDist toolsJar "$@"
 for backend in ast bytecode; do
-  "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
+  "$JAVA_HOME/bin/java" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
     -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.LibraryCheckKt build/libraries/cases.json "$backend" \
     2>&1 | tee "build/libraries/check-$backend.log"
 done

@@ -405,7 +405,7 @@ def package_scalar_link(module):
     if native:
         reps += ('IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Word32Rep',
                  'Word64Rep', 'AddrRep', 'ByteArray#', 'MutableByteArray#')
-    results = tuple(rep for rep in reps if rep not in ('AddrRep', 'ByteArray#', 'MutableByteArray#')) + (('void',) if native else ())
+    results = tuple(rep for rep in reps if rep not in ('ByteArray#', 'MutableByteArray#')) + (('void',) if native else ())
     abi = {}
     for index, entry in enumerate(link['abi']):
         record(entry, 'symbol entry convention safety arguments result' if native else 'symbol entry arguments result')
@@ -414,7 +414,8 @@ def package_scalar_link(module):
         require(entry['entry'] == ('thc_native_' if native else 'thc_scalar_') + link['componentSha256'] + '_' + str(index), 'component entry namespace')
         require(isinstance(entry['arguments'], list) and all(arg in reps for arg in entry['arguments']) and entry['result'] in results, 'C ABI')
         require(not native or entry['convention'] in ('ccall', 'capi') and (entry['safety'] == 'unsafe' or
-                entry['safety'] == 'safe' and not any(rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#') for rep in entry['arguments'])),
+                entry['safety'] == 'safe' and entry['result'] != 'AddrRep' and
+                not any(rep in ('AddrRep', 'ByteArray#', 'MutableByteArray#') for rep in entry['arguments'])),
                 'unsupported C calling convention/safety')
         key = (name, entry.get('convention', 'ccall'), entry.get('safety', 'unsafe'), tuple(entry['arguments']), entry['result'])
         require(key not in abi, 'duplicate ABI signature')

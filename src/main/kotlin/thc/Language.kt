@@ -283,7 +283,7 @@ object CoreModules {
      */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
-                shutdownEntry: String? = null): String {
+                shutdownEntry: String? = null, asyncExceptions: Boolean? = null): String {
         require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
             "Executable shutdown requires a distinct IO entry"
         }
@@ -295,6 +295,7 @@ object CoreModules {
         if (manifest != null) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
         if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
+        if (asyncExceptions != null) settings["asyncExceptions"] = asyncExceptions
         return requestDocument(paths, settings)
     }
 
@@ -380,6 +381,9 @@ class Language : TruffleLanguage<Language.State>() {
     // Layout interning belongs to a context even when the language instance is shared.
     internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
+    private val threadPollState = locals.createContextThreadLocal { context, thread -> context.threads.pollState(thread) }
+    private val threadMaskingState = locals.createContextThreadLocal { context, thread -> context.maskingState.cell(thread) }
+    private val threadAnnotations = locals.createContextThreadLocal { context, thread -> context.stackAnnotations.cell(thread) }
     class State(val env: Env, language: Language) {
         internal val shutdown = java.util.concurrent.atomic.AtomicReference<thc.runtime.GuestShutdown>()
         internal val managedExports = ManagedExportRegistry(this, language)
@@ -387,9 +391,12 @@ class Language : TruffleLanguage<Language.State>() {
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val packageCbits = thc.runtime.PackageScalarLibraries(env)
-        internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
-        internal val stackAnnotations = ThreadLocal.withInitial { thc.runtime.StackAnnotationState.EMPTY }
+        internal val maskingState = thc.runtime.CarrierLocal(thc.runtime.MaskingState.UNMASKED)
+        internal val stackAnnotations = thc.runtime.CarrierLocal(thc.runtime.StackAnnotationState.EMPTY)
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
+        internal val threadPollState = language.threadPollState
+        internal val threadMaskingState = language.threadMaskingState
+        internal val threadAnnotations = language.threadAnnotations
         internal val runtimeTrace = thc.runtime.RuntimeTraceServices(env.err())
         internal val runtimeJit = thc.runtime.RuntimeJitServices(language)
         @JvmField internal val stm = thc.runtime.ManagedSTM()
@@ -409,6 +416,7 @@ class Language : TruffleLanguage<Language.State>() {
         @JvmField internal val closureInfo = thc.runtime.ClosureInfoTables()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
+        internal val compilerRts = thc.runtime.CompilerRts()
         internal val stableNames = thc.runtime.StableNames()
         @JvmField internal val compactRegions = thc.runtime.ManagedCompacts()
         @JvmField internal val heapAddresses = thc.runtime.HeapAddresses()
@@ -493,6 +501,7 @@ class Language : TruffleLanguage<Language.State>() {
         try { context.signals.close() } finally { context.iconv.dispose() }
     }
     override fun disposeContext(context: State) {
+        context.compilerRts.close()
         try { context.runtimeJit.close() } finally { context.runtimeTrace.close() }
         context.compactImages.close()
         context.heapAddresses.close()
@@ -578,6 +587,10 @@ class Language : TruffleLanguage<Language.State>() {
         }
         val backend = input["backend"] ?: defaultBackend()
         require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
+        require(!input.containsKey("asyncExceptions") || input["asyncExceptions"] is Boolean) {
+            "asyncExceptions must be a Boolean"
+        }
+        val asyncExceptions = input["asyncExceptions"] as? Boolean ?: (backend == "bytecode")
         val registrations = linked["managedRegistrations"] as List<ManagedExportAdmission>
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any {
@@ -586,8 +599,8 @@ class Language : TruffleLanguage<Language.State>() {
                 val owner = currentState(this)
                 (linked["foreignLinks"] as List<ForeignBitcode>).forEach { owner.cbits().link(it) }
                 (linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
-                val program = if (backend == "ast") Program(this@Language, linked)
-                    else BytecodeProgram(this@Language, linked, true)
+                val program = if (backend == "ast") Program(this@Language, linked, asyncExceptions)
+                    else BytecodeProgram(this@Language, linked, asyncExceptions)
                 val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,
                     ioResult, this@Language, shutdownEntry, shutdownResult,
                     bindings.any { it["id"] == thc.runtime.CoreSignalForeign.dispatcher })
@@ -633,7 +646,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             }
         }
         val threads = Language.currentState(dispatch).threads
-        threads.enterCurrent()
+        threads.enterCurrent(externalAsync = when (program) {
+            is Program -> program.enableAsync
+            is BytecodeProgram -> program.enableAsync
+            else -> true
+        })
         var outcome = thc.runtime.GuestThreadStatus.FINISHED
         try {
             try {
@@ -675,7 +692,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
             val owner = Language.currentState(dispatch)
             val threads = owner.threads
-            threads.enterCurrent()
+            threads.enterCurrent(externalAsync = when (program) {
+                is Program -> program.enableAsync
+                is BytecodeProgram -> program.enableAsync
+                else -> true
+            })
             var outcome = thc.runtime.GuestThreadStatus.FINISHED
             try {
                 if (processSignals) owner.signals.bind(program)
