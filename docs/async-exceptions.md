@@ -94,9 +94,9 @@ PAP prefix and its caller across interruption.
 compiled loop, its blocked MVar, a second evaluator waiting for the owner, and
 a previously saved continuation. These checks assert that the effectful prefix
 executes once after repeated interruption and that the running-loop request was
-claimed from compiled code. The expanded AST live compiled-retention checks are
-still under diagnosis; the public-thread and strict-entry results above do not
-establish that full live suite.
+claimed from compiled code. The same checks run against AST and bytecode in
+both default and dense handoff modes without relaxing first-installed-code
+retention assertions.
 
 The focused fixtures are prepared with:
 
@@ -106,9 +106,11 @@ cabal run thc-fixtures --offline -- thread-async
 cabal run thc-fixtures --offline -- uncaught-self
 ```
 
-STM transaction frames, compact traversal, GHC BCO interpreter frames, opaque
-foreign execution and mixed asynchronous/delimited capture retain their separate
-continuation barriers.
+[STM](stm.md) aborts its current attempt and preserves an `atomically#` restart
+at the enclosing update boundary; it does not save a live log or resume an
+abandoned transactional child. Compact traversal, GHC BCO interpreter frames,
+opaque foreign execution and mixed asynchronous/delimited capture retain their
+separate continuation barriers.
 Arbitrary JVM/native frames and blocking file operations do not gain resumable
 interruption from the public option. See the
 [primop-by-primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions)

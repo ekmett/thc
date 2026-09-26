@@ -186,12 +186,16 @@ unmasks. Construction admits the ordinary caller and strict-entry routes while
 still rejecting conflicting representation proofs and unknown Core forms.
 `LiveAsyncNativeTest` extends coverage to running loops, blocking waits,
 blackhole ownership and repeated interruption using a native GHC result oracle.
-Its expanded AST compiled-retention checks are still under diagnosis; the
-public-thread and strict-entry passes do not establish the entire live suite.
+The AST loop retains its installed code before delivery and records whether
+the request was claimed there. Disabled delimited-capture paths must be guarded
+before materializing frames: otherwise an impossible exception edge can escape
+the loop frame and invalidate its first installed invocation.
 
-STM transaction frames, compact traversal, opaque foreign execution and mixed
-asynchronous/delimited capture retain separate lowering or continuation
-barriers. Ordinary Core capture does not remove those subsystem requirements.
+STM aborts its carrier-local attempt before emitting a fresh restart capture;
+the old transactional child chain and log never enter the enclosing thunk's
+saved suffix. See [STM](stm.md). Compact traversal, GHC BCO interpreter frames,
+opaque foreign execution and mixed asynchronous/delimited capture retain
+separate barriers. Ordinary Core capture does not remove those requirements.
 
 The callback permission gate is admitted only at a public guest entry whose
 guest body already satisfies its backend's capture obligations. It does not
