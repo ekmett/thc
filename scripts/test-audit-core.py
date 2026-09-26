@@ -2283,6 +2283,37 @@ class OriginalStringRtsDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(wrong)['accepted'])
 
 
+class OriginalUnixLibcDeclarationTest(unittest.TestCase):
+    def test_original_unix_units_keep_exact_abis_and_capabilities(self):
+        fixture = LibdwUnavailableAuditTest()
+        declarations = json.loads((ROOT.parent / 'src/test/resources/core/original-unix-libc-descriptors.json').read_text())
+        self.assertEqual({'close', 'dup', 'isatty', 'getenv'}, set(declarations))
+        for symbol, declaration in declarations.items():
+            with self.subTest(symbol=symbol):
+                self.assertEqual('unix-2.8.8.0-inplace', declaration['target']['unit'])
+                self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+                disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+                self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+                installed = copy.deepcopy(declaration); installed['target']['unit'] = 'unix-2.8.8.0-460b'
+                self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'])
+                for unit in ('unix', 'unix-2.8.8.1-inplace', 'unix-2.8.8.0-forged', 'unix-2.8.8.0',
+                             'unix-2.8.8.0-', 'unix-2.8.8.0-460b-extra', 'other'):
+                    wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                    self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+                for key, value in (('safety', 'safe'), ('arity', 1), ('resultRep', LONG)):
+                    wrong = copy.deepcopy(declaration); wrong[key] = value
+                    self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+                wrong = copy.deepcopy(declaration)
+                wrong['argumentReps'][0]['primReps'] = ['WordRep']
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+                wrong = copy.deepcopy(declaration)
+                wrong['resultRep']['components'].reverse()
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        wrong = copy.deepcopy(declarations['getenv'])
+        wrong['target']['symbol'] = 'putenv'
+        self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+
+
 class OriginalEnvironmentDeclarationTest(unittest.TestCase):
     def test_environment_abi_and_capability_controls(self):
         fixture = LibdwUnavailableAuditTest()

@@ -1280,6 +1280,21 @@
         "scripts/simd-families.json",
         "scripts/generate-simd-families.py"
       ]
+    },
+    "unix-libc": {
+      "junit": ["thc.runtime.UnixLibcTest"],
+      "commands": [
+        {"argv":["cabal","run","exe:thc-fixtures","--offline","--","unix-libc"]}
+      ],
+      "outputs": ["build/unix-libc"],
+      "sources": [
+        "compiler/test-fixtures/UnixLibcAudit.hs",
+        "test/haskell-fixtures/UnixLibcFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "src/test/resources/core/original-unix-libc-descriptors.json"
+      ]
     }
   }
 }

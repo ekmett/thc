@@ -6,6 +6,10 @@ package thc.runtime
 import com.oracle.truffle.api.nodes.Node
 import thc.Language
 
+// Preserve the genuine installed owner; only this pinned Unix release is reviewed.
+private val unixUnit = Regex("unix-2\\.8\\.8\\.0-(?:inplace|[0-9a-f]+)")
+internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUnit.matches(unit)
+
 /** Exact pinned GHC/unix declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String?, val unit: String = "ghc-internal") {
@@ -112,6 +116,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     ICONV_CLOSE("hs_iconv_close", "ccall", "unsafe", listOf("Int64Rep", null), "Int32Rep"),
     ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep"),
     STRERROR("base_strerror_r", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int32Rep");
+
+    // These original unix declarations have the same CInt ABI as GHC's.
+    // Other symbols and releases require their own declaration evidence.
+    fun acceptsUnit(value: Any?): Boolean = value == unit ||
+        isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY)
 
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val waitStatus: Boolean get() = this == WCOREDUMP || this == WSTOPSIG || this == WIFSTOPPED ||
@@ -242,7 +251,7 @@ internal object CoreOriginalStdio {
             ?: throw RuntimeFault("Invalid original stdio call: calling convention/safety")
         requireProof(descriptor.keys == descriptorKeys && exactInteger(descriptor["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == operation.unit && target["isFunction"] == true,
+            target["kind"] == "static" && operation.acceptsUnit(target["unit"]) && target["isFunction"] == true,
             "static original installed-library function target")
         requireProof(descriptor["convention"] == operation.convention && descriptor["safety"] == operation.safety,
             "calling convention/safety")

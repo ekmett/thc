@@ -33,14 +33,23 @@ COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
 WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
-RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
+RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                  "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
+                  "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
+UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
@@ -367,6 +376,7 @@ CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
 REQUIRED = tuple(sorted({
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
+    *UNIX_LIBC_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
     *(["build/original-gmp/manifest.json"] if GMP_NATIVE_HOST else []),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
@@ -1356,6 +1366,8 @@ def allowed_payload(name, pins):
         return False
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
+    if parts[1] == "unix-libc":
+        return name in UNIX_LIBC_OUTPUTS
     if parts[1] == "proxy-void":
         return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":

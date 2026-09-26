@@ -1039,7 +1039,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(24, len(consumers))
+        self.assertEqual(25, len(consumers))
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)

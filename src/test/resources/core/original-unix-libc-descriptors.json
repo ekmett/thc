@@ -1,0 +1,198 @@
+{
+  "isatty": {
+    "schema": 1,
+    "target": {
+      "kind": "static",
+      "symbol": "isatty",
+      "unit": "unix-2.8.8.0-inplace",
+      "isFunction": true
+    },
+    "convention": "ccall",
+    "safety": "unsafe",
+    "arity": 2,
+    "suppliedArity": 2,
+    "argumentReps": [
+      {
+        "primReps": [
+          "Int32Rep"
+        ],
+        "kind": "long",
+        "evaluated": false
+      },
+      {
+        "primReps": [],
+        "kind": "void",
+        "evaluated": false
+      }
+    ],
+    "resultRep": {
+      "primReps": [
+        "Int32Rep"
+      ],
+      "kind": "unknown",
+      "evaluated": false,
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "primReps": [],
+          "kind": "void",
+          "evaluated": true
+        },
+        {
+          "primReps": [
+            "Int32Rep"
+          ],
+          "kind": "long",
+          "evaluated": true
+        }
+      ]
+    }
+  },
+  "getenv": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      },
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 2,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "AddrRep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 2,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "getenv",
+      "unit": "unix-2.8.8.0-inplace"
+    }
+  },
+  "dup": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "long",
+        "primReps": [
+          "Int32Rep"
+        ]
+      },
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 2,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "Int32Rep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "Int32Rep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 2,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "dup",
+      "unit": "unix-2.8.8.0-inplace"
+    }
+  },
+  "close": {
+    "argumentReps": [
+      {
+        "evaluated": false,
+        "kind": "long",
+        "primReps": [
+          "Int32Rep"
+        ]
+      },
+      {
+        "evaluated": false,
+        "kind": "void",
+        "primReps": []
+      }
+    ],
+    "arity": 2,
+    "convention": "ccall",
+    "resultRep": {
+      "aggregate": "unboxed-tuple",
+      "components": [
+        {
+          "evaluated": true,
+          "kind": "void",
+          "primReps": []
+        },
+        {
+          "evaluated": true,
+          "kind": "long",
+          "primReps": [
+            "Int32Rep"
+          ]
+        }
+      ],
+      "evaluated": false,
+      "kind": "unknown",
+      "primReps": [
+        "Int32Rep"
+      ]
+    },
+    "safety": "unsafe",
+    "schema": 1,
+    "suppliedArity": 2,
+    "target": {
+      "isFunction": true,
+      "kind": "static",
+      "symbol": "close",
+      "unit": "unix-2.8.8.0-inplace"
+    }
+  }
+}

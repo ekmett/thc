@@ -162,6 +162,7 @@ tasks.withType<Test>().configureEach {
             "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
             "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
             "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
+            "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
             "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
             "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
             "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
