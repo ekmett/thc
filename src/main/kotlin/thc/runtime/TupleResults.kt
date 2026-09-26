@@ -163,6 +163,9 @@ internal class TupleResultPool {
 /** A destination holds compile-time slot metadata only, never a frame or payload. */
 internal abstract class TupleDestination(val shape: TupleShape) {
     abstract fun consume(frame: VirtualFrame, node: Node, result: Any?)
+    /** AST callers continue from their written locals. A yielded bytecode call
+     * instead returns an owned result to its saved ResumeTupleApplication. */
+    open fun delimitedResult(frame: VirtualFrame, node: Node): Any? = null
 }
 internal class AstTupleDestination(shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray, private val offset: Int) : TupleDestination(shape) {
@@ -181,7 +184,10 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
     fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
         try { executeCall(frame, function, arguments) }
         catch (cut: DelimitedCut) {
-            if (destination is AstTupleDestination) cut.append(frame, DelimitedTupleStep(destination, this))
+            val pending = cut.frames.lastOrNull()
+            if (destination is AstTupleDestination && !(pending?.frame === frame &&
+                    (pending.step as? DelimitedPendingApplication)?.destination === destination))
+                cut.append(frame, DelimitedTupleStep(destination, this))
             throw cut
         }
     }
@@ -254,7 +260,23 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
         System.arraycopy(function.supplied, 0, packet, skip, prefixSize)
         System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount)
         if (arity < argsSize) {
-            val closure = requireClosure(force.execute(frame, scalar!!.call(frame, packet, false)))
+            val result = if (!DelimitedControl.enabled(this)) force.execute(frame, scalar!!.call(frame, packet, false))
+                else try {
+                    val answer = scalar!!.call(frame, packet, false)
+                    DelimitedControl.captureBytecode(answer, null)
+                    force.execute(frame, answer)
+                } catch (cut: DelimitedCut) {
+                    val remaining = arguments.copyOfRange(physicalCount, arguments.size)
+                    throw cut.append(frame, object : DelimitedPendingApplication {
+                        override val destination = this@DirectTupleCaller.destination
+                        override fun resume(frame: MaterializedFrame, input: DelimitedResume,
+                                            ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                            rest!!.execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf())
+                            return destination.delimitedResult(frame, this@DirectTupleCaller)
+                        }
+                    })
+                }
+            val closure = requireClosure(result)
             rest!!.execute(frame, closure, arguments.copyOfRange(physicalCount, arguments.size))
             return
         }
@@ -312,9 +334,9 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
     @Child private var tailCheck = TailCheck(metrics)
     @Child private var bounce = TupleBounce(destination, metrics)
     @Child private var typed = GenericInputCall(ScalarArrayInputSource(inputLayout), argsSize, tail, metrics, destination, 0)
-    fun execute(frame: VirtualFrame, initial: Closure, arguments: Array<Any?>) {
+    fun execute(frame: VirtualFrame, initial: Closure, arguments: Array<Any?>, initialOffset: Int = 0) {
         var function = initial
-        var offset = 0
+        var offset = initialOffset
         while (true) {
             TruffleSafepoint.poll(this)
             val remaining = argsSize - offset
@@ -334,7 +356,30 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
             System.arraycopy(function.supplied, 0, packet, skip, function.supplied.size)
             System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.size, physicalCount)
             if (!exact) {
-                function = requireClosure(force.execute(frame, scalar.call(frame, function.target, packet, false)))
+                val result = if (!DelimitedControl.enabled(this)) force.execute(frame, scalar.call(frame, function.target, packet, false))
+                    else try {
+                        val answer = scalar.call(frame, function.target, packet, false)
+                        DelimitedControl.captureBytecode(answer, null)
+                        force.execute(frame, answer)
+                    } catch (cut: DelimitedCut) {
+                        val remaining = arguments.copyOf()
+                        val next = offset + count
+                        throw cut.append(frame, object : DelimitedPendingApplication {
+                            override val destination = this@GenericTupleCaller.destination
+                            override fun resume(frame: MaterializedFrame, input: DelimitedResume,
+                                                ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                                try { execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf(), next) }
+                                catch (cut: DelimitedCut) {
+                                    if (destination is AstTupleDestination &&
+                                        (cut.frames.lastOrNull()?.step as? DelimitedPendingApplication)?.destination !== destination)
+                                        cut.append(frame, DelimitedTupleStep(destination, this@GenericTupleCaller))
+                                    throw cut
+                                }
+                                return destination.delimitedResult(frame, this@GenericTupleCaller)
+                            }
+                        })
+                    }
+                function = requireClosure(result)
                 offset += count
                 continue
             }
@@ -522,6 +567,8 @@ internal class BytecodeTupleSlots(shape: TupleShape,
 /** The private checkpoint path intercepts a yielded IO action before tuple consumption. */
 internal class ContinuationTupleDestination(private val destination: BytecodeTupleSlots) :
     TupleDestination(destination.shape) {
+    override fun delimitedResult(frame: VirtualFrame, node: Node): Any? =
+        ownedTupleResult(destination.finish(frame, (node.rootNode as BytecodeRoot).bytecodeNode), shape)
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
         DelimitedControl.captureBytecode(result, shape)
         if (result is TailYield) throw TupleCallYield(result.continuation, true, result.target)

@@ -39,7 +39,13 @@ both a separately called worker and an exported local join; neither restarts the
 original action. A resumed dense-ABI function detaches its old result destination
 before reentering its body.
 
-Overapplication with unfinished applications and composition with one-shot asynchronous suspension remain
+Scalar-argument overapplications retain the not-yet-consumed arguments and
+resume the existing dispatcher at that offset, after the suspended callee has
+returned its function. Both scalar and tuple results work through direct and
+megamorphic calls. The captured tuple consumer runs once; bytecode receives an
+owned result at its saved call site. Neither path reruns the callee prefix.
+
+Applications with unboxed tuple/vector inputs and composition with one-shot asynchronous suspension remain
 unestablished and require additional runtime work. This checkpoint must not be
 described as complete delimited-continuation support. Capturing through a thunk
 update rejects explicitly; GHC also excludes update/STM/foreign stack barriers
@@ -60,11 +66,11 @@ cabal run exe:thc-fixtures --offline -- delimited-continuations
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.DelimitedContinuationsTest --rerun
 ```
 
-The Haskell producer retains the native GHC invocation, its 39 results, original
-pre/post Core, 26 strict entry audits, command stdout/stderr, and source/artifact
+The Haskell producer retains the native GHC invocation, its 51 results, original
+pre/post Core, 34 strict entry audits, command stdout/stderr, and source/artifact
 SHA-256 provenance under `build/delimited-continuations/`. The Kotlin arithmetic
-and shared-state model is independent of THC execution. Each mode checks 156
-interpreted observations and 52 first-installed executions with exact guest-root
+and shared-state model is independent of THC execution. Each mode checks 228
+interpreted observations and 76 first-installed executions with exact guest-root
 entry deltas, no intervening guest calls, and balanced argument/result pools and
 masking state. These checks establish this fixture's scope, not universal
 continuation correctness or allocation-free capture.
@@ -105,3 +111,29 @@ All 34 continuation/control-flow regression tests pass again in default
 (`20260926-055257-0k26t_0h`) and dense (`20260926-055406-ip0qk49m`) modes.
 The producer's 122-file closed cache payload and 249 fast fixture/cache tests
 also pass; the same native artifacts serve both backend and handoff matrices.
+
+The pending-application failure is retained in `20260926-055611-7tkele3h`:
+an actual two-argument GHC worker, applied to three arguments, resumed as a
+closure where the caller expected its eventual tuple. The expanded examples
+exercise scalar and tuple results and four distinct targets at each generic
+call site. Source checks retain the two-argument worker and returned lambda,
+not an eta-expanded substitute. The four-target example enters 19 original
+functions, with the application helper called four times: exactly 22 entries.
+Its first-installed check initially caught an incomplete test target inventory
+(`20260926-060101-jxrx7fea`, 20 instead of 22). The inventory now starts from all
+genuine global lambdas, including targets reached only indirectly, and checks
+the exact source-derived function labels. Already-forced source CAFs remain
+compiled and monitored too. Expected entry counts and the no-settling rule are
+unchanged.
+All examples run with normal call-target splitting. The two four-target cases
+also run with splitting disabled to force the generic dispatch paths; all
+active clones are compiled in the normal run, with source body identities
+checked independently of the number of cloned call targets.
+The resulting 38-test continuation/application, tail, join, and handoff suite
+passes in default (`20260926-061038-5bfxcdgw`) and dense
+(`20260926-061245-ppnja5dd`) modes. The final producer
+(`20260926-060726-j00g5v3k`) supplies the same 51 native observations and 34
+strict Core audits to both runs. Its closed 154-file payload, 249 fast
+fixture/cache checks, and 13 coverage checks pass. Typed tuple/vector input
+capture and mixed one-shot asynchronous suspension remain outside this tested
+slice.

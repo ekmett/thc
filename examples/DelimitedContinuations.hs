@@ -8,6 +8,88 @@ module DelimitedContinuations where
 
 import GHC.Exts
 
+{-# OPAQUE scalarApplicationWorker #-}
+scalarApplicationWorker :: PromptTag# Int -> State# RealWorld -> Int# -> Int#
+scalarApplicationWorker tag s = case control0# tag (\k st -> k (\sx -> (# sx, 17# #)) st) s of
+  (# _, value #) -> \n -> value +# n
+
+{-# OPAQUE scalarApplicationWorker2 #-}
+scalarApplicationWorker2 :: PromptTag# Int -> State# RealWorld -> Int# -> Int#
+scalarApplicationWorker2 tag s = case control0# tag (\k st -> k (\sx -> (# sx, 18# #)) st) s of
+  (# _, value #) -> \n -> value +# n
+
+{-# OPAQUE scalarApplicationWorker3 #-}
+scalarApplicationWorker3 :: PromptTag# Int -> State# RealWorld -> Int# -> Int#
+scalarApplicationWorker3 tag s = case control0# tag (\k st -> k (\sx -> (# sx, 19# #)) st) s of
+  (# _, value #) -> \n -> value +# n
+
+{-# OPAQUE scalarApplicationWorker4 #-}
+scalarApplicationWorker4 :: PromptTag# Int -> State# RealWorld -> Int# -> Int#
+scalarApplicationWorker4 tag s = case control0# tag (\k st -> k (\sx -> (# sx, 20# #)) st) s of
+  (# _, value #) -> \n -> value +# n
+
+{-# OPAQUE applyScalarWorker #-}
+applyScalarWorker :: (PromptTag# Int -> State# RealWorld -> Int# -> Int#)
+  -> PromptTag# Int -> Int# -> State# RealWorld -> (# State# RealWorld, Int #)
+applyScalarWorker worker tag n s = case worker tag s n of value -> (# s, I# value #)
+
+{-# OPAQUE polymorphicScalarApplications #-}
+polymorphicScalarApplications :: Int# -> Int#
+polymorphicScalarApplications n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (applyScalarWorker scalarApplicationWorker tag n) s1 of
+    (# s2, I# a #) -> case prompt# tag (applyScalarWorker scalarApplicationWorker2 tag n) s2 of
+      (# s3, I# b #) -> case prompt# tag (applyScalarWorker scalarApplicationWorker3 tag n) s3 of
+        (# s4, I# c #) -> case prompt# tag (applyScalarWorker scalarApplicationWorker4 tag n) s4 of
+          (# _, I# d #) -> a +# b +# c +# d +# 100#
+
+{-# OPAQUE resumedScalarApplication #-}
+resumedScalarApplication :: Int# -> Int#
+resumedScalarApplication n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (\s2 -> case scalarApplicationWorker tag s2 n of
+    value -> (# s2, I# (value +# 100#) #)) s1 of
+      (# _, I# answer #) -> answer
+
+{-# OPAQUE applicationWorker2 #-}
+applicationWorker2 :: PromptTag# Int -> State# RealWorld -> Int# -> (# State# RealWorld, Int #)
+applicationWorker2 tag s = case control0# tag (\k st -> k (\sx -> (# sx, 18# #)) st) s of
+  (# st, value #) -> \n -> (# st, I# (value +# n) #)
+
+{-# OPAQUE applicationWorker3 #-}
+applicationWorker3 :: PromptTag# Int -> State# RealWorld -> Int# -> (# State# RealWorld, Int #)
+applicationWorker3 tag s = case control0# tag (\k st -> k (\sx -> (# sx, 19# #)) st) s of
+  (# st, value #) -> \n -> (# st, I# (value +# n) #)
+
+{-# OPAQUE applicationWorker4 #-}
+applicationWorker4 :: PromptTag# Int -> State# RealWorld -> Int# -> (# State# RealWorld, Int #)
+applicationWorker4 tag s = case control0# tag (\k st -> k (\sx -> (# sx, 20# #)) st) s of
+  (# st, value #) -> \n -> (# st, I# (value +# n) #)
+
+{-# OPAQUE applyWorker #-}
+applyWorker :: (PromptTag# Int -> State# RealWorld -> Int# -> (# State# RealWorld, Int #))
+  -> PromptTag# Int -> Int# -> State# RealWorld -> (# State# RealWorld, Int #)
+applyWorker worker tag n s = worker tag s n
+
+{-# OPAQUE polymorphicApplications #-}
+polymorphicApplications :: Int# -> Int#
+polymorphicApplications n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (applyWorker applicationWorker tag n) s1 of
+    (# s2, I# a #) -> case prompt# tag (applyWorker applicationWorker2 tag n) s2 of
+      (# s3, I# b #) -> case prompt# tag (applyWorker applicationWorker3 tag n) s3 of
+        (# s4, I# c #) -> case prompt# tag (applyWorker applicationWorker4 tag n) s4 of
+          (# _, I# d #) -> a +# b +# c +# d +# 100#
+
+{-# OPAQUE applicationWorker #-}
+applicationWorker :: PromptTag# Int -> State# RealWorld -> Int# -> (# State# RealWorld, Int #)
+applicationWorker tag s = case control0# tag (\k st -> k (\sx -> (# sx, 17# #)) st) s of
+  (# st, value #) -> \n -> (# st, I# (value +# n) #)
+
+{-# OPAQUE resumedApplication #-}
+resumedApplication :: Int# -> Int#
+resumedApplication n = runRW# $ \s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag (\s2 -> case applicationWorker tag s2 n of
+    (# s3, I# value #) -> (# s3, I# (value +# 100#) #)) s1 of
+      (# _, I# answer #) -> answer
+
 -- An unlifted result cannot acquire an update frame. The strict call consumes
 -- the same State# thread as the enclosing prompt; no nested runRW#/unsafe IO.
 {-# OPAQUE scalarWorker #-}

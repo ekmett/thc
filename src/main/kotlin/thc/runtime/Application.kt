@@ -201,7 +201,22 @@ internal abstract class Dispatch(
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity))
         if (hasEnvironment) packet[1] = function.environment
         // There is pending application work, so this first call is not tail.
-        val result = force.execute(frame, caller.call(frame, packet, false))
+        val result = if (!DelimitedControl.enabled(this)) force.execute(frame, caller.call(frame, packet, false))
+            else try {
+                val answer = caller.call(frame, packet, false)
+                DelimitedControl.captureBytecode(answer, null)
+                force.execute(frame, answer)
+            } catch (cut: DelimitedCut) {
+                val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
+                throw cut.append(frame, object : DelimitedStep {
+                    override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame, input: DelimitedResume,
+                                        ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                        val answer = rest.execute(frame, requireClosure(force.execute(frame, input.get())), remaining.copyOf())
+                        DelimitedControl.captureBytecode(answer, null)
+                        return answer
+                    }
+                })
+            }
         val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
         return rest.execute(frame, requireClosure(result), remaining)
     }
@@ -230,7 +245,7 @@ internal abstract class Dispatch(
     fun indirectOverapplied(frame: VirtualFrame, function: Closure, arguments: Array<Any?>,
                             @Bind node: Node,
                             @Cached(inline = true) generic: GenericDispatch): Any? =
-        generic.execute(frame, node, function, arguments, argsSize, argumentLayout, tailCall, metrics)
+        generic.execute(frame, node, function, arguments, argsSize, argumentLayout, tailCall, metrics, 0)
 
     fun targetInputLayout(target: RootCallTarget) = (target.rootNode as? GuestRoot)?.inputLayout
     fun createCaller(target: RootCallTarget, prefixSize: Int) = DirectCallerNode(target, metrics, evaluatedArguments, prefixSize)
@@ -251,20 +266,21 @@ internal abstract class Dispatch(
 @GenerateInline
 internal abstract class GenericDispatch : Node() {
     abstract fun execute(frame: VirtualFrame, inliningTarget: Node, function: Closure,
-                         arguments: Array<Any?>, logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics): Any?
+                         arguments: Array<Any?>, logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean,
+                         metrics: Metrics, initialOffset: Int): Any?
 
     companion object {
         @JvmStatic
         @Specialization
         fun apply(frame: VirtualFrame, node: Node, initial: Closure, arguments: Array<Any?>,
-                  logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics,
+                  logicalCount: Int, layout: ArgumentLayout?, tailCall: Boolean, metrics: Metrics, initialOffset: Int,
                   @Cached(value = "createCaller(metrics)", neverDefault = true) caller: IndirectCallerNode,
                   @Cached(value = "createForce(metrics)", neverDefault = true) force: Force,
                   @Cached(value = "createTyped(layout, logicalCount, tailCall, metrics)", neverDefault = true) typed: GenericInputCall,
                   @Cached underapplied: InlinedConditionProfile,
                   @Cached exact: InlinedConditionProfile): Any? {
             var function = initial
-            var offset = 0
+            var offset = initialOffset
             while (true) {
                 TruffleSafepoint.poll(node)
                 val remaining = logicalCount - offset
@@ -287,7 +303,25 @@ internal abstract class GenericDispatch : Node() {
                 if (exact.profile(node, count == remaining)) {
                     return caller.call(frame, function.target, packet, tailCall)
                 }
-                val result = caller.call(frame, function.target, packet, false)
+                val result = if (!DelimitedControl.enabled(node)) caller.call(frame, function.target, packet, false)
+                    else try {
+                        val answer = caller.call(frame, function.target, packet, false)
+                        DelimitedControl.captureBytecode(answer, null)
+                        answer
+                    } catch (cut: DelimitedCut) {
+                        val remainingArguments = arguments.copyOf()
+                        val next = offset + count
+                        throw cut.append(frame, object : DelimitedStep {
+                            override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame, input: DelimitedResume,
+                                                ambient: MaskingState, outerMask: DelimitedStep?): Any? {
+                                val answer = apply(frame, node, requireClosure(force.execute(frame, input.get())),
+                                    remainingArguments.copyOf(), logicalCount, layout, tailCall, metrics, next,
+                                    caller, force, typed, underapplied, exact)
+                                DelimitedControl.captureBytecode(answer, null)
+                                return answer
+                            }
+                        })
+                    }
                 offset += count
                 function = requireClosure(force.execute(frame, result))
             }

@@ -28,6 +28,12 @@ internal interface DelimitedStep {
                outerMask: DelimitedStep?): Any?
 }
 
+/** A pending application already owns the destination that its outer dispatcher
+ * would otherwise consume. Capture that consumer only once. */
+internal interface DelimitedPendingApplication : DelimitedStep {
+    val destination: TupleDestination
+}
+
 /** Lexical control transfers belong to their saved owner, not the resumer's
  * ordinary trampoline. Otherwise they can silently discard caller suffixes. */
 internal interface DelimitedTransferStep : DelimitedStep {
@@ -264,6 +270,12 @@ internal class DelimitedActionSite(private val language: Language, private val m
 }
 
 internal object DelimitedControl {
+    fun enabled(node: Node): Boolean = when (val root = node.rootNode) {
+        is FunctionRoot -> root.enableDelimited
+        is BytecodeRoot -> root.isDelimitedEnabled
+        is DelimitedContinuationRoot -> true
+        else -> false
+    }
     fun contains(value: Any?): Boolean = when (value) {
         is Map<*, *> -> value.values.any(::contains)
         is List<*> -> value.take(2) in listOf(listOf("prim", "prompt#"), listOf("prim", "control0#")) || value.any(::contains)
