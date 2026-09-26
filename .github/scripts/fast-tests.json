@@ -17,6 +17,12 @@
     "src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/kotlin/thc/runtime/GuestEnvironment.kt": {
+      "junit": ["thc.runtime.GuestEnvironmentTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt": {
+      "junit": ["thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/GuestArguments.kt": {
       "junit": ["thc.runtime.GuestArgumentsTest"], "python": []
     },

@@ -297,6 +297,36 @@ default/manual/automatic flags and evaluates `flag`, `os`, `arch` and `impl`
 conditions. Unknown explicit flag names are errors. Repeated flag settings use
 the last value, following Cabal's flag-assignment behavior.
 
+## Guest environment
+
+The command-line context inherits its host-authorized environment. Original
+GHC 9.14.1 POSIX `getenv`, `putenv`, `__hsbase_unsetenv` and `__hscore_environ`
+operate on context-owned storage: guest `setEnv` and `unsetEnv` do not change
+the JVM process or another THC context. Custom embedding contexts retain
+Truffle's environment-access policy and explicit environment overrides.
+
+Initial host strings use the selected Linux UTF-8 filesystem encoding. Subsequent
+guest C strings retain their bytes. `putenv` retains its caller's buffer, so
+mutating that buffer changes the value returned by `getenv`; the caller must
+keep it live. Returned strings and null-terminated pointer vectors obey the
+existing owned-native allocation lifetime checks. Environment mutation may
+invalidate a previously returned vector. This is the current Linux x86_64
+native-allocation path, not Windows environment support or child-process launch.
+
+The original string encoder's `realloc` uses the same owned allocation registry.
+Successful resizing preserves the retained byte prefix and retires all old
+aliases; allocation failure leaves the original allocation live. Null input is
+`malloc`, while nonnull input with size zero follows Linux's free-and-null
+contract. Interior pointers, cross-context allocations and a synchronous resize
+of a currently borrowed allocation reject rather than bypass lifetime checks.
+
+`cabal test environment-full-core -ffull-core-tests` compares original
+`System.Environment` operations with native GHC through the installed-Core
+provider. It uses the same `THC_INSTALLED_CORE_GHC`,
+`THC_INSTALLED_CORE_GHC_PKG` and `THC_INSTALLED_CORE_GHC_SOURCE` settings as the
+other full-Core tests. The JVM controls additionally cover pointer aliasing,
+context isolation, ABI rejection and first-installed calls on both backends.
+
 ## What the plan means
 
 `Distribution.PackageDescription.Parsec.parseGenericPackageDescription` parses

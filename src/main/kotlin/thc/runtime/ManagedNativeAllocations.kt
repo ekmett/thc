@@ -115,6 +115,43 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
             threads.leaveForeign(previous)
         }
     }
+    /** Allocate/copy/retire is a valid realloc implementation: successful calls
+     * invalidate every old alias, and allocation failure leaves the old owner
+     * untouched. Reserve ownership without holding the registry across borrows. */
+    @TruffleBoundary fun realloc(address: ManagedAddress, size: Long): ManagedAddress {
+        current()
+        if (size < 0) fault("Native realloc size exceeds the signed Long segment domain")
+        if (address === ManagedAddress.nullAddress()) return malloc(size)
+        val owner = synchronized(this) {
+            val allocation = freeableOwner(address)!!
+            freeing.add(allocation)
+            allocation
+        }
+        var replacement = ManagedAddress.nullAddress()
+        var retired = false
+        try {
+            // This is the selected Linux libc contract for realloc(p, 0).
+            if (size != 0L) {
+                replacement = malloc(size)
+                if (replacement === ManagedAddress.nullAddress()) return replacement
+                owner.access { source -> replacement.nativeAllocation()!!.access { destination ->
+                    destination.asSlice(0, minOf(owner.size, size)).copyFrom(source.asSlice(0, minOf(owner.size, size)))
+                } }
+            }
+            owner.release()
+            retired = true
+            return replacement
+        } catch (failure: Throwable) {
+            if (replacement !== ManagedAddress.nullAddress()) try { free(replacement) }
+                catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        } finally {
+            synchronized(this) {
+                if (retired) live.remove(owner)
+                freeing.remove(owner)
+            }
+        }
+    }
     /** Check the same ownership contract when installing an &free callback. */
     @Synchronized @TruffleBoundary fun requireFreeTarget(address: ManagedAddress) {
         current()
