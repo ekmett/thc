@@ -100,6 +100,12 @@ class OriginalRtsLocksTest {
                 assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any?>(), audit["issues"])
                 assertEquals(emptyList<Any?>(), audit["missingGlobals"])
             }
+            for (name in listOf("originalLock", "originalUnlock")) {
+                val evidence = ArrayCoreEvidence(module, name)
+                assertEquals(1, evidence.bindings.size)
+                assertEquals(2, evidence.guestLambdas(evidence.root["expr"]).size)
+                assertEquals(1, evidence.loweredGuestLambdas(evidence.root["expr"]).size, "Exact State# redex")
+            }
             for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
                 val program = load(language, backend, module + ("instrument" to true))
                 val entries = listOf("originalLock", "originalUnlock").associateWith(program::entryTarget)
@@ -117,7 +123,7 @@ class OriginalRtsLocksTest {
                         assertEquals(row[4], Calls.target(entries.getValue(name), arrayOf(0L, *args.toTypedArray())), "$stage/$backend/${row[0]}")
                         assertEquals(row[6], state.stdio.errno())
                         if (compiled) {
-                            assertEquals(before + active.getValue(name).size, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                            assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                             for ((key, entry) in entries) assertEquals(active.getValue(key), targets(entry))
                             active.values.flatten().forEach(::valid)
                         }
@@ -129,7 +135,7 @@ class OriginalRtsLocksTest {
                 exercise(false)
                 active = entries.mapValues { targets(it.value) }
                 for ((name, targets) in active) {
-                    assertEquals(2, targets.size, "Original entry plus runRW lambda: $name")
+                    assertEquals(1, targets.size, "Public entry with in-frame runRW body: $name")
                     val binding = (module["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
                     assertEquals(2, OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" })
                     targets.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }

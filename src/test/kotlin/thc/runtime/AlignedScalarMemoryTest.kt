@@ -139,10 +139,11 @@ class AlignedScalarMemoryTest {
                 assertEquals(2, lambdas.size, entry + " public and runRW state roots")
                 assertSame(outer, lambdas[0])
                 assertSame(state, lambdas[1])
-                lambdas.map { expression ->
+                assertSame(state, evidence.immediateStateLambda(stateCall))
+                evidence.loweredGuestLambdas(outer).map { expression ->
                     val formals = expression[1] as List<Map<String, Any?>>
                     "lambda ${formals.joinToString { it["name"].toString() }}"
-                }.toSet().also { assertEquals(2, it.size, entry + " distinct original Core root labels") }
+                }.toSet().also { assertEquals(1, it.size, entry + " public root after in-frame State# lowering") }
             }
             for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
@@ -171,7 +172,7 @@ class AlignedScalarMemoryTest {
                             for (row in inputs) for (selector in 0..5)
                                 assertEquals(row.expected[selector], call(row, selector), stage + "/" + backend + "/" + row)
                             val targets = activeTargets(target)
-                            assertEquals(2, targets.size, entryLabel + " active public and state roots")
+                            assertEquals(1, targets.size, entryLabel + " active public root; State# body stays in-frame")
                             assertEquals(expectedLabels.getValue(type), targets.map { it.rootNode.name }.toSet(),
                                 entryLabel + " original Core root labels")
                             val callCount = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
@@ -191,13 +192,13 @@ class AlignedScalarMemoryTest {
                                 val label = stage + "/" + backend + "/" + row + "/" + selector
                                 val before = count()
                                 assertEquals(row.expected[selector], call(row, selector), label)
-                                assertEquals(2L, count() - before, label + " exact public and state compiled entries")
+                                assertEquals(1L, count() - before, label + " exact compiled public entry")
                                 assertEquals(callsBeforeSetup, interpretedCalls(), label + " no interpreted guest entries")
                                 assertEquals(argumentAllocations, handoff.arguments.allocations, label + " pooled arguments reused")
                                 assertEquals(resultAllocations, handoff.results.allocations, label + " pooled results reused")
                                 assertSame(target, program.entryTarget(entry), label)
                                 val after = activeTargets(target)
-                                assertEquals(2, after.size, label)
+                                assertEquals(1, after.size, label)
                                 assertTrue(targets.zip(after).all { (a, b) -> a === b }, label)
                                 targets.forEach { valid(it, label) }
                             }

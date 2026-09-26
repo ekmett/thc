@@ -78,6 +78,24 @@ class ArrayCoreEvidenceTest {
         }
     }
 
+    @Test fun inFrameStateProofKeepsReturnedLambdasAndValidatesMultiargumentRoots() {
+        val nested = root(listOf("lam", listOf(formal("returned")), leaf))
+        val outer = (nested["expr"] as List<Any?>).toMutableList().also {
+            it[1] = listOf(formal("x"), formal("y"))
+        }
+        val proof = ArrayCoreEvidence(module(nested + ("expr" to outer)), "root")
+        assertEquals(3, proof.guestLambdas(outer).size)
+        val kept = proof.loweredGuestLambdas(outer)
+        assertEquals(2, kept.size)
+        assertSame(outer, kept[0])
+        assertEquals("returned", ((kept[1][1] as List<*>).single() as Map<*, *>)["id"])
+        assertThrows(IllegalArgumentException::class.java) { proof.stateLambda(outer) }
+        for (bad in listOf(changedCall { it[2] = listOf(leaf) }, changedCall { it[3] = listOf(true) })) {
+            val rejected = ArrayCoreEvidence(module(bad), "root")
+            assertThrows(IllegalArgumentException::class.java) { rejected.loweredGuestLambdas(bad["expr"]) }
+        }
+    }
+
     @Test fun onlyCompleteProvenJoinPrefixesAreExcludedAndTheirBodiesRemainVisible() {
         fun join() = mutableMapOf<String, Any?>("id" to "j", "joinValueArity" to 1L,
             "joinResultRep" to intRep, "info" to mapOf("joinArity" to 1L),

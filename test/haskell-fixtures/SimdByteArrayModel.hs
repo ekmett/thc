@@ -131,9 +131,8 @@ helper family name = lookup name
 
 guestCalls :: Family -> String -> Int
 guestCalls family name
-  | floating family && "IndexCase" `isSuffixOf` name && not (any (`isPrefixOf` name) ["vectorGraph","scalarGraph"]) = 4
-  | Just _ <- helper family name = 3
-  | otherwise = 2
+  | Just _ <- helper family name = 2
+  | otherwise = 1
 
 initialBytes :: Family -> [Integer]
 initialBytes family = [((base + fromIntegral (i `div` 4)*0x01030507) `shiftR` (8*(i `mod` 4))) .&. 255 | i <- [0..63 :: Int]]

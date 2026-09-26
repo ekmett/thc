@@ -1053,6 +1053,11 @@
       "junit": [
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
+        "thc.runtime.HintTraceTest",
+        "thc.runtime.OriginalOpenTest",
+        "thc.runtime.OriginalFstatTest",
+        "thc.runtime.OriginalPosixStatTest",
+        "thc.runtime.OriginalRtsLocksTest",
         "thc.runtime.AtomicAddressTest",
         "thc.runtime.AtomicIntArrayTest",
         "thc.runtime.DelimitedContinuationsTest",

@@ -82,6 +82,16 @@ class HintTraceTest {
         }
         for (stage in receipt["stages"] as List<String>) {
             val module = module(stage)
+            for (name in listOf("hints", "traces")) {
+                val proof = ArrayCoreEvidence(module, name)
+                proof.stateLambda(proof.root["expr"])
+                assertEquals(2, proof.guestLambdas(proof.root["expr"]).size, "Original entry and state lambda")
+                assertEquals(1, proof.loweredStateLambdas(proof.root["expr"]).size, "Exact runRW redex lowers in-frame")
+                // Floating string/bottom CAFs remain supplied; none contains a guest lambda.
+                proof.bindings.filter { it !== proof.root }.forEach { binding ->
+                    assertTrue(proof.guestLambdas(binding["expr"]).isEmpty())
+                }
+            }
             assertTrue(primitives(module).containsAll(prefetchArities.keys + TraceOp.entries.map { it.primitive }))
             for (backend in listOf("ast", "bytecode")) {
                 val output = ByteArrayOutputStream()
@@ -103,12 +113,13 @@ class HintTraceTest {
                         }
                         rows.forEach(::check)
                         val active = listOf("hints", "traces").flatMap { targets(program.entryTarget(it)) }.distinct()
+                        assertEquals(2, active.size, "One lowered public root for hints and traces")
                         active.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
                         for (row in rows) {
                             val before = (program.diagnostics()["compiledEntries"] as Number).toLong()
                             check(row)
-                            // Each original function enters itself and its runRW lambda, exactly once.
-                            assertEquals(before + 2, (program.diagnostics()["compiledEntries"] as Number).toLong())
+                            // Each original function executes its proven State# body in-frame.
+                            assertEquals(before + 1, (program.diagnostics()["compiledEntries"] as Number).toLong())
                             active.forEach(::valid)
                         }
                     } finally { context.leave() }

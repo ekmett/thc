@@ -84,9 +84,9 @@ class StableNamesTest {
                     val evidence = ArrayCoreEvidence(module, entry)
                     // The unforced bottom is a separate CAF, not an executed root.
                     evidence.stateLambda(evidence.root["expr"])
-                    assertEquals(evidence.guestLambdas(evidence.root["expr"]).size.toLong(),
+                    assertEquals(evidence.loweredStateLambdas(evidence.root["expr"]).size.toLong(),
                         (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before,
-                        "$stage/$backend/$entry original entry and immediate state lambdas")
+                        "$stage/$backend/$entry original entry with in-frame State# body")
                     ThreadInventoryCoreEvidence.released(language)
                 } finally { context.leave() }
             }
