@@ -3307,6 +3307,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = TextForeignOp.class, name = "operation")
+    public static final class OriginalTextCall {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                TextForeignOp operation, Object bytes, long offset, long length, long count, Object state,
+                @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = ManagedText.invoke(operation, bytes, offset, length, count);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = FloatForeignOp.class, name = "operation")
     public static final class OriginalFloatCall {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,

@@ -79,6 +79,7 @@ import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
 import WcwidthFixtures (prepareWcwidth)
+import TextCbitsFixtures (prepareTextCbits)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
@@ -968,6 +969,7 @@ main = do
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["getentropy"] -> prepareGetEntropy root
     ["wcwidth"] -> prepareWcwidth root
+    ["text-cbits"] -> prepareTextCbits root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
