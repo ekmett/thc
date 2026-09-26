@@ -60,6 +60,31 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertFalse(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
+    def test_scalar_memory_owns_closed_native_outputs_and_rejects_stale_receipts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        cache = fast_fixtures.fast_inputs
+        group = manifest['groups']['scalar-memory-utilities']
+        self.assertEqual('scalar-memory-utilities', owners['thc.runtime.ScalarMemoryUtilitiesTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'scalar-memory-utilities']}], group['commands'])
+        self.assertIn('"$fixture_bin" scalar-memory-utilities', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertTrue(cache.SCALAR_MEMORY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        name = 'build/scalar-memory-utilities/manifest.json'
+        artifacts = {}
+        for item in cache.SCALAR_MEMORY_OUTPUTS - {name}:
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.SCALAR_MEMORY_ENTRIES),
+            stages=['pre','post'], nativeRows=271, artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        self.assertEqual(cache.SCALAR_MEMORY_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for bad in (dict(receipt, schema=True), dict(receipt, ghc='9.12.2'), dict(receipt, entries=[]),
+                    dict(receipt, nativeRows=270), dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
+            with self.assertRaises(cache.CacheMiss): cache.scalar_memory_artifact_hashes(bad)
+        (self.root / 'build/scalar-memory-utilities/native/oracle').write_text('mutated')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+
     def test_thread_inventory_owns_exact_native_outputs_and_rejects_partial_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

@@ -86,11 +86,11 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
-      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest"],
+      "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
-      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest"],
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
@@ -897,6 +897,18 @@
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
+    "compiler/test-fixtures/ScalarMemoryUtilities.hs": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
     "scripts/prepare-address-identity.sh": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
@@ -1352,6 +1364,7 @@
         "thc.runtime.MaskFunctionNativeTest",
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.SmallArrayTest",
+        "thc.runtime.ScalarMemoryUtilitiesTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.WideCharAddressTest",
         "thc.runtime.OriginalStdioNativeTest",

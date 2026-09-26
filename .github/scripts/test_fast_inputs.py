@@ -102,6 +102,33 @@ class FastInputTests(unittest.TestCase):
             self.put(name, json.dumps(manifest))
             with self.assertRaises(cache.CacheMiss): self.pack()
 
+    def test_scalar_memory_exact_archive_and_missing_native_binary(self):
+        self.assertEqual(25, len(cache.SCALAR_MEMORY_OUTPUTS))
+        self.assertIn('build/scalar-memory-utilities/manifest.json', DECLARED_REQUIRED)
+        for path in cache.SCALAR_MEMORY_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for suffix in ('extra.json', 'native/other', 'post/core/Other.json', 'failed-native-import/command.json'):
+            self.assertFalse(cache.allowed_payload('build/scalar-memory-utilities/' + suffix, {}))
+        name = 'build/scalar-memory-utilities/manifest.json'
+        binary = 'build/scalar-memory-utilities/native/oracle'
+        artifacts = cache.SCALAR_MEMORY_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+        (self.root / binary).chmod(0o755)
+        original = json.dumps(dict(schema=1, ghc='9.14.1', entries=list(cache.SCALAR_MEMORY_ENTRIES),
+            stages=['pre','post'], nativeRows=271, inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/' + binary])
+            self.rejected_without_writes(changed)
+
     def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
         self.assertEqual(20, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)

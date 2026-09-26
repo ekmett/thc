@@ -37,6 +37,7 @@ import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
 import ThreadStatusFixtures (prepareThreadStatus)
 import ThreadInventoryFixtures (prepareThreadInventory)
+import ScalarMemoryUtilitiesFixtures (prepareScalarMemoryUtilities)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
@@ -981,6 +982,7 @@ main = do
     ["thread-label"] -> prepareThreadLabel root
     ["thread-status"] -> prepareThreadStatus root
     ["thread-inventory"] -> prepareThreadInventory root
+    ["scalar-memory-utilities"] -> prepareScalarMemoryUtilities root
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root
     ["mask-functions"] -> prepareMaskFunctions root

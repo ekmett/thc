@@ -2554,6 +2554,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         SmallArrayOp.WRITE -> e.builder.beginWriteSmallArray()
+                        SmallArrayOp.SHRINK -> e.builder.beginShrinkSmallArray()
                         SmallArrayOp.CLONE -> e.builder.beginCloneSmallArray()
                         SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.beginTransferSmallArray(operation == SmallArrayOp.COPY_MUTABLE)
                         else -> e.builder.beginSizeSmallArray()
@@ -2561,6 +2562,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     when (operation) {
                         SmallArrayOp.WRITE -> e.builder.endWriteSmallArray()
+                        SmallArrayOp.SHRINK -> e.builder.endShrinkSmallArray()
                         SmallArrayOp.CLONE -> e.builder.endCloneSmallArray()
                         SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> e.builder.endTransferSmallArray()
                         else -> e.builder.endSizeSmallArray()
@@ -2753,6 +2755,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.beginAddressWrite(false)
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray(byteOffset)
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr(byteOffset)
+                        PinnedMemoryOp.COPY_ADDR -> e.builder.beginMoveAddress()
+                        PinnedMemoryOp.SET_ADDR -> e.builder.beginFillAddress()
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
                         PinnedMemoryOp.WRITE_WIDE_CHAR -> e.builder.beginWriteNativeScalarOffAddr(4, byteOffset)
                         PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
@@ -2771,6 +2775,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.endByteArrayContents()
                         PinnedMemoryOp.WRITE_ADDR -> e.builder.endAddressWrite()
                         PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.endAddressWrite()
+                        PinnedMemoryOp.COPY_ADDR -> e.builder.endMoveAddress()
+                        PinnedMemoryOp.SET_ADDR -> e.builder.endFillAddress()
                         PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.endWriteAddrArray()
                         PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.endWriteWord16OffAddr()
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32, PinnedMemoryOp.WRITE_WIDE_CHAR,
@@ -2812,7 +2818,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.NEW -> e.builder.beginNewByteArray(destination[0])
                         ByteArrayOp.RESIZE -> e.builder.beginResizeByteArray(false, destination[0])
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
-                        ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
+                        ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.beginIntArrayAccess(byteOffset, destination[0])
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE ->
@@ -2840,7 +2846,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
                         ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeMutableByteArray()
-                        ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
+                        ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endIntArrayAccess()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
@@ -2865,6 +2871,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             e.builder.beginCopyMutableByteArray(operation == ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING)
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> e.builder.beginWriteByteArray()
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
+                        ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
+                        ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.beginPinnedByteArray()
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
@@ -2912,6 +2920,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> e.builder.endCopyMutableByteArray()
                         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> e.builder.endWriteByteArray()
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
+                        ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
+                        ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.endPinnedByteArray()
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.endIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
@@ -4391,6 +4401,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "addr2Int#" -> "AddressToInt"
             "int2Addr#" -> "IntToAddress"
             "plusAddr#" -> "AddressPlus"
+            "minusAddr#" -> "AddressMinus"
+            "remAddr#" -> "AddressRemainder"
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
             "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
@@ -4465,6 +4477,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "AddressToInt" -> b.beginAddressToInt(); "IntToAddress" -> b.beginIntToAddress()
                 "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
+                "AddressMinus" -> b.beginAddressMinus(); "AddressRemainder" -> b.beginAddressRemainder()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(
                     if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16 else ManagedAddressRead.WORD16)
@@ -4535,6 +4548,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "NarrowWord" -> b.endNarrowWord()
                 "AddressToInt" -> b.endAddressToInt(); "IntToAddress" -> b.endIntToAddress()
                 "Raise" -> b.endRaise(); "AddressPlus" -> b.endAddressPlus(); "AddressIndexByte" -> b.endAddressIndexByte()
+                "AddressMinus" -> b.endAddressMinus(); "AddressRemainder" -> b.endAddressRemainder()
                 "AddressIndexManagedScalar" -> b.endAddressIndexManagedScalar()
                 "AddressEqual" -> b.endAddressEqual(); "AddressNotEqual" -> b.endAddressNotEqual()
                 "AddressOrder" -> b.endAddressOrder()

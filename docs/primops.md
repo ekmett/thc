@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1011 / 1491 (67.8%).**
+**Implementation coverage: 1021 / 1491 (68.5%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1011 | A runtime implementation is registered in the capability inventory. |
-| Missing | 480 | No runtime implementation is registered. |
+| Implemented | 1021 | A runtime implementation is registered in the capability inventory. |
+| Missing | 470 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -199,6 +199,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `clz64#` — arity 1 — Numeric scalar signature
 - [x] `clz8#` — arity 1 — Numeric scalar signature
 - [x] `compareByteArrays#` — arity 5 — Byte-array operation
+- [x] `copyAddrToAddr#` — arity 4 — Byte-array operation
 - [x] `copyAddrToAddrNonOverlapping#` — arity 4 — Byte-array operation
 - [x] `copyAddrToByteArray#` — arity 5 — Byte-array operation
 - [x] `copyArray#` — arity 6 — Boxed-array operation
@@ -454,8 +455,12 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `intToInt32#` — arity 1 — Numeric scalar signature
 - [x] `intToInt64#` — arity 1 — Numeric scalar signature
 - [x] `intToInt8#` — arity 1 — Numeric scalar signature
+- [x] `isByteArrayPinned#` — arity 1 — Byte-array operation
+- [x] `isByteArrayWeaklyPinned#` — arity 1 — Byte-array operation
 - [x] `isCurrentThreadBound#` — arity 1 — Thread operation
 - [x] `isEmptyMVar#` — arity 2 — MVar operation
+- [x] `isMutableByteArrayPinned#` — arity 1 — Byte-array operation
+- [x] `isMutableByteArrayWeaklyPinned#` — arity 1 — Byte-array operation
 - [x] `keepAlive#` — arity 3 — Specialized lowering
 - [x] `killThread#` — arity 3 — Thread operation
 - [x] `labelThread#` — arity 3 — Thread operation
@@ -543,6 +548,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `minWord64X4#` — arity 2 — Specialized lowering
 - [x] `minWord64X8#` — arity 2 — Specialized lowering
 - [x] `minWord8X16#` — arity 2 — Specialized lowering
+- [x] `minusAddr#` — arity 2 — Pointer scalar signature
 - [x] `minusDoubleX2#` — arity 2 — Specialized lowering
 - [x] `minusDoubleX4#` — arity 2 — Specialized lowering
 - [x] `minusDoubleX8#` — arity 2 — Specialized lowering
@@ -840,6 +846,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `readWordArray#` — arity 3 — Byte-array operation
 - [x] `readWordOffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering
+- [x] `remAddr#` — arity 2 — Pointer scalar signature
 - [x] `remInt#` — arity 2 — Numeric scalar signature
 - [x] `remInt16#` — arity 2 — Numeric scalar signature
 - [x] `remInt32#` — arity 2 — Numeric scalar signature
@@ -852,8 +859,10 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `remWord8#` — arity 2 — Numeric scalar signature
 - [x] `resizeMutableByteArray#` — arity 3 — Byte-array operation
 - [x] `retry#` — arity 1 — STM operation
+- [x] `setAddrRange#` — arity 4 — Byte-array operation
 - [x] `setByteArray#` — arity 5 — Byte-array operation
 - [x] `shrinkMutableByteArray#` — arity 3 — Byte-array operation
+- [x] `shrinkSmallMutableArray#` — arity 3 — Boxed-array operation
 - [x] `sinDouble#` — arity 1 — Numeric scalar signature
 - [x] `sinFloat#` — arity 1 — Numeric scalar signature
 - [x] `sinhDouble#` — arity 1 — Numeric scalar signature
@@ -983,6 +992,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `unsafeFreezeByteArray#` — arity 2 — Byte-array operation
 - [x] `unsafeFreezeSmallArray#` — arity 2 — Boxed-array operation
 - [x] `unsafeThawArray#` — arity 2 — Boxed-array operation
+- [x] `unsafeThawByteArray#` — arity 2 — Byte-array operation
 - [x] `unsafeThawSmallArray#` — arity 2 — Boxed-array operation
 - [x] `waitRead#` — arity 2 — Specialized lowering
 - [x] `waitWrite#` — arity 2 — Specialized lowering
@@ -1121,7 +1131,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `compactResize#` — arity 3
 - [ ] `compactSize#` — arity 2
 - [ ] `control0#` — arity 3
-- [ ] `copyAddrToAddr#` — arity 4
 - [ ] `delay#` — arity 2
 - [ ] `forkOn#` — arity 3
 - [ ] `getApStackVal#` — arity 2
@@ -1233,10 +1242,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `insertWord16X32#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
-- [ ] `isByteArrayPinned#` — arity 1
-- [ ] `isByteArrayWeaklyPinned#` — arity 1
-- [ ] `isMutableByteArrayPinned#` — arity 1
-- [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
 - [ ] `makeStableName#` — arity 2
 - [ ] `maxInt16X32#` — arity 2
 - [ ] `maxInt8X32#` — arity 2
@@ -1250,7 +1255,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `minWord16X32#` — arity 2
 - [ ] `minWord8X32#` — arity 2
 - [ ] `minWord8X64#` — arity 2
-- [ ] `minusAddr#` — arity 2
 - [ ] `minusInt16X32#` — arity 2
 - [ ] `minusInt8X32#` — arity 2
 - [ ] `minusInt8X64#` — arity 2
@@ -1402,7 +1406,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readWord8X32OffAddr#` — arity 3
 - [ ] `readWord8X64Array#` — arity 3
 - [ ] `readWord8X64OffAddr#` — arity 3
-- [ ] `remAddr#` — arity 2
 - [ ] `remInt16X16#` — arity 2
 - [ ] `remInt16X32#` — arity 2
 - [ ] `remInt16X8#` — arity 2
@@ -1427,10 +1430,8 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `remWord8X16#` — arity 2
 - [ ] `remWord8X32#` — arity 2
 - [ ] `remWord8X64#` — arity 2
-- [ ] `setAddrRange#` — arity 4
 - [ ] `setOtherThreadAllocationCounter#` — arity 3
 - [ ] `setThreadAllocationCounter#` — arity 2
-- [ ] `shrinkSmallMutableArray#` — arity 3
 - [ ] `shuffleDoubleX2#` — arity 3
 - [ ] `shuffleDoubleX4#` — arity 3
 - [ ] `shuffleDoubleX8#` — arity 3
@@ -1476,7 +1477,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `unpackWord16X32#` — arity 1
 - [ ] `unpackWord8X32#` — arity 1
 - [ ] `unpackWord8X64#` — arity 1
-- [ ] `unsafeThawByteArray#` — arity 2
 - [ ] `whereFrom#` — arity 3
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX8#` — arity 4

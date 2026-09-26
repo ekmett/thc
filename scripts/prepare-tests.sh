@@ -58,6 +58,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" compare-byte-arrays
 python3 scripts/prepare-boxed-arrays.py
 "$fixture_bin" small-arrays
+"$fixture_bin" scalar-memory-utilities
 python3 scripts/prepare-array-slices.py
 python3 scripts/prepare-address-fields.py
 python3 scripts/prepare-data-to-tag.py

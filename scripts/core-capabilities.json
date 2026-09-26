@@ -559,6 +559,8 @@
     "addr2Int#": 1,
     "int2Addr#": 1,
     "plusAddr#": 2,
+    "minusAddr#": 2,
+    "remAddr#": 2,
     "eqAddr#": 2,
     "neAddr#": 2,
     "ltAddr#": 2,
@@ -881,6 +883,11 @@
     "writeWord8Array#": 4,
     "writeCharArray#": 4,
     "unsafeFreezeByteArray#": 2,
+    "unsafeThawByteArray#": 2,
+    "isByteArrayPinned#": 1,
+    "isMutableByteArrayPinned#": 1,
+    "isByteArrayWeaklyPinned#": 1,
+    "isMutableByteArrayWeaklyPinned#": 1,
     "sizeofByteArray#": 1,
     "indexWord8Array#": 2,
     "indexCharArray#": 2,
@@ -892,6 +899,8 @@
     "copyAddrToByteArray#": 5,
     "copyByteArrayToAddr#": 5,
     "copyMutableByteArrayToAddr#": 5,
+    "copyAddrToAddr#": 4,
+    "setAddrRange#": 4,
     "compareByteArrays#": 5,
     "sqrtFloat#": 1,
     "sqrtDouble#": 1,
@@ -1192,6 +1201,7 @@
     "freezeSmallArray#": 4,
     "thawSmallArray#": 4,
     "unsafeThawSmallArray#": 2,
+    "shrinkSmallMutableArray#": 3,
     "cloneArray#": 3,
     "freezeArray#": 4,
     "thawArray#": 4,
@@ -4326,6 +4336,52 @@
         "primReps": []
       }
     },
+    "copyAddrToAddr#": {
+      "arguments": [
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "setAddrRange#": {
+      "arguments": [
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "unsafeThawByteArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "unknown", "aggregate": "unboxed-tuple", "primReps": ["BoxedRep (Just Unlifted)"],
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }
+        ]
+      }
+    },
+    "isByteArrayPinned#": {
+      "arguments": [{ "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
+    "isMutableByteArrayPinned#": {
+      "arguments": [{ "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
+    "isByteArrayWeaklyPinned#": {
+      "arguments": [{ "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
+    "isMutableByteArrayWeaklyPinned#": {
+      "arguments": [{ "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] }],
+      "result": { "kind": "long", "primReps": ["IntRep"] }
+    },
     "getSizeofMutableByteArray#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
@@ -6422,6 +6478,10 @@
     "casSmallArray#": {
       "arguments": ["array", "int", "element", "element", "state"],
       "result": ["state", "int", "element"]
+    },
+    "shrinkSmallMutableArray#": {
+      "arguments": ["array", "int", "state"],
+      "result": "state"
     },
     "newSmallArray#": {
       "arguments": ["int", "element", "state"],
