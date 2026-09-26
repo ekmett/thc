@@ -17,6 +17,47 @@ from zipfile import ZipFile
 import core_package_manifest
 
 
+class PackageNativeVariantsTest(unittest.TestCase):
+    """Structural controls only; the placeholder bitcode is never executed."""
+    def module(self, reps):
+        unit, name = 'variants', 'Variants'
+        scalar_type = dict(kind='tycon', arguments=[], name=dict(unit='ghc-internal',
+            module='GHC.Internal.Word', occurrence='Word', namespace='type'))
+        abi, imports = [], []
+        for index, rep in enumerate(reps):
+            abi.append(dict(symbol='read_bytes', entry='thc_native_' + 'a' * 64 + '_' + str(index),
+                convention='ccall', safety='unsafe', arguments=[rep], result='WordRep'))
+            imports.append(dict(binder=dict(unit=unit, module=name, occurrence='read' + str(index), namespace='value'),
+                header=None, symbol='read_bytes', unit=unit, isFunction=True, convention='ccall', safety='unsafe',
+                declaredType=scalar_type, normalizedType=scalar_type, normalizationRole='representational',
+                emitted=dict(symbol='read_bytes', unit=unit, convention='ccall', safety='unsafe',
+                             arguments=[rep, 'void'], result=['void', 'WordRep'])))
+        cpu = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine().lower(), platform.machine().lower())
+        target = cpu + ('-apple-darwin' if platform.system() == 'Darwin' else '-unknown-linux-gnu')
+        link = dict(schema=1, format='llvm-bitcode', profile='thc-package-c-ffi-v1', unit=unit, target=target,
+            componentSha256='a' * 64, bitcodeSha256=hashlib.sha256(b'BC').hexdigest(), bitcodeHex='4243', abi=abi)
+        proof = dict(schema=1, scope='retained-static-import-products', execution='not-linked',
+            profile='ghc-9.14.1-thc-only-static-c-imports-v1', unit=unit, module=name, status='verified', wordBits=64,
+            expectedForeign=dict(schema=1, execution='not-linked', stubs=None, files=[]), imports=imports, expectedCalls=[])
+        return dict(schema=1, ghc='9.14.1', unit=unit, module=name, bindings=[], constructors=[],
+                    packageNativeLink=link, staticForeignImports=proof)
+
+    def test_pointer_variants_keep_distinct_provenance_entries(self):
+        module = self.module(['AddrRep', 'ByteArray#'])
+        link, proved = core_package_manifest.package_scalar_link(module)
+        self.assertEqual({entry['entry'] for entry in link['abi']}, proved)
+        self.assertEqual(2, len(proved))
+        module['staticForeignImports']['imports'].pop()
+        _, partial = core_package_manifest.package_scalar_link(module)
+        self.assertEqual(1, len(partial), 'one symbol does not prove both semantic variants')
+
+    def test_conflicts_order_duplicates_and_erased_mutability_still_reject(self):
+        for reps in (['AddrRep', 'WordRep'], ['ByteArray#', 'MutableByteArray#'],
+                     ['ByteArray#', 'AddrRep'], ['AddrRep', 'AddrRep']):
+            with self.subTest(reps=reps), self.assertRaises(ValueError):
+                core_package_manifest.package_scalar_link(self.module(reps))
+
+
 class PackageManifestTest(unittest.TestCase):
     def setUp(self):
         self.scratch = TemporaryDirectory()

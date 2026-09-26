@@ -110,4 +110,24 @@ class PackageScalarForeignTest {
             }
         }
     }
+
+    @Test fun sameSymbolSelectsTheExactPointerOrByteArrayAdapter() {
+        val variants = listOf("AddrRep", "ByteArray#").mapIndexed { index, rep ->
+            PackageScalarSignature("read_bytes", "adapter_$index", listOf(rep), "WordRep") }
+        val link = PackageScalarLink("first", "unused", "", "", byteArrayOf(), variants)
+        val output = result("WordRep")
+        fun validate(rep: String, selected: PackageScalarLink = link): PackageScalarCall? {
+            val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to "read_bytes",
+                "unit" to "first", "isFunction" to true), "convention" to "ccall", "safety" to "unsafe",
+                "arity" to 2L, "suppliedArity" to 2L, "argumentReps" to listOf(scalar(rep, false), scalar(null, false)),
+                "resultRep" to result("WordRep", false))
+            return CorePackageScalarForeign.validate(mapOf("foreignCall" to descriptor, "rep" to output),
+                listOf(scalar(rep), scalar(null)), listOf(false, false), output, listOf(selected))
+        }
+        for (signature in variants) assertSame(signature, validate(signature.arguments.single())!!.signature)
+        assertThrows(RuntimeFault::class.java) { validate("WordRep") }
+        val ambiguous = PackageScalarLink("first", "unused", "", "", byteArrayOf(), listOf(variants[1],
+            variants[1].copy(entry = "writable_adapter", arguments = listOf("MutableByteArray#"))))
+        assertThrows(RuntimeFault::class.java) { validate("ByteArray#", ambiguous) }
+    }
 }

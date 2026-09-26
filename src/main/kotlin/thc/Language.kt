@@ -155,7 +155,7 @@ object CoreModules {
         fun finish(): Map<String, Any?> {
             require(count != 0) { "No Core modules supplied" }
             packageScalarLinks.forEach { (unit, link) ->
-                require(packageScalarProofs[unit] == link.abi.map { it.symbol }.toSet()) {
+                require(packageScalarProofs[unit] == link.abi.map { it.entry }.toSet()) {
                     "Package C ABI lacks complete typed import provenance: $unit"
                 }
             }

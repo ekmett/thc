@@ -12,6 +12,10 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  test/fixtures/run-native-variants/cabal.project
+  test/fixtures/run-native-variants/native-variants.cabal
+  test/fixtures/run-native-variants/Main.hs
+  test/fixtures/run-native-variants/variants.c
   examples/standard-apps/README.md
   examples/standard-apps/TinyLexer.x
   examples/standard-apps/TinyParser.y

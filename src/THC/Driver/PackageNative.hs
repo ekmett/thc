@@ -18,7 +18,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (isPrefixOf, nub, sort, sortOn)
+import Data.List (groupBy, isPrefixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
@@ -36,11 +36,24 @@ nativeSignatures :: String -> [Value] -> Either String [Signature]
 nativeSignatures unit modules = do
   imports <- concat <$> mapM moduleImports modules
   signatures <- mapM classify imports
-  let ordered = sortOn first (nub signatures)
-  require (length ordered == length (nub (map first ordered))) "conflicting package native signatures"
+  let ordered = sort (nub signatures)
+  forM_ (groupBy (\a b -> first a == first b) ordered) $ \variants -> do
+    require (length (nub (map cAbi variants)) == 1) "conflicting package native signatures"
+    -- Addr# and ByteArray# have the same C pointer ABI but distinct Core
+    -- carriers. Do not collapse their typed adapters or pointer handling.
+    -- ByteArray# and MutableByteArray# erase to the same Core shape; without
+    -- further call-site proof, choosing a read/write policy would be ambiguous.
+    require (length variants == length (nub (map coreAbi variants)))
+      "ambiguous package native byte-array mutability variants"
   pure ordered
   where
     first (symbol,_,_,_,_) = symbol
+    cAbi (_,convention,safety,arguments,result) =
+      (convention,safety,map pointerAbi arguments,result)
+    pointerAbi value | value `elem` ["ByteArray#","MutableByteArray#"] = "AddrRep"
+                     | otherwise = value
+    coreAbi (_,convention,safety,arguments,result) =
+      (convention,safety,map (\value -> if value == "MutableByteArray#" then "ByteArray#" else value) arguments,result)
     moduleImports value = do
       require (member value "unit" == Just (toJSON unit)) "package native module owner differs"
       case member value "staticForeignImports" of

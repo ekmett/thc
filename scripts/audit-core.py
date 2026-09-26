@@ -140,7 +140,7 @@ class Audit:
                 else:
                     self.constructors[key] = constructor
         for unit, link in self.package_scalar_links.items():
-            if self.package_scalar_proofs[unit] != {entry['symbol'] for entry in link['abi']}:
+            if self.package_scalar_proofs[unit] != {entry['entry'] for entry in link['abi']}:
                 self.issue('module-format', None, unit, 'Package C ABI lacks complete typed import provenance')
 
     def issue(self, code, owner, path, detail):
@@ -703,11 +703,7 @@ class Audit:
                 self.issue('foreign-call', owner, path, str(error))
             return True
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
-        package_abi = next((entry for entry in package_link['abi'] if entry['symbol'] == symbol), None) if package_link else None
-        if package_link is not None and package_abi is None:
-            self.issue('foreign-call', owner, path, 'Unlinked package C symbol in scalar component')
-            return True
-        if package_abi is not None:
+        if package_link is not None:
             try:
                 head = self.expression_rep(function)
                 if (len(function) != 3 or function[0] != 'var' or not isinstance(function[1], str) or not function[1] or
@@ -715,7 +711,7 @@ class Audit:
                     set(head) != {'kind', 'primReps', 'evaluated'} or head['kind'] != 'closure' or
                     head['primReps'] != ['BoxedRep (Just Lifted)'] or head['evaluated'] is not True):
                     raise ValueError('Package C call requires its unresolved foreign identifier')
-                core_package_manifest.validate_package_scalar_call(call, package_abi, package_link['unit'],
+                package_abi = core_package_manifest.select_package_scalar_call(call, package_link['abi'], package_link['unit'],
                     [core_original_foreign.raw_rep(argument) for argument in arguments], expr[3],
                     core_original_foreign.raw_rep(expr))
                 for index, (argument, primitive) in enumerate(zip(arguments, package_abi['arguments'] + [None])):

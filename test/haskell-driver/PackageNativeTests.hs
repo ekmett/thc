@@ -36,6 +36,16 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       ]
   , TestCase $ assertBool "conflicting emitted ABIs rejected" $ isLeft $ nativeSignatures "fixture-unit"
       [moduleWith [ordinary,entry "identity" "ccall" ["IntRep","void"] ["void","IntRep"]]]
+  , TestCase $ assertEqual "one C pointer ABI retains each distinct Core carrier adapter"
+      (Right [("read_bytes","ccall","unsafe",["AddrRep","WordRep"],"WordRep"),
+              ("read_bytes","ccall","unsafe",["ByteArray#","WordRep"],"WordRep")])
+      (nativeSignatures "fixture-unit" [moduleWith
+        [entry "read_bytes" "ccall" ["ByteArray#","WordRep","void"] ["void","WordRep"],
+         entry "read_bytes" "ccall" ["AddrRep","WordRep","void"] ["void","WordRep"]]])
+  , TestCase $ assertBool "erased byte-array mutability cannot choose a writable policy" $ isLeft $
+      nativeSignatures "fixture-unit" [moduleWith
+        [entry "read_bytes" "ccall" ["ByteArray#","void"] ["void","WordRep"],
+         entry "read_bytes" "ccall" ["MutableByteArray#","void"] ["void","WordRep"]]]
   , TestCase $ mapM_ (\value -> assertBool "retained proof mismatch rejected"
       (isLeft (nativeSignatures "fixture-unit" [value])))
       [ set "unit" "other-unit" (moduleWith [ordinary])

@@ -19,7 +19,7 @@ import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand)
 
 tests :: Env -> Test
-tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env]
+tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env, nativeVariantsTest env]
 
 proxyOptionsTest :: Env -> Test
 proxyOptionsTest env = TestLabel "compiler proxy preserves arguments and replay provenance" $ TestCase $
@@ -248,6 +248,46 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
     assertNoStdout second
     assertBackend "bytecode" second
     assertEqual "transitive captured bundle is reused" stamp =<< getModificationTime leafBundle
+
+nativeVariantsTest :: Env -> Test
+nativeVariantsTest env = TestLabel "same native C symbol retains pointer and byte-array variants" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-native-variants" "native variants" $ \project ->
+  withCache (takeDirectory project </> "cache") $ do
+    let base = takeDirectory project
+        output = base </> "output"
+        invoke backend = run env base (Just backend) 240
+          ["run", project, "--exe", "variants", "--thc-root", thcRoot env,
+           "--runtime", runtime env, "--dist-dir", output]
+    forM_ ["ast", "bytecode"] $ \backend -> do
+      actual <- invoke backend
+      assertSuccess actual
+      assertNoStdout actual
+      diagnostics <- json (last $ lines $ err actual)
+      assertEqual "selected backend" backend (string $ field diagnostics "backend")
+      assertEqual "no runtime traps" 0 (number $ field diagnostics "unsupportedTraps")
+      audit <- readJson (output </> "audit.json")
+      assertBool "unchanged strict audit accepted both call shapes" (bool $ field audit "accepted")
+      assertEqual "no missing foreign or Haskell globals" [] (array $ field audit "missingGlobals")
+    plan <- readJson (output </> "native/cache/plan.json")
+    let component = one ((== "exe:variants") . string . (`field` "component-name"))
+          [unit | unit <- objects plan "install-plan", string (field unit "type") == "configured"]
+        identifier = string (field component "id")
+    native <- runExe env project Nothing 60 (string $ field component "bin-file") []
+    assertSuccess native
+    assertNoStdout native
+    manifest <- readJson (output </> "packages.json")
+    let unit = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
+        bundle = string (field (field unit "bundle") "path")
+        modulePath = string (field (one ((== "Main") . string . (`field` "name")) (objects unit "modules")) "path")
+    core <- readCore bundle modulePath
+    let abi = objects (field core "packageNativeLink") "abi"
+    assertEqual "one real C symbol" ["variant_sum", "variant_sum"] (map (string . (`field` "symbol")) abi)
+    assertEqual "two exact semantic carrier adapters" [["AddrRep", "WordRep"], ["ByteArray#", "WordRep"]]
+      (map (map string . array . (`field` "arguments")) abi)
+    case abi of
+      [address, bytes] -> assertBool "the variants have distinct component entrypoints"
+        (field address "entry" /= field bytes "entry")
+      _ -> fail "expected exactly two native ABI variants"
 
 sourceDist :: Env -> FilePath -> FilePath -> IO ()
 sourceDist env source project = do
