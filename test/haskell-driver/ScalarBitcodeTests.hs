@@ -17,8 +17,13 @@ tests = TestLabel "closed scalar C producer inputs" $ TestList
       (Right [("mixed",["Int32Rep","Int64Rep","FloatRep","DoubleRep"],"DoubleRep")])
       (scalarFunctions $ unlines
         ["define internal i32 @helper(i32 noundef %x) {","  ret i32 %x","}",
-         "define dso_local double @mixed(i32 noundef %a, i64 %b, float %c, double returned %d) {",
+         "define dso_local noundef double @mixed(i32 noundef %a, i64 %b, float %c, double returned %d) {",
          "  ret double %d","}"])
+  , TestCase $ mapM_ (\(label,ir) -> assertBool label (isLeft (scalarFunctions ir)))
+      [("signext result rejected", "define signext i32 @result(i32 %x) {\n ret i32 %x\n}"),
+       ("zeroext result rejected", "define zeroext i32 @result(i32 %x) {\n ret i32 %x\n}"),
+       ("signext parameter rejected", "define i32 @argument(i32 signext %x) {\n ret i32 %x\n}"),
+       ("zeroext parameter rejected", "define i32 @argument(i32 zeroext %x) {\n ret i32 %x\n}")]
   , TestCase $ mapM_ (assertBool "nonclosed/native ABI products rejected" . isLeft . scalarFunctions)
       [ unlines ["declare i32 @external(i32)",integerFunction]
       , unlines ["@state = global i32 0",integerFunction]
