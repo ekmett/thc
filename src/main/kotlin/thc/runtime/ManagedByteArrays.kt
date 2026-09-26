@@ -9,9 +9,11 @@ import jdk.incubator.vector.ShortVector
 import jdk.incubator.vector.LongVector
 import jdk.incubator.vector.FloatVector
 import jdk.incubator.vector.DoubleVector
+import jdk.incubator.vector.VectorShape
 
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.lang.invoke.MethodHandles
 import java.nio.ByteOrder
@@ -179,55 +181,75 @@ internal object ManagedByteArray {
         return if (unsigned) byte else byte.toByte().toLong()
     }
     private inline fun <T> withElement(value: Any?, index: Long, width: Int,
-        writable: Boolean, action: (ByteArray) -> T): T =
+        writable: Boolean, action: (MemorySegment) -> T): T =
         if (value is ManagedAllocation) value.accessElement(index, width, writable, action)
-        else action(require(value))
+        else {
+            val bytes = require(value)
+            elementOffset(bytes, index, width, "scalar")
+            action(MemorySegment.ofArray(bytes))
+        }
 
     private inline fun <T> withByteRange(value: Any?, offset: Long, width: Int,
-        writable: Boolean, action: (ByteArray) -> T): T =
+        writable: Boolean, action: (MemorySegment) -> T): T =
         if (value is ManagedAllocation) value.accessByteRange(offset, width, writable, action)
-        else action(require(value))
+        else {
+            val bytes = require(value)
+            byteOffset(bytes, offset, width, "scalar")
+            action(MemorySegment.ofArray(bytes))
+        }
 
     @JvmStatic @JvmOverloads fun readIntGuest(value: Any?, index: Long, byteOffset: Boolean = false): Long =
         if (byteOffset) withByteRange(value, index, 8, writable = false) {
-            ints.get(it, byteOffset(it, index, 8, "Int")) as Long
-        } else withElement(value, index, 8, writable = false) { readInt(it, index) }
+            it.get(ValueLayout.JAVA_LONG_UNALIGNED, index)
+        } else withElement(value, index, 8, writable = false) { it.get(ValueLayout.JAVA_LONG_UNALIGNED, index * 8) }
     @JvmStatic @JvmOverloads fun writeIntGuest(value: Any?, index: Long, integer: Long, byteOffset: Boolean = false) =
         if (byteOffset) withByteRange(value, index, 8, writable = true) {
-            ints.set(it, byteOffset(it, index, 8, "Int"), integer)
-        } else withElement(value, index, 8, writable = true) { writeInt(it, index, integer) }
+            it.set(ValueLayout.JAVA_LONG_UNALIGNED, index, integer)
+        } else withElement(value, index, 8, writable = true) { it.set(ValueLayout.JAVA_LONG_UNALIGNED, index * 8, integer) }
     @JvmStatic fun readDoubleGuest(value: Any?, index: Long): Double =
-        withElement(value, index, 8, writable = false) { readDouble(it, index) }
+        withElement(value, index, 8, writable = false) { it.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, index * 8) }
     @JvmStatic fun writeDoubleGuest(value: Any?, index: Long, number: Double) =
-        withElement(value, index, 8, writable = true) { writeDouble(it, index, number) }
+        withElement(value, index, 8, writable = true) { it.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, index * 8, number) }
     @JvmStatic fun readDoubleByteOffsetGuest(value: Any?, offset: Long): Double =
-        withByteRange(value, offset, 8, writable = false) { readDoubleByteOffset(it, offset) }
+        withByteRange(value, offset, 8, writable = false) { it.get(ValueLayout.JAVA_DOUBLE_UNALIGNED, offset) }
     @JvmStatic fun writeDoubleByteOffsetGuest(value: Any?, offset: Long, number: Double) =
-        withByteRange(value, offset, 8, writable = true) { writeDoubleByteOffset(it, offset, number) }
+        withByteRange(value, offset, 8, writable = true) { it.set(ValueLayout.JAVA_DOUBLE_UNALIGNED, offset, number) }
     @JvmStatic fun readFloatGuest(value: Any?, index: Long): Float =
-        withElement(value, index, 4, writable = false) { readFloat(it, index) }
+        withElement(value, index, 4, writable = false) { it.get(ValueLayout.JAVA_FLOAT_UNALIGNED, index * 4) }
     @JvmStatic fun writeFloatGuest(value: Any?, index: Long, number: Float) =
-        withElement(value, index, 4, writable = true) { writeFloat(it, index, number) }
+        withElement(value, index, 4, writable = true) { it.set(ValueLayout.JAVA_FLOAT_UNALIGNED, index * 4, number) }
     @JvmStatic fun readFloatByteOffsetGuest(value: Any?, offset: Long): Float =
-        withByteRange(value, offset, 4, writable = false) { readFloatByteOffset(it, offset) }
+        withByteRange(value, offset, 4, writable = false) { it.get(ValueLayout.JAVA_FLOAT_UNALIGNED, offset) }
     @JvmStatic fun writeFloatByteOffsetGuest(value: Any?, offset: Long, number: Float) =
-        withByteRange(value, offset, 4, writable = true) { writeFloatByteOffset(it, offset, number) }
+        withByteRange(value, offset, 4, writable = true) { it.set(ValueLayout.JAVA_FLOAT_UNALIGNED, offset, number) }
     @JvmStatic fun readInt16Guest(value: Any?, index: Long, unsigned: Boolean): Long =
-        withElement(value, index, 2, writable = false) { if (unsigned) readWord16(it, index) else readInt16(it, index) }
+        withElement(value, index, 2, writable = false) {
+            val result = it.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2)
+            if (unsigned) java.lang.Short.toUnsignedLong(result) else result.toLong()
+        }
     @JvmStatic fun writeInt16Guest(value: Any?, index: Long, integer: Long) =
-        withElement(value, index, 2, writable = true) { writeInt16(it, index, integer) }
+        withElement(value, index, 2, writable = true) { it.set(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2, integer.toShort()) }
     @JvmStatic fun readInt16ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
-        withByteRange(value, offset, 2, writable = false) { if (unsigned) readWord16ByteOffset(it, offset) else readInt16ByteOffset(it, offset) }
+        withByteRange(value, offset, 2, writable = false) {
+            val result = it.get(ValueLayout.JAVA_SHORT_UNALIGNED, offset)
+            if (unsigned) java.lang.Short.toUnsignedLong(result) else result.toLong()
+        }
     @JvmStatic fun writeInt16ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
-        withByteRange(value, offset, 2, writable = true) { writeInt16ByteOffset(it, offset, integer) }
+        withByteRange(value, offset, 2, writable = true) { it.set(ValueLayout.JAVA_SHORT_UNALIGNED, offset, integer.toShort()) }
     @JvmStatic fun readInt32Guest(value: Any?, index: Long, unsigned: Boolean): Long =
-        withElement(value, index, 4, writable = false) { if (unsigned) readWord32(it, index) else readInt32(it, index) }
+        withElement(value, index, 4, writable = false) {
+            val result = it.get(ValueLayout.JAVA_INT_UNALIGNED, index * 4)
+            if (unsigned) Integer.toUnsignedLong(result) else result.toLong()
+        }
     @JvmStatic fun writeInt32Guest(value: Any?, index: Long, integer: Long) =
-        withElement(value, index, 4, writable = true) { writeInt32(it, index, integer) }
+        withElement(value, index, 4, writable = true) { it.set(ValueLayout.JAVA_INT_UNALIGNED, index * 4, integer.toInt()) }
     @JvmStatic fun readInt32ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
-        withByteRange(value, offset, 4, writable = false) { if (unsigned) readWord32ByteOffset(it, offset) else readInt32ByteOffset(it, offset) }
+        withByteRange(value, offset, 4, writable = false) {
+            val result = it.get(ValueLayout.JAVA_INT_UNALIGNED, offset)
+            if (unsigned) Integer.toUnsignedLong(result) else result.toLong()
+        }
     @JvmStatic fun writeInt32ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
-        withByteRange(value, offset, 4, writable = true) { writeInt32ByteOffset(it, offset, integer) }
+        withByteRange(value, offset, 4, writable = true) { it.set(ValueLayout.JAVA_INT_UNALIGNED, offset, integer.toInt()) }
     @JvmStatic fun fillGuest(value: Any?, offset: Long, count: Long, byteValue: Long) = when (value) {
         is ManagedAllocation -> value.fill(offset, count, byteValue)
         else -> fill(require(value), offset, count, byteValue)
@@ -258,8 +280,7 @@ internal object ManagedByteArray {
             source is ManagedAllocation && destination is ManagedAllocation ->
                 destination.copyFrom(source, sourceOffset, destinationOffset, count)
             source is ManagedAllocation -> {
-                val bytes = source.copyBytesOut(sourceOffset, count)
-                System.arraycopy(bytes, 0, require(destination), destinationOffset.toInt(), count.toInt())
+                source.copyBytesTo(sourceOffset, MemorySegment.ofArray(require(destination)), destinationOffset, count)
             }
             destination is ManagedAllocation ->
                 destination.copyBytesIn(require(source), sourceOffset.toInt(), destinationOffset, count)
@@ -286,38 +307,80 @@ internal object ManagedByteArray {
     @JvmStatic fun allocateGuest(size: Long): ManagedAllocation =
         ManagedAllocation.mutable(size, ValueLayout.ADDRESS.byteSize().toInt())
     private inline fun <T> vectorGuest(value: Any?, index: Long, scalarOffset: Boolean,
-        scalarWidth: Int, writable: Boolean, vectorBytes: Int, action: (ByteArray) -> T): T =
-        if (value is ManagedAllocation)
-            value.accessVector(index, scalarOffset, scalarWidth, writable, vectorBytes, action)
-        else action(require(value))
+        scalarWidth: Int, writable: Boolean, vectorBytes: Int, action: (MemorySegment, Long) -> T): T {
+        val stride = if (scalarOffset) scalarWidth else vectorBytes
+        return if (value is ManagedAllocation)
+            value.accessVector(index, scalarOffset, scalarWidth, writable, vectorBytes) { action(it, index * stride) }
+        else {
+            val bytes = require(value)
+            if (bytes.size < vectorBytes || index < 0 || index > (bytes.size - vectorBytes).toLong() / stride)
+                fault("Vector ByteArray# range outside its backing storage")
+            action(MemorySegment.ofArray(bytes), index * stride)
+        }
+    }
     @JvmStatic @JvmOverloads fun readByteVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): ByteVector =
-        vectorGuest(value, index, scalarOffset, 1, false, vectorBytes) { readByteVectorArray(it, index, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 1, false, vectorBytes) { segment, offset ->
+            ByteVector.fromMemorySegment(ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeByteVectorGuest(value: Any?, index: Long, vector: ByteVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 1, true, vectorBytes) { writeByteVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 1, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun readShortVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): ShortVector =
-        vectorGuest(value, index, scalarOffset, 2, false, vectorBytes) { readShortVectorArray(it, index, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 2, false, vectorBytes) { segment, offset ->
+            ShortVector.fromMemorySegment(ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeShortVectorGuest(value: Any?, index: Long, vector: ShortVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 2, true, vectorBytes) { writeShortVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 2, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun readLongVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): LongVector =
-        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { readLongVectorArray(it, index, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { segment, offset ->
+            LongVector.fromMemorySegment(LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeLongVectorGuest(value: Any?, index: Long, vector: LongVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { writeLongVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): IntVector =
-        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readIntVectorArray(it, index, scalarOffset, "Int32X4", vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { segment, offset ->
+            IntVector.fromMemorySegment(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeIntVectorArray(it, index, vector, scalarOffset, "Int32X4", vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): IntVector =
-        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readIntVectorArray(it, index, scalarOffset, "Word32X4", vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { segment, offset ->
+            IntVector.fromMemorySegment(IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeWord32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeIntVectorArray(it, index, vector, scalarOffset, "Word32X4", vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): FloatVector =
-        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { readFloatVectorArray(it, index, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 4, false, vectorBytes) { segment, offset ->
+            FloatVector.fromMemorySegment(FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { writeFloatVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 4, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireFloat(vector, FloatVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean, vectorBytes: Int = 16): DoubleVector =
-        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { readDoubleVectorArray(it, index, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 8, false, vectorBytes) { segment, offset ->
+            DoubleVector.fromMemorySegment(DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)), segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic @JvmOverloads fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleVector, scalarOffset: Boolean, vectorBytes: Int = 16) =
-        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { writeDoubleVectorArray(it, index, vector, scalarOffset, vectorBytes) }
+        vectorGuest(value, index, scalarOffset, 8, true, vectorBytes) { segment, offset ->
+            CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
+                .intoMemorySegment(segment, offset, ByteOrder.nativeOrder())
+        }
     @JvmStatic fun require(value: Any?): ByteArray = when (value) {
         is ByteArray -> value
         is ManagedAllocation -> value.wholeBytesForPrimitive()
@@ -329,7 +392,7 @@ internal object ManagedByteArray {
 private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"
 
 /** No compact-region or RTS-large-object allocation mode exists here. Explicit
- * logical pinning supplies both guarantees; ordinary allocations promise neither. */
+ * native-backed pinning supplies both guarantees; ordinary allocations promise neither. */
 private class PinnedByteArrayExpression(@field:Child private var array: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Long = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long = when (val value = array.execute(frame)) {

@@ -4,14 +4,17 @@
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import java.lang.foreign.Arena
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 
-/** Allocation owned by a pinned ByteArray# and all of its Addr# views.
+/** Heap or native allocation owned by a ByteArray# and all of its Addr# views.
  * Pointer cells retain managed references; their bytes are deliberately not
  * synthetic process addresses. Raw byte access to a live pointer cell faults.
  */
 internal class ManagedAllocation private constructor(
-    private val bytes: ByteArray, private val writable: Boolean, private val pointerBytes: Int,
-    val isPinned: Boolean = false
+    private val bytes: ByteArray?, private val segment: MemorySegment,
+    private val writable: Boolean, private val pointerBytes: Int
 ) {
     init { if (pointerBytes != 4 && pointerBytes != 8) fault("Unsupported target pointer width") }
     // Pointer-free pinned arrays pay for the owner, not a per-cell map.
@@ -23,17 +26,27 @@ internal class ManagedAllocation private constructor(
     // Guest allocations also use this owner so shrink preserves identity.
     // Its monitor keeps pointer installation and scalar access ordered.
     @Volatile private var pointerCapable = false
-    @Volatile private var logicalSize = bytes.size
+    @Volatile private var logicalSize = segment.byteSize().toInt()
+    val isPinned: Boolean get() = segment.isNative
     val size: Long get() = logicalSize.toLong()
     val addressWidth: Int get() = pointerBytes
     val isWritable: Boolean get() = writable
     internal fun ownsStorage(candidate: ByteArray): Boolean = bytes === candidate
+    internal fun nativeSegment(): MemorySegment? = if (isPinned) segment else null
+
+    /** Both interop views refer to the allocation itself, never a staging copy. */
+    @Synchronized internal fun exposeSegment(): MemorySegment {
+        if (pointerCapable) fault("Pointer-bearing pinned array cannot be passed to native bitcode")
+        exposedToNative = true
+        return if (writable) segment else segment.asReadOnly()
+    }
 
     /** A mutable raw alias is permitted only before pointer cells are installed;
      * once returned it permanently rules out later pointer installation.
      * Immutable images never expose their writable JVM backing array. */
     @Synchronized fun rawBytesIfPointerFree(): ByteArray {
         if (pointerCapable) fault("Pointer-bearing pinned array cannot be accessed as raw bytes")
+        val bytes = bytes ?: fault("Native pinned storage has no JVM byte-array alias")
         if (!writable) return bytes.copyOf()
         exposedAsRawBytes = true
         return bytes
@@ -42,6 +55,7 @@ internal class ManagedAllocation private constructor(
     /** Sulong holds a raw ByteBuffer view; it cannot track managed references. */
     @Synchronized fun exposeToNative(): ByteArray {
         if (pointerCapable) fault("Pointer-bearing pinned array cannot be passed to native bitcode")
+        val bytes = bytes ?: fault("Native pinned storage has no JVM byte-array alias")
         if (!writable) return bytes.copyOf()
         exposedToNative = true
         return bytes
@@ -50,6 +64,7 @@ internal class ManagedAllocation private constructor(
     /** Only synchronous, pointer-free primitive operations borrow this view.
      * Their raw array bounds cannot represent a shrunk logical length. */
     @Synchronized fun wholeBytesForPrimitive(): ByteArray {
+        val bytes = bytes ?: fault("Native pinned storage has no JVM byte-array alias")
         if (pointerCapable || logicalSize != bytes.size)
             fault("Raw byte-array primitive cannot access a pointer-bearing or shrunk allocation")
         if (!writable) return bytes.copyOf()
@@ -92,14 +107,14 @@ internal class ManagedAllocation private constructor(
     @Synchronized fun readByte(offset: Long): Long {
         val start = range(offset, 1)
         if (pointerCapable && intersectsPointer(start, 1)) fault("Cannot expose managed pointer bits as a byte")
-        return bytes[start].toLong() and 255L
+        return segment.get(ValueLayout.JAVA_BYTE, start.toLong()).toLong() and 255L
     }
 
     @Synchronized fun writeByte(offset: Long, value: Long) {
         mutable()
         val start = range(offset, 1)
         if (pointerCapable) invalidate(start, 1)
-        bytes[start] = value.toByte()
+        segment.set(ValueLayout.JAVA_BYTE, start.toLong(), value.toByte())
     }
 
     /** Write one complete native-endian numeric element without exposing raw
@@ -111,7 +126,7 @@ internal class ManagedAllocation private constructor(
         if (pointerCapable) invalidate(start, width)
         for (index in 0 until width) {
             val shift = (if (little) index else width - 1 - index) * 8
-            bytes[start + index] = (value ushr shift).toByte()
+            segment.set(ValueLayout.JAVA_BYTE, start.toLong() + index, (value ushr shift).toByte())
         }
     }
 
@@ -122,7 +137,7 @@ internal class ManagedAllocation private constructor(
         val start = range(offset, pointerBytes.toLong())
         invalidate(start, pointerBytes)
         pointerCapable = true
-        bytes.fill(0, start, start + pointerBytes)
+        segment.asSlice(start.toLong(), pointerBytes.toLong()).fill(0)
         cells()[start] = value
     }
 
@@ -135,10 +150,10 @@ internal class ManagedAllocation private constructor(
     /** Atomic address and array aliases share the backing monitor, including
      * a raw byte-array alias exposed earlier. Always acquire owner before bytes. */
     internal inline fun <T> accessAtomicByteRange(offset: Long, width: Int, writable: Boolean,
-        action: (ByteArray, Int) -> T): T = synchronized(this) {
+        action: (MemorySegment, Int) -> T): T = synchronized(this) {
         requireByteRegion(offset, width.toLong(), writable)
         if (offset % width != 0L) fault("Misaligned atomic Addr#")
-        synchronized(bytes) { action(bytes, offset.toInt()) }
+        synchronized(bytes ?: this) { action(segment, offset.toInt()) }
     }
 
     @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
@@ -149,9 +164,9 @@ internal class ManagedAllocation private constructor(
     /** Internal scalar array operations keep the backing private and inspect
      * exactly their element range while holding the pointer-cell monitor. */
     internal inline fun <T> accessElement(index: Long, width: Int, writable: Boolean,
-        action: (ByteArray) -> T): T = synchronized(this) {
+        action: (MemorySegment) -> T): T = synchronized(this) {
         prepareElement(index, width, writable)
-        action(bytes)
+        action(segment)
     }
 
     private fun prepareElement(index: Long, width: Int, writable: Boolean) {
@@ -177,6 +192,27 @@ internal class ManagedAllocation private constructor(
             fault("Atomic Int access overlaps a managed pointer cell")
         // Address atomics may arrive through an exposed backing-array alias.
         // Every atomic path takes this lock, always after the owner monitor.
+        if (isPinned) {
+            val operationAddress = when (operation) {
+                AtomicIntArrayOp.READ -> AtomicAddressOp.READ
+                AtomicIntArrayOp.WRITE -> AtomicAddressOp.WRITE
+                AtomicIntArrayOp.ADD -> AtomicAddressOp.ADD
+                AtomicIntArrayOp.SUB -> AtomicAddressOp.SUB
+                AtomicIntArrayOp.AND -> AtomicAddressOp.AND
+                AtomicIntArrayOp.NAND -> AtomicAddressOp.NAND
+                AtomicIntArrayOp.OR -> AtomicAddressOp.OR
+                AtomicIntArrayOp.XOR -> AtomicAddressOp.XOR
+                else -> when (width) {
+                    1 -> AtomicAddressOp.CAS8
+                    2 -> AtomicAddressOp.CAS16
+                    4 -> AtomicAddressOp.CAS32
+                    else -> AtomicAddressOp.CAS64
+                }
+            }
+            val old = operationAddress.numeric(ManagedAddress.fromGuestByteArray(this).plus(start.toLong()), operand, replacement)
+            return when (width) { 1 -> old.toByte().toLong(); 2 -> old.toShort().toLong(); 4 -> old.toInt().toLong(); else -> old }
+        }
+        val bytes = bytes!!
         return synchronized(bytes) {
             val old = when (width) {
                 1 -> bytes[start].toLong()
@@ -217,9 +253,9 @@ internal class ManagedAllocation private constructor(
     /** Word8ArrayAs* offsets count bytes, including unaligned starts. Keep the
      * entire scalar access under the pointer-cell monitor. */
     internal inline fun <T> accessByteRange(offset: Long, width: Int, writable: Boolean,
-        action: (ByteArray) -> T): T = synchronized(this) {
+        action: (MemorySegment) -> T): T = synchronized(this) {
         prepareByteRange(offset, width, writable)
-        action(bytes)
+        action(segment)
     }
 
     private fun prepareByteRange(offset: Long, width: Int, writable: Boolean) {
@@ -235,9 +271,9 @@ internal class ManagedAllocation private constructor(
     /** Vector indices count either full vectors or scalar lanes. Keep
      * the checked operation inside the owner monitor without a callback object. */
     internal inline fun <T> accessVector(index: Long, scalarOffset: Boolean, scalarWidth: Int,
-        writable: Boolean, vectorBytes: Int = 16, action: (ByteArray) -> T): T = synchronized(this) {
+        writable: Boolean, vectorBytes: Int = 16, action: (MemorySegment) -> T): T = synchronized(this) {
         prepareVector(index, scalarOffset, scalarWidth, writable, vectorBytes)
-        action(bytes)
+        action(segment)
     }
 
     private fun prepareVector(index: Long, scalarOffset: Boolean, scalarWidth: Int, writable: Boolean, vectorBytes: Int) {
@@ -256,25 +292,38 @@ internal class ManagedAllocation private constructor(
         val start = range(offset, count)
         if (intersectsPointer(start, count.toInt()))
             fault("Raw copy overlaps a managed pointer cell")
-        return bytes.copyOfRange(start, start + count.toInt())
+        return segment.asSlice(start.toLong(), count).toArray(ValueLayout.JAVA_BYTE)
     }
 
     @Synchronized fun copyBytesIn(source: ByteArray, sourceOffset: Int,
+        destinationOffset: Long, count: Long) =
+        copyBytesIn(MemorySegment.ofArray(source), sourceOffset.toLong(), destinationOffset, count)
+
+    @Synchronized fun copyBytesIn(source: MemorySegment, sourceOffset: Long,
         destinationOffset: Long, count: Long) {
         mutable()
-        if (sourceOffset < 0 || count < 0 || sourceOffset.toLong() > source.size ||
-            count > source.size.toLong() - sourceOffset)
+        if (sourceOffset < 0 || count < 0 || sourceOffset > source.byteSize() ||
+            count > source.byteSize() - sourceOffset)
             fault("Raw copy source outside its backing storage")
         val start = range(destinationOffset, count)
         if (pointerCapable) invalidate(start, count.toInt())
-        System.arraycopy(source, sourceOffset, bytes, start, count.toInt())
+        MemorySegment.copy(source, sourceOffset, segment, start.toLong(), count)
+    }
+
+    @Synchronized fun copyBytesTo(sourceOffset: Long, destination: MemorySegment,
+        destinationOffset: Long, count: Long) {
+        requireByteRegion(sourceOffset, count, false)
+        if (destinationOffset < 0 || destinationOffset > destination.byteSize() ||
+            count > destination.byteSize() - destinationOffset || destination.isReadOnly)
+            fault("Raw copy destination outside its writable backing storage")
+        MemorySegment.copy(segment, sourceOffset, destination, destinationOffset, count)
     }
 
     @Synchronized fun fill(offset: Long, count: Long, value: Long) {
         mutable()
         val start = range(offset, count)
         if (pointerCapable) invalidate(start, count.toInt())
-        bytes.fill(value.toByte(), start, start + count.toInt())
+        segment.asSlice(start.toLong(), count).fill(value.toByte())
     }
 
     /** Snapshot cells before memmove, including a copy within this allocation. */
@@ -293,7 +342,7 @@ internal class ManagedAllocation private constructor(
             if (copied.isNotEmpty() && (exposedToNative || exposedAsRawBytes))
                 fault("Cannot copy managed pointers into a raw-exposed array")
             if (copied.isNotEmpty()) pointerCapable = true
-            System.arraycopy(source.bytes, from, bytes, to, width)
+            MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
             invalidate(to, width)
             if (copied.isNotEmpty()) {
                 cells().putAll(copied)
@@ -316,10 +365,11 @@ internal class ManagedAllocation private constructor(
         mutable()
         if (newSize < 0 || newSize > Int.MAX_VALUE.toLong()) fault("Managed allocation size outside JVM domain")
         if (newSize == size) return this
-        // Ordinary pinned byte arrays still use the typed, pointer-free copy.
+        if (newSize < size) { shrink(newSize); return this }
+        // GHC permits resizing in place; replacement allocations are unpinned.
         // Keep pointer-map collection code out of partial evaluation even when
         // another byte-array branch is the one exercised by a compiled guest.
-        if (!pointerCapable) return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes, isPinned)
+        if (!pointerCapable) return resizedStorage(newSize)
         return resizeWithPointerCells(newSize)
     }
 
@@ -345,19 +395,35 @@ internal class ManagedAllocation private constructor(
             if (start < newSize && start.toLong() + pointerBytes > newSize)
                 fault("Cannot truncate a managed pointer cell")
         }
-        return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes, isPinned).also { replacement ->
+        return resizedStorage(newSize).also { replacement ->
             pointers?.filterKeys { it.toLong() + pointerBytes <= newSize }?.takeIf { it.isNotEmpty() }
                 ?.let { replacement.cells().putAll(it); replacement.pointerCapable = true }
         }
     }
 
+    private fun resizedStorage(newSize: Long): ManagedAllocation =
+        mutable(newSize, pointerBytes).also {
+            MemorySegment.copy(segment, 0, it.segment, 0, minOf(size, newSize))
+        }
+
     companion object {
         private val COPY_TIE_LOCK = Any()
-        fun mutable(size: Long, pointerBytes: Int, pinned: Boolean = false): ManagedAllocation {
+        fun mutable(size: Long, pointerBytes: Int, pinned: Boolean = false, alignment: Long = 8): ManagedAllocation {
             if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("Managed allocation size outside JVM domain")
-            return ManagedAllocation(ByteArray(size.toInt()), true, pointerBytes, pinned)
+            if (pinned) {
+                if (alignment <= 0 || alignment and (alignment - 1) != 0L)
+                    fault("Pinned ByteArray# alignment must be a positive power of two")
+                // Reserve the inclusive one-past address too. The automatic arena
+                // is shared and lives as long as any segment/buffer alias does.
+                val storage = Arena.ofAuto().allocate(size + 1L, alignment).asSlice(0, size)
+                return ManagedAllocation(null, storage, true, pointerBytes)
+            }
+            val bytes = ByteArray(size.toInt())
+            return ManagedAllocation(bytes, MemorySegment.ofArray(bytes), true, pointerBytes)
         }
-        fun immutable(bytes: ByteArray, pointerBytes: Int): ManagedAllocation =
-            ManagedAllocation(bytes.copyOf(), false, pointerBytes)
+        fun immutable(bytes: ByteArray, pointerBytes: Int): ManagedAllocation {
+            val copy = bytes.copyOf()
+            return ManagedAllocation(copy, MemorySegment.ofArray(copy), false, pointerBytes)
+        }
     }
 }

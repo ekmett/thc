@@ -239,7 +239,8 @@ class AtomicAddressTest {
                     val targetType = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
                     for (target in allTargets) {
                         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
-                        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                        assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target),
+                            "$stage/$backend/$inline/${target.rootNode.name} installation")
                         runtime.javaClass.getMethod("bypassedInstalledCode", targetType).invoke(runtime, target)
                     }
                     assertEquals(beforeSetup, count(), "Compilation must not enter guest code")
@@ -409,7 +410,8 @@ class AtomicAddressTest {
     }
 
     @Test fun pointerCasRecognizesRawAliasesInBothDirections() {
-        val target = PinnedMemory.allocate(64,8)
+        // This case specifically checks owner/JVM-byte-array alias identity.
+        val target = ManagedAllocation.mutable(64,8)
         val owned = ManagedAddress.fromAllocation(target)
         val raw = ManagedAddress.fromByteArray(target.rawBytesIfPointerFree())
         val location = ManagedAddress.fromAllocation(PinnedMemory.allocate(8,8))
@@ -526,7 +528,8 @@ class AtomicAddressTest {
     }
 
     @Test fun aliasesLinearizeAndPublishAcrossThreads() {
-        val owner = PinnedMemory.allocate(16,8)
+        // Native pinned storage has no JVM-array alias; exercise the heap lock pair.
+        val owner = ManagedAllocation.mutable(16,8)
         val owned = ManagedAddress.fromAllocation(owner).plus(8)
         val exposed = ManagedAddress.fromByteArray(owner.rawBytesIfPointerFree()).plus(8)
         contend(owned,exposed)

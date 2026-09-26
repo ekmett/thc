@@ -79,7 +79,7 @@ class NativeAddressTest {
                     return result
                 }
                 val literal = ManagedAddress.fromHex("616263")
-                val header = ManagedAddress.fromAllocation(ManagedAllocation.immutable(byteArrayOf(7, 9, 11, 13), 8))
+                val header = ManagedAddress.fromHex("07090b0d")
                 var literalBits: Long? = null
                 fun exercise() {
                     for (bits in listOf(Long.MIN_VALUE, -4096L, -1L, 0L, 1L, 4096L, Long.MAX_VALUE))
@@ -193,7 +193,7 @@ class NativeAddressTest {
         }
     }
 
-    @Test fun immutableImagesKeepTheirBytesAndExclusiveOnePastAliases() {
+    @Test fun immutableHeapBuffersStayReadOnlyWithoutPromotionAndStaticLiteralsKeepNativeImages() {
         context().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -204,24 +204,40 @@ class NativeAddressTest {
                 val literal = ManagedAddress.fromHex("616263")
                 input.fill(0)
                 val cbits = Language.currentState(null).cbits()
+                val interop = InteropLibrary.getUncached()
                 for (original in listOf(allocation, literal)) {
                     val expected = original.rawBacking()
                     val escaped = listOf(original.rawBacking(), original.cbitsBacking()) +
                         if (original === allocation) listOf(owner.wholeBytesForPrimitive()) else emptyList()
-                    // Exposures made before projection cannot later mutate its source.
+                    // Writable snapshots cannot mutate the original readonly storage.
                     val oldBuffer = cbits.buffer(original)
                     escaped.forEach { it.fill(0) }
-                    val bits = original.toNativeBits()
                     original.rawBacking().fill(0)
                     original.cbitsBacking().fill(0)
-                    val view = registry.transport(original)!!
-                    val native = MemorySegment.ofAddress(InteropLibrary.getUncached().asPointer(view))
-                        .reinterpret(expected.size.toLong())
-                    assertArrayEquals(expected, native.toArray(ValueLayout.JAVA_BYTE))
                     assertArrayEquals(expected, original.rawBacking())
-                    assertTrue(registry.recover(bits).sameLocation(original))
+                    assertFalse(interop.isBufferWritable(oldBuffer))
+                    assertThrows(UnsupportedMessageException::class.java) { interop.writeBufferByte(oldBuffer, 0, 0) }
+                    val observed = ByteArray(expected.size)
+                    interop.readBuffer(oldBuffer, 0, observed, 0, observed.size)
+                    assertArrayEquals(expected, observed)
+                    if (original === allocation) {
+                        assertThrows(RuntimeFault::class.java) { original.toNativeBits() }
+                        assertNull(registry.transport(original))
+                        interop.toNative(oldBuffer)
+                        assertFalse(interop.isPointer(oldBuffer))
+                        assertThrows(UnsupportedMessageException::class.java) { interop.asPointer(oldBuffer) }
+                        assertFalse(original.cbitsSegment().isNative)
+                    } else {
+                        val bits = original.toNativeBits()
+                        val view = registry.transport(original)!!
+                        val native = MemorySegment.ofAddress(interop.asPointer(view)).reinterpret(expected.size.toLong())
+                        assertArrayEquals(expected, native.toArray(ValueLayout.JAVA_BYTE))
+                        assertTrue(registry.recover(bits).sameLocation(original))
+                        interop.toNative(oldBuffer)
+                        assertEquals(bits, interop.asPointer(oldBuffer))
+                        Reference.reachabilityFence(view)
+                    }
                     assertSame(oldBuffer, cbits.buffer(original.plus(1)))
-                    Reference.reachabilityFence(view)
                 }
                 assertEquals(7L, allocation.readWord8(0))
                 assertThrows(RuntimeFault::class.java) { allocation.writeAddressElementIndex(0, literal) }
@@ -230,9 +246,9 @@ class NativeAddressTest {
                 assertThrows(RuntimeFault::class.java) { owner.copyFrom(pointerOwner, 0, 0, 8) }
                 assertThrows(RuntimeFault::class.java) { ManagedAddress.fromAllocation(pointerOwner).toNativeBits() }
 
-                // Include empty images and sizes on both sides of native alignment
+                // Include empty pinned arrays and sizes on both sides of native alignment
                 // boundaries. One-past is a valid alias, but never readable memory.
-                val originals = (0..32).map { ManagedAddress.fromAllocation(ManagedAllocation.immutable(ByteArray(it), 8)) }
+                val originals = (0..32).map { ManagedAddress.fromGuestByteArray(PinnedMemory.allocate(it.toLong(), 8)) }
                 val bases = originals.map(ManagedAddress::toNativeBits)
                 for ((index, original) in originals.withIndex()) {
                     val end = bases[index] + original.cbitsSize()
@@ -241,7 +257,7 @@ class NativeAddressTest {
                     for (other in originals.indices) if (other != index) {
                         val outside = java.lang.Long.compareUnsigned(end, bases[other]) < 0 ||
                             java.lang.Long.compareUnsigned(bases[index], bases[other] + originals[other].cbitsSize()) > 0
-                        assertTrue(outside, "Immutable images must have disjoint inclusive address ranges")
+                        assertTrue(outside, "Pinned allocations must have disjoint inclusive address ranges")
                     }
                 }
                 // Immutable hardening must not replace existing mutable aliases.

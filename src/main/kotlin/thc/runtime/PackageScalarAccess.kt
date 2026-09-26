@@ -124,7 +124,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                     }
                     address.requireByteRegion(0, argumentReps[index] == "MutableByteArray#")
                     val writable = argumentReps[index] != "ByteArray#" && address.cbitsWritable()
-                    val key = address.nativeImageKey() ?: address.cbitsBacking()
+                    val key = address.cbitsStorageKey()
                     val buffer = buffers.getOrPut(key) { PackagePointerBuffer(address, writable) }
                     if (buffer.address.cbitsOwner() == null && address.cbitsOwner() != null) buffer.address = address
                     buffer.writable = buffer.writable || writable
@@ -139,8 +139,10 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         entry.owner.nativeAddresses.project(address)
                         entry.owner.nativeAddresses.transport(address) ?: fault("Missing immutable C pointer image")
                     }
-                    buffer.transport = CbitsBuffer(address.cbitsBacking(), buffer.writable,
-                        LongSupplier { address.cbitsSize() }, 0, nativeImage)
+                    buffer.transport = CbitsBuffer(address.cbitsBuffer(), buffer.writable,
+                        LongSupplier { address.cbitsSize() }, 0, nativeImage,
+                        if (address.cbitsOwner()?.isPinned == true)
+                            LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null)
                 }
                 for ((index, address) in addresses) {
                     converted[index] = when {

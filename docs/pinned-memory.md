@@ -1,4 +1,4 @@
-# Managed pinned memory and bounded MD5 calls
+# Native pinned memory and bounded MD5 calls
 
 The [aligned scalar extension](aligned-scalar-memory.md) also supports opaque
 StablePtr array/address cells and four-byte WideChar array elements.
@@ -21,7 +21,9 @@ array without copying or first freezing it. It requires an exact unlifted object
 operand and an `AddrRep` result, with no State argument or tuple result. Both
 contents operations preserve the same backing allocation and offset identity;
 addresses keep that storage alive and retain pointer-cell protections. This is
-stable managed address access, not a physical JVM address or native heap pin.
+stable address access. Explicitly pinned arrays have real native storage from
+allocation; ordinary arrays remain on the moving JVM heap. Neither contents
+operation copies, promotes, or temporarily pins an array.
 
 Pinned `ByteArray#` values have one allocation owner shared by frozen values
 and every address alias. An owner stores managed `Addr#` references in sparse
@@ -44,10 +46,34 @@ is rejected.
 An aligned full-width numeric overwrite releases the replaced pointer;
 partial overlap fails before changing bytes or references.
 
-Pinning and power-of-two alignment are logical properties of managed storage,
-not physical JVM heap pinning or native process pointers. The separate
-[native address projection](native-addresses.md) and owned native allocation
-paths do not make mutable managed arrays arbitrary C pointers. See the
+`newPinnedByteArray#` and `newAlignedPinnedByteArray#` allocate a shared automatic
+FFM arena once. Alignment is physical, including requested power-of-two
+alignment. The native segment, its bounded buffer view, every `Addr#` alias,
+and unsafe-frozen arrays share exactly the same bytes. This naturally backs
+GHC's existing `mallocForeignPtrBytes` and aligned/plain allocation paths.
+Repeated native address acquisition and foreign calls never copy or repin it.
+The automatic arena is reclaimed only after all segment/buffer/address owners
+become unreachable; `keepAlive#` and `touch#` retain their existing fences.
+Numeric pointers alone do not keep the allocation alive. Resize down changes
+the logical size in place without copying; growth allocates an ordinary unpinned
+heap array and copies the prefix, as GHC's replacement-allocation contract requires.
+
+Ordinary arrays use heap segments over their original JVM `byte[]`, retaining
+moving-GC freedom. Managed Sulong accesses them by object plus offset, without
+physical pinning; raw native projection rejects them even after unsafe freeze.
+Buffer-only and native-pointer-capable views of pinned storage are both
+available without copying. The installed community Sulong has not exercised
+true `llvm.managed`; a buffer-only view test is not a managed-engine test.
+Pre-existing native GMP and Windows MD5 staging for **unpinned** heap data is a
+separate remaining boundary; their pinned paths now borrow the original segment.
+The native allocator/automatic-arena lifetime boundary is kept out of guest
+partial evaluation. Scalar and vector operations use direct segment accesses;
+heap-backed segments still refer to the original moving array. Existing direct
+host `ByteArray` helpers are unchanged. This is a storage/coherence guarantee,
+not a claim that native allocation is as cheap as JVM allocation or a measured
+throughput improvement.
+The separate [native address projection](native-addresses.md) and explicit
+malloc/free ownership paths do not grant access to arbitrary process memory. See the
 [primop behavior reference](primop-behavior.md#addresses-pinning-and-pointer-containing-storage)
 for the current interoperability boundaries.
 
