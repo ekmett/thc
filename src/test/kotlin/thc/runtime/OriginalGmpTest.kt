@@ -43,13 +43,15 @@ class OriginalGmpTest {
             listOf("pre", "post").flatMap { stage -> listOf(
                 "$prefix/$stage/core/OriginalGmpAudit.json", "$prefix/$stage/core/THC.InterfaceClosure.json") }, "$prefix/")
         val rows = json("$prefix/oracle.json") as List<Map<String, Any?>>
-        assertEquals(296, rows.size)
+        assertEquals(464, rows.size)
         assertEquals(GmpForeignOp.entries.map { it.symbol }.toSet(), rows.map { it["symbol"] }.toSet())
         assertEquals(mapOf("originalAdd" to 15, "originalSub" to 15, "originalAddWord" to 8,
             "originalMulWord" to 8, "originalCmp" to 5, "originalMul" to 4, "originalDivWord" to 12,
             "originalModWord" to 5, "originalQuotRem" to 8, "originalQuot" to 4, "originalRem" to 8,
             "originalRShift" to 48, "originalRShiftNegative" to 24, "originalGetDouble" to 84,
-            "originalEncodeDouble" to 48),
+            "originalEncodeDouble" to 48, "originalGcdWords" to 7, "originalGcdWord" to 8,
+            "originalGcd" to 24, "originalLShift" to 63, "originalAnd" to 15,
+            "originalAndNot" to 15, "originalOr" to 15, "originalXor" to 15, "originalPopCount" to 6),
             rows.groupingBy { it["entry"] as String }.eachCount())
         for (stage in listOf("pre", "post")) for (entry in rows.map { it["entry"] as String }.toSet()) {
             val audit = json("$prefix/$stage/$entry.audit.json") as Map<String, Any?>
@@ -76,15 +78,17 @@ class OriginalGmpTest {
         val remainder = if (row["alias"] == "remainder-left" && row["entry"] == "originalQuotRem") left
             else convert(row["remainderBefore"])
         val arguments: Array<Any?> = when (row["entry"]) {
-            "originalAdd", "originalSub", "originalMul", "originalQuot", "originalRem" ->
+            "originalAdd", "originalSub", "originalMul", "originalQuot", "originalRem", "originalGcd" ->
                 arrayOf(output, left, row["leftCount"], right, row["rightCount"])
-            "originalAddWord", "originalMulWord", "originalRShift", "originalRShiftNegative" ->
+            "originalAddWord", "originalMulWord", "originalRShift", "originalRShiftNegative", "originalLShift" ->
                 arrayOf(output, left, row["leftCount"], row["word"])
             "originalGetDouble" -> arrayOf(left, row["word"], row["fractional"])
-            "originalEncodeDouble" -> arrayOf(row["word"], row["fractional"])
+            "originalEncodeDouble", "originalGcdWords" -> arrayOf(row["word"], row["fractional"])
+            "originalAnd", "originalAndNot", "originalOr", "originalXor" -> arrayOf(output, left, right, row["leftCount"])
+            "originalPopCount" -> arrayOf(left, row["leftCount"])
             "originalCmp" -> arrayOf(left, right, row["leftCount"])
             "originalDivWord" -> arrayOf(output, row["fractional"], left, row["leftCount"], row["word"])
-            "originalModWord" -> arrayOf(left, row["leftCount"], row["word"])
+            "originalModWord", "originalGcdWord" -> arrayOf(left, row["leftCount"], row["word"])
             "originalQuotRem" -> arrayOf(output, remainder, row["fractional"], left,
                 row["leftCount"], right, row["rightCount"])
             else -> error("Unknown original GMP consumer")
@@ -122,7 +126,7 @@ class OriginalGmpTest {
         for (stage in listOf("pre", "post")) {
             val source = module(stage)
             val calls = OriginalStdioChecks.foreignCalls(source)
-            assertEquals(15, calls.size)
+            assertEquals(24, calls.size)
             assertEquals(GmpForeignOp.entries.toSet(), calls.map { call ->
                 val metadata = call[6] as Map<*, *>
                 CoreGmpForeign.validate(metadata, (call[2] as List<List<Any?>>).map {

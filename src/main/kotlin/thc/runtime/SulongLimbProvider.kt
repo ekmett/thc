@@ -37,6 +37,15 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
     private val remainder = member("remainder")
     private val shiftRight = member("shift_right")
     private val getDouble = member("get_double")
+    private val gcdWords = member("gcd_words")
+    private val gcdWord = member("gcd_word")
+    private val gcd = member("gcd")
+    private val shiftLeft = member("shift_left")
+    private val and = member("and")
+    private val andNot = member("and_not")
+    private val or = member("or")
+    private val xor = member("xor")
+    private val populationCount = member("popcount")
     private fun member(name: String): Any = interop.readMember(library, "thc_gmp_$name")
 
     // Native transport belongs to this provider, not to the shared limb-region
@@ -53,10 +62,11 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
         }
     private fun LimbRegion.destination(scope: NativeLimbScope): NativeLimbScope.Pointer =
         if (address.cbitsOwner()?.isPinned == true) scope.borrow(address, byteSize) else scope.allocate(byteSize)
-    private fun LimbRegion.copyFrom(pointer: NativeLimbScope.Pointer) {
+    private fun LimbRegion.copyFrom(pointer: NativeLimbScope.Pointer, written: Long = limbs) {
         synchronized(address.cbitsOwner() ?: address.cbitsStorageKey()) {
             requireOutput(limbs)
-            if (!pointer.aliases(address)) pointer.copyTo(address.cbitsSegment(), address.cbitsOffset(), byteSize)
+            if (written < 0 || written > limbs) fault("Invalid native limb result count")
+            if (!pointer.aliases(address)) pointer.copyTo(address.cbitsSegment(), address.cbitsOffset(), written * 8)
         }
     }
 
@@ -166,6 +176,64 @@ internal class SulongLimbProvider(env: TruffleLanguage.Env) : LimbProvider {
     @TruffleBoundary override fun toDouble(input: LimbRegion, negative: Boolean, exponent: Long): Double =
         owned(input) { scope -> interop.asDouble(interop.execute(getDouble, input.snapshot(scope),
             if (negative) -input.limbs else input.limbs, exponent)) }
+    @TruffleBoundary override fun gcdWords(left: Long, right: Long): Long =
+        owned { interop.asLong(interop.execute(gcdWords, left, right)) }
+    @TruffleBoundary override fun gcdWord(input: LimbRegion, word: Long): Long {
+        input.requirePositive()
+        if (input.limbs > 1 && word == 0L) fault("Multi-limb GCD requires a nonzero word")
+        return owned(input) { scope ->
+            val source = input.snapshot(scope)
+            if (input.limbs > 1) normalized(input, source)
+            interop.asLong(interop.execute(gcdWord, source, input.limbs, word))
+        }
+    }
+    @TruffleBoundary override fun gcd(output: LimbRegion, left: LimbRegion, right: LimbRegion): Long {
+        ordered(left, right); output.requireOutput(right.limbs)
+        exactAlias(output, left); exactAlias(output, right)
+        return owned(output, left, right) { scope ->
+            val first = left.snapshot(scope); val second = right.snapshot(scope)
+            if (left.limbs > 1) normalized(left, first)
+            if (right.limbs > 1) normalized(right, second)
+            else if (left.limbs > 1 && second.readWord(0) == 0L) fault("Multi-limb GCD requires a nonzero divisor")
+            val destination = output.destination(scope)
+            val result = interop.asLong(interop.execute(gcd, destination, first, left.limbs, second, right.limbs))
+            // GHC writes only the returned prefix, then its caller trims the
+            // logical size. Preserve unused output limbs and allocation canaries.
+            output.copyFrom(destination, result)
+            result
+        }
+    }
+    @TruffleBoundary override fun shiftLeft(output: LimbRegion, input: LimbRegion, count: Long): Long {
+        input.requirePositive()
+        if (count <= 0 || count > Int.MAX_VALUE.toLong() * 8) fault("Invalid limb left shift count")
+        output.requireOutput(input.limbs + (count + 63) / 64)
+        exactAlias(output, input)
+        return owned(output, input) { scope ->
+            val source = input.snapshot(scope); val destination = output.destination(scope)
+            val result = interop.asLong(interop.execute(shiftLeft, destination, source, input.limbs, count))
+            output.copyFrom(destination)
+            result
+        }
+    }
+    @TruffleBoundary override fun bitwise(output: LimbRegion, left: LimbRegion, right: LimbRegion, operation: LimbBitwise) {
+        ordered(left, right)
+        if (left.limbs != right.limbs) fault("Logical limb operations require equal counts")
+        output.requireOutput(left.limbs); exactAlias(output, left); exactAlias(output, right)
+        val function = when (operation) {
+            LimbBitwise.AND -> and; LimbBitwise.AND_NOT -> andNot
+            LimbBitwise.OR -> or; LimbBitwise.XOR -> xor
+        }
+        owned(output, left, right) { scope ->
+            val first = left.snapshot(scope); val second = right.snapshot(scope)
+            val destination = output.destination(scope)
+            interop.execute(function, destination, first, second, left.limbs)
+            output.copyFrom(destination)
+        }
+    }
+    @TruffleBoundary override fun populationCount(input: LimbRegion): Long {
+        input.requirePositive()
+        return owned(input) { scope -> interop.asLong(interop.execute(populationCount, input.snapshot(scope), input.limbs)) }
+    }
     private fun divisionInputs(numerator: LimbRegion, divisor: LimbRegion) {
         ordered(numerator, divisor)
         disjoint(numerator, divisor)

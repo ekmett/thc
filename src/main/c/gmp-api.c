@@ -14,7 +14,8 @@ _Static_assert(CHAR_BIT == 8 && sizeof(int) == 4 && sizeof(mp_limb_t) == 8 && si
 int thc_gmp_limb_bits(void) { return mp_bits_per_limb; }
 
 /* All arguments are real native pointers into the caller's confined arena.
- * No managed interop reads, allocation, free or abort occur inside this shim.
+ * No managed interop reads occur inside this shim. The GCD adapter alone
+ * uses GMP-owned result scratch, just as GHC's original mpz_gcd wrapper does.
  * The host validates complete shapes/aliases and snapshots inputs first; its
  * finally closes the arena even if LLVM interop or result conversion throws. */
 
@@ -120,4 +121,69 @@ double thc_gmp_get_double(void const *input, int64_t size, int64_t exponent) {
     /* Preserve the original LP64 wrapper's narrowing at the C-int ldexp ABI
      * without introducing signed-overflow UB in the intermediate addition. */
     return ldexp(fraction, (int32_t)((uint64_t)scale + (uint64_t)exponent));
+}
+
+uint64_t thc_gmp_gcd_words(uint64_t left, uint64_t right) {
+    if (!left) return right;
+    if (!right) return left;
+    mp_limb_t value = left;
+    return mpn_gcd_1(&value, 1, right);
+}
+uint64_t thc_gmp_gcd_word(void const *input, int64_t size, uint64_t word) {
+    mp_srcptr limbs = input;
+    if (size == 1) return thc_gmp_gcd_words(limbs[0], word);
+    return mpn_gcd_1(limbs, size, word);
+}
+int64_t thc_gmp_gcd(void *output, void const *left, int64_t left_size,
+                    void const *right, int64_t right_size) {
+    mp_ptr out = output;
+    mp_srcptr rhs = right;
+    if (right_size == 1) {
+        out[0] = thc_gmp_gcd_word(left, left_size, rhs[0]);
+        return 1;
+    }
+    /* Read-only borrowed operands; mpn_gcd would mutate them and impose extra
+     * normalization. GMP owns and releases only its temporary result. */
+    const __mpz_struct a = { ._mp_alloc = 0, ._mp_size = (int)left_size, ._mp_d = (mp_ptr)left };
+    const __mpz_struct b = { ._mp_alloc = 0, ._mp_size = (int)right_size, ._mp_d = (mp_ptr)right };
+    mpz_t result;
+    mpz_init(result);
+    mpz_gcd(result, &a, &b);
+    mp_size_t size = result[0]._mp_size;
+    memcpy(out, result[0]._mp_d, size * sizeof(mp_limb_t));
+    mpz_clear(result);
+    return size;
+}
+uint64_t thc_gmp_shift_left(void *output, void const *input, int64_t size, uint64_t count) {
+    mp_ptr out = output;
+    mp_srcptr in = input;
+    mp_size_t whole = count / GMP_NUMB_BITS;
+    unsigned bits = count % GMP_NUMB_BITS;
+    mp_size_t end = size + whole;
+    if (bits) {
+        mp_limb_t (*volatile call)(mp_ptr, mp_srcptr, mp_size_t, unsigned) = &__gmpn_lshift;
+        out[end] = call(out + whole, in, size, bits);
+    } else {
+        memmove(out + whole, in, size * sizeof(mp_limb_t));
+        --end;
+    }
+    /* Store the low zero limbs after consuming input, preserving exact-start
+     * pinned aliases without staging another copy. */
+    memset(out, 0, whole * sizeof(mp_limb_t));
+    return out[end];
+}
+void thc_gmp_and(void *output, void const *left, void const *right, int64_t size) {
+    mpn_and_n(output, left, right, size);
+}
+void thc_gmp_and_not(void *output, void const *left, void const *right, int64_t size) {
+    mpn_andn_n(output, left, right, size);
+}
+void thc_gmp_or(void *output, void const *left, void const *right, int64_t size) {
+    mpn_ior_n(output, left, right, size);
+}
+void thc_gmp_xor(void *output, void const *left, void const *right, int64_t size) {
+    mpn_xor_n(output, left, right, size);
+}
+uint64_t thc_gmp_popcount(void const *input, int64_t size) {
+    return mpn_popcount(input, size);
 }

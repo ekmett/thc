@@ -71,6 +71,27 @@ requests = concat
   , [Request "originalEncodeDouble" "none" [] [] (fromIntegral mantissa) exponent
     | mantissa <- [0,1,-1,minBound,maxBound,9007199254740993] :: [Int],
       exponent <- [minBound,-1075,-1074,-1,0,1,1024,maxBound] ]
+  , [Request "originalGcdWords" "none" [] [] a (fromIntegral b)
+    | (a,b) <- [(0,0),(0,maxBound),(maxBound,0),(maxBound,maxBound),
+                (48,18),(0x8000000000000000,2),(maxBound,3)] :: [(Word,Word)] ]
+  , [Request "originalGcdWord" "none" a [] word 0
+    | (a,word) <- [([0],0),([0],17),([maxBound],0),([48],18),([maxBound],3),
+                   ([0,1],6),([1,1],17),([maxBound,maxBound],maxBound)] ]
+  , [Request "originalGcd" alias a b 0 0
+    | alias <- ["none","output-left","output-right"],
+      (a,b) <- [([0],[0]),([48],[0]),([0],[17]),([48],[18]),([maxBound,maxBound],[maxBound]),
+                ([0,2],[0,1]),([3,2],[3,1]),([0,0,1],[0,1])] ]
+  , [Request "originalLShift" alias a [] shift 0
+    | a <- [[0],[1],[maxBound],[1,1],[0,maxBound],[maxBound,maxBound],[1,0,1]],
+      shift <- [1,63,64,65,127,128,129],
+      alias <- if shift < 64 then ["none","output-left"] else ["none"] ]
+  , [Request entry alias a b 0 0
+    | entry <- ["originalAnd","originalAndNot","originalOr","originalXor"],
+      alias <- ["none","output-left","output-right"],
+      (a,b) <- [([0],[0]),([maxBound],[0]),([maxBound],[maxBound]),
+                ([0,maxBound],[maxBound,0]),([0xaaaaaaaaaaaaaaaa,0x55555555],[0x5555555555555555,0xffff0000])] ]
+  , [Request "originalPopCount" "none" a [] 0 0
+    | a <- [[0],[maxBound],[0,maxBound],[1,1],[maxBound,maxBound],[0xaaaa,0x5555,0x8000000000000000]] ]
   ]
 
 main :: IO ()
@@ -84,6 +105,11 @@ main = mapM execute requests >>= print
             "originalModWord" -> 0
             "originalGetDouble" -> 0
             "originalEncodeDouble" -> 0
+            "originalGcdWords" -> 0
+            "originalGcdWord" -> 0
+            "originalPopCount" -> 0
+            "originalGcd" -> nr
+            "originalLShift" -> nl + (fromIntegral word + 63) `div` 64
             "originalRShift" -> nl - fromIntegral word `div` 64
             "originalRShiftNegative" -> nl - (fromIntegral word - 1) `div` 64
             "originalMul" -> nl + nr
@@ -131,6 +157,15 @@ main = mapM execute requests >>= print
             "originalRShiftNegative" -> withWord (G.c_mpn_rshift_2c out a an w)
             "originalGetDouble" -> evaluate (I# (word2Int# (word64ToWord# (castDoubleToWord64# (G.c_mpn_get_d a (word2Int# w) fraction)))))
             "originalEncodeDouble" -> evaluate (I# (word2Int# (word64ToWord# (castDoubleToWord64# (P.intEncodeDouble# (word2Int# w) fraction)))))
+            "originalGcdWords" -> evaluate (I# (word2Int# (G.integer_gmp_gcd_word w (int2Word# fraction))))
+            "originalGcdWord" -> evaluate (I# (word2Int# (G.c_mpn_gcd_1# a an w)))
+            "originalGcd" -> G.c_mpn_gcd# out a an b bn
+            "originalLShift" -> withWord (G.c_mpn_lshift out a an w)
+            "originalAnd" -> withVoid (G.c_mpn_and_n out a b an)
+            "originalAndNot" -> withVoid (G.c_mpn_andn_n out a b an)
+            "originalOr" -> withVoid (G.c_mpn_ior_n out a b an)
+            "originalXor" -> withVoid (G.c_mpn_xor_n out a b an)
+            "originalPopCount" -> evaluate (I# (word2Int# (G.c_mpn_popcount a an)))
             _ -> fail "unknown original GMP request"
       afterLeft <- observe leftBuffer
       afterRight <- observe rightBuffer
