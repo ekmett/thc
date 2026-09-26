@@ -314,7 +314,7 @@ class ThreadInventoryNativeTest {
         }
     }
 
-    @Test fun retiredBoundaryNegativeControlRejectsTheFormerTwoEntryThreshold() {
+    @Test fun retiredBoundaryNegativeControlRejectsMissingCompiledEntries() {
         provenance()
         for (stage in listOf("pre", "post")) for (backendName in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
@@ -324,6 +324,8 @@ class ThreadInventoryNativeTest {
                 val proof = ThreadInventoryCoreEvidence(module, "selfInventory")
                 assertEquals(4L, proof.compiledCalls(1), "Public, state, and occurrences at indices zero and one")
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                assertEquals(java.lang.Boolean.getBoolean(HANDOFF_PROPERTY), language.handoffLayouts.enabled)
+                println("THREAD_INVENTORY_BOUNDARY_HANDOFF=${language.handoffLayouts.enabled}")
                 val linked = CoreModules.reachable(module, "selfInventory") + ("instrument" to true)
                 val program: ExecutableProgram = if (backendName == "ast") Program(language, linked) else BytecodeProgram(language, linked, true)
                 val entry = program.entryTarget("selfInventory")
@@ -359,12 +361,25 @@ class ThreadInventoryNativeTest {
                         val calls = interpretedCalls(active)
                         assertEquals(11L, Calls.target(entry, arrayOf(0L, 1L)))
                         val negative = count() - before
-                        println("THREAD_INVENTORY_BOUNDARY $stage/$backendName negative=$negative")
-                        assertEquals(3L, negative, "Only the public root bypasses installed code")
-                        assertTrue(negative >= 2, "The former threshold incorrectly accepts this bypass")
+                        val interpreted = interpretedCalls(active).mapIndexed { i, value -> value - calls[i] }
+                        val sourceCalls = mapOf("lambda token" to 1, "lambda s" to 1,
+                            "lambda wanted, threads, i" to 2)
+                        assertEquals(proof.labels, sourceCalls.keys)
+                        println("THREAD_INVENTORY_BOUNDARY $stage/$backendName negative=$negative interpreted=" +
+                            active.mapIndexed { i, target -> target.rootNode.name to interpreted[i] }.toMap())
+                        // Reprofiling the shared JVM boundary always bypasses the
+                        // outer entry, but previously compiled Java call sites can
+                        // bypass inner entries too. Account for the actual paths;
+                        // do not assume that only one of the four calls interpreted.
+                        assertEquals(1, interpreted[active.indexOf(entry)], "The outer entry deliberately bypasses code")
+                        active.forEachIndexed { i, target ->
+                            assertTrue(interpreted[i] in 0..sourceCalls.getValue(target.rootNode.name),
+                                "Interpreted calls fit the original root: ${target.rootNode.name}")
+                        }
+                        assertEquals(proof.compiledCalls(1), negative + interpreted.sum(),
+                            "Every source call is accounted for as compiled or interpreted")
+                        assertTrue(negative < proof.compiledCalls(1), "The deliberate bypass misses required compiled entries")
                         assertThrows(AssertionError::class.java) { assertEquals(proof.compiledCalls(1), negative) }
-                        assertEquals(active.mapIndexed { i, target -> calls[i] + if (target === entry) 1 else 0 },
-                            interpretedCalls(active))
                         retained()
 
                         reprofile.invoke(boundary)
