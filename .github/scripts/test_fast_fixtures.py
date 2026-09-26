@@ -1032,6 +1032,22 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn('"simd-floatx4-fma/' + suffix + '"', gradle)
         self.assertIn('build/simd-floatx4-fma/', (project / '.github/workflows/build.yml').read_text())
 
+        wide = manifest['groups']['simd-wide-floating-fma']
+        self.assertEqual('simd-wide-floating-fma', owners['thc.runtime.SimdWideFloatFmaTest'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
+                                   'simd-wide-floating-fma']}], wide['commands'])
+        self.assertEqual(['build/simd-wide-floating-fma'], wide['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in wide['sources']))
+        self.assertIn('"$fixture_bin" simd-wide-floating-fma', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/simd-wide-floating-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
+        # Scalar FMA expectations are mandatory on every supported host; AVX512 is not required.
+        for suffix in ('manifest.json', 'oracle.txt', 'pre-audit.json', 'pre-double-audit.json',
+                       'pre-core/SimdWideFloatFma.json'):
+            self.assertIn('build/simd-wide-floating-fma/' + suffix, fast_fixtures.FULL_REQUIRED)
+        for suffix in ('**/*.json', 'oracle.txt'):
+            self.assertIn('"simd-wide-floating-fma/' + suffix + '"', gradle)
+        self.assertIn('build/simd-wide-floating-fma/', (project / '.github/workflows/build.yml').read_text())
+
     def test_floating_address_fixture_is_selected_and_receipted(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -1135,7 +1151,7 @@ class FixturePreparationTest(unittest.TestCase):
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         classes = policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"]
         expected = sorted({owners[name] for name in classes if owners[name] is not None})
-        self.assertEqual(26, len(classes))
+        self.assertEqual(27, len(classes))
         self.manifest = {"schema": 1, "fixtureFreeJunit": manifest["fixtureFreeJunit"],
                          "groups": {name: manifest["groups"][name] for name in expected}}
         (self.root / fast_fixtures.MANIFEST).write_text(json.dumps(self.manifest))
@@ -1170,7 +1186,7 @@ class FixturePreparationTest(unittest.TestCase):
                 path = self.root / source
                 path.write_bytes(path.read_bytes() + b"\n# changed\n")
                 self.assertEqual([group_id], prepare()["rebuilt"])
-        for group_id in ("sum-results", "floating-tuples", "sqrt", "scalar-bitcasts", "simd-floatx4", "simd-floatx4-fma",
+        for group_id in ("sum-results", "floating-tuples", "sqrt", "scalar-bitcasts", "simd-floatx4", "simd-floatx4-fma", "simd-wide-floating-fma",
                          "simd-doublex2", "simd-floatx4-bytearray", "simd-doublex2-bytearray"):
             for change in ("bytes", "missing"):
                 with self.subTest(group=group_id, change=change):

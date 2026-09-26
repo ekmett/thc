@@ -12,6 +12,8 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/SimdWideFloatFma.hs
+  compiler/test-fixtures/SimdWideFloatFmaNative.hs
   compiler/test-fixtures/OriginalStringRtsNative.hs
   compiler/test-fixtures/RtsShutdownNative.hs
   compiler/pinned-ghc-internal/cbits/strerror.c
@@ -78,6 +80,7 @@ extra-source-files:
   compiler/test-fixtures/TopHandlerMainThreadAbiNative.hs
   README.md
   docs/driver.md
+  docs/wide-floating-fma.md
   docs/documentation.md
   docs/site/index.md
   docs/site/embedding.md
@@ -420,6 +423,7 @@ executable thc-fixtures
     FusedFloatingFixtures
     SimdCallFixtures
     SimdFloatFmaFixtures
+    SimdWideFloatFmaFixtures
     SqrtFixtures
     UnsafeEqualityFixtures
     OriginalStdioFixtures

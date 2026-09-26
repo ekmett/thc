@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module SimdFloatFmaFixtures (prepareSimdFloatFma) where
+module SimdFloatFmaFixtures (prepareSimdFloatFma, inputs, doubleInputs) where
 
 import Control.Monad (forM_, unless, when)
 import Data.Aeson (object, (.=))

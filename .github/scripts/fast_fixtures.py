@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "5fddb1fdf2b45105e5b891f291a1ecb0197e63226982c80b3fa128002c1f366b"
+FULL_PREPARATION_PLAN = "d2d2f564785a6f32b79645a0a475298ac7bed0a832427bdebcdf05d4975c21e9"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -39,6 +39,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/simd-calls/pre-audit.json",
     "build/simd-floatx4-fma/manifest.json", "build/simd-floatx4-fma/pre-core/SimdFloatFma.json",
     "build/simd-floatx4-fma/pre-audit.json", "build/simd-floatx4-fma/pre-double-audit.json",
+    *fast_inputs.SIMD_WIDE_FMA_OUTPUTS,
     *([] if platform.machine().lower() in ("arm64", "aarch64") else
       ["build/simd-calls/oracle.tsv", "build/simd-calls/post-core/SimdCallAudit.json",
        "build/simd-calls/post-audit.json", "build/simd-floatx4-fma/oracle.txt",

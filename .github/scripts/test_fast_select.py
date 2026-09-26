@@ -976,7 +976,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
             "FloatingPrimitiveTest", "FloatingTupleTest", "FusedFloatingTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
-            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SqrtPrimitiveTest",
+            "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SqrtPrimitiveTest",
             "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))
         self.assertLessEqual({"scripts/test-scalar-bitcasts.py", "scripts/test-core-sums.py",
@@ -991,10 +991,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
                                    ("SimdFloatFmaFixtures", "SimdFloatFmaTest"),
+                                   ("SimdWideFloatFmaFixtures", "SimdWideFloatFmaTest"),
                                    ("WordFloatingFixtures", "WordFloatingTest")):
             with self.subTest(producer=producer):
                 junit = "thc.runtime." + consumer
-                self.assertEqual({junit}, set(owners["test/haskell-fixtures/" + producer + ".hs"]["junit"]))
+                expected = {junit} | ({"thc.runtime.SimdWideFloatFmaTest"} if producer == "SimdFloatFmaFixtures" else set())
+                self.assertEqual(expected, set(owners["test/haskell-fixtures/" + producer + ".hs"]["junit"]))
                 self.assertIn(junit, owners["test/haskell-fixtures/Main.hs"]["junit"])
         # FMA shares these real native/exported fixtures with the earlier
         # floating suite; adding its producer must not replace their owners.
@@ -1010,7 +1012,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                 "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
                 "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
                 "Word32VectorStorageTest"],
-            "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdFloatByteArrayTest",
+            "FloatingVectorPrimitives": ["SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SimdFloatByteArrayTest",
                 "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "SimdDoubleVectorTest",
                 "SimdDoubleByteArrayTest", "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest"],
         }

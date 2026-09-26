@@ -112,10 +112,16 @@ class SimdFloatFmaTest {
             checkGenuineCoreAndNativeLaneBits(double, laneCount)
     }
 
-    private fun checkGenuineCoreAndNativeLaneBits(double: Boolean, laneCount: Int) {
-        val doubleWide = double && laneCount == 4
-        val wide = laneCount == 8
+    internal fun checkGenuineCoreAndNativeLaneBits(double: Boolean, laneCount: Int) {
+        val vector512 = if (double) laneCount == 8 else laneCount == 16
+        val directory = if (vector512) File(root, "build/simd-wide-floating-fma") else this.directory
+        val moduleName = if (vector512) "SimdWideFloatFma" else "SimdFloatFma"
+        val nativeRows = if (vector512) 2112 else 1584
+        val doubleWide = double && laneCount >= 4
+        val wide = !double && laneCount >= 8
         val names = when {
+            vector512 && double -> listOf("doubleHugeAddCase", "doubleHugeSubCase", "doubleHugeNegAddCase", "doubleHugeNegSubCase")
+            vector512 -> listOf("hugeAddCase", "hugeSubCase", "hugeNegAddCase", "hugeNegSubCase")
             doubleWide -> listOf("doubleWideAddCase", "doubleWideSubCase", "doubleWideNegAddCase", "doubleWideNegSubCase")
             double -> listOf("doubleAddCase", "doubleSubCase", "doubleNegAddCase", "doubleNegSubCase")
             wide -> listOf("wideAddCase", "wideSubCase", "wideNegAddCase", "wideNegSubCase")
@@ -132,11 +138,13 @@ class SimdFloatFmaTest {
                 val base = this.lanes(input)
                 val (x,y,z) = base[0]
                 val all = if (wide) base + listOf(Triple(-x,y,z), Triple(x,-y,z), Triple(-y,z,-x), Triple(z,-x,-y)) else base
-                return all.map { (a,b,c) -> Triple(a.toDouble(), b.toDouble(), c.toDouble()) }
+                val selected = if (vector512) all + all.map { (a,b,c) -> Triple(-a,-b,-c) } else all
+                return selected.map { (a,b,c) -> Triple(a.toDouble(), b.toDouble(), c.toDouble()) }
             }
             val (x,y,z) = input.map(Double::fromBits)
             val base = listOf(Triple(x,y,z), Triple(y,z,-x))
-            return if (doubleWide) base + listOf(Triple(z,x,y), Triple(-x,y,-z)) else base
+            val all = if (doubleWide) base + listOf(Triple(z,x,y), Triple(-x,y,-z)) else base
+            return if (vector512) all + all.map { (a,b,c) -> Triple(-a,-b,-c) } else all
         }
         fun model(operation: Int, lane: Triple<Double, Double, Double>): Long {
             val (x,y,z) = lane
@@ -149,16 +157,29 @@ class SimdFloatFmaTest {
         assertEquals(1L, manifest["schema"])
         assertEquals("9.14.1", manifest["ghc"])
         val exportOnly = System.getProperty("os.arch") in listOf("aarch64", "arm64")
-        assertEquals(if (exportOnly) listOf("pre") else listOf("pre", "post"), manifest["stages"])
-        assertEquals(if (exportOnly) null else 1584L, manifest["nativeRows"], "Native preparation cannot silently downgrade")
-        assertEquals(listOf("-fllvm", "-mavx2", "-mfma"), manifest["nativeFlags"])
+        assertEquals(if (vector512 || exportOnly) listOf("pre") else listOf("pre", "post"), manifest["stages"])
+        assertEquals(if (exportOnly && !vector512) null else nativeRows.toLong(), manifest["nativeRows"],
+            "Native preparation cannot silently downgrade")
+        assertEquals(if (vector512) { if (exportOnly) emptyList<String>() else listOf("-mfma") }
+            else listOf("-fllvm", "-mavx2", "-mfma"), manifest["nativeFlags"])
+        if (vector512) {
+            assertEquals("native-ghc-scalar-fma-lanes", manifest["oracleKind"])
+            assertEquals(false, manifest["nativeVectorParity"], "Native 512-bit instruction parity remains unproved")
+        }
         for ((path, want) in ((manifest["inputHashes"] as Map<String, String>) +
                 (manifest["artifactHashes"] as Map<String, String>))) {
             val hash = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
                 .joinToString("") { "%02x".format(it) }
             assertEquals(want, hash, "Stale shared SIMD fused fixture $path")
         }
-        assertEquals(names, manifest[if (doubleWide) "doubleWideEntries" else if (double) "doubleEntries" else if (wide) "wideEntries" else "entries"])
+        assertEquals(names, manifest[when {
+            vector512 && double -> "doubleHugeEntries"
+            vector512 -> "hugeEntries"
+            doubleWide -> "doubleWideEntries"
+            double -> "doubleEntries"
+            wide -> "wideEntries"
+            else -> "entries"
+        }])
         for (stage in manifest["stages"] as List<String>) {
             val audit = Json.parse(File(directory, "$stage-audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"], "$stage canonical audit")
@@ -173,7 +194,7 @@ class SimdFloatFmaTest {
             else (manifest["inputs"] as List<List<Number>>).map { row -> row.map { it.toLong() } }
         assertEquals(22, inputs.size)
         val native = if (manifest["nativeRows"] != null) File(directory, "oracle.txt").readLines().map { it.split(' ') }.also {
-            assertEquals(1584, it.size)
+            assertEquals(nativeRows, it.size)
         }.filter { it[0] in names } else null
         val expectedRequests = names.flatMap { name -> inputs.flatMap { input -> (0 until laneCount).map { lane ->
             listOf(name) + input.map(::unsigned) + lane.toString()
@@ -191,7 +212,7 @@ class SimdFloatFmaTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val source = Json.parse(File(directory, "$stage-core/SimdFloatFma.json").readText()) as Map<String, Any?>
+                    val source = Json.parse(File(directory, "$stage-core/$moduleName.json").readText()) as Map<String, Any?>
                     for ((operation,name) in names.withIndex()) {
                         val linked = CoreModules.reachable(source, name) + mapOf("instrument" to true)
                         val program = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
@@ -222,7 +243,14 @@ class SimdFloatFmaTest {
                         val resultShape = requireNotNull(workerRoot.tupleResult)
                         assertEquals(3, inputLayout.logical.logicalArity)
                         assertEquals(3 * laneCount, inputLayout.logical.physicalArity)
-                        assertEquals(if (doubleWide) GeneratedVectors.vectorDoubleX4 else if (double) CoreVector.DOUBLEX2 else if (wide) GeneratedVectors.vectorFloatX8 else CoreVector.FLOATX4, resultShape.proof.vector)
+                        assertEquals(when {
+                            vector512 && double -> GeneratedVectors.vectorDoubleX8
+                            vector512 -> GeneratedVectors.vectorFloatX16
+                            doubleWide -> GeneratedVectors.vectorDoubleX4
+                            double -> CoreVector.DOUBLEX2
+                            wide -> GeneratedVectors.vectorFloatX8
+                            else -> CoreVector.FLOATX4
+                        }, resultShape.proof.vector)
                         fun workerCall(input: List<Long>) {
                             val laneInputs = lanes(input)
                             val loan = language.handoffState.get().arguments.acquire(inputLayout.packet)
