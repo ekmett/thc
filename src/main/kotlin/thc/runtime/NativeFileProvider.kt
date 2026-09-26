@@ -6,11 +6,22 @@ package thc.runtime
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.interop.InteropLibrary
+import com.oracle.truffle.api.interop.TruffleObject
+import com.oracle.truffle.api.interop.UnsupportedMessageException
+import com.oracle.truffle.api.library.ExportLibrary
+import com.oracle.truffle.api.library.ExportMessage
 import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
 import org.graalvm.polyglot.io.IOAccess
 import org.graalvm.polyglot.Context
 import java.io.Closeable
+import java.io.IOException
+import java.lang.foreign.Arena
+import java.lang.foreign.FunctionDescriptor
+import java.lang.foreign.Linker
+import java.lang.foreign.MemoryLayout
+import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 import java.nio.ByteBuffer
 import java.nio.ReadOnlyBufferException
 import java.nio.channels.ClosedChannelException
@@ -345,5 +356,82 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
         override fun isOpen(): Boolean = lease.isOpen
         override fun close() = retire(lease)
+    }
+}
+
+/** Private native-provider ownership; neither fd nor pointer becomes guest data.
+ * Cleanup is a host downcall and remains valid after LLVM disposal. Acquisition
+ * publishes only after its worker joins. Linux consumes close even on EINTR. */
+@ExportLibrary(InteropLibrary::class)
+internal class NativeFileLease : AutoCloseable, TruffleObject {
+    private val arena = Arena.ofShared()
+    private val slot = arena.allocate(ValueLayout.JAVA_INT)
+    // IO owns this lease's monitor. Readiness never waits on a blocking read:
+    // only physical close and duplicate share this short lifetime lock.
+    private val lifetime = Any()
+    private var closed = false
+    init { slot.set(ValueLayout.JAVA_INT, 0, -1) }
+
+    @Synchronized fun openSlot(): MemorySegment {
+        if (closed) throw ClosedChannelException()
+        check(slot.get(ValueLayout.JAVA_INT, 0) == -1) { "Open lease already populated" }
+        return slot
+    }
+    @Synchronized fun requireOpen() {
+        if (closed || slot.get(ValueLayout.JAVA_INT, 0) < 0) throw ClosedChannelException()
+    }
+    val isOpen: Boolean
+        @Synchronized get() = !closed && slot.get(ValueLayout.JAVA_INT, 0) >= 0
+
+    fun duplicateForWait(): Int = synchronized(lifetime) {
+        if (closed || slot.get(ValueLayout.JAVA_INT, 0) < 0) throw ClosedChannelException()
+        try {
+            Arena.ofConfined().use { call ->
+                val errors = call.allocate(capture)
+                val result = WaitDuplicate.fcntl.invokeExact(errors,
+                    slot.get(ValueLayout.JAVA_INT, 0), 1030, 0) as Int // Linux F_DUPFD_CLOEXEC.
+                if (result < 0) throw NativeFileException("duplicate readiness lease", errors.get(ValueLayout.JAVA_INT, errno))
+                result
+            }
+        } catch (failure: Throwable) { failed("Native readiness duplication failed", failure) }
+    }
+    @Synchronized override fun close() {
+        synchronized(lifetime) {
+            if (closed) return
+            closed = true
+            try {
+                val fd = slot.get(ValueLayout.JAVA_INT, 0)
+                slot.set(ValueLayout.JAVA_INT, 0, -1)
+                if (fd >= 0) try {
+                    Arena.ofConfined().use { call ->
+                        val errors = call.allocate(capture)
+                        val result = closeFd.invokeExact(errors, fd) as Int
+                        if (result != 0) throw NativeFileException("close", errors.get(ValueLayout.JAVA_INT, errno))
+                    }
+                } catch (failure: Throwable) { failed("Native close invocation failed", failure) }
+            } finally { arena.close() }
+        }
+    }
+    @ExportMessage @Synchronized fun isPointer(): Boolean = !closed
+    @ExportMessage @Synchronized fun asPointer(): Long {
+        if (closed) throw UnsupportedMessageException.create()
+        return slot.address()
+    }
+    companion object {
+        private val capture = Linker.Option.captureStateLayout()
+        private val errno = capture.byteOffset(MemoryLayout.PathElement.groupElement("errno"))
+        private val closeFd = Linker.nativeLinker().downcallHandle(
+            Linker.nativeLinker().defaultLookup().find("close").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT), Linker.Option.captureCallState("errno"))
+        private fun failed(message: String, failure: Throwable): Nothing {
+            if (failure is IOException || failure is RuntimeException || failure is Error) throw failure
+            throw IOException(message, failure)
+        }
+    }
+    private object WaitDuplicate {
+        val fcntl = Linker.nativeLinker().downcallHandle(
+            Linker.nativeLinker().defaultLookup().find("fcntl").orElseThrow(),
+            FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.JAVA_INT),
+            Linker.Option.firstVariadicArg(2), Linker.Option.captureCallState("errno"))
     }
 }
