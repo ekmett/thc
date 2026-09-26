@@ -9,6 +9,12 @@ owning context. There is no separate scheduler identity. The command-line
 runtime permits thread creation; an embedding must enable
 `Context.Builder.allowCreateThread(true)`.
 
+Ordinary AST execution also supports `fork#` and thread observation. Its child
+inherits the parent's mask and evaluates the lazy action head on its own thread.
+It can self-throw, but cannot generally save a continuation for external async
+delivery. External sends to these children fail before enqueueing; nested entry
+does not upgrade that lifetime. This is not general resumable AST async support.
+
 The [capture contract](async-continuation-contract.md) separates delivery
 eligibility from the caller's obligation to preserve a suspended computation.
 

@@ -8,12 +8,18 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
+import GraphFixtures (prepareGraph)
+import IntegerCompletionFixtures (prepareIntegerCompletion)
+import AddressArrayCopyFixtures (prepareAddressArrayCopy)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
+import PinnedAddressFixtures (preparePinnedAddresses)
 import FloatingAddressFixtures (prepareFloatingAddress)
+import AtomicAddressFixtures (prepareAtomicAddress)
 import FloatingByteOffsetFixtures (prepareFloatingByteOffset)
 import NarrowByteOffsetFixtures (prepareNarrowByteOffset)
+import UnalignedScalarMemoryFixtures (prepareUnalignedScalarMemory)
 import Int32ByteOffsetFixtures (prepareInt32ByteOffset)
 import Explicit64ArrayFixtures (prepareExplicit64Array)
 import FusedFloatingFixtures (prepareFusedFloating)
@@ -21,12 +27,15 @@ import SimdCallFixtures (prepareSimdCalls)
 import SimdFloatFmaFixtures (prepareSimdFloatFma)
 import SimdWideFloatFmaFixtures (prepareSimdWideFloatFma)
 import SqrtFixtures (prepareSqrt)
+import FloatDecodeFixtures (prepareFloatDecode)
+import FloatingRemainderFixtures (prepareFloatingRemainder)
 import UnsafeEqualityFixtures (prepareUnsafeEquality)
 import ContinuationFixtures (prepareCoreContinuation)
 import ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmeticCore)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
 import ThreadStatusFixtures (prepareThreadStatus)
+import ThreadInventoryFixtures (prepareThreadInventory)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
@@ -57,14 +66,19 @@ import OriginalSigprocmaskFixtures (prepareOriginalSigprocmask)
 import OriginalSigsetFixtures (prepareOriginalSigset)
 import OriginalIconvFixtures (prepareOriginalIconv)
 import MutVarFixtures (prepareMutVar)
+import STMFixtures (prepareSTM)
 import StablePointerFixtures (prepareStablePointers)
 import WeakFixtures (prepareWeaks)
 import ShrinkByteArrayFixtures (prepareShrinkByteArrays)
+import ByteArrayFixtures (prepareByteArrayFamily)
+import SimdByteArrayFixtures (prepareSimdByteArray)
 import FetchAddIntArrayFixtures (prepareFetchAddIntArray)
+import AtomicIntArrayFixtures (prepareAtomicIntArrays)
 import StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource)
 import StackDecoderFixtures (prepareOriginalStackDecoder)
 import SmallArrayFixtures (prepareSmallArrays)
 import BoxedArrayExtensionsFixtures (prepareBoxedArrayExtensions)
+import AlignedScalarMemoryFixtures (prepareAlignedScalarMemory)
 import WideCharAddressFixtures (prepareWideCharAddress)
 import ManagedAddressReadFixtures (prepareManagedAddressReads)
 import Control.Monad (forM, forM_, unless, when)
@@ -877,14 +891,22 @@ main = do
     [name] -> prepareAggregate root name
     _ -> pure False
   unless handled $ case args of
+    ["integer-completion"] -> prepareIntegerCompletion root
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["bignat-literals", "--check-only"] -> prepareBigNatLiterals root True
+    "pinned-addresses":options | all (`elem` ["--native-only","--export-only","--allow-unsupported"]) options,
+      length options == Set.size (Set.fromList options) ->
+        preparePinnedAddresses root ("--native-only" `elem` options) ("--export-only" `elem` options) ("--allow-unsupported" `elem` options)
+    ["float-decode"] -> prepareFloatDecode root
+    ["floating-remainder"] -> prepareFloatingRemainder root
     ["floating-address"] -> prepareFloatingAddress root
+    ["atomic-address"] -> prepareAtomicAddress root
     ["floating-byte-offset"] -> prepareFloatingByteOffset root
     ["narrow-byte-offset"] -> prepareNarrowByteOffset root
     ["int32-byte-offset"] -> prepareInt32ByteOffset root
+    ["unaligned-scalar-memory"] -> prepareUnalignedScalarMemory root
     ["explicit64-arrays"] -> prepareExplicit64Array root
     ["fused-floating"] -> prepareFusedFloating root
     ["simd-calls"] -> prepareSimdCalls root
@@ -923,32 +945,40 @@ main = do
     ["original-rts-locks", "--require-supported"] -> prepareOriginalRtsLocks root True
     ["original-iconv"] -> prepareOriginalIconv root
     ["mutvar"] -> prepareMutVar root
+    ["stm"] -> prepareSTM root
     ["stable-pointers"] -> prepareStablePointers root
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
+    [family] | family `elem` ["bytearray", "mutable-bytearrays", "resize-bytearrays", "mutable-bytearray-size", "compare-byte-arrays"] -> prepareByteArrayFamily root family
+    family:options | family `elem` ["int32x4-bytearray", "word32x4-bytearray", "floatx4-bytearray", "doublex2-bytearray"] -> prepareSimdByteArray root family options
     ["fetch-add-int-array"] -> prepareFetchAddIntArray root
+    ["atomic-int-arrays"] -> prepareAtomicIntArrays root
     ["original-stack"] -> prepareOriginalStack root
     ["original-stack-decoder"] -> prepareOriginalStackDecoder root
     ["original-stack-formatter"] -> prepareOriginalStackFormatter root
     ["original-stack-source-export", directory] -> exportOriginalStackSource root directory
     ["boxed-array-extensions"] -> prepareBoxedArrayExtensions root
+    ["aligned-scalar-memory"] -> prepareAlignedScalarMemory root
     ["wide-char-address"] -> prepareWideCharAddress root
     ["managed-address-reads"] -> prepareManagedAddressReads root
+    ["graph-bfs"] -> prepareGraph root
     ["bit"] -> prepare root Bit
     ["integer"] -> prepare root IntegerWord
     ["signed-narrow"] -> prepare root SignedNarrow
     ["explicit64"] -> prepare root Explicit64
     ["pinned-pointer-cells"] -> preparePinnedPointers root
+    ["address-array-copy"] -> prepareAddressArrayCopy root
     ["core-continuation"] -> prepareCoreContinuation root
     ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["arithmetic-exceptions", "--core-only"] -> refreshArithmeticCore root
     ["live-async"] -> prepareLiveAsync root
     ["thread-label"] -> prepareThreadLabel root
     ["thread-status"] -> prepareThreadStatus root
+    ["thread-inventory"] -> prepareThreadInventory root
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root
     ["mask-functions"] -> prepareMaskFunctions root
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (rts-shutdown|interface-core|core-continuation|arithmetic-exceptions [--core-only]|mask-functions|live-async|thread-async|thread-status|thread-label|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-fcntl|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stable-pointers|weak-explicit|shrink-bytearrays|bit|integer|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|unsafe-equality [--check-only]|floating-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|explicit64-arrays|tuple-arithmetic|pinned-pointer-cells|managed-address-reads|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (rts-shutdown|interface-core|core-continuation|arithmetic-exceptions [--core-only]|mask-functions|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|original-fcntl|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|unaligned-scalar-memory|aligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

@@ -8,4 +8,9 @@ cd "$THC_ROOT"
 make --no-print-directory -s -C "$THC_ROOT" check-java
 scripts/prepare-tests.sh
 # Normal dependency downloads are enabled. Pass --offline explicitly if desired.
-./gradlew --no-daemon test "$@" installDist toolsJar
+if [ "${1:-}" = "--handoff-modes" ]; then
+  shift
+  ./gradlew --no-daemon --continue installDist toolsJar testDefault "$@" testDense "$@"
+else
+  ./gradlew --no-daemon test "$@" installDist toolsJar
+fi

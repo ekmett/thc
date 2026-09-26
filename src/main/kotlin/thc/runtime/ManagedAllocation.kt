@@ -131,6 +131,15 @@ internal class ManagedAllocation private constructor(
         if (intersectsPointer(start, count.toInt())) fault("Native byte transport overlaps a managed pointer cell")
     }
 
+    /** Atomic address and array aliases share the backing monitor, including
+     * a raw byte-array alias exposed earlier. Always acquire owner before bytes. */
+    internal inline fun <T> accessAtomicByteRange(offset: Long, width: Int, writable: Boolean,
+        action: (ByteArray, Int) -> T): T = synchronized(this) {
+        requireByteRegion(offset, width.toLong(), writable)
+        if (offset % width != 0L) fault("Misaligned atomic Addr#")
+        synchronized(bytes) { action(bytes, offset.toInt()) }
+    }
+
     @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
         val start = range(offset, pointerBytes.toLong())
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")
@@ -155,18 +164,53 @@ internal class ManagedAllocation private constructor(
             fault("Scalar read overlaps a managed pointer cell")
     }
 
-    /** The allocation monitor makes the old-value read and wrapped write one
-     * atomic operation. Monitor entry/exit also supplies the full barrier. */
-    @Synchronized fun fetchAddInt(index: Long, delta: Long): Long {
+    /** The allocation monitor orders all widths, shrink, and pointer-cell
+     * installation. Both successful and failed CAS have a full memory barrier. */
+    @Synchronized fun atomicInt(index: Long, operand: Long, replacement: Long, operation: AtomicIntArrayOp): Long {
         mutable()
-        if (index < 0 || index > Long.MAX_VALUE / 8)
+        val width = operation.width
+        if (index < 0 || index > Long.MAX_VALUE / width)
             fault("Managed allocation element outside its backing storage")
-        val start = range(index * 8, 8)
-        if (intersectsPointer(start, 8))
+        val start = range(index * width, width.toLong())
+        if (intersectsPointer(start, width))
             fault("Atomic Int access overlaps a managed pointer cell")
-        val old = ManagedByteArray.readInt(bytes, index)
-        ManagedByteArray.writeInt(bytes, index, old + delta)
-        return old
+        // Address atomics may arrive through an exposed backing-array alias.
+        // Every atomic path takes this lock, always after the owner monitor.
+        return synchronized(bytes) {
+            val old = when (width) {
+                1 -> bytes[start].toLong()
+                2 -> ManagedByteArray.readInt16(bytes, index)
+                4 -> ManagedByteArray.readInt32(bytes, index)
+                else -> ManagedByteArray.readInt(bytes, index)
+            }
+            val next = when (operation) {
+                AtomicIntArrayOp.READ -> return@synchronized old
+                AtomicIntArrayOp.WRITE -> operand
+                AtomicIntArrayOp.ADD -> old + operand
+                AtomicIntArrayOp.SUB -> old - operand
+                AtomicIntArrayOp.AND -> old and operand
+                AtomicIntArrayOp.NAND -> (old and operand).inv()
+                AtomicIntArrayOp.OR -> old or operand
+                AtomicIntArrayOp.XOR -> old xor operand
+                else -> {
+                    val expected = when (width) {
+                        1 -> operand.toByte().toLong()
+                        2 -> operand.toShort().toLong()
+                        4 -> operand.toInt().toLong()
+                        else -> operand
+                    }
+                    if (old != expected) return@synchronized old
+                    replacement
+                }
+            }
+            when (width) {
+                1 -> bytes[start] = next.toByte()
+                2 -> ManagedByteArray.writeInt16(bytes, index, next)
+                4 -> ManagedByteArray.writeInt32(bytes, index, next)
+                else -> ManagedByteArray.writeInt(bytes, index, next)
+            }
+            old
+        }
     }
 
     /** Word8ArrayAs* offsets count bytes, including unaligned starts. Keep the

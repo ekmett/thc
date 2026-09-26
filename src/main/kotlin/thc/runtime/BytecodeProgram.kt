@@ -271,7 +271,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "Bytecode DSL primitive locals; selective StaticShape captures",
-        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "single guest thread")
+        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; resumable asynchronous delivery")
 
     /** Actual decoded instruction listings, available without a Graal graph viewer. */
     fun bytecodeDump(): String = roots.joinToString("\n\n") { "${it.name}\n${it.bytecodeNode.dump()}" }
@@ -1417,6 +1417,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
+            val floatDecode = if (fn[0] == "prim") FloatDecodeOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val packageScalar = CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
@@ -2189,6 +2190,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && CoreThreadObservation.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreThreadObservation.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val state = argument(args[0], scope, false)
+                CoreThreadObservation.validate(name, listOf(state.proof), flags, tupleProof)
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginObserveThreads(destination[0], name == "listThreads#")
+                    state.emit(e)
+                    e.builder.endObserveThreads()
+                }
             } else if (fn[0] == "prim" && fn[1] == "yield#") {
                 CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operand = argument(args[0], scope, false)
@@ -2334,6 +2345,34 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.emitLoadConstant(Unit)
                     b.endThreadPrimitive()
                     b.endStoreLocal()
+                }
+            } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
+                val operation = STMOp.named(fn[1] as String)!!
+                if (resumable && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                    throw UnsupportedCore("STM transaction frames do not yet support resumable async/checkpoint delivery")
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.proof }, flags, tupleProof)
+                val nested = if (operation == STMOp.ATOMICALLY) globals[STMOp.NESTED]
+                    ?: throw UnsupportedCore("atomically# requires original nestedAtomically payload") else null
+                if (operation == STMOp.WRITE) ProvenExpression(Expression { e ->
+                    e.builder.beginWriteTVar(); operands.forEach { it.emit(e) }; e.builder.endWriteTVar()
+                }, tupleProof.copy(evaluated = true))
+                else tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    if (operation.callback) {
+                        b.beginInvokeSTM(operation, tupleSlots(TupleShape(tupleProof, language), destination), metrics)
+                        operands[0].emit(e)
+                        if (operands.size == 3) operands[1].emit(e) else b.emitLoadNull()
+                        if (nested != null) b.emitReadGlobal(nested) else b.emitLoadNull()
+                        operands.last().emit(e)
+                        b.endInvokeSTM()
+                    } else {
+                        b.beginTVarAccess(operation, destination[0])
+                        if (operation == STMOp.RETRY) b.emitLoadNull() else operands[0].emit(e)
+                        operands.last().emit(e)
+                        b.endTVarAccess()
+                    }
                 }
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
@@ -2587,23 +2626,44 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     emitKeepAlive(e, destination)
                 } else ProvenExpression(Expression { e -> emitKeepAlive(e, null) },
                     tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && AtomicAddressOp.named(fn[1] as String) != null) {
+                val operation = AtomicAddressOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation == AtomicAddressOp.WRITE) ProvenExpression(Expression { e ->
+                    e.builder.beginAtomicAddressWrite()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endAtomicAddressWrite()
+                }, tupleProof.copy(evaluated = true))
+                else tupleExpression(tupleProof) { e, destination ->
+                    if (operation.pointer) e.builder.beginAtomicAddressPointer(operation, destination[0])
+                    else e.builder.beginAtomicAddressNumeric(operation, destination[0])
+                    operands[0].emit(e)
+                    if (operation == AtomicAddressOp.READ) e.builder.emitLoadConstant(0L) else operands[1].emit(e)
+                    if (operation.cas) operands[2].emit(e)
+                    else if (operation.pointer) e.builder.emitLoadConstant(ManagedAddress.nullAddress())
+                    else e.builder.emitLoadConstant(0L)
+                    operands.last().emit(e)
+                    if (operation.pointer) e.builder.endAtomicAddressPointer() else e.builder.endAtomicAddressNumeric()
+                }
             } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
                 val operation = FloatingAddressOp.named(fn[1] as String)!!
+                val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { compile(it, scope, false) }
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
-                    if (operation.floating) e.builder.beginReadFloatOffAddr(destination[0])
-                    else e.builder.beginReadDoubleOffAddr(destination[0])
+                    if (operation.floating) e.builder.beginReadFloatOffAddr(byteOffset, destination[0])
+                    else e.builder.beginReadDoubleOffAddr(byteOffset, destination[0])
                     operands.forEach { it.emit(e) }
                     if (operation.floating) e.builder.endReadFloatOffAddr()
                     else e.builder.endReadDoubleOffAddr()
                 } else ProvenExpression(Expression { e ->
                     if (operation.write) {
-                        if (operation.floating) e.builder.beginWriteFloatOffAddr()
-                        else e.builder.beginWriteDoubleOffAddr()
+                        if (operation.floating) e.builder.beginWriteFloatOffAddr(byteOffset)
+                        else e.builder.beginWriteDoubleOffAddr(byteOffset)
                     } else {
-                        if (operation.floating) e.builder.beginIndexFloatOffAddr()
-                        else e.builder.beginIndexDoubleOffAddr()
+                        if (operation.floating) e.builder.beginIndexFloatOffAddr(byteOffset)
+                        else e.builder.beginIndexDoubleOffAddr(byteOffset)
                     }
                     operands.forEach { it.emit(e) }
                     if (operation.write) {
@@ -2614,8 +2674,18 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         else e.builder.endIndexDoubleOffAddr()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && AddressArrayCopyOp.named(fn[1] as String) != null) {
+                val operation = AddressArrayCopyOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                ProvenExpression(Expression { e ->
+                    if (operation.toArray) e.builder.beginCopyAddressToByteArray() else e.builder.beginCopyByteArrayToAddress()
+                    operands.forEach { it.emit(e) }
+                    if (operation.toArray) e.builder.endCopyAddressToByteArray() else e.builder.endCopyByteArrayToAddress()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { compile(it, scope, false) }
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
@@ -2624,13 +2694,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
                         PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.beginReadWord8OffAddr(destination[0])
                         PinnedMemoryOp.READ_INT8 -> e.builder.beginReadInt8OffAddr(destination[0])
-                        PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(destination[0])
-                        PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(destination[0])
+                        PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(byteOffset, destination[0])
+                        PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(byteOffset, destination[0])
                         PinnedMemoryOp.READ_WORD16, PinnedMemoryOp.READ_INT16,
                         PinnedMemoryOp.READ_WORD32, PinnedMemoryOp.READ_WIDE_CHAR, PinnedMemoryOp.READ_WORD,
                         PinnedMemoryOp.READ_INT32, PinnedMemoryOp.READ_INT,
                         PinnedMemoryOp.READ_INT64, PinnedMemoryOp.READ_WORD64 ->
-                            e.builder.beginReadManagedAddress(operation.addressRead!!, destination[0])
+                            e.builder.beginReadManagedAddress(operation.addressRead!!, byteOffset, destination[0])
                         else -> error("Scalar pinned memory operation")
                     }
                     operands.forEach { it.emit(e) }
@@ -2650,20 +2720,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 } else ProvenExpression(Expression { e ->
                     when (operation) {
                         PinnedMemoryOp.CONTENTS, PinnedMemoryOp.MUTABLE_CONTENTS -> e.builder.beginByteArrayContents()
-                        PinnedMemoryOp.WRITE_ADDR -> e.builder.beginAddressWrite()
-                        PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.beginAddressWrite()
-                        PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray()
-                        PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr()
+                        PinnedMemoryOp.WRITE_ADDR -> e.builder.beginAddressWrite(byteOffset)
+                        PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> e.builder.beginAddressWrite(false)
+                        PinnedMemoryOp.WRITE_ADDR_ARRAY -> e.builder.beginWriteAddrArray(byteOffset)
+                        PinnedMemoryOp.WRITE_INT16, PinnedMemoryOp.WRITE_WORD16 -> e.builder.beginWriteWord16OffAddr(byteOffset)
                         PinnedMemoryOp.WRITE_INT32, PinnedMemoryOp.WRITE_WORD32,
-                        PinnedMemoryOp.WRITE_WIDE_CHAR -> e.builder.beginWriteNativeScalarOffAddr(4)
+                        PinnedMemoryOp.WRITE_WIDE_CHAR -> e.builder.beginWriteNativeScalarOffAddr(4, byteOffset)
                         PinnedMemoryOp.WRITE_INT, PinnedMemoryOp.WRITE_WORD,
-                        PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.beginWriteNativeScalarOffAddr(8)
-                        PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr()
-                        PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.beginIndexAddrArray()
+                        PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.beginWriteNativeScalarOffAddr(8, byteOffset)
+                        PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.beginIndexAddrOffAddr(byteOffset)
+                        PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.beginIndexAddrArray(byteOffset)
+                        PinnedMemoryOp.INDEX_WORD8_AS_CHAR, PinnedMemoryOp.INDEX_WORD8_AS_INT16, PinnedMemoryOp.INDEX_WORD8_AS_WORD16,
                         PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32, PinnedMemoryOp.INDEX_WIDE_CHAR,
                         PinnedMemoryOp.INDEX_INT, PinnedMemoryOp.INDEX_WORD,
                         PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 ->
-                            e.builder.beginIndexManagedAddress(operation.addressRead!!)
+                            e.builder.beginIndexManagedAddress(operation.addressRead!!, byteOffset)
                         else -> e.builder.beginWriteWord8OffAddr()
                     }
                     operands.forEach { it.emit(e) }
@@ -2678,14 +2749,33 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PinnedMemoryOp.WRITE_INT64, PinnedMemoryOp.WRITE_WORD64 -> e.builder.endWriteNativeScalarOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_OFF -> e.builder.endIndexAddrOffAddr()
                         PinnedMemoryOp.INDEX_ADDR_ARRAY -> e.builder.endIndexAddrArray()
+                        PinnedMemoryOp.INDEX_WORD8_AS_CHAR, PinnedMemoryOp.INDEX_WORD8_AS_INT16, PinnedMemoryOp.INDEX_WORD8_AS_WORD16,
                         PinnedMemoryOp.INDEX_INT32, PinnedMemoryOp.INDEX_WORD32, PinnedMemoryOp.INDEX_WIDE_CHAR,
                         PinnedMemoryOp.INDEX_INT, PinnedMemoryOp.INDEX_WORD,
                         PinnedMemoryOp.INDEX_INT64, PinnedMemoryOp.INDEX_WORD64 -> e.builder.endIndexManagedAddress()
                         else -> e.builder.endWriteWord8OffAddr()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && AtomicIntArrayOp.named(fn[1] as String) != null) {
+                val operation = AtomicIntArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginAtomicIntArray(operation, destination[0])
+                    operands[0].emit(e)
+                    operands[1].emit(e)
+                    if (operation.operands > 0) operands[2].emit(e) else e.builder.emitLoadConstant(0L)
+                    if (operation.operands == 2) operands[3].emit(e) else e.builder.emitLoadConstant(0L)
+                    operands.last().emit(e)
+                    e.builder.endAtomicIntArray()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginAtomicWriteIntArray()
+                    operands.forEach { it.emit(e) }
+                    e.builder.endAtomicWriteIntArray()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
+                val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { compile(it, scope, false) }
                 if (operation.tuple) tupleExpression(tupleProof) { e, destination ->
@@ -2695,9 +2785,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.beginGetSizeMutableByteArray(destination[0])
                         ByteArrayOp.FREEZE -> e.builder.beginFreezeByteArray(destination[0])
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
-                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64,
-                        ByteArrayOp.FETCH_ADD_INT -> e.builder.beginIntArrayAccess(
-                            operation == ByteArrayOp.FETCH_ADD_INT, destination[0])
+                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.beginIntArrayAccess(byteOffset, destination[0])
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE ->
                             e.builder.beginReadDoubleArray(operation == ByteArrayOp.READ_WORD8_AS_DOUBLE, destination[0])
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT ->
@@ -2718,22 +2806,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                 destination[0])
                         else -> error("Scalar ByteArray operation")
                     }
-                    if (operation == ByteArrayOp.FETCH_ADD_INT) operands.forEach { it.emit(e) }
-                    else if (operation in setOf(ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
-                            ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64)) {
-                        operands[0].emit(e)
-                        operands[1].emit(e)
-                        e.builder.emitLoadConstant(0L)
-                        operands[2].emit(e)
-                    } else operands.forEach { it.emit(e) }
+                    operands.forEach { it.emit(e) }
                     when (operation) {
                         ByteArrayOp.NEW -> e.builder.endNewByteArray()
                         ByteArrayOp.RESIZE -> e.builder.endResizeByteArray()
                         ByteArrayOp.GET_SIZE_MUTABLE -> e.builder.endGetSizeMutableByteArray()
                         ByteArrayOp.FREEZE -> e.builder.endFreezeByteArray()
                         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD,
-                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64,
-                        ByteArrayOp.FETCH_ADD_INT -> e.builder.endIntArrayAccess()
+                        ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endIntArrayAccess()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
@@ -2759,9 +2839,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
-                        ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.beginWriteIntArray()
+                        ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.beginWriteIntArray(byteOffset)
                         ByteArrayOp.INDEX_INT, ByteArrayOp.INDEX_WORD,
-                        ByteArrayOp.INDEX_INT64, ByteArrayOp.INDEX_WORD64 -> e.builder.beginIndexIntArray()
+                        ByteArrayOp.INDEX_INT64, ByteArrayOp.INDEX_WORD64 -> e.builder.beginIndexIntArray(byteOffset)
                         ByteArrayOp.WRITE_DOUBLE, ByteArrayOp.WRITE_WORD8_AS_DOUBLE ->
                             e.builder.beginWriteDoubleArray(operation == ByteArrayOp.WRITE_WORD8_AS_DOUBLE)
                         ByteArrayOp.INDEX_DOUBLE, ByteArrayOp.INDEX_WORD8_AS_DOUBLE ->
@@ -2825,15 +2905,39 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         else -> error("Tuple ByteArray operation")
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (floatDecode != null) {
+                floatDecode.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operand = argument(args.single(), scope, false)
+                tupleExpression(tupleProof) { e, destination ->
+                    if (floatDecode == FloatDecodeOp.DOUBLE_WORDS) {
+                        e.builder.beginDecodeDoubleWords(destination[0], destination[1], destination[2], destination[3])
+                        operand.emit(e)
+                        e.builder.endDecodeDoubleWords()
+                    } else if (floatDecode == FloatDecodeOp.FLOAT) {
+                        e.builder.beginDecodeFloat(destination[0], destination[1])
+                        operand.emit(e)
+                        e.builder.endDecodeFloat()
+                    } else {
+                        e.builder.beginDecodeDouble(destination[0], destination[1])
+                        operand.emit(e)
+                        e.builder.endDecodeDouble()
+                    }
+                }
             } else if (tupleOperation != null) {
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.map { argument(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
-                    // The fixed-arity operation ignores its third accessor for pairs.
-                    e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1],
-                        destination.getOrElse(2) { destination[1] })
-                    operands.forEach { it.emit(e) }
-                    e.builder.endTupleArithmetic()
+                    if (tupleOperation == TupleArithmeticOp.QUOT_REM_WORD_2) {
+                        e.builder.beginDoubleWordDivision(destination[0], destination[1])
+                        operands.forEach { it.emit(e) }
+                        e.builder.endDoubleWordDivision()
+                    } else {
+                        // The fixed-arity operation ignores its third accessor for pairs.
+                        e.builder.beginTupleArithmetic(tupleOperation, destination[0], destination[1],
+                            destination.getOrElse(2) { destination[1] })
+                        operands.forEach { it.emit(e) }
+                        e.builder.endTupleArithmetic()
+                    }
                 }
             } else if (tupleProof.isSum && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-sum") {
                 val tag = SumShape.constructor(tupleProof, constructors[fn[1]], fn[2])
@@ -3917,6 +4021,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "sinhDouble#" -> "DoubleSinh"
             "coshDouble#" -> "DoubleCosh"
             "tanhDouble#" -> "DoubleTanh"
+            "asinhFloat#" -> "FloatAsinh"
+            "acoshFloat#" -> "FloatAcosh"
+            "atanhFloat#" -> "FloatAtanh"
+            "minFloat#" -> "FloatMin"
+            "maxFloat#" -> "FloatMax"
+            "asinhDouble#" -> "DoubleAsinh"
+            "acoshDouble#" -> "DoubleAcosh"
+            "atanhDouble#" -> "DoubleAtanh"
+            "minDouble#" -> "DoubleMin"
+            "maxDouble#" -> "DoubleMax"
             "==##" -> "DoubleEqual"
             "/=##" -> "DoubleNotEqual"
             "<##" -> "DoubleLess"
@@ -3937,11 +4051,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "double2Float#" -> "DoubleToFloat"
             else -> return null
         }
-        val unary = operation in setOf("CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "WordToFloat", "IntToDouble", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
+        val unary = operation in setOf("FloatAsinh", "FloatAcosh", "FloatAtanh", "DoubleAsinh", "DoubleAcosh", "DoubleAtanh", "CastFloatToWord32", "CastWord32ToFloat", "CastDoubleToWord64", "CastWord64ToDouble", "FloatNegate", "DoubleNegate", "FloatSqrt", "DoubleSqrt", "IntToFloat", "WordToFloat", "IntToDouble", "WordToDouble", "FloatToInt", "DoubleToInt", "FloatToDouble", "DoubleToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "DoubleAbs", "DoubleExp", "DoubleExpm1", "DoubleLog", "DoubleLog1p", "DoubleSin", "DoubleCos", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh", "DoubleTan", "DoubleAsin", "DoubleAcos", "DoubleAtan", "DoubleSinh", "DoubleCosh", "DoubleTanh")
         val fused = operation in setOf("FloatFMAdd", "FloatFMSub", "FloatFNMAdd", "FloatFNMSub",
             "DoubleFMAdd", "DoubleFMSub", "DoubleFNMAdd", "DoubleFNMSub")
         if (args.size != if (fused) 3 else if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
         val kind = when (operation) {
+            "FloatAsinh", "FloatAcosh", "FloatAtanh", "FloatMin", "FloatMax" -> CoreKind.FLOAT
+            "DoubleAsinh", "DoubleAcosh", "DoubleAtanh", "DoubleMin", "DoubleMax" -> CoreKind.DOUBLE
             "FloatFMAdd", "FloatFMSub", "FloatFNMAdd", "FloatFNMSub" -> CoreKind.FLOAT
             "DoubleFMAdd", "DoubleFMSub", "DoubleFNMAdd", "DoubleFNMSub" -> CoreKind.DOUBLE
             "FloatAdd", "FloatSubtract", "FloatMultiply", "FloatDivide", "FloatNegate", "FloatSqrt", "IntToFloat", "WordToFloat", "DoubleToFloat", "CastWord32ToFloat", "FloatAbs", "FloatExp", "FloatExpm1", "FloatLog", "FloatLog1p", "FloatSin", "FloatCos", "FloatPower", "FloatTan", "FloatAsin", "FloatAcos", "FloatAtan", "FloatSinh", "FloatCosh", "FloatTanh" -> CoreKind.FLOAT
@@ -3995,6 +4111,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "DoubleSinh" -> b.beginDoubleSinh()
                 "DoubleCosh" -> b.beginDoubleCosh()
                 "DoubleTanh" -> b.beginDoubleTanh()
+                "FloatAsinh" -> b.beginFloatAsinh()
+                "FloatAcosh" -> b.beginFloatAcosh()
+                "FloatAtanh" -> b.beginFloatAtanh()
+                "FloatMin" -> b.beginFloatMin()
+                "FloatMax" -> b.beginFloatMax()
+                "DoubleAsinh" -> b.beginDoubleAsinh()
+                "DoubleAcosh" -> b.beginDoubleAcosh()
+                "DoubleAtanh" -> b.beginDoubleAtanh()
+                "DoubleMin" -> b.beginDoubleMin()
+                "DoubleMax" -> b.beginDoubleMax()
                 "FloatEqual" -> b.beginFloatEqual()
                 "FloatNotEqual" -> b.beginFloatNotEqual()
                 "FloatLess" -> b.beginFloatLess()
@@ -4072,6 +4198,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "DoubleSinh" -> b.endDoubleSinh()
                 "DoubleCosh" -> b.endDoubleCosh()
                 "DoubleTanh" -> b.endDoubleTanh()
+                "FloatAsinh" -> b.endFloatAsinh()
+                "FloatAcosh" -> b.endFloatAcosh()
+                "FloatAtanh" -> b.endFloatAtanh()
+                "FloatMin" -> b.endFloatMin()
+                "FloatMax" -> b.endFloatMax()
+                "DoubleAsinh" -> b.endDoubleAsinh()
+                "DoubleAcosh" -> b.endDoubleAcosh()
+                "DoubleAtanh" -> b.endDoubleAtanh()
+                "DoubleMin" -> b.endDoubleMin()
+                "DoubleMax" -> b.endDoubleMax()
                 "FloatEqual" -> b.endFloatEqual()
                 "FloatNotEqual" -> b.endFloatNotEqual()
                 "FloatLess" -> b.endFloatLess()
@@ -4135,6 +4271,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
             "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" -> "ShiftLeftNarrowInt"
             "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> "ShiftRightNarrowInt"
+            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#" -> "ShiftRightLogicalNarrowInt"
+            "mulIntMayOflo#" -> "MultiplyIntMayOverflow"
 
             "quotWord#" -> "QuotientUnsigned"
             "remWord#" -> "RemainderUnsigned"
@@ -4204,6 +4342,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise", "AddressToInt", "IntToAddress")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
+        if (operation in setOf("ShiftRightLogicalNarrowInt", "MultiplyIntMayOverflow") &&
+            args.any { it.proof.kind != CoreKind.LONG || it.proof.isTypedTransport })
+            throw RuntimeFault("Primitive requires Long operands: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         return evaluated(Expression { e ->
             val b = e.builder
@@ -4222,6 +4363,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
                 "ShiftLeftNarrowInt" -> b.beginShiftLeftNarrowInt(intShift)
                 "ShiftRightNarrowInt" -> b.beginShiftRightNarrowInt(intShift)
+                "ShiftRightLogicalNarrowInt" -> b.beginShiftRightLogicalNarrowInt(intShift)
+                "MultiplyIntMayOverflow" -> b.beginMultiplyIntMayOverflow()
                 "QuotientUnsigned" -> b.beginQuotientUnsigned()
                 "RemainderUnsigned" -> b.beginRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
@@ -4290,6 +4433,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
                 "ShiftLeftNarrowInt" -> b.endShiftLeftNarrowInt()
                 "ShiftRightNarrowInt" -> b.endShiftRightNarrowInt()
+                "ShiftRightLogicalNarrowInt" -> b.endShiftRightLogicalNarrowInt()
+                "MultiplyIntMayOverflow" -> b.endMultiplyIntMayOverflow()
                 "QuotientUnsigned" -> b.endQuotientUnsigned()
                 "RemainderUnsigned" -> b.endRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()

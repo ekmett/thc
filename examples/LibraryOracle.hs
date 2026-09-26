@@ -14,10 +14,16 @@ import qualified THC.IntSetPrimops as SP
 import qualified THC.IntSetWorkload as IS
 import qualified THC.SetWorkload as S
 import qualified THC.SequenceWorkload as SQ
+import qualified THC.GraphWorkload as G
 
 entries :: [(String, Int# -> Int#)]
 entries =
-  [ ("setAggregate", S.setAggregate)
+  [ ("graphChecksum", G.graphChecksum)
+  , ("graphReachable", G.graphReachable)
+  , ("graphDistanceTotal", G.graphDistanceTotal)
+  , ("graphDistanceAt", G.graphDistanceAt)
+  , ("graphControl", G.graphControl)
+  , ("setAggregate", S.setAggregate)
   , ("intMapAggregate", I.intMapAggregate)
   , ("countLeadingZeros", P.countLeadingZeros)
   , ("unsignedLessThanZero", P.unsignedLessThanZero)
@@ -44,8 +50,11 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    [name, input] -> case (lookup name entries, readMaybe input) of
+    ["--batch"] -> getContents >>= mapM_ (emit . words) . lines
+    _ -> emit args
+  where
+    emit [name, input] = case (lookup name entries, readMaybe input) of
       (Just f, Just (I# n)) ->
         putStrLn (name ++ "\t" ++ input ++ "\t" ++ show (I# (f n)))
       _ -> die "unknown entry or invalid machine Int"
-    _ -> die "usage: library-oracle ENTRY INPUT"
+    emit _ = die "usage: library-oracle ENTRY INPUT | --batch (ENTRY INPUT lines on stdin)"

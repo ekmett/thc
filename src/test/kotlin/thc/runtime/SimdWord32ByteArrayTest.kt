@@ -63,6 +63,8 @@ class SimdWord32ByteArrayTest {
     private fun provenance(): Map<String, Any?> {
         val provenance = Json.parse(File(directory, "provenance.json").readText()) as Map<String, Any?>
         validateMode(provenance)
+        SimdByteArrayEvidence.inventory(root, "word32x4", provenance)
+        SimdByteArrayCorpus("word32x4").verify(root, provenance)
         assertEquals("word32x4-bytearray", provenance["vector"], "Exact unsigned memory provenance")
         assertEquals(ByteOrder.LITTLE_ENDIAN, ByteOrder.nativeOrder(), "Word32X4 bounded corpus requires a little-endian host")
         assertEquals(true, provenance["positiveAuditsAccepted"])
@@ -92,6 +94,11 @@ class SimdWord32ByteArrayTest {
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target), label)
 
+    @Test fun independentCorpusAndClosedProvenanceControls() {
+        val manifest = provenance()
+        SimdByteArrayCorpus("word32x4").controls(root)
+        SimdByteArrayEvidence.controls(root, "word32x4", manifest)
+    }
     @Test fun nativeMemoryCoreHasExactCompiledEntriesWithInlining() = nativeCore(true)
     @Test fun nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() = nativeCore(false)
     @Test fun preparationModeRejectsCorruptionAndNativeDowngrades() {

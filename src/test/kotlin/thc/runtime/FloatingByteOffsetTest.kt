@@ -94,7 +94,7 @@ class FloatingByteOffsetTest {
         fun proof(kind: CoreKind, rep: String) = CoreRepresentation(kind, primReps = listOf(rep))
         val array = proof(CoreKind.OBJECT, "BoxedRep (Just Unlifted)")
         val offset = proof(CoreKind.LONG, "IntRep")
-        val wrongOffset = proof(CoreKind.LONG, "WordRep")
+        val wrongOffset = proof(CoreKind.DOUBLE, "DoubleRep")
         val float = proof(CoreKind.FLOAT, "FloatRep")
         val double = proof(CoreKind.DOUBLE, "DoubleRep")
         ByteArrayOp.INDEX_WORD8_AS_FLOAT.validate(listOf(array, offset), listOf(false, false), float)

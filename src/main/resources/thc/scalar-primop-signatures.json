@@ -156,6 +156,18 @@
       ],
       "result": "FloatRep"
     },
+    "acoshDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "acoshFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "addr2Int#": {
       "arguments": [
         "AddrRep"
@@ -216,6 +228,18 @@
       ],
       "result": "FloatRep"
     },
+    "asinhDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "asinhFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "atanDouble#": {
       "arguments": [
         "DoubleRep"
@@ -223,6 +247,18 @@
       "result": "DoubleRep"
     },
     "atanFloat#": {
+      "arguments": [
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "atanhDouble#": {
+      "arguments": [
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "atanhFloat#": {
       "arguments": [
         "FloatRep"
       ],
@@ -877,6 +913,97 @@
       ],
       "result": "Word8Rep"
     },
+    "indexWord8OffAddrAsAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "AddrRep"
+    },
+    "indexWord8OffAddrAsChar#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "indexWord8OffAddrAsDouble#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "indexWord8OffAddrAsFloat#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "FloatRep"
+    },
+    "indexWord8OffAddrAsInt#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
+    },
+    "indexWord8OffAddrAsInt16#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Int16Rep"
+    },
+    "indexWord8OffAddrAsInt32#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Int32Rep"
+    },
+    "indexWord8OffAddrAsInt64#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Int64Rep"
+    },
+    "indexWord8OffAddrAsWideChar#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "indexWord8OffAddrAsWord#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "WordRep"
+    },
+    "indexWord8OffAddrAsWord16#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Word16Rep"
+    },
+    "indexWord8OffAddrAsWord32#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Word32Rep"
+    },
+    "indexWord8OffAddrAsWord64#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "Word64Rep"
+    },
     "indexWordOffAddr#": {
       "arguments": [
         "AddrRep",
@@ -1172,6 +1299,34 @@
       ],
       "result": "IntRep"
     },
+    "maxDouble#": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "maxFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
+    "minDouble#": {
+      "arguments": [
+        "DoubleRep",
+        "DoubleRep"
+      ],
+      "result": "DoubleRep"
+    },
+    "minFloat#": {
+      "arguments": [
+        "FloatRep",
+        "FloatRep"
+      ],
+      "result": "FloatRep"
+    },
     "minusFloat#": {
       "arguments": [
         "FloatRep",
@@ -1185,6 +1340,13 @@
         "WordRep"
       ],
       "result": "WordRep"
+    },
+    "mulIntMayOflo#": {
+      "arguments": [
+        "IntRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
     },
     "narrow16Int#": {
       "arguments": [
@@ -2074,6 +2236,27 @@
         "IntRep"
       ],
       "result": "Word64Rep"
+    },
+    "uncheckedShiftRLInt16#": {
+      "arguments": [
+        "Int16Rep",
+        "IntRep"
+      ],
+      "result": "Int16Rep"
+    },
+    "uncheckedShiftRLInt32#": {
+      "arguments": [
+        "Int32Rep",
+        "IntRep"
+      ],
+      "result": "Int32Rep"
+    },
+    "uncheckedShiftRLInt8#": {
+      "arguments": [
+        "Int8Rep",
+        "IntRep"
+      ],
+      "result": "Int8Rep"
     },
     "uncheckedShiftRLWord16#": {
       "arguments": [

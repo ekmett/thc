@@ -49,8 +49,34 @@ bytecode backend contracts and the pinned GHC/Graal toolchain requirements.
 
 ## Verification and handoff
 
-Use small, reviewed, tested checkpoints. Exercise both backends and both handoff
-modes when affected. Preserve failed evidence and state remaining limitations.
+The objective is a working compiler/JIT with reasonable GHC semantics, not formal
+equivalence to every GHC RTS detail. Implement a sensible translation and test it
+in proportion to its risk. Ordinary arithmetic needs ordinary regression and
+boundary tests, not days of exhaustive or proof-framework work. Reserve deeper
+investigation for observed failures, tricky semantics, concurrency and memory
+safety. Reuse existing evidence and tests instead of duplicating verification.
+Do not hold a working feature batch behind unrelated global runtime gaps.
+
+Count a primop as implemented when its sensible runtime implementation exists
+and has appropriate tests. Tuple/vector results, managed storage, Sulong pointer
+abstractions, GHC preconditions and the chosen target are not automatic partial
+support. Record concrete missing behavior separately; no universal correctness
+proof or certification layer is required for the implementation metric.
+
+Accumulate related primops and their fixtures/proofs into substantial, reviewed,
+tested checkpoints. Workers own substantial chunks end-to-end and may rebuild
+and run focused tests locally whenever that helps development or diagnosis.
+Avoid per-operation handoffs, tiny commits, and redundant full validation.
+At an integration checkpoint, compile the source batch once and run both
+handoff forks from those artifacts with
+`testDefault` and `testDense` in one Gradle invocation (`--continue` preserves
+both results after a failure). Group integration and pushes to avoid repeating
+the same build/CI work for each small edit; there is no required commit count.
+Exercise both backends and both handoff modes when affected. Preserve failed
+evidence and state remaining limitations.
 Do not replace first-compiled-call checks with warmup calls, retries, exclusions,
 or weaker counters to obtain a passing result. Keep agents on owned worktrees
 and coordinate shared build resources and integration with the task owner.
+Use per-worktree build-directory leases; independent CPU builds may run
+concurrently when host resources allow. Do not impose a global build queue or
+require the integration owner's approval for each local rebuild.

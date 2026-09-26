@@ -1095,6 +1095,14 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         case thing of
           AnId v -> pure v
           _ -> error "THC implicit descriptor-wait exception is not an Id"
+      stmPayloadId = do
+        name <- initIfaceCheck (text "THC implicit nested atomically exception") hsc $
+          lookupOrig (mkModule ghcInternalUnit (mkModuleName "GHC.Internal.Control.Exception.Base"))
+            (mkVarOcc "nestedAtomically")
+        thing <- lookupGlobal hsc name
+        case thing of
+          AnId v -> pure v
+          _ -> error "THC implicit nested atomically exception is not an Id"
       -- Exception.cmm supplies these closures implicitly. Resolve their real
       -- installed Ids/unfoldings in the current GHC session so the normal
       -- dependency walk retains the SomeException dictionary and Typeable data.
@@ -1111,6 +1119,10 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
       walk _ [] found missing = pure (reverse found, reverse missing)
       walk seen (v:todo) found missing
         | v `elemVarSet` seen = walk seen todo found missing
+        | Just op <- isPrimOpId_maybe v
+        , occNameString (primOpOcc op) == "atomically#" = do
+            payload <- stmPayloadId
+            walk seen' (payload : todo) found missing
         | Just op <- isPrimOpId_maybe v
         , occNameString (primOpOcc op) `elem` ["waitRead#", "waitWrite#"] = do
             payload <- waitPayloadId

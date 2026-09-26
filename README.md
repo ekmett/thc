@@ -47,6 +47,7 @@ separate, explicit choice. Exporter API support is limited to the GHC version
 above.
 
 Use `make test` for the test suite and `make clean` to remove build products.
+`make test-modes` runs both handoff modes in separate JVMs from one shared build.
 `make distclean` also removes the checkout's Gradle and Kotlin caches.
 `make run ARGS='--help'` builds and runs the driver; the equivalent Cabal command
 is `cabal run thc -- --help`.
@@ -87,7 +88,9 @@ current Linux configuration and cache. A file-lifecycle test also matches native
 GHC on UTF-8 reads and writes, append, seeking, EOF, caught missing-file errors,
 and shutdown flushing. Binary `hPutBuf`/`hGetBuf` tests match native GHC on
 offset buffers, short reads, EOF, and cleanup after exceptions. General file IO
-remains incomplete.
+remains incomplete. [Synchronous STM/TVar transactions](docs/stm.md) work in both
+backends with buffered writes, atomic commit and real retry wakeups; asynchronous
+transaction continuations and GC deadlock detection remain explicit limits.
 The independent single-package `.cabal` path still excludes
 internal library and build-tool dependencies; use a `cabal.project` directory
 for the tested multi-package path. `thc build` and `thc repl` are future commands.
@@ -119,7 +122,9 @@ The tests include ordinary list, `STRef`, array, `ShortByteString`, `IntMap`,
 `IntSet` and `Sequence` programs. They compare native GHC results with both
 interpreters and compiled guest code. The [coverage guide](docs/README.md) links
 the individual contracts, native checks and remaining gaps; the generated
-[primop checklist](docs/primops.md) tracks what is implemented, partial or missing.
+[primop checklist](docs/primops.md) counts implemented and missing operations,
+with concrete runtime limitations documented separately. Tuple, vector and pointer
+representations do not make an implementation incomplete.
 
 An explicit [full-Core locale/iconv proof group](docs/original-iconv.md) exercises
 the four original imports through native glibc/Sulong, with context-owned handles
@@ -216,8 +221,8 @@ separate run.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the mixed Java/Kotlin reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
-* [Development](docs/contributing.md) covers local checks and manual integration
-  of small, reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
+* [Development](docs/contributing.md) covers local checks, build batching and manual
+  integration of reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
   adding a primitive.
 * [Cabal integration](docs/cabal.md) describes the limited working `thc run`
   path and the planned `thc build` and `thc repl` commands.

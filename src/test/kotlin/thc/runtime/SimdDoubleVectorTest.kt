@@ -7,6 +7,7 @@ package thc.runtime
 import jdk.incubator.vector.DoubleVector
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -199,6 +200,9 @@ class SimdDoubleVectorTest {
                 val compiledEntries = (stageStructure["compiledEntriesByEntry"] as Map<String, Number>).getValue(name).toLong()
                 assertTrue(compiledEntries >= 1)
                 var compiledTargets = emptyList<RootCallTarget>()
+                val handoff = language.handoffState.get()
+                var argumentAllocations = 0L
+                var resultAllocations = 0L
                 fun checkRows(compiled: Boolean = false) {
                     for (input in cases) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
@@ -214,6 +218,8 @@ class SimdDoubleVectorTest {
                         }
                         if (compiled) {
                             assertEquals(before + compiledEntries, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), "$label compiled guest entry")
+                            assertEquals(argumentAllocations, handoff.arguments.allocations, label)
+                            assertEquals(resultAllocations, handoff.results.allocations, label)
                             val calls = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java).filter { it.callTarget === target }
                             assertTrue(calls.isNotEmpty(), "$label selected guest call")
                             for (call in calls) assertSame(target, call.currentCallTarget, "$label active guest identity")
@@ -223,6 +229,11 @@ class SimdDoubleVectorTest {
                                 assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active), "$label active compiled target")
                             }
                         }
+                        assertEquals(0, handoff.arguments.depth, label)
+                        assertEquals(0, handoff.arguments.retainedReferences(), label)
+                        assertEquals(0, handoff.results.depth, label)
+                        assertEquals(0, handoff.results.retainedReferences(), label)
+                        assertNull(handoff.pending, label)
                     }
                 }
                 checkRows(); checkRows()
@@ -230,11 +241,22 @@ class SimdDoubleVectorTest {
                 // active callees before checking that whole compiled call chain.
                 compiledTargets = activeTargets(host)
                 assertTrue(compiledTargets.size > 1, "$stage/$backend/$name active guest targets")
+                val beforeSetup = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                assertEquals(0L, beforeSetup, "The full corpus ran interpreted before installation")
+                val beforeCalls = compiledTargets.map { it.javaClass.getMethod("getCallCount").invoke(it) }
+                argumentAllocations = handoff.arguments.allocations
+                resultAllocations = handoff.results.allocations
                 for (active in compiledTargets) {
                     active.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(active, true)
                     assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active), "$stage/$backend/$name installed")
+                    Truffle.getRuntime().let { runtime -> runtime.javaClass.getMethod("bypassedInstalledCode",
+                        Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, active) }
                 }
+                assertEquals(beforeSetup, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                assertEquals(beforeCalls, compiledTargets.map { it.javaClass.getMethod("getCallCount").invoke(it) })
                 checkRows(compiled = true)
+                assertEquals(beforeCalls, compiledTargets.map { it.javaClass.getMethod("getCallCount").invoke(it) },
+                    "No interpreted active target after installation")
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$name after execution")
                 compiledTargets.forEach { active ->
                     assertEquals(true, active.javaClass.getMethod("isValidLastTier").invoke(active), "$stage/$backend/$name active compiled target")

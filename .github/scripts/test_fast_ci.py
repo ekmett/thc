@@ -94,7 +94,13 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn("--fail-fast", narrow)
         self.assertIn(".github/scripts/fast_ci.init.gradle", narrow)
         self.assertNotIn("--rerun-tasks", narrow)
-        self.assertEqual(narrow[-2:], ["--tests", "example.Test"])
+        self.assertIn("--continue", narrow)
+        self.assertEqual(narrow[narrow.index("testDefault"):],
+                         ["testDefault", "--rerun", "--fail-fast", "--tests", "example.Test",
+                          "testDense", "--rerun", "--fail-fast", "--tests", "example.Test"])
+        self.assertNotIn("installDist", narrow)
+        installed = ci.gradle_command(self.selection(), install_dist=True)
+        self.assertLess(installed.index("installDist"), installed.index("testDefault"))
         full = ci.gradle_command(self.selection("full"))
         self.assertIn("--fail-fast", full)
         self.assertNotIn("--tests", full)
@@ -184,7 +190,7 @@ class FastRunnerTest(unittest.TestCase):
             directory = self.root / "receipts"
 
             def command(self, name, argv, **kwargs):
-                output = self.root / "build/test-results/test"
+                output = self.root / "build/test-results/testDefault"
                 output.mkdir(parents=True)
                 (output / "TEST-example.Test.xml").write_text(
                     '<testsuite name="example.Test" tests="1" failures="1" errors="0" skipped="0">'
@@ -193,9 +199,87 @@ class FastRunnerTest(unittest.TestCase):
 
         selection = self.selection() | {"junit": {"classes": ["example.Test", "later.Test"],
                                                   "patterns": ["example.Test", "later.Test"]}}
-        with self.assertRaisesRegex(RuntimeError, "Gradle default failed with exit 1"):
-            ci.run_mode(FailedRun(), selection, "default")
+        summaries, failures = ci.run_modes(FailedRun(), selection)
+        self.assertEqual(summaries, {})
+        self.assertIn("Gradle handoff batch failed with exit 1", failures)
+        self.assertTrue(any("dense: No fresh JUnit XML" in failure for failure in failures))
         self.assertTrue((self.root / "receipts/default/xml/TEST-example.Test.xml").exists())
+
+    def batch_selection(self):
+        classes = ["thc.runtime.HandoffTest"]
+        return self.selection() | {"junit": {"classes": classes, "patterns": classes}}
+
+    def mode_xml(self, task, dense, *, failed=False, case="proof"):
+        output = self.root / "build/test-results" / task
+        output.mkdir(parents=True, exist_ok=True)
+        marker = "true" if dense else "false"
+        (output / "TEST-thc.runtime.HandoffTest.xml").write_text(
+            f'<testsuite name="thc.runtime.HandoffTest" tests="1" failures="{int(failed)}" '
+            f'errors="0" skipped="0"><testcase name="{case}" classname="thc.runtime.HandoffTest">'
+            + ('<failure/>' if failed else '') + '</testcase>'
+            f'<system-out>THC_HANDOFF_MODE={marker}\n</system-out></testsuite>')
+
+    def test_batch_runs_once_and_preserves_both_actual_mode_outputs(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        self.mode_xml("testDefault", False, case="stale-default")
+        self.mode_xml("testDense", True, case="stale-dense")
+
+        def fresh(*args, **kwargs):
+            self.mode_xml("testDefault", False)
+            self.mode_xml("testDense", True)
+            return 0, ""
+
+        with patch.object(recorder, "command", side_effect=fresh) as command:
+            summaries, failures = ci.run_modes(recorder, self.batch_selection(), install_dist=True)
+        command.assert_called_once()
+        self.assertIn("installDist", command.call_args.args[1])
+        self.assertEqual(failures, [])
+        self.assertEqual({mode: data["handoffSlabs"] for mode, data in summaries.items()},
+                         {"default": False, "dense": True})
+        for mode in ("default", "dense"):
+            proof = recorder.directory / f"prior-{mode}/xml/TEST-thc.runtime.HandoffTest.xml"
+            self.assertIn("stale-" + mode, proof.read_text())
+            self.assertTrue((recorder.directory / mode / "summary.json").is_file())
+
+    def test_batch_cannot_reuse_previous_xml_or_fake_dense_with_default(self):
+        for fresh in (False, True):
+            with self.subTest(fresh=fresh), patch.object(ci, "git", return_value="a" * 40):
+                recorder = ci.Recorder(self.root, self.root / str(fresh))
+                self.mode_xml("testDefault", False)
+                self.mode_xml("testDense", True)
+
+                def run(*args, **kwargs):
+                    if fresh:
+                        self.mode_xml("testDefault", False)
+                        self.mode_xml("testDense", False)
+                    return 0, ""
+
+                with patch.object(recorder, "command", side_effect=run):
+                    summaries, failures = ci.run_modes(recorder, self.batch_selection())
+                self.assertNotIn("dense", summaries)
+                self.assertTrue(any("dense: " + ("Wrong/missing" if fresh else "No fresh") in failure
+                                    for failure in failures))
+
+    def test_batch_checks_other_mode_after_failure_and_requires_same_cases(self):
+        for failed in (False, True):
+            with self.subTest(failed=failed), patch.object(ci, "git", return_value="a" * 40):
+                recorder = ci.Recorder(self.root, self.root / str(failed))
+
+                def run(*args, **kwargs):
+                    self.mode_xml("testDefault", False, failed=failed)
+                    self.mode_xml("testDense", True, case="different")
+                    return int(failed), ""
+
+                with patch.object(recorder, "command", side_effect=run):
+                    summaries, failures = ci.run_modes(recorder, self.batch_selection())
+                self.assertIn("dense", summaries)
+                self.assertTrue(failures)
+                if failed:
+                    self.assertNotIn("default", summaries)
+                    self.assertIn("Gradle handoff batch failed with exit 1", failures)
+                else:
+                    self.assertIn("Default and dense handoff executed different testcase sets", failures)
 
     def test_linked_test_output_rejected(self):
         source = self.root / "build/test-results/test"
@@ -246,7 +330,7 @@ class FastRunnerTest(unittest.TestCase):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]) as run:
-            with patch.object(ci, "run_mode", return_value={"cases": [["example.Test", "works"]]}), \
+            with patch.object(ci, "run_modes", return_value=({}, [])), \
                     patch.object(ci.fixtures, "prepare", return_value={"mode": "selected", "reused": ["smoke"]}) as prepare:
                 ci.execute(recorder, "b" * 40, "HEAD", identity_path)
                 prepare.assert_called_once_with(self.root, selection, run, identity)
@@ -267,14 +351,15 @@ class FastRunnerTest(unittest.TestCase):
         identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
-        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 4) as commands, \
+        with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 3) as commands, \
                 patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
-                patch.object(ci, "run_mode", return_value={"cases": []}):
+                patch.object(ci, "run_modes", return_value=({}, [])) as modes:
             ci.execute(recorder, "HEAD", "HEAD", identity_path)
+        modes.assert_called_once_with(recorder, selection, install_dist=True)
         self.assertEqual([call.args[0] for call in commands.call_args_list[2:]],
-                         ["driver-plugin", "driver-launcher", "driver-tests"])
+                         ["driver-plugin", "driver-tests"])
         self.assertEqual(["cabal", "test", "driver-tests", "-fdevelopment", "--test-show-details=direct"],
-                         commands.call_args_list[4].args[1])
+                         commands.call_args_list[3].args[1])
 
 
     def test_opt_in_harness_compiles_without_executing_and_retains_jvm_smoke(self):
@@ -290,7 +375,7 @@ class FastRunnerTest(unittest.TestCase):
                            RuntimeError("compile failed") if failed else (0, "")]
                 with patch.object(recorder, "command", side_effect=outputs) as commands, \
                         patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
-                        patch.object(ci, "run_mode", return_value={"cases": []}) as smoke:
+                        patch.object(ci, "run_modes", return_value=({}, [])) as smoke:
                     if failed:
                         with self.assertRaisesRegex(RuntimeError, "haskell-compile"):
                             ci.execute(recorder, "HEAD", "HEAD", identity_path)
@@ -299,7 +384,7 @@ class FastRunnerTest(unittest.TestCase):
                 self.assertEqual(commands.call_args_list[2].args,
                                  ("haskell-compile", ["cabal", "build", "test:added-full-core",
                                                        "-fdevelopment", "-ffull-core-tests"]))
-                self.assertEqual([call.args[2] for call in smoke.call_args_list], ["default", "dense"])
+                smoke.assert_called_once_with(recorder, selection, install_dist=False)
                 self.assertEqual(recorder.data["passed"], not failed)
 
 
@@ -312,7 +397,7 @@ class FastRunnerTest(unittest.TestCase):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, ""), (0, "")]) as run, \
                 patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
-                patch.object(ci, "run_mode", return_value={"cases": []}), \
+                patch.object(ci, "run_modes", return_value=({}, [])), \
                 patch.object(ci, "run_polyglot", return_value={"classes": ["example.PolyglotTest"]}) as optional:
             ci.execute(recorder, "HEAD", "HEAD", identity_path)
         optional.assert_called_once_with(recorder, selection)
@@ -337,7 +422,7 @@ class FastRunnerTest(unittest.TestCase):
             recorder = ci.Recorder(self.root, self.root / "receipts")
         with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection)), (0, "")]), \
                 patch.object(ci.fixtures, "prepare", side_effect=RuntimeError("native failed")), \
-                patch.object(ci, "run_mode") as junit:
+                patch.object(ci, "run_modes") as junit:
             with self.assertRaisesRegex(RuntimeError, "native failed"):
                 ci.execute(recorder, "HEAD", "HEAD", identity_path)
             junit.assert_not_called()
@@ -352,7 +437,7 @@ class FastRunnerTest(unittest.TestCase):
             with self.subTest(checked=checked), patch.object(ci, "git", return_value="a" * 40), \
                     patch.dict(os.environ, {"FAST_AUTOMATION_SHA": checked}), \
                     patch.object(ci.fixtures, "prepare", return_value={"mode": "selected"}), \
-                    patch.object(ci, "run_mode", return_value={"cases": []}):
+                    patch.object(ci, "run_modes", return_value=({}, [])):
                 recorder = ci.Recorder(self.root, self.root / ("run-" + (checked or "none")))
                 with patch.object(recorder, "command", side_effect=[(0, json.dumps(selection))] + [(0, "")] * 3) as run:
                     ci.execute(recorder, "HEAD", "HEAD", identity_path)

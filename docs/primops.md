@@ -6,24 +6,30 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
+**Implementation coverage: 952 / 1491 (63.8%).**
+
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 503 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 679 | No declared lowering. |
+| Implemented | 952 | A runtime implementation is registered in the capability inventory. |
+| Missing | 539 | No runtime implementation is registered. |
 
-A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
-testing. Defined-input preconditions, exact representation proofs and the current call ABI still
-apply. Partial entries deliberately stay unchecked: exact guest transport for 24 vector shapes
-does not expand the admitted SIMD operations, and managed array access does not imply
-foreign memory access. Public host vector arguments and results remain unsupported.
-Names and arities alone cannot certify an implementation. See the [coverage guide](README.md)
-for native tests, retained graphs and the boundaries of each family. Arity counts logical value
-arguments, not flattened tuple fields.
+Implemented means translating the GHC operation to a sensible runtime implementation and
+checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
+The capability inventory records those implementations; accepting a name in the exporter
+alone is not sufficient grounds to add one.
+
+Numeric, tuple, vector, pointer and stateful operations use the same counting rule.
+A Sulong pointer abstraction, managed storage, exact vector species, the selected 64-bit
+target and GHC input preconditions do not themselves make an implementation partial.
+
+Concrete unfinished behavior remains listed below and in the [coverage guide](README.md).
+For example, automatic weak finalization and unsupported thread operations remain real work.
+Primop implementation coverage is one part of GHC feature parity, alongside the compiler,
+libraries, FFI and runtime. Arity counts logical arguments, not flattened tuple fields.
 
 ## Updating the list
 
-After implementing and testing a primitive, update its existing capability contract. For a new
+After implementing and testing a primitive, update its capability contract. For a new
 monomorphic scalar operation, also regenerate the shared signature table:
 
 ```sh
@@ -33,14 +39,20 @@ python3 scripts/primop-coverage.py --check
 python3 scripts/test-primop-coverage.py
 ```
 
-CI checks this file against a fresh query of the pinned GHC API. The machine-readable report
-in `build/primop-coverage.json` includes exact GHC signatures and generation provenance.
-New capability entries default to partial unless the existing scalar contract establishes the
-fixed numeric form; adding a name cannot mark an arbitrary operation fully supported.
+CI checks this file against a fresh query of the pinned GHC API. The schema-2 report
+in `build/primop-coverage.json` retains exact GHC signatures, contract families, limitations
+and generation provenance. `implementationCounts` replaces the old `supportCounts`, whose
+supported/partial split incorrectly treated every non-numeric-scalar implementation as partial.
 
-## Current aggregate and address limits
+## Known behavior and runtime limits
 
-- Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals, non-null masks and general AST fork support remain unavailable.
+The following describes implemented behavior and specific remaining restrictions.
+Shared runtime gaps are not automatically attributed to every operation using that runtime.
+
+- STM/TVar primops admit synchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Transaction frames reject resumable async/checkpoint modes; GC-driven BlockedIndefinitelyOnSTM detection is unavailable. Empty-read-set retries wait until cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.
+- All 16 address atomics return old values (including failed CAS), narrow exact widths, require alignment and complete checked ranges, and supply full barriers. Managed byte storage synchronizes owner then backing bytes; pointer CAS/exchange retain managed pointer cells and compare address identity. Numeric atomics reject pointer-cell overlaps. Native-enabled Linux x86_64 owned allocations use real atomics, with exact byte/short C CAS; native pointer values must have real address bits. Freed or foreign owners, unowned numeric dereferences, opaque locations and immutable writes reject.
+- copyAddrToByteArray#, copyByteArrayToAddr# and copyMutableByteArrayToAddr# copy contained byte ranges between distinct array/address backing allocations, as required by GHC; same-backing addresses reject even for disjoint or empty ranges. Managed pointer cells retain references only through whole-cell managed copies and cannot be exported as raw native bits. Native addresses require live context-owned malloc storage on the existing native-enabled Linux x86_64 backend; unowned numeric pointers and immutable destinations reject. Empty valid copies preserve pointer cells and return scalar State# without a result tuple.
+- Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals and non-null masks remain unavailable.
 - Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format, preserving raw bytes, offset/NUL boundaries and the appended newline; other printf varargs formats reject before output. No program-name prefix is invented for an embedding that has not registered one.
 - Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.
 - waitRead#/waitWrite# admit exact Int# and State# contracts for live context-owned native descriptors. A logical wait token retains its original descriptor identity across async suspension and rejects close or number reuse. Bad descriptors raise the original lazy ghc-internal blockedOnBadFD payload; arbitrary host streams and nonnative readiness providers have no general readiness guarantee.
@@ -53,865 +65,984 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - Original ghc-internal memcpy has the same exact Addr#/Addr#/Word64#/State# declaration and checked storage transport as memmove, but rejects overlapping nonempty ranges before mutation. Adjacent and empty checked regions are permitted; the returned Addr# is the original destination carrier.
 - Original ghc-internal strlen scans only live, bounded managed or owned native Addr# bytes through the first NUL and returns the exact Int# length. Unterminated storage, pointer-cell byte exposure, opaque labels, unowned numeric addresses and freed native allocations reject. rts_isThreaded reports the nonthreaded RTS mode used by THC's admitted original FD and wait path; it does not report the number of Java guest threads or offer GHC's threaded RTS ABI.
 - labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.
+- listThreads# returns independent Array# snapshots of context-owned guest identities, including retained completed threads, with unspecified order and weak registry retention. indexArray#/readArray# also transport unlifted object elements; writes retain the lifted gate. isCurrentThreadBound# observes THC's admitted unbound-only runtime and returns zero for registered guest entries, not a claim of forkOS/TLS support. par#/spark#/getSpark#/numSparks#/forkOn# remain unsupported: safe speculative cancellation and a capability scheduler are not provided.
 - threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.
 - The public AST killThread# path preserves exact asynchronous self-delivery through catch# and Haskell masks. It rejects an external target before enqueueing because ordinary AST callers have no saved sender continuation. Only the restricted, explicitly admitted captured AST route can suspend and resume an external send; bytecode remains the general thread-primitive backend.
 - The enabled_capabilities RTS data label is a context-owned, live Word32 cell containing at least one logical Java carrier. Only readWord32OffAddr# at offset zero is supported; writes, other widths, offsets and native projection reject. This does not provide physical GHC -N semantics, capability resizing, event-manager reconfiguration or arbitrary RTS data symbols.
 - The native DWARF backend is unavailable, matching GHC 9.14.1 RTS USE_LIBDW=0: original libdwPoolTake/libdwGetBacktrace return null, libdwLookupLocation returns failure 1 without touching Location, and libdwPoolClear is a no-op. Managed IPE snapshots are separate. Explicit C finalization supports source-certified USE_LIBDW=0 labels and free for context-owned malloc bases; arbitrary C callback addresses remain unsupported.
 - Address operations support managed literal or byte-array backing with checked offsets, with the separately bounded immutable native projection described above. Unowned numeric addresses have no byte access. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Exact GHC MD5 calls use checked Sulong buffer views. Original localeEncoding/hs_iconv_open/hs_iconv_close/hs_iconv use Linux GNU LP64 native iconv with context-owned opaque handles, explicit native-buffer copies, checked disjoint pointer/count/byte regions, cursor writeback and captured errno; Original base_strerror_r uses the pinned GHC wrapper, a checked writable guest buffer, and a short-lived native scratch copy with thread-local C message locale and complete buffer writeback. No general native-pointer FFI is admitted.
 - shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.
-- fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.
-- StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.
+- Atomic Int-array reads/writes, fetchAdd/Sub/And/Nand/Or/XorIntArray#, and casInt{,8,16,32,64}Array# use owned mutable allocations with full memory barriers. Fetch and CAS return the previous signed value; failed CAS leaves bytes unchanged. Offsets count elements of the selected width, arithmetic wraps, and narrow CAS compares low bits. Raw host arrays, immutable allocations, out-of-range elements, and pointer-cell overlaps are rejected. See docs/atomic-int-arrays.md for native/model/concurrency evidence and managed-storage limits.
+- StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Aligned StablePtr array/address index/read/write operations retain opaque handles in allocation-owned pointer cells; raw ByteArray storage, numeric projections and native pointer-cell access remain rejected. A stored handle does not extend its registry lifetime: dereference/equality still reject foreign or released handles.
 - Weak# support is PARTIAL: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Exact source-certified USE_LIBDW=0 C labels can register one-argument callbacks; explicit finalization makes the weak dead before invoking them through Sulong outside the registry lock, then returns the real Haskell action without invoking it. Close discards outstanding callbacks. Original rts_setMainThread stores the Weak# key capability, not its boxed value or a permanent Java thread ID. The separate launcher-only SIGINT bridge does not enable other signal handlers. Automatic GC/ephemeron reclamation and arbitrary C function/data labels remain unsupported.
 - Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums and unresolved leaves cannot appear in tuple inputs; exact vector leaves retain atomic VecRep identity and occupy one raw fixed-species vector reference each; exact evaluated AddrRep leaves use managed address references.
 - SIMD guest transport admits only the 24 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings, sum fields and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.
 - Binary unboxed sum results and immediate cases support exact machine Int/Word, Float, Double, known reference, void and tuple payloads. Nested sums, width-changing payload casts, vector/address or unknown leaves, sum inputs/captures/heap fields/local lets/joins/host results remain unsupported.
 
-## Supported scalar forms
+## Implemented primops
 
-- [x] `*#` — arity 2
-- [x] `*##` — arity 2
-- [x] `**##` — arity 2
-- [x] `+#` — arity 2
-- [x] `+##` — arity 2
-- [x] `-#` — arity 2
-- [x] `-##` — arity 2
-- [x] `/##` — arity 2
-- [x] `/=#` — arity 2
-- [x] `/=##` — arity 2
-- [x] `<#` — arity 2
-- [x] `<##` — arity 2
-- [x] `<=#` — arity 2
-- [x] `<=##` — arity 2
-- [x] `==#` — arity 2
-- [x] `==##` — arity 2
-- [x] `>#` — arity 2
-- [x] `>##` — arity 2
-- [x] `>=#` — arity 2
-- [x] `>=##` — arity 2
-- [x] `acosDouble#` — arity 1
-- [x] `acosFloat#` — arity 1
-- [x] `and#` — arity 2
-- [x] `and64#` — arity 2
-- [x] `andI#` — arity 2
-- [x] `andWord16#` — arity 2
-- [x] `andWord32#` — arity 2
-- [x] `andWord8#` — arity 2
-- [x] `asinDouble#` — arity 1
-- [x] `asinFloat#` — arity 1
-- [x] `atanDouble#` — arity 1
-- [x] `atanFloat#` — arity 1
-- [x] `bitReverse#` — arity 1
-- [x] `bitReverse16#` — arity 1
-- [x] `bitReverse32#` — arity 1
-- [x] `bitReverse64#` — arity 1
-- [x] `bitReverse8#` — arity 1
-- [x] `byteSwap#` — arity 1
-- [x] `byteSwap16#` — arity 1
-- [x] `byteSwap32#` — arity 1
-- [x] `byteSwap64#` — arity 1
-- [x] `castDoubleToWord64#` — arity 1
-- [x] `castFloatToWord32#` — arity 1
-- [x] `castWord32ToFloat#` — arity 1
-- [x] `castWord64ToDouble#` — arity 1
-- [x] `chr#` — arity 1
-- [x] `clz#` — arity 1
-- [x] `clz16#` — arity 1
-- [x] `clz32#` — arity 1
-- [x] `clz64#` — arity 1
-- [x] `clz8#` — arity 1
-- [x] `cosDouble#` — arity 1
-- [x] `cosFloat#` — arity 1
-- [x] `coshDouble#` — arity 1
-- [x] `coshFloat#` — arity 1
-- [x] `ctz#` — arity 1
-- [x] `ctz16#` — arity 1
-- [x] `ctz32#` — arity 1
-- [x] `ctz64#` — arity 1
-- [x] `ctz8#` — arity 1
-- [x] `divideFloat#` — arity 2
-- [x] `double2Float#` — arity 1
-- [x] `double2Int#` — arity 1
-- [x] `eqChar#` — arity 2
-- [x] `eqFloat#` — arity 2
-- [x] `eqInt16#` — arity 2
-- [x] `eqInt32#` — arity 2
-- [x] `eqInt64#` — arity 2
-- [x] `eqInt8#` — arity 2
-- [x] `eqWord#` — arity 2
-- [x] `eqWord16#` — arity 2
-- [x] `eqWord32#` — arity 2
-- [x] `eqWord64#` — arity 2
-- [x] `eqWord8#` — arity 2
-- [x] `expDouble#` — arity 1
-- [x] `expFloat#` — arity 1
-- [x] `expm1Double#` — arity 1
-- [x] `expm1Float#` — arity 1
-- [x] `fabsDouble#` — arity 1
-- [x] `fabsFloat#` — arity 1
-- [x] `float2Double#` — arity 1
-- [x] `float2Int#` — arity 1
-- [x] `fmaddDouble#` — arity 3
-- [x] `fmaddFloat#` — arity 3
-- [x] `fmsubDouble#` — arity 3
-- [x] `fmsubFloat#` — arity 3
-- [x] `fnmaddDouble#` — arity 3
-- [x] `fnmaddFloat#` — arity 3
-- [x] `fnmsubDouble#` — arity 3
-- [x] `fnmsubFloat#` — arity 3
-- [x] `geChar#` — arity 2
-- [x] `geFloat#` — arity 2
-- [x] `geInt16#` — arity 2
-- [x] `geInt32#` — arity 2
-- [x] `geInt64#` — arity 2
-- [x] `geInt8#` — arity 2
-- [x] `geWord#` — arity 2
-- [x] `geWord16#` — arity 2
-- [x] `geWord32#` — arity 2
-- [x] `geWord64#` — arity 2
-- [x] `geWord8#` — arity 2
-- [x] `gtChar#` — arity 2
-- [x] `gtFloat#` — arity 2
-- [x] `gtInt16#` — arity 2
-- [x] `gtInt32#` — arity 2
-- [x] `gtInt64#` — arity 2
-- [x] `gtInt8#` — arity 2
-- [x] `gtWord#` — arity 2
-- [x] `gtWord16#` — arity 2
-- [x] `gtWord32#` — arity 2
-- [x] `gtWord64#` — arity 2
-- [x] `gtWord8#` — arity 2
-- [x] `int16ToInt#` — arity 1
-- [x] `int16ToWord16#` — arity 1
-- [x] `int2Double#` — arity 1
-- [x] `int2Float#` — arity 1
-- [x] `int2Word#` — arity 1
-- [x] `int32ToInt#` — arity 1
-- [x] `int32ToWord32#` — arity 1
-- [x] `int64ToInt#` — arity 1
-- [x] `int64ToWord64#` — arity 1
-- [x] `int8ToInt#` — arity 1
-- [x] `int8ToWord8#` — arity 1
-- [x] `intToInt16#` — arity 1
-- [x] `intToInt32#` — arity 1
-- [x] `intToInt64#` — arity 1
-- [x] `intToInt8#` — arity 1
-- [x] `leChar#` — arity 2
-- [x] `leFloat#` — arity 2
-- [x] `leInt16#` — arity 2
-- [x] `leInt32#` — arity 2
-- [x] `leInt64#` — arity 2
-- [x] `leInt8#` — arity 2
-- [x] `leWord#` — arity 2
-- [x] `leWord16#` — arity 2
-- [x] `leWord32#` — arity 2
-- [x] `leWord64#` — arity 2
-- [x] `leWord8#` — arity 2
-- [x] `log1pDouble#` — arity 1
-- [x] `log1pFloat#` — arity 1
-- [x] `logDouble#` — arity 1
-- [x] `logFloat#` — arity 1
-- [x] `ltChar#` — arity 2
-- [x] `ltFloat#` — arity 2
-- [x] `ltInt16#` — arity 2
-- [x] `ltInt32#` — arity 2
-- [x] `ltInt64#` — arity 2
-- [x] `ltInt8#` — arity 2
-- [x] `ltWord#` — arity 2
-- [x] `ltWord16#` — arity 2
-- [x] `ltWord32#` — arity 2
-- [x] `ltWord64#` — arity 2
-- [x] `ltWord8#` — arity 2
-- [x] `minusFloat#` — arity 2
-- [x] `minusWord#` — arity 2
-- [x] `narrow16Int#` — arity 1
-- [x] `narrow16Word#` — arity 1
-- [x] `narrow32Int#` — arity 1
-- [x] `narrow32Word#` — arity 1
-- [x] `narrow8Int#` — arity 1
-- [x] `narrow8Word#` — arity 1
-- [x] `neChar#` — arity 2
-- [x] `neFloat#` — arity 2
-- [x] `neInt16#` — arity 2
-- [x] `neInt32#` — arity 2
-- [x] `neInt64#` — arity 2
-- [x] `neInt8#` — arity 2
-- [x] `neWord#` — arity 2
-- [x] `neWord16#` — arity 2
-- [x] `neWord32#` — arity 2
-- [x] `neWord64#` — arity 2
-- [x] `neWord8#` — arity 2
-- [x] `negateDouble#` — arity 1
-- [x] `negateFloat#` — arity 1
-- [x] `negateInt#` — arity 1
-- [x] `negateInt16#` — arity 1
-- [x] `negateInt32#` — arity 1
-- [x] `negateInt64#` — arity 1
-- [x] `negateInt8#` — arity 1
-- [x] `not#` — arity 1
-- [x] `not64#` — arity 1
-- [x] `notI#` — arity 1
-- [x] `notWord16#` — arity 1
-- [x] `notWord32#` — arity 1
-- [x] `notWord8#` — arity 1
-- [x] `or#` — arity 2
-- [x] `or64#` — arity 2
-- [x] `orI#` — arity 2
-- [x] `orWord16#` — arity 2
-- [x] `orWord32#` — arity 2
-- [x] `orWord8#` — arity 2
-- [x] `ord#` — arity 1
-- [x] `pdep#` — arity 2
-- [x] `pdep16#` — arity 2
-- [x] `pdep32#` — arity 2
-- [x] `pdep64#` — arity 2
-- [x] `pdep8#` — arity 2
-- [x] `pext#` — arity 2
-- [x] `pext16#` — arity 2
-- [x] `pext32#` — arity 2
-- [x] `pext64#` — arity 2
-- [x] `pext8#` — arity 2
-- [x] `plusFloat#` — arity 2
-- [x] `plusInt16#` — arity 2
-- [x] `plusInt32#` — arity 2
-- [x] `plusInt64#` — arity 2
-- [x] `plusInt8#` — arity 2
-- [x] `plusWord#` — arity 2
-- [x] `plusWord16#` — arity 2
-- [x] `plusWord32#` — arity 2
-- [x] `plusWord64#` — arity 2
-- [x] `plusWord8#` — arity 2
-- [x] `popCnt#` — arity 1
-- [x] `popCnt16#` — arity 1
-- [x] `popCnt32#` — arity 1
-- [x] `popCnt64#` — arity 1
-- [x] `popCnt8#` — arity 1
-- [x] `powerFloat#` — arity 2
-- [x] `quotInt#` — arity 2
-- [x] `quotInt16#` — arity 2
-- [x] `quotInt32#` — arity 2
-- [x] `quotInt64#` — arity 2
-- [x] `quotInt8#` — arity 2
-- [x] `quotWord#` — arity 2
-- [x] `quotWord16#` — arity 2
-- [x] `quotWord32#` — arity 2
-- [x] `quotWord64#` — arity 2
-- [x] `quotWord8#` — arity 2
-- [x] `remInt#` — arity 2
-- [x] `remInt16#` — arity 2
-- [x] `remInt32#` — arity 2
-- [x] `remInt64#` — arity 2
-- [x] `remInt8#` — arity 2
-- [x] `remWord#` — arity 2
-- [x] `remWord16#` — arity 2
-- [x] `remWord32#` — arity 2
-- [x] `remWord64#` — arity 2
-- [x] `remWord8#` — arity 2
-- [x] `sinDouble#` — arity 1
-- [x] `sinFloat#` — arity 1
-- [x] `sinhDouble#` — arity 1
-- [x] `sinhFloat#` — arity 1
-- [x] `sqrtDouble#` — arity 1
-- [x] `sqrtFloat#` — arity 1
-- [x] `subInt16#` — arity 2
-- [x] `subInt32#` — arity 2
-- [x] `subInt64#` — arity 2
-- [x] `subInt8#` — arity 2
-- [x] `subWord16#` — arity 2
-- [x] `subWord32#` — arity 2
-- [x] `subWord64#` — arity 2
-- [x] `subWord8#` — arity 2
-- [x] `tanDouble#` — arity 1
-- [x] `tanFloat#` — arity 1
-- [x] `tanhDouble#` — arity 1
-- [x] `tanhFloat#` — arity 1
-- [x] `timesFloat#` — arity 2
-- [x] `timesInt16#` — arity 2
-- [x] `timesInt32#` — arity 2
-- [x] `timesInt64#` — arity 2
-- [x] `timesInt8#` — arity 2
-- [x] `timesWord#` — arity 2
-- [x] `timesWord16#` — arity 2
-- [x] `timesWord32#` — arity 2
-- [x] `timesWord64#` — arity 2
-- [x] `timesWord8#` — arity 2
-- [x] `uncheckedIShiftL#` — arity 2
-- [x] `uncheckedIShiftL64#` — arity 2
-- [x] `uncheckedIShiftRA#` — arity 2
-- [x] `uncheckedIShiftRA64#` — arity 2
-- [x] `uncheckedIShiftRL#` — arity 2
-- [x] `uncheckedIShiftRL64#` — arity 2
-- [x] `uncheckedShiftL#` — arity 2
-- [x] `uncheckedShiftL64#` — arity 2
-- [x] `uncheckedShiftLInt16#` — arity 2
-- [x] `uncheckedShiftLInt32#` — arity 2
-- [x] `uncheckedShiftLInt8#` — arity 2
-- [x] `uncheckedShiftLWord16#` — arity 2
-- [x] `uncheckedShiftLWord32#` — arity 2
-- [x] `uncheckedShiftLWord8#` — arity 2
-- [x] `uncheckedShiftRAInt16#` — arity 2
-- [x] `uncheckedShiftRAInt32#` — arity 2
-- [x] `uncheckedShiftRAInt8#` — arity 2
-- [x] `uncheckedShiftRL#` — arity 2
-- [x] `uncheckedShiftRL64#` — arity 2
-- [x] `uncheckedShiftRLWord16#` — arity 2
-- [x] `uncheckedShiftRLWord32#` — arity 2
-- [x] `uncheckedShiftRLWord8#` — arity 2
-- [x] `word16ToInt16#` — arity 1
-- [x] `word16ToWord#` — arity 1
-- [x] `word2Double#` — arity 1
-- [x] `word2Float#` — arity 1
-- [x] `word2Int#` — arity 1
-- [x] `word32ToInt32#` — arity 1
-- [x] `word32ToWord#` — arity 1
-- [x] `word64ToInt64#` — arity 1
-- [x] `word64ToWord#` — arity 1
-- [x] `word8ToInt8#` — arity 1
-- [x] `word8ToWord#` — arity 1
-- [x] `wordToWord16#` — arity 1
-- [x] `wordToWord32#` — arity 1
-- [x] `wordToWord64#` — arity 1
-- [x] `wordToWord8#` — arity 1
-- [x] `xor#` — arity 2
-- [x] `xor64#` — arity 2
-- [x] `xorI#` — arity 2
-- [x] `xorWord16#` — arity 2
-- [x] `xorWord32#` — arity 2
-- [x] `xorWord8#` — arity 2
+- [x] `*#` — arity 2 — Numeric scalar signature
+- [x] `*##` — arity 2 — Numeric scalar signature
+- [x] `**##` — arity 2 — Numeric scalar signature
+- [x] `+#` — arity 2 — Numeric scalar signature
+- [x] `+##` — arity 2 — Numeric scalar signature
+- [x] `-#` — arity 2 — Numeric scalar signature
+- [x] `-##` — arity 2 — Numeric scalar signature
+- [x] `/##` — arity 2 — Numeric scalar signature
+- [x] `/=#` — arity 2 — Numeric scalar signature
+- [x] `/=##` — arity 2 — Numeric scalar signature
+- [x] `<#` — arity 2 — Numeric scalar signature
+- [x] `<##` — arity 2 — Numeric scalar signature
+- [x] `<=#` — arity 2 — Numeric scalar signature
+- [x] `<=##` — arity 2 — Numeric scalar signature
+- [x] `==#` — arity 2 — Numeric scalar signature
+- [x] `==##` — arity 2 — Numeric scalar signature
+- [x] `>#` — arity 2 — Numeric scalar signature
+- [x] `>##` — arity 2 — Numeric scalar signature
+- [x] `>=#` — arity 2 — Numeric scalar signature
+- [x] `>=##` — arity 2 — Numeric scalar signature
+- [x] `acosDouble#` — arity 1 — Numeric scalar signature
+- [x] `acosFloat#` — arity 1 — Numeric scalar signature
+- [x] `acoshDouble#` — arity 1 — Numeric scalar signature
+- [x] `acoshFloat#` — arity 1 — Numeric scalar signature
+- [x] `addCFinalizerToWeak#` — arity 6 — Weak-pointer operation
+- [x] `addIntC#` — arity 2 — Scalar tuple result
+- [x] `addWordC#` — arity 2 — Scalar tuple result
+- [x] `addr2Int#` — arity 1 — Pointer scalar signature
+- [x] `and#` — arity 2 — Numeric scalar signature
+- [x] `and64#` — arity 2 — Numeric scalar signature
+- [x] `andI#` — arity 2 — Numeric scalar signature
+- [x] `andWord16#` — arity 2 — Numeric scalar signature
+- [x] `andWord32#` — arity 2 — Numeric scalar signature
+- [x] `andWord8#` — arity 2 — Numeric scalar signature
+- [x] `asinDouble#` — arity 1 — Numeric scalar signature
+- [x] `asinFloat#` — arity 1 — Numeric scalar signature
+- [x] `asinhDouble#` — arity 1 — Numeric scalar signature
+- [x] `asinhFloat#` — arity 1 — Numeric scalar signature
+- [x] `atanDouble#` — arity 1 — Numeric scalar signature
+- [x] `atanFloat#` — arity 1 — Numeric scalar signature
+- [x] `atanhDouble#` — arity 1 — Numeric scalar signature
+- [x] `atanhFloat#` — arity 1 — Numeric scalar signature
+- [x] `atomicCasAddrAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `atomicCasWord16Addr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `atomicCasWord32Addr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `atomicCasWord64Addr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `atomicCasWord8Addr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `atomicCasWordAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `atomicExchangeAddrAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `atomicExchangeWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `atomicModifyMutVar2#` — arity 3 — Mutable-reference operation
+- [x] `atomicReadIntArray#` — arity 3 — Byte-array operation
+- [x] `atomicReadWordAddr#` — arity 2 — Pointer or pinned-memory operation
+- [x] `atomicSwapMutVar#` — arity 3 — Mutable-reference operation
+- [x] `atomicWriteIntArray#` — arity 4 — Byte-array operation
+- [x] `atomicWriteWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `atomically#` — arity 2 — STM operation
+- [x] `bitReverse#` — arity 1 — Numeric scalar signature
+- [x] `bitReverse16#` — arity 1 — Numeric scalar signature
+- [x] `bitReverse32#` — arity 1 — Numeric scalar signature
+- [x] `bitReverse64#` — arity 1 — Numeric scalar signature
+- [x] `bitReverse8#` — arity 1 — Numeric scalar signature
+- [x] `broadcastDoubleX2#` — arity 1 — Specialized lowering
+- [x] `broadcastDoubleX4#` — arity 1 — Specialized lowering
+- [x] `broadcastDoubleX8#` — arity 1 — Specialized lowering
+- [x] `broadcastFloatX16#` — arity 1 — Specialized lowering
+- [x] `broadcastFloatX4#` — arity 1 — Specialized lowering
+- [x] `broadcastFloatX8#` — arity 1 — Specialized lowering
+- [x] `broadcastInt16X16#` — arity 1 — Specialized lowering
+- [x] `broadcastInt16X8#` — arity 1 — Specialized lowering
+- [x] `broadcastInt32X16#` — arity 1 — Specialized lowering
+- [x] `broadcastInt32X4#` — arity 1 — Specialized lowering
+- [x] `broadcastInt32X8#` — arity 1 — Specialized lowering
+- [x] `broadcastInt64X2#` — arity 1 — Specialized lowering
+- [x] `broadcastInt64X4#` — arity 1 — Specialized lowering
+- [x] `broadcastInt64X8#` — arity 1 — Specialized lowering
+- [x] `broadcastInt8X16#` — arity 1 — Specialized lowering
+- [x] `broadcastWord16X16#` — arity 1 — Specialized lowering
+- [x] `broadcastWord16X8#` — arity 1 — Specialized lowering
+- [x] `broadcastWord32X16#` — arity 1 — Specialized lowering
+- [x] `broadcastWord32X4#` — arity 1 — Specialized lowering
+- [x] `broadcastWord32X8#` — arity 1 — Specialized lowering
+- [x] `broadcastWord64X2#` — arity 1 — Specialized lowering
+- [x] `broadcastWord64X4#` — arity 1 — Specialized lowering
+- [x] `broadcastWord64X8#` — arity 1 — Specialized lowering
+- [x] `broadcastWord8X16#` — arity 1 — Specialized lowering
+- [x] `byteArrayContents#` — arity 1 — Pointer or pinned-memory operation
+- [x] `byteSwap#` — arity 1 — Numeric scalar signature
+- [x] `byteSwap16#` — arity 1 — Numeric scalar signature
+- [x] `byteSwap32#` — arity 1 — Numeric scalar signature
+- [x] `byteSwap64#` — arity 1 — Numeric scalar signature
+- [x] `casInt16Array#` — arity 5 — Byte-array operation
+- [x] `casInt32Array#` — arity 5 — Byte-array operation
+- [x] `casInt64Array#` — arity 5 — Byte-array operation
+- [x] `casInt8Array#` — arity 5 — Byte-array operation
+- [x] `casIntArray#` — arity 5 — Byte-array operation
+- [x] `castDoubleToWord64#` — arity 1 — Numeric scalar signature
+- [x] `castFloatToWord32#` — arity 1 — Numeric scalar signature
+- [x] `castWord32ToFloat#` — arity 1 — Numeric scalar signature
+- [x] `castWord64ToDouble#` — arity 1 — Numeric scalar signature
+- [x] `catch#` — arity 3 — Specialized lowering
+- [x] `catchRetry#` — arity 3 — STM operation
+- [x] `catchSTM#` — arity 3 — STM operation
+- [x] `chr#` — arity 1 — Numeric scalar signature
+- [x] `cloneArray#` — arity 3 — Boxed-array operation
+- [x] `cloneMutableArray#` — arity 4 — Boxed-array operation
+- [x] `cloneSmallArray#` — arity 3 — Boxed-array operation
+- [x] `cloneSmallMutableArray#` — arity 4 — Boxed-array operation
+- [x] `clz#` — arity 1 — Numeric scalar signature
+- [x] `clz16#` — arity 1 — Numeric scalar signature
+- [x] `clz32#` — arity 1 — Numeric scalar signature
+- [x] `clz64#` — arity 1 — Numeric scalar signature
+- [x] `clz8#` — arity 1 — Numeric scalar signature
+- [x] `compareByteArrays#` — arity 5 — Byte-array operation
+- [x] `copyAddrToAddrNonOverlapping#` — arity 4 — Byte-array operation
+- [x] `copyAddrToByteArray#` — arity 5 — Byte-array operation
+- [x] `copyArray#` — arity 6 — Boxed-array operation
+- [x] `copyByteArray#` — arity 6 — Byte-array operation
+- [x] `copyByteArrayToAddr#` — arity 5 — Byte-array operation
+- [x] `copyMutableArray#` — arity 6 — Boxed-array operation
+- [x] `copyMutableByteArray#` — arity 6 — Byte-array operation
+- [x] `copyMutableByteArrayNonOverlapping#` — arity 6 — Byte-array operation
+- [x] `copyMutableByteArrayToAddr#` — arity 5 — Byte-array operation
+- [x] `copySmallArray#` — arity 6 — Boxed-array operation
+- [x] `copySmallMutableArray#` — arity 6 — Boxed-array operation
+- [x] `cosDouble#` — arity 1 — Numeric scalar signature
+- [x] `cosFloat#` — arity 1 — Numeric scalar signature
+- [x] `coshDouble#` — arity 1 — Numeric scalar signature
+- [x] `coshFloat#` — arity 1 — Numeric scalar signature
+- [x] `ctz#` — arity 1 — Numeric scalar signature
+- [x] `ctz16#` — arity 1 — Numeric scalar signature
+- [x] `ctz32#` — arity 1 — Numeric scalar signature
+- [x] `ctz64#` — arity 1 — Numeric scalar signature
+- [x] `ctz8#` — arity 1 — Numeric scalar signature
+- [x] `dataToTagLarge#` — arity 1 — Algebraic constructor-family operation
+- [x] `dataToTagSmall#` — arity 1 — Algebraic constructor-family operation
+- [x] `deRefStablePtr#` — arity 2 — Stable-pointer operation
+- [x] `deRefWeak#` — arity 2 — Weak-pointer operation
+- [x] `decodeDouble_2Int#` — arity 1 — Scalar tuple result
+- [x] `decodeDouble_Int64#` — arity 1 — Scalar tuple result
+- [x] `decodeFloat_Int#` — arity 1 — Scalar tuple result
+- [x] `divideDoubleX2#` — arity 2 — Specialized lowering
+- [x] `divideDoubleX4#` — arity 2 — Specialized lowering
+- [x] `divideDoubleX8#` — arity 2 — Specialized lowering
+- [x] `divideFloat#` — arity 2 — Numeric scalar signature
+- [x] `divideFloatX16#` — arity 2 — Specialized lowering
+- [x] `divideFloatX4#` — arity 2 — Specialized lowering
+- [x] `divideFloatX8#` — arity 2 — Specialized lowering
+- [x] `double2Float#` — arity 1 — Numeric scalar signature
+- [x] `double2Int#` — arity 1 — Numeric scalar signature
+- [x] `eqAddr#` — arity 2 — Pointer scalar signature
+- [x] `eqChar#` — arity 2 — Numeric scalar signature
+- [x] `eqFloat#` — arity 2 — Numeric scalar signature
+- [x] `eqInt16#` — arity 2 — Numeric scalar signature
+- [x] `eqInt32#` — arity 2 — Numeric scalar signature
+- [x] `eqInt64#` — arity 2 — Numeric scalar signature
+- [x] `eqInt8#` — arity 2 — Numeric scalar signature
+- [x] `eqStablePtr#` — arity 2 — Stable-pointer operation
+- [x] `eqWord#` — arity 2 — Numeric scalar signature
+- [x] `eqWord16#` — arity 2 — Numeric scalar signature
+- [x] `eqWord32#` — arity 2 — Numeric scalar signature
+- [x] `eqWord64#` — arity 2 — Numeric scalar signature
+- [x] `eqWord8#` — arity 2 — Numeric scalar signature
+- [x] `expDouble#` — arity 1 — Numeric scalar signature
+- [x] `expFloat#` — arity 1 — Numeric scalar signature
+- [x] `expm1Double#` — arity 1 — Numeric scalar signature
+- [x] `expm1Float#` — arity 1 — Numeric scalar signature
+- [x] `fabsDouble#` — arity 1 — Numeric scalar signature
+- [x] `fabsFloat#` — arity 1 — Numeric scalar signature
+- [x] `fetchAddIntArray#` — arity 4 — Byte-array operation
+- [x] `fetchAddWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `fetchAndIntArray#` — arity 4 — Byte-array operation
+- [x] `fetchAndWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `fetchNandIntArray#` — arity 4 — Byte-array operation
+- [x] `fetchNandWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `fetchOrIntArray#` — arity 4 — Byte-array operation
+- [x] `fetchOrWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `fetchSubIntArray#` — arity 4 — Byte-array operation
+- [x] `fetchSubWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `fetchXorIntArray#` — arity 4 — Byte-array operation
+- [x] `fetchXorWordAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `finalizeWeak#` — arity 2 — Weak-pointer operation
+- [x] `float2Double#` — arity 1 — Numeric scalar signature
+- [x] `float2Int#` — arity 1 — Numeric scalar signature
+- [x] `fmaddDouble#` — arity 3 — Numeric scalar signature
+- [x] `fmaddDoubleX2#` — arity 3 — Specialized lowering
+- [x] `fmaddDoubleX4#` — arity 3 — Specialized lowering
+- [x] `fmaddDoubleX8#` — arity 3 — Specialized lowering
+- [x] `fmaddFloat#` — arity 3 — Numeric scalar signature
+- [x] `fmaddFloatX16#` — arity 3 — Specialized lowering
+- [x] `fmaddFloatX4#` — arity 3 — Specialized lowering
+- [x] `fmaddFloatX8#` — arity 3 — Specialized lowering
+- [x] `fmsubDouble#` — arity 3 — Numeric scalar signature
+- [x] `fmsubDoubleX2#` — arity 3 — Specialized lowering
+- [x] `fmsubDoubleX4#` — arity 3 — Specialized lowering
+- [x] `fmsubDoubleX8#` — arity 3 — Specialized lowering
+- [x] `fmsubFloat#` — arity 3 — Numeric scalar signature
+- [x] `fmsubFloatX16#` — arity 3 — Specialized lowering
+- [x] `fmsubFloatX4#` — arity 3 — Specialized lowering
+- [x] `fmsubFloatX8#` — arity 3 — Specialized lowering
+- [x] `fnmaddDouble#` — arity 3 — Numeric scalar signature
+- [x] `fnmaddDoubleX2#` — arity 3 — Specialized lowering
+- [x] `fnmaddDoubleX4#` — arity 3 — Specialized lowering
+- [x] `fnmaddDoubleX8#` — arity 3 — Specialized lowering
+- [x] `fnmaddFloat#` — arity 3 — Numeric scalar signature
+- [x] `fnmaddFloatX16#` — arity 3 — Specialized lowering
+- [x] `fnmaddFloatX4#` — arity 3 — Specialized lowering
+- [x] `fnmaddFloatX8#` — arity 3 — Specialized lowering
+- [x] `fnmsubDouble#` — arity 3 — Numeric scalar signature
+- [x] `fnmsubDoubleX2#` — arity 3 — Specialized lowering
+- [x] `fnmsubDoubleX4#` — arity 3 — Specialized lowering
+- [x] `fnmsubDoubleX8#` — arity 3 — Specialized lowering
+- [x] `fnmsubFloat#` — arity 3 — Numeric scalar signature
+- [x] `fnmsubFloatX16#` — arity 3 — Specialized lowering
+- [x] `fnmsubFloatX4#` — arity 3 — Specialized lowering
+- [x] `fnmsubFloatX8#` — arity 3 — Specialized lowering
+- [x] `fork#` — arity 2 — Thread operation
+- [x] `freezeArray#` — arity 4 — Boxed-array operation
+- [x] `freezeSmallArray#` — arity 4 — Boxed-array operation
+- [x] `geAddr#` — arity 2 — Pointer scalar signature
+- [x] `geChar#` — arity 2 — Numeric scalar signature
+- [x] `geFloat#` — arity 2 — Numeric scalar signature
+- [x] `geInt16#` — arity 2 — Numeric scalar signature
+- [x] `geInt32#` — arity 2 — Numeric scalar signature
+- [x] `geInt64#` — arity 2 — Numeric scalar signature
+- [x] `geInt8#` — arity 2 — Numeric scalar signature
+- [x] `geWord#` — arity 2 — Numeric scalar signature
+- [x] `geWord16#` — arity 2 — Numeric scalar signature
+- [x] `geWord32#` — arity 2 — Numeric scalar signature
+- [x] `geWord64#` — arity 2 — Numeric scalar signature
+- [x] `geWord8#` — arity 2 — Numeric scalar signature
+- [x] `getCurrentCCS#` — arity 2 — Specialized lowering
+- [x] `getMaskingState#` — arity 1 — Specialized lowering
+- [x] `getSizeofMutableByteArray#` — arity 2 — Byte-array operation
+- [x] `getSizeofSmallMutableArray#` — arity 2 — Boxed-array operation
+- [x] `gtAddr#` — arity 2 — Pointer scalar signature
+- [x] `gtChar#` — arity 2 — Numeric scalar signature
+- [x] `gtFloat#` — arity 2 — Numeric scalar signature
+- [x] `gtInt16#` — arity 2 — Numeric scalar signature
+- [x] `gtInt32#` — arity 2 — Numeric scalar signature
+- [x] `gtInt64#` — arity 2 — Numeric scalar signature
+- [x] `gtInt8#` — arity 2 — Numeric scalar signature
+- [x] `gtWord#` — arity 2 — Numeric scalar signature
+- [x] `gtWord16#` — arity 2 — Numeric scalar signature
+- [x] `gtWord32#` — arity 2 — Numeric scalar signature
+- [x] `gtWord64#` — arity 2 — Numeric scalar signature
+- [x] `gtWord8#` — arity 2 — Numeric scalar signature
+- [x] `indexAddrArray#` — arity 2 — Pointer or pinned-memory operation
+- [x] `indexAddrOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexArray#` — arity 2 — Boxed-array operation
+- [x] `indexCharArray#` — arity 2 — Byte-array operation
+- [x] `indexCharOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexDoubleArray#` — arity 2 — Byte-array operation
+- [x] `indexDoubleArrayAsDoubleX2#` — arity 2 — Specialized lowering
+- [x] `indexDoubleOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexDoubleX2Array#` — arity 2 — Specialized lowering
+- [x] `indexFloatArray#` — arity 2 — Byte-array operation
+- [x] `indexFloatArrayAsFloatX4#` — arity 2 — Specialized lowering
+- [x] `indexFloatOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexFloatX4Array#` — arity 2 — Specialized lowering
+- [x] `indexInt16Array#` — arity 2 — Byte-array operation
+- [x] `indexInt16OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexInt32Array#` — arity 2 — Byte-array operation
+- [x] `indexInt32ArrayAsInt32X4#` — arity 2 — Specialized lowering
+- [x] `indexInt32OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexInt32X4Array#` — arity 2 — Specialized lowering
+- [x] `indexInt64Array#` — arity 2 — Byte-array operation
+- [x] `indexInt64OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexInt8Array#` — arity 2 — Byte-array operation
+- [x] `indexInt8OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexIntArray#` — arity 2 — Byte-array operation
+- [x] `indexIntOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexSmallArray#` — arity 2 — Boxed-array operation
+- [x] `indexStablePtrArray#` — arity 2 — Pointer or pinned-memory operation
+- [x] `indexStablePtrOffAddr#` — arity 2 — Pointer or pinned-memory operation
+- [x] `indexWideCharArray#` — arity 2 — Byte-array operation
+- [x] `indexWideCharOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord16Array#` — arity 2 — Byte-array operation
+- [x] `indexWord16OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord32Array#` — arity 2 — Byte-array operation
+- [x] `indexWord32ArrayAsWord32X4#` — arity 2 — Specialized lowering
+- [x] `indexWord32OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord32X4Array#` — arity 2 — Specialized lowering
+- [x] `indexWord64Array#` — arity 2 — Byte-array operation
+- [x] `indexWord64OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8Array#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsAddr#` — arity 2 — Pointer or pinned-memory operation
+- [x] `indexWord8ArrayAsChar#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsDouble#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsFloat#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsInt#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsInt16#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsInt32#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsInt64#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsStablePtr#` — arity 2 — Pointer or pinned-memory operation
+- [x] `indexWord8ArrayAsWideChar#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsWord#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsWord16#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsWord32#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsWord64#` — arity 2 — Byte-array operation
+- [x] `indexWord8OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsChar#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsDouble#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsFloat#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsInt#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsInt16#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsInt32#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsInt64#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsStablePtr#` — arity 2 — Pointer or pinned-memory operation
+- [x] `indexWord8OffAddrAsWideChar#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsWord#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsWord16#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsWord32#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8OffAddrAsWord64#` — arity 2 — Pointer scalar signature
+- [x] `indexWordArray#` — arity 2 — Byte-array operation
+- [x] `indexWordOffAddr#` — arity 2 — Pointer scalar signature
+- [x] `insertDoubleX2#` — arity 3 — Specialized lowering
+- [x] `insertDoubleX4#` — arity 3 — Specialized lowering
+- [x] `insertDoubleX8#` — arity 3 — Specialized lowering
+- [x] `insertFloatX16#` — arity 3 — Specialized lowering
+- [x] `insertFloatX4#` — arity 3 — Specialized lowering
+- [x] `insertFloatX8#` — arity 3 — Specialized lowering
+- [x] `insertInt16X16#` — arity 3 — Specialized lowering
+- [x] `insertInt16X8#` — arity 3 — Specialized lowering
+- [x] `insertInt32X16#` — arity 3 — Specialized lowering
+- [x] `insertInt32X4#` — arity 3 — Specialized lowering
+- [x] `insertInt32X8#` — arity 3 — Specialized lowering
+- [x] `insertInt64X2#` — arity 3 — Specialized lowering
+- [x] `insertInt64X4#` — arity 3 — Specialized lowering
+- [x] `insertInt64X8#` — arity 3 — Specialized lowering
+- [x] `insertInt8X16#` — arity 3 — Specialized lowering
+- [x] `insertWord16X16#` — arity 3 — Specialized lowering
+- [x] `insertWord16X8#` — arity 3 — Specialized lowering
+- [x] `insertWord32X16#` — arity 3 — Specialized lowering
+- [x] `insertWord32X4#` — arity 3 — Specialized lowering
+- [x] `insertWord32X8#` — arity 3 — Specialized lowering
+- [x] `insertWord64X2#` — arity 3 — Specialized lowering
+- [x] `insertWord64X4#` — arity 3 — Specialized lowering
+- [x] `insertWord64X8#` — arity 3 — Specialized lowering
+- [x] `insertWord8X16#` — arity 3 — Specialized lowering
+- [x] `int16ToInt#` — arity 1 — Numeric scalar signature
+- [x] `int16ToWord16#` — arity 1 — Numeric scalar signature
+- [x] `int2Addr#` — arity 1 — Pointer scalar signature
+- [x] `int2Double#` — arity 1 — Numeric scalar signature
+- [x] `int2Float#` — arity 1 — Numeric scalar signature
+- [x] `int2Word#` — arity 1 — Numeric scalar signature
+- [x] `int32ToInt#` — arity 1 — Numeric scalar signature
+- [x] `int32ToWord32#` — arity 1 — Numeric scalar signature
+- [x] `int64ToInt#` — arity 1 — Numeric scalar signature
+- [x] `int64ToWord64#` — arity 1 — Numeric scalar signature
+- [x] `int8ToInt#` — arity 1 — Numeric scalar signature
+- [x] `int8ToWord8#` — arity 1 — Numeric scalar signature
+- [x] `intToInt16#` — arity 1 — Numeric scalar signature
+- [x] `intToInt32#` — arity 1 — Numeric scalar signature
+- [x] `intToInt64#` — arity 1 — Numeric scalar signature
+- [x] `intToInt8#` — arity 1 — Numeric scalar signature
+- [x] `isCurrentThreadBound#` — arity 1 — Thread operation
+- [x] `isEmptyMVar#` — arity 2 — MVar operation
+- [x] `keepAlive#` — arity 3 — Specialized lowering
+- [x] `killThread#` — arity 3 — Thread operation
+- [x] `labelThread#` — arity 3 — Thread operation
+- [x] `leAddr#` — arity 2 — Pointer scalar signature
+- [x] `leChar#` — arity 2 — Numeric scalar signature
+- [x] `leFloat#` — arity 2 — Numeric scalar signature
+- [x] `leInt16#` — arity 2 — Numeric scalar signature
+- [x] `leInt32#` — arity 2 — Numeric scalar signature
+- [x] `leInt64#` — arity 2 — Numeric scalar signature
+- [x] `leInt8#` — arity 2 — Numeric scalar signature
+- [x] `leWord#` — arity 2 — Numeric scalar signature
+- [x] `leWord16#` — arity 2 — Numeric scalar signature
+- [x] `leWord32#` — arity 2 — Numeric scalar signature
+- [x] `leWord64#` — arity 2 — Numeric scalar signature
+- [x] `leWord8#` — arity 2 — Numeric scalar signature
+- [x] `listThreads#` — arity 1 — Thread operation
+- [x] `log1pDouble#` — arity 1 — Numeric scalar signature
+- [x] `log1pFloat#` — arity 1 — Numeric scalar signature
+- [x] `logDouble#` — arity 1 — Numeric scalar signature
+- [x] `logFloat#` — arity 1 — Numeric scalar signature
+- [x] `ltAddr#` — arity 2 — Pointer scalar signature
+- [x] `ltChar#` — arity 2 — Numeric scalar signature
+- [x] `ltFloat#` — arity 2 — Numeric scalar signature
+- [x] `ltInt16#` — arity 2 — Numeric scalar signature
+- [x] `ltInt32#` — arity 2 — Numeric scalar signature
+- [x] `ltInt64#` — arity 2 — Numeric scalar signature
+- [x] `ltInt8#` — arity 2 — Numeric scalar signature
+- [x] `ltWord#` — arity 2 — Numeric scalar signature
+- [x] `ltWord16#` — arity 2 — Numeric scalar signature
+- [x] `ltWord32#` — arity 2 — Numeric scalar signature
+- [x] `ltWord64#` — arity 2 — Numeric scalar signature
+- [x] `ltWord8#` — arity 2 — Numeric scalar signature
+- [x] `makeStablePtr#` — arity 2 — Stable-pointer operation
+- [x] `maskAsyncExceptions#` — arity 2 — Specialized lowering
+- [x] `maskUninterruptible#` — arity 2 — Specialized lowering
+- [x] `maxDouble#` — arity 2 — Numeric scalar signature
+- [x] `maxDoubleX2#` — arity 2 — Specialized lowering
+- [x] `maxDoubleX4#` — arity 2 — Specialized lowering
+- [x] `maxDoubleX8#` — arity 2 — Specialized lowering
+- [x] `maxFloat#` — arity 2 — Numeric scalar signature
+- [x] `maxFloatX16#` — arity 2 — Specialized lowering
+- [x] `maxFloatX4#` — arity 2 — Specialized lowering
+- [x] `maxFloatX8#` — arity 2 — Specialized lowering
+- [x] `maxInt16X16#` — arity 2 — Specialized lowering
+- [x] `maxInt16X8#` — arity 2 — Specialized lowering
+- [x] `maxInt32X16#` — arity 2 — Specialized lowering
+- [x] `maxInt32X4#` — arity 2 — Specialized lowering
+- [x] `maxInt32X8#` — arity 2 — Specialized lowering
+- [x] `maxInt64X2#` — arity 2 — Specialized lowering
+- [x] `maxInt64X4#` — arity 2 — Specialized lowering
+- [x] `maxInt64X8#` — arity 2 — Specialized lowering
+- [x] `maxInt8X16#` — arity 2 — Specialized lowering
+- [x] `maxWord16X16#` — arity 2 — Specialized lowering
+- [x] `maxWord16X8#` — arity 2 — Specialized lowering
+- [x] `maxWord32X16#` — arity 2 — Specialized lowering
+- [x] `maxWord32X4#` — arity 2 — Specialized lowering
+- [x] `maxWord32X8#` — arity 2 — Specialized lowering
+- [x] `maxWord64X2#` — arity 2 — Specialized lowering
+- [x] `maxWord64X4#` — arity 2 — Specialized lowering
+- [x] `maxWord64X8#` — arity 2 — Specialized lowering
+- [x] `maxWord8X16#` — arity 2 — Specialized lowering
+- [x] `minDouble#` — arity 2 — Numeric scalar signature
+- [x] `minDoubleX2#` — arity 2 — Specialized lowering
+- [x] `minDoubleX4#` — arity 2 — Specialized lowering
+- [x] `minDoubleX8#` — arity 2 — Specialized lowering
+- [x] `minFloat#` — arity 2 — Numeric scalar signature
+- [x] `minFloatX16#` — arity 2 — Specialized lowering
+- [x] `minFloatX4#` — arity 2 — Specialized lowering
+- [x] `minFloatX8#` — arity 2 — Specialized lowering
+- [x] `minInt16X16#` — arity 2 — Specialized lowering
+- [x] `minInt16X8#` — arity 2 — Specialized lowering
+- [x] `minInt32X16#` — arity 2 — Specialized lowering
+- [x] `minInt32X4#` — arity 2 — Specialized lowering
+- [x] `minInt32X8#` — arity 2 — Specialized lowering
+- [x] `minInt64X2#` — arity 2 — Specialized lowering
+- [x] `minInt64X4#` — arity 2 — Specialized lowering
+- [x] `minInt64X8#` — arity 2 — Specialized lowering
+- [x] `minInt8X16#` — arity 2 — Specialized lowering
+- [x] `minWord16X16#` — arity 2 — Specialized lowering
+- [x] `minWord16X8#` — arity 2 — Specialized lowering
+- [x] `minWord32X16#` — arity 2 — Specialized lowering
+- [x] `minWord32X4#` — arity 2 — Specialized lowering
+- [x] `minWord32X8#` — arity 2 — Specialized lowering
+- [x] `minWord64X2#` — arity 2 — Specialized lowering
+- [x] `minWord64X4#` — arity 2 — Specialized lowering
+- [x] `minWord64X8#` — arity 2 — Specialized lowering
+- [x] `minWord8X16#` — arity 2 — Specialized lowering
+- [x] `minusDoubleX2#` — arity 2 — Specialized lowering
+- [x] `minusDoubleX4#` — arity 2 — Specialized lowering
+- [x] `minusDoubleX8#` — arity 2 — Specialized lowering
+- [x] `minusFloat#` — arity 2 — Numeric scalar signature
+- [x] `minusFloatX16#` — arity 2 — Specialized lowering
+- [x] `minusFloatX4#` — arity 2 — Specialized lowering
+- [x] `minusFloatX8#` — arity 2 — Specialized lowering
+- [x] `minusInt16X16#` — arity 2 — Specialized lowering
+- [x] `minusInt16X8#` — arity 2 — Specialized lowering
+- [x] `minusInt32X16#` — arity 2 — Specialized lowering
+- [x] `minusInt32X4#` — arity 2 — Specialized lowering
+- [x] `minusInt32X8#` — arity 2 — Specialized lowering
+- [x] `minusInt64X2#` — arity 2 — Specialized lowering
+- [x] `minusInt64X4#` — arity 2 — Specialized lowering
+- [x] `minusInt64X8#` — arity 2 — Specialized lowering
+- [x] `minusInt8X16#` — arity 2 — Specialized lowering
+- [x] `minusWord#` — arity 2 — Numeric scalar signature
+- [x] `minusWord16X16#` — arity 2 — Specialized lowering
+- [x] `minusWord16X8#` — arity 2 — Specialized lowering
+- [x] `minusWord32X16#` — arity 2 — Specialized lowering
+- [x] `minusWord32X4#` — arity 2 — Specialized lowering
+- [x] `minusWord32X8#` — arity 2 — Specialized lowering
+- [x] `minusWord64X2#` — arity 2 — Specialized lowering
+- [x] `minusWord64X4#` — arity 2 — Specialized lowering
+- [x] `minusWord64X8#` — arity 2 — Specialized lowering
+- [x] `minusWord8X16#` — arity 2 — Specialized lowering
+- [x] `mkWeak#` — arity 4 — Weak-pointer operation
+- [x] `mkWeakNoFinalizer#` — arity 3 — Weak-pointer operation
+- [x] `mulIntMayOflo#` — arity 2 — Numeric scalar signature
+- [x] `mutableByteArrayContents#` — arity 1 — Pointer or pinned-memory operation
+- [x] `myThreadId#` — arity 1 — Thread operation
+- [x] `narrow16Int#` — arity 1 — Numeric scalar signature
+- [x] `narrow16Word#` — arity 1 — Numeric scalar signature
+- [x] `narrow32Int#` — arity 1 — Numeric scalar signature
+- [x] `narrow32Word#` — arity 1 — Numeric scalar signature
+- [x] `narrow8Int#` — arity 1 — Numeric scalar signature
+- [x] `narrow8Word#` — arity 1 — Numeric scalar signature
+- [x] `neAddr#` — arity 2 — Pointer scalar signature
+- [x] `neChar#` — arity 2 — Numeric scalar signature
+- [x] `neFloat#` — arity 2 — Numeric scalar signature
+- [x] `neInt16#` — arity 2 — Numeric scalar signature
+- [x] `neInt32#` — arity 2 — Numeric scalar signature
+- [x] `neInt64#` — arity 2 — Numeric scalar signature
+- [x] `neInt8#` — arity 2 — Numeric scalar signature
+- [x] `neWord#` — arity 2 — Numeric scalar signature
+- [x] `neWord16#` — arity 2 — Numeric scalar signature
+- [x] `neWord32#` — arity 2 — Numeric scalar signature
+- [x] `neWord64#` — arity 2 — Numeric scalar signature
+- [x] `neWord8#` — arity 2 — Numeric scalar signature
+- [x] `negateDouble#` — arity 1 — Numeric scalar signature
+- [x] `negateDoubleX2#` — arity 1 — Specialized lowering
+- [x] `negateDoubleX4#` — arity 1 — Specialized lowering
+- [x] `negateDoubleX8#` — arity 1 — Specialized lowering
+- [x] `negateFloat#` — arity 1 — Numeric scalar signature
+- [x] `negateFloatX16#` — arity 1 — Specialized lowering
+- [x] `negateFloatX4#` — arity 1 — Specialized lowering
+- [x] `negateFloatX8#` — arity 1 — Specialized lowering
+- [x] `negateInt#` — arity 1 — Numeric scalar signature
+- [x] `negateInt16#` — arity 1 — Numeric scalar signature
+- [x] `negateInt16X16#` — arity 1 — Specialized lowering
+- [x] `negateInt16X8#` — arity 1 — Specialized lowering
+- [x] `negateInt32#` — arity 1 — Numeric scalar signature
+- [x] `negateInt32X16#` — arity 1 — Specialized lowering
+- [x] `negateInt32X4#` — arity 1 — Specialized lowering
+- [x] `negateInt32X8#` — arity 1 — Specialized lowering
+- [x] `negateInt64#` — arity 1 — Numeric scalar signature
+- [x] `negateInt64X2#` — arity 1 — Specialized lowering
+- [x] `negateInt64X4#` — arity 1 — Specialized lowering
+- [x] `negateInt64X8#` — arity 1 — Specialized lowering
+- [x] `negateInt8#` — arity 1 — Numeric scalar signature
+- [x] `negateInt8X16#` — arity 1 — Specialized lowering
+- [x] `newAlignedPinnedByteArray#` — arity 3 — Pointer or pinned-memory operation
+- [x] `newArray#` — arity 3 — Boxed-array operation
+- [x] `newByteArray#` — arity 2 — Byte-array operation
+- [x] `newMVar#` — arity 1 — MVar operation
+- [x] `newMutVar#` — arity 2 — Mutable-reference operation
+- [x] `newPinnedByteArray#` — arity 2 — Pointer or pinned-memory operation
+- [x] `newSmallArray#` — arity 3 — Boxed-array operation
+- [x] `newTVar#` — arity 2 — STM operation
+- [x] `noDuplicate#` — arity 1 — Specialized lowering
+- [x] `not#` — arity 1 — Numeric scalar signature
+- [x] `not64#` — arity 1 — Numeric scalar signature
+- [x] `notI#` — arity 1 — Numeric scalar signature
+- [x] `notWord16#` — arity 1 — Numeric scalar signature
+- [x] `notWord32#` — arity 1 — Numeric scalar signature
+- [x] `notWord8#` — arity 1 — Numeric scalar signature
+- [x] `or#` — arity 2 — Numeric scalar signature
+- [x] `or64#` — arity 2 — Numeric scalar signature
+- [x] `orI#` — arity 2 — Numeric scalar signature
+- [x] `orWord16#` — arity 2 — Numeric scalar signature
+- [x] `orWord32#` — arity 2 — Numeric scalar signature
+- [x] `orWord8#` — arity 2 — Numeric scalar signature
+- [x] `ord#` — arity 1 — Numeric scalar signature
+- [x] `packDoubleX2#` — arity 1 — Specialized lowering
+- [x] `packDoubleX4#` — arity 1 — Specialized lowering
+- [x] `packDoubleX8#` — arity 1 — Specialized lowering
+- [x] `packFloatX16#` — arity 1 — Specialized lowering
+- [x] `packFloatX4#` — arity 1 — Specialized lowering
+- [x] `packFloatX8#` — arity 1 — Specialized lowering
+- [x] `packInt16X16#` — arity 1 — Specialized lowering
+- [x] `packInt16X8#` — arity 1 — Specialized lowering
+- [x] `packInt32X16#` — arity 1 — Specialized lowering
+- [x] `packInt32X4#` — arity 1 — Specialized lowering
+- [x] `packInt32X8#` — arity 1 — Specialized lowering
+- [x] `packInt64X2#` — arity 1 — Specialized lowering
+- [x] `packInt64X4#` — arity 1 — Specialized lowering
+- [x] `packInt64X8#` — arity 1 — Specialized lowering
+- [x] `packInt8X16#` — arity 1 — Specialized lowering
+- [x] `packWord16X16#` — arity 1 — Specialized lowering
+- [x] `packWord16X8#` — arity 1 — Specialized lowering
+- [x] `packWord32X16#` — arity 1 — Specialized lowering
+- [x] `packWord32X4#` — arity 1 — Specialized lowering
+- [x] `packWord32X8#` — arity 1 — Specialized lowering
+- [x] `packWord64X2#` — arity 1 — Specialized lowering
+- [x] `packWord64X4#` — arity 1 — Specialized lowering
+- [x] `packWord64X8#` — arity 1 — Specialized lowering
+- [x] `packWord8X16#` — arity 1 — Specialized lowering
+- [x] `pdep#` — arity 2 — Numeric scalar signature
+- [x] `pdep16#` — arity 2 — Numeric scalar signature
+- [x] `pdep32#` — arity 2 — Numeric scalar signature
+- [x] `pdep64#` — arity 2 — Numeric scalar signature
+- [x] `pdep8#` — arity 2 — Numeric scalar signature
+- [x] `pext#` — arity 2 — Numeric scalar signature
+- [x] `pext16#` — arity 2 — Numeric scalar signature
+- [x] `pext32#` — arity 2 — Numeric scalar signature
+- [x] `pext64#` — arity 2 — Numeric scalar signature
+- [x] `pext8#` — arity 2 — Numeric scalar signature
+- [x] `plusAddr#` — arity 2 — Pointer scalar signature
+- [x] `plusDoubleX2#` — arity 2 — Specialized lowering
+- [x] `plusDoubleX4#` — arity 2 — Specialized lowering
+- [x] `plusDoubleX8#` — arity 2 — Specialized lowering
+- [x] `plusFloat#` — arity 2 — Numeric scalar signature
+- [x] `plusFloatX16#` — arity 2 — Specialized lowering
+- [x] `plusFloatX4#` — arity 2 — Specialized lowering
+- [x] `plusFloatX8#` — arity 2 — Specialized lowering
+- [x] `plusInt16#` — arity 2 — Numeric scalar signature
+- [x] `plusInt16X16#` — arity 2 — Specialized lowering
+- [x] `plusInt16X8#` — arity 2 — Specialized lowering
+- [x] `plusInt32#` — arity 2 — Numeric scalar signature
+- [x] `plusInt32X16#` — arity 2 — Specialized lowering
+- [x] `plusInt32X4#` — arity 2 — Specialized lowering
+- [x] `plusInt32X8#` — arity 2 — Specialized lowering
+- [x] `plusInt64#` — arity 2 — Numeric scalar signature
+- [x] `plusInt64X2#` — arity 2 — Specialized lowering
+- [x] `plusInt64X4#` — arity 2 — Specialized lowering
+- [x] `plusInt64X8#` — arity 2 — Specialized lowering
+- [x] `plusInt8#` — arity 2 — Numeric scalar signature
+- [x] `plusInt8X16#` — arity 2 — Specialized lowering
+- [x] `plusWord#` — arity 2 — Numeric scalar signature
+- [x] `plusWord16#` — arity 2 — Numeric scalar signature
+- [x] `plusWord16X16#` — arity 2 — Specialized lowering
+- [x] `plusWord16X8#` — arity 2 — Specialized lowering
+- [x] `plusWord2#` — arity 2 — Scalar tuple result
+- [x] `plusWord32#` — arity 2 — Numeric scalar signature
+- [x] `plusWord32X16#` — arity 2 — Specialized lowering
+- [x] `plusWord32X4#` — arity 2 — Specialized lowering
+- [x] `plusWord32X8#` — arity 2 — Specialized lowering
+- [x] `plusWord64#` — arity 2 — Numeric scalar signature
+- [x] `plusWord64X2#` — arity 2 — Specialized lowering
+- [x] `plusWord64X4#` — arity 2 — Specialized lowering
+- [x] `plusWord64X8#` — arity 2 — Specialized lowering
+- [x] `plusWord8#` — arity 2 — Numeric scalar signature
+- [x] `plusWord8X16#` — arity 2 — Specialized lowering
+- [x] `popCnt#` — arity 1 — Numeric scalar signature
+- [x] `popCnt16#` — arity 1 — Numeric scalar signature
+- [x] `popCnt32#` — arity 1 — Numeric scalar signature
+- [x] `popCnt64#` — arity 1 — Numeric scalar signature
+- [x] `popCnt8#` — arity 1 — Numeric scalar signature
+- [x] `powerFloat#` — arity 2 — Numeric scalar signature
+- [x] `putMVar#` — arity 3 — MVar operation
+- [x] `quotInt#` — arity 2 — Numeric scalar signature
+- [x] `quotInt16#` — arity 2 — Numeric scalar signature
+- [x] `quotInt32#` — arity 2 — Numeric scalar signature
+- [x] `quotInt64#` — arity 2 — Numeric scalar signature
+- [x] `quotInt8#` — arity 2 — Numeric scalar signature
+- [x] `quotRemInt#` — arity 2 — Scalar tuple result
+- [x] `quotRemInt16#` — arity 2 — Scalar tuple result
+- [x] `quotRemInt32#` — arity 2 — Scalar tuple result
+- [x] `quotRemInt8#` — arity 2 — Scalar tuple result
+- [x] `quotRemWord#` — arity 2 — Scalar tuple result
+- [x] `quotRemWord16#` — arity 2 — Scalar tuple result
+- [x] `quotRemWord2#` — arity 3 — Scalar tuple result
+- [x] `quotRemWord32#` — arity 2 — Scalar tuple result
+- [x] `quotRemWord8#` — arity 2 — Scalar tuple result
+- [x] `quotWord#` — arity 2 — Numeric scalar signature
+- [x] `quotWord16#` — arity 2 — Numeric scalar signature
+- [x] `quotWord32#` — arity 2 — Numeric scalar signature
+- [x] `quotWord64#` — arity 2 — Numeric scalar signature
+- [x] `quotWord8#` — arity 2 — Numeric scalar signature
+- [x] `raise#` — arity 1 — Specialized lowering
+- [x] `raiseDivZero#` — arity 1 — Specialized lowering
+- [x] `raiseIO#` — arity 2 — Specialized lowering
+- [x] `raiseOverflow#` — arity 1 — Specialized lowering
+- [x] `raiseUnderflow#` — arity 1 — Specialized lowering
+- [x] `readAddrArray#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readAddrOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readArray#` — arity 3 — Boxed-array operation
+- [x] `readCharArray#` — arity 3 — Byte-array operation
+- [x] `readCharOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readDoubleArray#` — arity 3 — Byte-array operation
+- [x] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering
+- [x] `readDoubleOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readDoubleX2Array#` — arity 3 — Specialized lowering
+- [x] `readFloatArray#` — arity 3 — Byte-array operation
+- [x] `readFloatArrayAsFloatX4#` — arity 3 — Specialized lowering
+- [x] `readFloatOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readFloatX4Array#` — arity 3 — Specialized lowering
+- [x] `readInt16Array#` — arity 3 — Byte-array operation
+- [x] `readInt16OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readInt32Array#` — arity 3 — Byte-array operation
+- [x] `readInt32ArrayAsInt32X4#` — arity 3 — Specialized lowering
+- [x] `readInt32OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readInt32X4Array#` — arity 3 — Specialized lowering
+- [x] `readInt64Array#` — arity 3 — Byte-array operation
+- [x] `readInt64OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readInt8Array#` — arity 3 — Byte-array operation
+- [x] `readInt8OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readIntArray#` — arity 3 — Byte-array operation
+- [x] `readIntOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readMVar#` — arity 2 — MVar operation
+- [x] `readMutVar#` — arity 2 — Mutable-reference operation
+- [x] `readSmallArray#` — arity 3 — Boxed-array operation
+- [x] `readStablePtrArray#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readStablePtrOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readTVar#` — arity 2 — STM operation
+- [x] `readTVarIO#` — arity 2 — STM operation
+- [x] `readWideCharArray#` — arity 3 — Byte-array operation
+- [x] `readWideCharOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord16Array#` — arity 3 — Byte-array operation
+- [x] `readWord16OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord32Array#` — arity 3 — Byte-array operation
+- [x] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering
+- [x] `readWord32OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord32X4Array#` — arity 3 — Specialized lowering
+- [x] `readWord64Array#` — arity 3 — Byte-array operation
+- [x] `readWord64OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8Array#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8ArrayAsChar#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsDouble#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsFloat#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsInt#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsInt16#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsInt32#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsInt64#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsStablePtr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8ArrayAsWideChar#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsWord#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsWord16#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsWord32#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsWord64#` — arity 3 — Byte-array operation
+- [x] `readWord8OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsChar#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsDouble#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsFloat#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsInt#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsInt16#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsInt32#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsInt64#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsStablePtr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsWideChar#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsWord#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsWord16#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsWord32#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8OffAddrAsWord64#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWordArray#` — arity 3 — Byte-array operation
+- [x] `readWordOffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering
+- [x] `remInt#` — arity 2 — Numeric scalar signature
+- [x] `remInt16#` — arity 2 — Numeric scalar signature
+- [x] `remInt32#` — arity 2 — Numeric scalar signature
+- [x] `remInt64#` — arity 2 — Numeric scalar signature
+- [x] `remInt8#` — arity 2 — Numeric scalar signature
+- [x] `remWord#` — arity 2 — Numeric scalar signature
+- [x] `remWord16#` — arity 2 — Numeric scalar signature
+- [x] `remWord32#` — arity 2 — Numeric scalar signature
+- [x] `remWord64#` — arity 2 — Numeric scalar signature
+- [x] `remWord8#` — arity 2 — Numeric scalar signature
+- [x] `resizeMutableByteArray#` — arity 3 — Byte-array operation
+- [x] `retry#` — arity 1 — STM operation
+- [x] `setByteArray#` — arity 5 — Byte-array operation
+- [x] `shrinkMutableByteArray#` — arity 3 — Byte-array operation
+- [x] `sinDouble#` — arity 1 — Numeric scalar signature
+- [x] `sinFloat#` — arity 1 — Numeric scalar signature
+- [x] `sinhDouble#` — arity 1 — Numeric scalar signature
+- [x] `sinhFloat#` — arity 1 — Numeric scalar signature
+- [x] `sizeofArray#` — arity 1 — Boxed-array operation
+- [x] `sizeofByteArray#` — arity 1 — Byte-array operation
+- [x] `sizeofMutableArray#` — arity 1 — Boxed-array operation
+- [x] `sizeofMutableByteArray#` — arity 1 — Byte-array operation
+- [x] `sizeofSmallArray#` — arity 1 — Boxed-array operation
+- [x] `sizeofSmallMutableArray#` — arity 1 — Boxed-array operation
+- [x] `sqrtDouble#` — arity 1 — Numeric scalar signature
+- [x] `sqrtFloat#` — arity 1 — Numeric scalar signature
+- [x] `subInt16#` — arity 2 — Numeric scalar signature
+- [x] `subInt32#` — arity 2 — Numeric scalar signature
+- [x] `subInt64#` — arity 2 — Numeric scalar signature
+- [x] `subInt8#` — arity 2 — Numeric scalar signature
+- [x] `subIntC#` — arity 2 — Scalar tuple result
+- [x] `subWord16#` — arity 2 — Numeric scalar signature
+- [x] `subWord32#` — arity 2 — Numeric scalar signature
+- [x] `subWord64#` — arity 2 — Numeric scalar signature
+- [x] `subWord8#` — arity 2 — Numeric scalar signature
+- [x] `subWordC#` — arity 2 — Scalar tuple result
+- [x] `tagToEnum#` — arity 1 — Nullary constructor-family operation
+- [x] `takeMVar#` — arity 2 — MVar operation
+- [x] `tanDouble#` — arity 1 — Numeric scalar signature
+- [x] `tanFloat#` — arity 1 — Numeric scalar signature
+- [x] `tanhDouble#` — arity 1 — Numeric scalar signature
+- [x] `tanhFloat#` — arity 1 — Numeric scalar signature
+- [x] `thawArray#` — arity 4 — Boxed-array operation
+- [x] `thawSmallArray#` — arity 4 — Boxed-array operation
+- [x] `threadLabel#` — arity 2 — Thread operation
+- [x] `threadStatus#` — arity 2 — Thread operation
+- [x] `timesDoubleX2#` — arity 2 — Specialized lowering
+- [x] `timesDoubleX4#` — arity 2 — Specialized lowering
+- [x] `timesDoubleX8#` — arity 2 — Specialized lowering
+- [x] `timesFloat#` — arity 2 — Numeric scalar signature
+- [x] `timesFloatX16#` — arity 2 — Specialized lowering
+- [x] `timesFloatX4#` — arity 2 — Specialized lowering
+- [x] `timesFloatX8#` — arity 2 — Specialized lowering
+- [x] `timesInt16#` — arity 2 — Numeric scalar signature
+- [x] `timesInt16X16#` — arity 2 — Specialized lowering
+- [x] `timesInt16X8#` — arity 2 — Specialized lowering
+- [x] `timesInt2#` — arity 2 — Scalar tuple result
+- [x] `timesInt32#` — arity 2 — Numeric scalar signature
+- [x] `timesInt32X16#` — arity 2 — Specialized lowering
+- [x] `timesInt32X4#` — arity 2 — Specialized lowering
+- [x] `timesInt32X8#` — arity 2 — Specialized lowering
+- [x] `timesInt64#` — arity 2 — Numeric scalar signature
+- [x] `timesInt64X2#` — arity 2 — Specialized lowering
+- [x] `timesInt64X4#` — arity 2 — Specialized lowering
+- [x] `timesInt64X8#` — arity 2 — Specialized lowering
+- [x] `timesInt8#` — arity 2 — Numeric scalar signature
+- [x] `timesInt8X16#` — arity 2 — Specialized lowering
+- [x] `timesWord#` — arity 2 — Numeric scalar signature
+- [x] `timesWord16#` — arity 2 — Numeric scalar signature
+- [x] `timesWord16X16#` — arity 2 — Specialized lowering
+- [x] `timesWord16X8#` — arity 2 — Specialized lowering
+- [x] `timesWord2#` — arity 2 — Scalar tuple result
+- [x] `timesWord32#` — arity 2 — Numeric scalar signature
+- [x] `timesWord32X16#` — arity 2 — Specialized lowering
+- [x] `timesWord32X4#` — arity 2 — Specialized lowering
+- [x] `timesWord32X8#` — arity 2 — Specialized lowering
+- [x] `timesWord64#` — arity 2 — Numeric scalar signature
+- [x] `timesWord64X2#` — arity 2 — Specialized lowering
+- [x] `timesWord64X4#` — arity 2 — Specialized lowering
+- [x] `timesWord64X8#` — arity 2 — Specialized lowering
+- [x] `timesWord8#` — arity 2 — Numeric scalar signature
+- [x] `timesWord8X16#` — arity 2 — Specialized lowering
+- [x] `touch#` — arity 2 — Specialized lowering
+- [x] `tryPutMVar#` — arity 3 — MVar operation
+- [x] `tryReadMVar#` — arity 2 — MVar operation
+- [x] `tryTakeMVar#` — arity 2 — MVar operation
+- [x] `uncheckedIShiftL#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedIShiftL64#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedIShiftRA#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedIShiftRA64#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedIShiftRL#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedIShiftRL64#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftL#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftL64#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftLInt16#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftLInt32#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftLInt8#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftLWord16#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftLWord32#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftLWord8#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRAInt16#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRAInt32#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRAInt8#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRL#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRL64#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRLInt16#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRLInt32#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRLInt8#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRLWord16#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRLWord32#` — arity 2 — Numeric scalar signature
+- [x] `uncheckedShiftRLWord8#` — arity 2 — Numeric scalar signature
+- [x] `unmaskAsyncExceptions#` — arity 2 — Specialized lowering
+- [x] `unpackDoubleX2#` — arity 1 — Specialized lowering
+- [x] `unpackDoubleX4#` — arity 1 — Specialized lowering
+- [x] `unpackDoubleX8#` — arity 1 — Specialized lowering
+- [x] `unpackFloatX16#` — arity 1 — Specialized lowering
+- [x] `unpackFloatX4#` — arity 1 — Specialized lowering
+- [x] `unpackFloatX8#` — arity 1 — Specialized lowering
+- [x] `unpackInt16X16#` — arity 1 — Specialized lowering
+- [x] `unpackInt16X8#` — arity 1 — Specialized lowering
+- [x] `unpackInt32X16#` — arity 1 — Specialized lowering
+- [x] `unpackInt32X4#` — arity 1 — Specialized lowering
+- [x] `unpackInt32X8#` — arity 1 — Specialized lowering
+- [x] `unpackInt64X2#` — arity 1 — Specialized lowering
+- [x] `unpackInt64X4#` — arity 1 — Specialized lowering
+- [x] `unpackInt64X8#` — arity 1 — Specialized lowering
+- [x] `unpackInt8X16#` — arity 1 — Specialized lowering
+- [x] `unpackWord16X16#` — arity 1 — Specialized lowering
+- [x] `unpackWord16X8#` — arity 1 — Specialized lowering
+- [x] `unpackWord32X16#` — arity 1 — Specialized lowering
+- [x] `unpackWord32X4#` — arity 1 — Specialized lowering
+- [x] `unpackWord32X8#` — arity 1 — Specialized lowering
+- [x] `unpackWord64X2#` — arity 1 — Specialized lowering
+- [x] `unpackWord64X4#` — arity 1 — Specialized lowering
+- [x] `unpackWord64X8#` — arity 1 — Specialized lowering
+- [x] `unpackWord8X16#` — arity 1 — Specialized lowering
+- [x] `unsafeFreezeArray#` — arity 2 — Boxed-array operation
+- [x] `unsafeFreezeByteArray#` — arity 2 — Byte-array operation
+- [x] `unsafeFreezeSmallArray#` — arity 2 — Boxed-array operation
+- [x] `unsafeThawArray#` — arity 2 — Boxed-array operation
+- [x] `unsafeThawSmallArray#` — arity 2 — Boxed-array operation
+- [x] `waitRead#` — arity 2 — Specialized lowering
+- [x] `waitWrite#` — arity 2 — Specialized lowering
+- [x] `word16ToInt16#` — arity 1 — Numeric scalar signature
+- [x] `word16ToWord#` — arity 1 — Numeric scalar signature
+- [x] `word2Double#` — arity 1 — Numeric scalar signature
+- [x] `word2Float#` — arity 1 — Numeric scalar signature
+- [x] `word2Int#` — arity 1 — Numeric scalar signature
+- [x] `word32ToInt32#` — arity 1 — Numeric scalar signature
+- [x] `word32ToWord#` — arity 1 — Numeric scalar signature
+- [x] `word64ToInt64#` — arity 1 — Numeric scalar signature
+- [x] `word64ToWord#` — arity 1 — Numeric scalar signature
+- [x] `word8ToInt8#` — arity 1 — Numeric scalar signature
+- [x] `word8ToWord#` — arity 1 — Numeric scalar signature
+- [x] `wordToWord16#` — arity 1 — Numeric scalar signature
+- [x] `wordToWord32#` — arity 1 — Numeric scalar signature
+- [x] `wordToWord64#` — arity 1 — Numeric scalar signature
+- [x] `wordToWord8#` — arity 1 — Numeric scalar signature
+- [x] `writeAddrArray#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeAddrOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeArray#` — arity 4 — Boxed-array operation
+- [x] `writeCharArray#` — arity 4 — Byte-array operation
+- [x] `writeCharOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeDoubleArray#` — arity 4 — Byte-array operation
+- [x] `writeDoubleArrayAsDoubleX2#` — arity 4 — Specialized lowering
+- [x] `writeDoubleOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeDoubleX2Array#` — arity 4 — Specialized lowering
+- [x] `writeFloatArray#` — arity 4 — Byte-array operation
+- [x] `writeFloatArrayAsFloatX4#` — arity 4 — Specialized lowering
+- [x] `writeFloatOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeFloatX4Array#` — arity 4 — Specialized lowering
+- [x] `writeInt16Array#` — arity 4 — Byte-array operation
+- [x] `writeInt16OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeInt32Array#` — arity 4 — Byte-array operation
+- [x] `writeInt32ArrayAsInt32X4#` — arity 4 — Specialized lowering
+- [x] `writeInt32OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeInt32X4Array#` — arity 4 — Specialized lowering
+- [x] `writeInt64Array#` — arity 4 — Byte-array operation
+- [x] `writeInt64OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeInt8Array#` — arity 4 — Byte-array operation
+- [x] `writeInt8OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeIntArray#` — arity 4 — Byte-array operation
+- [x] `writeIntOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeMutVar#` — arity 3 — Mutable-reference operation
+- [x] `writeSmallArray#` — arity 4 — Boxed-array operation
+- [x] `writeStablePtrArray#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeStablePtrOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeTVar#` — arity 3 — STM operation
+- [x] `writeWideCharArray#` — arity 4 — Byte-array operation
+- [x] `writeWideCharOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord16Array#` — arity 4 — Byte-array operation
+- [x] `writeWord16OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord32Array#` — arity 4 — Byte-array operation
+- [x] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering
+- [x] `writeWord32OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord32X4Array#` — arity 4 — Specialized lowering
+- [x] `writeWord64Array#` — arity 4 — Byte-array operation
+- [x] `writeWord64OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8Array#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8ArrayAsChar#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsDouble#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsFloat#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsInt#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsInt16#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsInt32#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsInt64#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsStablePtr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8ArrayAsWideChar#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsWord#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsWord16#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsWord32#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsWord64#` — arity 4 — Byte-array operation
+- [x] `writeWord8OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsChar#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsDouble#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsFloat#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsInt#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsInt16#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsInt32#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsInt64#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsStablePtr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsWideChar#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsWord#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsWord16#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsWord32#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8OffAddrAsWord64#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWordArray#` — arity 4 — Byte-array operation
+- [x] `writeWordOffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `xor#` — arity 2 — Numeric scalar signature
+- [x] `xor64#` — arity 2 — Numeric scalar signature
+- [x] `xorI#` — arity 2 — Numeric scalar signature
+- [x] `xorWord16#` — arity 2 — Numeric scalar signature
+- [x] `xorWord32#` — arity 2 — Numeric scalar signature
+- [x] `xorWord8#` — arity 2 — Numeric scalar signature
+- [x] `yield#` — arity 1 — Specialized lowering
 
-## Partial forms
-
-- [ ] `addCFinalizerToWeak#` — arity 6 — Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons
-- [ ] `addIntC#` — arity 2 — Exact tuple arithmetic
-- [ ] `addWordC#` — arity 2 — Exact tuple arithmetic
-- [ ] `addr2Int#` — arity 1 — Managed addresses with operation-specific storage restrictions
-- [ ] `atomicModifyMutVar2#` — arity 3 — Managed lazy reference cells
-- [ ] `atomicSwapMutVar#` — arity 3 — Managed lazy reference cells
-- [ ] `broadcastDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastDoubleX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `broadcastWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `byteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `catch#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `cloneArray#` — arity 3 — Managed lifted arrays
-- [ ] `cloneMutableArray#` — arity 4 — Managed lifted arrays
-- [ ] `cloneSmallArray#` — arity 3 — Managed lifted arrays
-- [ ] `cloneSmallMutableArray#` — arity 4 — Managed lifted arrays
-- [ ] `compareByteArrays#` — arity 5 — Managed byte storage
-- [ ] `copyAddrToAddrNonOverlapping#` — arity 4 — Managed byte storage
-- [ ] `copyArray#` — arity 6 — Managed lifted arrays
-- [ ] `copyByteArray#` — arity 6 — Managed byte storage
-- [ ] `copyMutableArray#` — arity 6 — Managed lifted arrays
-- [ ] `copyMutableByteArray#` — arity 6 — Managed byte storage
-- [ ] `copyMutableByteArrayNonOverlapping#` — arity 6 — Managed byte storage
-- [ ] `copySmallArray#` — arity 6 — Managed lifted arrays
-- [ ] `copySmallMutableArray#` — arity 6 — Managed lifted arrays
-- [ ] `dataToTagLarge#` — arity 1 — concrete-algebraic-family-64
-- [ ] `dataToTagSmall#` — arity 1 — concrete-algebraic-family-64
-- [ ] `deRefStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
-- [ ] `deRefWeak#` — arity 2 — Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons
-- [ ] `divideDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `divideDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `divideDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `divideFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `divideFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `divideFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `eqAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `eqStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
-- [ ] `fetchAddIntArray#` — arity 4 — Managed byte storage
-- [ ] `finalizeWeak#` — arity 2 — Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons
-- [ ] `fmaddDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmaddDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmaddDoubleX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmaddFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmaddFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmaddFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmsubDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmsubDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmsubDoubleX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmsubFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmsubFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fmsubFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmaddDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmaddDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmaddDoubleX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmaddFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmaddFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmaddFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmsubDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmsubDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmsubDoubleX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmsubFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmsubFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fnmsubFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `fork#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `freezeArray#` — arity 4 — Managed lifted arrays
-- [ ] `freezeSmallArray#` — arity 4 — Managed lifted arrays
-- [ ] `geAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `getCurrentCCS#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `getMaskingState#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `getSizeofMutableByteArray#` — arity 2 — Managed byte storage
-- [ ] `getSizeofSmallMutableArray#` — arity 2 — Managed lifted arrays
-- [ ] `gtAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexAddrArray#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexAddrOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexArray#` — arity 2 — Managed lifted arrays
-- [ ] `indexCharArray#` — arity 2 — Managed byte storage
-- [ ] `indexCharOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexDoubleArray#` — arity 2 — Managed byte storage
-- [ ] `indexDoubleArrayAsDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexDoubleOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexDoubleX2Array#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexFloatArray#` — arity 2 — Managed byte storage
-- [ ] `indexFloatArrayAsFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexFloatOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexFloatX4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexInt16Array#` — arity 2 — Managed byte storage
-- [ ] `indexInt16OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexInt32Array#` — arity 2 — Managed byte storage
-- [ ] `indexInt32ArrayAsInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexInt32OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexInt32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexInt64Array#` — arity 2 — Managed byte storage
-- [ ] `indexInt64OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexInt8Array#` — arity 2 — Managed byte storage
-- [ ] `indexInt8OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexIntArray#` — arity 2 — Managed byte storage
-- [ ] `indexIntOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexSmallArray#` — arity 2 — Managed lifted arrays
-- [ ] `indexWideCharOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexWord16Array#` — arity 2 — Managed byte storage
-- [ ] `indexWord16OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexWord32Array#` — arity 2 — Managed byte storage
-- [ ] `indexWord32ArrayAsWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexWord32OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexWord32X4Array#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `indexWord64Array#` — arity 2 — Managed byte storage
-- [ ] `indexWord64OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexWord8Array#` — arity 2 — Managed byte storage
-- [ ] `indexWord8ArrayAsDouble#` — arity 2 — Managed byte storage
-- [ ] `indexWord8ArrayAsFloat#` — arity 2 — Managed byte storage
-- [ ] `indexWord8ArrayAsInt16#` — arity 2 — Managed byte storage
-- [ ] `indexWord8ArrayAsInt32#` — arity 2 — Managed byte storage
-- [ ] `indexWord8ArrayAsWord16#` — arity 2 — Managed byte storage
-- [ ] `indexWord8ArrayAsWord32#` — arity 2 — Managed byte storage
-- [ ] `indexWord8OffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `indexWordArray#` — arity 2 — Managed byte storage
-- [ ] `indexWordOffAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `insertDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertDoubleX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertDoubleX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertFloatX16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertFloatX8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt16X16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt16X8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt32X16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt32X8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt64X2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt64X4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertInt8X16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord16X16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord16X8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord32X16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord32X8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord64X2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord64X4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `insertWord8X16#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `int2Addr#` — arity 1 — Managed addresses with operation-specific storage restrictions
-- [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
-- [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `labelThread#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `leAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `ltAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `makeStablePtr#` — arity 2 — Context-owned opaque stable handles; no pointer memory access
-- [ ] `maskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maskUninterruptible#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `maxWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `minusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `mkWeak#` — arity 4 — Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons
-- [ ] `mkWeakNoFinalizer#` — arity 3 — Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons
-- [ ] `mutableByteArrayContents#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `myThreadId#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `neAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `negateDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateDoubleX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `negateInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `newAlignedPinnedByteArray#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `newArray#` — arity 3 — Managed lifted arrays
-- [ ] `newByteArray#` — arity 2 — Managed byte storage
-- [ ] `newMVar#` — arity 1 — Managed blocking cells; backend and continuation limits apply
-- [ ] `newMutVar#` — arity 2 — Managed lazy reference cells
-- [ ] `newPinnedByteArray#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `newSmallArray#` — arity 3 — Managed lifted arrays
-- [ ] `noDuplicate#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packDoubleX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `packWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `plusAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
-- [ ] `plusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord2#` — arity 2 — Exact tuple arithmetic
-- [ ] `plusWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `plusWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `putMVar#` — arity 3 — Managed blocking cells; backend and continuation limits apply
-- [ ] `quotRemInt#` — arity 2 — Exact tuple arithmetic
-- [ ] `quotRemWord#` — arity 2 — Exact tuple arithmetic
-- [ ] `raise#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `raiseDivZero#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `raiseIO#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `raiseOverflow#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `raiseUnderflow#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `readAddrArray#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readAddrOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readArray#` — arity 3 — Managed lifted arrays
-- [ ] `readCharArray#` — arity 3 — Managed byte storage
-- [ ] `readCharOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readDoubleArray#` — arity 3 — Managed byte storage
-- [ ] `readDoubleArrayAsDoubleX2#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readDoubleOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readDoubleX2Array#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readFloatArray#` — arity 3 — Managed byte storage
-- [ ] `readFloatArrayAsFloatX4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readFloatOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readFloatX4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readInt16Array#` — arity 3 — Managed byte storage
-- [ ] `readInt16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readInt32Array#` — arity 3 — Managed byte storage
-- [ ] `readInt32ArrayAsInt32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readInt32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readInt32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readInt64Array#` — arity 3 — Managed byte storage
-- [ ] `readInt64OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readInt8Array#` — arity 3 — Managed byte storage
-- [ ] `readInt8OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readIntArray#` — arity 3 — Managed byte storage
-- [ ] `readIntOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
-- [ ] `readMutVar#` — arity 2 — Managed lazy reference cells
-- [ ] `readSmallArray#` — arity 3 — Managed lifted arrays
-- [ ] `readWideCharOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWord16Array#` — arity 3 — Managed byte storage
-- [ ] `readWord16OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWord32Array#` — arity 3 — Managed byte storage
-- [ ] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWord32OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWord32X4Array#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWord64Array#` — arity 3 — Managed byte storage
-- [ ] `readWord64OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWord8Array#` — arity 3 — Managed byte storage
-- [ ] `readWord8ArrayAsDouble#` — arity 3 — Managed byte storage
-- [ ] `readWord8ArrayAsFloat#` — arity 3 — Managed byte storage
-- [ ] `readWord8ArrayAsInt16#` — arity 3 — Managed byte storage
-- [ ] `readWord8ArrayAsInt32#` — arity 3 — Managed byte storage
-- [ ] `readWord8ArrayAsWord16#` — arity 3 — Managed byte storage
-- [ ] `readWord8ArrayAsWord32#` — arity 3 — Managed byte storage
-- [ ] `readWord8OffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `readWordArray#` — arity 3 — Managed byte storage
-- [ ] `readWordOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
-- [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
-- [ ] `setByteArray#` — arity 5 — Managed byte storage
-- [ ] `shrinkMutableByteArray#` — arity 3 — Managed byte storage
-- [ ] `sizeofArray#` — arity 1 — Managed lifted arrays
-- [ ] `sizeofByteArray#` — arity 1 — Managed byte storage
-- [ ] `sizeofMutableArray#` — arity 1 — Managed lifted arrays
-- [ ] `sizeofMutableByteArray#` — arity 1 — Managed byte storage
-- [ ] `sizeofSmallArray#` — arity 1 — Managed lifted arrays
-- [ ] `sizeofSmallMutableArray#` — arity 1 — Managed lifted arrays
-- [ ] `subIntC#` — arity 2 — Exact tuple arithmetic
-- [ ] `subWordC#` — arity 2 — Exact tuple arithmetic
-- [ ] `tagToEnum#` — arity 1 — concrete-nullary-family
-- [ ] `takeMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
-- [ ] `thawArray#` — arity 4 — Managed lifted arrays
-- [ ] `thawSmallArray#` — arity 4 — Managed lifted arrays
-- [ ] `threadLabel#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `threadStatus#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesFloatX16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesFloatX4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesFloatX8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt2#` — arity 2 — Exact tuple arithmetic
-- [ ] `timesInt32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesInt8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord16X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord16X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord2#` — arity 2 — Exact tuple arithmetic
-- [ ] `timesWord32X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord32X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord32X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord64X2#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `timesWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `touch#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `tryPutMVar#` — arity 3 — Managed blocking cells; backend and continuation limits apply
-- [ ] `tryReadMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
-- [ ] `tryTakeMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
-- [ ] `unmaskAsyncExceptions#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackDoubleX2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackDoubleX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackDoubleX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackFloatX16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackFloatX4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackFloatX8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackInt8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord16X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord16X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord32X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord32X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord32X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord64X2#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord64X4#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord64X8#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unpackWord8X16#` — arity 1 — Specialized lowering; see capability and coverage limits
-- [ ] `unsafeFreezeArray#` — arity 2 — Managed lifted arrays
-- [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
-- [ ] `unsafeFreezeSmallArray#` — arity 2 — Managed lifted arrays
-- [ ] `unsafeThawArray#` — arity 2 — Managed lifted arrays
-- [ ] `unsafeThawSmallArray#` — arity 2 — Managed lifted arrays
-- [ ] `waitRead#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `waitWrite#` — arity 2 — Specialized lowering; see capability and coverage limits
-- [ ] `writeAddrArray#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeAddrOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeArray#` — arity 4 — Managed lifted arrays
-- [ ] `writeCharArray#` — arity 4 — Managed byte storage
-- [ ] `writeCharOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeDoubleArray#` — arity 4 — Managed byte storage
-- [ ] `writeDoubleArrayAsDoubleX2#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeDoubleOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeDoubleX2Array#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeFloatArray#` — arity 4 — Managed byte storage
-- [ ] `writeFloatArrayAsFloatX4#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeFloatOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeFloatX4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeInt16Array#` — arity 4 — Managed byte storage
-- [ ] `writeInt16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeInt32Array#` — arity 4 — Managed byte storage
-- [ ] `writeInt32ArrayAsInt32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeInt32OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeInt32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeInt64Array#` — arity 4 — Managed byte storage
-- [ ] `writeInt64OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeInt8Array#` — arity 4 — Managed byte storage
-- [ ] `writeInt8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeIntArray#` — arity 4 — Managed byte storage
-- [ ] `writeIntOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeMutVar#` — arity 3 — Managed lazy reference cells
-- [ ] `writeSmallArray#` — arity 4 — Managed lifted arrays
-- [ ] `writeWideCharOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWord16Array#` — arity 4 — Managed byte storage
-- [ ] `writeWord16OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWord32Array#` — arity 4 — Managed byte storage
-- [ ] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWord32OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWord32X4Array#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWord64Array#` — arity 4 — Managed byte storage
-- [ ] `writeWord64OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWord8Array#` — arity 4 — Managed byte storage
-- [ ] `writeWord8ArrayAsDouble#` — arity 4 — Managed byte storage
-- [ ] `writeWord8ArrayAsFloat#` — arity 4 — Managed byte storage
-- [ ] `writeWord8ArrayAsInt16#` — arity 4 — Managed byte storage
-- [ ] `writeWord8ArrayAsInt32#` — arity 4 — Managed byte storage
-- [ ] `writeWord8ArrayAsWord16#` — arity 4 — Managed byte storage
-- [ ] `writeWord8ArrayAsWord32#` — arity 4 — Managed byte storage
-- [ ] `writeWord8OffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `writeWordArray#` — arity 4 — Managed byte storage
-- [ ] `writeWordOffAddr#` — arity 4 — Specialized lowering; see capability and coverage limits
-- [ ] `yield#` — arity 1 — Specialized lowering; see capability and coverage limits
-
-## Missing forms
+## Missing primops
 
 <details>
 <summary>Remaining GHC primops, in name order</summary>
 
-- [ ] `acoshDouble#` — arity 1
-- [ ] `acoshFloat#` — arity 1
 - [ ] `addrToAny#` — arity 1
 - [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
-- [ ] `asinhDouble#` — arity 1
-- [ ] `asinhFloat#` — arity 1
-- [ ] `atanhDouble#` — arity 1
-- [ ] `atanhFloat#` — arity 1
-- [ ] `atomicCasAddrAddr#` — arity 4
-- [ ] `atomicCasWord16Addr#` — arity 4
-- [ ] `atomicCasWord32Addr#` — arity 4
-- [ ] `atomicCasWord64Addr#` — arity 4
-- [ ] `atomicCasWord8Addr#` — arity 4
-- [ ] `atomicCasWordAddr#` — arity 4
-- [ ] `atomicExchangeAddrAddr#` — arity 3
-- [ ] `atomicExchangeWordAddr#` — arity 3
 - [ ] `atomicModifyMutVar_#` — arity 3
-- [ ] `atomicReadIntArray#` — arity 3
-- [ ] `atomicReadWordAddr#` — arity 2
-- [ ] `atomicWriteIntArray#` — arity 4
-- [ ] `atomicWriteWordAddr#` — arity 3
-- [ ] `atomically#` — arity 2
 - [ ] `broadcastInt16X32#` — arity 1
 - [ ] `broadcastInt8X32#` — arity 1
 - [ ] `broadcastInt8X64#` — arity 1
@@ -919,15 +1050,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `broadcastWord8X32#` — arity 1
 - [ ] `broadcastWord8X64#` — arity 1
 - [ ] `casArray#` — arity 5
-- [ ] `casInt16Array#` — arity 5
-- [ ] `casInt32Array#` — arity 5
-- [ ] `casInt64Array#` — arity 5
-- [ ] `casInt8Array#` — arity 5
-- [ ] `casIntArray#` — arity 5
 - [ ] `casMutVar#` — arity 4
 - [ ] `casSmallArray#` — arity 5
-- [ ] `catchRetry#` — arity 3
-- [ ] `catchSTM#` — arity 3
 - [ ] `clearCCS#` — arity 2
 - [ ] `closureSize#` — arity 1
 - [ ] `compactAdd#` — arity 3
@@ -943,24 +1067,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `compactSize#` — arity 2
 - [ ] `control0#` — arity 3
 - [ ] `copyAddrToAddr#` — arity 4
-- [ ] `copyAddrToByteArray#` — arity 5
-- [ ] `copyByteArrayToAddr#` — arity 5
-- [ ] `copyMutableByteArrayToAddr#` — arity 5
-- [ ] `decodeDouble_2Int#` — arity 1
-- [ ] `decodeDouble_Int64#` — arity 1
-- [ ] `decodeFloat_Int#` — arity 1
 - [ ] `delay#` — arity 2
-- [ ] `fetchAddWordAddr#` — arity 3
-- [ ] `fetchAndIntArray#` — arity 4
-- [ ] `fetchAndWordAddr#` — arity 3
-- [ ] `fetchNandIntArray#` — arity 4
-- [ ] `fetchNandWordAddr#` — arity 3
-- [ ] `fetchOrIntArray#` — arity 4
-- [ ] `fetchOrWordAddr#` — arity 3
-- [ ] `fetchSubIntArray#` — arity 4
-- [ ] `fetchSubWordAddr#` — arity 3
-- [ ] `fetchXorIntArray#` — arity 4
-- [ ] `fetchXorWordAddr#` — arity 3
 - [ ] `forkOn#` — arity 3
 - [ ] `getApStackVal#` — arity 2
 - [ ] `getCCSOf#` — arity 2
@@ -1031,9 +1138,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexInt8X32OffAddr#` — arity 2
 - [ ] `indexInt8X64Array#` — arity 2
 - [ ] `indexInt8X64OffAddr#` — arity 2
-- [ ] `indexStablePtrArray#` — arity 2
-- [ ] `indexStablePtrOffAddr#` — arity 2
-- [ ] `indexWideCharArray#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X16#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X32#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X8#` — arity 2
@@ -1068,31 +1172,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `indexWord64X4OffAddr#` — arity 2
 - [ ] `indexWord64X8Array#` — arity 2
 - [ ] `indexWord64X8OffAddr#` — arity 2
-- [ ] `indexWord8ArrayAsAddr#` — arity 2
-- [ ] `indexWord8ArrayAsChar#` — arity 2
-- [ ] `indexWord8ArrayAsInt#` — arity 2
-- [ ] `indexWord8ArrayAsInt64#` — arity 2
-- [ ] `indexWord8ArrayAsStablePtr#` — arity 2
-- [ ] `indexWord8ArrayAsWideChar#` — arity 2
-- [ ] `indexWord8ArrayAsWord#` — arity 2
-- [ ] `indexWord8ArrayAsWord64#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X16#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X32#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X64#` — arity 2
-- [ ] `indexWord8OffAddrAsAddr#` — arity 2
-- [ ] `indexWord8OffAddrAsChar#` — arity 2
-- [ ] `indexWord8OffAddrAsDouble#` — arity 2
-- [ ] `indexWord8OffAddrAsFloat#` — arity 2
-- [ ] `indexWord8OffAddrAsInt#` — arity 2
-- [ ] `indexWord8OffAddrAsInt16#` — arity 2
-- [ ] `indexWord8OffAddrAsInt32#` — arity 2
-- [ ] `indexWord8OffAddrAsInt64#` — arity 2
-- [ ] `indexWord8OffAddrAsStablePtr#` — arity 2
-- [ ] `indexWord8OffAddrAsWideChar#` — arity 2
-- [ ] `indexWord8OffAddrAsWord#` — arity 2
-- [ ] `indexWord8OffAddrAsWord16#` — arity 2
-- [ ] `indexWord8OffAddrAsWord32#` — arity 2
-- [ ] `indexWord8OffAddrAsWord64#` — arity 2
 - [ ] `indexWord8OffAddrAsWord8X16#` — arity 2
 - [ ] `indexWord8OffAddrAsWord8X32#` — arity 2
 - [ ] `indexWord8OffAddrAsWord8X64#` — arity 2
@@ -1110,21 +1192,15 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord8X64#` — arity 3
 - [ ] `isByteArrayPinned#` — arity 1
 - [ ] `isByteArrayWeaklyPinned#` — arity 1
-- [ ] `isCurrentThreadBound#` — arity 1
 - [ ] `isMutableByteArrayPinned#` — arity 1
 - [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
-- [ ] `listThreads#` — arity 1
 - [ ] `makeStableName#` — arity 2
-- [ ] `maxDouble#` — arity 2
-- [ ] `maxFloat#` — arity 2
 - [ ] `maxInt16X32#` — arity 2
 - [ ] `maxInt8X32#` — arity 2
 - [ ] `maxInt8X64#` — arity 2
 - [ ] `maxWord16X32#` — arity 2
 - [ ] `maxWord8X32#` — arity 2
 - [ ] `maxWord8X64#` — arity 2
-- [ ] `minDouble#` — arity 2
-- [ ] `minFloat#` — arity 2
 - [ ] `minInt16X32#` — arity 2
 - [ ] `minInt8X32#` — arity 2
 - [ ] `minInt8X64#` — arity 2
@@ -1139,13 +1215,11 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minusWord8X32#` — arity 2
 - [ ] `minusWord8X64#` — arity 2
 - [ ] `mkApUpd0#` — arity 1
-- [ ] `mulIntMayOflo#` — arity 2
 - [ ] `negateInt16X32#` — arity 1
 - [ ] `negateInt8X32#` — arity 1
 - [ ] `negateInt8X64#` — arity 1
 - [ ] `newBCO#` — arity 6
 - [ ] `newPromptTag#` — arity 1
-- [ ] `newTVar#` — arity 2
 - [ ] `numSparks#` — arity 1
 - [ ] `packInt16X32#` — arity 1
 - [ ] `packInt8X32#` — arity 1
@@ -1189,13 +1263,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `quotInt8X16#` — arity 2
 - [ ] `quotInt8X32#` — arity 2
 - [ ] `quotInt8X64#` — arity 2
-- [ ] `quotRemInt16#` — arity 2
-- [ ] `quotRemInt32#` — arity 2
-- [ ] `quotRemInt8#` — arity 2
-- [ ] `quotRemWord16#` — arity 2
-- [ ] `quotRemWord2#` — arity 3
-- [ ] `quotRemWord32#` — arity 2
-- [ ] `quotRemWord8#` — arity 2
 - [ ] `quotWord16X16#` — arity 2
 - [ ] `quotWord16X32#` — arity 2
 - [ ] `quotWord16X8#` — arity 2
@@ -1274,11 +1341,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readInt8X32OffAddr#` — arity 3
 - [ ] `readInt8X64Array#` — arity 3
 - [ ] `readInt8X64OffAddr#` — arity 3
-- [ ] `readStablePtrArray#` — arity 3
-- [ ] `readStablePtrOffAddr#` — arity 3
-- [ ] `readTVar#` — arity 2
-- [ ] `readTVarIO#` — arity 2
-- [ ] `readWideCharArray#` — arity 3
 - [ ] `readWord16ArrayAsWord16X16#` — arity 3
 - [ ] `readWord16ArrayAsWord16X32#` — arity 3
 - [ ] `readWord16ArrayAsWord16X8#` — arity 3
@@ -1313,31 +1375,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord64X4OffAddr#` — arity 3
 - [ ] `readWord64X8Array#` — arity 3
 - [ ] `readWord64X8OffAddr#` — arity 3
-- [ ] `readWord8ArrayAsAddr#` — arity 3
-- [ ] `readWord8ArrayAsChar#` — arity 3
-- [ ] `readWord8ArrayAsInt#` — arity 3
-- [ ] `readWord8ArrayAsInt64#` — arity 3
-- [ ] `readWord8ArrayAsStablePtr#` — arity 3
-- [ ] `readWord8ArrayAsWideChar#` — arity 3
-- [ ] `readWord8ArrayAsWord#` — arity 3
-- [ ] `readWord8ArrayAsWord64#` — arity 3
 - [ ] `readWord8ArrayAsWord8X16#` — arity 3
 - [ ] `readWord8ArrayAsWord8X32#` — arity 3
 - [ ] `readWord8ArrayAsWord8X64#` — arity 3
-- [ ] `readWord8OffAddrAsAddr#` — arity 3
-- [ ] `readWord8OffAddrAsChar#` — arity 3
-- [ ] `readWord8OffAddrAsDouble#` — arity 3
-- [ ] `readWord8OffAddrAsFloat#` — arity 3
-- [ ] `readWord8OffAddrAsInt#` — arity 3
-- [ ] `readWord8OffAddrAsInt16#` — arity 3
-- [ ] `readWord8OffAddrAsInt32#` — arity 3
-- [ ] `readWord8OffAddrAsInt64#` — arity 3
-- [ ] `readWord8OffAddrAsStablePtr#` — arity 3
-- [ ] `readWord8OffAddrAsWideChar#` — arity 3
-- [ ] `readWord8OffAddrAsWord#` — arity 3
-- [ ] `readWord8OffAddrAsWord16#` — arity 3
-- [ ] `readWord8OffAddrAsWord32#` — arity 3
-- [ ] `readWord8OffAddrAsWord64#` — arity 3
 - [ ] `readWord8OffAddrAsWord8X16#` — arity 3
 - [ ] `readWord8OffAddrAsWord8X32#` — arity 3
 - [ ] `readWord8OffAddrAsWord8X64#` — arity 3
@@ -1372,7 +1412,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `remWord8X16#` — arity 2
 - [ ] `remWord8X32#` — arity 2
 - [ ] `remWord8X64#` — arity 2
-- [ ] `retry#` — arity 1
 - [ ] `setAddrRange#` — arity 4
 - [ ] `setOtherThreadAllocationCounter#` — arity 3
 - [ ] `setThreadAllocationCounter#` — arity 2
@@ -1418,9 +1457,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `traceBinaryEvent#` — arity 3
 - [ ] `traceEvent#` — arity 2
 - [ ] `traceMarker#` — arity 2
-- [ ] `uncheckedShiftRLInt16#` — arity 2
-- [ ] `uncheckedShiftRLInt32#` — arity 2
-- [ ] `uncheckedShiftRLInt8#` — arity 2
 - [ ] `unpackClosure#` — arity 1
 - [ ] `unpackInt16X32#` — arity 1
 - [ ] `unpackInt8X32#` — arity 1
@@ -1496,10 +1532,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeInt8X32OffAddr#` — arity 4
 - [ ] `writeInt8X64Array#` — arity 4
 - [ ] `writeInt8X64OffAddr#` — arity 4
-- [ ] `writeStablePtrArray#` — arity 4
-- [ ] `writeStablePtrOffAddr#` — arity 4
-- [ ] `writeTVar#` — arity 3
-- [ ] `writeWideCharArray#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X16#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X32#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X8#` — arity 4
@@ -1534,31 +1566,9 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `writeWord64X4OffAddr#` — arity 4
 - [ ] `writeWord64X8Array#` — arity 4
 - [ ] `writeWord64X8OffAddr#` — arity 4
-- [ ] `writeWord8ArrayAsAddr#` — arity 4
-- [ ] `writeWord8ArrayAsChar#` — arity 4
-- [ ] `writeWord8ArrayAsInt#` — arity 4
-- [ ] `writeWord8ArrayAsInt64#` — arity 4
-- [ ] `writeWord8ArrayAsStablePtr#` — arity 4
-- [ ] `writeWord8ArrayAsWideChar#` — arity 4
-- [ ] `writeWord8ArrayAsWord#` — arity 4
-- [ ] `writeWord8ArrayAsWord64#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X16#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X32#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X64#` — arity 4
-- [ ] `writeWord8OffAddrAsAddr#` — arity 4
-- [ ] `writeWord8OffAddrAsChar#` — arity 4
-- [ ] `writeWord8OffAddrAsDouble#` — arity 4
-- [ ] `writeWord8OffAddrAsFloat#` — arity 4
-- [ ] `writeWord8OffAddrAsInt#` — arity 4
-- [ ] `writeWord8OffAddrAsInt16#` — arity 4
-- [ ] `writeWord8OffAddrAsInt32#` — arity 4
-- [ ] `writeWord8OffAddrAsInt64#` — arity 4
-- [ ] `writeWord8OffAddrAsStablePtr#` — arity 4
-- [ ] `writeWord8OffAddrAsWideChar#` — arity 4
-- [ ] `writeWord8OffAddrAsWord#` — arity 4
-- [ ] `writeWord8OffAddrAsWord16#` — arity 4
-- [ ] `writeWord8OffAddrAsWord32#` — arity 4
-- [ ] `writeWord8OffAddrAsWord64#` — arity 4
 - [ ] `writeWord8OffAddrAsWord8X16#` — arity 4
 - [ ] `writeWord8OffAddrAsWord8X32#` — arity 4
 - [ ] `writeWord8OffAddrAsWord8X64#` — arity 4

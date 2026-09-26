@@ -134,13 +134,16 @@ class Int32VectorMemoryProofTest {
             "readInt32ArrayAsInt32X4#", "writeInt32X4Array#", "writeInt32ArrayAsInt32X4#"),
             operations.map { it.primitive }.toSet())
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
-            for (operation in operations) {
-                val p = program(language, backend, fixture(operation), diagnostic)
+            for (operation in operations) for (indexRep in listOf("IntRep", "WordRep")) {
+                // The binder shares a Long carrier; the operation keeps its exact index proof.
+                val f = fixture(operation)
+                f.parameters[1]["rep"] = copy(scalar("long", indexRep))
+                val p = program(language, backend, f, diagnostic)
                 for (index in if (operation.scalarOffset) 0L..3L else 0L..1L) {
                     val bytes = ByteArray(40) { (it * 47 + 129).toByte() }
                     val expectedBytes = bytes.copyOf(); val offset = (index * if (operation.scalarOffset) 4 else 16).toInt()
                     if (operation.isWrite) storeModel(expectedBytes, offset)
-                    assertEquals(expected(expectedBytes, offset), invoke(p, bytes, index), "$backend/$diagnostic/${operation.primitive}/$index")
+                    assertEquals(expected(expectedBytes, offset), invoke(p, bytes, index), "$backend/$diagnostic/${operation.primitive}/$indexRep/$index")
                     assertArrayEquals(expectedBytes, bytes); released(language)
                 }
                 assertEquals(0L, (p.diagnostics().getValue("unsupportedTraps") as Number).toLong())
@@ -194,7 +197,8 @@ class Int32VectorMemoryProofTest {
     @Test fun allOperationsRejectWrongArgumentsFlagsArityAndResultProofs() {
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) withLanguage { language ->
             for (operation in operations) {
-                val mutations = listOf("array-levity", "index-signedness", "lexical-array", "lexical-index", "partial", "over", "result") +
+                val mutations = listOf("array-levity", "index-signedness", "lexical-array",
+                    "lexical-index-float", "lexical-index-double", "partial", "over", "result") +
                     if (operation.isRead || operation.isWrite) listOf("state") else emptyList()
                 for (mutation in mutations) {
                     val f = fixture(operation); val args = list(f.app[2]); val flags = list(f.app[3])
@@ -202,7 +206,8 @@ class Int32VectorMemoryProofTest {
                         "array-levity" -> map(list(args[0])[2])["rep"] = copy(scalar("object", "BoxedRep (Just Lifted)"))
                         "index-signedness" -> map(list(args[1])[2])["rep"] = copy(scalar("long", "WordRep"))
                         "lexical-array" -> f.parameters[0]["rep"] = copy(scalar("object", "BoxedRep (Just Lifted)"))
-                        "lexical-index" -> f.parameters[1]["rep"] = copy(scalar("long", "WordRep"))
+                        "lexical-index-float" -> f.parameters[1]["rep"] = copy(scalar("float", "FloatRep"))
+                        "lexical-index-double" -> f.parameters[1]["rep"] = copy(scalar("double", "DoubleRep"))
                         "partial" -> { args.removeAt(args.lastIndex); flags.removeAt(flags.lastIndex) }
                         "over" -> { args.add(copy(args[0])); flags.add(false) }
                         "result" -> map(f.app[6]).remove("rep")

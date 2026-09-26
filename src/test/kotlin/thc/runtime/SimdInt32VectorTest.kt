@@ -7,6 +7,7 @@ package thc.runtime
 import jdk.incubator.vector.IntVector
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.Truffle
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -78,6 +79,9 @@ class SimdInt32VectorTest {
         for (stage in stages) for (backend in listOf("ast", "bytecode")) withLanguage { language ->
             for (entry in listOf("vectorCase", "subtractCase")) {
                 val program = program(language, backend, module(stage), entry)
+                val handoff = language.handoffState.get()
+                var argumentAllocations = 0L
+                var resultAllocations = 0L
                 fun checkRows(compiled: Boolean = false) {
                     for ((i, a) in inputs.withIndex()) for ((j, b) in inputs.withIndex()) {
                         val values = listOf(a, b, inputs[(i + 3*j) % 9], inputs[(3*i + j + 1) % 9])
@@ -89,13 +93,33 @@ class SimdInt32VectorTest {
                         val result = Calls.target(program.hostEntryTarget(4), arrayOf(program.entryValue(entry), values.toTypedArray()))
                         val label = "$stage/$backend/$entry/$values"
                         assertEquals(expected, result, label)
-                        if (compiled) assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), label)
+                        if (compiled) {
+                            assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), label)
+                            assertEquals(argumentAllocations, handoff.arguments.allocations, label)
+                            assertEquals(resultAllocations, handoff.results.allocations, label)
+                        }
+                        assertEquals(0, handoff.arguments.depth, label)
+                        assertEquals(0, handoff.arguments.retainedReferences(), label)
+                        assertEquals(0, handoff.results.depth, label)
+                        assertEquals(0, handoff.results.retainedReferences(), label)
+                        assertNull(handoff.pending, label)
                     }
                 }
                 checkRows(); checkRows()
                 val target = program.entryTarget(entry)
+                val beforeSetup = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                assertEquals(0L, beforeSetup, "The full corpus ran interpreted before installation")
+                val beforeCalls = target.javaClass.getMethod("getCallCount").invoke(target)
+                argumentAllocations = handoff.arguments.allocations
+                resultAllocations = handoff.results.allocations
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$entry installed")
+                Truffle.getRuntime().let { runtime -> runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target) }
+                assertEquals(beforeSetup, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                assertEquals(beforeCalls, target.javaClass.getMethod("getCallCount").invoke(target))
                 checkRows(compiled = true)
+                assertEquals(beforeCalls, target.javaClass.getMethod("getCallCount").invoke(target), "No interpreted entry after installation")
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$entry after execution")
                 assertEquals(0, language.handoffState.get().results.depth)
             }

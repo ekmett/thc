@@ -49,7 +49,8 @@ internal object ManagedArray {
     @JvmStatic fun freeze(array: Array<Any?>): Array<Any?> = array
 }
 
-/** Element-exposing operations keep the known-lifted specialization. Slice
+/** Writes keep the known-lifted specialization. Reads also expose unlifted
+ * object references (notably Array# ThreadId# from listThreads#). Slice
  * operations copy boxed references opaquely without changing element proofs. */
 internal enum class ArrayOp(val primitive: String, private val arguments: List<String>, private val result: List<String>) {
     NEW("newArray#", listOf("int", "element", "state"), listOf("state", "array")),
@@ -73,8 +74,10 @@ internal enum class ArrayOp(val primitive: String, private val arguments: List<S
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
             "int" -> rep.kind == CoreKind.LONG && rep.primReps == listOf("IntRep")
             "array" -> rep.kind == CoreKind.OBJECT && rep.primReps == listOf("BoxedRep (Just Unlifted)")
-            else -> rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
-                rep.primReps == listOf("BoxedRep (Just Lifted)")
+            else -> (rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
+                rep.primReps == listOf("BoxedRep (Just Lifted)")) ||
+                (this in setOf(READ, INDEX) && rep.kind == CoreKind.OBJECT &&
+                    rep.primReps == listOf("BoxedRep (Just Unlifted)"))
         }
         if (actual.size != arguments.size || flags.size != arguments.size)
             throw RuntimeFault("Primitive arity mismatch: $primitive")

@@ -87,11 +87,31 @@ roots take a mutable array, offset, four machine-Int lanes and State token
 Packed-code evidence must distinguish the intentional caller-array access
 from unwanted private vector payload arrays or materialized carriers.
 
-`scripts/prepare-int32x4-bytearray-audit.py` generates fresh pre/post Core,
+`cabal run exe:thc-fixtures -- int32x4-bytearray` generates fresh pre/post Core,
 strict audits, native/model TSVs and source/artifact hashes. Each stage checks
 14 positive roots, seven exact frontier negatives and six deliberately unsigned
 metadata mutations. `--export-only` retains pre-Tidy/model evidence without a
 native-execution claim, matching the existing AArch64 CI path.
+
+## Fixture production
+
+The four 128-bit byte-array families share the Haskell
+`SimdByteArrayFixtures` producer and integer/byte model. Run
+`cabal run exe:thc-fixtures -- int32x4-bytearray`; the independent Kotlin
+`SimdByteArrayCorpus` controls run in the existing native test class.
+The shared Python `audit-core.py` remains the exact Core proof mechanism;
+the family-specific Python producer, model and test entry points are removed.
+Fresh pre/post audits and retained historical Core mutation controls both run.
+Receipts include closed source/artifact inventories and command exit records;
+failed attempts and prior receipts are preserved, never resealed.
+
+`--export-only` records only pre-Tidy/model evidence, with native fields
+explicitly null. This remains the default ARM CI policy. Repeatable
+`--ghc-option=OPTION` records and forwards explicit code-generation options
+to exports and native builds (for example `--ghc-option=-fllvm`).
+Availability of LLVM and native arithmetic evidence on a host does not by
+itself establish this byte-array corpus or JVM/graph support.
+The historical results below are not new migration performance measurements.
 
 ## Verified checkpoint
 

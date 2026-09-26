@@ -170,6 +170,33 @@ class ByteArrayContracts(unittest.TestCase):
         self.assertEqual(4, CAP['primitives']['fetchAddIntArray#'])
         self.assertEqual(['IntRep'], CAP['managedByteArrayPrimitives']['fetchAddIntArray#']['result']['primReps'])
 
+    def test_atomic_integer_array_contracts_keep_exact_ghc_operands_and_state_order(self):
+        names = ([f'fetch{op}IntArray#' for op in ('Add', 'Sub', 'And', 'Nand', 'Or', 'Xor')] +
+                 [f'casInt{width}Array#' for width in ('', '8', '16', '32', '64')] +
+                 ['atomicReadIntArray#', 'atomicWriteIntArray#'])
+        for name in names:
+            contract = CAP['managedByteArrayPrimitives'][name]
+            for index in range(1, len(contract['arguments']) - 1):
+                module, app = fixture(name)
+                app[2][index][2]['rep']['primReps'] = ['WordRep']
+                self.assertIn('primitive-representation', {x['code'] for x in check(module)['issues']}, (name, index))
+            module, app = fixture(name)
+            app[2][-1][2]['rep'].update(kind='unknown', aggregate='unboxed-tuple', components=[])
+            self.assertFalse(check(module)['accepted'], name)
+            if name == 'atomicWriteIntArray#':
+                continue
+            for mutation in ('swapped', 'missing-state', 'wrong-result-width'):
+                module, app = fixture(name)
+                proof = app[6]['rep']
+                if mutation == 'swapped':
+                    proof['components'].reverse()
+                elif mutation == 'missing-state':
+                    proof['components'].pop(0)
+                else:
+                    proof['primReps'] = ['WordRep']
+                    proof['components'][1]['primReps'] = ['WordRep']
+                self.assertFalse(check(module)['accepted'], (name, mutation))
+
     def test_lexical_reference_cannot_be_relabelled_by_an_occurrence(self):
         for name in ('writeWord8Array#', 'unsafeFreezeByteArray#', 'sizeofByteArray#', 'indexWord8Array#',
                      'readIntArray#', 'writeIntArray#', 'indexIntArray#', 'copyByteArray#', 'setByteArray#', 'copyMutableByteArray#', 'copyMutableByteArrayNonOverlapping#',

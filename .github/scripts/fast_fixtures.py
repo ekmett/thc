@@ -24,16 +24,20 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "619e2b794214700649669833fef2a3e5cd2cf299f0d0443721844edca79dc831"
+FULL_PREPARATION_PLAN = "c5bcea6f4bcf89eb0614dd79752ce948453ccbbd969794ee8611fbfdad516a96"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
-    "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
-    "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
-    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address",
-    "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset",
+    "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
+    "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
+    "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
+    "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset", "build/unaligned-scalar-memory",
     "build/explicit64-arrays", "build/mask-functions", "build/interface-core",
     "build/original-fd-ready", "build/simd-calls",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *fast_inputs.THREAD_INVENTORY_OUTPUTS,
+    "build/aligned-scalar-memory/manifest.json", "build/aligned-scalar-memory/oracle.tsv",
+    *[f"build/aligned-scalar-memory/{stage}/{file}" for stage in ("pre", "post")
+      for file in ("audit.json", "core/AlignedScalarMemoryAudit.json")],
     "build/native-malloc/oracle.txt",
     "build/simd-calls/manifest.json", "build/simd-calls/pre-core/SimdCallAudit.json",
     "build/simd-calls/pre-audit.json",
@@ -119,12 +123,17 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/addr-identity/pre-core/AddressIdentityAudit.json", "build/addr-identity/post-core/AddressIdentityAudit.json",
     "build/io-main-pap/provenance.json", "build/managed-mvars/manifest.json", "build/managed-md5-native/provenance.json",
     "build/pinned-addresses/manifest.json",
+    *fast_inputs.INTEGER_COMPLETION_OUTPUTS,
     "build/pinned-pointer-cells/manifest.json",
     "build/pinned-pointer-cells/oracle.tsv", "build/pinned-pointer-cells/pre/audit.json",
     "build/pinned-pointer-cells/post/audit.json",
     "build/pinned-pointer-cells/pre/core/PinnedPointerCellsAudit.json",
     "build/pinned-pointer-cells/post/core/PinnedPointerCellsAudit.json",
     "build/floating-address/manifest.json", "build/floating-address/oracle.tsv",
+    "build/atomic-address/manifest.json", "build/atomic-address/oracle.tsv",
+    "build/atomic-address/pre/audit.json", "build/atomic-address/post/audit.json",
+    "build/atomic-address/pre/core/AtomicAddressAudit.json",
+    "build/atomic-address/post/core/AtomicAddressAudit.json",
     "build/floating-address/pre/audit.json", "build/floating-address/post/audit.json",
     "build/floating-address/pre/core/FloatingAddressAudit.json",
     "build/floating-address/post/core/FloatingAddressAudit.json",
@@ -136,6 +145,12 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/narrow-byte-offset/pre/audit.json", "build/narrow-byte-offset/post/audit.json",
     "build/narrow-byte-offset/pre/core/NarrowByteOffsetAudit.json",
     "build/narrow-byte-offset/post/core/NarrowByteOffsetAudit.json",
+    "build/unaligned-scalar-memory/manifest.json", "build/unaligned-scalar-memory/oracle.tsv",
+    "build/unaligned-scalar-memory/inputs.txt",
+    "build/unaligned-scalar-memory/logs/ghc-inventory.stdout",
+    "build/unaligned-scalar-memory/pre/audit.json", "build/unaligned-scalar-memory/post/audit.json",
+    "build/unaligned-scalar-memory/pre/core/UnalignedScalarMemoryAudit.json",
+    "build/unaligned-scalar-memory/post/core/UnalignedScalarMemoryAudit.json",
     "build/int32-byte-offset/manifest.json", "build/int32-byte-offset/oracle.tsv",
     "build/int32-byte-offset/pre/audit.json", "build/int32-byte-offset/post/audit.json",
     "build/int32-byte-offset/pre/core/Int32ByteOffsetAudit.json",
@@ -147,6 +162,11 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/shrink-bytearrays/pre/core/THC.InterfaceClosure.json",
     "build/shrink-bytearrays/post/core/THC.InterfaceClosure.json",
     "build/fetch-add-int-array/manifest.json", "build/fetch-add-int-array/oracle.tsv",
+    "build/atomic-int-arrays/manifest.json", "build/atomic-int-arrays/oracle.tsv",
+    "build/atomic-int-arrays/pre/core/AtomicIntArrayAudit.json",
+    "build/atomic-int-arrays/post/core/AtomicIntArrayAudit.json",
+    "build/atomic-int-arrays/pre/core/THC.InterfaceClosure.json",
+    "build/atomic-int-arrays/post/core/THC.InterfaceClosure.json",
     "build/fetch-add-int-array/pre/core/FetchAddIntArrayAudit.json",
     "build/fetch-add-int-array/post/core/FetchAddIntArrayAudit.json",
     "build/fetch-add-int-array/pre/core/THC.InterfaceClosure.json",
@@ -185,7 +205,7 @@ INTERMEDIATE_SUFFIXES = frozenset({".o", ".hi", ".dyn_o", ".dyn_hi"})
 # writes JVM products there. A future fixture there requires a plan/output review.
 NON_FIXTURE_BUILD_ROOTS = frozenset({
     "aggregate-ghc", "aggregate-post-ghc", "cbv-post-ghc", "classes", "compiler",
-    "fast", "generated", "ghc", "kotlin", "libs", "reports", "resources",
+    "fast", "float-decode-originals", "generated", "ghc", "kotlin", "libs", "reports", "resources",
     "snapshot", "source-ghc", "test-results", "tmp",
 })
 COMMON_SOURCES = (
@@ -290,6 +310,39 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/thread-inventory"]:
+        name = "build/thread-inventory/manifest.json"
+        expected = fast_inputs.thread_inventory_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
+    family = group["outputs"][0].removeprefix("build/")
+    if family in fast_inputs.SIMD_BYTEARRAY_FAMILIES:
+        name = f"build/{family}/provenance.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = fast_inputs.simd_bytearray_artifact_hashes(family, manifest)
+        return _manifest_output_hashes(root, name, expected)
+    if family in fast_inputs.BYTEARRAY_FAMILIES:
+        name = f"build/{family}/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = dict(fast_inputs.bytearray_artifact_hashes(family, manifest))
+        if family in ("bytearray", "compare-byte-arrays"):
+            pins = fast_inputs.vendor_pins(root)
+            expected.update({path: pins[path] for path in fast_inputs.BYTEARRAY_VENDOR})
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"][0] == "build/float-decode":
+        name = "build/float-decode/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = manifest.get("artifactHashes")
+        fast_inputs.require(isinstance(expected, dict) and
+                            set(expected) == fast_inputs.FLOAT_DECODE_OUTPUTS - {name},
+                            "Incomplete floating decode fixture inventory")
+        expected = dict(expected)
+        pins = fast_inputs.vendor_pins(root)
+        expected.update({path: pins[path] for path in fast_inputs.BIGNAT_VENDOR})
+        return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/pinned-addresses"]:
+        name = "build/pinned-addresses/manifest.json"
+        expected = fast_inputs.pinned_address_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"][0] == "build/bignat-literals":
         name = "build/bignat-literals/manifest.json"
         manifest = json.loads(fast_inputs.file_path(root, name).read_text())
@@ -466,7 +519,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
+        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

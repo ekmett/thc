@@ -67,6 +67,42 @@ private const val DOUBLE_COSH = 56
 private const val DOUBLE_TANH = 57
 private const val WORD_FLOAT = 58
 private const val WORD_DOUBLE = 59
+private const val FLOAT_ASINH = 60
+private const val FLOAT_ACOSH = 61
+private const val FLOAT_ATANH = 62
+private const val DOUBLE_ASINH = 63
+private const val DOUBLE_ACOSH = 64
+private const val DOUBLE_ATANH = 65
+private const val FLOAT_MIN = 66
+private const val FLOAT_MAX = 67
+private const val DOUBLE_MIN = 68
+private const val DOUBLE_MAX = 69
+
+/** Algebraic log1p forms avoid cancellation near zero/one. Above 2^28,
+ * the correction to log(2*x) is below one binary64 ulp; below 2^-28,
+ * asinh/atanh round to x. No intermediate squares can overflow. */
+internal object InverseHyperbolic {
+    private const val LN2 = 0.6931471805599453
+    @JvmStatic fun asinh(x: Double): Double {
+        val a = Math.abs(x)
+        if (a < 3.725290298461914e-9 || !a.isFinite()) return x
+        val result = if (a > 268435456.0) Math.log(a) + LN2
+            else Math.log1p(a + a * a / (1.0 + Math.sqrt(1.0 + a * a)))
+        return Math.copySign(result, x)
+    }
+    @JvmStatic fun acosh(x: Double): Double {
+        if (x < 1.0) return Double.NaN
+        if (x > 268435456.0) return Math.log(x) + LN2
+        val t = x - 1.0
+        return Math.log1p(t + Math.sqrt(t * (x + 1.0)))
+    }
+    @JvmStatic fun atanh(x: Double): Double {
+        val a = Math.abs(x)
+        if (a < 3.725290298461914e-9) return x
+        if (a > 1.0) return Double.NaN
+        return Math.copySign(0.5 * Math.log1p(2.0 * a / (1.0 - a)), x)
+    }
+}
 
 /** Unsigned 64-bit conversion with one rounding at the destination precision. */
 internal object WordFloatingConversions {
@@ -109,7 +145,11 @@ private val floatingOperations = mapOf(
     "atanDouble#" to DOUBLE_ATAN,
     "sinhDouble#" to DOUBLE_SINH,
     "coshDouble#" to DOUBLE_COSH,
-    "tanhDouble#" to DOUBLE_TANH)
+    "tanhDouble#" to DOUBLE_TANH,
+    "asinhFloat#" to FLOAT_ASINH, "acoshFloat#" to FLOAT_ACOSH, "atanhFloat#" to FLOAT_ATANH,
+    "asinhDouble#" to DOUBLE_ASINH, "acoshDouble#" to DOUBLE_ACOSH, "atanhDouble#" to DOUBLE_ATANH,
+    "minFloat#" to FLOAT_MIN, "maxFloat#" to FLOAT_MAX,
+    "minDouble#" to DOUBLE_MIN, "maxDouble#" to DOUBLE_MAX)
 
 /** JVM float operations round each result to binary32; no implicit numeric widening. */
 internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
@@ -130,6 +170,8 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
         return if (name == "sqrtFloat#") FloatSqrt(arguments[0]) else DoubleSqrt(arguments[0])
     }
     val kind = when (name) {
+        "asinhFloat#", "acoshFloat#", "atanhFloat#", "minFloat#", "maxFloat#" -> CoreKind.FLOAT
+        "asinhDouble#", "acoshDouble#", "atanhDouble#", "minDouble#", "maxDouble#" -> CoreKind.DOUBLE
         "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
         "int2Float#", "word2Float#", "double2Float#", "fabsFloat#", "expFloat#", "expm1Float#",
         "logFloat#", "log1pFloat#", "sinFloat#", "cosFloat#", "powerFloat#",
@@ -142,7 +184,8 @@ internal fun floatingPrimitive(name: String, arguments: Array<Expr>): Expr? {
         "==##", "/=##", "<##", "<=##", ">##", ">=##", "float2Int#", "double2Int#" -> CoreKind.LONG
         else -> return null
     }
-    val unary = name in setOf("negateFloat#", "negateDouble#", "int2Float#", "int2Double#",
+    val unary = name in setOf("asinhFloat#", "acoshFloat#", "atanhFloat#", "asinhDouble#", "acoshDouble#", "atanhDouble#",
+        "negateFloat#", "negateDouble#", "int2Float#", "int2Double#",
         "word2Float#", "word2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#",
         "fabsFloat#", "expFloat#", "expm1Float#", "logFloat#", "log1pFloat#", "sinFloat#", "cosFloat#",
         "fabsDouble#", "expDouble#", "expm1Double#", "logDouble#", "log1pDouble#", "sinDouble#", "cosDouble#",
@@ -217,6 +260,9 @@ private class FloatingPrimitive(private val operation: Int,
             FLOAT_SINH -> return Math.sinh(x.toDouble()).toFloat()
             FLOAT_COSH -> return Math.cosh(x.toDouble()).toFloat()
             FLOAT_TANH -> return Math.tanh(x.toDouble()).toFloat()
+            FLOAT_ASINH -> return InverseHyperbolic.asinh(x.toDouble()).toFloat()
+            FLOAT_ACOSH -> return InverseHyperbolic.acosh(x.toDouble()).toFloat()
+            FLOAT_ATANH -> return InverseHyperbolic.atanh(x.toDouble()).toFloat()
         }
         val y = arguments[1].executeRequiredFloat(frame)
         return when (operation) {
@@ -225,6 +271,8 @@ private class FloatingPrimitive(private val operation: Int,
             FLOAT_MUL -> x * y
             FLOAT_DIV -> x / y
             FLOAT_POWER -> Math.pow(x.toDouble(), y.toDouble()).toFloat()
+            FLOAT_MIN -> if (x < y) x else y
+            FLOAT_MAX -> if (x > y) x else y
             else -> fault("Expected Float primitive result")
         }
     }
@@ -250,6 +298,9 @@ private class FloatingPrimitive(private val operation: Int,
             DOUBLE_SINH -> return Math.sinh(x)
             DOUBLE_COSH -> return Math.cosh(x)
             DOUBLE_TANH -> return Math.tanh(x)
+            DOUBLE_ASINH -> return InverseHyperbolic.asinh(x)
+            DOUBLE_ACOSH -> return InverseHyperbolic.acosh(x)
+            DOUBLE_ATANH -> return InverseHyperbolic.atanh(x)
         }
         val y = arguments[1].executeRequiredDouble(frame)
         return when (operation) {
@@ -258,6 +309,8 @@ private class FloatingPrimitive(private val operation: Int,
             DOUBLE_MUL -> x * y
             DOUBLE_DIV -> x / y
             DOUBLE_POWER -> Math.pow(x, y)
+            DOUBLE_MIN -> if (x < y) x else y
+            DOUBLE_MAX -> if (x > y) x else y
             else -> fault("Expected Double primitive result")
         }
     }

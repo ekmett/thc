@@ -672,13 +672,16 @@ class AuditTest(unittest.TestCase):
 
     def test_tuple_arithmetic_requires_exact_logical_results_and_scalar_arguments(self):
         for name, contract in CAP['tuplePrimitives'].items():
-            scalar = dict(LONG, primReps=[contract['arguments'][0]])
+            arguments = [dict(LONG, kind={'FloatRep': 'float', 'DoubleRep': 'double'}.get(rep, 'long'),
+                              primReps=[rep]) for rep in contract['arguments']]
+            scalar = arguments[0]
             proof = tuple_rep(*(dict(LONG, primReps=[rep]) for rep in contract["result"]))
             module = tuple_fixture(proof)
             call = module['bindings'][0]['expr'][2][1]
             call[:] = ['app', ['prim', name],
-                       [['lit', 'word' if scalar['primReps'] == ['WordRep'] else 'int', '1', dict(rep=scalar)]] * 2,
-                       [False, False], False, False, dict(rep=proof)]
+                       [['lit', {'FloatRep': 'float', 'DoubleRep': 'double', 'WordRep': 'word'}.get(rep['primReps'][0], 'int'),
+                         '1', dict(rep=rep)] for rep in arguments],
+                       [False] * len(contract['arguments']), False, False, dict(rep=proof)]
             self.assertTrue(run_tuple(module)['accepted'], name)
             for mutation in ('nested', 'scalar', 'unknown', 'wrong-register', 'unknown-argument', 'lifted', 'partial', 'overapplied', 'missing-result', 'extra-result'):
                 changed = copy.deepcopy(module)
@@ -1030,7 +1033,8 @@ class AuditTest(unittest.TestCase):
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         action = dict(kind='closure', primReps=['BoxedRep (Just Lifted)'], evaluated=True)
         payload = dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
-        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload, 'int': LONG, 'byteArray': thread}
+        roles = {'state': state, 'threadId': thread, 'action': action, 'payload': payload, 'int': LONG,
+                 'byteArray': thread, 'threadArray': thread}
         contracts = CAP['managedThreadPrimitives']
         self.assertEqual({name: len(spec['arguments']) for name, spec in contracts.items()},
                          {name: CAP['primitives'][name] for name in contracts})
@@ -2760,6 +2764,62 @@ class DescriptorWaitAuditTest(unittest.TestCase):
                 if mutation == 'flags': call[3] = [False, True]
                 bad = audit_core.Audit([('wait.json', module)], CAP).run(['root'])
                 self.assertFalse(bad['accepted'], (name, mutation, bad))
+
+
+class STMContractTest(unittest.TestCase):
+    """Proof mutations only; native values come from the Haskell STM producer."""
+    @staticmethod
+    def fixture(name, include_payload=True):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        roles = dict(state=state, action=CLOSURE, boxed=REFERENCE,
+                     tvar=dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True))
+        contract = CAP['managedSTMPrimitives'][name]
+        proofs = [copy.deepcopy(roles[role]) for role in contract['arguments']]
+        params = [dict(id='p' + str(i), lifted=proof['primReps'] == ['BoxedRep (Just Lifted)'], rep=proof)
+                  for i, proof in enumerate(proofs)]
+        result = contract['result']
+        if isinstance(result, list):
+            parts = [copy.deepcopy(roles[role]) for role in result]
+            result = dict(kind='unknown', aggregate='unboxed-tuple', evaluated=True,
+                          components=parts, primReps=[rep for part in parts for rep in part['primReps']])
+        else:
+            result = copy.deepcopy(roles[result])
+        call = ['app', ['prim', name],
+                [['var', param['id'], dict(rep=proof)] for param, proof in zip(params, proofs)],
+                [param['lifted'] for param in params], False, False, dict(rep=result)]
+        body = ['case', call, 'result', [['default', None, [], [*lit(0), dict(rep=LONG)]]],
+                dict(rep=LONG, binder=dict(id='result', lifted=False, rep=dict(result, evaluated=True)))]
+        root = dict(bind('root', ['lam', params, body, dict(rep=CLOSURE, resultRep=LONG)]),
+                    rep=CLOSURE, arity=len(params))
+        payload_id = 'ghc-internal:GHC.Internal.Control.Exception.Base.nestedAtomically'
+        payload = dict(bind(payload_id, ['var', payload_id, dict(rep=REFERENCE)]), rep=REFERENCE)
+        return dict(schema=1, ghc='9.14.1', bindings=[root] +
+                    ([payload] if name == 'atomically#' and include_payload else []), constructors=[])
+
+    def test_all_eight_exact_contracts_reject_shape_state_and_liftedness_mutations(self):
+        self.assertEqual({'atomically#', 'retry#', 'catchRetry#', 'catchSTM#',
+                          'newTVar#', 'readTVar#', 'readTVarIO#', 'writeTVar#'},
+                         set(CAP['managedSTMPrimitives']))
+        for name in CAP['managedSTMPrimitives']:
+            original = self.fixture(name)
+            report = audit_core.Audit([('stm.json', original)], CAP).run(['root'])
+            self.assertTrue(report['accepted'], (name, report['issues']))
+            for mutation in ('state', 'result', 'flags', 'arity'):
+                changed = copy.deepcopy(original)
+                call = changed['bindings'][0]['expr'][2][1]
+                if mutation == 'state': call[2][-1][2]['rep'] = LONG
+                if mutation == 'result': call[6]['rep'] = LONG
+                if mutation == 'flags': call[3] = [not flag for flag in call[3]]
+                if mutation == 'arity': call[2].pop()
+                bad = audit_core.Audit([('stm.json', changed)], CAP).run(['root'])
+                self.assertFalse(bad['accepted'], (name, mutation, bad))
+
+    def test_nested_exception_is_a_real_implicit_dependency_and_same_tvar_is_not_invented(self):
+        report = audit_core.Audit([('stm.json', self.fixture('atomically#', False))], CAP).run(['root'])
+        self.assertFalse(report['accepted'])
+        self.assertIn('ghc-internal:GHC.Internal.Control.Exception.Base.nestedAtomically',
+                      [binding['id'] for binding in report['missingGlobals']])
+        self.assertNotIn('sameTVar#', CAP['primitives'])
 
 
 if __name__ == '__main__':

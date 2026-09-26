@@ -63,6 +63,8 @@ class SimdFloatByteArrayTest {
     private fun provenance(): Map<String, Any?> {
         val provenance = Json.parse(File(directory, "provenance.json").readText()) as Map<String, Any?>
         validateMode(provenance)
+        SimdByteArrayEvidence.inventory(root, "floatx4", provenance)
+        SimdByteArrayCorpus("floatx4").verify(root, provenance)
         assertEquals("floatx4-bytearray", provenance["vector"], "Exact Float memory provenance")
         assertEquals(ByteOrder.LITTLE_ENDIAN, ByteOrder.nativeOrder(), "FloatX4 bounded corpus requires a little-endian host")
         assertEquals(true, provenance["positiveAuditsAccepted"])
@@ -92,6 +94,11 @@ class SimdFloatByteArrayTest {
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target), label)
 
+    @Test fun independentCorpusAndClosedProvenanceControls() {
+        val manifest = provenance()
+        SimdByteArrayCorpus("floatx4").controls(root)
+        SimdByteArrayEvidence.controls(root, "floatx4", manifest)
+    }
     @Test fun nativeMemoryCoreHasExactCompiledEntriesWithInlining() = nativeCore(true)
     @Test fun nativeMemoryCoreHasExactCompiledEntriesWithoutInlining() = nativeCore(false)
     @Test fun preparationModeRejectsCorruptionAndNativeDowngrades() {

@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
 import java.math.BigInteger
-import java.security.MessageDigest
 
 class ByteArrayTest {
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -29,6 +28,7 @@ class ByteArrayTest {
     private fun program(language: Language, module: Map<String, Any?>, backend: String): ExecutableProgram =
         if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
     private fun mathematical(name: String, seed: Long): Long {
+        require(name in names) { "Unknown byte-array entry" }
         val x = BigInteger.valueOf(seed)
         fun byte(value: BigInteger) = value.mod(BigInteger.valueOf(256))
         if (name == "orderedBytes") return (BigInteger.valueOf(3) + byte(x) +
@@ -58,12 +58,8 @@ class ByteArrayTest {
 
     @Test fun installedShortByteStringAndArrayEffectsMatchNativeAndIndependentModel() {
         val manifest = manifest()
-        for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
-            val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
-                .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, actual, "Stale ByteArray fixture: $path; rerun prepare-bytearray.py")
-        }
-        val rows = File(root, "build/bytearray/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        ByteArrayFixtureEvidence.verify(root, "bytearray", manifest)
+        val rows = checkedRows(File(root, "build/bytearray/oracle.tsv").readText()).groupBy { it[0] }
         assertEquals(names.toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
@@ -105,6 +101,28 @@ class ByteArrayTest {
         }
     }
 
+    private val inputs = ((-512L..512L).toList() + listOf(Long.MIN_VALUE, Long.MIN_VALUE + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE)).sorted()
+    private fun checkedRows(text: String): List<List<String>> {
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        require(lines.size == 4116)
+        return lines.mapIndexed { index, line ->
+            val fields = line.split('\t'); require(fields.size == 3)
+            val name = names[index / inputs.size]; val raw = inputs[index % inputs.size]
+            require(fields[0] == name && fields[1].toLongOrNull() == raw && fields[2].toLongOrNull() == mathematical(name, raw)) {
+                "Missing, duplicate, reordered or mismatched byte-array row $index"
+            }
+            fields
+        }
+    }
+    @Test fun originalSourceEvidenceAndCompleteCorpusFailClosed() {
+        ByteArrayFixtureEvidence.rejectionControls(root, "bytearray")
+        val text = File(root, "build/bytearray/oracle.tsv").readText(); checkedRows(text)
+        val lines = text.lines().filter { it.isNotEmpty() }
+        for (bad in listOf(lines.drop(1), lines + lines.first(), lines.reversed(), listOf(lines[1]) + lines.drop(1),
+            listOf("unknown\t0\t0") + lines.drop(1), listOf("shortBytes\t9223372036854775808\t0") + lines.drop(1),
+            listOf(lines.first().substringBeforeLast('\t') + "\t999") + lines.drop(1), lines + ""))
+            assertThrows(IllegalArgumentException::class.java) { checkedRows(bad.joinToString("\n", postfix = "\n")) }
+    }
     @Test fun managedStorageHasExactSizeUnsignedBytesIdentityAndGuardedDomain() {
         for (size in listOf(0L, 1L, 7L, 8L, 9L, 256L)) {
             val array = ManagedByteArray.allocate(size)
@@ -286,7 +304,8 @@ class ByteArrayTest {
                     val module = fresh()
                     val args = copy(module)[2] as MutableList<Any?>
                     val proof = CoreRepresentations.metadata(args[argument] as List<Any?>)!!["rep"] as MutableMap<String, Any?>
-                    proof["primReps"] = if (argument in listOf(0, 2)) listOf("BoxedRep (Just Lifted)") else listOf("WordRep")
+                    proof["primReps"] = if (argument in listOf(0, 2)) listOf("BoxedRep (Just Lifted)") else listOf("DoubleRep")
+                    if (argument !in listOf(0, 2)) proof["kind"] = "double"
                     assertThrows(RuntimeFault::class.java, {
                         program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
                     }, "$backend/copy argument $argument/$diagnostic")
@@ -351,7 +370,7 @@ class ByteArrayTest {
                         1 -> { args.add(args[0]); flags.add(false); metadata.remove("callDemand") }
                         2 -> metadata.remove("rep")
                         3 -> { val proof = metadata["rep"] as MutableMap<String, Any?>
-                            proof["primReps"] = listOf("WordRep"); proof["kind"] = "long"
+                            proof["primReps"] = listOf("DoubleRep"); proof["kind"] = "double"
                             proof.remove("aggregate"); proof.remove("components") }
                         4 -> flags[0] = true
                         5 -> { val proof = CoreRepresentations.metadata(args[0] as List<Any?>)!!["rep"] as MutableMap<String, Any?>

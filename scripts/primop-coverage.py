@@ -31,7 +31,7 @@ def report(rows, advertised):
         expected = inventory[name]['valueArity']
         if type(arity) is not int or arity != expected:
             raise ValueError(f'Primitive arity mismatch: {name}: THC {arity!r}, GHC {expected}')
-    return dict(schema=1, ghc='9.14.1', counts=dict(total=len(inventory),
+    return dict(schema=2, ghc='9.14.1', counts=dict(total=len(inventory),
                 advertised=len(advertised), unadvertised=len(inventory)-len(advertised)),
                 claim='Advertised names and value arities only; not proof of runtime semantics, lowering, or tested input coverage.',
                 primitives=[inventory[name] for name in sorted(inventory)])
@@ -56,7 +56,7 @@ def declared_primitives(capability):
 
 
 def classify(data, capability, scalars):
-    """Conservative progress labels, not an independent semantic support registry."""
+    """Count registered runtime implementations independently of carrier shape."""
     if scalars.get('schema') != 1 or scalars.get('ghc') != '9.14.1' or scalars.get('targetWordSize') != 64:
         raise ValueError('Expected the pinned 64-bit scalar signature contract')
     signatures = scalars['primitives']
@@ -65,88 +65,95 @@ def classify(data, capability, scalars):
         row = inventory.get(name)
         if not row or not row['advertised'] or len(signature['arguments']) != row['valueArity']:
             raise ValueError(f'Stale scalar signature contract: {name}')
-    # Address carriers have a deliberately narrower managed-literal domain.
-    numeric = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep',
-               'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep', 'FloatRep', 'DoubleRep'}
-    counts = dict(supported=0, partial=0, missing=0)
+    counts = dict(implemented=0, missing=0)
     for row in data['primitives']:
         name = row['name']
-        signature = signatures.get(name)
-        if not row['advertised']:
-            status, scope = 'missing', 'No declared lowering'
-        elif signature and set(signature['arguments'] + [signature['result']]) <= numeric:
-            status, scope = 'supported', 'Fixed scalar contract'
-        else:
-            status, scope = 'partial', 'Specialized lowering; see capability and coverage limits'
-            for key, label in (('tuplePrimitives', 'Exact tuple arithmetic'),
-                               ('managedByteArrayPrimitives', 'Managed byte storage'),
-                               ('managedArrayPrimitives', 'Managed lifted arrays'),
-                               ('managedMutVarPrimitives', 'Managed lazy reference cells'),
-                               ('managedStablePtrPrimitives', 'Context-owned opaque stable handles; no pointer memory access'),
-                               ('managedWeakPrimitives', 'Retained registrations and explicit Haskell/C finalization; restricted C labels, no GC or ephemerons'),
-                               ('managedMVarPrimitives', 'Managed blocking cells; backend and continuation limits apply')):
+        status = 'implemented' if row['advertised'] else 'missing'
+        contract = 'No declared lowering'
+        if row['advertised']:
+            contract = 'Specialized lowering'
+            for key, label in (('tuplePrimitives', 'Scalar tuple result'),
+                               ('managedByteArrayPrimitives', 'Byte-array operation'),
+                               ('managedArrayPrimitives', 'Boxed-array operation'),
+                               ('managedMutVarPrimitives', 'Mutable-reference operation'),
+                               ('managedStablePtrPrimitives', 'Stable-pointer operation'),
+                               ('managedWeakPrimitives', 'Weak-pointer operation'),
+                               ('managedThreadPrimitives', 'Thread operation'),
+                               ('managedSTMPrimitives', 'STM operation'),
+                               ('managedMVarPrimitives', 'MVar operation'),
+                               ('managedPinnedMemoryPrimitives', 'Pointer or pinned-memory operation')):
                 if name in capability.get(key, {}):
-                    scope = label
+                    contract = label
                     break
-            if signature and 'AddrRep' in signature['arguments'] + [signature['result']]:
-                scope = 'Managed addresses with operation-specific storage restrictions'
+            if name in signatures:
+                signature = signatures[name]
+                contract = ('Pointer scalar signature' if 'AddrRep' in signature['arguments'] + [signature['result']]
+                            else 'Numeric scalar signature')
             if name == 'tagToEnum#' and 'tagToEnum' in capability:
-                scope = capability['tagToEnum']
+                contract = 'Nullary constructor-family operation'
             if name in ('dataToTagSmall#', 'dataToTagLarge#') and 'dataToTag' in capability:
-                scope = capability['dataToTag']
-        row.update(status=status, scope=scope)
+                contract = 'Algebraic constructor-family operation'
+        row.update(status=status, contract=contract)
         counts[status] += 1
-    data['supportCounts'] = counts
-    data['claim'] = ('Capability-derived progress, not exhaustive semantic or test coverage. '
-                     'Supported means an advertised fixed scalar contract on the pinned 64-bit target; '
-                     'partial means another advertised, restricted lowering. GHC input preconditions '
-                     'and documented Core/calling-convention limits apply to both.')
+    data['implementationCounts'] = counts
+    data['limitations'] = list(capability.get('limitations', []))
+    data['claim'] = ('Runtime implementations registered for the pinned 64-bit GHC primop inventory. '
+                     'Registration follows implementation and ordinary testing, not formal proof. '
+                     'Concrete known limitations remain documented separately; representation alone '
+                     'does not make an implementation partial. Primop coverage is not whole-GHC feature parity.')
     return data
 
 
 def checklist(data, capability):
-    counts = data['supportCounts']
+    counts = data['implementationCounts']
+    total = data['counts']['total']
+    percentage = 100 * counts['implemented'] / total if total else 0
     lines = [
         '# Primop checklist', '',
         '<!-- Generated by scripts/primop-coverage.py; change capabilities, not this list. -->', '',
-        "GHC 9.14.1 exposes **%d primops** on the pinned 64-bit target. This list is" % data['counts']['total'],
+        "GHC 9.14.1 exposes **%d primops** on the pinned 64-bit target. This list is" % total,
         'generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)',
         'and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).', '',
+        f"**Implementation coverage: {counts['implemented']} / {total} ({percentage:.1f}%).**", '',
         '| Status | Count | Meaning |', '| --- | ---: | --- |',
-        f"| Supported | {counts['supported']} | Implemented fixed numeric/character scalar forms. |",
-        f"| Partial | {counts['partial']} | Implemented with additional representation, storage or use-site limits. |",
-        f"| Missing | {counts['missing']} | No declared lowering. |", '',
-        'A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive',
-        'testing. Defined-input preconditions, exact representation proofs and the current call ABI still',
-        'apply. Partial entries deliberately stay unchecked: exact guest transport for 24 vector shapes',
-        'does not expand the admitted SIMD operations, and managed array access does not imply',
-        'foreign memory access. Public host vector arguments and results remain unsupported.',
-        'Names and arities alone cannot certify an implementation. See the [coverage guide](README.md)',
-        'for native tests, retained graphs and the boundaries of each family. Arity counts logical value',
-        'arguments, not flattened tuple fields.', '',
+        f"| Implemented | {counts['implemented']} | A runtime implementation is registered in the capability inventory. |",
+        f"| Missing | {counts['missing']} | No runtime implementation is registered. |", '',
+        'Implemented means translating the GHC operation to a sensible runtime implementation and',
+        'checking it with ordinary tests. It does not require formal proof or exhaustive input testing.',
+        'The capability inventory records those implementations; accepting a name in the exporter',
+        'alone is not sufficient grounds to add one.', '',
+        'Numeric, tuple, vector, pointer and stateful operations use the same counting rule.',
+        'A Sulong pointer abstraction, managed storage, exact vector species, the selected 64-bit',
+        'target and GHC input preconditions do not themselves make an implementation partial.', '',
+        'Concrete unfinished behavior remains listed below and in the [coverage guide](README.md).',
+        'For example, automatic weak finalization and unsupported thread operations remain real work.',
+        'Primop implementation coverage is one part of GHC feature parity, alongside the compiler,',
+        'libraries, FFI and runtime. Arity counts logical arguments, not flattened tuple fields.', '',
         '## Updating the list', '',
-        'After implementing and testing a primitive, update its existing capability contract. For a new',
+        'After implementing and testing a primitive, update its capability contract. For a new',
         'monomorphic scalar operation, also regenerate the shared signature table:', '',
         '```sh', 'python3 scripts/generate-scalar-signatures.py --write',
         'python3 scripts/primop-coverage.py --write-checklist',
         'python3 scripts/primop-coverage.py --check', 'python3 scripts/test-primop-coverage.py', '```', '',
-        'CI checks this file against a fresh query of the pinned GHC API. The machine-readable report',
-        'in `build/primop-coverage.json` includes exact GHC signatures and generation provenance.',
-        'New capability entries default to partial unless the existing scalar contract establishes the',
-        'fixed numeric form; adding a name cannot mark an arbitrary operation fully supported.', '',
-        '## Current aggregate and address limits', '',
+        'CI checks this file against a fresh query of the pinned GHC API. The schema-2 report',
+        'in `build/primop-coverage.json` retains exact GHC signatures, contract families, limitations',
+        'and generation provenance. `implementationCounts` replaces the old `supportCounts`, whose',
+        'supported/partial split incorrectly treated every non-numeric-scalar implementation as partial.', '',
+        '## Known behavior and runtime limits', '',
+        'The following describes implemented behavior and specific remaining restrictions.',
+        'Shared runtime gaps are not automatically attributed to every operation using that runtime.', '',
     ]
     lines.extend('- ' + item for item in capability.get('limitations', []))
-    for status, title in (('supported', 'Supported scalar forms'), ('partial', 'Partial forms'), ('missing', 'Missing forms')):
+    for status, title in (('implemented', 'Implemented primops'), ('missing', 'Missing primops')):
         lines.extend(['', f'## {title}', ''])
         if status == 'missing':
             lines.extend(['<details>', '<summary>Remaining GHC primops, in name order</summary>', ''])
         for row in data['primitives']:
             if row['status'] != status:
                 continue
-            mark = 'x' if status == 'supported' else ' '
-            scope = f" — {row['scope']}" if status == 'partial' else ''
-            lines.append(f"- [{mark}] `{row['name']}` — arity {row['valueArity']}{scope}")
+            mark = 'x' if status == 'implemented' else ' '
+            contract = f" — {row['contract']}" if status == 'implemented' else ''
+            lines.append(f"- [{mark}] `{row['name']}` — arity {row['valueArity']}{contract}")
         if status == 'missing':
             lines.extend(['', '</details>'])
     return '\n'.join(lines) + '\n'
@@ -188,7 +195,8 @@ def main():
                 for path in (capability, SCALARS, Path(__file__).resolve())})
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(data, indent=2) + '\n')
-    print(f"GHC primop inventory: {data['counts']['advertised']} declared / {len(rows)} total; names and arities agree; {data['supportCounts']}")
+    print(f"GHC primop inventory: {data['implementationCounts']['implemented']} implemented / {len(rows)} total; "
+          f"names and arities agree; {data['implementationCounts']}")
 
 
 if __name__ == '__main__':

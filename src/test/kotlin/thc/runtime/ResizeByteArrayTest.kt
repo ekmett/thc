@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -58,6 +57,8 @@ class ResizeByteArrayTest {
     @Test fun nativeResizePrefixAndRepeatedWritesWithInlining()=native(true)
     @Test fun nativeResizePrefixAndRepeatedWritesAcrossResidualCalls()=native(false)
     private data class Row(val name: String,val raw: Long,val code: Long,val expected: Long)
+    @Test fun resizeFixtureEvidenceRejectsMissingAndChangedProvenance() =
+        ByteArrayFixtureEvidence.rejectionControls(root, "resize-bytearrays")
     private fun inputs(): List<Pair<Long,Long>> {
         val pairs=(0 until 17*17).map { it.toLong()*0x123456789abcdefL to it.toLong() }.toMutableSet()
         for(seed in 0L..255L)for((old,size) in listOf(0 to 16,16 to 0,16 to 8,8 to 16,8 to 8))
@@ -145,10 +146,7 @@ class ResizeByteArrayTest {
     }
     private fun native(inlining: Boolean) {
         val manifest=manifest()
-        for(kind in listOf("inputHashes","artifactHashes"))for((path,expected) in manifest[kind] as Map<String,String>) {
-            val hash=MessageDigest.getInstance("SHA-256").digest(File(root,path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected,hash,"Stale resize input $path")
-        }
+        ByteArrayFixtureEvidence.verify(root, "resize-bytearrays", manifest)
         assertEquals(names,manifest["entries"])
         assertEquals(inputs(),(manifest["inputs"] as List<List<Number>>).map { it[0].toLong() to it[1].toLong() })
         val rows=verifyRows(File(root,"build/resize-bytearrays/oracle.tsv").readText()).groupBy { it.name }

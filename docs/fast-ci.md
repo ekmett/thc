@@ -52,11 +52,15 @@ scope is reviewed. The groups retain independent native oracles and pre/post
 Core audits. These are local accelerators, not cached test results or a transfer
 archive.
 
-The selected Python tests run with normal Python and `-O`. Gradle runs the selected
-JUnit classes in ordinary and dense handoff modes, rerunning the `test` task while
-keeping compilation and dependency outputs reusable. Existing test reports are
-moved aside; the runner requires fresh, nonempty, successful XML for every selected
-class and the same testcase set in both modes. The primop checklist is checked
+The selected Python tests run with normal Python and `-O`. One Gradle invocation
+runs the selected JUnit classes in separate `testDefault` and `testDense` forks,
+with explicit false/true handoff properties and independent XML/report directories.
+Both tasks share compilation and the always-fresh native/ABI probes; `installDist`
+joins the same invocation when driver tests require it. `--continue` runs the
+second mode even when the first fails. Existing test reports are moved aside;
+the runner requires fresh, nonempty, successful XML for every selected class,
+the same testcase set in both modes, and a `HandoffTest` marker emitted after
+checking the actual test-process property and runtime context. The primop checklist is checked
 against the installed GHC API on every run. Selection, commands, timings, native
 input decisions and fresh results are retained in `build/fast/results/`.
 

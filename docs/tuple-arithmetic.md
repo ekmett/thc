@@ -30,11 +30,16 @@ Returning those fields through an ordinary function still uses the separate
 [tuple result protocol](tuple-results.md); local primitive evaluation requires
 no call boundary.
 
-Load validation and the static auditor require the exact scalar input register
-names and a flat logical tuple with exactly two corresponding scalar leaves.
-A scalar result, same-width nested tuple, unknown leaf, missing proof or wrong
-signedness is rejected. Primops used as first-class values and partial or
+Load validation requires Long input carriers and a flat logical tuple of the
+operation's result arity. The static auditor separately checks exact GHC register
+names and order; runtime lowering trusts physically equivalent integral carriers.
+A scalar result, same-width nested tuple, unknown leaf or missing proof is
+rejected. Primops used as first-class values and partial or
 oversaturated applications remain unsupported.
+
+The [scalar integer completion](integer-completion.md) extends this protocol to
+all six narrow quotient/remainder operations and the three-input double-word
+unsigned division operation.
 
 `TupleArithmeticAudit.hs` retains each genuine primitive in both pre- and
 post-Tidy Core. A dynamic selector observes each result field separately without

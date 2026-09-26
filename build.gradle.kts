@@ -128,16 +128,21 @@ tasks.withType<Test>().configureEach {
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
             "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
+            "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
+            "integer-completion/native/**", "integer-completion/commands/**",
             "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
             "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
+            "stm/**/*.json", "stm/*.tsv", "stm/installed/bundles/*.zip", "stm/native/**",
             "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
             "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
             "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
             "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
+            "atomic-int-arrays/**/*.json", "atomic-int-arrays/*.tsv", "atomic-int-arrays/NativeAtomicIntArrays.hs", "atomic-int-arrays/commands/*",
             "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
             "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
             "core-continuation/**/*.json", "core-continuation/native-output.txt",
             "thread-status/**/*.json", "thread-status/oracle.txt",
+            "thread-inventory/**/*.json", "thread-inventory/oracle.txt",
             "thread-label/**/*.json", "thread-label/oracle.txt",
             "uncaught-self/**/*.json", "uncaught-self/native/oracle",
             "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
@@ -196,15 +201,24 @@ tasks.withType<Test>().configureEach {
             "original-stack-formatter/run-*/originals/generated/**/*.hs",
             "original-stack-formatter/run-*/originals/generated.json",
             "original-stack-formatter/run-*/originals/target-layout.json",
-            "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**",
+            "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**", "pinned-addresses/commands/**",
             "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
+            "address-array-copy/**/*.json", "address-array-copy/*.tsv", "address-array-copy/native/**", "address-array-copy/commands/**",
+            "aligned-scalar-memory/**/*.json", "aligned-scalar-memory/*.tsv", "aligned-scalar-memory/*.txt", "aligned-scalar-memory/logs/**",
             "wide-char-address/**/*.json", "wide-char-address/logs/*.stdout", "wide-char-address/native/**",
             "floating-address/**/*.json", "floating-address/*.tsv", "floating-address/native/**",
+            "atomic-address/**/*.json", "atomic-address/*.tsv", "atomic-address/*.txt", "atomic-address/native/**", "atomic-address/logs/**",
             "explicit64-arrays/**/*.json", "explicit64-arrays/*.tsv", "explicit64-arrays/native/**",
             "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
             "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/native/**", "scalar-bitcasts/commands/**",
+            "float-decode/**/*.json", "float-decode/*.tsv", "float-decode/native/**", "float-decode/commands/**",
+            "floating-remainder/**/*.json", "floating-remainder/*.tsv", "floating-remainder/native/**", "floating-remainder/commands/**",
             "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",
-            "bytearray/**/*.json", "bytearray/oracle.tsv", "bytearray/NativeByteArray.hs",
+            "unaligned-scalar-memory/**/*.json", "unaligned-scalar-memory/*.tsv", "unaligned-scalar-memory/*.txt",
+            "unaligned-scalar-memory/logs/**",
+            "bytearray/**/*.json", "bytearray/*.tsv", "bytearray/NativeByteArray.hs", "bytearray/native/**",
+            "bytearray/commands/**", "mutable-bytearrays/commands/**", "resize-bytearrays/commands/**",
+            "mutable-bytearray-size/commands/**", "compare-byte-arrays/commands/**",
             "mutable-bytearray-size/**/*.json", "mutable-bytearray-size/*.tsv", "mutable-bytearray-size/native/**",
             "resize-bytearrays/**/*.json", "resize-bytearrays/*.tsv", "resize-bytearrays/native/**",
             "mutable-bytearrays/**/*.json", "mutable-bytearrays/*.tsv", "mutable-bytearrays/NativeMutableByteArrays.hs", "mutable-bytearrays/native/**",
@@ -246,6 +260,9 @@ tasks.withType<Test>().configureEach {
             "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
             "simd-floatx4-bytearray/**/*.json", "simd-floatx4-bytearray/*.tsv", "simd-floatx4-bytearray/native/floatx4-bytearray-oracle",
             "simd-doublex2-bytearray/**/*.json", "simd-doublex2-bytearray/*.tsv", "simd-doublex2-bytearray/native/doublex2-bytearray-oracle",
+            "simd-int32x4-bytearray/prepare-run-*/commands/*", "simd-int32x4-bytearray/prepare-run-*/retained-original-source.hs",
+            "simd-word32x4-bytearray/prepare-run-*/commands/*", "simd-word32x4-bytearray/prepare-run-*/retained-original-source.hs",
+            "simd-floatx4-bytearray/prepare-run-*/commands/*", "simd-doublex2-bytearray/prepare-run-*/commands/*",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
             "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
     })
@@ -260,17 +277,24 @@ tasks.withType<Test>().configureEach {
         "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
         "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
+    inputs.files(fileTree("bench/experiments") {
+        include("int32x4-bytearray/evidence-x86_64/*-core.json.gz", "int32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
+            "word32x4-bytearray/evidence-x86_64/*-core.json.gz", "word32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
+            "floatx4-bytearray/evidence-x86_64/*-core.json.gz", "floatx4-bytearray/evidence-x86_64/input-provenance.json.gz",
+            "doublex2-bytearray/evidence-x86_64/captures/doublex2/*-core.json.gz",
+            "doublex2-bytearray/evidence-x86_64/captures/doublex2/input-provenance.json.gz")
+    })
     inputs.file("thc.cabal")
     inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("scripts") {
         include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
             "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
-        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-tag-to-enum-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-bytearray.py", "prepare-mutable-bytearray-size.py", "prepare-resize-bytearrays.py", "prepare-mutable-bytearrays.py", "mutable_bytearray_model.py", "test-mutable-bytearray-model.py", "prepare-compare-byte-arrays.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
+        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-tag-to-enum-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
             "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
             "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py", "generate-scalar-signatures.py",
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
-            "prepare-managed-md5.py", "prepare-pinned-addresses.py",
+            "prepare-managed-md5.py",
             "prepare-int16x8-audit.py", "int16x8_model.py", "test-int16x8-model.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
             "prepare-managed-address-reads.py",
@@ -280,10 +304,10 @@ tasks.withType<Test>().configureEach {
             "prepare-word16x8-audit.py", "word16x8_model.py", "test-word16x8-model.py",
             "prepare-word32x4-audit.py", "word32x4_model.py", "test-word32x4-model.py",
             "prepare-int32x4-multiply-audit.py", "int32x4_multiply_model.py", "test-int32x4-multiply-model.py",
-            "prepare-int32x4-bytearray-audit.py", "int32x4_bytearray_model.py", "test-int32x4-bytearray-model.py", "test-core-vector-memory.py",
-            "prepare-word32x4-bytearray-audit.py", "word32x4_bytearray_model.py", "test-word32x4-bytearray-model.py", "test-core-word32-vector-memory.py",
-            "prepare-floatx4-bytearray-audit.py", "floatx4_bytearray_model.py", "test-floatx4-bytearray-model.py", "test-core-float-vector-memory.py",
-            "prepare-doublex2-bytearray-audit.py", "doublex2_bytearray_model.py", "test-doublex2-bytearray-model.py", "test-core-double-vector-memory.py",
+            "test-core-vector-memory.py",
+            "test-core-word32-vector-memory.py",
+            "test-core-float-vector-memory.py",
+            "test-core-double-vector-memory.py",
             "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
             "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
     })
@@ -296,6 +320,29 @@ tasks.withType<Test>().configureEach {
 tasks.test {
     useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
 }
+// Both forks consume the same testClasses/runtimeClasspath task graph. Native
+// compilation and ABI probes remain fresh, but execute only once per invocation.
+// Keep `test` compatible with existing JAVA_TOOL_OPTIONS-based single-mode runs.
+val handoffModeTests = listOf("testDefault" to false, "testDense" to true).map { (taskName, dense) ->
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Runs the ordinary test inventory with ${if (dense) "dense" else "default"} handoffs."
+        testClassesDirs = sourceSets.test.get().output.classesDirs
+        classpath = sourceSets.test.get().runtimeClasspath
+        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Handoff mode evidence requires a fresh test process") { true }
+    }
+}
+handoffModeTests[1].configure { mustRunAfter(handoffModeTests[0]) }
+tasks.register("testHandoffModes") {
+    group = "verification"
+    description = "Runs fresh default and dense test forks from one compilation (use --continue to collect both failures)."
+    dependsOn(handoffModeTests)
+}
 // Actual private boot-library FCallId proofs require installed full Core. Keep
 // this named suite independent of stock/thin default fixture groups; selecting
 // it without preparing its real fixture is an error, never a skipped test.
@@ -306,6 +353,24 @@ fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
+tasks.register<Test>("graphWorkloadTest") {
+    group = "verification"
+    description = "Checks the real containers BFS example against native GHC and an independent shortest-distance model."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    maxHeapSize = "8g"
+    // Only this optional proof consumes the graph manifest. Its test validates
+    // every recorded artifact; unrelated Test tasks need not hash these exports.
+    inputs.file("build/graph-bfs/manifest.json")
+    filter { includeTestsMatching("thc.GraphWorkloadTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Graph native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        check(file("build/graph-bfs/manifest.json").isFile) {
+            "Missing graph proof: run cabal run exe:thc-fixtures -- graph-bfs (docs/graph-example.md)"
+        }
+    }
+}
 tasks.register<Test>("originalIconvFullCoreTest") {
     group = "verification"
     description = "Tests original locale/iconv imports using the explicitly prepared full-Core GHC fixture."
@@ -370,6 +435,25 @@ tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
     doFirst {
         check(file("build/arithmetic-exceptions/manifest.json").isFile) {
             "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+        }
+    }
+}
+tasks.register<Test>("stmFullCoreTest") {
+    group = "verification"
+    description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."
+    maxHeapSize = "4g"
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/stm") {
+        include("**/*.json", "*.tsv", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/stm-oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.STMFullCoreTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original STM native/first-entry evidence requires a fresh process") { true }
+    doFirst {
+        check(file("build/stm/manifest.json").isFile) {
+            "Missing STM fixture: select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- stm (docs/stm.md)"
         }
     }
 }
@@ -477,6 +561,28 @@ val compileCbits by tasks.registering(Exec::class) {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
 tasks.processResources { dependsOn(compileCbits) }
+
+// Exact-width byte/short atomics, which JDK segment handles do not implement.
+val compileNativeAtomics by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-atomic-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-atomics")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-atomic-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-atomics")) }
+tasks.processResources { dependsOn(compileNativeAtomics) }
 
 // Optional Linux opened-resource provider; not original fstat admission.
 val compileNativeFiles by tasks.registering {

@@ -5,6 +5,9 @@
  * native thread without changing the embedding process's global locale. */
 #define _POSIX_C_SOURCE 200809L
 #include <locale.h>
+#if defined(__APPLE__)
+#include <xlocale.h>
+#endif
 #include <stdlib.h>
 
 struct thc_strerror_locale {

@@ -45,8 +45,7 @@ full-width bounds and overlap violations, and require State failure to leave
 storage unchanged. Result pools must remain empty and reference-clean.
 
 ```sh
-python3 scripts/prepare-mutable-bytearrays.py
-python3 scripts/test-mutable-bytearray-model.py
+cabal run exe:thc-fixtures --offline -- mutable-bytearrays
 python3 scripts/test-core-bytearrays.py
 ./gradlew test --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest
@@ -55,3 +54,11 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.run
 This adds no resizing, pinned allocation, `Addr#`, foreign-memory, concurrent or
 atomic operations. Native undefined ranges and overlapping calls to the disjoint
 primitive are not counted as execution coverage.
+
+The five related byte-array fixture producers share the Haskell
+`ByteArrayFixtures` module. `MutableByteArrayTest` independently checks the
+complete ordered native corpus, all contained ranges, overlap snapshots and
+distinct-storage copy equivalence. Missing, duplicate, reordered and wrong rows,
+missing source/artifact hashes and corrupt receipts are rejected. The existing
+Python Core auditor, original-source exporter and primop inventory remain shared
+dependencies; there is no Python fixture-model entry point for this family.

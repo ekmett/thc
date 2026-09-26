@@ -7,6 +7,39 @@ strict Core bundles; `scripts/try.sh` runs both backends through interpreted,
 compiled, cold-input and recompiled checks. The fixtures below remain as
 smaller tests of individual runtime mechanisms.
 
+## Floating decomposition
+
+The separate [`THC.InverseHyperbolic`](THC/InverseHyperbolic.hs) example
+evaluates `asinhDouble#` from raw binary64 input bits and returns raw result
+bits:
+
+```sh
+cabal run exe:thc-fixtures --offline -- floating-remainder
+build/install/thc/bin/thc build/floating-remainder/post-core/THC.InverseHyperbolic.json asinhExample 1 --compile
+THC_BACKEND=ast build/install/thc/bin/thc build/floating-remainder/post-core/THC.InverseHyperbolic.json asinhExample 1 --compile
+```
+
+Both commands return `1`: the smallest positive subnormal is unchanged at
+binary64 precision. See the [floating guide](../docs/floating-primitives.md)
+for the inverse functions, min/max operand rules and four-field decomposition.
+
+[`THC.FloatDecode`](THC/FloatDecode.hs) exposes the ordinary `Float` and `Double`
+`exponent` methods through integer-bit-pattern inputs, matching THC's scalar CLI.
+The [floating guide](../docs/floating-primitives.md#integer-decomposition-and-public-exponent)
+describes the native-backed corpus, decomposition primops and exact scope.
+
+```sh
+make runtime
+cabal run exe:thc-fixtures --offline -- float-decode
+build/install/thc/bin/thc build/float-decode/post-core/THC.FloatDecode.json,build/float-decode/original/GHC.Internal.Bignum.Integer.json doubleExampleExponent 1 --compile
+THC_BACKEND=ast build/install/thc/bin/thc build/float-decode/post-core/THC.FloatDecode.json,build/float-decode/original/GHC.Internal.Bignum.Integer.json floatExampleExponent 1 --compile
+```
+
+Input `1` is the smallest positive subnormal bit pattern: these commands print
+`-1073` and `-148` respectively. Both signed zeros have exponent zero. The
+original Integer module is required by the real `Double` implementation; omitting
+it is a strict loading error, not a request to replace the library method.
+
 These are real Haskell modules compiled by GHC 9.14.1 at `-O2`. The THC
 prototype exports `THC.Prim` and `THC.Fixtures`; `NativeOracle.hs` is only the
 native GHC oracle and benchmark driver. The prototype does not need to execute
@@ -130,3 +163,9 @@ startup, argument parsing, and result printing from its reported time. These
 small runs are smoke comparisons; JVM warmup, proven Graal compilation,
 allocation, repeated independent runs, and representative applications remain
 necessary before making performance claims.
+
+## Opaque pointers and wide characters
+
+[`StableWideCells.hs`](StableWideCells.hs) stores a caller-owned StablePtr and a
+supplementary-plane character in aligned array slots. See the
+[storage contract and native/compiled checks](../docs/aligned-scalar-memory.md).

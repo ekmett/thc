@@ -109,7 +109,7 @@ class FetchAddIntArrayTest {
             val results = (0 until threads).map {
                 pool.submit<List<Long>> {
                     assertTrue(start.await(10, TimeUnit.SECONDS))
-                    (0 until perThread).map { ManagedByteArray.fetchAddIntGuest(owner, 1, 1) }
+                    (0 until perThread).map { AtomicIntArrayOp.ADD.execute(owner, 1, 1, 0) }
                 }
             }
             start.countDown()
@@ -119,13 +119,13 @@ class FetchAddIntArrayTest {
             assertEquals(313L, ManagedByteArray.readIntGuest(owner, 0))
         } finally { pool.shutdownNow() }
         owner.shrink(8)
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.fetchAddIntGuest(owner, 1, 1) }
+        assertThrows(RuntimeFault::class.java) { AtomicIntArrayOp.ADD.execute(owner, 1, 1, 0) }
         assertEquals(313L, ManagedByteArray.readIntGuest(owner, 0))
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.fetchAddIntGuest(ByteArray(8), 0, 1) }
+        assertThrows(RuntimeFault::class.java) { AtomicIntArrayOp.ADD.execute(ByteArray(8), 0, 1, 0) }
         val pointerOwner = ManagedByteArray.allocateGuest(8)
         val address = ManagedAddress.fromAllocation(pointerOwner)
         pointerOwner.writeAddressByteOffset(0, address)
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.fetchAddIntGuest(pointerOwner, 0, 1) }
+        assertThrows(RuntimeFault::class.java) { AtomicIntArrayOp.ADD.execute(pointerOwner, 0, 1, 0) }
         assertSame(address, pointerOwner.readAddressByteOffset(0))
     }
 }

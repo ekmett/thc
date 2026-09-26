@@ -78,12 +78,32 @@ It checks installed-target identity and validity, not compiled-entry counters;
 those counters are required separately by the instrumented native tests. Neither
 test setting increases a compiler graph budget or changes production policy.
 
-`scripts/prepare-word32x4-bytearray-audit.py` prepares fresh native/pre/post
+`cabal run exe:thc-fixtures -- word32x4-bytearray` prepares fresh native/pre/post
 inputs, fourteen strict positive roots, seven exact frontier negatives and six
 signed-proof mutations per stage. Export-only mode honestly records pre-Tidy
 Core/model inputs without claiming native execution. Per-run provenance and
-command/status logs are retained; earlier snapshots do not independently retain
-every shared artifact overwritten by later preparation modes.
+command/status logs are retained. Preparation now copies the previous receipt
+and every recorded artifact before replacing canonical output files.
+
+## Fixture production
+
+The four 128-bit byte-array families share the Haskell
+`SimdByteArrayFixtures` producer and integer/byte model. Run
+`cabal run exe:thc-fixtures -- word32x4-bytearray`; the independent Kotlin
+`SimdByteArrayCorpus` controls run in the existing native test class.
+The shared Python `audit-core.py` remains the exact Core proof mechanism;
+the family-specific Python producer, model and test entry points are removed.
+Fresh pre/post audits and retained historical Core mutation controls both run.
+Receipts include closed source/artifact inventories and command exit records;
+failed attempts and prior receipts are preserved, never resealed.
+
+`--export-only` records only pre-Tidy/model evidence, with native fields
+explicitly null. This remains the default ARM CI policy. Repeatable
+`--ghc-option=OPTION` records and forwards explicit code-generation options
+to exports and native builds (for example `--ghc-option=-fllvm`).
+Availability of LLVM and native arithmetic evidence on a host does not by
+itself establish this byte-array corpus or JVM/graph support.
+The historical results below are not new migration performance measurements.
 
 ## Verified checkpoint
 

@@ -7,14 +7,14 @@ import com.oracle.truffle.api.frame.VirtualFrame
 
 /** IEEE values in managed, native-endian Addr# storage. Element offsets have their GHC widths. */
 internal object FloatingAddresses {
-    @JvmStatic fun readFloat(address: ManagedAddress, index: Long): Float =
-        java.lang.Float.intBitsToFloat((ManagedAddressRead.WORD32.read(address, index)).toInt())
-    @JvmStatic fun readDouble(address: ManagedAddress, index: Long): Double =
-        java.lang.Double.longBitsToDouble(ManagedAddressRead.WORD64.read(address, index))
-    @JvmStatic fun writeFloat(address: ManagedAddress, index: Long, value: Float) =
-        address.writeNativeScalar(index, 4, (java.lang.Float.floatToRawIntBits(value).toLong() and 0xffffffffL))
-    @JvmStatic fun writeDouble(address: ManagedAddress, index: Long, value: Double) =
-        address.writeNativeScalar(index, 8, java.lang.Double.doubleToRawLongBits(value))
+    @JvmStatic @JvmOverloads fun readFloat(address: ManagedAddress, index: Long, byteOffset: Boolean = false): Float =
+        java.lang.Float.intBitsToFloat((ManagedAddressRead.WORD32.read(address, index, byteOffset)).toInt())
+    @JvmStatic @JvmOverloads fun readDouble(address: ManagedAddress, index: Long, byteOffset: Boolean = false): Double =
+        java.lang.Double.longBitsToDouble(ManagedAddressRead.WORD64.read(address, index, byteOffset))
+    @JvmStatic @JvmOverloads fun writeFloat(address: ManagedAddress, index: Long, value: Float, byteOffset: Boolean = false) =
+        address.writeNativeScalar(index, 4, (java.lang.Float.floatToRawIntBits(value).toLong() and 0xffffffffL), byteOffset)
+    @JvmStatic @JvmOverloads fun writeDouble(address: ManagedAddress, index: Long, value: Double, byteOffset: Boolean = false) =
+        address.writeNativeScalar(index, 8, java.lang.Double.doubleToRawLongBits(value), byteOffset)
 }
 
 internal enum class FloatingAddressOp(val primitive: String, val floating: Boolean, val tuple: Boolean, val write: Boolean) {
@@ -28,7 +28,7 @@ internal enum class FloatingAddressOp(val primitive: String, val floating: Boole
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         val payload = if (floating) "FloatRep" else "DoubleRep"
         fun exact(proof: CoreRepresentation, reps: List<String>, kind: CoreKind): Boolean =
-            !proof.isAggregate && !proof.isVector && proof.primReps == reps && proof.kind == kind
+            !proof.isAggregate && !proof.isVector && (kind == CoreKind.LONG || proof.primReps == reps) && proof.kind == kind
         val arguments = 2 + (if (write) 2 else if (tuple) 1 else 0)
         if (actual.size != arguments || flags != List(arguments) { false } ||
             !exact(actual[0], listOf("AddrRep"), CoreKind.ADDRESS) ||
@@ -46,11 +46,21 @@ internal enum class FloatingAddressOp(val primitive: String, val floating: Boole
         if (!valid) fault("Floating Addr# result representation mismatch: $primitive")
     }
 
-    companion object { fun named(name: String): FloatingAddressOp? = entries.firstOrNull { it.primitive == name } }
+    companion object {
+        fun named(name: String): FloatingAddressOp? = when (name) {
+            "indexWord8OffAddrAsFloat#" -> INDEX_FLOAT
+            "indexWord8OffAddrAsDouble#" -> INDEX_DOUBLE
+            "readWord8OffAddrAsFloat#" -> READ_FLOAT
+            "readWord8OffAddrAsDouble#" -> READ_DOUBLE
+            "writeWord8OffAddrAsFloat#" -> WRITE_FLOAT
+            "writeWord8OffAddrAsDouble#" -> WRITE_DOUBLE
+            else -> entries.firstOrNull { it.primitive == name }
+        }
+    }
 }
 
 internal class FloatingAddressExpression(private val operation: FloatingAddressOp, proof: CoreRepresentation,
-    @field:Children private var operands: Array<Expr>) : Expr() {
+    @field:Children private var operands: Array<Expr>, private val byteOffset: Boolean = false) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any {
         if (operation.tuple) fault("Floating Addr# tuple read requires a destination")
@@ -60,11 +70,11 @@ internal class FloatingAddressExpression(private val operation: FloatingAddressO
             if (operation.floating) {
                 val value = operands[2].executeRequiredFloat(frame)
                 ManagedByteArray.requireState(operands[3].execute(frame))
-                FloatingAddresses.writeFloat(address, index, value)
+                FloatingAddresses.writeFloat(address, index, value, byteOffset)
             } else {
                 val value = operands[2].executeRequiredDouble(frame)
                 ManagedByteArray.requireState(operands[3].execute(frame))
-                FloatingAddresses.writeDouble(address, index, value)
+                FloatingAddresses.writeDouble(address, index, value, byteOffset)
             }
             return Unit
         }
@@ -73,14 +83,14 @@ internal class FloatingAddressExpression(private val operation: FloatingAddressO
     override fun executeFloat(frame: VirtualFrame): Float {
         if (operation == FloatingAddressOp.INDEX_FLOAT)
             return FloatingAddresses.readFloat(operands[0].executeRequiredAddress(frame),
-                operands[1].executeRequiredLong(frame))
+                operands[1].executeRequiredLong(frame), byteOffset)
         if (operation == FloatingAddressOp.INDEX_DOUBLE) return super.executeFloat(frame)
         fault("Floating Addr# operation does not produce a scalar Float")
     }
     override fun executeDouble(frame: VirtualFrame): Double {
         if (operation == FloatingAddressOp.INDEX_DOUBLE)
             return FloatingAddresses.readDouble(operands[0].executeRequiredAddress(frame),
-                operands[1].executeRequiredLong(frame))
+                operands[1].executeRequiredLong(frame), byteOffset)
         if (operation == FloatingAddressOp.INDEX_FLOAT) return super.executeDouble(frame)
         fault("Floating Addr# operation does not produce a scalar Double")
     }
@@ -89,8 +99,8 @@ internal class FloatingAddressExpression(private val operation: FloatingAddressO
         val address = operands[0].executeRequiredAddress(frame)
         val index = operands[1].executeRequiredLong(frame)
         ManagedByteArray.requireState(operands[2].execute(frame))
-        if (operation.floating) FrameAccess.writeFloat(frame, slots[offset], FloatingAddresses.readFloat(address, index))
-        else FrameAccess.writeDouble(frame, slots[offset], FloatingAddresses.readDouble(address, index))
+        if (operation.floating) FrameAccess.writeFloat(frame, slots[offset], FloatingAddresses.readFloat(address, index, byteOffset))
+        else FrameAccess.writeDouble(frame, slots[offset], FloatingAddresses.readDouble(address, index, byteOffset))
         return null
     }
 }

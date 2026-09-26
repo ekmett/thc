@@ -397,7 +397,8 @@ def main():
                                 if entry.get('execution', group['execution']) == 'frontier'),
                allNativeResultsMatchIndependentModels=True, staticSupportViolations=violations))
     inputs = {ROOT / group['source'] for group in groups} | {
-        ROOT / 'examples/LibraryOracle.hs', ROOT / 'scripts/prepare-library-tests.py',
+        ROOT / 'examples/LibraryOracle.hs', ROOT / 'examples/THC/GraphWorkload.hs',
+        ROOT / 'scripts/prepare-library-tests.py',
         ROOT / 'scripts/audit-core.py', ROOT / 'scripts/core-capabilities.json',
         ROOT / 'src/main/resources/thc/scalar-primop-signatures.json',
         ROOT / 'src/diagnostics/kotlin/thc/LibraryCheck.kt', ROOT / 'compiler/build.sh',

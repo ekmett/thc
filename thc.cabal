@@ -12,6 +12,11 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  examples/THC/GraphWorkload.hs
+  examples/LibraryOracle.hs
+  examples/ThreadInventory.hs
+  compiler/test-fixtures/ThreadInventoryNative.hs
+  docs/thread-inventory.md
   compiler/test-fixtures/SimdWideFloatFma.hs
   compiler/test-fixtures/SimdWideFloatFmaNative.hs
   test/fixtures/run-scalar-cbits/src/Scalar.hs
@@ -441,10 +446,13 @@ executable thc-fixtures
   main-is: Main.hs
   other-modules:
     AggregateFixtures
+    GraphFixtures
+    IntegerCompletionFixtures
     ContinuationFixtures
     LiveAsyncFixtures
     ThreadLabelFixtures
     ThreadStatusFixtures
+    ThreadInventoryFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     ArithmeticExceptionFixtures
@@ -455,17 +463,23 @@ executable thc-fixtures
     FixtureSupport
     WordFloatingFixtures
     ScalarBitCastFixtures
+    AddressArrayCopyFixtures
     BigNatLiteralFixtures
+    PinnedAddressFixtures
     FloatingAddressFixtures
+    AtomicAddressFixtures
     FloatingByteOffsetFixtures
     NarrowByteOffsetFixtures
     Int32ByteOffsetFixtures
+    UnalignedScalarMemoryFixtures
     Explicit64ArrayFixtures
     FusedFloatingFixtures
     SimdCallFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures
+    FloatDecodeFixtures
+    FloatingRemainderFixtures
     UnsafeEqualityFixtures
     OriginalStdioFixtures
     OriginalStdioCloseFixtures
@@ -493,10 +507,15 @@ executable thc-fixtures
     OriginalSigsetFixtures
     OriginalIconvFixtures
     MutVarFixtures
+    STMFixtures
     StablePointerFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
+    ByteArrayFixtures
+    SimdByteArrayFixtures
+    SimdByteArrayModel
     FetchAddIntArrayFixtures
+    AtomicIntArrayFixtures
     SmallArrayFixtures
     StackFixtures
     StackDecoderFixtures
@@ -514,6 +533,7 @@ executable thc-fixtures
     THC.Driver.Run
     THC.Driver.Zip
     BoxedArrayExtensionsFixtures
+    AlignedScalarMemoryFixtures
     WideCharAddressFixtures
     ManagedAddressReadFixtures
   hs-source-dirs: test/haskell-fixtures, src

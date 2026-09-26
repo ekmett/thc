@@ -26,14 +26,14 @@ internal object PinnedMemory {
         return index * width
     }
 
-    @JvmStatic fun readAddressArray(value: Any?, index: Long): ManagedAddress {
+    @JvmStatic @JvmOverloads fun readAddressArray(value: Any?, index: Long, byteOffset: Boolean = false): ManagedAddress {
         val array = pointerArray(value)
-        return array.readAddressByteOffset(byteOffset(array, index))
+        return array.readAddressByteOffset(if (byteOffset) index else byteOffset(array, index))
     }
 
-    @JvmStatic fun writeAddressArray(value: Any?, index: Long, address: ManagedAddress) {
+    @JvmStatic @JvmOverloads fun writeAddressArray(value: Any?, index: Long, address: ManagedAddress, byteOffset: Boolean = false) {
         val array = pointerArray(value)
-        array.writeAddressByteOffset(byteOffset(array, index), address)
+        array.writeAddressByteOffset(if (byteOffset) index else byteOffset(array, index), address)
     }
 }
 
@@ -57,6 +57,9 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
     READ_INT64("readInt64OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true, ManagedAddressRead.INT64),
     READ_ADDR("readAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep"), emptyList()), true),
     INDEX_ADDR_OFF("indexAddrOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false),
+    INDEX_WORD8_AS_CHAR("indexWord8OffAddrAsChar#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.CHAR),
+    INDEX_WORD8_AS_INT16("indexWord8OffAddrAsInt16#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT16),
+    INDEX_WORD8_AS_WORD16("indexWord8OffAddrAsWord16#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD16),
     INDEX_INT32("indexInt32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.INT32),
     INDEX_WORD32("indexWord32OffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WORD32),
     INDEX_WIDE_CHAR("indexWideCharOffAddr#", listOf(listOf("AddrRep"), listOf("IntRep")), false, ManagedAddressRead.WIDE_CHAR),
@@ -86,7 +89,7 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
 
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         fun exact(proof: CoreRepresentation, reps: List<String>): Boolean = !proof.isAggregate && !proof.isVector &&
-            proof.primReps == reps && proof.kind == when (reps.singleOrNull()) {
+            (proof.kind == CoreKind.LONG || proof.primReps == reps) && proof.kind == when (reps.singleOrNull()) {
                 null -> CoreKind.VOID
                 "BoxedRep (Just Unlifted)" -> CoreKind.OBJECT
                 "AddrRep" -> CoreKind.ADDRESS
@@ -104,25 +107,72 @@ internal enum class PinnedMemoryOp(val primitive: String, val arguments: List<Li
             else -> listOf("BoxedRep (Just Unlifted)")
         }
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN && result.components!!.size == 2 &&
-            exact(result.components[0], emptyList()) && exact(result.components[1], payload) && result.primReps == payload
+            exact(result.components[0], emptyList()) && exact(result.components[1], payload) &&
+            (result.components[1].kind == CoreKind.LONG || result.primReps == payload)
         else exact(result, if (this == CONTENTS || this == MUTABLE_CONTENTS || this == INDEX_ADDR_OFF || this == INDEX_ADDR_ARRAY)
             listOf("AddrRep") else addressRead?.let { listOf(it.payload) } ?: emptyList())
         if (!valid) throw RuntimeFault("Pinned memory result representation mismatch: $primitive")
     }
-    companion object { fun named(name: String): PinnedMemoryOp? = entries.firstOrNull { it.primitive == name } }
+    companion object {
+        fun named(name: String): PinnedMemoryOp? = when (name) {
+            "indexStablePtrArray#" -> INDEX_ADDR_ARRAY
+            "readStablePtrArray#" -> READ_ADDR_ARRAY
+            "writeStablePtrArray#" -> WRITE_ADDR_ARRAY
+            "indexStablePtrOffAddr#" -> INDEX_ADDR_OFF
+            "readStablePtrOffAddr#" -> READ_ADDR
+            "writeStablePtrOffAddr#" -> WRITE_ADDR
+            "indexWord8OffAddrAsInt#" -> INDEX_INT
+            "indexWord8OffAddrAsWord#" -> INDEX_WORD
+            "indexWord8OffAddrAsInt32#" -> INDEX_INT32
+            "indexWord8OffAddrAsWord32#" -> INDEX_WORD32
+            "indexWord8OffAddrAsInt64#" -> INDEX_INT64
+            "indexWord8OffAddrAsWord64#" -> INDEX_WORD64
+            "indexWord8OffAddrAsWideChar#" -> INDEX_WIDE_CHAR
+            "indexWord8OffAddrAsAddr#" -> INDEX_ADDR_OFF
+            "indexWord8OffAddrAsStablePtr#" -> INDEX_ADDR_OFF
+            "indexWord8ArrayAsAddr#", "indexWord8ArrayAsStablePtr#" -> INDEX_ADDR_ARRAY
+            "readWord8OffAddrAsInt#" -> READ_INT
+            "readWord8OffAddrAsWord#" -> READ_WORD
+            "readWord8OffAddrAsInt16#" -> READ_INT16
+            "readWord8OffAddrAsWord16#" -> READ_WORD16
+            "readWord8OffAddrAsInt32#" -> READ_INT32
+            "readWord8OffAddrAsWord32#" -> READ_WORD32
+            "readWord8OffAddrAsInt64#" -> READ_INT64
+            "readWord8OffAddrAsWord64#" -> READ_WORD64
+            "readWord8OffAddrAsWideChar#" -> READ_WIDE_CHAR
+            "readWord8OffAddrAsChar#" -> READ_CHAR
+            "readWord8OffAddrAsAddr#" -> READ_ADDR
+            "readWord8OffAddrAsStablePtr#" -> READ_ADDR
+            "readWord8ArrayAsAddr#", "readWord8ArrayAsStablePtr#" -> READ_ADDR_ARRAY
+            "writeWord8OffAddrAsInt#" -> WRITE_INT
+            "writeWord8OffAddrAsWord#" -> WRITE_WORD
+            "writeWord8OffAddrAsInt16#" -> WRITE_INT16
+            "writeWord8OffAddrAsWord16#" -> WRITE_WORD16
+            "writeWord8OffAddrAsInt32#" -> WRITE_INT32
+            "writeWord8OffAddrAsWord32#" -> WRITE_WORD32
+            "writeWord8OffAddrAsInt64#" -> WRITE_INT64
+            "writeWord8OffAddrAsWord64#" -> WRITE_WORD64
+            "writeWord8OffAddrAsWideChar#" -> WRITE_WIDE_CHAR
+            "writeWord8OffAddrAsChar#" -> WRITE_CHAR
+            "writeWord8OffAddrAsAddr#" -> WRITE_ADDR
+            "writeWord8OffAddrAsStablePtr#" -> WRITE_ADDR
+            "writeWord8ArrayAsAddr#", "writeWord8ArrayAsStablePtr#" -> WRITE_ADDR_ARRAY
+            else -> entries.firstOrNull { it.primitive == name }
+        }
+    }
 }
 
 /** Keep the two pure index operands as adopted children so compiled Truffle
  * does not have to materialize a virtual frame through an array-selected Expr. */
-internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation,
+internal class PinnedPointerIndexExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = executeAddress(frame)
     override fun executeAddress(frame: VirtualFrame): ManagedAddress = when (operation) {
         PinnedMemoryOp.INDEX_ADDR_OFF -> base.executeRequiredAddress(frame)
-            .readAddressElementIndex(index.executeRequiredLong(frame))
+            .readAddressElementIndex(index.executeRequiredLong(frame), byteOffset)
         PinnedMemoryOp.INDEX_ADDR_ARRAY -> PinnedMemory.readAddressArray(base.execute(frame),
-            index.executeRequiredLong(frame))
+            index.executeRequiredLong(frame), byteOffset)
         else -> fault("Expected a pointer index primitive")
     }
 }
@@ -137,15 +187,15 @@ internal class PinnedByteArrayContents(proof: CoreRepresentation,
         ManagedAddress.fromGuestByteArray(array.execute(frame))
 }
 
-internal class PinnedScalarIndexExpression(private val operation: ManagedAddressRead, proof: CoreRepresentation,
+internal class PinnedScalarIndexExpression(private val operation: ManagedAddressRead, proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long = operation.read(
-        base.executeRequiredAddress(frame), index.executeRequiredLong(frame))
+        base.executeRequiredAddress(frame), index.executeRequiredLong(frame), byteOffset)
 }
 
-internal class PinnedPointerArrayWrite(proof: CoreRepresentation,
+internal class PinnedPointerArrayWrite(proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr,
     @field:Child private var address: Expr, @field:Child private var state: Expr) : Expr() {
     init { representation = proof.copy(evaluated = true) }
@@ -154,12 +204,12 @@ internal class PinnedPointerArrayWrite(proof: CoreRepresentation,
         val element = index.executeRequiredLong(frame)
         val value = address.executeRequiredAddress(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        PinnedMemory.writeAddressArray(allocation, element, value)
+        PinnedMemory.writeAddressArray(allocation, element, value, byteOffset)
         return Unit
     }
 }
 
-internal class PinnedPointerArrayRead(proof: CoreRepresentation,
+internal class PinnedPointerArrayRead(proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr,
     @field:Child private var state: Expr) : Expr() {
     init { representation = proof.copy(evaluated = true) }
@@ -168,13 +218,13 @@ internal class PinnedPointerArrayRead(proof: CoreRepresentation,
         val allocation = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], PinnedMemory.readAddressArray(allocation, element))
+        FrameAccess.write(frame, slots[offset], PinnedMemory.readAddressArray(allocation, element, byteOffset))
         return null
     }
 }
 
 internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, proof: CoreRepresentation,
-    @field:Children private var operands: Array<Expr>) : Expr() {
+    @field:Children private var operands: Array<Expr>, private val byteOffset: Boolean = false) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = when {
         operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS ->
@@ -193,7 +243,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredLong(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
-            address.writeWord16(offset, value)
+            address.writeNativeScalar(offset, 2, value, byteOffset)
             Unit
         }
         operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 ||
@@ -206,7 +256,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             ManagedByteArray.requireState(operands[3].execute(frame))
             val width = if (operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 ||
                 operation == PinnedMemoryOp.WRITE_WIDE_CHAR) 4 else 8
-            address.writeNativeScalar(offset, width, value)
+            address.writeNativeScalar(offset, width, value, byteOffset)
             Unit
         }
         operation == PinnedMemoryOp.WRITE_ADDR -> {
@@ -214,7 +264,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             val offset = operands[1].executeRequiredLong(frame)
             val value = operands[2].executeRequiredAddress(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
-            address.writeAddressElementIndex(offset, value)
+            address.writeAddressElementIndex(offset, value, byteOffset)
             Unit
         }
         operation == PinnedMemoryOp.COPY_ADDR_NON_OVERLAPPING -> {
@@ -247,7 +297,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
-                val value = operation.addressRead?.read(address, index)
+                val value = operation.addressRead?.read(address, index, byteOffset)
                     ?: address.readWord8(index).let { if (operation == PinnedMemoryOp.READ_INT8) it.toByte().toLong() else it }
                 FrameAccess.writeLong(frame, slots[offset], value)
             }
@@ -255,7 +305,7 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
-                FrameAccess.write(frame, slots[offset], address.readAddressElementIndex(index))
+                FrameAccess.write(frame, slots[offset], address.readAddressElementIndex(index, byteOffset))
             }
             else -> fault("Pinned memory scalar operation has no tuple destination")
         }

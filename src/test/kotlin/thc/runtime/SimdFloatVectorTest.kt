@@ -7,6 +7,7 @@ package thc.runtime
 import jdk.incubator.vector.FloatVector
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.Truffle
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -23,6 +24,7 @@ class SimdFloatVectorTest {
     private fun metadata() = mapOf("kind" to "vector", "evaluated" to true,
         "primReps" to listOf("VecRep 4 FloatElemRep"), "vector" to mapOf("lanes" to 4L, "element" to "FloatElemRep"))
     private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
+        .option("compiler.Inlining", "false")
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000").build().use { context ->
             context.initialize("thc"); context.enter()
@@ -156,20 +158,45 @@ class SimdFloatVectorTest {
                 val program = program(language, backend, module(stage), name)
                 val host = program.hostEntryTarget(arity)
                 val closure = program.entryValue(name)
+                val target = program.entryTarget(name)
+                val handoff = language.handoffState.get()
+                var argumentAllocations = 0L
+                var resultAllocations = 0L
                 fun checkRows(compiled: Boolean = false) {
                     for (input in cases) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         val actual = Calls.target(host, arrayOf(closure, input.toTypedArray()))
                         val label = "$stage/$backend/$name/$input"
                         assertEquals(expected.getValue(name to input), actual, label)
-                        if (compiled) assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before, label)
+                        // Exactly the selected root is installed. Scalar helper
+                        // roots remain interpreted with Truffle inlining disabled.
+                        if (compiled) {
+                            assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), label)
+                            assertEquals(argumentAllocations, handoff.arguments.allocations, label)
+                            assertEquals(resultAllocations, handoff.results.allocations, label)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), label)
+                        }
+                        assertEquals(0, handoff.arguments.depth, label)
+                        assertEquals(0, handoff.arguments.retainedReferences(), label)
+                        assertEquals(0, handoff.results.depth, label)
+                        assertEquals(0, handoff.results.retainedReferences(), label)
+                        assertNull(handoff.pending, label)
                     }
                 }
                 checkRows(); checkRows()
-                val target = program.entryTarget(name)
+                val beforeSetup = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                assertEquals(0L, beforeSetup, "The full corpus ran interpreted before installation")
+                val beforeCalls = target.javaClass.getMethod("getCallCount").invoke(target)
+                argumentAllocations = handoff.arguments.allocations
+                resultAllocations = handoff.results.allocations
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$name installed")
+                Truffle.getRuntime().let { runtime -> runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target) }
+                assertEquals(beforeSetup, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                assertEquals(beforeCalls, target.javaClass.getMethod("getCallCount").invoke(target))
                 checkRows(compiled = true)
+                assertEquals(beforeCalls, target.javaClass.getMethod("getCallCount").invoke(target), "No interpreted entry after installation")
                 assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target), "$stage/$backend/$name after execution")
                 val diagnostics = program.diagnostics()
                 assertEquals(0L, (diagnostics.getValue("unsupportedTraps") as Number).toLong())

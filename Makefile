@@ -16,7 +16,7 @@ export JAVA_HOME
 
 CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v '$(GHC)')" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal scripts/check-ghc-core.hs
 
-.PHONY: all runtime haskell run jar fixtures test jit-test probe clean distclean check-java check-ghc-core
+.PHONY: all runtime haskell run jar fixtures test test-modes jit-test probe clean distclean check-java check-ghc-core
 .PHONY: docs docs-haskell docs-jvm docs-check check-pandoc
 
 all: runtime haskell
@@ -71,6 +71,9 @@ fixtures: check-java
 
 test: fixtures
 	./gradlew test $(GRADLE_FLAGS) $(if $(TESTS),--tests '$(TESTS)')
+
+test-modes: fixtures
+	./gradlew $(GRADLE_FLAGS) --continue testDefault $(if $(TESTS),--tests '$(TESTS)') testDense $(if $(TESTS),--tests '$(TESTS)')
 
 jit-test: fixtures
 	./gradlew jitStabilityTest $(GRADLE_FLAGS)

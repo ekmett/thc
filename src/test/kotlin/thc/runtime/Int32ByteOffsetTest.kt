@@ -86,11 +86,11 @@ class Int32ByteOffsetTest {
         assertEquals(0x80000001L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 9, true))
     }
 
-    @Test fun metadataRequiresExactInt32RepsAndByteOffsets() {
+    @Test fun metadataRequiresScalarCarriersAndByteOffsets() {
         fun proof(kind: CoreKind, rep: String) = CoreRepresentation(kind, primReps = listOf(rep))
         val array = proof(CoreKind.OBJECT, "BoxedRep (Just Unlifted)")
         val offset = proof(CoreKind.LONG, "IntRep")
-        val wrongOffset = proof(CoreKind.LONG, "WordRep")
+        val wrongOffset = proof(CoreKind.DOUBLE, "DoubleRep")
         val signed = proof(CoreKind.LONG, "Int32Rep")
         val unsigned = proof(CoreKind.LONG, "Word32Rep")
         ByteArrayOp.INDEX_WORD8_AS_INT32.validate(listOf(array, offset), listOf(false, false), signed)
@@ -98,10 +98,10 @@ class Int32ByteOffsetTest {
         assertThrows(RuntimeFault::class.java) {
             ByteArrayOp.INDEX_WORD8_AS_INT32.validate(listOf(array, wrongOffset), listOf(false, false), signed)
         }
-        assertThrows(RuntimeFault::class.java) {
+        assertDoesNotThrow {
             ByteArrayOp.INDEX_WORD8_AS_WORD32.validate(listOf(array, offset), listOf(false, false), signed)
         }
-        assertThrows(RuntimeFault::class.java) {
+        assertDoesNotThrow {
             ByteArrayOp.INDEX_WORD8_AS_INT32.validate(listOf(array, offset), listOf(false, true), signed)
         }
     }

@@ -11,8 +11,34 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/ManagedSTM.kt": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": []
+    },
+    "src/main/kotlin/thc/runtime/STMPrimops.kt": {
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/ThreadObservation.kt": {
+      "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/AtomicIntArrays.kt": {
+      "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "src/main/kotlin/thc/runtime/AddressArrayCopy.kt": {
+      "junit": ["thc.runtime.AddressArrayCopyTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/FloatDecodePrimitives.kt": {
+      "junit": ["thc.runtime.FloatDecodeTest", "thc.runtime.FloatingRemainderTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/kotlin/thc/runtime/AtomicAddresses.kt": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
     "src/main/kotlin/thc/runtime/ManagedNativeAllocations.kt": {
-      "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"],
+      "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest", "thc.runtime.AtomicAddressTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreDataLabels.kt": {
@@ -41,7 +67,7 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/StablePointers.kt": {
-      "junit": ["thc.runtime.StablePointerTest"],
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreStablePointers.kt": {
@@ -53,7 +79,7 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
-      "junit": ["thc.runtime.FloatingAddressTest"],
+      "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedSmallArrays.kt": {
@@ -72,6 +98,7 @@
     },
     "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
       "junit": [
+        "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FloatingAddressTest",
         "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
@@ -106,9 +133,7 @@
         "scripts/test-core-float-vector-memory.py",
         "scripts/test-core-sums.py",
         "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-bytearray-model.py",
         "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py",
         "scripts/test-sum-layout.py",
         "scripts/test-tuple-inputs.py"
@@ -116,6 +141,7 @@
     },
     "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
       "junit": [
+        "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FusedFloatingTest",
         "thc.runtime.WordFloatingTest",
         "thc.SumLayoutMetadataTest",
@@ -149,9 +175,7 @@
         "scripts/test-core-float-vector-memory.py",
         "scripts/test-core-sums.py",
         "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-bytearray-model.py",
         "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py",
         "scripts/test-sum-layout.py",
         "scripts/test-tuple-inputs.py"
@@ -179,11 +203,9 @@
         "scripts/test-core-vectors.py",
         "scripts/test-core-word32-vector-memory.py",
         "scripts/test-int16x8-model.py",
-        "scripts/test-int32x4-bytearray-model.py",
         "scripts/test-int32x4-multiply-model.py",
         "scripts/test-int8x16-model.py",
         "scripts/test-word16x8-model.py",
-        "scripts/test-word32x4-bytearray-model.py",
         "scripts/test-word32x4-model.py",
         "scripts/test-word8x16-model.py"
       ]
@@ -205,9 +227,7 @@
         "scripts/test-core-double-vector-memory.py",
         "scripts/test-core-float-vector-memory.py",
         "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-bytearray-model.py",
         "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-bytearray-model.py",
         "scripts/test-floatx4-model.py"
       ]
     }
@@ -249,7 +269,105 @@
     }
   },
   "owners": {
+    "test/haskell-fixtures/SimdByteArrayFixtures.hs": {
+      "junit": [
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdDoubleByteArrayTest"
+      ],
+      "python": []
+    },
+    "test/haskell-fixtures/SimdByteArrayModel.hs": {
+      "junit": [
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdDoubleByteArrayTest"
+      ],
+      "python": []
+    },
+    "src/test/kotlin/thc/runtime/SimdByteArrayCorpus.kt": {
+      "junit": [
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdDoubleByteArrayTest"
+      ],
+      "python": []
+    },
+    "src/test/kotlin/thc/runtime/SimdByteArrayEvidence.kt": {
+      "junit": [
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdDoubleByteArrayTest"
+      ],
+      "python": []
+    },
+    "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/STMFixtures.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
+    "compiler/test-fixtures/STMAudit.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/STMNative.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": []},
+    "src/test/kotlin/thc/runtime/ManagedSTMTest.kt": {"junit": ["thc.runtime.ManagedSTMTest"], "python": []},
+    "test/haskell-fixtures/FloatingRemainderFixtures.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "compiler/test-fixtures/FloatingRemainderAudit.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "compiler/test-fixtures/FloatingRemainderNative.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "examples/THC/InverseHyperbolic.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "examples/ThreadInventory.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/ThreadInventoryNative.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "test/haskell-fixtures/ThreadInventoryFixtures.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "examples/StableWideCells.hs": {
+      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/AlignedScalarMemoryAudit.hs": {
+      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/AlignedScalarMemoryNative.hs": {
+      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/AlignedScalarMemoryFixtures.hs": {
+      "junit": ["thc.runtime.AlignedScalarMemoryTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/IntegerCompletionFixtures.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/IntegerCompletionAudit.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/kotlin/thc/runtime/IntegerCompletionTest.kt": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/UnalignedScalarMemoryAudit.hs": {
+      "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/UnalignedScalarMemoryNative.hs": {
+      "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/UnalignedScalarMemoryFixtures.hs": {
+      "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/AddressArrayCopyFixtures.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
+    "compiler/test-fixtures/AddressArrayCopyAudit.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
+    "compiler/test-fixtures/AddressArrayCopyNative.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
+    "test/haskell-fixtures/FloatDecodeFixtures.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
+    "compiler/test-fixtures/FloatDecodeAudit.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
+    "compiler/test-fixtures/FloatDecodeNative.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
+    "examples/THC/FloatDecode.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
     "test/haskell-fixtures/ScalarBitCastFixtures.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
+    "test/haskell-fixtures/PinnedAddressFixtures.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
+    "compiler/test-fixtures/PinnedAddressAudit.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
+    "compiler/test-fixtures/PinnedAddressAuditNative.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
+    "src/test/kotlin/thc/runtime/PinnedAddressTest.kt": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
     "test/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/BigNatLiteralAuditNative.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
@@ -631,6 +749,22 @@
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
     },
+    "compiler/test-fixtures/AtomicAddressAudit.hs": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/AtomicAddressNative.hs": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/AtomicAddressFixtures.hs": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "src/main/c/native-atomic-api.c": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
     "compiler/test-fixtures/FloatingAddressNative.hs": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
@@ -775,6 +909,12 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": [
+        "thc.runtime.AtomicAddressTest",
+        "thc.runtime.AtomicIntArrayTest",
+        "thc.runtime.ThreadInventoryNativeTest",
+        "thc.runtime.AlignedScalarMemoryTest",
+        "thc.runtime.IntegerCompletionTest",
+        "thc.runtime.UnalignedScalarMemoryTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
         "thc.runtime.IntArrayNativeTest",
@@ -1075,12 +1215,24 @@
         "scripts/test-core-data-tags.py"
       ]
     },
-    "scripts/prepare-mutable-bytearray-size.py": {
-      "junit": ["thc.runtime.MutableByteArraySizeTest"],
+    "test/haskell-fixtures/ByteArrayFixtures.hs": {
+      "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
       "python": ["scripts/test-core-bytearrays.py"]
     },
-    "scripts/prepare-resize-bytearrays.py": {
-      "junit": ["thc.runtime.ResizeByteArrayTest"],
+    "src/test/kotlin/thc/runtime/ByteArrayFixtureEvidence.kt": {
+      "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/ByteArrayAudit.hs": {
+      "junit": ["thc.runtime.ByteArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/MutableByteArrayAudit.hs": {
+      "junit": ["thc.runtime.MutableByteArrayTest"],
+      "python": ["scripts/test-core-bytearrays.py"]
+    },
+    "compiler/test-fixtures/CompareByteArraysAudit.hs": {
+      "junit": ["thc.runtime.CompareByteArraysTest"],
       "python": ["scripts/test-core-bytearrays.py"]
     },
     "scripts/prepare-simd-capability-smoke.py": {
@@ -1137,7 +1289,15 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.FloatingRemainderTest",
+        "thc.runtime.AlignedScalarMemoryTest",
+        "thc.runtime.IntegerCompletionTest",
+        "thc.runtime.UnalignedScalarMemoryTest",
+        "thc.runtime.AtomicAddressTest",
+        "thc.runtime.PinnedAddressTest",
+        "thc.runtime.AddressArrayCopyTest",
         "thc.runtime.BigNatLiteralTest",
+        "thc.runtime.FloatDecodeTest",
         "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",
         "thc.runtime.RtsShutdownTest",
@@ -1157,6 +1317,7 @@
         "thc.runtime.ManagedAddressReadTest",
         "thc.runtime.ThreadAsyncNativeTest",
         "thc.runtime.ThreadStatusNativeTest",
+        "thc.runtime.ThreadInventoryNativeTest",
         "thc.runtime.ThreadLabelNativeTest",
         "thc.runtime.UncaughtSelfNativeTest",
         "thc.runtime.Int32ByteOffsetTest",
@@ -1192,7 +1353,13 @@
         "thc.runtime.StablePointerTest",
         "thc.runtime.ManagedWeakTest",
         "thc.runtime.ShrinkByteArrayTest",
+        "thc.runtime.ByteArrayTest",
+        "thc.runtime.MutableByteArrayTest",
+        "thc.runtime.ResizeByteArrayTest",
+        "thc.runtime.MutableByteArraySizeTest",
+        "thc.runtime.CompareByteArraysTest",
         "thc.runtime.FetchAddIntArrayTest",
+        "thc.runtime.AtomicIntArrayTest",
         "thc.runtime.OriginalStackConsumerProofTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.BitPrimopsTest",
@@ -1205,7 +1372,11 @@
         "thc.runtime.Int32ArrayNativeTest",
         "thc.runtime.IntArrayNativeTest",
         "thc.runtime.DoubleArrayNativeTest",
-        "thc.runtime.FloatWordArrayNativeTest"
+        "thc.runtime.FloatWordArrayNativeTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdDoubleByteArrayTest"
       ],
       "python": []
     },
@@ -1287,6 +1458,14 @@
     },
     "test/haskell-fixtures/ShrinkByteArrayFixtures.hs": {
       "junit": ["thc.runtime.ShrinkByteArrayTest"],
+      "python": []
+    },
+    "test/haskell-fixtures/AtomicIntArrayFixtures.hs": {
+      "junit": ["thc.runtime.AtomicIntArrayTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/AtomicIntArrayAudit.hs": {
+      "junit": ["thc.runtime.AtomicIntArrayTest"],
       "python": []
     },
     "test/haskell-fixtures/FetchAddIntArrayFixtures.hs": {

@@ -14,7 +14,7 @@ are unspecified to guests; JVM zero initialization is not a guest guarantee.
 
 `compiler/test-fixtures/ResizeByteArrayAudit.hs` retains an OPAQUE resize worker
 across actual calls, including repeat resize and later writes through the returned
-reference. It never accesses a retired array. `scripts/prepare-resize-bytearrays.py`
+reference. It never accesses a retired array. `cabal run exe:thc-fixtures --offline -- resize-bytearrays`
 rebuilds the pinned exporter and generates fresh pre/post Core, native TSV and
 source/artifact hashes. `ResizeByteArrayNative.hs` owns native input generation
 and execution; `ResizeByteArrayTest` checks every native row against an independent

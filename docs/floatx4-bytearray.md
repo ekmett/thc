@@ -50,6 +50,26 @@ tests. Graph acceptance must prove live packed caller-array memory operations
 and reject private vector/carrier/payload allocations and unexpected calls;
 public result boxes and exact deoptimization metadata remain distinguished.
 
+## Fixture production
+
+The four 128-bit byte-array families share the Haskell
+`SimdByteArrayFixtures` producer and integer/byte model. Run
+`cabal run exe:thc-fixtures -- floatx4-bytearray`; the independent Kotlin
+`SimdByteArrayCorpus` controls run in the existing native test class.
+The shared Python `audit-core.py` remains the exact Core proof mechanism;
+the family-specific Python producer, model and test entry points are removed.
+Fresh pre/post audits and retained historical Core mutation controls both run.
+Receipts include closed source/artifact inventories and command exit records;
+failed attempts and prior receipts are preserved, never resealed.
+
+`--export-only` records only pre-Tidy/model evidence, with native fields
+explicitly null. This remains the default ARM CI policy. Repeatable
+`--ghc-option=OPTION` records and forwards explicit code-generation options
+to exports and native builds (for example `--ghc-option=-fllvm`).
+Availability of LLVM and native arithmetic evidence on a host does not by
+itself establish this byte-array corpus or JVM/graph support.
+The historical results below are not new migration performance measurements.
+
 ## Verified checkpoint
 
 Runtime `4281921` passes 15 focused tests and the full 530 default + 530

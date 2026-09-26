@@ -64,6 +64,26 @@ An isolated cold bounds-transition test follows the existing memory-family
 pattern: explicitly compile one fresh guest, invalidate on its first invalid
 access, verify no effects, then recover without recompilation.
 
+## Fixture production
+
+The four 128-bit byte-array families share the Haskell
+`SimdByteArrayFixtures` producer and integer/byte model. Run
+`cabal run exe:thc-fixtures -- doublex2-bytearray`; the independent Kotlin
+`SimdByteArrayCorpus` controls run in the existing native test class.
+The shared Python `audit-core.py` remains the exact Core proof mechanism;
+the family-specific Python producer, model and test entry points are removed.
+Fresh pre/post audits and retained historical Core mutation controls both run.
+Receipts include closed source/artifact inventories and command exit records;
+failed attempts and prior receipts are preserved, never resealed.
+
+`--export-only` records only pre-Tidy/model evidence, with native fields
+explicitly null. This remains the default ARM CI policy. Repeatable
+`--ghc-option=OPTION` records and forwards explicit code-generation options
+to exports and native builds (for example `--ghc-option=-fllvm`).
+Availability of LLVM and native arithmetic evidence on a host does not by
+itself establish this byte-array corpus or JVM/graph support.
+The historical results below are not new migration performance measurements.
+
 ## Verified x86-64 checkpoint
 
 Frozen source `b6ba65f3ba54f937e2b88f61f04e7e4f425a1e5c` passes all 4,384

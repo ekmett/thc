@@ -20,6 +20,7 @@ class PrimopCoverageTest(unittest.TestCase):
 
     def test_inventory_retains_unadvertised_operations_and_exact_signatures(self):
         result = coverage.report(self.rows, {'+#': 2})
+        self.assertEqual(2, result['schema'])
         self.assertEqual({'total': 2, 'advertised': 1, 'unadvertised': 1}, result['counts'])
         self.assertEqual(self.rows[1][2], result['primitives'][1]['signature'])
         self.assertFalse(result['primitives'][1]['advertised'])
@@ -58,45 +59,71 @@ class PrimopChecklistTest(unittest.TestCase):
         data = coverage.report(self.rows, coverage.declared_primitives(cap))
         return coverage.classify(data, cap, self.scalars if scalars is None else scalars)
 
-    def test_family_gates_count_as_partial_not_missing_or_full_scalar(self):
+    def test_family_gates_count_as_implemented_not_missing(self):
         data = self.derive()
-        self.assertEqual(dict(supported=1, partial=5, missing=0), data['supportCounts'])
+        self.assertEqual(dict(implemented=6, missing=0), data['implementationCounts'])
         by_name = {row['name']: row for row in data['primitives']}
         for name in ('tagToEnum#', 'dataToTagSmall#', 'dataToTagLarge#'):
-            self.assertEqual(('partial', 1), (by_name[name]['status'], by_name[name]['valueArity']))
+            self.assertEqual(('implemented', 1), (by_name[name]['status'], by_name[name]['valueArity']))
 
-    def test_vector_and_address_forms_do_not_become_full_scalar_support(self):
+    def test_vector_pointer_and_numeric_forms_use_the_same_implementation_metric(self):
         rows = {row['name']: row for row in self.derive()['primitives']}
-        self.assertEqual('partial', rows['packInt64X2#']['status'])
-        self.assertEqual('Managed addresses with operation-specific storage restrictions', rows['plusAddr#']['scope'])
-        self.assertEqual('supported', rows['+#']['status'])
+        for name in ('packInt64X2#', 'plusAddr#', '+#'):
+            self.assertEqual('implemented', rows[name]['status'])
+        self.assertEqual('Pointer scalar signature', rows['plusAddr#']['contract'])
+        self.assertEqual('Numeric scalar signature', rows['+#']['contract'])
 
-    def test_managed_mvars_remain_partial_without_claiming_a_guest_scheduler(self):
+    def test_managed_mvars_count_as_implementations(self):
         cap = dict(primitives={'newMVar#': 1}, managedMVarPrimitives={
             'newMVar#': dict(arguments=['state'], result=['state', 'mvar'])})
         data = coverage.report([('newMVar#', '1', 'State# s -> (# State# s, MVar# s a #)')], cap['primitives'])
         scalars = dict(schema=1, ghc='9.14.1', targetWordSize=64, primitives={})
         row = coverage.classify(data, cap, scalars)['primitives'][0]
-        self.assertEqual('partial', row['status'])
-        self.assertEqual('Managed blocking cells; backend and continuation limits apply', row['scope'])
+        self.assertEqual('implemented', row['status'])
+        self.assertEqual('MVar operation', row['contract'])
 
     def test_explicit_weaks_do_not_claim_automatic_gc_or_ephemerons(self):
         cap = dict(primitives={'mkWeak#': 4}, managedWeakPrimitives={
-            'mkWeak#': dict(arguments=['boxed', 'boxed', 'action', 'state'], result=['state', 'weak'])})
+            'mkWeak#': dict(arguments=['boxed', 'boxed', 'action', 'state'], result=['state', 'weak'])},
+            limitations=['Automatic weak finalization and ephemerons are not implemented.'])
         data = coverage.report([('mkWeak#', '4', 'a -> b -> IO c -> State# RealWorld -> (# State#, Weak# b #)')], cap['primitives'])
         scalars = dict(schema=1, ghc='9.14.1', targetWordSize=64, primitives={})
         row = coverage.classify(data, cap, scalars)['primitives'][0]
-        self.assertEqual('partial', row['status'])
-        self.assertIn('restricted C labels, no GC or ephemerons', row['scope'])
+        self.assertEqual('implemented', row['status'])
+        self.assertEqual('Weak-pointer operation', row['contract'])
+        self.assertEqual(cap['limitations'], data['limitations'])
+        self.assertIsNot(cap['limitations'], data['limitations'])
+        self.assertIn(cap['limitations'][0], coverage.checklist(data, cap))
 
-    def test_unadvertised_is_missing_and_new_advertisements_default_to_partial(self):
+    def test_registered_implementations_change_coverage_without_a_scalar_gate(self):
         cap = copy.deepcopy(self.capability)
         del cap['tagToEnum']
         before = self.derive(cap)
-        self.assertEqual(1, before['supportCounts']['missing'])
+        self.assertEqual(1, before['implementationCounts']['missing'])
         cap['primitives']['tagToEnum#'] = 1
         after = self.derive(cap)
-        self.assertEqual(dict(supported=1, partial=5, missing=0), after['supportCounts'])
+        self.assertEqual(dict(implemented=6, missing=0), after['implementationCounts'])
+        for data in (before, after):
+            self.assertNotIn('supportCounts', data)
+
+    def test_scalar_signature_presence_is_not_an_implementation_gate(self):
+        without_signatures = copy.deepcopy(self.scalars)
+        without_signatures['primitives'] = {}
+        self.assertEqual(self.derive()['implementationCounts'], self.derive(scalars=without_signatures)['implementationCounts'])
+
+    def test_tuple_result_does_not_demote_an_arithmetic_implementation(self):
+        cap = dict(primitives={'quotRemWord2#': 3}, tuplePrimitives={
+            'quotRemWord2#': dict(arguments=['WordRep'] * 3, result=['WordRep'] * 2)})
+        data = coverage.report([('quotRemWord2#', '3', 'Word# -> Word# -> Word# -> (# Word#, Word# #)')], cap['primitives'])
+        result = coverage.classify(data, cap, dict(self.scalars, primitives={}))
+        self.assertEqual(dict(implemented=1, missing=0), result['implementationCounts'])
+        self.assertEqual('Scalar tuple result', result['primitives'][0]['contract'])
+
+    def test_empty_inventory_percentage_is_defined(self):
+        cap = dict(primitives={})
+        data = coverage.classify(coverage.report([], {}), cap, dict(self.scalars, primitives={}))
+        text = coverage.checklist(data, cap)
+        self.assertIn('0 / 0 (0.0%)', text)
 
     def test_stale_scalar_table_or_wrong_target_cannot_mark_support(self):
         for mutation in ('undeclared', 'arity', 'target'):
@@ -135,7 +162,9 @@ class PrimopChecklistTest(unittest.TestCase):
                 coverage.check_document(path, coverage.checklist(self.derive(changed), changed))
             self.assertEqual(original, path.read_text())
         self.assertIn('- [x] `+#`', original)
-        self.assertIn('- [ ] `packInt64X2#`', original)
+        self.assertIn('- [x] `packInt64X2#`', original)
+        self.assertIn('- [ ] `packInt64X2#`', coverage.checklist(self.derive(changed), changed))
+        self.assertIn('It does not require formal proof or exhaustive input testing.', original)
 
     def test_document_is_independent_of_input_order_and_does_not_mutate_contracts(self):
         cap = copy.deepcopy(self.capability)

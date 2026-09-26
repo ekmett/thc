@@ -1191,7 +1191,9 @@ class Audit:
                     argument_reps = [self.expression_rep(argument) for argument in arguments]
                     actual_args = [self.shape(rep) for rep in argument_reps]
                     if (actual_args != expected_args or flags != [False] * len(expected_args) or
-                            any(not isinstance(rep, dict) or rep.get('kind') != 'long' or 'aggregate' in rep for rep in argument_reps)):
+                            any(not isinstance(rep, dict) or 'aggregate' in rep or
+                                rep.get('kind') != {'FloatRep': 'float', 'DoubleRep': 'double'}.get(register, 'long')
+                                for rep, register in zip(argument_reps, tuple_primitive['arguments']))):
                         self.issue('primitive-representation', owner, path, function[1] + ': exact scalar arguments required')
                     if self.shape(proof) != expected_result:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact logical tuple result required')
@@ -1208,6 +1210,8 @@ class Audit:
                             return kind == 'long' and reps == ['IntRep']
                         if role == 'array':
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if function[1] in ('readArray#', 'indexArray#') and kind == 'object':
+                            return reps in (['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
                         return kind in ('object', 'data', 'closure') and reps == ['BoxedRep (Just Lifted)']
                     expected = array['arguments']
                     if (len(arguments) != len(expected) or any(type(flag) is not bool for flag in flags) or
@@ -1322,7 +1326,7 @@ class Audit:
                             return kind == 'void' and reps == []
                         if role == 'int':
                             return kind == 'long' and reps == ['IntRep']
-                        if role in ('threadId', 'byteArray'):
+                        if role in ('threadId', 'byteArray', 'threadArray'):
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
                         if role == 'action':
                             return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']
@@ -1526,7 +1530,9 @@ class Audit:
                         valid = role_matches(proof, result)
                     if not valid:
                         self.issue('primitive-representation', owner, path, function[1] + ': exact MutVar result required')
-                mvar = self.cap.get('managedMVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                stm = self.cap.get('managedSTMPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                mvar = stm or (self.cap.get('managedMVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None)
+                cell_family = 'STM' if stm else 'MVar'
                 if mvar is not None:
                     def mvar_role(rep, role):
                         if not isinstance(rep, dict) or 'aggregate' in rep or 'vector' in rep or is_vector(rep):
@@ -1534,8 +1540,10 @@ class Audit:
                         kind, reps = rep.get('kind'), rep.get('primReps')
                         if role == 'state':
                             return kind == 'void' and reps == []
-                        if role == 'mvar':
+                        if role in ('mvar', 'tvar'):
                             return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        if role == 'action':
+                            return kind == 'closure' and reps == ['BoxedRep (Just Lifted)']
                         if role == 'flag':
                             return kind == 'long' and reps == ['IntRep']
                         return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
@@ -1546,7 +1554,7 @@ class Audit:
                     if (len(actual) != len(expected) or not isinstance(flags, list) or
                             any(type(flag) is not bool for flag in flags) or flags != expected_flags or
                             any(not mvar_role(rep, role) for rep, role in zip(actual, expected))):
-                        self.issue('primitive-representation', owner, path, function[1] + ': exact MVar arguments required')
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact ' + cell_family + ' arguments required')
                     # An occurrence cannot manufacture the MVar role from a
                     # contradictory concrete local/global binding proof.
                     for argument, rep, role in zip(arguments, actual, expected):
@@ -1560,7 +1568,7 @@ class Audit:
                                 self.shape(stored) != self.shape(rep) or
                                 stored.get('kind') != 'unknown' and not mvar_role(stored, role)):
                             self.issue('primitive-representation', owner, path,
-                                       function[1] + ': MVar argument contradicts its binding proof')
+                                       function[1] + ': ' + cell_family + ' argument contradicts its binding proof')
                     result = mvar['result']
                     if isinstance(result, list):
                         fields = proof.get('components') if isinstance(proof, dict) else None
@@ -1571,7 +1579,7 @@ class Audit:
                     else:
                         valid = mvar_role(proof, result)
                     if not valid:
-                        self.issue('primitive-representation', owner, path, function[1] + ': exact MVar result required')
+                        self.issue('primitive-representation', owner, path, function[1] + ': exact ' + cell_family + ' result required')
                 target = bound.get(function[1]) if function[0] == 'var' else None
                 if isinstance(target, dict) and '_join_result' in target:
                     self.compare_shapes(target['_join_result'], proof, owner, path + '/rep')
@@ -1815,6 +1823,9 @@ class Audit:
                 name = expr[1]
                 if name in ('waitRead#', 'waitWrite#'):
                     self.reference('ghc-internal:GHC.Internal.Event.Thread.blockedOnBadFD', owner, path + '/badFD')
+                if name == 'atomically#':
+                    self.reference('ghc-internal:GHC.Internal.Control.Exception.Base.nestedAtomically', owner,
+                                   path + '/nested-atomically')
                 self.primitives.setdefault(name, []).append(dict(self.location(owner, path), arity=primitive_arity))
                 if name in ARITHMETIC_EXCEPTIONS:
                     self.reference(ARITHMETIC_EXCEPTIONS[name], owner, path + '/implicit-exception')

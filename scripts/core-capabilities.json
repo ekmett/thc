@@ -183,6 +183,16 @@
       18446744073709551615
     ]
   },
+  "managedSTMPrimitives": {
+    "atomically#": {"arguments": ["action", "state"], "result": ["state", "boxed"]},
+    "retry#": {"arguments": ["state"], "result": ["state", "boxed"]},
+    "catchRetry#": {"arguments": ["action", "action", "state"], "result": ["state", "boxed"]},
+    "catchSTM#": {"arguments": ["action", "action", "state"], "result": ["state", "boxed"]},
+    "newTVar#": {"arguments": ["boxed", "state"], "result": ["state", "tvar"]},
+    "readTVar#": {"arguments": ["tvar", "state"], "result": ["state", "boxed"]},
+    "readTVarIO#": {"arguments": ["tvar", "state"], "result": ["state", "boxed"]},
+    "writeTVar#": {"arguments": ["tvar", "boxed", "state"], "result": "state"}
+  },
   "constructorKinds": [
     "boxed"
   ],
@@ -223,6 +233,81 @@
   "strictLiftedFields": true,
   "dataToTag": "concrete-algebraic-family-64",
   "primitives": {
+    "indexStablePtrArray#": 2,
+    "readStablePtrArray#": 3,
+    "writeStablePtrArray#": 4,
+    "indexStablePtrOffAddr#": 2,
+    "readStablePtrOffAddr#": 3,
+    "writeStablePtrOffAddr#": 4,
+    "indexWideCharArray#": 2,
+    "readWideCharArray#": 3,
+    "writeWideCharArray#": 4,
+    "indexWord8ArrayAsChar#": 2,
+    "readWord8ArrayAsChar#": 3,
+    "writeWord8ArrayAsChar#": 4,
+    "indexWord8ArrayAsWideChar#": 2,
+    "readWord8ArrayAsWideChar#": 3,
+    "writeWord8ArrayAsWideChar#": 4,
+    "indexWord8ArrayAsInt#": 2,
+    "readWord8ArrayAsInt#": 3,
+    "writeWord8ArrayAsInt#": 4,
+    "indexWord8ArrayAsWord#": 2,
+    "readWord8ArrayAsWord#": 3,
+    "writeWord8ArrayAsWord#": 4,
+    "indexWord8ArrayAsInt64#": 2,
+    "readWord8ArrayAsInt64#": 3,
+    "writeWord8ArrayAsInt64#": 4,
+    "indexWord8ArrayAsWord64#": 2,
+    "readWord8ArrayAsWord64#": 3,
+    "writeWord8ArrayAsWord64#": 4,
+    "indexWord8ArrayAsAddr#": 2,
+    "readWord8ArrayAsAddr#": 3,
+    "writeWord8ArrayAsAddr#": 4,
+    "indexWord8ArrayAsStablePtr#": 2,
+    "readWord8ArrayAsStablePtr#": 3,
+    "writeWord8ArrayAsStablePtr#": 4,
+    "indexWord8OffAddrAsChar#": 2,
+    "readWord8OffAddrAsChar#": 3,
+    "writeWord8OffAddrAsChar#": 4,
+    "indexWord8OffAddrAsWideChar#": 2,
+    "readWord8OffAddrAsWideChar#": 3,
+    "writeWord8OffAddrAsWideChar#": 4,
+    "indexWord8OffAddrAsInt#": 2,
+    "readWord8OffAddrAsInt#": 3,
+    "writeWord8OffAddrAsInt#": 4,
+    "indexWord8OffAddrAsWord#": 2,
+    "readWord8OffAddrAsWord#": 3,
+    "writeWord8OffAddrAsWord#": 4,
+    "indexWord8OffAddrAsFloat#": 2,
+    "readWord8OffAddrAsFloat#": 3,
+    "writeWord8OffAddrAsFloat#": 4,
+    "indexWord8OffAddrAsDouble#": 2,
+    "readWord8OffAddrAsDouble#": 3,
+    "writeWord8OffAddrAsDouble#": 4,
+    "indexWord8OffAddrAsInt16#": 2,
+    "readWord8OffAddrAsInt16#": 3,
+    "writeWord8OffAddrAsInt16#": 4,
+    "indexWord8OffAddrAsInt32#": 2,
+    "readWord8OffAddrAsInt32#": 3,
+    "writeWord8OffAddrAsInt32#": 4,
+    "indexWord8OffAddrAsInt64#": 2,
+    "readWord8OffAddrAsInt64#": 3,
+    "writeWord8OffAddrAsInt64#": 4,
+    "indexWord8OffAddrAsWord16#": 2,
+    "readWord8OffAddrAsWord16#": 3,
+    "writeWord8OffAddrAsWord16#": 4,
+    "indexWord8OffAddrAsWord32#": 2,
+    "readWord8OffAddrAsWord32#": 3,
+    "writeWord8OffAddrAsWord32#": 4,
+    "indexWord8OffAddrAsWord64#": 2,
+    "readWord8OffAddrAsWord64#": 3,
+    "writeWord8OffAddrAsWord64#": 4,
+    "indexWord8OffAddrAsAddr#": 2,
+    "readWord8OffAddrAsAddr#": 3,
+    "writeWord8OffAddrAsAddr#": 4,
+    "indexWord8OffAddrAsStablePtr#": 2,
+    "readWord8OffAddrAsStablePtr#": 3,
+    "writeWord8OffAddrAsStablePtr#": 4,
     "indexWord32X4Array#": 2,
     "indexWord32ArrayAsWord32X4#": 2,
     "readWord32X4Array#": 3,
@@ -456,12 +541,22 @@
     "raiseUnderflow#": 1,
     "raiseIO#": 2,
     "catch#": 3,
+    "atomically#": 2,
+    "retry#": 1,
+    "catchRetry#": 3,
+    "catchSTM#": 3,
+    "newTVar#": 2,
+    "readTVar#": 2,
+    "readTVarIO#": 2,
+    "writeTVar#": 3,
     "unmaskAsyncExceptions#": 2,
     "maskAsyncExceptions#": 2,
     "maskUninterruptible#": 2,
     "getMaskingState#": 1,
     "fork#": 2,
     "myThreadId#": 1,
+    "listThreads#": 1,
+    "isCurrentThreadBound#": 1,
     "threadStatus#": 2,
     "labelThread#": 3,
     "threadLabel#": 2,
@@ -477,6 +572,20 @@
     "minusInt64X2#": 2,
     "negateInt64X2#": 1,
     "quotRemInt#": 2,
+    "quotRemInt8#": 2,
+    "quotRemInt16#": 2,
+    "quotRemInt32#": 2,
+    "quotRemWord8#": 2,
+    "quotRemWord16#": 2,
+    "quotRemWord32#": 2,
+    "quotRemWord2#": 3,
+    "uncheckedShiftRLInt8#": 2,
+    "uncheckedShiftRLInt16#": 2,
+    "uncheckedShiftRLInt32#": 2,
+    "mulIntMayOflo#": 2,
+    "decodeFloat_Int#": 1,
+    "decodeDouble_Int64#": 1,
+    "decodeDouble_2Int#": 1,
     "quotRemWord#": 2,
     "addIntC#": 2,
     "subIntC#": 2,
@@ -645,6 +754,22 @@
     "writeDoubleX2Array#": 4,
     "writeDoubleArrayAsDoubleX2#": 4,
     "newPinnedByteArray#": 2,
+    "atomicReadWordAddr#": 2,
+    "atomicWriteWordAddr#": 3,
+    "atomicExchangeWordAddr#": 3,
+    "atomicExchangeAddrAddr#": 3,
+    "atomicCasWordAddr#": 4,
+    "atomicCasWord8Addr#": 4,
+    "atomicCasWord16Addr#": 4,
+    "atomicCasWord32Addr#": 4,
+    "atomicCasWord64Addr#": 4,
+    "atomicCasAddrAddr#": 4,
+    "fetchAddWordAddr#": 3,
+    "fetchSubWordAddr#": 3,
+    "fetchAndWordAddr#": 3,
+    "fetchNandWordAddr#": 3,
+    "fetchOrWordAddr#": 3,
+    "fetchXorWordAddr#": 3,
     "newAlignedPinnedByteArray#": 3,
     "byteArrayContents#": 1,
     "mutableByteArrayContents#": 1,
@@ -709,6 +834,9 @@
     "copyMutableByteArray#": 6,
     "copyMutableByteArrayNonOverlapping#": 6,
     "copyAddrToAddrNonOverlapping#": 4,
+    "copyAddrToByteArray#": 5,
+    "copyByteArrayToAddr#": 5,
+    "copyMutableByteArrayToAddr#": 5,
     "compareByteArrays#": 5,
     "sqrtFloat#": 1,
     "sqrtDouble#": 1,
@@ -742,6 +870,16 @@
     "sinhDouble#": 1,
     "coshDouble#": 1,
     "tanhDouble#": 1,
+    "asinhFloat#": 1,
+    "acoshFloat#": 1,
+    "atanhFloat#": 1,
+    "minFloat#": 2,
+    "maxFloat#": 2,
+    "asinhDouble#": 1,
+    "acoshDouble#": 1,
+    "atanhDouble#": 1,
+    "minDouble#": 2,
+    "maxDouble#": 2,
     "newMutVar#": 2,
     "makeStablePtr#": 2,
     "deRefStablePtr#": 2,
@@ -771,6 +909,18 @@
     "indexWord64Array#": 2,
     "readIntArray#": 3,
     "fetchAddIntArray#": 4,
+    "fetchSubIntArray#": 4,
+    "fetchAndIntArray#": 4,
+    "fetchNandIntArray#": 4,
+    "fetchOrIntArray#": 4,
+    "fetchXorIntArray#": 4,
+    "casIntArray#": 5,
+    "casInt8Array#": 5,
+    "casInt16Array#": 5,
+    "casInt32Array#": 5,
+    "casInt64Array#": 5,
+    "atomicReadIntArray#": 3,
+    "atomicWriteIntArray#": 4,
     "writeIntArray#": 4,
     "indexIntArray#": 2,
     "readDoubleArray#": 3,
@@ -1034,7 +1184,10 @@
     "subWordC#": 2
   },
   "limitations": [
-    "Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals, non-null masks and general AST fork support remain unavailable.",
+    "STM/TVar primops admit synchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Transaction frames reject resumable async/checkpoint modes; GC-driven BlockedIndefinitelyOnSTM detection is unavailable. Empty-read-set retries wait until cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.",
+    "All 16 address atomics return old values (including failed CAS), narrow exact widths, require alignment and complete checked ranges, and supply full barriers. Managed byte storage synchronizes owner then backing bytes; pointer CAS/exchange retain managed pointer cells and compare address identity. Numeric atomics reject pointer-cell overlaps. Native-enabled Linux x86_64 owned allocations use real atomics, with exact byte/short C CAS; native pointer values must have real address bits. Freed or foreign owners, unowned numeric dereferences, opaque locations and immutable writes reject.",
+    "copyAddrToByteArray#, copyByteArrayToAddr# and copyMutableByteArrayToAddr# copy contained byte ranges between distinct array/address backing allocations, as required by GHC; same-backing addresses reject even for disjoint or empty ranges. Managed pointer cells retain references only through whole-cell managed copies and cannot be exported as raw native bits. Native addresses require live context-owned malloc storage on the existing native-enabled Linux x86_64 backend; unowned numeric pointers and immutable destinations reject. Empty valid copies preserve pointer cells and return scalar State# without a result tuple.",
+    "Original stg_sig_install is limited to SIGINT with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc. Only the standalone NativeIO launcher can own the process signal handler, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire it. A native signal-safe pipe transports actual siginfo bytes to the original GHC runHandlersPtr on a Truffle thread. Delivery requires the bytecode backend; other signals and non-null masks remain unavailable.",
     "Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format, preserving raw bytes, offset/NUL boundaries and the appended newline; other printf varargs formats reject before output. No program-name prefix is invented for an embedding that has not registered one.",
     "Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.",
     "waitRead#/waitWrite# admit exact Int# and State# contracts for live context-owned native descriptors. A logical wait token retains its original descriptor identity across async suspension and rejects close or number reuse. Bad descriptors raise the original lazy ghc-internal blockedOnBadFD payload; arbitrary host streams and nonnative readiness providers have no general readiness guarantee.",
@@ -1048,14 +1201,15 @@
     "Original ghc-internal memcpy has the same exact Addr#/Addr#/Word64#/State# declaration and checked storage transport as memmove, but rejects overlapping nonempty ranges before mutation. Adjacent and empty checked regions are permitted; the returned Addr# is the original destination carrier.",
     "Original ghc-internal strlen scans only live, bounded managed or owned native Addr# bytes through the first NUL and returns the exact Int# length. Unterminated storage, pointer-cell byte exposure, opaque labels, unowned numeric addresses and freed native allocations reject. rts_isThreaded reports the nonthreaded RTS mode used by THC's admitted original FD and wait path; it does not report the number of Java guest threads or offer GHC's threaded RTS ABI.",
     "labelThread#/threadLabel# retain and observe the exact UTF-8 ByteArray# on context-owned Java thread identities, including finished threads; empty labels are present and host Java thread names are unchanged. Labels are released with their identities or context disposal. No RTS eventlog emission is claimed.",
+    "listThreads# returns independent Array# snapshots of context-owned guest identities, including retained completed threads, with unspecified order and weak registry retention. indexArray#/readArray# also transport unlifted object elements; writes retain the lifted gate. isCurrentThreadBound# observes THC's admitted unbound-only runtime and returns zero for registered guest entries, not a claim of forkOS/TLS support. par#/spark#/getSpark#/numSparks#/forkOn# remain unsupported: safe speculative cancellation and a capability scheduler are not provided.",
     "threadStatus# returns the exact State#/Int#/Int#/Int# tuple for context-owned Java thread identities. Logical capabilities are monotonically allocated per Java carrier, not physical CPU numbers; forkOn/count/affinity APIs remain unsupported. Registered MVar, black-hole, throwTo and foreign boundaries report their actual managed states. Forked threads retain normal/uncaught-guest completion; a live host carrier outside guest entry remains foreign and keeps its identity on re-entry. Existing throwTo mailboxes are scoped to active guest invocations and do not queue across separate host calls.",
     "The public AST killThread# path preserves exact asynchronous self-delivery through catch# and Haskell masks. It rejects an external target before enqueueing because ordinary AST callers have no saved sender continuation. Only the restricted, explicitly admitted captured AST route can suspend and resume an external send; bytecode remains the general thread-primitive backend.",
     "The enabled_capabilities RTS data label is a context-owned, live Word32 cell containing at least one logical Java carrier. Only readWord32OffAddr# at offset zero is supported; writes, other widths, offsets and native projection reject. This does not provide physical GHC -N semantics, capability resizing, event-manager reconfiguration or arbitrary RTS data symbols.",
     "The native DWARF backend is unavailable, matching GHC 9.14.1 RTS USE_LIBDW=0: original libdwPoolTake/libdwGetBacktrace return null, libdwLookupLocation returns failure 1 without touching Location, and libdwPoolClear is a no-op. Managed IPE snapshots are separate. Explicit C finalization supports source-certified USE_LIBDW=0 labels and free for context-owned malloc bases; arbitrary C callback addresses remain unsupported.",
     "Address operations support managed literal or byte-array backing with checked offsets, with the separately bounded immutable native projection described above. Unowned numeric addresses have no byte access. Char# byte-memory operations read an unsigned byte and write the low eight bits of WordRep. Ordered Addr# comparisons are limited to offsets in the same backing allocation or null compared with itself; unrelated addresses have no synthetic order. Exact GHC MD5 calls use checked Sulong buffer views. Original localeEncoding/hs_iconv_open/hs_iconv_close/hs_iconv use Linux GNU LP64 native iconv with context-owned opaque handles, explicit native-buffer copies, checked disjoint pointer/count/byte regions, cursor writeback and captured errno; Original base_strerror_r uses the pinned GHC wrapper, a checked writable guest buffer, and a short-lived native scratch copy with thread-local C message locale and complete buffer writeback. No general native-pointer FFI is admitted.",
     "shrinkMutableByteArray# changes the logical size of a THC-owned allocation in place, preserving frozen and pinned aliases while retaining backing capacity. Managed byte, scalar, vector, address and C-bitcode buffer accesses observe the shorter bound; partial truncation of a managed pointer cell is rejected. Host-injected raw byte arrays cannot be shrunk in place.",
-    "fetchAddIntArray# atomically returns the previous signed machine Int and writes the wrapped sum under the allocation monitor, with a full memory barrier. It requires a THC-owned mutable byte array and a contained machine-word element; raw host arrays and pointer-cell overlaps are rejected.",
-    "StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Stable-pointer array and byte-memory index/read/write primops remain unsupported.",
+    "Atomic Int-array reads/writes, fetchAdd/Sub/And/Nand/Or/XorIntArray#, and casInt{,8,16,32,64}Array# use owned mutable allocations with full memory barriers. Fetch and CAS return the previous signed value; failed CAS leaves bytes unchanged. Offsets count elements of the selected width, arithmetic wraps, and narrow CAS compares low bits. Raw host arrays, immutable allocations, out-of-range elements, and pointer-cell overlaps are rejected. See docs/atomic-int-arrays.md for native/model/concurrency evidence and managed-storage limits.",
+    "StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. The two original RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged. Live identity casts may be compared, but the handles have no byte storage, pointer arithmetic or ordering. Aligned StablePtr array/address index/read/write operations retain opaque handles in allocation-owned pointer cells; raw ByteArray storage, numeric projections and native pointer-cell access remain rejected. A stored handle does not extend its registry lifetime: dereference/equality still reject foreign or released handles.",
     "Weak# support is PARTIAL: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Exact source-certified USE_LIBDW=0 C labels can register one-argument callbacks; explicit finalization makes the weak dead before invoking them through Sulong outside the registry lock, then returns the real Haskell action without invoking it. Close discards outstanding callbacks. Original rts_setMainThread stores the Weak# key capability, not its boxed value or a permanent Java thread ID. The separate launcher-only SIGINT bridge does not enable other signal handlers. Automatic GC/ephemeron reclamation and arbitrary C function/data labels remain unsupported.",
     "Unboxed tuple inputs and results use exact recursive layouts and concrete Long, Float, Double or reference fields. Local joins may read an enclosing tuple's existing typed frame slots; ordinary function captures, heap fields and ordinary let bindings remain unsupported. Join inputs admit only exact empty unboxed tuples; other aggregate join inputs remain unsupported. Scalar void tuple components retain logical positions but have no physical payload slots; sums and unresolved leaves cannot appear in tuple inputs; exact vector leaves retain atomic VecRep identity and occupy one raw fixed-species vector reference each; exact evaluated AddrRep leaves use managed address references.",
     "SIMD guest transport admits only the 24 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings, sum fields and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.",
@@ -1172,6 +1326,25 @@
     {"lanes": 8, "element": "DoubleElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"}
   ],
   "tuplePrimitives": {
+    "decodeDouble_2Int#": {
+      "arguments": ["DoubleRep"],
+      "result": ["IntRep", "WordRep", "WordRep", "IntRep"]
+    },
+    "quotRemInt8#": {"arguments": ["Int8Rep", "Int8Rep"], "result": ["Int8Rep", "Int8Rep"]},
+    "quotRemInt16#": {"arguments": ["Int16Rep", "Int16Rep"], "result": ["Int16Rep", "Int16Rep"]},
+    "quotRemInt32#": {"arguments": ["Int32Rep", "Int32Rep"], "result": ["Int32Rep", "Int32Rep"]},
+    "quotRemWord8#": {"arguments": ["Word8Rep", "Word8Rep"], "result": ["Word8Rep", "Word8Rep"]},
+    "quotRemWord16#": {"arguments": ["Word16Rep", "Word16Rep"], "result": ["Word16Rep", "Word16Rep"]},
+    "quotRemWord32#": {"arguments": ["Word32Rep", "Word32Rep"], "result": ["Word32Rep", "Word32Rep"]},
+    "quotRemWord2#": {"arguments": ["WordRep", "WordRep", "WordRep"], "result": ["WordRep", "WordRep"]},
+    "decodeFloat_Int#": {
+      "arguments": ["FloatRep"],
+      "result": ["IntRep", "IntRep"]
+    },
+    "decodeDouble_Int64#": {
+      "arguments": ["DoubleRep"],
+      "result": ["Int64Rep", "IntRep"]
+    },
     "addWordC#": {
       "arguments": ["WordRep", "WordRep"],
       "result": ["WordRep", "IntRep"]
@@ -1246,6 +1419,1660 @@
     }
   },
   "managedPinnedMemoryPrimitives": {
+    "indexStablePtrArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readStablePtrArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "aggregate": "unboxed-tuple",
+        "primReps": [
+          "AddrRep"
+        ],
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "address",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeStablePtrArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexStablePtrOffAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readStablePtrOffAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "aggregate": "unboxed-tuple",
+        "primReps": [
+          "AddrRep"
+        ],
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "address",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeStablePtrOffAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "atomicReadWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "atomicWriteWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"void","primReps":[]}},
+    "atomicExchangeWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "atomicExchangeAddrAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"address","primReps":["AddrRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["AddrRep"],"components":[{"kind":"void","primReps":[]},{"kind":"address","primReps":["AddrRep"]}]}},
+    "atomicCasWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "atomicCasWord8Addr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["Word8Rep"]},{"kind":"long","primReps":["Word8Rep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["Word8Rep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["Word8Rep"]}]}},
+    "atomicCasWord16Addr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["Word16Rep"]},{"kind":"long","primReps":["Word16Rep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["Word16Rep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["Word16Rep"]}]}},
+    "atomicCasWord32Addr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["Word32Rep"]},{"kind":"long","primReps":["Word32Rep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["Word32Rep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["Word32Rep"]}]}},
+    "atomicCasWord64Addr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["Word64Rep"]},{"kind":"long","primReps":["Word64Rep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["Word64Rep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["Word64Rep"]}]}},
+    "atomicCasAddrAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"address","primReps":["AddrRep"]},{"kind":"address","primReps":["AddrRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["AddrRep"],"components":[{"kind":"void","primReps":[]},{"kind":"address","primReps":["AddrRep"]}]}},
+    "fetchAddWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "fetchSubWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "fetchAndWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "fetchNandWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "fetchOrWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "fetchXorWordAddr#": {"arguments":[{"kind":"address","primReps":["AddrRep"]},{"kind":"long","primReps":["WordRep"]},{"kind":"void","primReps":[]}],"result":{"kind":"unknown","aggregate":"unboxed-tuple","primReps":["WordRep"],"components":[{"kind":"void","primReps":[]},{"kind":"long","primReps":["WordRep"]}]}},
+    "indexWord8ArrayAsAddr#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readWord8ArrayAsAddr#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "AddrRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "address",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsAddr#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsStablePtr#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readWord8ArrayAsStablePtr#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "AddrRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "address",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsStablePtr#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsChar#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsChar#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsChar#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsWideChar#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsWideChar#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsWideChar#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsInt#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "IntRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsInt#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "IntRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "IntRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsInt#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsWord#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsWord#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsWord#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsFloat#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "float",
+        "primReps": [
+          "FloatRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsFloat#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "FloatRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "float",
+            "primReps": [
+              "FloatRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsFloat#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "float",
+          "primReps": [
+            "FloatRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsDouble#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "double",
+        "primReps": [
+          "DoubleRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsDouble#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "DoubleRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "double",
+            "primReps": [
+              "DoubleRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsDouble#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "double",
+          "primReps": [
+            "DoubleRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsInt16#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int16Rep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsInt16#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int16Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int16Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsInt16#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int16Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsInt32#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int32Rep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsInt32#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int32Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int32Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsInt32#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int32Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsInt64#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int64Rep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsInt64#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int64Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int64Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsInt64#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int64Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsWord16#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word16Rep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsWord16#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word16Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word16Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsWord16#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word16Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsWord32#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word32Rep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsWord32#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word32Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word32Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsWord32#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word32Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsWord64#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word64Rep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsWord64#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word64Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word64Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsWord64#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word64Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "AddrRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "address",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsAddr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8OffAddrAsStablePtr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "address",
+        "primReps": [
+          "AddrRep"
+        ]
+      }
+    },
+    "readWord8OffAddrAsStablePtr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "AddrRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "address",
+            "primReps": [
+              "AddrRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8OffAddrAsStablePtr#": {
+      "arguments": [
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "address",
+          "primReps": [
+            "AddrRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
     "newPinnedByteArray#": {
       "arguments": [
         {
@@ -1803,6 +3630,643 @@
     }
   },
   "managedByteArrayPrimitives": {
+    "indexWideCharArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWideCharArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWideCharArray#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsChar#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWord8ArrayAsChar#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsChar#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsWideChar#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWord8ArrayAsWideChar#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsWideChar#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsInt#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "IntRep"
+        ]
+      }
+    },
+    "readWord8ArrayAsInt#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "IntRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "IntRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsInt#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsWord#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "WordRep"
+        ]
+      }
+    },
+    "readWord8ArrayAsWord#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "WordRep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "WordRep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsWord#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "WordRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsInt64#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Int64Rep"
+        ]
+      }
+    },
+    "readWord8ArrayAsInt64#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Int64Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Int64Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsInt64#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Int64Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
+    "indexWord8ArrayAsWord64#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        }
+      ],
+      "result": {
+        "kind": "long",
+        "primReps": [
+          "Word64Rep"
+        ]
+      }
+    },
+    "readWord8ArrayAsWord64#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "unknown",
+        "primReps": [
+          "Word64Rep"
+        ],
+        "aggregate": "unboxed-tuple",
+        "components": [
+          {
+            "kind": "void",
+            "primReps": []
+          },
+          {
+            "kind": "long",
+            "primReps": [
+              "Word64Rep"
+            ]
+          }
+        ]
+      }
+    },
+    "writeWord8ArrayAsWord64#": {
+      "arguments": [
+        {
+          "kind": "object",
+          "primReps": [
+            "BoxedRep (Just Unlifted)"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "IntRep"
+          ]
+        },
+        {
+          "kind": "long",
+          "primReps": [
+            "Word64Rep"
+          ]
+        },
+        {
+          "kind": "void",
+          "primReps": []
+        }
+      ],
+      "result": {
+        "kind": "void",
+        "primReps": []
+      }
+    },
     "getSizeofMutableByteArray#": {
       "arguments": [
         { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
@@ -1878,6 +4342,36 @@
     "copyAddrToAddrNonOverlapping#": {
       "arguments": [
         { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "copyAddrToByteArray#": {
+      "arguments": [
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "copyByteArrayToAddr#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "address", "primReps": ["AddrRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
+    },
+    "copyMutableByteArrayToAddr#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
         { "kind": "address", "primReps": ["AddrRep"] },
         { "kind": "long", "primReps": ["IntRep"] },
         { "kind": "void", "primReps": [] }
@@ -2619,6 +5113,184 @@
           { "kind": "long", "primReps": ["IntRep"] }
         ]
       }
+    },
+    "fetchSubIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "fetchAndIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "fetchNandIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "fetchOrIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "fetchXorIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "casIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "casInt8Array#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["Int8Rep"] },
+        { "kind": "long", "primReps": ["Int8Rep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["Int8Rep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["Int8Rep"] }
+        ]
+      }
+    },
+    "casInt16Array#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["Int16Rep"] },
+        { "kind": "long", "primReps": ["Int16Rep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["Int16Rep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["Int16Rep"] }
+        ]
+      }
+    },
+    "casInt32Array#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["Int32Rep"] },
+        { "kind": "long", "primReps": ["Int32Rep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["Int32Rep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["Int32Rep"] }
+        ]
+      }
+    },
+    "casInt64Array#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["Int64Rep"] },
+        { "kind": "long", "primReps": ["Int64Rep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["Int64Rep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["Int64Rep"] }
+        ]
+      }
+    },
+    "atomicReadIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": {
+        "kind": "unknown", "primReps": ["IntRep"], "aggregate": "unboxed-tuple",
+        "components": [
+          { "kind": "void", "primReps": [] },
+          { "kind": "long", "primReps": ["IntRep"] }
+        ]
+      }
+    },
+    "atomicWriteIntArray#": {
+      "arguments": [
+        { "kind": "object", "primReps": ["BoxedRep (Just Unlifted)"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "long", "primReps": ["IntRep"] },
+        { "kind": "void", "primReps": [] }
+      ],
+      "result": { "kind": "void", "primReps": [] }
     },
     "writeIntArray#": {
       "arguments": [
@@ -3572,6 +6244,8 @@
     "eqStablePtr#": {"arguments": ["address", "address"], "result": "int"}
   },
   "managedThreadPrimitives": {
+    "listThreads#": {"arguments": ["state"], "result": ["state", "threadArray"]},
+    "isCurrentThreadBound#": {"arguments": ["state"], "result": ["state", "int"]},
     "labelThread#": {"arguments": ["threadId", "byteArray", "state"], "result": "state"},
     "threadLabel#": {"arguments": ["threadId", "state"], "result": ["state", "int", "byteArray"]},
     "fork#": {

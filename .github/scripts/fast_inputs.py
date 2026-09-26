@@ -35,15 +35,70 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """address-fields array-slices bignat-literals bit-primops
-thread-status thread-label boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
+MANIFEST_DIRS = """address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+thread-status thread-label thread-inventory boxed-arrays boxed-array-extensions bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
-int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array
+int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
+                            "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
+THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
+    "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
 SIMD_FLOAT_FMA_OUTPUTS = frozenset("build/simd-floatx4-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdFloatFma.json", "post-core/SimdFloatFma.json",
     "pre-audit.json", "post-audit.json", "pre-double-audit.json", "post-double-audit.json"))
+INTEGER_COMPLETION_OUTPUTS = frozenset("build/integer-completion/" + name for name in (
+    "manifest.json", "requests.tsv", "oracle.tsv", "NativeIntegerCompletion.hs", "native/integer-completion-oracle",
+    *(f"{stage}{suffix}" for stage in ("pre", "post") for suffix in ("-audit.json", "-core/IntegerCompletionAudit.json")),
+    *(f"commands/{command}.{suffix}" for command in ("ghc-version", "ghc-info", "pre-export", "post-export",
+      "pre-audit", "post-audit", "native-build", "native-oracle") for suffix in ("stdout", "stderr", "command.json"))))
+# These producers retain different command spellings and artifact layouts.
+# Admit their exact recorded evidence, not arbitrary files under each directory.
+ADDRESS_ARRAY_COPY_ENTRIES = ("addrToArray", "arrayToAddr", "mutableArrayToAddr")
+ADDRESS_ARRAY_COPY_OUTPUTS = frozenset("build/address-array-copy/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
+    *(f"{stage}-core/AddressArrayCopyAudit.json" for stage in ("pre", "post")),
+    *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in ADDRESS_ARRAY_COPY_ENTRIES),
+    *(f"commands/{label}.{suffix}" for label in (
+        "native-build", "native-oracle", *(f"{stage}-export" for stage in ("pre", "post")),
+        *(f"{stage}-{entry}-audit" for stage in ("pre", "post") for entry in ADDRESS_ARRAY_COPY_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+ATOMIC_INT_ARRAY_ENTRIES = (
+    *(f"fetch{operation}Result" for operation in ("Add", "Sub", "And", "Nand", "Or", "Xor")),
+    *(f"casInt{width}Result" for width in ("", "8", "16", "32", "64")), "atomicLoadStore")
+ATOMIC_INT_ARRAY_OUTPUTS = frozenset("build/atomic-int-arrays/" + name for name in (
+    "manifest.json", "NativeAtomicIntArrays.hs", "requests.tsv", "oracle.tsv",
+    *(f"{stage}/core/{module}.json" for stage in ("pre", "post") for module in ("AtomicIntArrayAudit", "THC.InterfaceClosure")),
+    *(f"{stage}/{entry}.audit.json" for stage in ("pre", "post") for entry in ATOMIC_INT_ARRAY_ENTRIES),
+    *(f"commands/{label}.{suffix}" for label in (
+        "native-build", "native-oracle", *(f"{stage}-export" for stage in ("pre", "post")),
+        *(f"{stage}-{entry}-audit" for stage in ("pre", "post") for entry in ATOMIC_INT_ARRAY_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+ATOMIC_ADDRESS_OUTPUTS = frozenset("build/atomic-address/" + name for name in (
+    "manifest.json", "inputs.txt", "oracle.tsv",
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in ("core/AtomicAddressAudit.json", "audit.json")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "version", "native-build", "native-oracle", *(f"{step}-{stage}" for stage in ("pre", "post") for step in ("export", "audit")))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+UNALIGNED_SCALAR_MEMORY_OUTPUTS = frozenset("build/unaligned-scalar-memory/" + name for name in (
+    "manifest.json", "inputs.txt", "oracle.tsv",
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in ("core/UnalignedScalarMemoryAudit.json", "audit.json")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-inventory", "native-build", "native-oracle",
+        *(f"{stage}-{step}" for stage in ("pre", "post") for step in ("export", "audit")))
+      for suffix in ("stdout", "stderr", "command.json")),
+))
+MEMORY_FIXTURE_OUTPUTS = {
+    "address-array-copy": ADDRESS_ARRAY_COPY_OUTPUTS,
+    "atomic-int-arrays": ATOMIC_INT_ARRAY_OUTPUTS,
+    "atomic-address": ATOMIC_ADDRESS_OUTPUTS,
+    "unaligned-scalar-memory": UNALIGNED_SCALAR_MEMORY_OUTPUTS,
+}
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -60,6 +115,122 @@ BIGNAT_OUTPUTS = frozenset("build/bignat-literals/" + path for path in (
 BIGNAT_VENDOR = frozenset("vendor/ghc-9.14.1/" + path for path in (
     "include/WordSize.h", "LICENSE", *(f"GHC/Internal/Bignum/{name}{suffix}"
       for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot"))))
+BYTEARRAY_FAMILIES = {
+    "bytearray": ("ByteArrayAudit", ("shortBytes", "orderedBytes", "shortUncons", "copiedBytes"), "NativeByteArray.hs"),
+    "mutable-bytearrays": ("MutableByteArrayAudit", ("filledBytes", "movedBytes", "disjointBytes", "copiedMutableBytes", "copiedDisjointBytes", "publicReplicate"), "NativeMutableByteArrays.hs"),
+    "resize-bytearrays": ("ResizeByteArrayAudit", ("resizedBytes", "resizedTwiceWrites"), None),
+    "mutable-bytearray-size": ("MutableByteArraySizeAudit", ("freshSize", "pureSize", "resizedSizes", "pureAfterResize", "orderedSize"), None),
+    "compare-byte-arrays": ("CompareByteArraysAudit", ("shortCompare", "shortPrefix", "shortSuffix", "rangeCompare", "aliasCompare"), "NativeCompareByteArrays.hs"),
+}
+BYTEARRAY_OUTPUTS = {}
+for _family, (_module, _entries, _driver) in BYTEARRAY_FAMILIES.items():
+    _original = _family in ("bytearray", "compare-byte-arrays")
+    _commands = ("ghc-version", "ghc-info", "bytestring-version", "bytestring-description", "native-build", "native-oracle") + (
+        () if _original else ("compiler-build", "primop-coverage")) + (() if _driver else ("native-inputs",)) + tuple(
+        name for stage in ("pre", "post") for name in (
+            f"{stage}-export", *([f"{stage}-original-list"] if _original else []),
+            *(f"{stage}-{entry}-audit" for entry in _entries)))
+    _stage_outputs = tuple(name for stage in ("pre", "post") for name in (
+            *(f"{stage}/core/{module}.json" for module in (_module, "THC.InterfaceClosure", "GHC.Internal.Base", "GHC.Internal.List")),
+            f"{stage}/boot-provenance.json", *(f"{stage}/{entry}.audit.json" for entry in _entries))) if _original else tuple(
+        name for stage in ("pre", "post") for name in (
+            *(f"{stage}-core/{module}.json" for module in (_module, "THC.InterfaceClosure")),
+            *(f"{stage}-{entry}.audit.json" for entry in _entries)))
+    BYTEARRAY_OUTPUTS[_family] = frozenset(f"build/{_family}/" + name for name in (
+        "manifest.json", "requests.tsv", "oracle.tsv", f"native/{_family}-oracle", *([_driver] if _driver else []), *_stage_outputs,
+        *(f"commands/{name}.{suffix}" for name in _commands for suffix in ("stdout", "stderr", "command.json"))))
+del _family, _module, _entries, _driver, _original, _commands, _stage_outputs
+BYTEARRAY_NATIVES = frozenset(f"build/{family}/native/{family}-oracle" for family in BYTEARRAY_FAMILIES)
+BYTEARRAY_VENDOR = frozenset("vendor/ghc-9.14.1/" + name for name in (
+    "LICENSE", "GHC/Internal/Base.hs", "GHC/Internal/List.hs", "GHC/Internal/Exception/Type.hs-boot",
+    "GHC/Internal/IO.hs-boot", "GHC/Internal/Num.hs-boot", "GHC/Internal/Enum.hs-boot", "GHC/Internal/Real.hs-boot"))
+SIMD_BYTEARRAY_FAMILIES = {
+    "simd-int32x4-bytearray": ("SimdInt32X4ByteArray", 9666, ("Word32ElemRep",)),
+    "simd-word32x4-bytearray": ("SimdWord32X4ByteArray", 9666, ("Int32ElemRep",)),
+    "simd-floatx4-bytearray": ("SimdFloatX4ByteArray", 6720, ("Int32ElemRep", "Word32ElemRep", "DoubleElemRep")),
+    "simd-doublex2-bytearray": ("SimdDoubleX2ByteArray", 4384, ("Int64ElemRep", "Int32ElemRep", "Word32ElemRep", "FloatElemRep")),
+}
+SIMD_BYTEARRAY_RETAINED = frozenset(
+    f"bench/experiments/{family.removeprefix('simd-')}/evidence-x86_64/" +
+    ("captures/doublex2/" if "doublex2" in family else "") + path
+    for family in SIMD_BYTEARRAY_FAMILIES for path in (
+        "pre-core.json.gz", "post-core.json.gz",
+        "input-provenance.json.gz" if "floatx4" in family or "doublex2" in family else "native/provenance.json.gz"))
+
+
+def simd_bytearray_outputs(family, attempt, native):
+    """Fixed proof/command inventory; never accept arbitrary prepare-run contents."""
+    module, _, wrong = SIMD_BYTEARRAY_FAMILIES[family]
+    floating = "floatx4" in family or "doublex2" in family
+    root = f"build/{family}"
+    require(isinstance(attempt, str) and re.fullmatch(re.escape(root) + r"/prepare-run-[A-Za-z0-9]+", attempt),
+            "Invalid SIMD memory attempt")
+    stages = ("pre", "post") if native else ("pre",)
+    entries = tuple(f"{offset}{op}Case" for offset in ("vector", "scalar") for op in
+                    (("Unit", "Index", "Read", "Write", "GraphIndex", "GraphStore") if floating else ("Unit", "Index", "Read", "Write", "Store")))
+    graphs = tuple(f"{offset}{op}" for offset in ("vector", "scalar") for op in
+                   (("IndexGraph" if floating else "IndexWorker"), "StoreGraph"))
+    frontiers = ("vectorArgument", "readVectorEscape", "readTupleEscape",
+                 "vectorReadWorker", "vectorWriteWorker", "scalarReadWorker", "scalarWriteWorker")
+    local = tuple(f"{offset}{op}" for offset in ("vector", "scalar") for op in ("Index", "Read", "Write"))
+    mutations = tuple(f"{stage}-wrong-{element}-{entry}" for stage in (*stages, "retained-pre", "retained-post")
+                      for element in wrong for entry in local)
+    audits = (*(f"{stage}-{entry}" for stage in stages for entry in (*entries, *graphs, *frontiers)),
+              *mutations, *(f"retained-{stage}-{entry}Case" for stage in ("pre", "post") for entry in local))
+    commands = ("ghc-version", "ghc-info", "host", "architecture", "system", "compiler-build",
+                "retained-provenance", "retained-pre", "retained-post", *(f"{stage}-export" for stage in stages), *audits,
+                *(("native-build", "native-oracle") if native else ()), *(("snan-oracle",) if native and floating else ()))
+    return frozenset((
+        f"{root}/expected.tsv", f"{root}/requests.tsv",
+        *(f"{root}/{stage}-core/{module}.json" for stage in stages),
+        *(f"{root}/{stage}-audit.json" for stage in stages),
+        *(f"{attempt}/audits/{label}.json" for label in audits),
+        *(f"{attempt}/mutations/{label}.json" for label in mutations),
+        *(f"{attempt}/retained/{stage}.json" for stage in ("pre", "post")),
+        *((f"{attempt}/retained-original-source.hs",) if not floating else ()),
+        *(f"{attempt}/commands/{label}.{suffix}" for label in commands for suffix in ("stdout", "stderr", "command.json")),
+        *((f"{root}/oracle.tsv", f"{root}/native/{family.removeprefix('simd-')}-oracle") if native else ()),
+        *(f"{root}/{name}.tsv" for name in ("snan-expected", "snan-requests", "snan-oracle") if native and floating)))
+
+
+def simd_bytearray_artifact_hashes(family, manifest):
+    stages = manifest.get("stages")
+    require(stages in (["pre"], ["pre", "post"]), "Invalid SIMD memory stages")
+    native = len(stages) == 2
+    _, rows, _ = SIMD_BYTEARRAY_FAMILIES[family]
+    require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("vector") == family.removeprefix("simd-"), "Invalid SIMD memory schema/family")
+    require(type(manifest.get("modelRows")) is int and manifest["modelRows"] == rows and
+            manifest.get("modelByteOrder") == "little", "Invalid SIMD memory model mode")
+    require((type(manifest.get("nativeRows")) is int and manifest["nativeRows"] == rows and
+             manifest.get("nativeByteOrder") == "little" and manifest.get("modelMatched") is True) if native else
+            all(key in manifest and manifest[key] is None for key in ("nativeRows", "nativeByteOrder", "modelMatched")),
+            "Invalid SIMD memory native mode")
+    required = simd_bytearray_outputs(family, manifest.get("attempt"), native)
+    records = manifest.get("artifacts")
+    require(isinstance(records, list) and all(isinstance(row, dict) and set(row) == {"path", "sha256"} for row in records),
+            "Invalid SIMD memory artifact records")
+    hashes = {row["path"]: row["sha256"] for row in records}
+    require(len(records) == len(hashes) and set(hashes) == required, "Incomplete SIMD memory artifact inventory")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in hashes.values()), "Invalid SIMD memory artifact hash")
+    return hashes
+PINNED_ADDRESS_ENTRIES = ("pinnedBytes", "alignedBytes", "keepAliveWord8", "keepAliveLazy", "fingerprintByte",
+                          "publicFingerprintByte", "publicFingerprintRoundtrip")
+PINNED_ADDRESS_NEGATIVES = ("read-word-not-word8", "write-word-not-word8", "read-address-is-word", "read-state-is-int",
+    "read-offset-is-word", "contents-lifted-array", "contents-result-is-word", "allocation-size-is-word",
+    "allocation-state-is-int", "aligned-alignment-is-word", "keepalive-state-is-int", "keepalive-result-word-not-word8")
+PINNED_ADDRESS_COMMANDS = ("native-build", "native-oracle", *(f"{stage}-export" for stage in ("pre", "post")),
+    *(f"{stage}-{name}-audit" for stage in ("pre", "post") for name in
+      (*PINNED_ADDRESS_ENTRIES, *(f"negative-{label}" for label in PINNED_ADDRESS_NEGATIVES))))
+PINNED_ADDRESS_OUTPUTS = frozenset("build/pinned-addresses/" + path for path in (
+    "manifest.json", "requests.tsv", "expected.tsv", "oracle.tsv", "structure-controls.json",
+    *(f"native/{name}" for name in ("pinned-address-oracle", "Main.hi", "Main.o", "PinnedAddressAudit.hi", "PinnedAddressAudit.o")),
+    *(f"{stage}/core/{name}.json" for stage in ("pre", "post") for name in ("PinnedAddressAudit", "THC.InterfaceClosure")),
+    *(f"{stage}/negative-proofs.json" for stage in ("pre", "post")),
+    *(f"{stage}/{name}.audit.json" for stage in ("pre", "post") for name in
+      (*PINNED_ADDRESS_ENTRIES, *(f"negative-{label}" for label in PINNED_ADDRESS_NEGATIVES))),
+    *(f"{stage}/negative/{label}-{index}.json" for stage in ("pre", "post") for label in PINNED_ADDRESS_NEGATIVES for index in (0, 1)),
+    *(f"commands/{name}.{suffix}" for name in PINNED_ADDRESS_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 SIMD_WIDE_FMA_OUTPUTS = frozenset("build/simd-wide-floating-fma/" + name for name in (
     "manifest.json", "oracle.txt", "pre-core/SimdWideFloatFma.json", "pre-audit.json", "pre-double-audit.json"))
 SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name in (
@@ -101,12 +272,36 @@ REQUIRED = tuple(sorted({
 BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
+FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
+                        "floatExampleExponent", "doubleExampleExponent")
+FLOAT_DECODE_COMMANDS = ("native-build", "native-oracle", "boot-export",
+                        *(label for stage in ("pre", "post") for label in
+                          (f"{stage}-export", *(f"{stage}-{name}-audit" for name in FLOAT_DECODE_ENTRIES))))
+FLOAT_DECODE_OUTPUTS = frozenset("build/float-decode/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
+    "original/GHC.Internal.Bignum.Integer.json", "original/boot-provenance.json",
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatDecodeAudit", "THC.FloatDecode")),
+    *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOAT_DECODE_ENTRIES),
+    *(f"commands/{command}.{suffix}" for command in FLOAT_DECODE_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
+FLOATING_REMAINDER_ENTRIES = (*(op + kind for kind in ("Float", "Double") for op in ("asinh", "acosh", "atanh", "min", "max")),
+                            "decodeWordsDirect", "decodeWordsCall", "asinhExample")
+FLOATING_REMAINDER_COMMANDS = ("native-build", "native-oracle",
+                              *(label for stage in ("pre", "post") for label in
+                                (f"{stage}-export", *(f"{stage}-{name}-audit" for name in FLOATING_REMAINDER_ENTRIES))))
+FLOATING_REMAINDER_OUTPUTS = frozenset("build/floating-remainder/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
+    *(f"{stage}-core/{module}.json" for stage in ("pre", "post") for module in ("FloatingRemainderAudit", "THC.InverseHyperbolic")),
+    *(f"{stage}-{entry}-audit.json" for stage in ("pre", "post") for entry in FLOATING_REMAINDER_ENTRIES),
+    *(f"commands/{command}.{suffix}" for command in FLOATING_REMAINDER_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 MAX_FILES = 30000
 MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate",
+NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+    "build/floating-remainder/native/oracle",
+    "build/pinned-addresses/native/pinned-address-oracle",
+    "build/integer-completion/native/integer-completion-oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
@@ -425,7 +620,7 @@ def original_stack_artifact(name):
 
 
 def native_executable(name):
-    return name in NATIVE_EXECUTABLES or (
+    return name in NATIVE_EXECUTABLES or name in BYTEARRAY_NATIVES or (
         original_stack_artifact(name) and name.endswith("/native/original-stack-native")) or (
         original_stack_formatter_artifact(name) and name.endswith("/native/formatter"))
 
@@ -800,7 +995,7 @@ def toolchain(root):
 def identity(root):
     tracked = tracked_files(root)
     sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/", "test/haskell-fixtures/", "src/THC/Driver/"))}
-    sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS))
+    sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED))
     require(all(name in tracked for name in sources), "Cache helper/runtime inputs must be tracked")
     require("scripts/prepare-tests.sh" in sources and "compiler/export-boot.py" in sources
             and "examples/coverage.json" in sources, "Incomplete authoritative source set")
@@ -852,6 +1047,54 @@ def bignat_artifact_hashes(manifest):
     return artifacts
 
 
+def pinned_address_artifact_hashes(manifest):
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == PINNED_ADDRESS_OUTPUTS - {"build/pinned-addresses/manifest.json"},
+            "Incomplete pinned-address artifact inventory")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid pinned-address artifact hash")
+    require(manifest.get("mode") == "full" and manifest.get("strictAccepted") is True, "Pinned-address diagnostic-only preparation")
+    return artifacts
+
+
+def memory_artifact_hashes(directory, manifest):
+    require(directory in MEMORY_FIXTURE_OUTPUTS, "Unknown memory fixture: " + directory)
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int
+            and manifest.get("schema") == 1 and manifest.get("ghc") == "9.14.1",
+            "Invalid memory fixture manifest: " + directory)
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            MEMORY_FIXTURE_OUTPUTS[directory] - {f"build/{directory}/manifest.json"},
+            "Incomplete/unreviewed memory fixture artifacts: " + directory)
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid memory fixture artifact hash: " + directory)
+    return artifacts
+
+
+def bytearray_artifact_hashes(family, manifest):
+    required = BYTEARRAY_OUTPUTS[family] - {f"build/{family}/manifest.json"}
+    records = manifest.get("artifactHashes")
+    require(isinstance(records, dict) and set(records) == required, "Incomplete byte-array artifact inventory")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in records.values()), "Invalid byte-array artifact hash")
+    require(manifest.get("entries") == list(BYTEARRAY_FAMILIES[family][1]), "Changed byte-array entry inventory")
+    require(type(manifest.get("schema")) is int and manifest.get("schema") == 1 and manifest.get("ghc") == "9.14.1" and manifest.get("wordBits") == 64,
+            "Wrong byte-array fixture schema/toolchain")
+    return records
+
+
+def thread_inventory_artifact_hashes(manifest):
+    require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
+            "Invalid thread inventory manifest")
+    require(manifest.get("entries") == list(THREAD_INVENTORY_ENTRIES) and manifest.get("stages") == ["pre", "post"] and
+            manifest.get("nativeThread") == "unbound forkIO, threaded RTS -N2",
+            "Invalid thread inventory provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == THREAD_INVENTORY_OUTPUTS - {"build/thread-inventory/manifest.json"},
+            "Incomplete thread inventory artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid thread inventory artifact hash")
+    return artifacts
+
+
 def allowed_payload(name, pins):
     parts = PurePosixPath(relative(name)).parts
     if name in pins:
@@ -864,13 +1107,32 @@ def allowed_payload(name, pins):
         return True
     if len(parts) < 3 or parts[0] != "build":
         return False
+    if parts[1] == "integer-completion":
+        return name in INTEGER_COMPLETION_OUTPUTS
+    if parts[1] in MEMORY_FIXTURE_OUTPUTS:
+        return name in MEMORY_FIXTURE_OUTPUTS[parts[1]]
     if parts[1] == "compiler":
         return len(parts) == 3 and (parts[2] == "plugin.json" or
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "thread-inventory":
+        return name in THREAD_INVENTORY_OUTPUTS
     if parts[1] == "bignat-literals":
         return name in BIGNAT_OUTPUTS
+    if parts[1] in BYTEARRAY_OUTPUTS:
+        return name in BYTEARRAY_OUTPUTS[parts[1]]
+    if parts[1] in SIMD_BYTEARRAY_FAMILIES:
+        if name == f"build/{parts[1]}/provenance.json":
+            return True
+        attempt = "/".join(parts[:3]) if parts[2].startswith("prepare-run-") else f"build/{parts[1]}/prepare-run-placeholder"
+        return name in simd_bytearray_outputs(parts[1], attempt, True)
+    if parts[1] == "pinned-addresses":
+        return name in PINNED_ADDRESS_OUTPUTS
+    if parts[1] == "float-decode":
+        return name in FLOAT_DECODE_OUTPUTS
+    if parts[1] == "floating-remainder":
+        return name in FLOATING_REMAINDER_OUTPUTS
     if parts[1] == "simd-capability-smoke":
         return name in SIMD_SMOKE_OUTPUTS
     if parts[1] == "simd-floatx4-fma":
@@ -1025,8 +1287,27 @@ def inventory(root, current, read, core_files, verified=None):
         if not name.endswith(".json"):
             continue
         doc = json.loads(data)
+        if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in SIMD_BYTEARRAY_FAMILIES:
+            simd_bytearray_artifact_hashes(name.split("/")[1], doc)
+        if name == "build/thread-inventory/manifest.json":
+            thread_inventory_artifact_hashes(doc)
+        if name.startswith("build/") and name.endswith("/manifest.json") and name.split("/")[1] in BYTEARRAY_FAMILIES:
+            bytearray_artifact_hashes(name.split("/")[1], doc)
+        memory_directory = PurePosixPath(name).parent.name
+        if name == f"build/{memory_directory}/manifest.json" and memory_directory in MEMORY_FIXTURE_OUTPUTS:
+            memory_artifact_hashes(memory_directory, doc)
         if name == "build/bignat-literals/manifest.json":
             bignat_artifact_hashes(doc)
+        if name == "build/pinned-addresses/manifest.json":
+            pinned_address_artifact_hashes(doc)
+        if name == "build/float-decode/manifest.json":
+            require(isinstance(doc.get("artifactHashes"), dict) and
+                    set(doc["artifactHashes"]) == FLOAT_DECODE_OUTPUTS - {name},
+                    "Incomplete floating decode fixture inventory")
+        if name == "build/floating-remainder/manifest.json":
+            require(isinstance(doc.get("artifactHashes"), dict) and
+                    set(doc["artifactHashes"]) == FLOATING_REMAINDER_OUTPUTS - {name},
+                    "Incomplete floating remainder fixture inventory")
         if name == "build/original-stack-formatter/manifest.json":
             formatter_artifact_hashes(root, doc)
         if name == "build/original-gmp/manifest.json":

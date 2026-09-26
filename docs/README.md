@@ -1,5 +1,7 @@
 # Coverage and runtime guide
 
+Scalar memory: [complete unaligned scalar families](unaligned-scalar-memory.md).
+
 THC uses GHC's Core and representation information to execute Haskell on
 Truffle/Graal. These pages describe the supported forms and their tests. A native
 oracle result, a passing diagnostic workload, and a strict whole-program pass
@@ -10,7 +12,7 @@ are different claims; each report identifies which it establishes.
 | Area | Reports |
 | --- | --- |
 | Core corpus | [Lazy lists, streams, sharing, trees and application](coverage.md); inputs in [coverage.json](../examples/coverage.json) |
-| Containers | [IntMap, IntSet and Sequence](library-coverage.md); [Map example and its diagnostic frontier](map-example.md); [Set source-binding audit](set-source-binding-audit.md) |
+| Containers | [IntMap, IntSet and Sequence](library-coverage.md); [breadth-first graph example](graph-example.md); [Map example and its diagnostic frontier](map-example.md); [Set source-binding audit](set-source-binding-audit.md) |
 | Formatting | [Int formatting](show-int.md), [Word and list formatting](show-word-list.md) |
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
@@ -19,7 +21,7 @@ are different claims; each report identifies which it establishes.
 | Managed exports | [Declared scalar and IO actions](site/embedding.md) through polyglot bindings; not native C callback addresses |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
-| Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); Java thread identities, masking and interruptible MVar waits |
+| Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); Java thread identities, masking and interruptible MVar waits |
 | ShortByteString | [Pack, length, unpack, uncons, comparison, prefix and suffix](bytearrays.md); [public slicing](library-coverage.md) |
 | Boxed arrays | [Public fixed-bounds STArray and lazy elements](core-evidence.md#lifted-boxed-array-storage); [clone, freeze and thaw slices](array-slices.md) |
 | Numeric arrays | [Int](int-arrays.md), [Double](double-arrays.md), [Float and machine Word](float-word-arrays.md), [Int32/Word32](int32-arrays.md), [Int16/Word16](int16-arrays.md), [Int8/Word8](int8-arrays.md) |
@@ -40,10 +42,13 @@ is the machine-readable declaration used by the auditor.
 | --- | --- |
 | Core proofs | [Representation evidence, strictness and local joins](core-evidence.md); [aggregate layouts](aggregate-layout.md); [shared scalar signatures](scalar-primitive-signatures.md) |
 | Integer scalars | [Unsigned machine/narrow operations](integer-primops.md), [signed narrow operations](signed-narrow-primops.md), [Int64 conversions](int64-conversions.md), [explicit Int64/Word64 operations](explicit64-primops.md), [bit operations](bit-primops.md) |
-| Floating scalars | [Float/Double arithmetic, conversions, square roots and raw bit casts](floating-primitives.md) |
+| Floating scalars | [Float/Double arithmetic, conversions, square roots, raw bit casts and integer decomposition](floating-primitives.md) |
 | Tuple arithmetic | [Quotient/remainder, overflow and carry results](tuple-arithmetic.md) |
+| Remaining scalar integer operations | [Narrow division, logical shifts, double-word division and overflow](integer-completion.md) |
 | Constructors | [Concrete tagToEnum families](tag-to-enum.md); [constructor-to-tag families and precise address fields](core-evidence.md) |
-| Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md) |
+| Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [address/array copies](address-array-copy.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md), [atomic integer reads, writes, fetch and CAS](atomic-int-arrays.md) |
+| Address atomics | [Word and pointer atomic reads, writes, exchange, CAS and fetch operations](atomic-address.md) |
+| Aligned pointer/character storage | [Opaque StablePtr cells and four-byte WideChar slots](aligned-scalar-memory.md) |
 | Type erasure | [Unsafe-equality cases](unsafe-equality-cases.md) |
 
 ### Tuples and sums

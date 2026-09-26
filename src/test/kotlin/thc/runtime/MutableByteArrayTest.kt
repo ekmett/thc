@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -59,17 +58,111 @@ class MutableByteArrayTest {
     @Test fun nativeFillsMovesAndPublicReplicateWithInlining()=native(true)
     @Test fun nativeFillsMovesAndPublicReplicateAcrossResidualCalls()=native(false)
     private data class Row(val raw: Long,val code: Long,val expected: Long)
+    private val inputs = buildSet {
+        val carriers = (-256L..511L).toMutableSet()
+        for (sign in listOf(-1L, 1L)) for (bit in 0..63) for (delta in -1L..1L)
+            carriers.add(sign * ((1L shl bit) + delta))
+        for (raw in carriers) add(raw to 72L)
+        for (code in 0L..1023L) add(code * 0x123456789abcdefL + Long.MIN_VALUE to code)
+        for (raw in listOf(Long.MIN_VALUE, -257L, -1L, 0L, 255L, 256L, Long.MAX_VALUE))
+            for (code in listOf(Long.MIN_VALUE, -1L, 0L, Long.MAX_VALUE)) add(raw to code)
+    }.sortedWith(compareBy({ it.first }, { it.second }))
+    private fun copyRange(code: Long): Triple<Int, Int, Int> {
+        val key = (code and 1023).toInt(); val from = key % 9; val to = key / 9 % 9
+        return Triple(from, to, minOf(key / 81 % 9, 8 - from, 8 - to))
+    }
+    private fun disjointRange(code: Long): Triple<Int, Int, Int> {
+        val key = (code and 1023).toInt(); val low = key % 5; val high = 4 + key / 5 % 5
+        val count = minOf(key / 25 % 5, 4 - low, 8 - high)
+        return if (key / 125 % 2 == 0) Triple(low, high, count) else Triple(high, low, count)
+    }
+    private fun fingerprint(values: List<Int>): Long {
+        var weight = 1L; var result = 0L
+        for (value in values) { result += weight * value; weight *= 257 }
+        return result
+    }
+    // Independent list/snapshot semantics, never a call into ManagedByteArray.
+    // Long arithmetic deliberately retains the native signed-64-bit wrap.
+    private fun model(name: String, raw: Long, code: Long): Long {
+        require(name in names) { "Unknown mutable byte-array entry" }
+        val source = MutableList(8) { ((raw + 17L * it) and 255).toInt() }
+        if (name == "publicReplicate") return (0 until (code and 15).toInt())
+            .fold(code and 15) { answer, _ -> answer * 257 + (raw and 255) }
+        if (name == "filledBytes") {
+            val key = (code and 1023).toInt(); val start = key % 9; val count = minOf(key / 9 % 9, 8 - start)
+            repeat(count) { source[start + it] = (raw and 255).toInt() }
+            return fingerprint(source)
+        }
+        val (from, to, count) = if (name == "disjointBytes") disjointRange(code) else copyRange(code)
+        if (name in listOf("movedBytes", "disjointBytes")) {
+            val snapshot = source.toList()
+            repeat(count) { source[to + it] = snapshot[from + it] }
+            return fingerprint(source)
+        }
+        val destination = MutableList(8) { ((raw + 101 + 29L * it) and 255).toInt() }
+        repeat(count) { destination[to + it] = source[from + it] }
+        source[0] = ((raw + 93) and 255).toInt()
+        return fingerprint(source) + 65537 * fingerprint(destination)
+    }
+    private fun checkedRows(text: String): Map<String, List<Row>> {
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        require(lines.size == names.size * inputs.size) { "Incomplete mutable byte-array corpus" }
+        val result = names.associateWith { mutableListOf<Row>() }
+        for ((index, line) in lines.withIndex()) {
+            val fields = line.split('\t'); require(fields.size == 4) { "Expected entry/raw/code/result" }
+            val name = names[index / inputs.size]; val (raw, code) = inputs[index % inputs.size]
+            require(fields[0] == name && fields[1].toLongOrNull() == raw && fields[2].toLongOrNull() == code) {
+                "Missing, duplicate, reordered or unknown mutable byte-array row $index"
+            }
+            val expected = model(name, raw, code)
+            require(fields[3].toLongOrNull() == expected) { "Native/model mismatch at row $index" }
+            result.getValue(name).add(Row(raw, code, expected))
+        }
+        return result
+    }
+    @Test fun independentMutableModelCoversCarriersAndEveryContainedRange() {
+        assertEquals(2146, inputs.size)
+        val pairs = inputs.toSet()
+        for (raw in -256L..511L) assertTrue(raw to 72L in pairs)
+        for (raw in listOf(Long.MIN_VALUE, Long.MAX_VALUE)) assertTrue(raw to 72L in pairs)
+        val moves = inputs.map { copyRange(it.second) }.toSet()
+        assertTrue(moves.containsAll(ranges()))
+        val disjoint = inputs.map { disjointRange(it.second) }.toSet()
+        assertTrue(disjoint.any { (a, b, n) -> n > 0 && a < b })
+        assertTrue(disjoint.any { (a, b, n) -> n > 0 && a > b })
+        for ((a, b, n) in disjoint) assertTrue(n == 0 || a + n <= b || b + n <= a)
+    }
+    @Test fun independentMutableMovesSnapshotBothDirectionsAndDistinctCopiesAgree() {
+        for ((from, to, count) in listOf(Triple(0, 1, 7), Triple(1, 0, 7), Triple(0, 0, 8), Triple(8, 8, 0))) {
+            val source = List(8) { (127 + 17 * it) % 256 }
+            val expected = source.mapIndexed { index, value -> if (index in to until to + count) source[from + index - to] else value }
+            assertEquals(fingerprint(expected), model("movedBytes", 127, (from + 9 * to + 81 * count).toLong()))
+        }
+        for ((raw, code) in inputs)
+            assertEquals(model("copiedMutableBytes", raw, code), model("copiedDisjointBytes", raw, code))
+        assertThrows(IllegalArgumentException::class.java) { model("unknown", 0, 0) }
+    }
+    @Test fun independentMutableCorpusRejectsMissingDuplicateReorderedAndWrongRows() {
+        val lines = names.flatMap { name -> inputs.map { (raw, code) -> "$name\t$raw\t$code\t${model(name, raw, code)}" } }
+        fun text(rows: List<String>) = rows.joinToString("\n", postfix = "\n")
+        assertEquals(names.toSet(), checkedRows(text(lines)).keys)
+        for (bad in listOf(lines.drop(1), lines + lines.first(), lines.reversed(),
+            listOf(lines[1]) + lines.drop(1), listOf("unknown\t0\t0\t0") + lines.drop(1),
+            listOf(lines.first().substringBeforeLast('\t') + "\t999") + lines.drop(1),
+            listOf(lines.first().replaceFirst('\t', ' ')) + lines.drop(1), lines + "", emptyList()))
+            assertThrows(IllegalArgumentException::class.java) { checkedRows(text(bad)) }
+        checkedRows(File(root, "build/mutable-bytearrays/oracle.tsv").readText())
+    }
     private fun native(inlining: Boolean) {
         val manifest=manifest()
-        for(kind in listOf("inputHashes","artifactHashes"))for((path,expected) in manifest[kind] as Map<String,String>) {
-            val hash=MessageDigest.getInstance("SHA-256").digest(File(root,path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected,hash,"Stale mutable-bytearray input $path")
-        }
-        val rows=File(root,"build/mutable-bytearrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        ByteArrayFixtureEvidence.verify(root, "mutable-bytearrays", manifest)
+        assertEquals(names, manifest["entries"])
+        assertEquals(inputs.map { listOf(it.first, it.second) }, manifest["inputs"])
+        val rows=checkedRows(File(root,"build/mutable-bytearrays/oracle.tsv").readText())
         assertEquals(names.toSet(),rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(),rows.values.sumOf { it.size })
         for((stage,paths) in manifest["stages"] as Map<String,List<String>>)for(name in names) {
-            val cases=rows.getValue(name).map { Row(it[1].toLong(),it[2].toLong(),it[3].toLong()) }
+            val cases=rows.getValue(name)
             val audit=Json.parse(File(root,"build/mutable-bytearrays/$stage-$name.audit.json").readText()) as Map<*,*>
             assertEquals(true,audit["accepted"])
             for(backend in listOf("ast","bytecode"))context(inlining).use { context->
@@ -98,6 +191,8 @@ class MutableByteArrayTest {
             }
         }
     }
+    @Test fun mutableFixtureEvidenceRejectsMissingAndChangedProvenance() =
+        ByteArrayFixtureEvidence.rejectionControls(root, "mutable-bytearrays")
     private fun bytes(seed: Int=0)=ByteArray(8) { (seed+17*it).toByte() }
     private fun overlaps(a: Int,b: Int,n: Int)=n>0 && a<b+n && b<a+n
     private fun ranges()=buildList {for(a in 0..8)for(b in 0..8)for(n in 0..minOf(8-a,8-b))add(Triple(a,b,n))}

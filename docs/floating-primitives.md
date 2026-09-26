@@ -2,7 +2,7 @@
 
 THC supports a bounded scalar `Float#`/`Double#` foundation in both the AST and
 bytecode backends. It includes floating literals, primitive locals, constructor
-fields and closure captures, scalar arguments/results, and 74 primops:
+fields and closure captures, scalar arguments/results, and 87 primops:
 
 | Family | Float# | Double# |
 | --- | --- | --- |
@@ -11,11 +11,14 @@ fields and closure captures, scalar arguments/results, and 74 primops:
 | Square root | `sqrtFloat#` | `sqrtDouble#` |
 | Scalar math | `fabsFloat#`, `expFloat#`, `expm1Float#`, `logFloat#`, `log1pFloat#`, `sinFloat#`, `cosFloat#`, `powerFloat#` | `fabsDouble#`, `expDouble#`, `expm1Double#`, `logDouble#`, `log1pDouble#`, `sinDouble#`, `cosDouble#`, `**##` |
 | Trigonometric and hyperbolic | `tanFloat#`, `asinFloat#`, `acosFloat#`, `atanFloat#`, `sinhFloat#`, `coshFloat#`, `tanhFloat#` | `tanDouble#`, `asinDouble#`, `acosDouble#`, `atanDouble#`, `sinhDouble#`, `coshDouble#`, `tanhDouble#` |
+| Inverse hyperbolic | `asinhFloat#`, `acoshFloat#`, `atanhFloat#` | `asinhDouble#`, `acoshDouble#`, `atanhDouble#` |
+| Operand extrema | `minFloat#`, `maxFloat#` | `minDouble#`, `maxDouble#` |
 | Comparisons | `eqFloat#`, `neFloat#`, `ltFloat#`, `leFloat#`, `gtFloat#`, `geFloat#` | `==##`, `/=##`, `<##`, `<=##`, `>##`, `>=##` |
 | Int conversion | `int2Float#`, `float2Int#` | `int2Double#`, `double2Int#` |
 | Unsigned Word conversion | `word2Float#` | `word2Double#` |
 | Precision conversion | `double2Float#` | `float2Double#` |
 | Raw bit casts | `castFloatToWord32#`, `castWord32ToFloat#` | `castDoubleToWord64#`, `castWord64ToDouble#` |
+| Integer decomposition | `decodeFloat_Int#` | `decodeDouble_Int64#`, `decodeDouble_2Int#` |
 
 The exporter retains `FloatRep` and `DoubleRep` as distinct scalar proofs.
 AST execution has `executeFloat`/`executeDouble` paths; frames and StaticShape
@@ -24,6 +27,85 @@ same concrete types with Bytecode DSL boxing elimination enabled for each.
 There is no implicit widening between the two types. Every floating operation
 rounds to its declared precision; comparisons use IEEE arithmetic equality and
 ordering, including unordered NaNs and equal positive/negative zeros.
+
+## Integer decomposition and public exponent
+
+`decodeFloat_Int#` returns `(# Int#, Int# #)` and `decodeDouble_Int64#`
+returns `(# Int64#, Int# #)`: a signed integer significand and a binary
+exponent. Both backends use raw IEEE bits and write the two primitive Long
+results directly into tuple destination slots. Shared Kotlin decomposition
+handles subnormal normalization, with no intermediate floating calculation or
+temporary pair. This is not a claim about the generic floating call ABI.
+
+Both signed zeros return `(0, 0)`. The smallest positive subnormals return
+`(2^23, -172)` and `(2^52, -1126)` respectively. Infinities and signed NaN
+payloads follow the bit decomposition in pinned GHC 9.14.1's `StgPrimFloat.c`;
+these are not finite mathematical values.
+
+`decodeDouble_2Int#` instead returns `(# Int#, Word#, Word#, Int# #)`:
+sign, high 32 significand bits, low 32 significand bits, and exponent. The
+two word fields are nonnegative Long carriers, not signed Int32 values.
+The pinned RTS's zero branch in `rts/StgPrimFloat.c::__decodeDouble_2Int`
+does not initialize the sign output. THC deterministically returns
+`(+1, 0, 0, 0)` for either zero. Tests preserve the native uninitialized
+observation but compare only the three defined zero fields; all four fields
+are exact for nonzero encodings, including subnormals and non-finite values.
+
+```sh
+cabal run exe:thc-fixtures --offline -- float-decode
+./gradlew --no-daemon test --tests thc.runtime.FloatDecodeTest
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun --tests thc.runtime.FloatDecodeTest
+```
+
+The Haskell producer records 22,520 ordered native rows: 936 binary32 and 4,694
+binary64 encodings across direct, opaque-worker, genuine public `exponent`
+and [command-line example](../examples/THC/FloatDecode.hs) entries.
+Inputs cover both signs, every exponent code, every leading subnormal
+bit and neighbors, boundary fractions and deterministic integer-generated cases.
+Kotlin independently derives fields with unbounded integer arithmetic and checks
+both Core stages/backends, with guest inlining enabled and disabled. Every
+measured call checks the exact compiled-entry count, target identities/validity
+and released handoff storage; setup does not execute a settling guest call.
+
+Public `Double.exponent` retains GHC's opaque `$wintegerFromInt64#` worker.
+Preparation exports and retains the complete unchanged original Integer module,
+alongside its pinned sources, license and provenance; the reachable worker is
+not fabricated. Missing that module fails the strict closure audit. The existing
+shared original-library exporter and Core auditor remain explicit Python
+dependencies; the new producer and independent models are Haskell and Kotlin.
+Malformed scalar carriers, tuple shape, arity and levity fail closed. Bare
+primops are rejected by strict loading and trap when demanded in diagnostic mode.
+Missing/corrupt native rows or source/artifact provenance are rejected as well.
+
+## Scalar arithmetic and conversions
+
+The inverse-hyperbolic operations share a Kotlin implementation between
+backends. Cancellation-resistant `log1p` formulas handle finite middle ranges;
+small `asinh`/`atanh` inputs retain their signed input, and large
+`asinh`/`acosh` inputs use `log(abs(x)) + log(2)` to avoid overflow.
+Float inputs are widened exactly, then rounded once to Float. Domain errors
+produce NaN; `atanh(±1)` produces signed infinity, and `asinh`/`atanh`
+preserve signed zero and subnormals. NaN payload/sign preservation is not promised.
+The native corpus and an independent 90-digit decimal model check a two-ULP
+bound over the tested inputs, not correctly-rounded or bit-identical libm
+behavior for every possible input.
+
+GHC explicitly leaves `minFloat#`/`maxFloat#` and their Double equivalents'
+operand choice unspecified for equal values (including opposite signed zeros)
+or NaNs. THC selects the second operand when its strict comparison is false.
+Tests require exact ordered unequal results, and a permitted operand otherwise;
+they do not mistake one native platform's NaN/zero choice for a portable rule.
+The genuine Haskell fixture imports these experimental operations explicitly
+from `GHC.Prim`, since GHC 9.14.1's `GHC.Exts` does not export them.
+
+`cabal run exe:thc-fixtures --offline -- floating-remainder` records 8,876
+argument-fed native rows and 26 strict pre/post Core audits, including the
+[runnable inverse-hyperbolic example](../examples/THC/InverseHyperbolic.hs).
+`FloatingRemainderTest` covers every leading subnormal bit, formula-switch
+neighbors, domain endpoints, finite extremes and deterministic bit patterns.
+Both backends and inlining modes check every interpreted/compiled row, exact
+first-installed entry counts, unchanged valid targets and empty handoff storage.
+The four-field decode also crosses an opaque worker boundary.
 
 `word2Float#` and `word2Double#` accept the full unsigned 64-bit `Word#`
 range, represented by raw Long bits. Top-bit-set values are shifted right with

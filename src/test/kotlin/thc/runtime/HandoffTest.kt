@@ -58,6 +58,28 @@ class HandoffTest {
         assertEquals(0, state.arguments.retainedReferences())
     }
 
+    @Test fun requestedModeReachesTestProcessAndContext() {
+        // Unlike withLanguage, this proof never changes the process property.
+        // Named Gradle forks supply an independent expectation; legacy `test`
+        // still accepts the caller's JAVA_TOOL_OPTIONS setting.
+        val actual = java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
+        val expected = System.getProperty("thc.expectedHandoffSlabs")
+        if (expected != null) {
+            assertTrue(expected == "true" || expected == "false")
+            assertEquals(expected, System.getProperty(HANDOFF_PROPERTY),
+                "The fork must receive its requested handoff mode")
+        }
+        executionContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                assertEquals(expected?.toBoolean() ?: actual, language.handoffLayouts.enabled,
+                    "The runtime context must use the fork's handoff mode")
+            } finally { context.leave() }
+        }
+        println("THC_HANDOFF_MODE=$actual")
+    }
+
     @Test fun internedRepVectorsGenerateMutableDenseFieldsAndSeparateLifetimes() = withLanguage { language ->
         val reps = listOf("IntRep", "BoxedRep (Just Lifted)", "WordRep")
         val layout = language.handoffLayouts.intern(reps)

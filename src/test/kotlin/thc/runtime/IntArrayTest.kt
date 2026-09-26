@@ -21,14 +21,14 @@ class IntArrayTest {
         fun operand(name: String, result: () -> Any?) = object : Expr() {
             override fun execute(frame: VirtualFrame): Any? { events.add(name); return result() }
         }
-        val fetch = byteArrayExpression(ByteArrayOp.FETCH_ADD_INT, CoreRepresentation.UNKNOWN, arrayOf(
+        val fetch = AtomicIntArrayExpression(AtomicIntArrayOp.ADD, arrayOf(
             operand("array") { owner }, operand("index") { 0L }, operand("delta") { 3L },
             operand("state") { ManagedByteArray.writeIntGuest(owner, 0, 7); Unit }))
         fetch.executeTuple(frame, intArrayOf(slot), 0)
         assertEquals(listOf("array", "index", "delta", "state"), events)
         assertEquals(7L, frame.getLong(slot))
         assertEquals(10L, ManagedByteArray.readIntGuest(owner, 0))
-        val badState = byteArrayExpression(ByteArrayOp.FETCH_ADD_INT, CoreRepresentation.UNKNOWN, arrayOf(
+        val badState = AtomicIntArrayExpression(AtomicIntArrayOp.ADD, arrayOf(
             operand("array") { owner }, operand("index") { 0L }, operand("delta") { 1L },
             operand("state") { "not State#" }))
         assertThrows(RuntimeFault::class.java) { badState.executeTuple(frame, intArrayOf(slot), 0) }

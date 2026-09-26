@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -57,6 +56,8 @@ class MutableByteArraySizeTest {
     @Test fun nativeLiveMutableSizesWithInlining()=native(true)
     @Test fun nativeLiveMutableSizesAcrossResidualCalls()=native(false)
     private data class Row(val raw: Long,val code: Long,val expected: Long)
+    @Test fun sizeFixtureEvidenceRejectsMissingAndChangedProvenance() =
+        ByteArrayFixtureEvidence.rejectionControls(root, "mutable-bytearray-size")
     // Independent of both the native driver and the guest byte-array implementation.
     // Long multiplication deliberately wraps, matching the signed 64-bit input inventory.
     private val inputs=buildSet {
@@ -155,10 +156,7 @@ class MutableByteArraySizeTest {
         assertEquals((names.size*inputs.size).toLong(),manifest["nativeRows"])
         assertEquals(setOf("pre","post"),(manifest["stages"] as Map<*,*>).keys)
         assertEquals(setOf("pre","post").flatMap { stage->names.map { "$stage/$it" } }.toSet(),(manifest["audits"] as Map<*,*>).keys)
-        for(kind in listOf("inputHashes","artifactHashes"))for((path,expected) in manifest[kind] as Map<String,String>) {
-            val hash=MessageDigest.getInstance("SHA-256").digest(File(root,path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected,hash,"Stale mutable-size input $path")
-        }
+        ByteArrayFixtureEvidence.verify(root, "mutable-bytearray-size", manifest)
         val rows=checkedRows(File(root,"build/mutable-bytearray-size/oracle.tsv").readText())
         for((stage,paths) in manifest["stages"] as Map<String,List<String>>)for(name in names) {
             val cases=rows.getValue(name)

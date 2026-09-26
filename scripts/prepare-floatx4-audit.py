@@ -172,6 +172,7 @@ def record(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--export-only', action='store_true', help='Pre-Tidy/Core + model only; no code generation, native oracle or post-Tidy claim')
+    parser.add_argument('--ghc-option', action='append', default=[], help='Explicit native/export codegen option, recorded in provenance (for example -fllvm on AArch64)')
     args = parser.parse_args()
     ghc = os.environ.get('GHC', 'ghc')
     check(subprocess.check_output([ghc, '--numeric-version'], text=True).strip() == '9.14.1', 'Requires pinned GHC9.14.1')
@@ -196,7 +197,7 @@ def main():
     for stage in stages:
         module_path = OUT / f'{stage}-core/SimdFloatX4.json'
         module_path.unlink(missing_ok=True)
-        options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
+        options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else list(args.ghc_option)
         if stage == 'post':
             options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['compiler/export.sh', *options, str(FIXTURE)],
@@ -216,7 +217,7 @@ def main():
         native = OUT / 'native'
         native.mkdir(exist_ok=True)
         binary = native / 'floatx4-oracle'
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-icompiler/test-fixtures',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', *args.ghc_option, '-icompiler/test-fixtures',
              '-odir', str(native), '-hidir', str(native), '-o', str(binary), str(NATIVE)])
         commands.append(dict(argv=[str(binary)], stdout=str(OUT / 'oracle.tsv')))
         output = subprocess.check_output([str(binary)], cwd=ROOT, text=True)

@@ -1,5 +1,8 @@
 # Managed pinned memory and bounded MD5 calls
 
+The [aligned scalar extension](aligned-scalar-memory.md) also supports opaque
+StablePtr array/address cells and four-byte WideChar array elements.
+
 This slice supports `newPinnedByteArray#`, `newAlignedPinnedByteArray#`,
 `byteArrayContents#`, `mutableByteArrayContents#`, `readWord8OffAddr#`, `writeWord8OffAddr#`,
 `readAddrOffAddr#`, `writeAddrOffAddr#`, `keepAlive#` and `touch#`
@@ -156,12 +159,22 @@ closure.
 
 ## Verification and remaining source frontier
 
-`scripts/prepare-pinned-addresses.py` creates genuine pre/post-Tidy Core and
+`cabal run exe:thc-fixtures --offline -- pinned-addresses` creates genuine pre/post-Tidy Core and
 7,269 native/model rows. Of these, 6,387 exercise the primitive slice and are
 checked on AST/bytecode with inlining enabled/disabled. Tests compile active
 guest targets plus the host boundary, then check reversed native inputs with
 exact guest-entry counts, target identity/validity and released handoff pools.
 Twelve malformed-proof controls per stage start from accepted genuine Core.
+The producer also exercises its actual structural checker with seven malformed
+call shapes and a rejected-baseline guard. Kotlin independently models the
+ordered corpus, checks all required source/artifact hashes and rejects missing,
+duplicate, reordered and altered rows. The existing shared `audit-core.py`
+proof checker remains an explicit Python dependency; the pinned-address
+producer and model no longer use Python or dynamic auditor imports.
+
+The Haskell command retains `--native-only`, `--export-only` and
+`--allow-unsupported` diagnostic modes. Only full, strictly accepted receipts
+are reusable fixture-cache inputs; these caches do not store JVM test outcomes.
 
 The remaining 882 rows exercise native public Storable functions only. Their
 original specialized peek/poke workers currently lack exported bodies in this
@@ -185,3 +198,6 @@ tests remain labeled synthetic rather than relabeled main-unit exports.
 First failures and reviewed corrections are retained in the checkpoint evidence;
 no settling retries, compiler-policy changes or reduced compiled-entry checks
 are part of these gates.
+
+The [scalar unaligned memory families](unaligned-scalar-memory.md) use byte offsets
+for all scalar widths and preserve these allocation and pointer-cell contracts.

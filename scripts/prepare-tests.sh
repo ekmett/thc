@@ -33,10 +33,14 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" word-floating
 "$fixture_bin" scalar-bitcasts
 "$fixture_bin" bignat-literals
+"$fixture_bin" float-decode
+"$fixture_bin" floating-remainder
 "$fixture_bin" floating-address
+"$fixture_bin" atomic-address
 "$fixture_bin" floating-byte-offset
 "$fixture_bin" narrow-byte-offset
 "$fixture_bin" int32-byte-offset
+"$fixture_bin" unaligned-scalar-memory
 "$fixture_bin" explicit64-arrays
 "$fixture_bin" fused-floating
 "$fixture_bin" simd-calls
@@ -46,11 +50,11 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" original-stack
 "$fixture_bin" original-stack-formatter
 "$fixture_bin" boxed-array-extensions
-python3 scripts/prepare-bytearray.py
-python3 scripts/prepare-mutable-bytearrays.py
-python3 scripts/prepare-resize-bytearrays.py
-python3 scripts/prepare-mutable-bytearray-size.py
-python3 scripts/prepare-compare-byte-arrays.py
+"$fixture_bin" bytearray
+"$fixture_bin" mutable-bytearrays
+"$fixture_bin" resize-bytearrays
+"$fixture_bin" mutable-bytearray-size
+"$fixture_bin" compare-byte-arrays
 python3 scripts/prepare-boxed-arrays.py
 "$fixture_bin" small-arrays
 python3 scripts/prepare-array-slices.py
@@ -61,6 +65,7 @@ python3 scripts/prepare-data-to-tag.py
 "$fixture_bin" weak-explicit
 "$fixture_bin" shrink-bytearrays
 "$fixture_bin" fetch-add-int-array
+"$fixture_bin" atomic-int-arrays
 python3 scripts/prepare-managed-mvars.py --refresh
 rm -rf -- build/synchronous-exceptions
 python3 scripts/prepare-synchronous-exceptions.py
@@ -68,6 +73,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" live-async
 "$fixture_bin" thread-async
 "$fixture_bin" thread-status
+"$fixture_bin" thread-inventory
 "$fixture_bin" thread-label
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
@@ -100,8 +106,10 @@ esac
 "$fixture_bin" original-strerror
 "$fixture_bin" original-stdio-truncate
 "$fixture_bin" original-fd-ready
-python3 scripts/prepare-pinned-addresses.py
+"$fixture_bin" pinned-addresses
 "$fixture_bin" pinned-pointer-cells
+"$fixture_bin" address-array-copy
+"$fixture_bin" aligned-scalar-memory
 "$fixture_bin" wide-char-address
 scripts/prepare-address-identity.sh
 "$fixture_bin" managed-address-reads
@@ -124,6 +132,7 @@ case "$(uname -m)" in
 esac
 python3 scripts/prepare-simd-capability-smoke.py
 "$fixture_bin" tuple-arithmetic
+"$fixture_bin" integer-completion
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;
   *) python3 scripts/prepare-int16x8-audit.py ;;
@@ -150,20 +159,20 @@ case "$(uname -m)" in
   *) python3 scripts/prepare-int32x4-multiply-audit.py ;;
 esac
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-int32x4-bytearray-audit.py --export-only ;;
-  *) python3 scripts/prepare-int32x4-bytearray-audit.py ;;
+  arm64|aarch64) "$fixture_bin" int32x4-bytearray --export-only ;;
+  *) "$fixture_bin" int32x4-bytearray ;;
 esac
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-word32x4-bytearray-audit.py --export-only ;;
-  *) python3 scripts/prepare-word32x4-bytearray-audit.py ;;
+  arm64|aarch64) "$fixture_bin" word32x4-bytearray --export-only ;;
+  *) "$fixture_bin" word32x4-bytearray ;;
 esac
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-floatx4-bytearray-audit.py --export-only ;;
-  *) python3 scripts/prepare-floatx4-bytearray-audit.py ;;
+  arm64|aarch64) "$fixture_bin" floatx4-bytearray --export-only ;;
+  *) "$fixture_bin" floatx4-bytearray ;;
 esac
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-doublex2-bytearray-audit.py --export-only ;;
-  *) python3 scripts/prepare-doublex2-bytearray-audit.py ;;
+  arm64|aarch64) "$fixture_bin" doublex2-bytearray --export-only ;;
+  *) "$fixture_bin" doublex2-bytearray ;;
 esac
 "$fixture_bin" explicit64
 compiler/export.sh examples/THC/Fixtures.hs compiler/test-fixtures/StrictFields.hs compiler/test-fixtures/SpeculationAudit.hs compiler/test-fixtures/RepresentationAudit.hs compiler/test-fixtures/SourceNotes.hs compiler/test-fixtures/CBVAudit.hs compiler/test-fixtures/CBVJoinAudit.hs compiler/test-fixtures/CBVCoercionAudit.hs compiler/test-fixtures/ConstructorFieldAudit.hs compiler/test-fixtures/DemandAudit.hs

@@ -131,6 +131,7 @@ class ManagedAddressReadTest {
     private fun expected(operation: ManagedAddressRead, bytes: ByteArray, start: Int): Long {
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
         return when (operation) {
+            ManagedAddressRead.CHAR -> buffer.get(start).toLong() and 255L
             ManagedAddressRead.WORD16 -> buffer.getShort(start).toLong() and 0xffffL
             ManagedAddressRead.INT16 -> buffer.getShort(start).toLong()
             ManagedAddressRead.WORD32, ManagedAddressRead.WIDE_CHAR ->
@@ -270,14 +271,14 @@ class ManagedAddressReadTest {
                     val flags = call[3] as MutableList<Any?>
                     val metadata = call.last() as MutableMap<String, Any?>
                     when (mutation) {
-                        0, 1, 2 -> (args[mutation].last() as MutableMap<String, Any?>)["rep"] = scalar("long", "WordRep")
+                        0, 1, 2 -> (args[mutation].last() as MutableMap<String, Any?>)["rep"] = scalar("double", "DoubleRep")
                         3 -> flags[0] = true
                         4 -> { args.removeAt(2); flags.removeAt(2) }
                         5 -> metadata["rep"] = integer
                         6 -> {
                             val tuple = metadata["rep"] as MutableMap<String, Any?>
-                            (tuple["components"] as MutableList<Any?>)[1] = scalar("long", "Word8Rep")
-                            tuple["primReps"] = listOf("Word8Rep")
+                            (tuple["components"] as MutableList<Any?>)[1] = scalar("double", "DoubleRep")
+                            tuple["primReps"] = listOf("DoubleRep")
                         }
                         7 -> {
                             val tuple = metadata["rep"] as MutableMap<String, Any?>

@@ -153,7 +153,11 @@ class WordCarryTest {
                     rep["primReps"] = shape
                     (rep["components"] as List<MutableMap<String, Any?>>).forEachIndexed { i, component -> component["primReps"] = listOf(shape[i]) }
                     val error = assertThrows(RuntimeFault::class.java) { program(language, module + ("diagnosticUnsupported" to diagnostic), backend) }
-                    assertTrue(error.message.orEmpty().contains("Tuple primitive result representation mismatch"), error.message)
+                    // Only the application's annotation changed; its enclosing
+                    // case still supplies the original logical aggregate proof.
+                    // This is a contradictory Core annotation, not evidence that
+                    // physically equivalent Long carriers select an operation.
+                    assertTrue(error.message.orEmpty().contains("Conflicting logical aggregate representation proofs"), error.message)
                 }
                 for (name in listOf("addWordC", "subWordC")) for (variant in listOf("nested", "state", "unknown")) {
                     val module = CoreModules.reachable(module(stage), name)

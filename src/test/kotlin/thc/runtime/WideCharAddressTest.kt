@@ -98,7 +98,7 @@ class WideCharAddressTest {
                     op.validate(arguments, List(arguments.size) { true }, result)
                 }
                 assertThrows(RuntimeFault::class.java) {
-                    op.validate(arguments, app[3] as List<*>, result.copy(primReps = listOf("IntRep")))
+                    op.validate(arguments, app[3] as List<*>, result.copy(kind = CoreKind.DOUBLE, primReps = listOf("DoubleRep")))
                 }
             }
             val audit = Json.parse(File(root, "build/wide-char-address/$stage/audit.json").readText()) as Map<String,Any?>

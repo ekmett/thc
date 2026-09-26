@@ -41,6 +41,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--export-only', action='store_true', help='Pre-Tidy Core through -fno-code -fwrite-if-simplified-core; explicitly no native/post-Tidy oracle')
     ap.add_argument('--vector', choices=['int64x2', 'int32x4'], default='int64x2')
+    ap.add_argument('--ghc-option', action='append', default=[], help='Explicit native/export codegen option, recorded in provenance (for example -fllvm on AArch64)')
     args = ap.parse_args()
     shape32 = args.vector == 'int32x4'
     module_name = 'SimdInt32X4' if shape32 else 'SimdInt64X2'
@@ -62,7 +63,7 @@ def main():
     stages = ['pre'] if args.export_only else ['pre', 'post']
     for stage in stages:
         (OUT / f'{stage}-core/{module_name}.json').unlink(missing_ok=True)
-        options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else []
+        options = ['-fno-code', '-fwrite-if-simplified-core'] if args.export_only else list(args.ghc_option)
         if stage == 'post': options += ['-fplugin-opt=THC.Plugin:post-tidy']
         run(['compiler/export.sh', *options, str(FIXTURE)], dict(THC_CORE_OUT=str(OUT / f'{stage}-core'), THC_GHC_OUT=str(OUT / f'{stage}-ghc')))
         module = json.loads((OUT / f'{stage}-core/{module_name}.json').read_text())
@@ -74,7 +75,7 @@ def main():
     rows = None
     if not args.export_only:
         native = OUT / 'native'; native.mkdir(exist_ok=True)
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-icompiler/test-fixtures', '-odir', str(native), '-hidir', str(native), '-o', str(native / 'simd'), str(NATIVE)])
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', *args.ghc_option, '-icompiler/test-fixtures', '-odir', str(native), '-hidir', str(native), '-o', str(native / 'simd'), str(NATIVE)])
         commands.append(dict(argv=[str(native / 'simd')], stdout=str(OUT / 'oracle.tsv')))
         output = subprocess.check_output([str(native / 'simd')], cwd=ROOT, text=True)
         actual = {}
@@ -89,7 +90,7 @@ def main():
         assert actual == wanted
         (OUT / 'oracle.tsv').write_text(output); rows = len(actual)
     artifacts = [OUT / f'{s}-core/{module_name}.json' for s in stages]
-    if rows is not None: artifacts += [OUT / 'oracle.tsv']
+    if rows is not None: artifacts += [OUT / 'oracle.tsv', OUT / 'native/simd']
     (OUT / 'provenance.json').write_text(json.dumps(dict(schema=1, vector=args.vector, commands=commands, nativeRows=rows, stages=stages, toolchain=toolchain,
         sources=[record(FIXTURE), record(NATIVE), record(Path(__file__).resolve()), *[record(p) for p in sorted((ROOT / 'compiler/THC').glob('*.hs'))]], artifacts=[record(p) for p in artifacts]), indent=2)+'\n')
     print(f'SIMD export stages={stages}; native oracle rows={rows} (None means not run)')

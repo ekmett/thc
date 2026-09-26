@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
 
@@ -63,6 +62,7 @@ class CompareByteArraysTest {
         return a.size.compareTo(b.size).toLong()
     }
     private fun model(name: String, raw: Long): Long {
+        require(name in names) { "Unknown byte-array comparison entry" }
         val k = (raw and 4095).toInt(); val x = (raw and 255).toInt()
         if (name == "shortCompare") return compare(listOf(x, 0, 128, 255),
             listOf(listOf(x, 0, 128, 255), listOf(x, 0, 128), listOf(x, 0, 128, 254), listOf(x, 0, 129, 0), emptyList())[k % 5])
@@ -77,11 +77,8 @@ class CompareByteArraysTest {
     private fun native(inlining: Boolean) {
         val manifest = Json.parse(File(root, "build/compare-byte-arrays/manifest.json").readText()) as Map<String, Any?>
         assertEquals(names, manifest["entries"]); assertEquals("sign only", manifest["resultContract"])
-        for (kind in listOf("inputHashes", "artifactHashes")) for ((path, expected) in manifest[kind] as Map<String, String>) {
-            val hash = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes()).joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(expected, hash, "Stale comparison fixture: $path")
-        }
-        val rows = File(root, "build/compare-byte-arrays/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        ByteArrayFixtureEvidence.verify(root, "compare-byte-arrays", manifest)
+        val rows = checkedRows(File(root, "build/compare-byte-arrays/oracle.tsv").readText()).groupBy { it[0] }
         assertEquals(names.toSet(), rows.keys)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.values.sumOf { it.size })
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
@@ -118,6 +115,29 @@ class CompareByteArraysTest {
         }
     }
 
+    private fun inputs(name: String) = ((if (name in listOf("rangeCompare", "aliasCompare")) (0L..728L).toList() else (-256L..256L).toList()) +
+        listOf(Long.MIN_VALUE, Long.MIN_VALUE + 1, Long.MAX_VALUE - 1, Long.MAX_VALUE, -4097L, 4097L)).toSortedSet().toList()
+    private fun checkedRows(text: String): List<List<String>> {
+        val domain = names.flatMap { name -> inputs(name).map { name to it } }
+        val lines = text.lineSequence().toList().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+        require(domain.size == 3027 && lines.size == domain.size)
+        return lines.mapIndexed { index, line ->
+            val fields = line.split('\t'); require(fields.size == 3)
+            val (name, raw) = domain[index]
+            require(fields[0] == name && fields[1].toLongOrNull() == raw && fields[2].toLongOrNull() == model(name, raw)) {
+                "Incomplete, reordered or mismatched sign-only native comparison row $index"
+            }
+            fields
+        }
+    }
+    @Test fun comparisonProvenanceAndExactCorpusFailClosed() {
+        ByteArrayFixtureEvidence.rejectionControls(root, "compare-byte-arrays")
+        val text = File(root, "build/compare-byte-arrays/oracle.tsv").readText(); checkedRows(text)
+        val lines = text.lines().filter { it.isNotEmpty() }
+        for (bad in listOf(lines.drop(1), lines + lines.first(), lines.reversed(), listOf(lines[1]) + lines.drop(1),
+            listOf("unknown\t0\t0") + lines.drop(1), listOf(lines.first().substringBeforeLast('\t') + "\t999") + lines.drop(1), lines + ""))
+            assertThrows(IllegalArgumentException::class.java) { checkedRows(bad.joinToString("\n", postfix = "\n")) }
+    }
     private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val bytes = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
@@ -174,7 +194,34 @@ class CompareByteArraysTest {
             } finally { context.leave() }
         }
     }
-    @Test fun exactSaturationLevityAndPrimitiveProofsAreMandatory() {
+    @Test fun lexicalLongAliasesPreserveComparisonSemanticsInBothBackends() {
+        val aliases = listOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
+            "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
+        val a = byteArrayOf(0, -1, 127, 1); val b = byteArrayOf(0, 127, -1, 1)
+        val ranges = listOf(listOf(0, 0, 0), listOf(4, 4, 0), listOf(0, 0, 1), listOf(0, 0, 4),
+            listOf(1, 2, 1), listOf(2, 1, 1), listOf(2, 2, 1))
+        for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                // Lexical scalar aliases share Long storage. The audited primop occurrence
+                // remains exact IntRep; its operation, not the binder alias, supplies semantics.
+                for (alias in aliases) for (position in listOf(1, 3, 4)) {
+                    val m = synthetic()
+                    (lambda(m)[1] as List<MutableMap<String, Any?>>)[position]["rep"] = long + ("primReps" to listOf(alias))
+                    val target = program(language, m, backend).entryTarget("entry")
+                    for ((from, to, length) in ranges) {
+                        val expected = compare(a.drop(from).take(length).map { it.toInt() and 255 },
+                            b.drop(to).take(length).map { it.toInt() and 255 })
+                        val actual = Calls.target(target, arrayOf(0L, a, from.toLong(), b, to.toLong(), length.toLong())) as Long
+                        assertEquals(expected, actual.compareTo(0).toLong(), "$backend/$alias/$position/$from/$to/$length")
+                    }
+                    released(language)
+                }
+            } finally { context.leave() }
+        }
+    }
+    @Test fun exactSaturationLevityAndPrimitiveOccurrenceAndCarrierProofsAreMandatory() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -196,7 +243,8 @@ class CompareByteArraysTest {
                                 "wrong" -> occurrence["rep"] = if (i in listOf(0, 2)) bytes + ("primReps" to listOf("BoxedRep (Just Lifted)")) else long + ("primReps" to listOf("WordRep"))
                                 "lifted" -> (a[3] as MutableList<Any?>)[i] = true
                                 "lexical" -> ((lambda(m)[1] as List<MutableMap<String, Any?>>)[i])["rep"] =
-                                    if (i in listOf(0, 2)) bytes + ("primReps" to listOf("BoxedRep (Just Lifted)")) else long + ("primReps" to listOf("WordRep"))
+                                    if (i in listOf(0, 2)) bytes + ("primReps" to listOf("BoxedRep (Just Lifted)"))
+                                    else mapOf("kind" to "double", "primReps" to listOf("DoubleRep"), "evaluated" to true)
                             }
                         }
                     }

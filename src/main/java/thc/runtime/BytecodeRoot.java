@@ -531,6 +531,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "listing")
+    public static final class ObserveThreads {
+        @Specialization public static void observe(VirtualFrame frame, LocalAccessor destination,
+                boolean listing, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreads threads = GuestThreads.current(node);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (listing) destination.setObject(bytecode, frame, threads.snapshot());
+            else destination.setLong(bytecode, frame, threads.isCurrentBound() ? 1L : 0L);
+        }
+    }
+
     @Operation public static final class LabelThread {
         @Specialization public static void set(Object identity, Object bytes, Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);
@@ -569,7 +583,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     TupleResultsKt.requireVoidCarrier(second);
                     // A lifted fork action may still be a thunk. Only the new
                     // child may enter it; the parent must return after registration.
-                    yield GuestThreadOps.fork(node, first);
+                    yield GuestThreadOps.fork(node, first, true);
                 }
                 case BEGIN_KILL -> {
                     TupleResultsKt.requireVoidCarrier(third);
@@ -661,6 +675,52 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    // Truffle Bytecode DSL specializations require Java; the shared IEEE
+    // decomposition remains Kotlin and returns primitive fields, not a carrier.
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "mantissa")
+    @ConstantOperand(type = LocalAccessor.class, name = "exponent")
+    public static final class DecodeFloat {
+        @Specialization public static void execute(VirtualFrame frame,
+                LocalAccessor mantissa, LocalAccessor exponent, float value, @Bind("$node") Node node) {
+            long bits = Float.floatToRawIntBits(value);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            mantissa.setLong(bytecode, frame, FloatDecodeOp.FLOAT.mantissa(bits));
+            exponent.setLong(bytecode, frame, FloatDecodeOp.FLOAT.exponent(bits));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "mantissa")
+    @ConstantOperand(type = LocalAccessor.class, name = "exponent")
+    public static final class DecodeDouble {
+        @Specialization public static void execute(VirtualFrame frame,
+                LocalAccessor mantissa, LocalAccessor exponent, double value, @Bind("$node") Node node) {
+            long bits = Double.doubleToRawLongBits(value);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            mantissa.setLong(bytecode, frame, FloatDecodeOp.DOUBLE.mantissa(bits));
+            exponent.setLong(bytecode, frame, FloatDecodeOp.DOUBLE.exponent(bits));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "sign")
+    @ConstantOperand(type = LocalAccessor.class, name = "high")
+    @ConstantOperand(type = LocalAccessor.class, name = "low")
+    @ConstantOperand(type = LocalAccessor.class, name = "exponent")
+    public static final class DecodeDoubleWords {
+        @Specialization public static void execute(VirtualFrame frame,
+                LocalAccessor sign, LocalAccessor high, LocalAccessor low, LocalAccessor exponent,
+                double value, @Bind("$node") Node node) {
+            long bits = Double.doubleToRawLongBits(value);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            sign.setLong(bytecode, frame, FloatDecodeOp.DOUBLE_WORDS.sign(bits));
+            high.setLong(bytecode, frame, FloatDecodeOp.DOUBLE_WORDS.high(bits));
+            low.setLong(bytecode, frame, FloatDecodeOp.DOUBLE_WORDS.low(bits));
+            exponent.setLong(bytecode, frame, FloatDecodeOp.DOUBLE_WORDS.exponent(bits));
+        }
+    }
+
     /** Saturated tuple arithmetic never constructs a result carrier or payload array. */
     @Operation
     @ConstantOperand(type = TupleArithmeticOp.class, name = "operation")
@@ -678,6 +738,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             first.setLong(bytecode, frame, a);
             second.setLong(bytecode, frame, b);
             if (operation.getResultArity() == 3) third.setLong(bytecode, frame, c);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "quotient")
+    @ConstantOperand(type = LocalAccessor.class, name = "remainder")
+    public static final class DoubleWordDivision {
+        @Specialization public static void execute(VirtualFrame frame, LocalAccessor quotient,
+                LocalAccessor remainder, long high, long low, long divisor, @Bind("$node") Node node) {
+            long q = Scalar64PrimitivesKt.unsignedDoubleWordQuotient(high, low, divisor);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            quotient.setLong(bytecode, frame, q);
+            remainder.setLong(bytecode, frame, low - q * divisor);
         }
     }
 
@@ -721,6 +794,39 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    // Java is required here by the Truffle Bytecode DSL annotation processor.
+    @Operation @ConstantOperand(type = AtomicAddressOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class AtomicAddressNumeric {
+        @Specialization public static void execute(VirtualFrame frame, AtomicAddressOp operation,
+                LocalAccessor destination, ManagedAddress location, long operand, long replacement,
+                Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                operation.numeric(location, operand, replacement));
+        }
+    }
+
+    @Operation @ConstantOperand(type = AtomicAddressOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class AtomicAddressPointer {
+        @Specialization public static void execute(VirtualFrame frame, AtomicAddressOp operation,
+                LocalAccessor destination, ManagedAddress location, ManagedAddress operand,
+                ManagedAddress replacement, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                operation.address(location, operand, replacement));
+        }
+    }
+
+    @Operation public static final class AtomicAddressWrite {
+        @Specialization public static Object execute(ManagedAddress location, long value, Object state) {
+            ManagedByteArray.requireState(state);
+            AtomicAddressOp.WRITE.numeric(location, value, 0L);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadInt8OffAddr {
@@ -733,103 +839,115 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadAddrOffAddr {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
                 ManagedAddress address, long offset, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                address.readAddressElementIndex(offset));
+                address.readAddressElementIndex(offset, byteOffset));
         }
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class IndexAddrOffAddr {
-        @Specialization public static ManagedAddress read(ManagedAddress address, long index) {
-            return address.readAddressElementIndex(index);
+        @Specialization public static ManagedAddress read(boolean byteOffset, ManagedAddress address, long index) {
+            return address.readAddressElementIndex(index, byteOffset);
         }
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class IndexAddrArray {
-        @Specialization public static ManagedAddress read(Object array, long index) {
-            return PinnedMemory.readAddressArray(array, index);
+        @Specialization public static ManagedAddress read(boolean byteOffset, Object array, long index) {
+            return PinnedMemory.readAddressArray(array, index, byteOffset);
         }
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadAddrArray {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
                 Object array, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                PinnedMemory.readAddressArray(array, index));
+                PinnedMemory.readAddressArray(array, index, byteOffset));
         }
     }
 
     @Operation
     @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadManagedAddress {
-        @Specialization public static void read(VirtualFrame frame, ManagedAddressRead operation,
+        @Specialization public static void read(VirtualFrame frame, ManagedAddressRead operation, boolean byteOffset,
                 LocalAccessor destination, ManagedAddress address, long offset, Object state,
                 @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            long value = operation.read(address, offset);
+            long value = operation.read(address, offset, byteOffset);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
         }
     }
 
-    @Operation @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadFloatOffAddr {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
                 ManagedAddress address, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
             destination.setFloat(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                FloatingAddresses.readFloat(address, index));
+                FloatingAddresses.readFloat(address, index, byteOffset));
         }
     }
-    @Operation @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ReadDoubleOffAddr {
-        @Specialization public static void read(VirtualFrame frame, LocalAccessor destination,
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
                 ManagedAddress address, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
             destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                FloatingAddresses.readDouble(address, index));
+                FloatingAddresses.readDouble(address, index, byteOffset));
         }
     }
-    @Operation public static final class IndexFloatOffAddr {
-        @Specialization public static float read(ManagedAddress address, long index) {
-            return FloatingAddresses.readFloat(address, index);
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class IndexFloatOffAddr {
+        @Specialization public static float read(boolean byteOffset, ManagedAddress address, long index) {
+            return FloatingAddresses.readFloat(address, index, byteOffset);
         }
     }
-    @Operation public static final class IndexDoubleOffAddr {
-        @Specialization public static double read(ManagedAddress address, long index) {
-            return FloatingAddresses.readDouble(address, index);
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class IndexDoubleOffAddr {
+        @Specialization public static double read(boolean byteOffset, ManagedAddress address, long index) {
+            return FloatingAddresses.readDouble(address, index, byteOffset);
         }
     }
-    @Operation public static final class WriteFloatOffAddr {
-        @Specialization public static Object write(ManagedAddress address, long index, float value, Object state) {
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteFloatOffAddr {
+        @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long index, float value, Object state) {
             ManagedByteArray.requireState(state);
-            FloatingAddresses.writeFloat(address, index, value);
+            FloatingAddresses.writeFloat(address, index, value, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
     }
-    @Operation public static final class WriteDoubleOffAddr {
-        @Specialization public static Object write(ManagedAddress address, long index, double value, Object state) {
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteDoubleOffAddr {
+        @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long index, double value, Object state) {
             ManagedByteArray.requireState(state);
-            FloatingAddresses.writeDouble(address, index, value);
+            FloatingAddresses.writeDouble(address, index, value, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
     }
 
     @Operation
     @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class IndexManagedAddress {
-        @Specialization public static long read(ManagedAddressRead operation,
+        @Specialization public static long read(ManagedAddressRead operation, boolean byteOffset,
                 ManagedAddress address, long offset) {
-            return operation.read(address, offset);
+            return operation.read(address, offset, byteOffset);
         }
     }
 
@@ -843,35 +961,38 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class WriteWord16OffAddr {
-        @Specialization public static Object write(ManagedAddress address, long offset, long value, Object state) {
+        @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long offset, long value, Object state) {
             ManagedByteArray.requireState(state);
-            address.writeWord16(offset, value);
+            address.writeNativeScalar(offset, 2, value, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
     }
 
     @Operation
     @ConstantOperand(type = int.class, name = "width")
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class WriteNativeScalarOffAddr {
-        @Specialization public static Object write(int width, ManagedAddress address, long offset,
+        @Specialization public static Object write(int width, boolean byteOffset, ManagedAddress address, long offset,
                 long value, Object state) {
             ManagedByteArray.requireState(state);
-            address.writeNativeScalar(offset, width, value);
+            address.writeNativeScalar(offset, width, value, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class AddressWrite {
-        @Specialization public static Object write(ManagedAddress address, long offset,
+        @Specialization public static Object write(boolean byteOffset, ManagedAddress address, long offset,
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
-            address.writeAddressElementIndex(offset, value);
+            address.writeAddressElementIndex(offset, value, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
         // Distinct typed operands share this address-mutation operation.
-        @Specialization public static Object copy(ManagedAddress source, ManagedAddress destination,
+        @Specialization public static Object copy(boolean byteOffset, ManagedAddress source, ManagedAddress destination,
                 long count, Object state) {
             ManagedByteArray.requireState(state);
             source.copyNonOverlappingTo(destination, count);
@@ -879,12 +1000,35 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    // Truffle Bytecode DSL requires Java specializations. Storage ownership,
+    // ranges, pointer cells and native lifetimes remain in shared Kotlin code.
     @Operation
+    public static final class CopyAddressToByteArray {
+        @Specialization public static Object copy(ManagedAddress source, Object destination,
+                long offset, long count, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            source.copyToByteArray(destination, offset, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    public static final class CopyByteArrayToAddress {
+        @Specialization public static Object copy(Object source, long offset,
+                ManagedAddress destination, long count, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.copyFromByteArray(source, offset, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     public static final class WriteAddrArray {
-        @Specialization public static Object write(Object array, long index,
+        @Specialization public static Object write(boolean byteOffset, Object array, long index,
                 ManagedAddress value, Object state) {
             ManagedByteArray.requireState(state);
-            PinnedMemory.writeAddressArray(array, index, value);
+            PinnedMemory.writeAddressArray(array, index, value, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
     }
@@ -2076,6 +2220,50 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void check(Object state) { TupleResultsKt.requireVoidCarrier(state); }
     }
 
+    /** Java is required for these Truffle Bytecode DSL declarations; the transaction
+     * algorithms and callback boundaries live in Kotlin and are shared with the AST. */
+    @Operation
+    @ConstantOperand(type = STMOp.class, name = "operation")
+    @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
+    @ConstantOperand(type = Metrics.class, name = "metrics")
+    public static final class InvokeSTM {
+        @Specialization public static void run(VirtualFrame frame, STMOp operation,
+                BytecodeTupleSlots destination, Metrics metrics, Object action, Object alternative,
+                Object nested, Object state,
+                @Cached(value = "create(operation, destination, metrics)", neverDefault = true) STMCall call) {
+            TupleResultsKt.requireVoidCarrier(state);
+            call.execute(frame, action, alternative, nested);
+        }
+        public static STMCall create(STMOp operation, BytecodeTupleSlots destination, Metrics metrics) {
+            return new STMCall(operation, destination, metrics);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = STMOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class TVarAccess {
+        @Specialization public static void run(VirtualFrame frame, STMOp operation, LocalAccessor destination,
+                Object value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedSTM stm = thc.Language.currentState(node).stm;
+            Object result = switch (operation) {
+                case NEW -> stm.newTVar(value);
+                case READ -> stm.read(value);
+                case READ_IO -> stm.readIO(value);
+                case RETRY -> stm.retry();
+                default -> throw new IllegalStateException("Not a TVar tuple operation");
+            };
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class WriteTVar {
+        @Specialization public static Object run(Object cell, Object value, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            thc.Language.currentState(node).stm.write(cell, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     /** Called inside a DSL TryCatch; its typed tuple destination is unchanged. */
     @Operation
     @ConstantOperand(type = BytecodeTupleSlots.class, name = "destination")
@@ -3035,17 +3223,34 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class IndexByteArray {
         @Specialization public static long index(Object value, long offset) { return ManagedByteArray.readGuest(value, offset, true); }
     }
-    /** Typed machine-Int array access; the constant mode selects a read or atomic fetch-add. */
+    /** Typed machine-Int array read. Java is required by the Bytecode DSL. */
     @Operation
-    @ConstantOperand(type = boolean.class, name = "fetchAdd")
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class IntArrayAccess {
-        @Specialization public static void read(VirtualFrame frame, boolean fetchAdd, LocalAccessor destination,
-                Object value, long index, long delta, Object state, @Bind("$node") Node node) {
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
             ManagedByteArray.requireState(state);
-            long result = fetchAdd ? ManagedByteArray.fetchAddIntGuest(value, index, delta)
-                    : ManagedByteArray.readIntGuest(value, index);
+            long result = ManagedByteArray.readIntGuest(value, index, byteOffset);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = AtomicIntArrayOp.class, name = "operation")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class AtomicIntArray {
+        @Specialization public static void access(VirtualFrame frame, AtomicIntArrayOp operation, LocalAccessor destination,
+                Object value, long index, long operand, long replacement, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            long result = operation.execute(value, index, operand, replacement);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+    @Operation public static final class AtomicWriteIntArray {
+        @Specialization public static Object write(Object value, long index, long operand, Object state) {
+            ManagedByteArray.requireState(state);
+            AtomicIntArrayOp.WRITE.execute(value, index, operand, 0L);
+            return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
@@ -3136,16 +3341,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return kotlin.Unit.INSTANCE;
         }
     }
-    @Operation public static final class WriteIntArray {
-        @Specialization public static Object write(Object value, long index, long integer, Object state) {
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteIntArray {
+        @Specialization public static Object write(boolean byteOffset, Object value, long index, long integer, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeIntGuest(value, index, integer);
+            ManagedByteArray.writeIntGuest(value, index, integer, byteOffset);
             return kotlin.Unit.INSTANCE;
         }
     }
-    @Operation public static final class IndexIntArray {
-        @Specialization public static long index(Object value, long index) {
-            return ManagedByteArray.readIntGuest(value, index);
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class IndexIntArray {
+        @Specialization public static long index(boolean byteOffset, Object value, long index) {
+            return ManagedByteArray.readIntGuest(value, index, byteOffset);
         }
     }
     @Operation
@@ -3860,6 +4067,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class ShiftRightNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) >> (int) y; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
+    public static final class ShiftRightLogicalNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow((x & (-1L >>> shift)) >>> (int) y, shift); } }
+    @Operation public static final class MultiplyIntMayOverflow { @Specialization public static long apply(long x, long y) { return Math.multiplyHigh(x, y) != ((x * y) >> 63) ? 1L : 0L; } }
+    @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class EqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) == signedNarrow(y, shift) ? 1L : 0L; } }
     @Operation @ConstantOperand(type = int.class, name = "shift")
     public static final class NotEqualNarrowInt { @Specialization public static long apply(int shift, long x, long y) { return signedNarrow(x, shift) != signedNarrow(y, shift) ? 1L : 0L; } }
@@ -3927,6 +4137,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation public static final class DoubleSinh { @Specialization public static double apply(double x) { return Math.sinh(x); } }
     @Operation public static final class DoubleCosh { @Specialization public static double apply(double x) { return Math.cosh(x); } }
     @Operation public static final class DoubleTanh { @Specialization public static double apply(double x) { return Math.tanh(x); } }
+    @Operation public static final class FloatAsinh { @Specialization public static float apply(float x) { return (float) InverseHyperbolic.asinh(x); } }
+    @Operation public static final class FloatAcosh { @Specialization public static float apply(float x) { return (float) InverseHyperbolic.acosh(x); } }
+    @Operation public static final class FloatAtanh { @Specialization public static float apply(float x) { return (float) InverseHyperbolic.atanh(x); } }
+    @Operation public static final class FloatMin { @Specialization public static float apply(float x, float y) { return x < y ? x : y; } }
+    @Operation public static final class FloatMax { @Specialization public static float apply(float x, float y) { return x > y ? x : y; } }
+    @Operation public static final class DoubleAsinh { @Specialization public static double apply(double x) { return InverseHyperbolic.asinh(x); } }
+    @Operation public static final class DoubleAcosh { @Specialization public static double apply(double x) { return InverseHyperbolic.acosh(x); } }
+    @Operation public static final class DoubleAtanh { @Specialization public static double apply(double x) { return InverseHyperbolic.atanh(x); } }
+    @Operation public static final class DoubleMin { @Specialization public static double apply(double x, double y) { return x < y ? x : y; } }
+    @Operation public static final class DoubleMax { @Specialization public static double apply(double x, double y) { return x > y ? x : y; } }
     @Operation public static final class DoubleEqual { @Specialization public static long apply(double x, double y) { return x == y ? 1L : 0L; } }
     @Operation public static final class DoubleNotEqual { @Specialization public static long apply(double x, double y) { return x != y ? 1L : 0L; } }
     @Operation public static final class DoubleLess { @Specialization public static long apply(double x, double y) { return x < y ? 1L : 0L; } }

@@ -31,7 +31,7 @@ malformed saturation, State/empty-tuple confusion, signedness, levity, missing p
 and wrong runtime carriers reject. Ordinary default and dense-handoff modes use the
 same gates and normal compilation thresholds.
 
-Reproduce preparation with `python3 scripts/prepare-mutable-bytearray-size.py`, the
+Reproduce preparation with `cabal run exe:thc-fixtures --offline -- mutable-bytearray-size`, the
 auditor proof checks with `python3 scripts/test-core-bytearrays.py`, and the model,
 native-comparison and compiled-path tests together with
 `./gradlew --no-daemon test --tests thc.runtime.MutableByteArraySizeTest`.

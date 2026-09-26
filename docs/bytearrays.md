@@ -61,7 +61,7 @@ whose ByteArray documentation states that freeze does not copy and both variants
 share the same heap structure. `scripts/primop-coverage.py` also checks the advertised
 names and arities against the installed GHC API, and records its signatures.
 
-Run `compiler/build.sh`, then `python3 scripts/prepare-bytearray.py` and
+Run `cabal run exe:thc-fixtures --offline -- bytearray` and
 `./gradlew test --tests thc.runtime.ByteArrayTest`. Preparation exports
 pre/post-Tidy source fixtures, exports the pinned List source, and records hashes
 of sources, exporter, auditor, capability manifest, Core artifacts, and native
@@ -97,7 +97,7 @@ and length, offsets no greater than size, and length no greater than
 `size - offset`. Empty ranges at either endpoint are valid. Comparing overlapping
 ranges of the same immutable array is valid and does not mutate storage.
 
-`prepare-compare-byte-arrays.py` exports genuine pre/post-Tidy public
+`cabal run exe:thc-fixtures --offline -- compare-byte-arrays` exports genuine pre/post-Tidy public
 ShortByteString `Ord`, `isPrefixOf`, and `isSuffixOf` workloads plus direct range
 and alias controls. The 3,027 native rows are checked against independent
 unsigned-list models; all ten entry audits must retain `compareByteArrays#` and

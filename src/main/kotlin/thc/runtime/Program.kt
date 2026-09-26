@@ -42,6 +42,9 @@ internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
 }
 /** Fixed-width signed arithmetic retains canonical sign-extended Long carriers. */
 internal fun narrowIntPrimitiveShift(name: String): Int = when (name) {
+    "uncheckedShiftRLInt8#" -> 56
+    "uncheckedShiftRLInt16#" -> 48
+    "uncheckedShiftRLInt32#" -> 32
     "word8ToInt8#", "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#", "uncheckedShiftLInt8#", "uncheckedShiftRAInt8#" -> 56
     "word16ToInt16#", "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#", "uncheckedShiftLInt16#", "uncheckedShiftRAInt16#" -> 48
     "word32ToInt32#", "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#", "uncheckedShiftLInt32#", "uncheckedShiftRAInt32#" -> 32
@@ -1269,7 +1272,8 @@ private class Primitive(private val name: String, @field:Children private var ar
             "gtInt8#", "gtInt16#", "gtInt32#" -> 2
             "geInt8#", "geInt16#", "geInt32#" -> 2
             "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#",
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> 2
+            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#",
+            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#", "mulIntMayOflo#" -> 2
 
             "quotWord#" -> 2
             "remWord#" -> 2
@@ -1303,6 +1307,9 @@ private class Primitive(private val name: String, @field:Children private var ar
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         if (arguments.size != arity) throw RuntimeFault("Primitive arity mismatch: $name")
+        if (operation in setOf("uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#", "mulIntMayOflo#") &&
+            arguments.any { it.representation.kind != CoreKind.LONG || it.representation.isTypedTransport })
+            throw RuntimeFault("Primitive requires Long operands: $name")
     }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
@@ -1335,6 +1342,9 @@ private class Primitive(private val name: String, @field:Children private var ar
                 signedNarrow(x shl y.toInt(), intShift)
             "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" ->
                 signedNarrow(x, intShift) shr y.toInt()
+            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#" ->
+                signedNarrow((x and (-1L ushr intShift)) ushr y.toInt(), intShift)
+            "mulIntMayOflo#" -> b(Math.multiplyHigh(x, y) != ((x * y) shr 63))
 
             "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
             "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
@@ -1477,7 +1487,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             tuple: TupleShape? = null,
                             tupleSlots: IntArray = intArrayOf(),
                             inputLayout: ArgumentLayout? = null,
-                            private val enableAsync: Boolean = false,
+                            internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray()) : GuestRoot(language, descriptor) {
     init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
     @field:CompilationFinal(dimensions = 1)
@@ -1817,7 +1827,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "indexed primitive slots; selective StaticShape captures",
-        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "single guest thread")
+        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; AST forks reject external asynchronous delivery")
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
@@ -2039,6 +2049,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val callStrict = CoreCallDemands.lowerApplication(expr, callDemandsEnabled)
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
+            val floatDecode = if (fn[0] == "prim") FloatDecodeOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
             val packageScalar = CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
@@ -2324,6 +2335,12 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "noDuplicate#") {
                 CoreNoDuplicate.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 NoDuplicate(argument(args[0], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && CoreThreadObservation.named(fn[1] as String)) {
+                val name = fn[1] as String
+                CoreThreadObservation.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                val state = argument(args[0], scope, false)
+                CoreThreadObservation.validate(name, listOf(state.representation), flags, tupleProof)
+                ThreadObservation(name == "listThreads#", state, tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "yield#") {
                 CoreYield.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 YieldThread(argument(args[0], scope, false), enableAsync, tupleProof)
@@ -2335,12 +2352,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val payload = globals[CoreFileWait.badFd]
                     ?: throw UnsupportedCore("$name requires original blockedOnBadFD payload")
                 WaitFileDescriptor(operands[0], operands[1], payload, name == "waitWrite#", enableAsync, tupleProof)
-            } else if (fn[0] == "prim" && fn[1] in listOf("myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#")) {
+            } else if (fn[0] == "prim" && fn[1] in listOf("fork#", "myThreadId#", "threadStatus#", "killThread#", "labelThread#", "threadLabel#")) {
                 val name = fn[1] as String
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 CoreGuestThreads.validate(name, operands.map { it.representation }, flags, tupleProof)
                 when (name) {
+                    "fork#" -> ForkThread(operands[0], operands[1], tupleProof)
                     "myThreadId#" -> MyThreadId(operands[0], tupleProof)
                     "threadStatus#" -> ThreadStatus(operands[0], operands[1], tupleProof)
                     "threadLabel#" -> ThreadLabel(operands[0], operands[1], tupleProof)
@@ -2350,6 +2368,17 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (fn[0] == "prim" && fn[1] == "getCurrentCCS#") {
                 CoreCurrentCCS.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)
+            } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
+                val operation = STMOp.named(fn[1] as String)!!
+                if (enableAsync && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                    throw UnsupportedCore("STM transaction frames do not yet support resumable asynchronous delivery")
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                operation.validate(operands.map { it.representation }, flags, tupleProof)
+                val nested = if (operation == STMOp.ATOMICALLY) GlobalRead(globals[STMOp.NESTED]
+                    ?: throw UnsupportedCore("atomically# requires original nestedAtomically payload")) else null
+                STMExpression(operation, tupleProof, operands.toTypedArray(),
+                    if (operation.callback) TupleShape(tupleProof, language as thc.Language) else null, metrics, nested)
             } else if (fn[0] == "prim" && MVarOp.named(fn[1] as String) != null) {
                 val operation = MVarOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
@@ -2417,36 +2446,61 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     TupleShape(tupleProof, language), function, stateArgument, false, metrics)
                 else Application(function, stateArgument, false, metrics)
                 KeepAliveExpression(kept, state, action, tupleProof)
+            } else if (fn[0] == "prim" && AtomicAddressOp.named(fn[1] as String) != null) {
+                val operation = AtomicAddressOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                AtomicAddressExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
             } else if (fn[0] == "prim" && FloatingAddressOp.named(fn[1] as String) != null) {
                 val operation = FloatingAddressOp.named(fn[1] as String)!!
+                val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                FloatingAddressExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
+                FloatingAddressExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray(), byteOffset)
+            } else if (fn[0] == "prim" && AddressArrayCopyOp.named(fn[1] as String) != null) {
+                val operation = AddressArrayCopyOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.map { compile(it, scope, false) }
+                if (operation.toArray) AddressToByteArrayExpression(tupleProof,
+                    operands[0], operands[1], operands[2], operands[3], operands[4])
+                else ByteArrayToAddressExpression(tupleProof,
+                    operands[0], operands[1], operands[2], operands[3], operands[4])
             } else if (fn[0] == "prim" && PinnedMemoryOp.named(fn[1] as String) != null) {
                 val operation = PinnedMemoryOp.named(fn[1] as String)!!
+                val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 if (operation == PinnedMemoryOp.CONTENTS || operation == PinnedMemoryOp.MUTABLE_CONTENTS)
                     PinnedByteArrayContents(tupleProof, compile(args[0], scope, false))
                 else if (operation == PinnedMemoryOp.INDEX_ADDR_OFF || operation == PinnedMemoryOp.INDEX_ADDR_ARRAY)
-                    PinnedPointerIndexExpression(operation, tupleProof,
+                    PinnedPointerIndexExpression(operation, tupleProof, byteOffset,
                         compile(args[0], scope, false), compile(args[1], scope, false))
                 else if (!operation.tuple && operation.addressRead != null)
-                    PinnedScalarIndexExpression(operation.addressRead, tupleProof,
+                    PinnedScalarIndexExpression(operation.addressRead, tupleProof, byteOffset,
                         compile(args[0], scope, false), compile(args[1], scope, false))
                 else if (operation == PinnedMemoryOp.WRITE_ADDR_ARRAY)
-                    PinnedPointerArrayWrite(tupleProof, compile(args[0], scope, false),
+                    PinnedPointerArrayWrite(tupleProof, byteOffset, compile(args[0], scope, false),
                         compile(args[1], scope, false), compile(args[2], scope, false),
                         compile(args[3], scope, false))
                 else if (operation == PinnedMemoryOp.READ_ADDR_ARRAY)
-                    PinnedPointerArrayRead(tupleProof, compile(args[0], scope, false),
+                    PinnedPointerArrayRead(tupleProof, byteOffset, compile(args[0], scope, false),
                         compile(args[1], scope, false), compile(args[2], scope, false))
-                else PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
+                else PinnedMemoryExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray(), byteOffset)
+            } else if (fn[0] == "prim" && AtomicIntArrayOp.named(fn[1] as String) != null) {
+                val operation = AtomicIntArrayOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                AtomicIntArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && ByteArrayOp.named(fn[1] as String) != null) {
                 val operation = ByteArrayOp.named(fn[1] as String)!!
+                val byteOffset = (fn[1] as String).contains("Word8") && (fn[1] as String).contains("As")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                byteArrayExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray())
+                byteArrayExpression(operation, tupleProof, args.map { compile(it, scope, false) }.toTypedArray(), byteOffset)
+            } else if (floatDecode != null) {
+                floatDecode.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                FloatDecodeExpression(floatDecode, tupleProof, argument(args.single(), scope, false))
             } else if (tupleOperation != null) {
                 tupleOperation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                TupleArithmeticExpression(tupleOperation, tupleProof,
+                if (tupleOperation == TupleArithmeticOp.QUOT_REM_WORD_2)
+                    DoubleWordDivisionExpression(tupleProof, argument(args[0], scope, false),
+                        argument(args[1], scope, false), argument(args[2], scope, false))
+                else TupleArithmeticExpression(tupleOperation, tupleProof,
                     argument(args[0], scope, false), argument(args[1], scope, false))
             } else if (tupleProof.isSum && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-sum") {
                 val tag = SumShape.constructor(tupleProof, constructors[fn[1]], fn[2])

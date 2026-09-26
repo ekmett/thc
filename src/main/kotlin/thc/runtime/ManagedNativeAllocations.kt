@@ -146,6 +146,19 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
         failed?.let { throw it }
     }
     @Synchronized internal fun liveCount(): Int = live.size
+
+    /** Pointer atomic results recover only existing context-owned allocations.
+     * Unknown bits remain non-dereferenceable in NativeAddresses. */
+    @Synchronized @TruffleBoundary internal fun recoverAddress(bits: Long): ManagedAddress? {
+        current()
+        if (closed) fault("Native allocation registry is closed")
+        for (owner in live) if (owner !in freeing) {
+            val displacement = owner.access { bits - it.address() }
+            if (java.lang.Long.compareUnsigned(displacement, owner.size) <= 0)
+                return ManagedAddress.fromNativeAllocation(owner).plus(displacement)
+        }
+        return null
+    }
     companion object {
         @JvmStatic fun current(node: Node?): ManagedNativeAllocations = Language.currentState(node).nativeAllocations
         private fun releaseNative(pointer: MemorySegment) {

@@ -131,7 +131,9 @@ internal class ManagedAddress private constructor(
         else offset == other.offset && when {
             this === NULL || other === NULL -> this === other
             native != null || other.native != null -> native != null && native === other.native
-            owner != null -> owner === other.owner
+            owner != null && other.owner != null -> owner === other.owner
+            owner != null -> other.mutableBytes?.let(owner::ownsStorage) == true
+            other.owner != null -> mutableBytes?.let(other.owner::ownsStorage) == true
             literalBytes != null -> literalBytes === other.literalBytes
             else -> mutableBytes != null && mutableBytes === other.mutableBytes
         }
@@ -297,11 +299,12 @@ internal class ManagedAddress private constructor(
     /** Native-endian scalar stores validate the full element before mutation.
      * Pointer-bearing allocations retain references except for a complete
      * overwrite of a pointer cell. */
-    fun writeNativeScalar(elementOffset: Long, width: Int, value: Long) {
+    @JvmOverloads fun writeNativeScalar(elementOffset: Long, width: Int, value: Long, byteOffset: Boolean = false) {
         if (width != 2 && width != 4 && width != 8) fault("Unsupported managed Addr# scalar width")
-        if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
+        val stride = if (byteOffset) 1 else width
+        if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
             fault("Managed Addr# element offset overflow")
-        val displacement = elementOffset * width
+        val displacement = elementOffset * stride
         requireRange(displacement, width.toLong(), writable = true)
         val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
         native?.let { allocation -> allocation.access { segment ->
@@ -320,6 +323,47 @@ internal class ManagedAddress private constructor(
     }
 
     fun writeWord16(elementOffset: Long, value: Long) = writeNativeScalar(elementOffset, 2, value)
+
+    /** Keep owner checks, alias synchronization and the complete read/modify/write
+     * together. This does not expose or permanently mark the backing as raw. */
+    internal inline fun <T> withAtomicBytes(width: Int, writable: Boolean,
+        action: (ByteArray, Int) -> T): T {
+        requireRange(0, width.toLong(), writable)
+        if (offset % width != 0L) fault("Misaligned atomic Addr#")
+        owner?.let { return it.accessAtomicByteRange(offset, width, writable, action) }
+        val bytes = literalBytes ?: mutableBytes ?: fault("Atomic Addr# has no byte storage")
+        return synchronized(bytes) { action(bytes, offset.toInt()) }
+    }
+
+    internal fun atomicPointer(expected: ManagedAddress?, desired: ManagedAddress): ManagedAddress {
+        val allocation = owner ?: fault("Pointer atomic requires managed pointer cells or owned native storage")
+        while (true) {
+            val old = synchronized(allocation) {
+                requireRange(0, allocation.addressWidth.toLong(), writable = true)
+                if (offset % allocation.addressWidth != 0L) fault("Misaligned atomic pointer Addr#")
+                allocation.readAddressByteOffset(offset)
+            }
+            // Referent validation may take native lifetime or context registry
+            // locks. Never hold a pointer-cell owner across those acquisitions:
+            // a native copy can already hold its borrow while waiting for this
+            // owner, with a free queued ahead of our new native read lock.
+            // These checks do not retain referent allocations through commit;
+            // this operation compares pointer values, not referent memory.
+            desired.sameLocation(desired)
+            expected?.sameLocation(expected)
+            old.sameLocation(old)
+            val matches = expected == null || old.sameLocation(expected)
+            synchronized(allocation) {
+                requireRange(0, allocation.addressWidth.toLong(), writable = true)
+                if (allocation.readAddressByteOffset(offset) === old) {
+                    if (matches) allocation.writeAddressByteOffset(offset, desired)
+                    return old
+                }
+            }
+            // A concurrent writer changed the observed cell. Revalidate that
+            // new reference outside the monitor before attempting the commit.
+        }
+    }
 
     /** Validate a complete byte region before any effect. An empty region may
      * start one past the allocation; an immutable destination is never writable. */
@@ -365,6 +409,55 @@ internal class ManagedAddress private constructor(
     /** copyAddrToAddrNonOverlapping# keeps its stronger disjointness contract. */
     fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) =
         copyTo(destination, count, allowOverlap = false)
+
+    /** The three array/address primops forbid an address into the array, not
+     * merely intersecting copied ranges. Raw aliases retain this identity too. */
+    private fun requireDistinctArray(array: Any?) {
+        val same = when (array) {
+            is ManagedAllocation -> owner === array || mutableBytes?.let(array::ownsStorage) == true ||
+                literalBytes?.let(array::ownsStorage) == true
+            is ByteArray -> mutableBytes === array || literalBytes === array || owner?.ownsStorage(array) == true
+            else -> fault("Expected a managed ByteArray#")
+        }
+        if (same) fault("Array/address copy requires distinct backing allocations")
+    }
+
+    /** Keep native lifetime and pointer-cell transport inside the existing
+     * storage boundaries; no temporary Addr# view or raw owner alias escapes. */
+    fun copyToByteArray(destination: Any?, destinationOffset: Long, count: Long) = withNativeBorrow {
+        requireRange(0, count)
+        requireDistinctArray(destination)
+        val destinationSize = ManagedByteArray.sizeGuest(destination)
+        if (destinationOffset < 0 || destinationOffset > destinationSize || count > destinationSize - destinationOffset)
+            fault("ByteArray# copy range outside its backing storage")
+        if (destination is ManagedAllocation && !destination.isWritable)
+            fault("Cannot write through an immutable managed allocation")
+        // An empty range may lie inside a pointer cell: it transports no bits
+        // and must not ask the pointer-copy boundary to interpret that cell.
+        if (count == 0L) return@withNativeBorrow
+        if (native != null) native.access { source ->
+            if (destination is ManagedAllocation)
+                destination.copyBytesIn(source.asSlice(offset, count).toArray(ValueLayout.JAVA_BYTE), 0, destinationOffset, count)
+            else MemorySegment.copy(source, offset, MemorySegment.ofArray(destination as ByteArray), destinationOffset, count)
+        } else ManagedByteArray.copyGuest(owner ?: literalBytes ?: mutableBytes,
+            offset, destination, destinationOffset, count, mutable = false)
+    }
+
+    fun copyFromByteArray(source: Any?, sourceOffset: Long, count: Long) = withNativeBorrow {
+        requireRange(0, count, writable = true)
+        requireDistinctArray(source)
+        val sourceSize = ManagedByteArray.sizeGuest(source)
+        if (sourceOffset < 0 || sourceOffset > sourceSize || count > sourceSize - sourceOffset)
+            fault("ByteArray# copy range outside its backing storage")
+        if (count == 0L) return@withNativeBorrow
+        if (native != null) native.access { target ->
+            // Managed pointer references cannot become fabricated native bits.
+            val bytes = if (source is ManagedAllocation) source.copyBytesOut(sourceOffset, count) else source as ByteArray
+            MemorySegment.copy(MemorySegment.ofArray(bytes), if (source is ManagedAllocation) 0 else sourceOffset,
+                target, offset, count)
+        } else ManagedByteArray.copyGuest(source, sourceOffset, owner ?: mutableBytes,
+            offset, count, mutable = false)
+    }
 
     private fun copyTo(destination: ManagedAddress, count: Long, allowOverlap: Boolean) = withNativeBorrows(destination) copy@ {
         requireRange(0, count)
@@ -412,22 +505,24 @@ internal class ManagedAddress private constructor(
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
     /** Pointer cells contain references, not process address bits. */
-    fun readAddressElementIndex(elementOffset: Long): ManagedAddress {
+    @JvmOverloads fun readAddressElementIndex(elementOffset: Long, byteOffset: Boolean = false): ManagedAddress {
         val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
         val width = allocation.addressWidth.toLong()
-        if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
+        val stride = if (byteOffset) 1L else width
+        if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
             fault("Managed Addr# element offset overflow")
-        val displacement = elementOffset * width
+        val displacement = elementOffset * stride
         requireRange(displacement, width)
         return allocation.readAddressByteOffset(offset + displacement)
     }
 
-    fun writeAddressElementIndex(elementOffset: Long, value: ManagedAddress) {
+    @JvmOverloads fun writeAddressElementIndex(elementOffset: Long, value: ManagedAddress, byteOffset: Boolean = false) {
         val allocation = owner ?: fault("Addr# has no allocation-owned pointer cells")
         val width = allocation.addressWidth.toLong()
-        if (elementOffset < Long.MIN_VALUE / width || elementOffset > Long.MAX_VALUE / width)
+        val stride = if (byteOffset) 1L else width
+        if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
             fault("Managed Addr# element offset overflow")
-        val displacement = elementOffset * width
+        val displacement = elementOffset * stride
         requireRange(displacement, width, writable = true)
         allocation.writeAddressByteOffset(offset + displacement, value)
     }

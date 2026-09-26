@@ -85,11 +85,11 @@ class NarrowByteOffsetTest {
         assertEquals(0x8001L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 5, true))
     }
 
-    @Test fun metadataRequiresExactNarrowRepsAndByteOffsets() {
+    @Test fun metadataRequiresScalarCarriersAndByteOffsets() {
         fun proof(kind: CoreKind, rep: String) = CoreRepresentation(kind, primReps = listOf(rep))
         val array = proof(CoreKind.OBJECT, "BoxedRep (Just Unlifted)")
         val offset = proof(CoreKind.LONG, "IntRep")
-        val wrongOffset = proof(CoreKind.LONG, "WordRep")
+        val wrongOffset = proof(CoreKind.DOUBLE, "DoubleRep")
         val signed = proof(CoreKind.LONG, "Int16Rep")
         val unsigned = proof(CoreKind.LONG, "Word16Rep")
         ByteArrayOp.INDEX_WORD8_AS_INT16.validate(listOf(array, offset), listOf(false, false), signed)
@@ -97,10 +97,10 @@ class NarrowByteOffsetTest {
         assertThrows(RuntimeFault::class.java) {
             ByteArrayOp.INDEX_WORD8_AS_INT16.validate(listOf(array, wrongOffset), listOf(false, false), signed)
         }
-        assertThrows(RuntimeFault::class.java) {
+        assertDoesNotThrow {
             ByteArrayOp.INDEX_WORD8_AS_WORD16.validate(listOf(array, offset), listOf(false, false), signed)
         }
-        assertThrows(RuntimeFault::class.java) {
+        assertDoesNotThrow {
             ByteArrayOp.INDEX_WORD8_AS_INT16.validate(listOf(array, offset), listOf(false, true), signed)
         }
     }

@@ -18,24 +18,67 @@ negative controls, strict Core audits, provenance, and all active CI callers.
 
 ## Build and test
 
+Use proportionate verification for a compiler/JIT with reasonable GHC semantics:
+straightforward implementations and ordinary regression/boundary tests for simple
+operations; deeper checks for actual failures, concurrency and memory safety.
+Formal equivalence or exhaustive testing is not the completion criterion. Shared
+representation choices (including Sulong pointers) do not make operations partial,
+and unrelated runtime gaps must not hold up a working feature batch.
+
 `make` builds the runtime and Haskell components. `make test` prepares native
 fixtures and runs the JVM tests; `make test TESTS='thc.RuntimeTest'` selects one
-JUnit class. `make jit-test` runs the separate advisory JIT retention suite.
+JUnit class. `make test-modes` prepares fixtures once and runs separate default
+and dense JVMs from one compilation; `TESTS` selects the same class in each.
+`make jit-test` runs the separate advisory JIT retention suite.
 `make jar` rebuilds only the runtime JAR, and `make probe ARGS='...'` invokes
 the diagnostic runner. `make clean` removes the Gradle and Cabal build products;
 `make distclean` also removes `.gradle`, `.kotlin`, and `.gradle-user-home` in the
 checkout. Neither cleanup target requires a JDK or removes an external cache.
 Use `GRADLE_FLAGS=--offline` or `CABAL_FLAGS=--offline` for an offline build.
 
-Use a descriptive branch name, such as `pinned-arrays` or `fast-ci`, and a
-focused pull request against `main`. Explain the problem, the change and how you
-checked it. Keep issues about the work to do; PRs carry the implementation
-discussion and merge status.
+Batch related primops, fixture changes and proofs into substantial tested
+commits. Rebuild and run focused tests locally whenever useful during development;
+workers should own substantial chunks without repeated per-operation handoffs.
+For an integration checkpoint, build the source batch once and run both handoff
+modes against those artifacts. Group integration
+and pushes so the same source batch does not repeatedly trigger builds and CI.
+There is no required commit count; preserve the complete checks and failed evidence.
 
-Current integration uses small, reviewed PRs merged manually by the integration
+Use a descriptive branch name, such as `pinned-arrays` or `fast-ci`, and a focused
+pull request against `main`. Explain the problem, the change and how you checked
+it. Keep issues about the work to do; PRs carry the implementation discussion
+and merge status.
+
+Current integration uses reviewed PRs merged manually by the integration
 owner. Record the exact tested revision and any dependent changes. Do not treat
 the retained merge-bot implementation or its `auto-merge` label as the current
 integration workflow.
+
+After preparing the affected native/Core fixtures, combine installation and
+both mode tasks in one invocation. Gradle shares Kotlin/KAPT/Java compilation,
+native compilation and ABI probes across these tasks:
+
+```sh
+./gradlew --max-workers=2 --continue installDist \
+  testDefault --tests 'thc.runtime.HandoffTest' --tests 'thc.RuntimeTest' \
+  testDense --tests 'thc.runtime.HandoffTest' --tests 'thc.RuntimeTest'
+```
+
+The named tasks always run fresh tests and explicitly set their fork's
+`thc.handoffSlabs` property. `HandoffTest` checks that property and the runtime
+context without changing the selected mode. XML and HTML remain separate under
+`build/test-results/testDefault`, `build/test-results/testDense` and the matching
+`build/reports/tests` directories. `--tests` and `--rerun` apply to the preceding
+task: select only `testDense` to repeat that mode, or use `testHandoffModes
+--continue` for both complete inventories. Avoid `--rerun-tasks`, which forces
+compilation dependencies to run again. Existing `test` and its
+`JAVA_TOOL_OPTIONS` selection remain supported.
+
+`scripts/try.sh --handoff-modes` prepares the full fixture set once and batches
+installation, diagnostic tools and both test forks. Native ABI probes still run
+once per Gradle graph because their complete host/compiler/header inputs are not
+modeled for safe cross-invocation caching. No fixture stamp or provenance hash is
+rewritten to approve stale artifacts.
 
 When adding a primop, update its existing entry in
 [`scripts/core-capabilities.json`](../scripts/core-capabilities.json) after both
@@ -51,8 +94,8 @@ python3 scripts/test-primop-coverage.py
 
 The scalar signature command needs the pinned GHC 9.14.1. The checklist is
 derived from the same contracts as the auditor; don't edit its checkboxes by
-hand. Partial support stays explicit, including local-only SIMD and managed
-address restrictions.
+hand. Record concrete missing behavior separately; runtime representations alone
+do not make implemented operations partial.
 
 `Fast checks` is the required PR workflow. It runs compiled smoke tests and
 checks for the changed components on Linux, in both handoff modes. Compiler,
@@ -138,8 +181,7 @@ This small serial bot provides the needed coordination for this personal repo.
 To reproduce the main checks locally:
 
 ```sh
-scripts/try.sh
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun
+scripts/try.sh --handoff-modes
 scripts/try-libraries.sh
 THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
 python3 -m unittest discover -s .github/scripts -p 'test_*.py'

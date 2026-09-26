@@ -106,8 +106,8 @@ jobs:
             major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')
             test "$major" = 18
           done
-      - name: Build and test from source
-        run: scripts/try.sh --fail-fast
+      - name: Build and test both handoff modes from source
+        run: scripts/try.sh --handoff-modes --fail-fast
       - name: Check Haskell calls into JavaScript
         run: |
           python3 scripts/test-polyglot-audit.py
@@ -125,12 +125,6 @@ jobs:
           cabal test driver-tests -fdevelopment --test-show-details=direct
       - name: Check registered cross-package Core on both compiled backends
         run: python3 scripts/test-core-package-link.py
-      - name: Preserve default test results
-        if: always()
-        shell: bash
-        run: |
-          if [ -d build/test-results/test ]; then cp -R build/test-results/test build/test-results/default; fi
-          if [ -d build/reports/tests/test ]; then cp -R build/reports/tests/test build/reports/tests/default; fi
       - name: Require fresh native SIMD oracle and post-Tidy export on x86
         if: runner.os == 'Linux'
         run: |
@@ -166,13 +160,6 @@ jobs:
           proof = json.loads(Path('build/simd-doublex2-bytearray/provenance.json').read_text())
           assert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
-      - name: Test opt-in dense handoff
-        env:
-          JAVA_TOOL_OPTIONS: -Dthc.handoffSlabs=true
-        run: |
-          ./gradlew --no-daemon test --rerun
-          cp -R build/test-results/test build/test-results/handoff
-          cp -R build/reports/tests/test build/reports/tests/handoff
       - name: Prepare fresh library source and native oracles
         run: python3 scripts/prepare-library-tests.py
       - name: Package verified library inputs and installed runtime
@@ -206,13 +193,9 @@ jobs:
           python3 scripts/test-word16x8-model.py
           python3 scripts/test-word32x4-model.py
           python3 scripts/test-int32x4-multiply-model.py
-          python3 scripts/test-int32x4-bytearray-model.py
           python3 scripts/test-core-vector-memory.py
-          python3 scripts/test-word32x4-bytearray-model.py
           python3 scripts/test-core-word32-vector-memory.py
-          python3 scripts/test-floatx4-bytearray-model.py
           python3 scripts/test-core-float-vector-memory.py
-          python3 scripts/test-doublex2-bytearray-model.py
           python3 scripts/test-core-double-vector-memory.py
           python3 scripts/test-core-bytearrays.py
           python3 scripts/test-core-arrays.py
@@ -223,7 +206,6 @@ jobs:
           python3 scripts/test-narrow-literal-proofs.py
           python3 scripts/test-short-bytes-slices-model.py
           python3 scripts/test-array-slice-model.py
-          python3 scripts/test-mutable-bytearray-model.py
           python3 scripts/test-primop-coverage.py
       - name: Check merged fixture and runtime recipes with and without assertions
         shell: bash
@@ -237,7 +219,6 @@ jobs:
             scripts/test-core-package-manifest.py \
             scripts/test-managed-mvar-fixtures.py \
             scripts/test-managed-mvars.py \
-            scripts/test-pinned-addresses.py \
             scripts/test-prepare-managed-md5.py \
             scripts/test-putstrln-export.py \
             scripts/test-synchronous-exception-fixtures.py; do
@@ -278,12 +259,15 @@ jobs:
             build/original-stdio-read/manifest.json
             build/original-stdio-read/*/*.audit.json
             build/original-stdio-read/*/core/*.json
+            build/unaligned-scalar-memory/
             build/floating/core/
             build/floating/checks.json
             build/floating/oracle.tsv
             build/word-floating/
             build/fused-floating/
+            build/aligned-scalar-memory/
             build/floating-tuple/
+            build/atomic-address/
             build/empty-tuple-input/
             build/empty-join-input/
             build/tuple-input/
@@ -366,6 +350,7 @@ jobs:
             build/state-tuple/*-audit.json
             build/state-tuple/*-core/*.json
             build/mutvar/manifest.json
+            build/stm/
             build/mutvar/oracle.tsv
             build/mutvar/NativeMutVar.hs
             build/mutvar/*/*.audit.json
@@ -403,6 +388,11 @@ jobs:
             build/address-fields/
             build/data-to-tag/
             build/scalar-bitcasts/
+            build/address-array-copy/
+            build/float-decode/
+            build/floating-remainder/
+            build/integer-completion/
+            build/thread-inventory/
             build/compare-byte-arrays/manifest.json
             build/compare-byte-arrays/oracle.tsv
             build/compare-byte-arrays/NativeCompareByteArrays.hs

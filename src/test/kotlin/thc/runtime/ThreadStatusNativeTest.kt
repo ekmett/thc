@@ -56,7 +56,6 @@ class ThreadStatusNativeTest {
             Triple("blockedStatus", 0L, 1L), Triple("blockedStatus", 1L, 14L))
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode"))
             for ((entry, reader, expected) in cases) {
-                if (backend == "ast" && entry !in listOf("selfStatus", "maskedStatus")) continue // fork# is bytecode-only.
                 Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
                     .option("compiler.Inlining", "false")
                     .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")

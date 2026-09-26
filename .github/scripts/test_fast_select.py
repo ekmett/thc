@@ -899,8 +899,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"AddressIdentity", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "IntegerVectorPrimitives", "FloatingVectorPrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown"},
+        self.assertEqual({"AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
+                         "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "STMPrimops"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -919,11 +919,18 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                           "python": ["scripts/test-audit-core.py"]},
                          self.family("CoreBoundThreadForeign"))
 
+    def test_thread_inventory_lowering_and_example_keep_native_and_structural_owners(self):
+        self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
+                         set(self.family("ThreadObservation")["junit"]))
+        for path in ("examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+                     "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
+
     def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
         malloc = "thc.runtime.NativeMallocTest"
         addresses = "thc.runtime.NativeAddressTest"
         buffers = "thc.runtime.NativeFileBuffersTest"
-        self.assertEqual([buffers, malloc], self.family("ManagedNativeAllocations")["junit"])
+        self.assertEqual([buffers, malloc, "thc.runtime.AtomicAddressTest"], self.family("ManagedNativeAllocations")["junit"])
         owners = self.policy["owners"]
         self.assertEqual([buffers, malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
         self.assertEqual({malloc, addresses},
@@ -1004,7 +1011,10 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(9, len(consumers))
+        self.assertEqual(15, len(consumers))
+        self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
+        self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
+        self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
         # The isolated boundary control delegates to the native test's genuine
         # two-root fixture helper, so it also consumes ArrayCoreEvidence.
         self.assertEqual(consumers | {"thc.runtime.Int16BoundaryCompilationTest"}, set(group["junit"]))
@@ -1069,13 +1079,13 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "BytecodeTypedTupleInputTest", "CompiledThunkRetentionTest", "DoubleArrayNativeTest", "DoubleArrayTest",
             "DoubleVectorMemoryProofTest", "DoubleVectorStorageTest", "FloatArrayTest",
             "FloatVectorMemoryProofTest", "FloatVectorStorageTest", "FloatWordArrayNativeTest",
-            "FloatingPrimitiveTest", "FloatingTupleTest", "FusedFloatingTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
+            "FloatingRemainderTest", "FloatingPrimitiveTest", "FloatingTupleTest", "FusedFloatingTest", "WordFloatingTest", "ScalarBitCastTest", "SimdDoubleByteArrayTest",
             "SimdDoubleVectorTest", "SimdFloatByteArrayTest", "SimdFloatVectorTest", "SimdFloatFmaTest", "SimdWideFloatFmaTest", "SqrtPrimitiveTest",
             "SumProtocolTest", "SumResultTest", "TupleInputNativeTest", "TypedInputScalarSourceTest")}},
                          set(floating["junit"]))
         self.assertLessEqual({"scripts/test-core-sums.py",
                              "scripts/test-sum-layout.py", "scripts/test-tuple-inputs.py",
-                             "scripts/test-doublex2-bytearray-model.py", "scripts/test-floatx4-bytearray-model.py"},
+                             "scripts/test-core-double-vector-memory.py", "scripts/test-core-float-vector-memory.py"},
                             set(floating["python"]))
         fixtures = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
         prepared = {name for group in fixtures["groups"].values() for name in group["junit"]}
@@ -1119,10 +1129,10 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         }
         python = {
             "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",
-                "int16x8-model", "int32x4-bytearray-model", "int32x4-multiply-model", "int8x16-model",
-                "word16x8-model", "word32x4-bytearray-model", "word32x4-model", "word8x16-model"],
+                "int16x8-model", "int32x4-multiply-model", "int8x16-model",
+                "word16x8-model", "word32x4-model", "word8x16-model"],
             "FloatingVectorPrimitives": ["core-double-vector-memory", "core-float-vector-memory", "core-vectors",
-                "doublex2-bytearray-model", "doublex2-model", "floatx4-bytearray-model", "floatx4-model"],
+                "doublex2-model", "floatx4-model"],
         }
         for name, tests in expected.items():
             with self.subTest(name=name):

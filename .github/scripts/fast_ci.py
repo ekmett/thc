@@ -5,7 +5,8 @@
 """Execute fresh affected tests with reusable inputs and auditable phase timings.
 
 This driver never treats Gradle task history or restored test XML as a result.
-Only the Test task is rerun; compilation remains eligible for Gradle's build cache.
+Both Test tasks run in one graph; compilation remains eligible for Gradle's build
+cache and always-fresh native compilation/probes execute once for both forks.
 """
 import argparse
 from contextlib import ExitStack
@@ -23,6 +24,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = re.compile(r"[0-9a-f]{40}\Z")
+HANDOFF_TASKS = {"default": "testDefault", "dense": "testDense"}
 FIXTURES_SPEC = importlib.util.spec_from_file_location("fast_fixtures", Path(__file__).with_name("fast_fixtures.py"))
 fixtures = importlib.util.module_from_spec(FIXTURES_SPEC)
 FIXTURES_SPEC.loader.exec_module(fixtures)
@@ -125,21 +127,26 @@ def validate_xml(directory, expected):
     return {**totals, "classes": sorted(classes), "cases": sorted(cases), "xmlFiles": len(files)}
 
 
-def gradle_command(selection):
+def gradle_command(selection, *, install_dist=False):
     require(selection.get("runnable") is True, "Selector could not establish a runnable test inventory")
     require(selection.get("mode") in ("narrow", "full"), "Invalid selection mode")
     classes = selection["junit"]["classes"]
     require(classes and len(set(classes)) == len(classes), "Empty/duplicate selected classes")
     require(all(isinstance(c, str) and re.fullmatch(r"[A-Za-z_][\w.$]*", c) for c in classes),
             "Invalid selected class name")
-    argv = ["./gradlew", "--daemon", "--max-workers=4", "--build-cache",
-            "--init-script", ".github/scripts/fast_ci.init.gradle", "test", "--rerun", "--fail-fast"]
+    argv = ["./gradlew", "--daemon", "--max-workers=4", "--build-cache", "--continue",
+            "--init-script", ".github/scripts/fast_ci.init.gradle"]
+    if install_dist:
+        argv.append("installDist")
     if selection["mode"] == "narrow":
         require(selection["junit"]["patterns"] == classes, "Narrow patterns must name entire selected classes")
-        for name in classes:
-            argv.extend(["--tests", name])
     else:
         require(selection["junit"]["patterns"] == ["*"], "Full mode must run every test")
+    for task in HANDOFF_TASKS.values():
+        argv.extend([task, "--rerun", "--fail-fast"])
+        if selection["mode"] == "narrow":
+            for name in classes:
+                argv.extend(["--tests", name])
     return argv
 
 
@@ -193,7 +200,7 @@ def haskell_compile_targets(selection):
 
 def preserve_previous(root, destination, task="test"):
     # Move only the exact test task output, not build/ or unrelated user data.
-    require(task in ("test", "polyglotTest"), "Unknown test task output")
+    require(task in ("test", "polyglotTest", *HANDOFF_TASKS.values()), "Unknown test task output")
     for source, suffix in ((root / "build/test-results" / task, "xml"),
                            (root / "build/reports/tests" / task, "html")):
         if source.exists() or source.is_symlink():
@@ -204,20 +211,39 @@ def preserve_previous(root, destination, task="test"):
             source.rename(target)
 
 
-def run_mode(recorder, selection, mode):
+def run_modes(recorder, selection, *, install_dist=False):
     root, directory = recorder.root, recorder.directory
-    preserve_previous(root, directory / ("prior-" + mode))
-    env = dict(os.environ)
-    env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") +
-                               " -Dthc.handoffSlabs=" + ("true" if mode == "dense" else "false")).strip()
-    code, _ = recorder.command("junit-" + mode, gradle_command(selection), env=env,
+    for mode, task in HANDOFF_TASKS.items():
+        preserve_previous(root, directory / ("prior-" + mode), task)
+    code, _ = recorder.command("junit-handoff-modes", gradle_command(selection, install_dist=install_dist),
                                allowed=tuple(range(-128, 256)))
-    # Preserve failed runs as well as successful ones before the next Test task.
-    preserve_previous(root, directory / mode)
-    require(code == 0, f"Gradle {mode} failed with exit {code}")
-    summary = validate_xml(directory / mode / "xml", selection["junit"]["classes"])
-    write_json(directory / mode / "summary.json", summary)
-    return summary
+    # Save both failed and successful forks before validating either. Each task
+    # owns its XML directory; --continue lets the other fork run after a failure.
+    for mode, task in HANDOFF_TASKS.items():
+        preserve_previous(root, directory / mode, task)
+    failures = [] if code == 0 else [f"Gradle handoff batch failed with exit {code}"]
+    summaries = {}
+    for mode in HANDOFF_TASKS:
+        try:
+            xml = directory / mode / "xml"
+            summary = validate_xml(xml, selection["junit"]["classes"])
+            # HandoffTest belongs to every smoke/full selection. This marker is
+            # printed only after checking the actual fork property and runtime
+            # context, without changing either to manufacture the expected mode.
+            proof = xml / "TEST-thc.runtime.HandoffTest.xml"
+            require(proof.is_file(), f"Missing {mode} test-process handoff proof")
+            markers = [line for output in ET.parse(proof).getroot().findall("system-out")
+                       for line in (output.text or "").splitlines() if line.startswith("THC_HANDOFF_MODE=")]
+            expected = "THC_HANDOFF_MODE=" + ("true" if mode == "dense" else "false")
+            require(markers == [expected], f"Wrong/missing {mode} test-process handoff proof: {markers}")
+            summary["handoffSlabs"] = mode == "dense"
+            summaries[mode] = summary
+            write_json(directory / mode / "summary.json", summary)
+        except (RuntimeError, ValueError, ET.ParseError) as error:
+            failures.append(f"{mode}: {error}")
+    if len(summaries) == 2 and summaries["default"]["cases"] != summaries["dense"]["cases"]:
+        failures.append("Default and dense handoff executed different testcase sets")
+    return summaries, failures
 
 
 def run_polyglot(recorder, selection):
@@ -291,11 +317,8 @@ def execute(recorder, base, head, identity_path):
     if selected_haskell:
         try:
             recorder.command("driver-plugin", ["compiler/build.sh"])
-            recorder.command("driver-launcher", ["./gradlew", "installDist"])
-            recorder.command("driver-tests", ["cabal", "test", "driver-tests", "-fdevelopment",
-                                              "--test-show-details=direct"])
         except RuntimeError as error:
-            failures.append("driver-tests: " + str(error))
+            failures.append("driver-plugin: " + str(error))
     automation_sha = os.environ.get("FAST_AUTOMATION_SHA", "")
     automation_checked = bool(SHA.fullmatch(automation_sha)) and automation_sha == git(recorder.root, "rev-parse", "HEAD")
     recorder.data["automationReused"] = automation_sha if automation_checked else None
@@ -305,13 +328,17 @@ def execute(recorder, base, head, identity_path):
         except RuntimeError as error:
             failures.append(str(error))
     summaries = {}
-    for mode in ("default", "dense"):
+    try:
+        summaries, mode_failures = run_modes(recorder, selection, install_dist=bool(selected_haskell))
+        failures.extend(mode_failures)
+    except (RuntimeError, ValueError, ET.ParseError) as error:
+        failures.append(f"handoff modes: {error}")
+    if selected_haskell:
         try:
-            summaries[mode] = run_mode(recorder, selection, mode)
-        except (RuntimeError, ValueError, ET.ParseError) as error:
-            failures.append(f"{mode}: {error}")
-    if len(summaries) == 2 and summaries["default"]["cases"] != summaries["dense"]["cases"]:
-        failures.append("Default and dense handoff executed different testcase sets")
+            recorder.command("driver-tests", ["cabal", "test", "driver-tests", "-fdevelopment",
+                                              "--test-show-details=direct"])
+        except RuntimeError as error:
+            failures.append("driver-tests: " + str(error))
     polyglot_summary = None
     if polyglot is not None:
         try:

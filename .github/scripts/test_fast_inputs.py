@@ -21,6 +21,334 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_simd_memory_closed_receipts_and_export_only_archives(self):
+        counts = {"simd-int32x4-bytearray": (259, 386), "simd-word32x4-bytearray": (259, 386),
+                  "simd-floatx4-bytearray": (446, 647), "simd-doublex2-bytearray": (536, 767)}
+        for family, sizes in counts.items():
+            for native in (False, True):
+                name = f"build/{family}/provenance.json"
+                attempt = f"build/{family}/prepare-run-Abc123"
+                required = cache.simd_bytearray_outputs(family, attempt, native)
+                self.assertEqual(sizes[int(native)], len(required))
+                self.assertIn(name, DECLARED_REQUIRED)
+                for path in required:
+                    self.assertTrue(cache.allowed_payload(path, {}), path)
+                    self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+                for suffix in ("prepare-run-Abc123/previous/old.json", "native/extra.o", "pre-core/Other.json",
+                               "prepare-run-Abc123/audits/extra.json", "prepare-run-Abc123/commands/extra.stdout"):
+                    self.assertFalse(cache.allowed_payload(f"build/{family}/{suffix}", {}), suffix)
+                rows = cache.SIMD_BYTEARRAY_FAMILIES[family][1]
+                good = dict(schema=1, vector=family.removeprefix("simd-"), attempt=attempt,
+                    stages=["pre", "post"] if native else ["pre"], modelRows=rows, modelByteOrder="little",
+                    nativeRows=rows if native else None, nativeByteOrder="little" if native else None,
+                    modelMatched=True if native else None,
+                    sources=[dict(path=p, sha256=h) for p, h in self.manifest['inputHashes'].items()],
+                    artifacts=[dict(path=p, sha256=cache.digest(self.root / p)) for p in sorted(required)])
+                self.assertEqual(required, set(cache.simd_bytearray_artifact_hashes(family, good)))
+                for index in range(len(good["artifacts"])):
+                    with self.assertRaises(cache.CacheMiss):
+                        cache.simd_bytearray_artifact_hashes(family, dict(good, artifacts=good["artifacts"][:index]+good["artifacts"][index+1:]))
+                for changes in (dict(schema=True), dict(modelRows=True), dict(nativeRows=False), dict(vector="wrong"),
+                                dict(stages=["post"]), dict(attempt=attempt+"/../escape"),
+                                dict(artifacts=good["artifacts"]+[good["artifacts"][0]]),
+                                dict(artifacts=[dict(good["artifacts"][0], sha256="bad")]+good["artifacts"][1:])):
+                    with self.assertRaises(cache.CacheMiss): cache.simd_bytearray_artifact_hashes(family, dict(good, **changes))
+                original = json.dumps(good); self.put(name, original)
+                self.bundle = self.temp_root / f"{family}-{native}.tar.gz"
+                with patch.object(cache, "REQUIRED", (*cache.REQUIRED, name)):
+                    packed = self.pack(); self.remove_payload(packed)
+                    cache.restore(self.root, self.current, self.bundle)
+                    self.assertEqual(original, (self.root / name).read_text())
+                    self.remove_payload(packed)
+                    missing = self.rewrite(lambda members: [(member, data) for member, data in members
+                        if member.name != "files/" + sorted(required)[0]])
+                    self.rejected_without_writes(missing)
+                    cache.restore(self.root, self.current, self.bundle)
+
+    def test_floating_remainder_has_closed_native_inventory(self):
+        name = 'build/floating-remainder/manifest.json'
+        binary = 'build/floating-remainder/native/oracle'
+        self.assertEqual(124, len(cache.FLOATING_REMAINDER_OUTPUTS))
+        self.assertIn(name, DECLARED_REQUIRED)
+        for path in cache.FLOATING_REMAINDER_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            if path == binary:
+                self.assertEqual(0o755, cache.safe_mode(0o755, path))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        for suffix in ('native/other', 'native/FloatingRemainderNative.o', 'pre-core/Other.json',
+                       'commands/extra.stdout', 'post-ghc/Main.hi', 'test-results/result.xml'):
+            self.assertFalse(cache.allowed_payload('build/floating-remainder/' + suffix, {}), suffix)
+        artifacts = cache.FLOATING_REMAINDER_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
+        (self.root / binary).chmod(0o755)
+        manifest = dict(schema=1, inputHashes=self.manifest['inputHashes'],
+                        artifactHashes={path: cache.digest(self.root / path) for path in artifacts})
+        original = json.dumps(manifest)
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            for absent in (binary, 'build/floating-remainder/pre-core/FloatingRemainderAudit.json'):
+                changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                    if member.name != 'files/' + absent])
+                self.rejected_without_writes(changed)
+            cache.restore(self.root, self.current, self.bundle)
+            manifest['artifactHashes'].pop('build/floating-remainder/commands/native-build.command.json')
+            self.put(name, json.dumps(manifest))
+            with self.assertRaises(cache.CacheMiss): self.pack()
+
+    def test_thread_inventory_exact_closed_archive_roundtrip_and_missing_member(self):
+        self.assertEqual(20, len(cache.THREAD_INVENTORY_OUTPUTS))
+        self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)
+        for path in cache.THREAD_INVENTORY_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for suffix in ('extra.json', 'native/oracle', 'post/core/Other.json', 'pre/other-audit.json'):
+            self.assertFalse(cache.allowed_payload('build/thread-inventory/' + suffix, {}))
+        name = 'build/thread-inventory/manifest.json'
+        artifacts = cache.THREAD_INVENTORY_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'10\n0\n111\n1\n')
+        original = json.dumps(dict(schema=1, ghc='9.14.1', entries=list(cache.THREAD_INVENTORY_ENTRIES),
+            stages=['pre', 'post'], nativeThread='unbound forkIO, threaded RTS -N2',
+            inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.remove_payload(packed)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/build/thread-inventory/post/core/ThreadInventory.json'])
+            self.rejected_without_writes(changed)
+
+    def test_bytearray_family_closed_receipts_and_native_permissions(self):
+        counts = {"bytearray": 77, "mutable-bytearrays": 87, "resize-bytearrays": 57,
+                  "mutable-bytearray-size": 81, "compare-byte-arrays": 85}
+        for family, count in counts.items():
+            self.bundle = self.temp_root / f"bundle-{family}.tar.gz"
+            name = f"build/{family}/manifest.json"
+            binary = f"build/{family}/native/{family}-oracle"
+            outputs = cache.BYTEARRAY_OUTPUTS[family]
+            self.assertEqual(count, len(outputs)); self.assertIn(name, DECLARED_REQUIRED)
+            artifacts = outputs - {name}
+            for path in artifacts:
+                self.assertTrue(cache.allowed_payload(path, {}), path)
+                self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+                if path == binary:
+                    self.assertEqual(0o755, cache.safe_mode(0o755, path))
+                else:
+                    with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+            (self.root / binary).chmod(0o755)
+            for suffix in ('commands/extra.stdout', 'pre-core/Other.json', 'native/extra.o', 'previous-manifests/old.json'):
+                self.assertFalse(cache.allowed_payload(f'build/{family}/' + suffix, {}))
+            good = dict(schema=1, ghc='9.14.1', wordBits=64, entries=list(cache.BYTEARRAY_FAMILIES[family][1]),
+                        inputHashes=self.manifest['inputHashes'], artifactHashes={path: cache.digest(self.root / path) for path in artifacts})
+            self.assertEqual(good['artifactHashes'], cache.bytearray_artifact_hashes(family, good))
+            for path in artifacts:
+                broken = dict(good, artifactHashes={p: h for p, h in good['artifactHashes'].items() if p != path})
+                with self.assertRaises(cache.CacheMiss): cache.bytearray_artifact_hashes(family, broken)
+            for changes in (dict(entries=[]), dict(schema=True), dict(wordBits=32), dict(ghc='other'),
+                            dict(artifactHashes=dict(good['artifactHashes'], unknown='0'*64)),
+                            dict(artifactHashes={**good['artifactHashes'], binary: 'bad'})):
+                with self.assertRaises(cache.CacheMiss): cache.bytearray_artifact_hashes(family, dict(good, **changes))
+            original = json.dumps(good); self.put(name, original)
+            with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+                packed = self.pack(); self.remove_payload(packed)
+                cache.restore(self.root, self.current, self.bundle)
+                self.assertEqual(original, (self.root / name).read_text())
+                self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+                self.remove_payload(packed)
+                missing = self.rewrite(lambda items: [(member, data) for member, data in items if member.name != 'files/' + binary])
+                self.rejected_without_writes(missing)
+                cache.restore(self.root, self.current, self.bundle)
+
+    def test_integer_completion_closed_native_and_command_inventory(self):
+        self.assertEqual(33, len(cache.INTEGER_COMPLETION_OUTPUTS))
+        name = "build/integer-completion/manifest.json"
+        binary = "build/integer-completion/native/integer-completion-oracle"
+        self.assertIn(name, DECLARED_REQUIRED)
+        for path in cache.INTEGER_COMPLETION_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            if path == binary:
+                self.assertEqual(0o755, cache.safe_mode(0o755, path))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        for suffix in ("commands/unknown.stdout", "native/other", "extra.json", "pre-core/Other.json"):
+            self.assertFalse(cache.allowed_payload("build/integer-completion/" + suffix, {}))
+        artifacts = cache.INTEGER_COMPLETION_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b"{}\n" if path.endswith(".json") else b"native evidence\n")
+        (self.root / binary).chmod(0o755)
+        original = json.dumps(dict(schema=1, ghc="9.14.1", wordBits=64, nativeRows=3373,
+            inputHashes=self.manifest["inputHashes"],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, "REQUIRED", (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != "files/" + binary])
+            self.rejected_without_writes(changed)
+
+    def memory_fixture(self, directory):
+        manifest_path = f'build/{directory}/manifest.json'
+        artifacts = cache.MEMORY_FIXTURE_OUTPUTS[directory] - {manifest_path}
+        for name in artifacts:
+            self.put(name, b'{}\n' if name.endswith('.json') else b'\x00\x80\xff\n')
+        binary = 'build/address-array-copy/native/oracle'
+        if binary in artifacts:
+            (self.root / binary).chmod(0o755)
+        manifest = {'schema': 1, 'ghc': '9.14.1', 'inputHashes': self.manifest['inputHashes'],
+                    'artifactHashes': {name: cache.digest(self.root / name) for name in sorted(artifacts)}}
+        self.put(manifest_path, json.dumps(manifest))
+        return manifest_path, manifest
+
+    def test_memory_fixtures_admit_exact_recorded_outputs_only(self):
+        expected_counts = {'address-array-copy': 42, 'atomic-int-arrays': 116,
+                           'atomic-address': 28, 'unaligned-scalar-memory': 31}
+        for directory, outputs in cache.MEMORY_FIXTURE_OUTPUTS.items():
+            with self.subTest(directory=directory):
+                self.assertEqual(expected_counts[directory], len(outputs))
+                self.assertIn(f'build/{directory}/manifest.json', DECLARED_REQUIRED)
+                for name in outputs:
+                    self.assertTrue(cache.allowed_payload(name, {}), name)
+                    if name == 'build/address-array-copy/native/oracle':
+                        self.assertEqual(0o755, cache.safe_mode(0o755, name))
+                    else:
+                        with self.assertRaises(cache.CacheMiss, msg=name):
+                            cache.safe_mode(0o755, name)
+                for suffix in ('logs/extra.stdout', 'commands/extra.stderr', 'native/other-oracle',
+                               'pre/core/Extra.json', 'native/Main.o', 'retained/oracle.tsv'):
+                    self.assertFalse(cache.allowed_payload(f'build/{directory}/{suffix}', {}), suffix)
+        # These are recorded inputs/logs that the former generic suffix policy rejected.
+        for name in ('address-array-copy/commands/native-build.stdout',
+                     'atomic-int-arrays/commands/pre-export.stderr',
+                     'atomic-address/inputs.txt', 'atomic-address/logs/export-post.command.json',
+                     'unaligned-scalar-memory/inputs.txt', 'unaligned-scalar-memory/logs/ghc-inventory.stdout'):
+            self.assertTrue(cache.allowed_payload('build/' + name, {}), name)
+
+    def test_memory_manifest_rejects_omitted_extra_and_invalid_artifact_hashes(self):
+        for directory in cache.MEMORY_FIXTURE_OUTPUTS:
+            with self.subTest(directory=directory):
+                path, original = self.memory_fixture(directory)
+                artifacts = original['artifactHashes']
+                self.assertEqual(artifacts, cache.memory_artifact_hashes(directory, original))
+                for missing in artifacts:
+                    changed = dict(original, artifactHashes={k: v for k, v in artifacts.items() if k != missing})
+                    with self.assertRaises(cache.CacheMiss, msg=missing):
+                        cache.memory_artifact_hashes(directory, changed)
+                for change in ({'schema': True}, {'schema': 2}, {'ghc': '9.12.2'},
+                               {'artifactHashes': None}, {'artifactHashes': dict(artifacts, extra='0' * 64)},
+                               {'artifactHashes': artifacts | {next(iter(artifacts)): 'not-a-hash'}},
+                               {'artifactHashes': artifacts | {next(iter(artifacts)): 42}}):
+                    with self.assertRaises(cache.CacheMiss, msg=repr(change)):
+                        cache.memory_artifact_hashes(directory, original | change)
+                # Packing must invoke the validator rather than merely relying on callers.
+                self.put(path, json.dumps(original | {'artifactHashes': {}}))
+                with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, path)):
+                    with self.assertRaisesRegex(cache.CacheMiss, 'Incomplete/unreviewed memory'):
+                        self.pack()
+                self.assertFalse(self.bundle.exists())
+
+    def test_memory_archive_round_trip_preserves_all_original_bytes(self):
+        manifests = dict(self.memory_fixture(directory) for directory in cache.MEMORY_FIXTURE_OUTPUTS)
+        original_bytes = {path: (self.root / path).read_bytes() for path in manifests}
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, *manifests)):
+            packed = self.pack()
+            for outputs in cache.MEMORY_FIXTURE_OUTPUTS.values():
+                self.assertLessEqual(outputs, packed['payload'].keys())
+            self.remove_payload(packed)
+            restored = cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(packed, restored)
+            for path, original in original_bytes.items():
+                self.assertEqual(original, (self.root / path).read_bytes())
+            for path, expected in restored['payload'].items():
+                self.assertEqual(expected, cache.digest(self.root / path))
+            self.assertEqual(0o755, (self.root / 'build/address-array-copy/native/oracle').stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            for directory in cache.MEMORY_FIXTURE_OUTPUTS:
+                artifact = f'build/{directory}/oracle.tsv'
+                with self.subTest(directory=directory, failure='missing'):
+                    changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                        if member.name != 'files/' + artifact])
+                    self.rejected_without_writes(changed)
+                with self.subTest(directory=directory, failure='corrupt'):
+                    changed = self.rewrite(lambda entries: [(member, b'changed\n' if member.name ==
+                        'files/' + artifact else data) for member, data in entries])
+                    self.rejected_without_writes(changed)
+
+    def test_memory_restore_rejects_self_consistent_but_incomplete_original_inventory(self):
+        manifests = dict(self.memory_fixture(directory) for directory in cache.MEMORY_FIXTURE_OUTPUTS)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, *manifests)):
+            packed = self.pack()
+            self.remove_payload(packed)
+            for directory in cache.MEMORY_FIXTURE_OUTPUTS:
+                with self.subTest(directory=directory):
+                    path = f'build/{directory}/manifest.json'
+                    omitted = f'build/{directory}/oracle.tsv'
+
+                    def omit_evidence(entries):
+                        # This is a forged synthetic archive, never resealed real evidence.
+                        original = copy.deepcopy(manifests[path])
+                        del original['artifactHashes'][omitted]
+                        raw = json.dumps(original).encode()
+                        bundle = copy.deepcopy(packed)
+                        del bundle['payload'][omitted]
+                        del bundle['modes'][omitted]
+                        bundle['payload'][path] = cache.sha(raw)
+                        return [(member, json.dumps(bundle).encode() if member.name == 'bundle.json'
+                                 else raw if member.name == 'files/' + path else data)
+                                for member, data in entries if member.name != 'files/' + omitted]
+
+                    changed = self.rewrite(omit_evidence)
+                    self.rejected_without_writes(changed, 'Incomplete/unreviewed memory fixture artifacts')
+
+    def test_float_decode_preserves_complete_original_core_and_native_evidence(self):
+        name = 'build/float-decode/manifest.json'
+        binary = 'build/float-decode/native/oracle'
+        self.assertEqual(89, len(cache.FLOAT_DECODE_OUTPUTS))
+        self.assertIn(name, DECLARED_REQUIRED)
+        for path in cache.FLOAT_DECODE_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            if path == binary:
+                self.assertEqual(0o755, cache.safe_mode(0o755, path))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        for suffix in ('native/other', 'native/FloatDecodeNative.o', 'original/Other.json',
+                       'commands/extra.stdout', 'boot-ghc/Integer.hi', 'test-results/result.xml'):
+            self.assertFalse(cache.allowed_payload('build/float-decode/' + suffix, {}), suffix)
+        artifacts = cache.FLOAT_DECODE_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
+        (self.root / binary).chmod(0o755)
+        manifest = dict(schema=1, inputHashes=self.manifest['inputHashes'],
+                        artifactHashes={path: cache.digest(self.root / path) for path in artifacts})
+        original = json.dumps(manifest)
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            for absent in (binary, 'build/float-decode/original/GHC.Internal.Bignum.Integer.json'):
+                changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                    if member.name != 'files/' + absent])
+                self.rejected_without_writes(changed)
+            cache.restore(self.root, self.current, self.bundle)
+            manifest['artifactHashes'].pop('build/float-decode/original/boot-provenance.json')
+            self.put(name, json.dumps(manifest))
+            with self.assertRaises(cache.CacheMiss): self.pack()
+
     def test_tcsetattr_exact_native_image_fixture_inventory(self):
         self.assertEqual(33, len(cache.ORIGINAL_TCSETATTR_OUTPUTS))
         self.assertIn('build/original-tcsetattr/manifest.json', DECLARED_REQUIRED)
@@ -125,6 +453,38 @@ class FastInputTests(unittest.TestCase):
             changed = self.rewrite(lambda entries: [(member, data) for member, data in entries
                 if member.name != 'files/' + binary])
             self.rejected_without_writes(changed)
+
+    def test_pinned_address_closed_artifacts_and_byte_preserving_restore(self):
+        name = 'build/pinned-addresses/manifest.json'
+        artifacts = cache.PINNED_ADDRESS_OUTPUTS - {name}
+        self.assertEqual(227, len(artifacts))
+        self.assertIn(name, DECLARED_REQUIRED)
+        binary = 'build/pinned-addresses/native/pinned-address-oracle'
+        for path in artifacts:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
+            if path == binary: self.assertEqual(0o755, cache.safe_mode(0o755, path))
+            else:
+                with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
+        (self.root / binary).chmod(0o755)
+        for suffix in ('commands/extra.stdout', 'previous-manifests/old.json', 'pre/ghc/Unknown.hi', 'native/extra.o', 'pre/negative/extra.json'):
+            self.assertFalse(cache.allowed_payload('build/pinned-addresses/' + suffix, {}), suffix)
+        records = {path: cache.digest(self.root / path) for path in artifacts}
+        manifest = dict(schema=1, mode='full', strictAccepted=True, inputHashes=self.manifest['inputHashes'], artifactHashes=records)
+        original = json.dumps(manifest); self.put(name, original)
+        for path in records:
+            with self.assertRaises(cache.CacheMiss): cache.pinned_address_artifact_hashes(dict(manifest, artifactHashes={p: h for p, h in records.items() if p != path}))
+        for changed in (dict(records, **{'build/pinned-addresses/extra.json': '0'*64}), dict(records, **{binary: 'bad'})):
+            with self.assertRaises(cache.CacheMiss): cache.pinned_address_artifact_hashes(dict(manifest, artifactHashes=changed))
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack(); self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(0o755, (self.root / binary).stat().st_mode & 0o7777)
+            self.remove_payload(packed)
+            missing = self.rewrite(lambda items: [(member, data) for member, data in items
+                if member.name != 'files/build/pinned-addresses/pre/negative/read-state-is-int-0.json'])
+            self.rejected_without_writes(missing)
 
     def test_bignat_closed_artifacts_preserve_receipt_and_reject_missing_records(self):
         name = 'build/bignat-literals/manifest.json'
@@ -648,7 +1008,7 @@ class FastInputTests(unittest.TestCase):
         self.vendor = b"original GHC source\n"
         self.put("compiler/export-boot.py", "exception_sources = " + repr({
             "GHC/Internal/CString.hs": cache.sha(self.vendor)}) + "\n")
-        for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS,
+        for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS, *cache.SIMD_BYTEARRAY_RETAINED,
                      "scripts/prepare-tests.sh", "examples/coverage.json",
                      "src/main/resources/thc/scalar-primop-signatures.json"):
             self.put(name, "source: " + name)
@@ -659,15 +1019,15 @@ class FastInputTests(unittest.TestCase):
                    "javaRelease": {"path": str(self.temp_root / "jdk/release"), "sha256": "b" * 64}}
         self.tool_patch = patch.object(cache, "toolchain", side_effect=lambda root: copy.deepcopy(self.tc))
         self.tool_patch.start(); self.addCleanup(self.tool_patch.stop)
-        self.required_patch = patch.object(cache, "REQUIRED", ("build/bytearray/manifest.json",))
+        self.required_patch = patch.object(cache, "REQUIRED", ("build/data-to-tag/manifest.json",))
         self.required_patch.start(); self.addCleanup(self.required_patch.stop)
         self.current = cache.identity(self.root)
         self.put(self.vendor_name, self.vendor)
-        self.put("build/bytearray/oracle.tsv", "0\t17\n")
+        self.put("build/data-to-tag/oracle.tsv", "0\t17\n")
         self.put("build/core/Fixture.json", json.dumps({"module": "Fixture", "bindings": []}))
         self.manifest = {"inputHashes": {"scripts/prepare-tests.sh": self.current["sources"]["scripts/prepare-tests.sh"],
                                          self.vendor_name: cache.sha(self.vendor)},
-                         "artifactHashes": {"build/bytearray/oracle.tsv": cache.digest(self.root / "build/bytearray/oracle.tsv")}}
+                         "artifactHashes": {"build/data-to-tag/oracle.tsv": cache.digest(self.root / "build/data-to-tag/oracle.tsv")}}
         self.write_manifest()
         self.bundle = self.temp_root / "bundle.tar.gz"
 
@@ -677,7 +1037,7 @@ class FastInputTests(unittest.TestCase):
         p.write_bytes(content if isinstance(content, bytes) else content.encode())
 
     def write_manifest(self):
-        self.put("build/bytearray/manifest.json", json.dumps(self.manifest))
+        self.put("build/data-to-tag/manifest.json", json.dumps(self.manifest))
 
     def pack(self):
         return cache.pack(self.root, self.current, self.bundle)
@@ -697,23 +1057,25 @@ class FastInputTests(unittest.TestCase):
                 archive.addfile(member, io.BytesIO(data))
         return changed
 
-    def rejected_without_writes(self, source):
+    def rejected_without_writes(self, source, message=None):
         before = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
-        with self.assertRaises(cache.CacheMiss):
+        with self.assertRaises(cache.CacheMiss) as rejected:
             cache.restore(self.root, self.current, source)
+        if message is not None:
+            self.assertRegex(str(rejected.exception), message)
         after = {str(p.relative_to(self.root)): p.read_bytes() for p in self.root.rglob("*") if p.is_file()}
         self.assertEqual(before, after)
 
     def test_round_trip_preserves_original_provenance_and_all_bytes(self):
-        original = (self.root / "build/bytearray/manifest.json").read_bytes()
+        original = (self.root / "build/data-to-tag/manifest.json").read_bytes()
         manifest = self.pack(); self.remove_payload(manifest)
         result = cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(manifest, result)
-        self.assertEqual(original, (self.root / "build/bytearray/manifest.json").read_bytes())
+        self.assertEqual(original, (self.root / "build/data-to-tag/manifest.json").read_bytes())
         for name, expected in result["payload"].items():
             self.assertEqual(expected, cache.digest(self.root / name))
         # Existing identical files are accepted, never overwritten.
-        p = self.root / "build/bytearray/oracle.tsv"; before = p.stat().st_mtime_ns
+        p = self.root / "build/data-to-tag/oracle.tsv"; before = p.stat().st_mtime_ns
         cache.restore(self.root, self.current, self.bundle)
         self.assertEqual(before, p.stat().st_mtime_ns)
 
@@ -762,7 +1124,7 @@ class FastInputTests(unittest.TestCase):
 
     def test_original_source_artifact_vendor_hash_mismatch_rejected(self):
         for section, name in (("inputHashes", "scripts/prepare-tests.sh"),
-                              ("artifactHashes", "build/bytearray/oracle.tsv"),
+                              ("artifactHashes", "build/data-to-tag/oracle.tsv"),
                               ("inputHashes", self.vendor_name)):
             with self.subTest(name=name):
                 old = self.manifest[section][name]; self.manifest[section][name] = "f" * 64
@@ -839,14 +1201,14 @@ class FastInputTests(unittest.TestCase):
         manifest = self.pack(); self.remove_payload(manifest)
         for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.DIRTYPE, tarfile.FIFOTYPE, tarfile.CHRTYPE):
             def mutate(es):
-                m = tarfile.TarInfo("files/build/bytearray/evil.json"); m.type = kind; m.linkname = "/tmp/escape"
+                m = tarfile.TarInfo("files/build/data-to-tag/evil.json"); m.type = kind; m.linkname = "/tmp/escape"
                 return es + [(m, b"")]
             with self.subTest(kind=kind): self.rejected_without_writes(self.rewrite(mutate))
 
     def test_self_consistent_unknown_or_tracked_payload_is_not_accepted(self):
         manifest = self.pack(); self.remove_payload(manifest)
         for name in ("build/fast/pass.json", "build/test-results/test/pass.xml", "build/classes/Evil.class",
-                     "build/bytearray/evil.sh", "scripts/prepare-tests.sh", "vendor/ghc-9.14.1/unknown.hs"):
+                     "build/data-to-tag/evil.sh", "scripts/prepare-tests.sh", "vendor/ghc-9.14.1/unknown.hs"):
             def mutate(es):
                 doc = json.loads(es[0][1]); doc["payload"][name] = cache.sha(b"evil")
                 return [(es[0][0], cache.canonical(doc)), *es[1:], (tarfile.TarInfo("files/"+name), b"evil")]
@@ -854,16 +1216,16 @@ class FastInputTests(unittest.TestCase):
 
     def test_symlink_destination_and_conflicting_file_preserved(self):
         manifest = self.pack(); self.remove_payload(manifest)
-        target = self.root / "build/bytearray/oracle.tsv"
+        target = self.root / "build/data-to-tag/oracle.tsv"
         target.symlink_to(self.temp_root / "missing-target")
         with self.assertRaises(cache.CacheMiss): cache.restore(self.root, self.current, self.bundle)
         self.assertTrue(target.is_symlink()); target.unlink()
-        self.put("build/bytearray/oracle.tsv", "existing different evidence")
+        self.put("build/data-to-tag/oracle.tsv", "existing different evidence")
         self.rejected_without_writes(self.bundle)
 
     def test_parent_symlink_and_non_directory_conflict(self):
         manifest = self.pack(); self.remove_payload(manifest)
-        directory = self.root / "build/bytearray"; directory.rmdir()
+        directory = self.root / "build/data-to-tag"; directory.rmdir()
         outside = self.temp_root / "outside"; outside.mkdir()
         directory.symlink_to(outside, target_is_directory=True)
         with self.assertRaises(cache.CacheMiss): cache.restore(self.root, self.current, self.bundle)
@@ -874,15 +1236,15 @@ class FastInputTests(unittest.TestCase):
     def test_original_provenance_payload_inventory_cannot_be_extended(self):
         manifest = self.pack(); self.remove_payload(manifest)
         def mutate(es):
-            doc = json.loads(es[0][1]); doc["payload"]["build/bytearray/unreferenced.json"] = cache.sha(b"{}")
+            doc = json.loads(es[0][1]); doc["payload"]["build/data-to-tag/unreferenced.json"] = cache.sha(b"{}")
             return [(es[0][0], cache.canonical(doc)), *es[1:],
-                    (tarfile.TarInfo("files/build/bytearray/unreferenced.json"), b"{}")]
+                    (tarfile.TarInfo("files/build/data-to-tag/unreferenced.json"), b"{}")]
         self.rejected_without_writes(self.rewrite(mutate))
 
     def test_archive_file_directory_collision(self):
         manifest = self.pack(); self.remove_payload(manifest)
         def mutate(es):
-            doc = json.loads(es[0][1]); name = "build/bytearray/oracle.tsv/child.json"
+            doc = json.loads(es[0][1]); name = "build/data-to-tag/oracle.tsv/child.json"
             doc["payload"][name] = cache.sha(b"{}")
             return [(es[0][0], cache.canonical(doc)), *es[1:], (tarfile.TarInfo("files/"+name), b"{}")]
         self.rejected_without_writes(self.rewrite(mutate))
@@ -916,12 +1278,12 @@ class FastInputTests(unittest.TestCase):
         identity_file.write_text(json.dumps(self.current))
         command = ["restore", "--root", str(self.root), "--identity", str(identity_file),
                    "--bundle", str(self.bundle)]
-        with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()):
-            self.assertEqual(0, cache.main(command))
+        with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
+            self.assertEqual(0, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
         self.put("scripts/prepare-tests.sh", "changed after the key step")
-        with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()):
-            self.assertEqual(1, cache.main(command))
+        with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
+            self.assertEqual(1, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
 
     def test_payload_scope_has_no_runtime_or_test_outputs(self):
@@ -966,7 +1328,7 @@ class FastInputTests(unittest.TestCase):
                      "test-results/pass.json", "reports/pass.json", "previous-manifests/stale.json",
                      "expected.json", "pre/proofs.json", "logs/pre-audit-unknown.stdout"):
             self.assertFalse(cache.allowed_payload("build/original-stdio/" + name, {}), name)
-        self.assertFalse(cache.allowed_payload("build/bytearray/logs/pre-export.stdout", {}))
+        self.assertFalse(cache.allowed_payload("build/data-to-tag/logs/pre-export.stdout", {}))
 
     def test_original_stdio_archive_round_trip_preserves_complete_artifact_inventory(self):
         manifest_path = "build/original-stdio/manifest.json"
@@ -1042,16 +1404,16 @@ class FastInputTests(unittest.TestCase):
         interface = folder/"Foo.dyn_hi"; interface.write_bytes(b"installed interface")
         raw = str(folder/".."/"lib"/"Foo.dyn_hi")
         self.manifest["installedInterface"] = {"path": raw, "sha256": cache.digest(interface)}
-        self.write_manifest(); original = (self.root/"build/bytearray/manifest.json").read_bytes()
+        self.write_manifest(); original = (self.root/"build/data-to-tag/manifest.json").read_bytes()
         m = self.pack();self.assertIn(raw,m["external"]);self.remove_payload(m)
         cache.restore(self.root,self.current,self.bundle)
-        self.assertEqual(original,(self.root/"build/bytearray/manifest.json").read_bytes())
+        self.assertEqual(original,(self.root/"build/data-to-tag/manifest.json").read_bytes())
         self.assertFalse(cache.external_allowed(str(folder/"../../../etc/passwd"),self.current))
 
     def test_native_execute_mode_preserved_and_special_or_data_execute_modes_rejected(self):
-        path = self.root/"build/bytearray/oracle.tsv"
+        path = self.root/"build/data-to-tag/oracle.tsv"
         # A real executable has a native executable name, not an oracle TSV.
-        name = "build/bytearray/native/oracle"
+        name = "build/data-to-tag/native/oracle"
         self.put(name,b"native bytes");(self.root/name).chmod(0o755)
         self.manifest["artifactHashes"][name]=cache.digest(self.root/name);self.write_manifest()
         m=self.pack();self.remove_payload(m);cache.restore(self.root,self.current,self.bundle)
@@ -1123,6 +1485,9 @@ class RenamedInputContractTests(unittest.TestCase):
             self.assertEqual(cache.digest(root / name), sources[name])
         self.assertNotIn("src/main/kotlin/thc/runtime/CoreVectorMemory.kt", sources)
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
+        self.assertIn("test/haskell-fixtures/PinnedAddressFixtures.hs", sources)
+        for name in ("prepare-pinned-addresses.py", "pinned_address_model.py", "test-pinned-addresses.py"):
+            self.assertNotIn("scripts/" + name, sources)
 
     def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
         root = Path(__file__).resolve().parents[2]
