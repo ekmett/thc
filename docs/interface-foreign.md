@@ -94,6 +94,33 @@ Foreign entry/exit retain their existing masking boundaries and scope storage.
 Compiled guest-entry validity does not establish Sulong inlining or
 allocation-free foreign calls; those claims require separate graph evidence.
 
+## Package C/CAPI calls
+
+The separate `thc-package-c-ffi-v1` profile extends the runtime link boundary
+for ordinary package C code. It accepts static, unsafe `ccall` and `capi`
+entries with machine-word and 8/16/32/64-bit signed/unsigned integers,
+`FloatRep`, `DoubleRep`, `AddrRep`, `ByteArray#` and `MutableByteArray#`
+arguments, and numeric or void results. Source-level pure imports still use
+GHC's emitted State-threaded foreign worker. A CAPI value import is executed
+through its original generated function wrapper.
+
+`packageNativeLink` retains the complete component ABI and bitcode identity;
+the original typed import declarations and CAPI source remain in the module.
+Modules containing only inlined calls contribute no invented declarations:
+their component's real import inventory must be present elsewhere in the
+merged bundle. Byte-array arguments are classified from the original GHC
+types; an arbitrary unlifted object is not accepted as byte storage.
+
+The runtime writes numeric results directly into the lowered carriers and
+preserves unsigned low bits at narrow C boundaries. Mutable managed buffers
+remain shared across calls rather than being copied per invocation. Owned
+native addresses are borrowed through synchronous return. This first slice
+does not support safe/interruptible calls, pointer results, retained pointers,
+callbacks, foreign exports, initialization/finalization or arbitrary extra
+native libraries. Managed pointer identity/interior-offset controls and the
+original Hashable XXH3 end-to-end fixture remain integration work; the focused
+C buffer tests alone are not evidence that Hashable or Pandoc runs.
+
 ## Why compiling the stubs through Sulong is insufficient
 
 The real GHC 9.14.1 `GHC.Internal.Conc.Bound` stub exports `forkOS_entry`. Its C
