@@ -3,14 +3,22 @@
 
 # Standalone process signals
 
-On Linux x86_64, the bytecode launcher translates original `stg_sig_install`
+On Linux x86_64, both backends translate original `stg_sig_install`
 for SIGHUP, SIGINT, SIGQUIT and SIGTERM. These are the four handlers installed
 temporarily by GHC 9.14.1's library-level `runGhc` and `runGhcT`; importing the
 compiler library alone does not install them.
 
 DFL, IGN, HAN and RST actions and a null signal mask are supported. Other
-signals, non-null masks, Windows delivery and the AST dispatcher remain outside
+signals, non-null masks and Windows delivery remain outside
 this bridge's current implementation.
+
+Delivery requires `asyncExceptions=true`. Bytecode enables it by default; AST
+retains its synchronous default and needs an explicit opt-in. For a standalone
+AST launch, set `THC_BACKEND=ast` and add `-Dthc.asyncExceptions=true` to
+`JAVA_OPTS`. `loadEntry(..., asyncExceptions = true)` and the public Core request
+expose the same option. A malformed property fails explicitly; omitting it does
+not change either backend's default. A synchronous program is rejected before
+the native transport is acquired.
 
 ## JVM and embedding ownership
 
@@ -52,3 +60,24 @@ process controls, real signal delivery through the FFM bridge in a separate
 `-Xrs` JVM, typed dispatcher checks for all four signal numbers, and both runtime
 handoff modes. These checks do not claim a complete GHC compiler session works.
 See [compiler RTS services](compiler-rts.md) for that separate effort.
+
+The separate `signal-dispatch` full-Core fixture compares original GHC
+`setHandler`/`runHandlersPtr` delivery with native GHC for all four signals,
+including the actual siginfo CInt, forked handler masking and shutdown cleanup.
+It retains byte-identical installed modules and strict pre/post Core audits.
+The test transport only queues events; the original Haskell handler registry,
+ForeignPtr wrapping and `forkIO` execute on both backends. It does not replace
+host process dispositions; the isolated native/JVM controls above cover that
+boundary separately.
+
+The full-Core producer needs the production annotated acquisition view when the
+bare installation lacks retained Posix foreign-import products. Select that
+view with `THC_INSTALLED_CORE_GHC` and `THC_INSTALLED_CORE_GHC_PKG`, as described
+in the [complete installed-Core guide](driver.md). The native oracle still uses
+`GHC`; missing typed import provenance is an audit failure, not permission to
+remove original error-handler branches.
+
+```sh
+cabal run exe:thc-fixtures -- signal-dispatch
+./gradlew --continue signalDispatchFullCoreDefault signalDispatchFullCoreDense
+```
