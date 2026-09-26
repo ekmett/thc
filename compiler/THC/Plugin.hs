@@ -53,7 +53,7 @@ import GHC.Cmm.CLabel (CStubLabel(..))
 import qualified GHC.Unit.Module.WholeCoreBindings as ForeignCore
 import qualified Data.ByteString as BS
 import Data.Char (ord)
-import Data.List (intercalate, isPrefixOf, nubBy, stripPrefix)
+import Data.List (isPrefixOf, nubBy, stripPrefix)
 import qualified Data.List.NonEmpty as NE
 import Data.IORef (IORef, newIORef, readIORef, modifyIORef')
 import Data.Maybe (mapMaybe)
@@ -196,17 +196,27 @@ resolvedJavaScriptType ty =
 data J = O [(String,J)] | A [J] | S String | N Integer | B Bool | Z
 
 json :: J -> String
-json (O xs) = "{" ++ intercalate "," [json (S k) ++ ":" ++ json v | (k,v) <- xs] ++ "}"
-json (A xs) = "[" ++ intercalate "," (map json xs) ++ "]"
-json (S s) = '"' : concatMap escape s ++ "\""
+json value = render value ""
   where
-    escape '"' = "\\\""
-    escape '\\' = "\\\\"
-    escape c | ord c < 32 = "\\u" ++ replicate (4-length h) '0' ++ h where h = showHex (ord c) ""
-    escape c = [c]
-json (N n) = show n
-json (B b) = if b then "true" else "false"
-json Z = "null"
+    -- Append directly to the enclosing output instead of copying each child's
+    -- complete String at every ancestor. Deep Core with source-note metadata
+    -- otherwise spends minutes repeatedly copying the same JSON characters.
+    render :: J -> ShowS
+    render (O xs) = showChar '{' . separated field xs . showChar '}'
+    render (A xs) = showChar '[' . separated render xs . showChar ']'
+    render (S s) = showChar '"' . foldr ((.) . escape) id s . showChar '"'
+    render (N n) = shows n
+    render (B b) = showString (if b then "true" else "false")
+    render Z = showString "null"
+    field (key, item) = render (S key) . showChar ':' . render item
+    separated :: (a -> ShowS) -> [a] -> ShowS
+    separated _ [] = id
+    separated item (x:xs) = item x . foldr (\y rest -> showChar ',' . item y . rest) id xs
+    escape '"' = showString "\\\""
+    escape '\\' = showString "\\\\"
+    escape c | ord c < 32 = showString "\\u" . showString (replicate (4-length h) '0') . showString h
+      where h = showHex (ord c) ""
+    escape c = showChar c
 
 num :: Integral a => a -> J
 num = N . toInteger
