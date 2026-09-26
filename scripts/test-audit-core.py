@@ -226,7 +226,25 @@ class PackageScalarOperandTest(unittest.TestCase):
         del altered[6]['rep']
         self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)))
 
-
+    def test_package_capi_byte_storage_address_and_void_shapes(self):
+        for rep in ('ByteArray#', 'MutableByteArray#', 'AddrRep'):
+            abi, expression, _ = self.call('Word64Rep')
+            stored = dict(kind='address' if rep == 'AddrRep' else 'object',
+                          primReps=['AddrRep'] if rep == 'AddrRep' else ['BoxedRep (Just Unlifted)'], evaluated=True)
+            abi.update(arguments=[rep], result='void', convention='capi')
+            state = dict(kind='void', primReps=[], evaluated=True)
+            output = dict(kind='unknown', primReps=[], aggregate='unboxed-tuple', evaluated=True, components=[state])
+            expression[2][0][2]['rep'] = stored
+            expression[6]['rep'] = output
+            expression[6]['foreignCall'].update(convention='capi',
+                argumentReps=[dict(stored, evaluated=False), dict(state, evaluated=False)],
+                resultRep=dict(output, evaluated=False))
+            self.assertEqual([], self.inspect(abi, expression, stored), rep)
+            self.assertIn('stored operand', str(self.inspect(abi, expression,
+                dict(stored, primReps=['BoxedRep (Just Lifted)']))), rep)
+            altered = copy.deepcopy(expression)
+            altered[6]['rep']['components'].append(dict(kind='long', primReps=['Word64Rep'], evaluated=True))
+            self.assertIn('exact scalar/State ABI', str(self.inspect(abi, altered, stored)), rep)
 class ArchiveReachabilityTest(unittest.TestCase):
     def report(self, expression, initializers=(), finalizers=(), files=()):
         root = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])

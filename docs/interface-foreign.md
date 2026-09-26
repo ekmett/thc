@@ -101,6 +101,36 @@ Foreign entry/exit retain their existing masking boundaries and scope storage.
 Compiled guest-entry validity does not establish Sulong inlining or
 allocation-free foreign calls; those claims require separate graph evidence.
 
+## Managed and native memory at the C boundary
+
+THC needs both bitcode operating on managed buffers and bitcode calling real
+host-native libraries, including mixed packages. These are not two mutually
+exclusive runtime modes: native-enabled Sulong can handle managed interop
+pointers and native pointers. Sulong's separate `--llvm.managed` sandbox mode
+prohibits host-native calls; using managed buffer views does not enable that
+mode. See [Sulong's native execution contract](https://www.graalvm.org/latest/reference-manual/llvm/NativeExecution/).
+
+The practical boundary is storage, not symbol lookup. A JVM-backed managed
+pointer is not a host machine address. The shared transport must preserve its
+allocation identity, offset, aliases, alignment and lifetime. A native call
+must not receive a temporary snapshot when it may retain a pointer, observe
+aliases, or mutate state used by later calls. Nor can a general adapter infer
+a buffer's required size or retention rules from an `AddrRep` alone.
+
+The intended general path is stable native backing for pinned/FFI allocations,
+accessed by THC primops, Sulong and host C as the same allocation. Ordinary
+non-escaping storage can remain managed. Scoped copies remain useful for
+explicitly bounded interfaces, such as the existing GMP limb provider, but
+are not a universal FFI policy. Opaque guest objects need handles and a
+separate re-entry contract, not pointer reinterpretation.
+
+Current support is narrower: managed package-C buffer views and separately
+owned native `malloc` addresses are implemented; generic native-backed pinned
+byte arrays, retained-pointer lifetimes and native callbacks remain work.
+The package-C acquisition path must eventually carry declared external native
+dependencies as well as bitcode. This design direction is not a claim that
+arbitrary mixed native packages already run.
+
 ## Package C/CAPI calls
 
 The separate `thc-package-c-ffi-v1` profile extends the runtime link boundary
