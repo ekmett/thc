@@ -22,9 +22,9 @@ jobs:
     timeout-minutes: 30
     env:
       GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-user-home
-      # Publish the verified raw-SIMD documentation without merging the pending
-      # runtime checkpoint. Restore github.sha when that checkpoint integrates.
-      DOCS_REVISION: f53d0be7c17a55fc31ec2b5a58e6086f13e0d6c3
+      # Publish the locally built and link-checked current-main snapshot.
+      # Keep this source pin stable while independent runtime batches advance main.
+      DOCS_REVISION: 7cbeeb5df8eeaeab0079bb1b1a458053a77d2b89
     steps:
       - uses: actions/checkout@v7.0.1
         with:
