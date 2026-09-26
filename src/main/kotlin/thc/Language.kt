@@ -380,6 +380,7 @@ class Language : TruffleLanguage<Language.State>() {
     // Layout interning belongs to a context even when the language instance is shared.
     internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
+    private val threadPollState = locals.createContextThreadLocal { context, thread -> context.threads.pollState(thread) }
     class State(val env: Env, language: Language) {
         internal val shutdown = java.util.concurrent.atomic.AtomicReference<thc.runtime.GuestShutdown>()
         internal val managedExports = ManagedExportRegistry(this, language)
@@ -390,6 +391,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
         internal val stackAnnotations = ThreadLocal.withInitial { thc.runtime.StackAnnotationState.EMPTY }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
+        internal val threadPollState = language.threadPollState
         internal val runtimeTrace = thc.runtime.RuntimeTraceServices(env.err())
         internal val runtimeJit = thc.runtime.RuntimeJitServices(language)
         @JvmField internal val stm = thc.runtime.ManagedSTM()

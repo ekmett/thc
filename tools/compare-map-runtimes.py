@@ -313,7 +313,7 @@ def main():
             if engine == 'native':
                 command = [str(native), '--bench-steady', ENTRY, str(args.native_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             else:
-                command = [str(java), '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true',
+                command = [str(java), '--add-modules=jdk.incubator.vector', '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true',
                            '-Dthc.diagnosticUnsupported=true', f'-Dthc.minimumWarmCalls={args.minimum_warm_calls}',
                            f'-Dthc.backend={getattr(args, engine + "_backend")}',
                            '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
