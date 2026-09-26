@@ -7,7 +7,7 @@ import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.graalvm.polyglot.io.IOAccess
-import thc.runtime.NativeProcessSignals
+import thc.runtime.NativeSignalTransport
 import kotlin.system.exitProcess
 
 /** One preference order for the command line, module requests and direct Core requests. */
@@ -89,7 +89,7 @@ fun main(args: Array<String>) {
         if (!exit.isExit) throw exit
         // All owning context.use scopes have closed before terminating the CLI.
         // Embedded loadEntry/runIO callers only receive the polyglot exit.
-        if (exit.exitStatus < 0) NativeProcessSignals.exitBySignal(-exit.exitStatus)
+        if (exit.exitStatus < 0) NativeSignalTransport.exitBySignal(-exit.exitStatus)
         exitProcess(exit.exitStatus)
     }
 }
