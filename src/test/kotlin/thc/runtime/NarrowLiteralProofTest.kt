@@ -100,8 +100,10 @@ class NarrowLiteralProofTest {
     private fun native(inlining: Boolean) {
         val rows = File(directory, "oracle.tsv").readLines().map { it.split('\t') }
         assertEquals(54, rows.size)
-        for (stage in listOf("pre", "post")) for (variant in listOf("exact", "absent", "unknown")) {
-            val projected = project(stage, variant)
+        val integral = listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
+        for (stage in listOf("pre", "post")) for (variant in listOf("exact", "absent", "unknown") + integral) {
+            val projected = if (variant in integral) project(stage, "bad",
+                mapOf("kind" to "long", "primReps" to listOf(variant), "evaluated" to true)) else project(stage, variant)
             for (kind in kinds) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -142,10 +144,8 @@ class NarrowLiteralProofTest {
             }
         }
     }
-    @Test fun contradictoryAndMalformedPresentProofsFailBothLoaders() {
-        val bad = listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep").map {
-            mapOf("kind" to "long", "primReps" to listOf(it), "evaluated" to true)
-        } + listOf(emptyMap(), mapOf("kind" to "long", "primReps" to listOf("Int8Rep")),
+    @Test fun differentCarriersAndMalformedPresentProofsFailBothLoaders() {
+        val bad = listOf(emptyMap(), mapOf("kind" to "long", "primReps" to listOf("Int8Rep")),
             mapOf("kind" to "unknown", "primReps" to "Int8Rep", "evaluated" to true),
             mapOf("kind" to "unknown", "primReps" to listOf("Int8Rep"), "evaluated" to true),
             mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true),

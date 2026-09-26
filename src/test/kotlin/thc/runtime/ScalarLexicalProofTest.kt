@@ -37,19 +37,29 @@ class ScalarLexicalProofTest {
             finally { context.leave() }
         }
     }
-    @Test fun tupleAndScalarArithmeticRejectContradictoryLexicalProofs() = visit { language, backend ->
-        for (diagnostic in listOf(false, true)) {
+    @Test fun tupleAndScalarArithmeticUseLongCarriersAcrossIntegralAnnotations() = visit { language, backend ->
+        for (rep in listOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
+                "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")) {
             val tupleModule = Json.parse(File(root, "build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json").readText()) as Map<String, Any?>
             val reached = CoreModules.reachable(tupleModule, "quotRemInt")
             val lambda = ((reached["bindings"] as List<Map<String, Any?>>).single()["expr"] as List<Any?>)
             val x = (lambda[1] as List<MutableMap<String, Any?>>)[0]
-            x["rep"] = proof("WordRep")
-            for (input in listOf(reached, module(proof("Word8Rep"), proof("Int8Rep")))) {
-                val error = assertThrows(RuntimeFault::class.java) {
-                    program(language, input + ("diagnosticUnsupported" to diagnostic), backend)
-                }
-                assertTrue(error.message.orEmpty().contains("Conflicting Core scalar representation proofs"), error.message)
-            }
+            x["rep"] = proof(rep)
+            val tuple = program(language, reached, backend)
+            for ((field, expected) in listOf(-2L, -3L).withIndex())
+                assertEquals(expected, Calls.target(tuple.hostEntryTarget(3),
+                    arrayOf(tuple.entryValue("quotRemInt"), arrayOf(-13L, 5L, field.toLong()))), "$backend/$rep/$field")
+            val scalar = program(language, module(proof(rep), proof("Int8Rep")), backend)
+            for (value in listOf(-128L, -1L, 0L, 1L, 127L))
+                assertEquals((value * 2).toByte().toLong(), Calls.target(scalar.hostEntryTarget(1),
+                    arrayOf(scalar.entryValue("entry"), arrayOf(value))), "$backend/$rep/$value")
+        }
+    }
+    @Test fun differentLexicalCarriersRemainIncompatible() = visit { language, backend ->
+        for (diagnostic in listOf(false, true)) assertThrows(RuntimeFault::class.java) {
+            program(language, module(proof("Int8Rep"), mapOf("kind" to "float",
+                "primReps" to listOf("FloatRep"), "evaluated" to true)) +
+                ("diagnosticUnsupported" to diagnostic), backend)
         }
     }
     @Test fun absentUnknownAndMatchingScalarProofsRemainCompatible() = visit { language, backend ->

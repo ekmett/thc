@@ -116,13 +116,37 @@ class TupleArithmeticTest {
     }
     private fun wrap(proof: Any?) = mapOf("aggregate" to "unboxed-tuple", "kind" to "unknown", "evaluated" to true,
         "primReps" to (proof as Map<String, Any?>)["primReps"], "components" to listOf(proof))
+    @Test fun integralAnnotationsDoNotSelectArithmeticOrResultOrder() {
+        val integral = setOf("IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
+            "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep")
+        fun project(value: Any?, rep: String): Any? = when (value) {
+            is Map<*, *> -> value.mapValues { project(it.value, rep) }
+            is List<*> -> value.map { project(it, rep) }
+            is String -> if (value in integral) rep else value
+            else -> value
+        }
+        for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (rep in listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")) for (name in names) {
+                    // Project annotations consistently; logical tuple shape and order stay intact.
+                    val input = project(CoreModules.reachable(module(), name), rep) as Map<String, Any?>
+                    val p = program(language, input, backend)
+                    val expected = mathematical(Row(name, -13L, 5L, emptyList()))
+                    for ((field, value) in expected.withIndex()) assertEquals(value,
+                        Calls.target(p.hostEntryTarget(3), arrayOf(p.entryValue(name), arrayOf(-13L, 5L, field.toLong()))),
+                        "$backend/$rep/$name/$field")
+                }
+            } finally { context.leave() }
+        }
+    }
     @Test fun exactPrimitiveShapesAndSaturationAreRequired() {
         val mutations = listOf<(MutableList<Any?>) -> Unit>(
             { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
                 val last = (rep["components"] as MutableList<MutableMap<String, Any?>>).last()
-                val wrong = if (last["primReps"] == listOf("IntRep")) "WordRep" else "IntRep"
-                last["primReps"] = listOf(wrong)
-                val flattened = rep["primReps"] as MutableList<Any?>; flattened[flattened.lastIndex] = wrong },
+                last["kind"] = "float"; last["primReps"] = listOf("FloatRep")
+                val flattened = rep["primReps"] as MutableList<Any?>; flattened[flattened.lastIndex] = "FloatRep" },
             { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
                 (rep["components"] as MutableList<Any?>).removeLast(); (rep["primReps"] as MutableList<Any?>).removeLast() },
             { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
@@ -134,7 +158,7 @@ class TupleArithmeticTest {
             { app -> val rep = (app[6] as MutableMap<String, Any?>)["rep"] as MutableMap<String, Any?>
                 rep.remove("aggregate"); rep.remove("components"); rep["kind"] = "long"; rep["primReps"] = listOf("IntRep") },
             { app -> val arg = (app[2] as List<List<Any?>>)[0]; val rep = CoreRepresentations.metadata(arg)!!["rep"] as MutableMap<String, Any?>
-                rep["primReps"] = if (rep["primReps"] == listOf("IntRep")) listOf("WordRep") else listOf("IntRep") },
+                rep["kind"] = "float"; rep["primReps"] = listOf("FloatRep") },
             { app -> val arg = (app[2] as List<List<Any?>>)[0]
                 (CoreRepresentations.metadata(arg)!!["rep"] as MutableMap<String, Any?>)["kind"] = "unknown" },
             { app -> (app[3] as MutableList<Any?>)[0] = true },

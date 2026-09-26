@@ -43,11 +43,8 @@ internal data class CoreRepresentation(
         else -> null
     }
     fun refine(other: CoreRepresentation): CoreRepresentation {
-        // A Long is only the host carrier: distinct exact GHC scalar reps cannot
-        // replace one another on a lexical value. Unknown/legacy proofs add no constraint.
-        if (present && other.present && kind == CoreKind.LONG && other.kind == CoreKind.LONG &&
-            primReps?.size == 1 && other.primReps?.size == 1 && primReps != other.primReps)
-            throw RuntimeFault("Conflicting Core scalar representation proofs: $primReps and ${other.primReps}")
+        // GHC checks scalar types; all integral PrimReps use the same Long carrier.
+        // The selected operation supplies signedness and narrowing semantics.
         val boxed = exactBoxedRep()
         val otherBoxed = other.exactBoxedRep()
         if (boxed != null && otherBoxed != null && boxed != otherBoxed)
@@ -273,8 +270,8 @@ internal object CoreRepresentations {
             "int8", "word8", "int16", "word16", "int32", "word32" -> narrowLiteralProof(expr)
             else -> parse(metadata(expr)?.get("rep"))
         } else parse(metadata(expr)?.get("rep"))
-    /** Narrow literals have intrinsic signed/unsigned identity, not merely a
-     * Long carrier. Missing legacy metadata is fine; a contradictory proof is not. */
+    /** The literal tag supplies signedness and width independently of duplicate
+     * scalar annotations. Missing legacy metadata remains compatible. */
     fun narrowLiteralProof(expr: List<Any?>): CoreRepresentation {
         val expected = when (expr[1]) {
             "int8" -> "Int8Rep"; "word8" -> "Word8Rep"
@@ -284,12 +281,12 @@ internal object CoreRepresentations {
         }
         val proof = parse(metadata(expr)?.get("rep"))
         // Export-only identity rewrites retain an explicit unconstrained proof.
-        // The literal still supplies its own exact representation; malformed
-        // records have already failed parse(), and retained constraints must match.
+        // The literal still supplies its own representation; malformed records
+        // have already failed parse(), and retained physical carriers must match.
         val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isAggregate && !proof.isVector
         if (proof.present && !unconstrained &&
-            (proof.kind != CoreKind.LONG || proof.primReps != listOf(expected) || proof.isAggregate || proof.isVector))
-            throw RuntimeFault("${expr[1]} literal requires exact $expected metadata")
+            (proof.kind != CoreKind.LONG || proof.isAggregate || proof.isVector))
+            throw RuntimeFault("${expr[1]} literal requires a scalar Long carrier")
         return CoreRepresentation(CoreKind.LONG, evaluated = true, present = true, primReps = listOf(expected))
     }
     fun lambdaResult(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("resultRep"))

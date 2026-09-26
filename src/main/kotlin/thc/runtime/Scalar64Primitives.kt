@@ -45,15 +45,12 @@ internal fun word64Literal(value: String): Long {
 }
 
 /** GHC 9.14.1 machine-width tuple primops writing exact scalar destinations. */
-internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: String,
-    val secondRep: String = scalarRep, val resultArity: Int = 2) {
-    QUOT_REM_INT("quotRemInt#", "IntRep"), QUOT_REM_WORD("quotRemWord#", "WordRep"),
-    ADD_INT_C("addIntC#", "IntRep"), SUB_INT_C("subIntC#", "IntRep"),
-    ADD_WORD_C("addWordC#", "WordRep", "IntRep"), SUB_WORD_C("subWordC#", "WordRep", "IntRep"),
-    PLUS_WORD_2("plusWord2#", "WordRep"), TIMES_WORD_2("timesWord2#", "WordRep"),
-    TIMES_INT_2("timesInt2#", "IntRep", resultArity = 3);
-
-    private val resultReps = listOf(scalarRep, secondRep) + if (resultArity == 3) listOf(scalarRep) else emptyList()
+internal enum class TupleArithmeticOp(val primitive: String, val resultArity: Int = 2) {
+    QUOT_REM_INT("quotRemInt#"), QUOT_REM_WORD("quotRemWord#"),
+    ADD_INT_C("addIntC#"), SUB_INT_C("subIntC#"),
+    ADD_WORD_C("addWordC#"), SUB_WORD_C("subWordC#"),
+    PLUS_WORD_2("plusWord2#"), TIMES_WORD_2("timesWord2#"),
+    TIMES_INT_2("timesInt2#", resultArity = 3);
 
     private fun divisionDomain(left: Long, right: Long) {
         if (right == 0L || this == QUOT_REM_INT && left == Long.MIN_VALUE && right == -1L)
@@ -85,11 +82,11 @@ internal enum class TupleArithmeticOp(val primitive: String, val scalarRep: Stri
     }
     fun validate(arguments: List<CoreRepresentation>, lifted: List<*>, result: CoreRepresentation) {
         if (arguments.size != 2) throw RuntimeFault("Primitive arity mismatch: $primitive")
-        fun scalar(rep: CoreRepresentation, expected: String): Boolean = !rep.isAggregate && rep.kind == CoreKind.LONG && rep.primReps == listOf(expected)
-        if (lifted != listOf(false, false) || arguments.any { !scalar(it, scalarRep) })
+        fun scalar(rep: CoreRepresentation): Boolean = !rep.isAggregate && !rep.isVector && rep.kind == CoreKind.LONG
+        if (lifted != listOf(false, false) || arguments.any { !scalar(it) })
             throw RuntimeFault("Tuple primitive argument representation mismatch: $primitive")
         if (!result.isTuple || result.components!!.size != resultArity ||
-            result.components.indices.any { !scalar(result.components[it], resultReps[it]) } || result.primReps != resultReps)
+            result.components.any { !scalar(it) })
             throw RuntimeFault("Tuple primitive result representation mismatch: $primitive")
     }
     companion object {

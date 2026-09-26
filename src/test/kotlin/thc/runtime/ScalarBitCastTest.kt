@@ -291,7 +291,37 @@ class ScalarBitCastTest {
                             "primReps" to listOf("WordRep", "WordRep"), "alternatives" to listOf(proof("IntRep"), proof("IntRep")),
                             "tagSlot" to 0, "alternativeSlots" to listOf(listOf(1), listOf(1)), "evaluated" to true)
                     }
-                    assertThrows(RuntimeException::class.java, { program(language, module, backend) }, "$backend/$name/$mutation")
+                    val (inputRep, outputRep) = signatures.getValue(name)
+                    val sameCarrier = when (mutation) {
+                        "argument", "lexical" -> proof(inputRep)["kind"] == "long"
+                        "result" -> proof(outputRep)["kind"] == "long"
+                        else -> false
+                    }
+                    if (sameCarrier) {
+                        val p = program(language, module, backend)
+                        val target = p.entryTarget("entry"); val host = p.hostEntryTarget(1)
+                        val bits = if (name.contains("32")) 0xff800123L else 0xfff0000000000123UL.toLong()
+                        val input: Any = when (inputRep) {
+                            "FloatRep" -> java.lang.Float.intBitsToFloat(bits.toInt())
+                            "DoubleRep" -> java.lang.Double.longBitsToDouble(bits)
+                            else -> bits
+                        }
+                        fun check() {
+                            val result = Calls.target(host, arrayOf(p.entryValue("entry"), arrayOf(input)))
+                            val actual = when (outputRep) {
+                                "FloatRep" -> java.lang.Float.floatToRawIntBits(result as Float).toLong() and 0xffffffffL
+                                "DoubleRep" -> java.lang.Double.doubleToRawLongBits(result as Double)
+                                else -> result as Long
+                            }
+                            assertEquals(bits, actual, "$backend/$name/$mutation")
+                        }
+                        check(); compile(target)
+                        val before = count(p); check()
+                        assertEquals(before + 1, count(p), "$backend/$name/$mutation first installed entry")
+                        assertSame(target, p.entryTarget("entry")); valid(target, "$backend/$name/$mutation")
+                        released(language)
+                    } else assertThrows(RuntimeException::class.java,
+                        { program(language, module, backend) }, "$backend/$name/$mutation")
                 }
             } finally { context.leave() }
         }
