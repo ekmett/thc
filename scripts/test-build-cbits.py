@@ -92,8 +92,14 @@ class CompilerTargetTest(unittest.TestCase):
             source = root / "src/main/c/md5-api.c"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
-            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c", "package-pointer-api.c"):
+            for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c", "package-pointer-api.c",
+                         "text-api.c", "wait-status-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
+            text_source = root / "compiler/pinned-text/2.1.3"
+            for name in build.TEXT_SHA256:
+                path = text_source / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes((build.ROOT / "compiler/pinned-text/2.1.3" / name).read_bytes())
             libdw = root / "compiler/pinned-ghc-rts"
             libdw.mkdir(parents=True)
             for name in build.LIBDW_SHA256:
@@ -105,10 +111,16 @@ class CompilerTargetTest(unittest.TestCase):
             libdir.mkdir()
             (libdir / "HsFFI.h").write_bytes(b"/* synthetic GHC header */\n")
             (libdir / "HsBaseConfig.h").write_bytes(b"#define HAVE_STRERROR_R 1\n")
+            (libdir / "HsUnix.h").write_bytes(b"/* synthetic Unix header */\n")
+            (libdir / "HsUnixConfig.h").write_bytes(b"/* synthetic Unix config */\n")
             output = root / "generated"
             default, target = "x86_64-pc-linux-gnu", "x86_64-unknown-linux-gnu"
 
             def query(command, **kwargs):
+                if "-S" in command:
+                    self.assertEqual(["/clang", "--target=" + target, "-S", "-emit-llvm",
+                                      str(output.resolve() / "thc/cbits/text.bc"), "-o", "-"], command)
+                    return "define ptr @thc_text_memchr(ptr %src, i32 %byte, i64 %len) { ret ptr null }\n"
                 replies = {("/clang", "-dumpmachine"): default,
                            ("/clang", "--target=" + target, "-dumpmachine"): target,
                            ("/clang", "--version"): "synthetic clang 20",
@@ -117,7 +129,8 @@ class CompilerTargetTest(unittest.TestCase):
                 return replies[tuple(command)] + "\n"
 
             def compile_bitcode(command, **kwargs):
-                self.assertEqual(["/clang", "--target=" + target], command[:2])
+                self.assertEqual("/clang", command[0])
+                self.assertEqual(["--target=" + target], [arg for arg in command if arg.startswith("--target=")])
                 self.assertEqual({"cwd": root, "check": True}, kwargs)
                 Path(command[command.index("-o") + 1]).write_bytes(b"synthetic LLVM bitcode")
 
@@ -136,9 +149,9 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(target, manifest["target"])
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
-            self.assertEqual(7, len(manifest["commands"]))
-            self.assertEqual(16, len(manifest["sources"]))
-            self.assertEqual(7, len(manifest["artifacts"]))
+            self.assertEqual(10, len(manifest["commands"]))
+            self.assertEqual(25, len(manifest["sources"]))
+            self.assertEqual(9, len(manifest["artifacts"]))
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])
 
