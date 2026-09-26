@@ -61,7 +61,8 @@ runGhcProxy arguments = do
       libdir <- lookupEnv "THC_PROXY_INTERFACE_LIBDIR"
       case (helper,libdir) of
         (Just executable,Just selectedLibdir) ->
-          capturePackageNative executable selectedLibdir compiler options unit root
+          getEnv "THC_PROXY_ROOT" >>= \repository ->
+            capturePackageNative repository executable selectedLibdir compiler options unit root
         _ -> pure ()
     _ -> pure ()
 

@@ -812,6 +812,7 @@ captureGlobalUnits context project target requested missing = do
     setPermissions wrapper (permissions {Directory.executable = True})
     inherited <- getEnvironment
     let overrides = [("THC_PROXY_DRIVER", contextDriver context),
+                     ("THC_PROXY_ROOT", contextRoot context),
                      ("THC_PROXY_GHC", contextGhc context),
                      ("THC_PROXY_CAPTURE", capture),
                      ("THC_PROXY_PLUGIN_DB", contextPluginDb context),
@@ -1056,7 +1057,7 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
       (Nothing,Nothing,Nothing) -> do
         selectedHelper <- prepareInterfaceHelper context (contextRoot context)
         Directory.withCurrentDirectory sourceDir $
-          capturePackageNative (installedHelper selectedHelper) (installedLibdir selectedHelper)
+          capturePackageNative (contextRoot context) (installedHelper selectedHelper) (installedLibdir selectedHelper)
             (componentCompiler component) arguments (unitId unit) staging
         updated <- forM exported $ \path -> do
           value <- readJson path
