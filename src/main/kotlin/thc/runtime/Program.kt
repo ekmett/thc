@@ -352,6 +352,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
+    private val resumeProfile = BranchProfile.create()
+    private val suspensionProfile = BranchProfile.create()
     @CompilationFinal @Volatile private var seenThunk = false
     @Suppress("UNUSED_PARAMETER")
     fun execute(frame: VirtualFrame, original: Any?): Any? {
@@ -370,7 +372,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
-            val observed = if (original.state == 5) savedGuestContinuation(original.value) else null
+            val observed = if (original.state == 5) {
+                resumeProfile.enter()
+                savedGuestContinuation(original.value)
+            } else null
             val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
             // update/resume helpers needs this caller's frame; materializing
@@ -502,16 +507,19 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 val claim = synchronized(original.monitor) {
                     when (original.state) {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
-                        5 -> if ((observed != null && original.value !== observed.identity) ||
-                            (observed == null &&
-                                (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
-                            continuation = savedGuestContinuation(original.value)
-                                ?: fault("Suspended thunk has no guest continuation")
-                            original.value = null // One owner consumes the one-shot continuation.
-                            original.owner = Thread.currentThread()
-                            original.state = 1
-                            claimedHere = true
-                            0
+                        5 -> {
+                            resumeProfile.enter()
+                            if ((observed != null && original.value !== observed.identity) ||
+                                (observed == null &&
+                                    (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
+                                continuation = savedGuestContinuation(original.value)
+                                    ?: fault("Suspended thunk has no guest continuation")
+                                original.value = null // One owner consumes the one-shot continuation.
+                                original.owner = Thread.currentThread()
+                                original.state = 1
+                                claimedHere = true
+                                0
+                            }
                         }
                         1 -> if (original.owner === Thread.currentThread()) 2 else 1
                         else -> 3
@@ -781,6 +789,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             }
             val saved = savedGuestContinuation(result)
             if (saved != null) {
+                suspensionProfile.enter()
                 if (saved.yielded is DelimitedCut)
                     fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
