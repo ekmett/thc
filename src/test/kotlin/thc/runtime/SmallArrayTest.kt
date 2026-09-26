@@ -64,7 +64,8 @@ class SmallArrayTest {
             assertEquals(68 * x + 702, existing, "native existing model $x")
             assertEquals(17 * x + 224, safe, "native safe-slice model $x")
         }
-        val names = SmallArrayOp.entries.map { it.primitive }.toSet()
+        // Shrink has its own native corpus in ScalarMemoryUtilitiesTest.
+        val names = SmallArrayOp.entries.filter { it != SmallArrayOp.SHRINK }.map { it.primitive }.toSet()
         for ((stage, path) in manifest["stages"] as Map<String, String>) {
             val auditPath = (manifest["audits"] as Map<String, String>).getValue(stage)
             assertEquals(true, (Json.parse(File(root, auditPath).readText()) as Map<*, *>)["accepted"])

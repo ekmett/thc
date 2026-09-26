@@ -47,6 +47,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "scalar-memory-utilities": {
+      "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-memory-utilities"]}],
+      "outputs": ["build/scalar-memory-utilities"],
+      "sources": ["compiler/test-fixtures/ScalarMemoryUtilities.hs", "compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs",
+        "test/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "thread-inventory": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],

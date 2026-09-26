@@ -500,8 +500,13 @@ class PinnedPointerCellsTest {
             operation.validate(arguments, flags, result)
             assertThrows(RuntimeFault::class.java) { operation.validate(arguments,
                 listOf(true, false, false, false), result) }
-            assertThrows(RuntimeFault::class.java) { operation.validate(
+            // The selected primop interprets a lowered Long; lexical WordRep
+            // versus IntRep is the exporter's concern, not a carrier difference.
+            operation.validate(
                 arguments.toMutableList().also { it[2] = it[2].copy(primReps = listOf("WordRep")) },
+                flags, result)
+            assertThrows(RuntimeFault::class.java) { operation.validate(
+                arguments.toMutableList().also { it[2] = it[2].copy(kind = CoreKind.DOUBLE, primReps = listOf("DoubleRep")) },
                 flags, result) }
             assertThrows(RuntimeFault::class.java) { operation.validate(arguments, flags,
                 result.copy(kind = CoreKind.LONG, primReps = listOf("IntRep"))) }

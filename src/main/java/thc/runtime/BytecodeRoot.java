@@ -903,6 +903,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class MoveAddress {
+        @Specialization public static Object move(ManagedAddress source, ManagedAddress destination,
+                long count, Object state) {
+            ManagedByteArray.requireState(state);
+            source.moveTo(destination, count);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation public static final class FillAddress {
+        @Specialization public static Object fill(ManagedAddress destination, long count, long value, Object state) {
+            ManagedByteArray.requireState(state);
+            destination.fill(count, value);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+
     @Operation
     @ConstantOperand(type = TargetLayout.class, name = "layout")
     public static final class OriginalStackInfo {
@@ -2396,6 +2412,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected primitive Long");
         }
     }
+    @Operation public static final class AddressMinus {
+        @Specialization public static long subtract(ManagedAddress left, ManagedAddress right) { return left.difference(right); }
+    }
+    @Operation public static final class AddressRemainder {
+        @Specialization public static long remainder(ManagedAddress address, long divisor) { return address.remainder(divisor); }
+    }
     @Operation @ConstantOperand(type = boolean.class, name = "signed")
     public static final class AddressIndexByte {
         @Specialization public static long index(boolean signed, ManagedAddress address, long displacement) {
@@ -3029,6 +3051,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation public static final class SizeByteArray {
         @Specialization public static long size(Object value) { return ManagedByteArray.sizeGuest(value); }
+    }
+    @Operation public static final class PinnedByteArray {
+        @Specialization public static long query(ManagedAllocation value) { return value.isPinned() ? 1L : 0L; }
+        @Specialization public static long query(byte[] value) { return 0L; }
+        @Fallback public static long invalid(Object value) { throw fail("Expected a managed ByteArray#"); }
+    }
+    @Operation public static final class ShrinkSmallArray {
+        @Specialization public static Object shrink(Object reference, long size, Object state) {
+            SmallArrayStorage array = ManagedSmallArray.require(reference);
+            TupleResultsKt.requireVoidCarrier(state);
+            array.shrink(size);
+            return kotlin.Unit.INSTANCE;
+        }
     }
     @Operation
     @ConstantOperand(type = boolean.class, name = "unsigned")

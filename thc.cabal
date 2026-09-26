@@ -12,6 +12,9 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  compiler/test-fixtures/ScalarMemoryUtilities.hs
+  compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs
+  docs/scalar-memory-utilities.md
   examples/ThreadInventory.hs
   compiler/test-fixtures/ThreadInventoryNative.hs
   docs/thread-inventory.md
@@ -449,6 +452,7 @@ executable thc-fixtures
     ThreadLabelFixtures
     ThreadStatusFixtures
     ThreadInventoryFixtures
+    ScalarMemoryUtilitiesFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
     ArithmeticExceptionFixtures

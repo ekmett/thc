@@ -9,8 +9,8 @@ and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signa
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | Supported | 309 | Implemented fixed numeric/character scalar forms. |
-| Partial | 505 | Implemented with additional representation, storage or use-site limits. |
-| Missing | 677 | No declared lowering. |
+| Partial | 515 | Implemented with additional representation, storage or use-site limits. |
+| Missing | 667 | No declared lowering. |
 
 A checked box records the scalar contract, **not** unrestricted Haskell support or exhaustive
 testing. Defined-input preconditions, exact representation proofs and the current call ABI still
@@ -418,6 +418,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `cloneSmallArray#` — arity 3 — Managed lifted arrays
 - [ ] `cloneSmallMutableArray#` — arity 4 — Managed lifted arrays
 - [ ] `compareByteArrays#` — arity 5 — Managed byte storage
+- [ ] `copyAddrToAddr#` — arity 4 — Managed byte storage
 - [ ] `copyAddrToAddrNonOverlapping#` — arity 4 — Managed byte storage
 - [ ] `copyArray#` — arity 6 — Managed lifted arrays
 - [ ] `copyByteArray#` — arity 6 — Managed byte storage
@@ -543,8 +544,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord64X8#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `insertWord8X16#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `int2Addr#` — arity 1 — Managed addresses with operation-specific storage restrictions
+- [ ] `isByteArrayPinned#` — arity 1 — Managed byte storage
+- [ ] `isByteArrayWeaklyPinned#` — arity 1 — Managed byte storage
 - [ ] `isCurrentThreadBound#` — arity 1 — Specialized lowering; see capability and coverage limits
 - [ ] `isEmptyMVar#` — arity 2 — Managed blocking cells; backend and continuation limits apply
+- [ ] `isMutableByteArrayPinned#` — arity 1 — Managed byte storage
+- [ ] `isMutableByteArrayWeaklyPinned#` — arity 1 — Managed byte storage
 - [ ] `keepAlive#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `killThread#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `labelThread#` — arity 3 — Specialized lowering; see capability and coverage limits
@@ -602,6 +607,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minWord64X4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord64X8#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minWord8X16#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `minusAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `minusDoubleX2#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX4#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `minusDoubleX8#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -760,9 +766,12 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWordArray#` — arity 3 — Managed byte storage
 - [ ] `readWordOffAddr#` — arity 3 — Specialized lowering; see capability and coverage limits
 - [ ] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering; see capability and coverage limits
+- [ ] `remAddr#` — arity 2 — Managed addresses with operation-specific storage restrictions
 - [ ] `resizeMutableByteArray#` — arity 3 — Managed byte storage
+- [ ] `setAddrRange#` — arity 4 — Managed byte storage
 - [ ] `setByteArray#` — arity 5 — Managed byte storage
 - [ ] `shrinkMutableByteArray#` — arity 3 — Managed byte storage
+- [ ] `shrinkSmallMutableArray#` — arity 3 — Managed lifted arrays
 - [ ] `sizeofArray#` — arity 1 — Managed lifted arrays
 - [ ] `sizeofByteArray#` — arity 1 — Managed byte storage
 - [ ] `sizeofMutableArray#` — arity 1 — Managed lifted arrays
@@ -836,6 +845,7 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unsafeFreezeByteArray#` — arity 2 — Managed byte storage
 - [ ] `unsafeFreezeSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `unsafeThawArray#` — arity 2 — Managed lifted arrays
+- [ ] `unsafeThawByteArray#` — arity 2 — Managed byte storage
 - [ ] `unsafeThawSmallArray#` — arity 2 — Managed lifted arrays
 - [ ] `waitRead#` — arity 2 — Specialized lowering; see capability and coverage limits
 - [ ] `waitWrite#` — arity 2 — Specialized lowering; see capability and coverage limits
@@ -945,7 +955,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `compactResize#` — arity 3
 - [ ] `compactSize#` — arity 2
 - [ ] `control0#` — arity 3
-- [ ] `copyAddrToAddr#` — arity 4
 - [ ] `copyAddrToByteArray#` — arity 5
 - [ ] `copyByteArrayToAddr#` — arity 5
 - [ ] `copyMutableByteArrayToAddr#` — arity 5
@@ -1111,10 +1120,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `insertWord16X32#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
-- [ ] `isByteArrayPinned#` — arity 1
-- [ ] `isByteArrayWeaklyPinned#` — arity 1
-- [ ] `isMutableByteArrayPinned#` — arity 1
-- [ ] `isMutableByteArrayWeaklyPinned#` — arity 1
 - [ ] `makeStableName#` — arity 2
 - [ ] `maxDouble#` — arity 2
 - [ ] `maxFloat#` — arity 2
@@ -1132,7 +1137,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `minWord16X32#` — arity 2
 - [ ] `minWord8X32#` — arity 2
 - [ ] `minWord8X64#` — arity 2
-- [ ] `minusAddr#` — arity 2
 - [ ] `minusInt16X32#` — arity 2
 - [ ] `minusInt8X32#` — arity 2
 - [ ] `minusInt8X64#` — arity 2
@@ -1348,7 +1352,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `readWord8X32OffAddr#` — arity 3
 - [ ] `readWord8X64Array#` — arity 3
 - [ ] `readWord8X64OffAddr#` — arity 3
-- [ ] `remAddr#` — arity 2
 - [ ] `remInt16X16#` — arity 2
 - [ ] `remInt16X32#` — arity 2
 - [ ] `remInt16X8#` — arity 2
@@ -1374,10 +1377,8 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `remWord8X32#` — arity 2
 - [ ] `remWord8X64#` — arity 2
 - [ ] `retry#` — arity 1
-- [ ] `setAddrRange#` — arity 4
 - [ ] `setOtherThreadAllocationCounter#` — arity 3
 - [ ] `setThreadAllocationCounter#` — arity 2
-- [ ] `shrinkSmallMutableArray#` — arity 3
 - [ ] `shuffleDoubleX2#` — arity 3
 - [ ] `shuffleDoubleX4#` — arity 3
 - [ ] `shuffleDoubleX8#` — arity 3
@@ -1429,7 +1430,6 @@ fixed numeric form; adding a name cannot mark an arbitrary operation fully suppo
 - [ ] `unpackWord16X32#` — arity 1
 - [ ] `unpackWord8X32#` — arity 1
 - [ ] `unpackWord8X64#` — arity 1
-- [ ] `unsafeThawByteArray#` — arity 2
 - [ ] `whereFrom#` — arity 3
 - [ ] `writeDoubleArrayAsDoubleX4#` — arity 4
 - [ ] `writeDoubleArrayAsDoubleX8#` — arity 4

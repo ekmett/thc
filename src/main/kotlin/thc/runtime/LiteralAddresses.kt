@@ -212,6 +212,33 @@ internal class ManagedAddress private constructor(
         return if (displacement == 0L) this else ManagedAddress(literalBytes, mutableBytes, offset + displacement, owner, native = native)
     }
 
+    /** Relative pointers need no JVM address projection. Native/numeric pointers
+     * retain machine arithmetic; managed storage uses its allocation-local origin. */
+    fun difference(other: ManagedAddress): Long {
+        native?.requireLive(); other.native?.requireLive()
+        if (numeric != null || other.numeric != null || native != null && other.native != null)
+            return toNativeBits() - other.toNativeBits()
+        if (this === NULL && other === NULL) return 0L
+        requireBytes(); other.requireBytes()
+        val shared = when {
+            owner != null && other.owner != null -> owner === other.owner
+            owner != null -> other.mutableBytes?.let(owner::ownsStorage) == true
+            other.owner != null -> mutableBytes?.let(other.owner::ownsStorage) == true
+            literalBytes != null -> literalBytes === other.literalBytes || literalBytes === other.mutableBytes
+            else -> mutableBytes != null && (mutableBytes === other.mutableBytes || mutableBytes === other.literalBytes)
+        }
+        if (!shared) fault("minusAddr# requires related managed pointers or numeric/native addresses")
+        return offset - other.offset
+    }
+
+    fun remainder(divisor: Long): Long {
+        if (divisor == 0L) fault("remAddr# divisor is zero")
+        // GHC 9.14.1 lowers AddrRemOp to unsigned machine-word remainder.
+        val bits = if (this === NULL || numeric != null || native != null) toNativeBits()
+            else { requireBytes(); size(); offset }
+        return java.lang.Long.remainderUnsigned(bits, divisor)
+    }
+
     private fun index(displacement: Long): Int {
         if (displacement < -offset || displacement >= size() - offset)
             fault("Managed Addr# access outside its backing storage")
@@ -365,6 +392,15 @@ internal class ManagedAddress private constructor(
     /** copyAddrToAddrNonOverlapping# keeps its stronger disjointness contract. */
     fun copyNonOverlappingTo(destination: ManagedAddress, count: Long) =
         copyTo(destination, count, allowOverlap = false)
+
+    fun fill(count: Long, value: Long) = withNativeBorrow {
+        requireRange(0, count, writable = true)
+        when {
+            native != null -> native.access { it.asSlice(offset, count).fill(value.toByte()); Unit }
+            owner != null -> owner.fill(offset, count, value)
+            else -> java.util.Arrays.fill(mutableBytes!!, offset.toInt(), (offset + count).toInt(), value.toByte())
+        }
+    }
 
     private fun copyTo(destination: ManagedAddress, count: Long, allowOverlap: Boolean) = withNativeBorrows(destination) copy@ {
         requireRange(0, count)

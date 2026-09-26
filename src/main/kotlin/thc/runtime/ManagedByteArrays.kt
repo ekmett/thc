@@ -312,6 +312,17 @@ internal object ManagedByteArray {
 
 private const val BYTE_ARRAY_REP = "BoxedRep (Just Unlifted)"
 
+/** No compact-region or RTS-large-object allocation mode exists here. Explicit
+ * logical pinning supplies both guarantees; ordinary allocations promise neither. */
+private class PinnedByteArrayExpression(@field:Child private var array: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
+    override fun executeLong(frame: VirtualFrame): Long = when (val value = array.execute(frame)) {
+        is ManagedAllocation -> if (value.isPinned) 1L else 0L
+        is ByteArray -> 0L
+        else -> fault("Expected a managed ByteArray#")
+    }
+}
+
 /** Exact primitive representation contracts, including the logical State# slot. */
 internal enum class ByteArrayOp(val primitive: String, private val arguments: List<List<String>>, val tuple: Boolean = false) {
     NEW("newByteArray#", listOf(listOf("IntRep"), emptyList()), true),
@@ -329,6 +340,11 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
     COMPARE("compareByteArrays#", listOf(listOf(BYTE_ARRAY_REP), listOf("IntRep"), listOf(BYTE_ARRAY_REP),
         listOf("IntRep"), listOf("IntRep"))),
     FREEZE("unsafeFreezeByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
+    UNSAFE_THAW("unsafeThawByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
+    IS_PINNED("isByteArrayPinned#", listOf(listOf(BYTE_ARRAY_REP))),
+    IS_MUTABLE_PINNED("isMutableByteArrayPinned#", listOf(listOf(BYTE_ARRAY_REP))),
+    IS_WEAKLY_PINNED("isByteArrayWeaklyPinned#", listOf(listOf(BYTE_ARRAY_REP))),
+    IS_MUTABLE_WEAKLY_PINNED("isMutableByteArrayWeaklyPinned#", listOf(listOf(BYTE_ARRAY_REP))),
     SIZE("sizeofByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     SIZE_MUTABLE("sizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP))),
     GET_SIZE_MUTABLE("getSizeofMutableByteArray#", listOf(listOf(BYTE_ARRAY_REP), emptyList()), true),
@@ -415,7 +431,8 @@ internal enum class ByteArrayOp(val primitive: String, private val arguments: Li
             WRITE, WRITE_CHAR, WRITE_INT, WRITE_DOUBLE, WRITE_INT32, WRITE_WORD32, WRITE_WORD8_AS_INT32, WRITE_WORD8_AS_WORD32, WRITE_FLOAT, WRITE_WORD,
             WRITE_WORD8_AS_DOUBLE, WRITE_WORD8_AS_FLOAT, WRITE_INT64, WRITE_WORD64, COPY, SET, COPY_MUTABLE, COPY_MUTABLE_NON_OVERLAPPING,
             SHRINK -> emptyList()
-            SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE -> listOf("IntRep")
+            SIZE, SIZE_MUTABLE, INDEX_INT, COMPARE, IS_PINNED, IS_MUTABLE_PINNED,
+            IS_WEAKLY_PINNED, IS_MUTABLE_WEAKLY_PINNED -> listOf("IntRep")
             INDEX_INT8 -> listOf("Int8Rep")
             INDEX_INT16, INDEX_WORD8_AS_INT16 -> listOf("Int16Rep")
             INDEX_WORD16, INDEX_WORD8_AS_WORD16 -> listOf("Word16Rep")
@@ -436,7 +453,9 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.NEW -> NewByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.RESIZE -> ResizeByteArrayExpression(operands[0], operands[1], operands[2])
         ByteArrayOp.SHRINK -> ShrinkByteArrayExpression(operands[0], operands[1], operands[2])
-        ByteArrayOp.FREEZE -> FreezeByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> FreezeByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
+        ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> PinnedByteArrayExpression(operands[0])
         ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SET -> SetByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])

@@ -10,7 +10,8 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
  * synthetic process addresses. Raw byte access to a live pointer cell faults.
  */
 internal class ManagedAllocation private constructor(
-    private val bytes: ByteArray, private val writable: Boolean, private val pointerBytes: Int
+    private val bytes: ByteArray, private val writable: Boolean, private val pointerBytes: Int,
+    val isPinned: Boolean = false
 ) {
     init { if (pointerBytes != 4 && pointerBytes != 8) fault("Unsupported target pointer width") }
     // Pointer-free pinned arrays pay for the owner, not a per-cell map.
@@ -274,7 +275,7 @@ internal class ManagedAllocation private constructor(
         // Ordinary pinned byte arrays still use the typed, pointer-free copy.
         // Keep pointer-map collection code out of partial evaluation even when
         // another byte-array branch is the one exercised by a compiled guest.
-        if (!pointerCapable) return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes)
+        if (!pointerCapable) return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes, isPinned)
         return resizeWithPointerCells(newSize)
     }
 
@@ -300,7 +301,7 @@ internal class ManagedAllocation private constructor(
             if (start < newSize && start.toLong() + pointerBytes > newSize)
                 fault("Cannot truncate a managed pointer cell")
         }
-        return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes).also { replacement ->
+        return ManagedAllocation(bytes.copyOf(newSize.toInt()), true, pointerBytes, isPinned).also { replacement ->
             pointers?.filterKeys { it.toLong() + pointerBytes <= newSize }?.takeIf { it.isNotEmpty() }
                 ?.let { replacement.cells().putAll(it); replacement.pointerCapable = true }
         }
@@ -308,9 +309,9 @@ internal class ManagedAllocation private constructor(
 
     companion object {
         private val COPY_TIE_LOCK = Any()
-        fun mutable(size: Long, pointerBytes: Int): ManagedAllocation {
+        fun mutable(size: Long, pointerBytes: Int, pinned: Boolean = false): ManagedAllocation {
             if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("Managed allocation size outside JVM domain")
-            return ManagedAllocation(ByteArray(size.toInt()), true, pointerBytes)
+            return ManagedAllocation(ByteArray(size.toInt()), true, pointerBytes, pinned)
         }
         fun immutable(bytes: ByteArray, pointerBytes: Int): ManagedAllocation =
             ManagedAllocation(bytes.copyOf(), false, pointerBytes)

@@ -43,7 +43,7 @@ is the machine-readable declaration used by the auditor.
 | Floating scalars | [Float/Double arithmetic, conversions, square roots and raw bit casts](floating-primitives.md) |
 | Tuple arithmetic | [Quotient/remainder, overflow and carry results](tuple-arithmetic.md) |
 | Constructors | [Concrete tagToEnum families](tag-to-enum.md); [constructor-to-tag families and precise address fields](core-evidence.md) |
-| Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md) |
+| Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md), [address utilities, pinning, unsafe thaw and small-array shrink](scalar-memory-utilities.md) |
 | Type erasure | [Unsafe-equality cases](unsafe-equality-cases.md) |
 
 ### Tuples and sums

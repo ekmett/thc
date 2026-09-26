@@ -1172,6 +1172,13 @@
       ],
       "result": "IntRep"
     },
+    "minusAddr#": {
+      "arguments": [
+        "AddrRep",
+        "AddrRep"
+      ],
+      "result": "IntRep"
+    },
     "minusFloat#": {
       "arguments": [
         "FloatRep",
@@ -1685,6 +1692,13 @@
         "Word8Rep"
       ],
       "result": "Word8Rep"
+    },
+    "remAddr#": {
+      "arguments": [
+        "AddrRep",
+        "IntRep"
+      ],
+      "result": "IntRep"
     },
     "remInt#": {
       "arguments": [

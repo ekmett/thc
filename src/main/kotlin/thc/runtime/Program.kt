@@ -2914,6 +2914,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 else -> ManagedAddressOrder.GE
             })
         }
+        "minusAddr#", "remAddr#" -> {
+            if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            if (name == "minusAddr#") SubtractManagedAddress(args[0], args[1])
+            else RemainderManagedAddress(args[0], args[1])
+        }
         "plusAddr#", "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             if (name == "plusAddr#") PlusManagedAddress(args[0], args[1])

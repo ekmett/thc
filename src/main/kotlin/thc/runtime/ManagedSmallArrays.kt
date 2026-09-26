@@ -7,7 +7,15 @@ import com.oracle.truffle.api.frame.VirtualFrame
 
 /** SmallArray# has its own storage carrier, so ordinary Array# operations
  * cannot accidentally accept it despite their identical unlifted Core rep. */
-internal class SmallArrayStorage(val elements: Array<Any?>)
+internal class SmallArrayStorage(val elements: Array<Any?>) {
+    @Volatile var logicalSize: Int = elements.size
+        private set
+    @Synchronized fun shrink(size: Long) {
+        if (size < 0 || size > logicalSize.toLong()) fault("SmallMutableArray# shrink length outside current size")
+        java.util.Arrays.fill(elements, size.toInt(), logicalSize, null)
+        logicalSize = size.toInt()
+    }
+}
 
 internal object ManagedSmallArray {
     @JvmStatic fun allocate(size: Long, initial: Any?): SmallArrayStorage {
@@ -16,7 +24,7 @@ internal object ManagedSmallArray {
     }
     @JvmStatic fun require(value: Any?): SmallArrayStorage =
         value as? SmallArrayStorage ?: fault("Expected managed SmallArray# storage")
-    @JvmStatic fun size(array: SmallArrayStorage): Long = array.elements.size.toLong()
+    @JvmStatic fun size(array: SmallArrayStorage): Long = array.logicalSize.toLong()
     private fun index(array: SmallArrayStorage, index: Long): Int {
         if (index < 0 || index >= size(array)) fault("SmallArray# index outside its backing storage")
         return index.toInt()
@@ -61,14 +69,15 @@ internal enum class SmallArrayOp(val primitive: String, private val arguments: L
     COPY_MUTABLE("copySmallMutableArray#", listOf("array", "int", "array", "int", "int", "state"), listOf("state")),
     SAFE_FREEZE("freezeSmallArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
     THAW("thawSmallArray#", listOf("array", "int", "int", "state"), listOf("state", "array")),
-    UNSAFE_THAW("unsafeThawSmallArray#", listOf("array", "state"), listOf("state", "array"));
+    UNSAFE_THAW("unsafeThawSmallArray#", listOf("array", "state"), listOf("state", "array")),
+    SHRINK("shrinkSmallMutableArray#", listOf("array", "int", "state"), listOf("state"));
 
     val tuple: Boolean get() = this in setOf(NEW, READ, INDEX, FREEZE, GET_SIZE_MUTABLE,
         CLONE_MUTABLE, SAFE_FREEZE, THAW, UNSAFE_THAW)
     fun validate(actual: List<CoreRepresentation>, flags: List<*>, proof: CoreRepresentation) {
         fun matches(rep: CoreRepresentation, role: String): Boolean = !rep.isAggregate && !rep.isVector && when (role) {
             "state" -> rep.kind == CoreKind.VOID && rep.primReps == emptyList<String>()
-            "int" -> rep.kind == CoreKind.LONG && rep.primReps == listOf("IntRep")
+            "int" -> rep.kind == CoreKind.LONG
             "array" -> rep.kind == CoreKind.OBJECT && rep.primReps == listOf("BoxedRep (Just Unlifted)")
             else -> rep.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
                 rep.primReps == listOf("BoxedRep (Just Lifted)")
@@ -91,6 +100,7 @@ internal fun smallArrayExpression(operation: SmallArrayOp, proof: CoreRepresenta
     SmallArrayOp.NEW -> NewSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.READ -> ReadSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.WRITE -> WriteSmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    SmallArrayOp.SHRINK -> ShrinkSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.INDEX -> IndexSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> FreezeSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.SIZE, SmallArrayOp.SIZE_MUTABLE -> SizeSmallArrayExpression(operands[0])
@@ -101,6 +111,17 @@ internal fun smallArrayExpression(operation: SmallArrayOp, proof: CoreRepresenta
     SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> TransferSmallArrayExpression(operation == SmallArrayOp.COPY_MUTABLE,
         operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
 }.proven(proof.copy(evaluated = true))
+
+private class ShrinkSmallArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var size: Expr, @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any {
+        val storage = ManagedSmallArray.require(array.execute(frame))
+        val length = size.executeRequiredLong(frame)
+        requireVoidCarrier(state.execute(frame))
+        storage.shrink(length)
+        return Unit
+    }
+}
 
 private class NewSmallArrayExpression(@field:Child private var size: Expr, @field:Child private var initial: Expr,
     @field:Child private var state: Expr) : Expr() {
