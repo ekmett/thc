@@ -27,6 +27,7 @@ python3 scripts/prepare-tuple-join-audit.py
 python3 scripts/prepare-empty-join-input.py
 cabal build exe:thc-fixtures --offline
 fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
+"$fixture_bin" sum-join
 "$fixture_bin" unsafe-equality
 "$fixture_bin" integer
 "$fixture_bin" bit
@@ -86,6 +87,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" interface-core
+"$fixture_bin" record-fields
 python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 "$fixture_bin" original-stdio-read

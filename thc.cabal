@@ -725,11 +725,13 @@ executable thc-fixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
+    SignalDispatchFixtures
     RtsShutdownFixtures
     FileWaitFixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
+    GhcApiFixtures
     RtsDiagnosticFixtures
     OriginalOpenFixtures
     PackageScalarFixtures
@@ -749,6 +751,7 @@ executable thc-fixtures
     WindowsSmokeFixtures
     StablePointerFixtures
     StableNameFixtures
+    SumJoinFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
     ByteArrayFixtures

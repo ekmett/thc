@@ -51,6 +51,8 @@ internal interface LimbProvider {
     fun multiplyWord(output: LimbRegion, input: LimbRegion, word: Long): Long
     fun divideWord(output: LimbRegion, fractionalLimbs: Long, input: LimbRegion, divisor: Long): Long
     fun moduloWord(input: LimbRegion, divisor: Long): Long
+    fun shiftRight(output: LimbRegion, input: LimbRegion, count: Long, negative: Boolean): Long
+    fun toDouble(input: LimbRegion, negative: Boolean, exponent: Long): Double
     fun divide(quotient: LimbRegion, remainder: LimbRegion, fractionalLimbs: Long,
         numerator: LimbRegion, divisor: LimbRegion)
     fun quotient(output: LimbRegion, numerator: LimbRegion, divisor: LimbRegion)

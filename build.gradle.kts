@@ -140,6 +140,7 @@ tasks.withType<Test>().configureEach {
             "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
+            "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
             "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
@@ -545,6 +546,26 @@ tasks.register<Test>("packageScalarFullCoreTest") {
     doFirst {
         check(file("build/package-scalar-cbits/manifest.json").isFile) {
             "Missing scalar cbits fixture: select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- package-scalar-cbits"
+        }
+    }
+}
+for ((taskName, dense) in listOf("signalDispatchFullCoreDefault" to false, "signalDispatchFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC signal handler lookup and forked dispatch on both backends."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/signal-dispatch") { include("**/*.json", "oracle.txt", "installed/bundles/*.zip") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SignalDispatchFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original signal delivery requires a fresh test process") { true }
+        doFirst {
+            check(file("build/signal-dispatch/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- signal-dispatch"
+            }
         }
     }
 }
