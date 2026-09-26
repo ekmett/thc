@@ -52,10 +52,12 @@ data ForeignCompiler = ForeignCompiler
   , foreignPluginLibrary :: FilePath, foreignRegisteredLibrary :: FilePath
   , foreignDriverHash :: String }
 
-boundModule, posixModule, unixFilesModule :: String
+boundModule, posixModule :: String
 boundModule = "GHC.Internal.Conc.Bound"
 posixModule = "GHC.Internal.System.Posix.Internals"
-unixFilesModule = "System.Posix.Files.PosixString"
+
+unixModules :: [String]
+unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals"]
 
 -- Presence is not permission to replace bad evidence. The helper has already
 -- checked actual annotations against the retained Core/foreign products.
@@ -65,18 +67,19 @@ missingForeignProof name core
       (Nothing, Nothing) -> Right True
       (Just _, Just proof) -> classified proof
       _ -> Left "incomplete static foreign-export evidence"
-  | name `elem` [posixModule, unixFilesModule] = maybe (Right True) classified (member "staticForeignImportStubs" core)
+  | name `elem` (posixModule : unixModules) = maybe (Right True) classified (member "staticForeignImportStubs" core)
   | otherwise = Left "module is outside the installed foreign producer profile"
   where
     classified proof
       | member "status" proof == Just (String "verified") = Right False
-      | otherwise = Left "present foreign provenance is not verified; refusing regeneration"
+      | otherwise = Left (name ++ ": present foreign provenance is not verified; refusing regeneration" ++
+          case member "reason" proof of Just (String reason) -> ": " ++ Text.unpack reason; _ -> "")
 
 prepareForeignInterfaces :: ForeignCompiler -> FilePath -> FilePath -> InstalledContext ->
                             [InstalledUnit] -> IO InstalledContext
 prepareForeignInterfaces producer cache source context registrations = do
   base <- prepareProfile [boundModule, posixModule] context
-  prepareProfile [unixFilesModule] base
+  prepareProfile unixModules base
   where
     prepareProfile names selected = do
       let candidates = [u | u <- registrations, all (`elem` map fst (installedInterfaces u)) names]
@@ -177,7 +180,7 @@ configuredRecipe producer context unit root names = do
   check (null (installedDatabases context)) "foreign regeneration requires the selected global package database"
   version <- command (foreignGhc producer) ["--numeric-version"] Nothing
   check (words version == ["9.14.1"]) "--ghc-source requires selected GHC 9.14.1"
-  let unixProfile = names == [unixFilesModule]
+  let unixProfile = names == unixModules
       packageName = if unixProfile then "unix" else "ghc-internal"
       stage = root </> "_build/stage1"
       packageRoot = root </> "libraries" </> packageName

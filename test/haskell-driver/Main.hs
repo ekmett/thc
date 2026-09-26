@@ -34,6 +34,8 @@ runTests :: [String] -> IO ()
 runTests arguments = do
   env <- setup
   selected <- case arguments of
+    ["--installed-foreign-source-only"] -> pure
+      [InstalledForeignTests.tests, InstalledForeignTests.viewTests env, InstalledForeignTests.sourceTests env]
     ["--installed-hydration-only"] -> pure [InstalledHydrationTests.tests]
     ["--runnable-targets-only"] -> pure [RunOptionsTests.tests env, BenchmarkTests.tests env]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
@@ -61,6 +63,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--inplace-store-only|--installed-hydration-only|--package-native-only]"
+    _ -> die "Usage: driver-tests [--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--inplace-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

@@ -253,7 +253,9 @@ prepareInterfaceCore root = do
          directory </> "typed-export-source/ForeignExportManaged.hs.saved",
          directory </> "typed-foreign-exports/registration/ForeignExportRegistration.hi",
          directory </> "typed-export-source/ForeignExportRegistration.hs.saved"] ++
-        [directory </> "import-stubs" </> variant ++ ".json" | variant <- ["plain", "extra-file", "wrapper", "instrumented"]] ++
+        [directory </> "import-stubs" </> variant ++ ".json" | variant <- ["plain", "labels", "extra-file", "wrapper", "instrumented"]] ++
+        [directory </> "import-stubs" </> "labels-" ++ entry ++ "-audit.json" |
+          entry <- ["probe", "unknownData", "unknownFunction"]] ++
         [directory </> "source/ForeignImportStubs.hs.saved", directory </> "import-stubs/plain/ForeignImportStubs.hi"] ++
         [directory </> entry ++ "-audit.json" | entry <- entries]
   inputHashes <- hashes root inputs
