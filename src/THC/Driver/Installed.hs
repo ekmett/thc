@@ -13,7 +13,7 @@ module THC.Driver.Installed
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
-import Control.Exception (SomeException, finally, mask, mask_, throwIO, try)
+import Control.Exception (SomeException, bracket, finally, mask, mask_, throwIO, try)
 import Control.Monad (filterM, foldM, forM, forM_, unless, void)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
@@ -35,7 +35,9 @@ import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator)
-import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
+import System.IO (hClose, hSetBinaryMode)
+import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
+                       waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
 import qualified Data.Text as Text
@@ -291,8 +293,8 @@ acquireInstalledWithJobs jobs context unit = do
           workers <- readIORef active
           forM_ workers $ \(thread, result) -> do
             killThread thread
-            -- readCreateProcessWithExitCode terminates and reaps its child
-            -- before the worker publishes cancellation. Do not leave an
+            -- The process bracket terminates and reaps its child before
+            -- the worker publishes cancellation. Do not leave an
             -- exporting helper alive after failure, timeout or caller unwind.
             void (readMVar result)
         go modules [] [] = finish modules
@@ -325,9 +327,9 @@ acquireInstalledWithJobs jobs context unit = do
         _ -> fail "installed interfaces disagree on their original Core owner"
       pure (Right (InstalledCore owner [(name, bytes) | (_, name, bytes) <- reverse modules]))
     load item@(name, path) = do
-      (status, output, diagnostic) <- boundedProcess (installedHelper context) (helperCommand context unit item)
+      (status, output, diagnostic) <- boundedInterfaceProcess (installedHelper context) (helperCommand context unit item)
       response <- either (fail . ("invalid thc-interface JSON: " ++)) pure
-        (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+        (eitherDecodeStrict' output)
       unless (valueAt response "schema" == Just (1 :: Int)) (fail "unsupported thc-interface protocol")
       case (status, valueAt response "status" :: Maybe String) of
         (ExitSuccess, Just "loaded") -> do
@@ -357,7 +359,8 @@ acquireInstalledWithJobs jobs context unit = do
             (fail "inconsistent missing-Core response")
           pure (Left (MissingCore (registeredId unit) name path))
         _ -> fail ("thc-interface failed for " ++ registeredId unit ++ ":" ++ name ++
-                    " (" ++ show status ++ "): " ++ take 2000 output ++ take 2000 diagnostic)
+                    " (" ++ show status ++ "): " ++ clipped output ++ clipped diagnostic)
+    clipped = take 2000 . Text.unpack . Text.decodeUtf8
 
 valueAt :: FromJSON a => Value -> String -> Maybe a
 valueAt (Object fields) name = do
@@ -367,6 +370,40 @@ valueAt _ _ = Nothing
 
 required :: FromJSON a => Value -> String -> IO a
 required value name = maybe (fail ("missing/invalid helper field " ++ name)) pure (valueAt value name)
+
+-- Full Core stdout can be tens of megabytes. Keep its UTF-8 bytes instead of
+-- building a linked-list String and encoding it back to bytes for Aeson. Drain
+-- stderr concurrently even when a helper emits more than a pipe buffer, and
+-- retain the existing empty-stdin, timeout, UTF-8 rejection and child cleanup.
+boundedInterfaceProcess :: FilePath -> [String] -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcess executable arguments = do
+  inherited <- getEnvironment
+  let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
+      commandLine = (proc executable arguments)
+        {env = Just clean, std_in = CreatePipe, std_out = CreatePipe, std_err = CreatePipe}
+      execute = withCreateProcess commandLine $ \input output diagnostic child ->
+        case (input, output, diagnostic) of
+          (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
+            hClose stdinPipe
+            hSetBinaryMode stdoutPipe True
+            hSetBinaryMode stderrPipe True
+            let startReader = mask_ $ do
+                  result <- newEmptyMVar :: IO (MVar (Either SomeException BS.ByteString))
+                  thread <- forkIOWithUnmask $ \unmask ->
+                    try (unmask (BS.hGetContents stderrPipe)) >>= putMVar result
+                  pure (thread, result)
+                stopReader (thread, result) = killThread thread >> void (readMVar result)
+            bracket startReader stopReader $ \(_, result) -> do
+              out <- BS.hGetContents stdoutPipe
+              err <- readMVar result >>= either throwIO pure
+              status <- waitForProcess child
+              -- The previous text Handle rejected invalid UTF-8 even on
+              -- otherwise successful output. Do not relax that protocol.
+              forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
+              pure (status, out, err)
+          _ -> fail "installed-Core helper pipes were unavailable"
+  result <- timeout (180 * 1000000) execute
+  maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result
 
 -- readCreateProcessWithExitCode cleans up its child on exceptions, including
 -- timeout/cancellation. Neither is classified as a missing capability.

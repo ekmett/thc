@@ -435,6 +435,9 @@ raising it increases helper CPU and peak memory demand. Results and errors are
 consumed in registered module order, and failure cancels outstanding helpers.
 Only hydration overlaps: identity/schema checks, source/provenance checks,
 registration rechecks, bundle contents and warm-cache validation are unchanged.
+Full-Core stdout stays in UTF-8 bytes through the subprocess boundary; stderr
+is drained concurrently and malformed UTF-8 remains a protocol failure.
+See the [transport allocation screen](../bench/results/performance-20260926-interface-transport.md).
 
 An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
 source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's
