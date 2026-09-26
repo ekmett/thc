@@ -138,8 +138,13 @@ internal class ManagedAllocation private constructor(
 
     /** Internal scalar array operations keep the backing private and inspect
      * exactly their element range while holding the pointer-cell monitor. */
-    @Synchronized fun <T> accessElement(index: Long, width: Int, writable: Boolean,
-        action: (ByteArray) -> T): T {
+    internal inline fun <T> accessElement(index: Long, width: Int, writable: Boolean,
+        action: (ByteArray) -> T): T = synchronized(this) {
+        prepareElement(index, width, writable)
+        action(bytes)
+    }
+
+    private fun prepareElement(index: Long, width: Int, writable: Boolean) {
         if (width <= 0 || index < 0 || index > Long.MAX_VALUE / width)
             fault("Managed allocation element outside its backing storage")
         val start = range(index * width, width.toLong())
@@ -148,7 +153,6 @@ internal class ManagedAllocation private constructor(
             if (pointerCapable) invalidate(start, width)
         } else if (intersectsPointer(start, width))
             fault("Scalar read overlaps a managed pointer cell")
-        return action(bytes)
     }
 
     /** The allocation monitor makes the old-value read and wrapped write one
@@ -167,8 +171,13 @@ internal class ManagedAllocation private constructor(
 
     /** Word8ArrayAs* offsets count bytes, including unaligned starts. Keep the
      * entire scalar access under the pointer-cell monitor. */
-    @Synchronized fun <T> accessByteRange(offset: Long, width: Int, writable: Boolean,
-        action: (ByteArray) -> T): T {
+    internal inline fun <T> accessByteRange(offset: Long, width: Int, writable: Boolean,
+        action: (ByteArray) -> T): T = synchronized(this) {
+        prepareByteRange(offset, width, writable)
+        action(bytes)
+    }
+
+    private fun prepareByteRange(offset: Long, width: Int, writable: Boolean) {
         if (width != 2 && width != 4 && width != 8) fault("Unsupported scalar byte-range width")
         val start = range(offset, width.toLong())
         if (writable) {
@@ -176,7 +185,6 @@ internal class ManagedAllocation private constructor(
             if (pointerCapable) invalidate(start, width)
         } else if (intersectsPointer(start, width))
             fault("Scalar read overlaps a managed pointer cell")
-        return action(bytes)
     }
 
     /** Vector indices count either full 16-byte vectors or scalar lanes. */
