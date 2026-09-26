@@ -7,6 +7,9 @@ behavior in its JVM implementation, normally Kotlin, and inline forwarding-only
 helpers instead of adding wrapper layers or temporary carrier objects. Retain
 real compiler/ABI boundaries and ownership, lifetime, and synchronization rules;
 verify allocation and call elimination rather than inferring it from source size.
+Trust GHC's type checking: use lowered scalar carrier types where they suffice,
+without redundant integral `RuntimeRep` identity checks. Preserve meaningful
+carrier, aggregate, ABI, ownership and memory-safety distinctions.
 
 Use Haskell for GHC-facing fixture generation and native-oracle tooling, and
 Kotlin for JVM checks and independent runtime models. Introduce Python only for
