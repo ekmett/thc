@@ -151,6 +151,28 @@ cabal test driver-tests --test-options=--package-native-only
 ./gradlew --continue getEntropyDefault getEntropyDense
 ```
 
+Linux x86-64 also admits libc `wcwidth` at its exact `i32 (i32)` ABI and
+records the explicit libc dependency in the embedded-LLVM artifact. This is
+the native locale-sensitive implementation used by Tasty's original
+`foreign import capi safe "wchar.h wcwidth" :: CWchar -> CInt`; no Unicode
+width table or unconditional width-one substitute is introduced. Its `-1`
+result is preserved, so Tasty's existing Haskell fallback remains responsible
+for displaying an undefined-width character as width one.
+
+The `wcwidth` fixture retains the original Tasty source/declaration and license,
+then compiles that exact declaration and fallback in a small genuine GHC/CAPI
+package. Native GHC observations in the C and C.UTF-8 locales cover ASCII,
+controls, combining marks, wide characters and invalid code points. Both
+backends compare the raw and fallback results before and from the first
+installed compiled call, with a thread-local native locale restored after each
+check. This focused declaration test is separate from running the whole Tasty
+or AD test suite.
+
+```sh
+THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
+./gradlew --continue wcwidthDefault wcwidthDense
+```
+
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
 State-threaded calls are `safe`. Its four Float/Double entries retain that safety
 through acquisition, ABI admission and call selection. A Linux native-libm
