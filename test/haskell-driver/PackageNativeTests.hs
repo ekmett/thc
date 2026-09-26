@@ -120,6 +120,22 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
               (Just Null) (marker >>= lookupField "unclassifiedReason")
       assertBool "a malformed companion declaration is still fatal"
         (isLeft (archiveNativeModules "fixture-unit" [named "Narrow" [ordinary,narrow],named "Wide" [set "normalizedType" (object []) wide]]))
+      let interruptible = changeEmitted "safety" "interruptible" narrow
+          blocked = named "Interruptible" [interruptible]
+      case archiveNativeModules "fixture-unit" (originals ++ [blocked]) of
+        Left message -> assertFailure message
+        Right archived -> do
+          let retained = last archived
+              marker = lookupField "packageNativeArchive" retained
+          assertEqual "interruptible-only module retains its original declarations"
+            (lookupField "staticForeignImports" blocked) (lookupField "staticForeignImports" retained)
+          assertEqual "unsupported local safety does not acquire other modules' conflict witnesses"
+            Nothing (marker >>= lookupField "conflictingImports")
+          assertEqual "interruptible declaration remains explicitly excluded"
+            (Just (toJSON [maybe Null id (lookupField "emitted" interruptible)]))
+            (marker >>= lookupField "unsupportedImports")
+          assertEqual "unrelated supported import retains its adapter across all three modules"
+            (nativeSignatures "fixture-unit" [moduleWith [ordinary]]) (nativeSignatures "fixture-unit" archived)
   , TestCase $ do
       let target = "x86_64-unknown-linux-gnu"
           valid = "declare i32 @getentropy(ptr noundef, i64 noundef) local_unnamed_addr\n"
