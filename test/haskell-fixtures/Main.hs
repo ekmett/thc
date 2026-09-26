@@ -68,6 +68,7 @@ import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import CompilerRtsFixtures (prepareCompilerRts)
+import FloatForeignFixtures (prepareFloatForeign)
 import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
@@ -983,6 +984,7 @@ main = do
     ["closure-inspection"] -> prepareClosureInspection root
     ["stable-pointers"] -> prepareStablePointers root
     ["compiler-rts"] -> prepareCompilerRts root
+    ["float-foreign"] -> prepareFloatForeign root
     "ghc-api" : probes -> prepareGhcApi root probes
     ["record-fields"] -> prepareRecordFields root
     ["stable-names"] -> prepareStableNames root
