@@ -29,6 +29,7 @@ cabal build exe:thc-fixtures --offline
 fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" sum-join
 "$fixture_bin" unsafe-equality
+"$fixture_bin" proxy-void
 "$fixture_bin" integer
 "$fixture_bin" bit
 "$fixture_bin" word-floating

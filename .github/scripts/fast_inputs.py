@@ -35,12 +35,19 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
+    "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
+    *(f"{stage}/{suffix}" for stage in ("pre", "post")
+      for suffix in ("core/ProxyVoidAudit.json", "core/THC.InterfaceClosure.json", "audit.json")),
+    *(f"commands/{command}.{suffix}" for command in
+      ("ghc-version", "predicate-build", "predicate-run", "native-build", "native-run", "pre-export", "pre-audit", "post-export", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json"))))
 RUBBISH_OUTPUTS = frozenset("build/rubbish-literals/" + name for name in (
     "manifest.json", "pre.json", "post.json", "oracle.json", "originals.json", "pre.audit.json", "post.audit.json", "frontiers.json", "frontiers.audit.json",
     *(f"logs/{command}.{suffix}" for command in
@@ -359,6 +366,7 @@ CORE_DIRS = ("build/core", "build/aggregate-core", "build/aggregate-post-core",
              "build/cbv-post-core", "build/source-core", "build/map/core", "build/map/boot-core")
 REQUIRED = tuple(sorted({
     *RUBBISH_OUTPUTS,
+    *PROXY_VOID_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
     *(["build/original-gmp/manifest.json"] if GMP_NATIVE_HOST else []),
     *(f"build/{d}/provenance.json" for d in PROVENANCE_DIRS),
@@ -407,7 +415,7 @@ MAX_FILE_BYTES = 256 * 1024 * 1024
 MAX_TOTAL_BYTES = 3 * 1024 * 1024 * 1024
 MAX_MANIFEST_BYTES = 16 * 1024 * 1024
 MAX_JSON_BYTES = 384 * 1024 * 1024
-NATIVE_EXECUTABLES = frozenset({"build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
+NATIVE_EXECUTABLES = frozenset({"build/proxy-void/native/oracle", "build/proxy-void/api/predicate", "build/simd-arithmetic/native/oracle", "build/unsafe-equality/api/predicate", "build/float-decode/native/oracle",
     "build/floating-remainder/native/oracle",
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
@@ -1348,6 +1356,8 @@ def allowed_payload(name, pins):
         return False
     if parts[1] == "integer-completion":
         return name in INTEGER_COMPLETION_OUTPUTS
+    if parts[1] == "proxy-void":
+        return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":
         return name in RUBBISH_OUTPUTS
     if parts[1] in MEMORY_FIXTURE_OUTPUTS:

@@ -10,7 +10,7 @@ module THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, is
 import GHC.Plugins
 import GHC.Builtin.Names
   ( hasKey, lazyIdKey, noinlineIdKey, noinlineConstraintIdKey, nospecIdKey
-  , runRWKey, realWorldPrimIdKey )
+  , runRWKey, realWorldPrimIdKey, proxyHashKey )
 import GHC.Core.Class (classAllSelIds)
 import GHC.Core.FVs (exprFreeVars)
 import GHC.Core.TyCo.Compare (eqType)
@@ -88,16 +88,18 @@ unaryTemplate v body = do
   let argument = setIdMult (mkTemplateLocal 1 argumentType) multiplicity
   pure (mkLams (typeBinders ++ [argument]) (body argument))
 
--- | State# RealWorld is a zero-width runtime token, not an external thunk.
--- The runtime must still sequence stateful primops and retain logical tuple slots.
+-- | The wired State# RealWorld and Proxy# constants have no runtime registers.
+-- Only these GHC keys are constants: arbitrary zero-width-producing calls must
+-- still execute, and scalar void remains distinct from an empty unboxed tuple.
 isWiredVoid :: Id -> Bool
-isWiredVoid v = v `hasKey` realWorldPrimIdKey
+isWiredVoid v = any (v `hasKey`) [realWorldPrimIdKey, proxyHashKey]
 
 wiredOrigin :: Id -> Maybe String
 wiredOrigin v
   | isUnaryClassId v = Just "GHC.CoreToStg.myCollectArgs/unary-class-erasure"
   | isIdentity v = Just "GHC.CoreToStg.Prep.cpeApp/identity-magic"
   | v `hasKey` runRWKey = Just "GHC.CoreToStg.Prep.cpeApp/runRW#"
-  | isWiredVoid v = Just "GHC.Types.Id.Make.realWorldPrimId/zero-width-state"
+  | v `hasKey` realWorldPrimIdKey = Just "GHC.Types.Id.Make.realWorldPrimId/zero-width-state"
+  | v `hasKey` proxyHashKey = Just "GHC.Types.Id.Make.proxyHashId/zero-width-proxy"
   | Just _ <- isClassOpId_maybe v = Just "GHC.Types.Id.Make.mkDictSelRhs"
   | otherwise = Nothing

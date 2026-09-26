@@ -1119,6 +1119,14 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         prepared = {name for group in fixtures["groups"].values() for name in group["junit"]}
         self.assertLessEqual(set(floating["junit"]), prepared | set(fixtures["fixtureFreeJunit"]))
 
+    def test_proxy_void_producer_and_native_sources_select_only_their_consumer(self):
+        owners = self.policy["owners"]
+        for path in ("test/haskell-fixtures/ProxyVoidFixtures.hs",
+                     "compiler/test-fixtures/ProxyVoidAudit.hs", "compiler/test-fixtures/ProxyVoidAuditNative.hs",
+                     "compiler/test-fixtures/ProxyVoidPredicate.hs", "src/test/kotlin/thc/runtime/ProxyVoidTest.kt"):
+            self.assertEqual({"junit": ["thc.runtime.ProxyVoidTest"], "python": []}, owners[path])
+        self.assertIn("thc.runtime.ProxyVoidTest", owners["test/haskell-fixtures/Main.hs"]["junit"])
+
     def test_floating_haskell_producers_and_main_keep_their_consumers(self):
         owners = self.policy["owners"]
         for path in ("test/haskell-fixtures/BigNatLiteralFixtures.hs",

@@ -57,6 +57,14 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "proxy-void": {
+      "junit": ["thc.runtime.ProxyVoidTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "proxy-void"]}],
+      "outputs": ["build/proxy-void"],
+      "sources": ["compiler/test-fixtures/ProxyVoidAudit.hs", "compiler/test-fixtures/ProxyVoidAuditNative.hs",
+        "compiler/test-fixtures/ProxyVoidPredicate.hs", "test/haskell-fixtures/ProxyVoidFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "simd-word32x4-bytearray": {
       "junit": [
         "thc.runtime.SimdWord32ByteArrayTest"

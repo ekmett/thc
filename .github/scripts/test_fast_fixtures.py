@@ -19,6 +19,23 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_proxy_void_has_focused_preparation_and_closed_cache(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('proxy-void', owners['thc.runtime.ProxyVoidTest'])
+        group = manifest['groups']['proxy-void']
+        self.assertEqual(['build/proxy-void'], group['outputs'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'proxy-void']}], group['commands'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        required = fast_fixtures.fast_inputs.PROXY_VOID_OUTPUTS
+        self.assertEqual(37, len(required))
+        self.assertTrue(required <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/proxy-void', fast_fixtures.FULL_OUTPUT_ROOTS)
+        for path in required:
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/proxy-void/baseline-audit.json', {}))
+
     def test_original_memory_search_registration_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

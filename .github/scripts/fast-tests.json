@@ -335,6 +335,11 @@
     }
   },
   "owners": {
+    "test/haskell-fixtures/ProxyVoidFixtures.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "compiler/test-fixtures/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "compiler/test-fixtures/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "compiler/test-fixtures/ProxyVoidPredicate.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "src/test/kotlin/thc/runtime/ProxyVoidTest.kt": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "test/haskell-fixtures/RubbishLiteralFixtures.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/RubbishLiteralAudit.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
     "src/test/kotlin/thc/runtime/RubbishLiteralTest.kt": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1460,6 +1465,7 @@
         "thc.runtime.DelimitedContinuationsTest",
         "thc.runtime.BigNatLiteralTest",
         "thc.runtime.RubbishLiteralTest",
+        "thc.runtime.ProxyVoidTest",
         "thc.runtime.FloatDecodeTest",
         "thc.runtime.ScalarBitCastTest",
         "thc.runtime.RtsDiagnosticsTest",

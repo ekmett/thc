@@ -65,7 +65,7 @@ is the machine-readable declaration used by the auditor.
 | Managed byte storage | [Allocation, reads, writes and copies](bytearrays.md), [fill and mutable copies](mutable-bytearray-ops.md), [address/array copies](address-array-copy.md), [resize](resize-bytearrays.md), [mutable size queries](mutable-bytearray-size.md), [address utilities, pinning, unsafe thaw and small-array shrink](scalar-memory-utilities.md), [atomic integer reads, writes, fetch and CAS](atomic-int-arrays.md) |
 | Address atomics | [Word and pointer atomic reads, writes, exchange, CAS and fetch operations](atomic-address.md) |
 | Aligned pointer/character storage | [Opaque StablePtr cells and four-byte WideChar slots](aligned-scalar-memory.md) |
-| Type erasure | [Unsafe-equality cases](unsafe-equality-cases.md) |
+| Type erasure | [Unsafe-equality cases](unsafe-equality-cases.md), [zero-width proxy](proxy-void.md) |
 
 ### Tuples and sums
 
