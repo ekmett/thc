@@ -91,9 +91,10 @@ current Linux configuration and cache. A file-lifecycle test also matches native
 GHC on UTF-8 reads and writes, append, seeking, EOF, caught missing-file errors,
 and shutdown flushing. Binary `hPutBuf`/`hGetBuf` tests match native GHC on
 offset buffers, short reads, EOF, and cleanup after exceptions. General file IO
-remains incomplete. [Synchronous STM/TVar transactions](docs/stm.md) work in both
-backends with buffered writes, atomic commit and real retry wakeups; asynchronous
-transaction continuations and GC deadlock detection remain explicit limits.
+remains incomplete. [STM/TVar transactions](docs/stm.md) work in both backends
+with buffered writes, atomic commit and real retry wakeups. Asynchronous
+interruption aborts the attempt and saves a fresh transaction restart;
+delimited transaction capture and GC deadlock detection remain explicit limits.
 The independent single-package `.cabal` path still excludes
 internal library and build-tool dependencies; use a `cabal.project` directory
 for the tested multi-package path. `thc build` and `thc repl` are future commands.

@@ -39,7 +39,7 @@ the child and releases the sender. At a public host entry, an uncaught delivery
 becomes a guest exception with the original payload. A completed target is a successful no-op.
 Only one request is claimed at a time; queued requests retain their order.
 
-The ordinary bytecode poll reads a Truffle context-thread-local cell and the
+The ordinary async poll reads a Truffle context-thread-local cell and the
 target's volatile pending flag. The cell follows nested guest entry and is
 cleared when the carrier leaves its final guest entry. Claiming remains a cold
 locked operation that rechecks ownership, foreign-call permission, masking and
