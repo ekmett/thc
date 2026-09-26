@@ -270,6 +270,17 @@ class PinnedPointerCellsTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     for (entry in listOf("mutableContentsRoundtrip", "touchLazyPayload")) {
                         val source = CoreModules.reachable(module(stage), entry) + ("instrument" to true)
+                        val evidence = ArrayCoreEvidence(source, entry)
+                        assertEquals(2, evidence.bindings.size)
+                        assertEquals(2, evidence.guestLambdas(evidence.root["expr"]).size)
+                        assertEquals(1, evidence.loweredStateLambdas(evidence.root["expr"]).size)
+                        val helperName = if (entry == "mutableContentsRoundtrip") "mutableContentsAt" else "opaqueBottom"
+                        val helper = evidence.bindings.single { it["name"] == helperName }
+                        assertEquals(1, evidence.guestLambdas(helper["expr"]).size)
+                        assertEquals(List(if (entry == "mutableContentsRoundtrip") 2 else 1) { helper["id"] },
+                            evidence.globalReferences(evidence.root["expr"]))
+                        val expectedTargets = if (entry == "mutableContentsRoundtrip") 2 else 1
+                        val expectedCalls = if (entry == "mutableContentsRoundtrip") 3L else 1L
                         val program = program(language, source, backend)
                         val target = program.entryTarget(entry)
                         fun check(row: Row) {
@@ -278,10 +289,10 @@ class PinnedPointerCellsTest {
                             released(language)
                         }
                         repeat(3) { rows.forEach(::check) }
-                        // Include runRW's actual state lambda and active split helper
-                        // targets, so disabling inlining still compiles the primops.
+                        // The mutable helper runs twice; touch# must leave the
+                        // opaque bottom unevaluated. Retain real helper boundaries.
                         val targets = activeTargets(target)
-                        assertTrue(targets.size >= 2, "Retain the original runRW lambda")
+                        assertEquals(expectedTargets, targets.size)
                         targets.forEach {
                             compile(it)
                             valid(it, "$stage/$backend/$entry/${it.rootNode.name} installation")
@@ -290,7 +301,7 @@ class PinnedPointerCellsTest {
                         for (row in rows.asReversed() + rows) {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             check(row) // First installed invocation is checked without settling/recompilation.
-                            assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() - before >= targets.size)
+                            assertEquals(expectedCalls, (program.diagnostics().getValue("compiledEntries") as Number).toLong() - before)
                             targets.forEach { valid(it, "$stage/$backend/$entry/${it.rootNode.name}/${row.input}/inlining=$inlining") }
                         }
                         assertEquals(0L, (program.diagnostics().getValue("unsupportedTraps") as Number).toLong())
@@ -494,17 +505,17 @@ class PinnedPointerCellsTest {
                 .single { it["name"] == "copyAddrToAddrNonOverlapping#" }["uses"] as List<Map<String, Any?>>)
             assertEquals(setOf("main:PinnedPointerCellsAudit.nonOverlappingCopy"), uses.map { it["owner"] }.toSet())
             val source = CoreModules.reachable(module(stage), "nonOverlappingCopy") + ("instrument" to true)
-            // Both retained Core stages apply a state lambda inside the public
-            // entry. The counter measures guest roots, including inlined ones,
-            // rather than just public invocations.
+            // Preserve the exported state lambda while proving its exact
+            // immediate application lowers within the public root.
             val evidence = ArrayCoreEvidence(source, "nonOverlappingCopy")
-            val expectedEntries = evidence.immediateStateCalls().toLong()
-            assertEquals(2L, expectedEntries, "$stage entry and immediate state lambda")
-            val expectedLabels = evidence.guestLambdas(evidence.root["expr"]).map { expression ->
+            assertEquals(2, evidence.immediateStateCalls(), "$stage original source lambda inventory")
+            val expectedEntries = evidence.loweredImmediateStateCalls().toLong()
+            assertEquals(1L, expectedEntries, "$stage lowered public root")
+            val expectedLabels = evidence.loweredStateLambdas(evidence.root["expr"]).map { expression ->
                 val formal = (expression[1] as List<Map<String, Any?>>).single()
                 "lambda ${formal["name"]}"
             }.toSet()
-            assertEquals(2, expectedLabels.size, "$stage entry and state root labels")
+            assertEquals(1, expectedLabels.size, "$stage lowered root label")
             val calls = primitiveCalls(source).filter { (it[1] as List<*>)[1] == "copyAddrToAddrNonOverlapping#" }
             assertEquals(1, calls.size)
             val arguments = (calls.single()[2] as List<List<Any?>>).map(CoreRepresentations::expression)

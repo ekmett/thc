@@ -93,6 +93,10 @@ class OriginalFstatTest {
             assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any?>(), audit["issues"])
             assertEquals(emptyList<Any?>(), audit["missingGlobals"])
             val linked = CoreModules.reachable(module(stage), name) + ("instrument" to true)
+            val evidence = ArrayCoreEvidence(linked, name)
+            assertEquals(1, evidence.bindings.size)
+            assertEquals(2, evidence.guestLambdas(evidence.root["expr"]).size, "Original Core retains the state lambda")
+            assertEquals(1, evidence.loweredGuestLambdas(evidence.root["expr"]).size, "Exact State# redex executes in-frame")
             val fstats = OriginalStdioChecks.foreignCalls(linked).filter {
                 (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["symbol"] == "__hscore_fstat"
             }
@@ -130,7 +134,7 @@ class OriginalFstatTest {
                             assertEquals(expected, Calls.target(entry, arrayOf(0L, source, address)), "$stage/$backend/$name/${row[0]}")
                             assertEquals((row[2] as Number).toLong(), stdio.errno())
                             if (compiled) {
-                                assertEquals(before + active.size, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                                 assertEquals(active, targets(entry)); active.forEach(::valid)
                             }
                             assertEquals(true, row[4], "Native destination/canary observation")
@@ -151,9 +155,9 @@ class OriginalFstatTest {
                     }
                     exercise(false)
                     active = targets(entry)
-                    assertEquals(2, active.size, "Exactly entry plus its original runRW lambda")
+                    assertEquals(1, active.size, "Only the public root remains after State# lowering")
                     val binding = (linked["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
-                    assertEquals(OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" }, active.size)
+                    assertEquals(2, OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" })
                     for (target in active) { target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true); valid(target) }
                     exercise(true)
                 } }

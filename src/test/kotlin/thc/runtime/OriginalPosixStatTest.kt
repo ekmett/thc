@@ -84,6 +84,11 @@ class OriginalPosixStatTest {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     for (name in names) {
                         val linked = CoreModules.reachable(module, name) + ("instrument" to true)
+                        val evidence = ArrayCoreEvidence(linked, name)
+                        assertEquals(1, evidence.bindings.size)
+                        val originalLambdas = if (name in listOf("originalStatSize", "originalStatTypes")) 1 else 2
+                        assertEquals(originalLambdas, evidence.guestLambdas(evidence.root["expr"]).size)
+                        assertEquals(1, evidence.loweredGuestLambdas(evidence.root["expr"]).size, "Only exact State# redexes lower in-frame")
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                         val entry = program.entryTarget(name)
                         var active = emptyList<RootCallTarget>()
@@ -91,7 +96,7 @@ class OriginalPosixStatTest {
                             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                             assertEquals(expected, Calls.target(entry, arrayOf(0L, argument)), "$stage/$backend/$name/$argument")
                             if (compiled) {
-                                assertEquals(before + active.size, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                                 assertEquals(active, targets(entry))
                                 active.forEach(::valid)
                             }
@@ -117,11 +122,7 @@ class OriginalPosixStatTest {
                         }
                         exercise(false)
                         active = targets(entry)
-                        // The exported root and each immediate runRW lambda are
-                        // real instrumented GuestRoots, all installed exactly once.
-                        val binding = (linked["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
-                        val lambdaCount = OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" }
-                        assertEquals(lambdaCount, active.size, "$stage/$backend/$name target shape")
+                        assertEquals(1, active.size, "$stage/$backend/$name lowered target shape")
                         for (target in active) {
                             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                             valid(target)

@@ -5,6 +5,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -147,7 +148,7 @@ class SimdFloatByteArrayTest {
             val error = assertThrows(UnsupportedCore::class.java) {
                 if (backend == "ast") Program(language, directRead) else BytecodeProgram(language, directRead)
             }
-            assertEquals("Vector ByteArray read requires an immediate exact case", error.message)
+            assertEquals("Vector memory read requires an immediate exact case", error.message)
         }
     }
     @Test fun publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() {
@@ -283,8 +284,8 @@ class SimdFloatByteArrayTest {
                 val host = p.hostEntryTarget(arity); val closure = p.entryValue(name); val target = p.entryTarget(name)
                 val callCount = integer(counts.getValue(name), "$name guest count")
                 // Counts are structural Core evidence, not guessed from global bindings:
-                // the raw index worker additionally has its own retained runRW lambda.
-                assertEquals(when (op) { "Unit" -> 2L; "Index" -> 4L; else -> 3L }, callCount)
+                // exact runRW applications in both roots execute in-frame.
+                assertEquals(if (op == "Unit") 1L else 2L, callCount)
                 assertEquals(callCount, integer((provenance["checkedGuestCallsByStage"] as Map<String, Any?>).getValue("$stage/$name"), "$stage/$name checked count"))
                 var targets = emptyList<RootCallTarget>()
                 fun check(compiled: Boolean) {
@@ -310,10 +311,21 @@ class SimdFloatByteArrayTest {
                 check(false)
                 targets = activeTargets(target)
                 assertEquals(callCount.toInt(), targets.size, "$stage/$backend/$name guest roots")
+                val targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+                val callCounter = targetClass.getMethod("getCallCount")
+                val beforeInstall = p.diagnostics().getValue("compiledEntries")
+                val callsBeforeInstall = targets.map { callCounter.invoke(it) }
                 for (t in targets) {
                     t.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(t, true)
                     valid(t, "initial installation")
+                    // Match EntryValue.compile: restore HotSpot's shared entry
+                    // stub before measuring the first call, without invoking it.
+                    val runtime = Truffle.getRuntime()
+                    runtime.javaClass.getMethod("bypassedInstalledCode", targetClass).invoke(runtime, t)
+                    valid(t, "installation after boundary restoration")
                 }
+                assertEquals(beforeInstall, p.diagnostics().getValue("compiledEntries"), "Installation cannot execute guest code")
+                assertEquals(callsBeforeInstall, targets.map { callCounter.invoke(it) }, "Installation cannot settle interpreted calls")
                 check(true)
                 for (counter in listOf("unsupportedTraps", "blackholes"))
                     assertEquals(0L, (p.diagnostics().getValue(counter) as Number).toLong(), counter)

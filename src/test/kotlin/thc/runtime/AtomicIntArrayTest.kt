@@ -184,6 +184,10 @@ class AtomicIntArrayTest {
                 val primops = (audit["primitives"] as List<Map<String, Any?>>).map { it["name"] }.toSet()
                 assertTrue(operation.primitive in primops)
                 if (name == "atomicLoadStore") assertTrue("atomicReadIntArray#" in primops)
+                val evidence = ArrayCoreEvidence(merged, name)
+                assertEquals(1, evidence.bindings.size, "$stage/$name closed original worker")
+                assertEquals(2, evidence.guestLambdas(evidence.root["expr"]).size, "Export retains the state lambda")
+                assertEquals(1, evidence.loweredGuestLambdas(evidence.root["expr"]).size, "Exact State# redex stays in-frame")
                 val cases = rows.filter { it.name == name }
                 for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
                     context.initialize("thc"); context.enter()
@@ -200,13 +204,13 @@ class AtomicIntArrayTest {
                         }
                         cases.forEach(::call)
                         val targets = activeTargets(entry)
-                        assertEquals(2, targets.size, "$label public entry and runRW state worker")
+                        assertEquals(1, targets.size, "$label public entry with in-frame State# body")
                         targets.forEach(::compile)
                         val allocations = language.handoffState.get().results.allocations
                         for (row in cases.asReversed()) {
                             val before = count()
                             call(row)
-                            assertEquals(2L, count() - before, "$label exact entries, including the first call after installation")
+                            assertEquals(1L, count() - before, "$label exact entry, including the first call after installation")
                             assertEquals(targets, activeTargets(entry), "$label target identities")
                             targets.forEach { valid(it, label) }
                         }

@@ -64,7 +64,17 @@ internal class ArrayCoreEvidence(module: Map<String, Any?>, private val name: St
         require((input?.get("rep") as? Map<*, *>)?.get("primReps") == listOf("IntRep")) {
             "$name: expected unary Int# entry"
         }
-        val call = outer.getOrNull(2) as? List<*>
+        val state = immediateStateLambda(outer.getOrNull(2))
+        val lambdas = guestLambdas(outer)
+        require(lambdas.size == 2 && lambdas[0] === outer && lambdas[1] === state) {
+            "$name: unexpected additional guest lambda"
+        }
+        return state
+    }
+
+    /** The exact source redex, also used by multiargument and helper fixtures. */
+    fun immediateStateLambda(expression: Any?): List<Any?> {
+        val call = expression as? List<*>
         require(call?.firstOrNull() == "app") { "$name: State# lambda must be called immediately" }
         val state = call.getOrNull(1) as? List<Any?>
         require(state?.firstOrNull() == "lam") { "$name: missing immediate State# lambda" }
@@ -78,11 +88,15 @@ internal class ArrayCoreEvidence(module: Map<String, Any?>, private val name: St
         require(argument?.firstOrNull() == "void" &&
             (argument.lastOrNull() as? Map<*, *>)?.get("rep") == void) { "$name: expected one void State# argument" }
         require(call.drop(3).take(3) == listOf(listOf(false), false, false)) { "$name: State# call flags changed" }
-        val lambdas = guestLambdas(outer)
-        require(lambdas.size == 2 && lambdas[0] === outer && lambdas[1] === state) {
-            "$name: unexpected additional guest lambda"
-        }
         return state
+    }
+
+    /** Keep helpers and returned/argument lambdas; exclude only checked direct
+     * State# applications. This reads Core, never runtime target observations. */
+    fun loweredGuestLambdas(expr: Any?): List<List<Any?>> {
+        val inFrame = nodes(expr).filter { it.firstOrNull() == "app" &&
+            (it.getOrNull(1) as? List<*>)?.firstOrNull() == "lam" }.map(::immediateStateLambda)
+        return guestLambdas(expr).filter { lambda -> inFrame.none { it === lambda } }
     }
 
     fun immediateStateCalls(): Int {

@@ -1053,6 +1053,11 @@
       "junit": [
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
+        "thc.runtime.HintTraceTest",
+        "thc.runtime.OriginalOpenTest",
+        "thc.runtime.OriginalFstatTest",
+        "thc.runtime.OriginalPosixStatTest",
+        "thc.runtime.OriginalRtsLocksTest",
         "thc.runtime.AtomicAddressTest",
         "thc.runtime.AtomicIntArrayTest",
         "thc.runtime.DelimitedContinuationsTest",
@@ -1566,7 +1571,7 @@
     "test/haskell-fixtures/MemorySearchFixtures.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
     "compiler/test-fixtures/OriginalMemorySearchAudit.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
     "compiler/test-fixtures/OriginalMemorySearchNative.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "src/main/kotlin/thc/runtime/CoreMemorySearchForeign.kt": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/kotlin/thc/runtime/CoreMemorySearchForeign.kt": {"junit": ["thc.runtime.OriginalMemorySearchTest", "thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },

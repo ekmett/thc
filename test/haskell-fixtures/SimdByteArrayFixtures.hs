@@ -93,6 +93,22 @@ boundary :: String -> String
 boundary "pre" = "optimized-Core-before-Tidy"
 boundary _ = "optimized-Core-after-Tidy-before-CorePrep"
 
+-- Independent source evidence for the exact CorePrep/runRW beta-redex.
+-- A merely zero-width value or an arbitrary immediate lambda is insufficient.
+validateStateCall :: String -> Value -> IO ()
+validateStateCall name call = do
+  let local = at 1 call
+      formals = items (at 1 local)
+      formal = firstValue formals
+      actuals = items (at 2 call)
+      actual = firstValue actuals
+      void = object ["primReps" .= ([] :: [String]),"kind" .= ("void" :: String),"evaluated" .= True]
+  check (at 0 call == String "app" && at 0 local == String "lam" && length formals == 1 &&
+    get "type" formal == String "State# RealWorld" && get "rep" formal == void &&
+    get "lifted" formal == Bool False && get "coercion" formal == Bool False &&
+    length actuals == 1 && at 0 actual == String "void" && get "rep" (at 1 actual) == void &&
+    take 3 (drop 3 (items call)) == [toJSON [False],Bool False,Bool False]) (name ++ ": exact in-frame State# application")
+
 validateWorker :: Family -> Value -> IO ()
 validateWorker family binding = do
   let name = string (get "name" binding)
@@ -109,6 +125,7 @@ validateWorker family binding = do
         calls = filter ((== String "lam") . at 0 . at 1) (expressions "app" expr)
     check (length (items (at 1 local)) == 1 && state (get "rep" (at 0 (at 1 local))) && scalar (get "resultRep" (at 3 local)) &&
       length calls == 1 && at 1 (firstValue calls) == local && length (items (at 2 (firstValue calls))) == 1) (name ++ ": scratch runRW call")
+    validateStateCall name (firstValue calls)
   if any (`isSuffixOf` name) ["IndexWorker","IndexGraph"] then
     check (length formals == (if rawIndex then 3 else 2) && all (scalar . get "rep") (drop 1 formals) && scalar result) (name ++ ": index ABI")
   else if "ReadWorker" `isSuffixOf` name then do
@@ -147,6 +164,7 @@ guestStructure family entry report core = do
   facts <- forM reachable $ \binding -> do
     let expr = get "expr" binding
         lambdas = expressions "lam" expr
+        stateCalls = filter ((== String "lam") . at 0 . at 1) (expressions "app" expr)
         references = [at 1 node | node <- expressions "var" expr, Map.member (at 1 node) bindings]
         calls = [node | node <- expressions "app" expr, at 0 (at 1 node) == String "var", Map.member (at 1 (at 1 node)) bindings]
         wrapper = get "id" binding == rootId
@@ -160,6 +178,7 @@ guestStructure family entry report core = do
       check (length (items (at 1 local)) == 1 && state (get "rep" (at 0 (at 1 local))) && scalar (get "resultRep" (at 3 local)) &&
         length localCalls == 1 && at 1 (firstValue localCalls) == local && length (items (at 2 (firstValue localCalls))) == 1) (name ++ ": one runRW call")
     else validateWorker family binding
+    forM_ stateCalls (validateStateCall (string (get "name" binding)))
     check (length references == (if needsCall then 1 else 0) && length calls == length references) (name ++ ": residual helper count")
     forM_ calls $ \call -> do
       let callee = bindings Map.! at 1 (at 1 call)
@@ -167,9 +186,11 @@ guestStructure family entry report core = do
       check (Just (string (get "name" callee)) == helper family name && length (items (at 2 call)) == arity &&
         take 3 (drop 3 (items call)) == [toJSON (replicate arity False),Bool False,Bool False]) (name ++ ": saturated unlifted helper")
     check (all ((== 1) . length . items . at 3) (expressions "case" expr)) (name ++ ": conditional guest call path")
-    pure (length lambdas,object ["id" .= get "id" binding,"name" .= get "name" binding,"lambdaCount" .= length lambdas])
+    let lowered = length lambdas - length stateCalls
+    pure (lowered,object ["id" .= get "id" binding,"name" .= get "name" binding,
+      "lambdaCount" .= length lambdas,"inFrameStateLambdas" .= length stateCalls,"loweredLambdaCount" .= lowered])
   let total = sum (map fst facts)
-  check (total == guestCalls family name) (name ++ ": actual guest root count")
+  check (total == guestCalls family name) (name ++ ": source-derived lowered guest root count")
   pure (object ["guestCalls" .= total,"roots" .= map snd facts])
 
 inventory :: Family -> String -> Value -> IO Value
@@ -464,7 +485,7 @@ prepareSimdByteArray root name args = do
         "checkedGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ entryName e,guestCalls family (entryName e)) | s <- stages,e <- entries family],
         "expectedGraphGuestCallsByEntry" .= Map.fromList [(n,1 :: Int) | n <- graphNames family],
         "checkedGraphGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ n,1 :: Int) | s <- stages,n <- graphNames family],
-        "guestCountPolicy" .= ("Count actual retained outer/runRW/helper lambdas; no settling calls" :: String),
+        "guestCountPolicy" .= ("Count source-proven lowered roots: exact immediate State# applications execute in-frame; retain outer/helper lambdas; no settling calls" :: String),
         Key.fromString controlKey .= Map.fromList [(s,control) | (s,_,_,(control,_,_),_,_) <- prepared],
         "retainedControls" .= first4 retained,"nativeDiagnostics" .= (case native of Just (_,_,Just (diagnostic,_),_) -> diagnostic; _ -> Null),
         "commands" .= map commandRecord commands,"sources" .= sources,"artifacts" .= artifactRecords,"attempt" .= attempt,

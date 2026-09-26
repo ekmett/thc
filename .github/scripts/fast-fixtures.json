@@ -23,6 +23,7 @@
     "thc.runtime.ManagedFilesTest",
     "thc.runtime.ManagedStdioTest",
     "thc.runtime.OriginalStdioCallTest",
+    "thc.runtime.OriginalStringRtsTest",
     "thc.runtime.StdioHostAbiTest",
     "thc.GuestExceptionsTest",
     "thc.runtime.ManagedDescriptorDupTest",
