@@ -49,3 +49,23 @@ These tests require the general `thc-package-c-ffi-v1` acquisition/runtime
 implementation. A native-only oracle run or a successful Kotlin compilation
 is not an end-to-end success; missing fixture preparation is a hard failure,
 not a skipped test.
+
+## Current original-Core checkpoint
+
+Direct captured-Core checks match all 180 native byte-oriented observations
+(`ByteString`, `ShortByteString`, lazy `ByteString`) in both AST and bytecode,
+with both handoff modes. Each check also repeats the entire matrix after
+compilation and requires an increased compiled-entry count on the very first
+and every later call. The strict audit accepts these roots with no missing
+globals or unsupported calls.
+
+Those checks exposed and fixed two runtime bugs: an empty `ByteString`'s
+zero-length null-pointer copy into a `ShortByteString`, and per-call ABI-set
+construction that made the compiler recursively inline Java collection/error
+machinery. Neither fix changes compiler budgets or Hashable's source.
+
+The complete five-instance fixture is not yet a passing application claim.
+Both original `Text` probes still require the installed text package's
+`_hs_text_measure_off` C helper for public slicing/chunking. They remain in the
+fixture; no successful full manifest is written while that dependency is
+missing.

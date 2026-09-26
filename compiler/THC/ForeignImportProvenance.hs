@@ -57,7 +57,7 @@ productOf (Foreign.IfaceForeign stubs files) = Product (fmap stub stubs) (map fi
       (header,source,map label initializers,map label finalizers)
     label (Foreign.IfaceCLabel value) = (csl_is_initializer value,
       unitString (moduleUnit (csl_module value)),moduleNameString (moduleName (csl_module value)),unpackFS (csl_name value))
-    file (Foreign.IfaceForeignFile language source extension) = (show language,source,extension)
+    file (Foreign.IfaceForeignFile sourceLanguage source extension) = (show sourceLanguage,source,extension)
 
 convention :: CCallConv -> String
 convention CCallConv = "ccall"
