@@ -1506,31 +1506,26 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginRuntimeServiceBridge(destination.single(), runtimeService.ordinal)
-                    operands[0].emit(e)
-                    operands[1].emit(e)
-                    if (runtimeService == RuntimeServiceCall.TRACE) operands[2].emit(e)
-                    else e.builder.emitLoadConstant(ManagedAddress.nullAddress())
                     when (runtimeService) {
-                        RuntimeServiceCall.QUERY -> operands[2].emit(e)
-                        RuntimeServiceCall.CONTROL -> e.builder.emitLoadConstant(0L)
-                        RuntimeServiceCall.TRACE -> operands[3].emit(e)
+                        RuntimeServiceCall.QUERY -> e.builder.beginRuntimeServiceQuery(destination.single())
+                        RuntimeServiceCall.CONTROL -> e.builder.beginRuntimeServiceControl(destination.single())
+                        RuntimeServiceCall.TRACE -> e.builder.beginRuntimeServiceTrace(destination.single())
                     }
-                    operands.last().emit(e)
-                    e.builder.endRuntimeServiceBridge()
+                    operands.forEach { it.emit(e) }
+                    when (runtimeService) {
+                        RuntimeServiceCall.QUERY -> e.builder.endRuntimeServiceQuery()
+                        RuntimeServiceCall.CONTROL -> e.builder.endRuntimeServiceControl()
+                        RuntimeServiceCall.TRACE -> e.builder.endRuntimeServiceTrace()
+                    }
                 }
             } else if (cpuAffinity != null) {
                 val state = compile(args.single(), scope, false)
                 CoreBoundThreadForeign.validateOperand(state.proof,
                     if (args.single()[0] == "var") scope.locals[args.single()[1]]?.proof ?: globalProofs[args.single()[1]] else null)
                 tupleExpression(tupleProof) { e, destination ->
-                    e.builder.beginRuntimeServiceBridge(destination.single(), 3)
-                    e.builder.emitLoadConstant(if (cpuAffinity) 1L else 0L)
-                    e.builder.emitLoadConstant(0L)
-                    e.builder.emitLoadConstant(ManagedAddress.nullAddress())
-                    e.builder.emitLoadConstant(0L)
+                    e.builder.beginCpuAffinityQuery(destination.single(), cpuAffinity)
                     state.emit(e)
-                    e.builder.endRuntimeServiceBridge()
+                    e.builder.endCpuAffinityQuery()
                 }
             } else if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

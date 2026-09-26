@@ -3261,29 +3261,48 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
-    /** A single typed host-service instruction keeps generated instruction
-     * metadata below the JVM method-size limit. The operation is a lowering
-     * constant, so compilation folds the switch without boxing a call packet. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    @ConstantOperand(type = int.class, name = "operation")
-    public static final class RuntimeServiceBridge {
-        @Specialization public static void execute(VirtualFrame frame, LocalAccessor destination, int operation,
-                long selector, long first, ManagedAddress address, long second, Object state, @Bind("$node") Node node) {
+    @ConstantOperand(type = boolean.class, name = "applied")
+    public static final class CpuAffinityQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination, boolean applied,
+                Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result;
-            switch (operation) {
-                case 0 -> result = RuntimeServices.query(node, 2, (int) selector, first, second);
-                case 1 -> result = RuntimeServices.control(node, (int) selector, first);
-                case 2 -> result = RuntimeServices.trace(node, (int) selector, first, address, second);
-                case 3 -> {
-                    GuestThreads threads = GuestThreads.current(node);
-                    result = selector != 0 ? (threads.currentIdentity().getAffinityApplied() ? 1L : 0L)
-                            : threads.getCpuAffinity().getMode().ordinal();
-                }
-                default -> throw fail("Unknown lowered runtime service operation");
-            }
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            GuestThreads threads = GuestThreads.current(node);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    applied ? (threads.currentIdentity().getAffinityApplied() ? 1L : 0L)
+                            : threads.getCpuAffinity().getMode().ordinal());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RuntimeServiceQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                long selector, long index, long detail, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    RuntimeServices.query(node, 2, (int) selector, index, detail));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RuntimeServiceControl {
+        @Specialization public static void control(VirtualFrame frame, LocalAccessor destination,
+                long selector, long setting, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    RuntimeServices.control(node, (int) selector, setting));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class RuntimeServiceTrace {
+        @Specialization public static void trace(VirtualFrame frame, LocalAccessor destination,
+                long operation, long token, ManagedAddress address, long length, Object state,
+                @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    RuntimeServices.trace(node, (int) operation, token, address, length));
         }
     }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */
