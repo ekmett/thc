@@ -316,6 +316,16 @@ class IoMainAuditTest(unittest.TestCase):
 
 
 class AuditTest(unittest.TestCase):
+    def test_bignat_intrinsic_representation_api_retains_exact_evaluated_proof(self):
+        # This is an assertion on the retained Python auditor's own API. The
+        # Haskell/Kotlin BigNat fixture owns corpus and CLI admission controls.
+        exact = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        for value in ('0', '1', str((1 << 255) + (1 << 128) + 3)):
+            for proof in (exact, None, dict(kind='unknown', primReps=None, evaluated=False)):
+                with self.subTest(value=value, proof=proof):
+                    literal = ['lit', 'bignat', value] + ([] if proof is None else [dict(rep=proof)])
+                    self.assertEqual(exact, audit_core.Audit.expression_rep(literal))
+
     def test_word_floating_requires_exact_unsigned_input_result_and_arity(self):
         for primitive, kind, register in [('word2Float#', 'float', 'FloatRep'),
                                           ('word2Double#', 'double', 'DoubleRep')]:

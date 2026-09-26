@@ -12,19 +12,147 @@ import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import thc.*
 import java.io.File
 import java.math.BigInteger
 import java.nio.ByteOrder
+import java.nio.file.Path
 import org.graalvm.polyglot.PolyglotException
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.concurrent.TimeUnit
 
 class BigNatLiteralTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val entries = listOf("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
         "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
+    private val arithmetic = listOf("integerAddFrontier", "naturalAddFrontier")
+    private val modules = listOf("BigNat", "Integer", "Natural")
+    private val directory = "build/bignat-literals"
+    private val values = listOf("0", "1", "-1", "9223372036854775807", "9223372036854775808",
+        "18446744073709551615", "18446744073709551616", "18446744073709551617",
+        "170141183460469231731687303715884105727", "170141183460469231731687303715884105728",
+        "340282366920938463463374607431768211456", "340282366920938463472597979468622987265",
+        "-340282366920938463481821351505477763071", "6277101735386680763835789423207666416102355444464034512895",
+        "6277101735386680763835789423207666416102355444464034512897",
+        "57896044618658097711785492504343953926975274699741220483192166611388333031427").map(::BigInteger)
+    private val seeds = listOf(Long.MIN_VALUE, Long.MAX_VALUE, -1000L, -17L, -1L) + (0L..16L) + listOf(31L, 1L shl 32)
+    private val vendorSources = modules.flatMap { name -> listOf(".hs", ".hs-boot").map {
+        "vendor/ghc-9.14.1/GHC/Internal/Bignum/$name$it" } } +
+        listOf("vendor/ghc-9.14.1/include/WordSize.h", "vendor/ghc-9.14.1/LICENSE")
+    private fun evidence() = Json.parse(File(root, "$directory/manifest.json").readText()) as Map<String, Any?>
+    private fun report(path: String) = Json.parse(File(root, path).readText()) as Map<String, Any?>
+    private fun verifyEvidence(manifest: Map<String, Any?>) {
+        assertEquals(1L, manifest["schema"]); assertEquals(699L, manifest["nativeRows"])
+        assertEquals(64L, manifest["wordBits"])
+        assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
+        assertEquals(entries, manifest["entries"]); assertEquals(arithmetic, manifest["arithmeticControls"])
+        assertEquals(listOf("integerAddFrontier"), manifest["frontiers"])
+        assertEquals(values.map { it.toString() }, manifest["values"]); assertEquals(seeds, manifest["seeds"])
+        assertEquals(listOf("pre", "post").associateWith { stage -> listOf("$directory/$stage-core/BigNatLiteralAudit.json") +
+            modules.map { "$directory/boot/core/GHC.Internal.Bignum.$it.json" } }, manifest["stages"])
+        val sources = vendorSources + listOf("compiler/test-fixtures/BigNatLiteralAudit.hs", "compiler/test-fixtures/BigNatLiteralAuditNative.hs",
+            "test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs",
+            "thc.cabal", "compiler/export-boot.py", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
+            "scripts/audit-core.py", "scripts/core-capabilities.json", "scripts/generate-scalar-signatures.py",
+            "src/main/resources/thc/scalar-primop-signatures.json") +
+            File(root, "compiler/THC").listFiles()!!.filter { it.extension == "hs" }.map { it.relativeTo(root).path } +
+            File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }.map { it.relativeTo(root).path }
+        val commands = listOf("plugin-build", "boot-export", "native-build", "native-oracle") + listOf("pre", "post").flatMap { stage ->
+            listOf("$stage-export") + (entries + arithmetic + "missing-source").map { "$stage-$it-audit" } }
+        val artifacts = listOf("$directory/requests.tsv", "$directory/oracle.tsv", "$directory/boot/boot-provenance.json") +
+            modules.map { "$directory/boot/core/GHC.Internal.Bignum.$it.json" } +
+            listOf("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o").map { "$directory/native/$it" } +
+            listOf("pre", "post").flatMap { stage -> listOf("$directory/$stage-core/BigNatLiteralAudit.json", "$directory/$stage-core/THC.InterfaceClosure.json") +
+                (entries + arithmetic + "missing-source").map { "$directory/$stage-$it.audit.json" } } +
+            commands.flatMap { name -> listOf("stdout", "stderr", "command.json").map { "$directory/commands/$name.$it" } }
+        for ((kind, required) in listOf("sources" to sources, "artifacts" to artifacts)) {
+            val records = manifest[kind] as List<Map<String, String>>
+            assertEquals(required.sorted(), records.map { it.getValue("path") }.sorted(), "$kind exact inventory")
+            for (item in records) {
+                val hash = MessageDigest.getInstance("SHA-256").digest(File(root, item.getValue("path")).readBytes())
+                    .joinToString("") { "%02x".format(it.toInt() and 255) }
+                assertEquals(item["sha256"], hash, "Stale BigNat preparation: ${item["path"]}")
+            }
+        }
+        val bootSources = report("$directory/boot/boot-provenance.json")["sources"] as List<Map<String, Any?>>
+        assertEquals(vendorSources.toSet(), bootSources.map { it["path"] }.toSet())
+        for (source in bootSources) assertTrue((manifest["sources"] as List<Map<String, Any?>>).any {
+            it["path"] == source["path"] && it["sha256"] == source["sha256"] })
+        val counts = manifest["sourceBindings"] as Map<String, Long>
+        assertEquals(modules.toSet(), counts.keys)
+        val originalIds = modules.flatMap { name ->
+            val original = report("$directory/boot/core/GHC.Internal.Bignum.$name.json")
+            assertEquals("9.14.1", original["ghc"])
+            assertEquals("optimized-Core-after-Tidy-before-CorePrep", original["boundary"])
+            assertNotNull(original["sourceCore"]); assertNotNull(original["sourceSpans"])
+            val bindings = original["bindings"] as List<Map<String, Any?>>
+            assertEquals(counts[name], bindings.size.toLong())
+            bindings.map { it["id"] }
+        }.toSet()
+        val coverage = manifest["coverage"] as Map<String, Map<String, Map<String, Any?>>>
+        assertEquals(setOf("pre", "post"), coverage.keys)
+        for (stage in listOf("pre", "post")) {
+            val public = report("$directory/$stage-core/BigNatLiteralAudit.json")
+            assertEquals("9.14.1", public["ghc"])
+            assertEquals(if (stage == "pre") "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep", public["boundary"])
+            val closure = report("$directory/$stage-core/THC.InterfaceClosure.json")["bindings"] as List<Map<String, Any?>>
+            assertTrue(originalIds.containsAll(closure.map { it["id"] }))
+            assertEquals((entries + arithmetic).toSet(), coverage.getValue(stage).keys)
+            for (name in entries + arithmetic) {
+                val audit = report("$directory/$stage-$name.audit.json")
+                verifyAudit(name, audit)
+                assertEquals(mapOf("accepted" to audit["accepted"], "reachable" to (audit["reachableBindings"] as List<*>).size.toLong(),
+                    "issues" to (audit["issues"] as List<*>).size.toLong(), "missing" to (audit["missingGlobals"] as List<*>).size.toLong()),
+                    coverage.getValue(stage)[name])
+            }
+            verifyAudit("missing-source", report("$directory/$stage-missing-source.audit.json"))
+        }
+    }
+    private fun verifyAudit(name: String, audit: Map<String, Any?>) {
+        assertEquals(emptyList<Any>(), audit["issues"])
+        val missing = (audit["missingGlobals"] as List<Map<String, Any?>>).map { it["id"] }.sortedBy { it.toString() }
+        if (name == "missing-source") {
+            assertEquals(false, audit["accepted"])
+            assertEquals(listOf("BigNat.bigNatZero", "Integer.integerToInt#", "Natural.naturalToWord#")
+                .map { "ghc-internal:GHC.Internal.Bignum.$it" }, missing)
+        } else {
+            assertEquals(name != "integerAddFrontier", audit["accepted"])
+            assertEquals(if (name == "integerAddFrontier") listOf("ghc-internal:GHC.Internal.Prim.Exception.raiseUnderflow") else emptyList<String>(), missing)
+            if (name in arithmetic) {
+                val wanted = mapOf("__gmpn_add" to 2, "__gmpn_add_1" to 1) +
+                    if (name == "integerAddFrontier") mapOf("__gmpn_cmp" to 1, "__gmpn_sub" to 1) else emptyMap()
+                assertEquals(wanted, (audit["foreignCalls"] as List<Map<String, Any?>>).groupingBy { it["symbol"] }.eachCount())
+                assertEquals(if (name == "integerAddFrontier") 7 else 5, (audit["primitives"] as List<Map<String, Any?>>)
+                    .filter { it["name"] == "shrinkMutableByteArray#" }.sumOf { (it["uses"] as List<*>).size })
+            }
+        }
+    }
+    @Test fun evidenceRejectsMissingHashesDomainsAndChangedFrontiers() {
+        val good = evidence(); verifyEvidence(good)
+        for ((key, value) in listOf("nativeRows" to 698L, "values" to emptyList<String>(), "seeds" to listOf(0L),
+            "entries" to entries.dropLast(1), "stages" to emptyMap<String, Any>(), "sourceBindings" to emptyMap<String, Long>(),
+            "coverage" to emptyMap<String, Any>(), "frontiers" to emptyList<String>(), "arithmeticControls" to emptyList<String>()))
+            assertThrows(AssertionError::class.java, { verifyEvidence(good + (key to value)) }, key)
+        for (kind in listOf("sources", "artifacts")) {
+            val records = good[kind] as List<Map<String, String>>
+            for (record in records) assertThrows(AssertionError::class.java, {
+                verifyEvidence(good + (kind to (records - record))) }, "$kind/${record["path"]}")
+            assertThrows(AssertionError::class.java) { verifyEvidence(good + (kind to
+                (listOf(records.first() + ("sha256" to "0".repeat(64))) + records.drop(1)))) }
+        }
+        for (stage in listOf("pre", "post")) for (name in arithmetic + "missing-source") {
+            val goodAudit = report("$directory/$stage-$name.audit.json")
+            for ((key, value) in listOf("accepted" to !(goodAudit["accepted"] as Boolean), "issues" to listOf("unexpected")))
+                assertThrows(AssertionError::class.java) { verifyAudit(name, goodAudit + (key to value)) }
+            if (name != "naturalAddFrontier") assertThrows(AssertionError::class.java) {
+                verifyAudit(name, goodAudit + ("missingGlobals" to emptyList<Any>())) }
+            if (name in arithmetic) for (key in listOf("foreignCalls", "primitives")) assertThrows(AssertionError::class.java) {
+                verifyAudit(name, goodAudit + (key to emptyList<Any>())) }
+        }
+    }
     private fun context(inlining: Boolean) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("compiler.Inlining", inlining.toString()).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()
@@ -78,19 +206,7 @@ class BigNatLiteralTest {
     @Test fun originalIntegerNaturalConversionsWithInlining() = native(true)
     @Test fun originalIntegerNaturalConversionsAcrossResidualCalls() = native(false)
     private fun native(inlining: Boolean) {
-        val manifest = Json.parse(File(root, "build/bignat-literals/manifest.json").readText()) as Map<String, Any?>
-        for (kind in listOf("sources", "artifacts")) for (item in manifest[kind] as List<Map<String, String>>) {
-            val hash = MessageDigest.getInstance("SHA-256").digest(File(root, item.getValue("path")).readBytes())
-                .joinToString("") { "%02x".format(it.toInt() and 255) }
-            assertEquals(item["sha256"], hash, "Stale BigNat preparation: ${item["path"]}")
-        }
-        assertEquals(64, (manifest["wordBits"] as Number).toInt())
-        assertEquals(if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) "little" else "big", manifest["byteOrder"])
-        assertEquals(entries, manifest["entries"])
-        val values = (manifest["values"] as List<String>).map(::BigInteger)
-        val seeds = (manifest["seeds"] as List<Number>).map { it.toLong() }
-        assertEquals(16, values.size)
-        assertTrue(seeds.containsAll(listOf(Long.MIN_VALUE, Long.MAX_VALUE, -1, 0, 1)))
+        val manifest = evidence(); verifyEvidence(manifest)
         val rows = File(root, "build/bignat-literals/oracle.tsv").readLines().map { line ->
             val p = line.split('\t'); Row(p[0], p[1].toLong(), p[2].toLong(), p[3].toLong())
         }
@@ -103,6 +219,7 @@ class BigNatLiteralTest {
             }
         }
         assertEquals(modeled, rows, "Every size, sign, limb, byte, sentinel and wrapped public conversion")
+        assertEquals(699, rows.distinct().size)
         assertEquals((manifest["nativeRows"] as Number).toInt(), rows.size)
         val stages = manifest["stages"] as Map<String, List<String>>
         for ((stage, paths) in stages) {
@@ -182,6 +299,75 @@ class BigNatLiteralTest {
         return Json.stringify(mapOf("entry" to "root", "backend" to backend, "modules" to listOf(
             mapOf("schema" to 1, "ghc" to "9.14.1", "constructors" to emptyList<Any>(), "bindings" to listOf(binding)))))
     }
+    @Test fun sharedAuditorRetainsCanonicalIntrinsicAndMalformedControls(@TempDir temporary: Path) {
+        val exact = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
+        val unknown = mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)
+        var serial = 0
+        fun audit(body: List<Any?>, accepted: Boolean, issue: String? = null) {
+            val module = ((Json.parse(request("ast", body)) as Map<*, *>)["modules"] as List<*>).single()
+            val name = "control-${serial++}"
+            val source = temporary.resolve("$name.json").toFile().apply { writeText(Json.stringify(module)) }
+            val output = temporary.resolve("$name-report.json").toFile()
+            val process = ProcessBuilder("python3", "scripts/audit-core.py", source.path, "--entry", "root", "--output", output.path)
+                .directory(root).redirectOutput(temporary.resolve("$name.stdout").toFile())
+                .redirectError(temporary.resolve("$name.stderr").toFile()).start()
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroyForcibly().waitFor(); fail<Unit>("Shared BigNat auditor timed out: $name")
+            }
+            assertEquals(if (accepted) 0 else 1, process.exitValue(), name)
+            val actual = Json.parse(output.readText()) as Map<*, *>
+            assertEquals(accepted, actual["accepted"], name)
+            if (accepted) { assertEquals(emptyList<Any>(), actual["issues"]); assertEquals(emptyList<Any>(), actual["missingGlobals"]) }
+            else {
+                val issues = actual["issues"] as List<Map<String, Any?>>
+                assertTrue(issues.isNotEmpty(), name)
+                if (issue != null) assertTrue(issues.any { it["code"] == issue }, "$name/$issue")
+            }
+        }
+        fun literal(value: String, proof: Map<String, Any?>?) = listOf("lit", "bignat", value) +
+            if (proof == null) emptyList() else listOf(mapOf("rep" to proof))
+        fun size(literal: List<Any?>) = listOf("app", listOf("prim", "sizeofByteArray#"), listOf(literal),
+            listOf(false), false, false, mapOf("rep" to mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)))
+        for (value in listOf("0", "1", values.last().toString())) for (proof in listOf(exact, null, unknown)) {
+            audit(literal(value, proof), true)
+            // CLI consumption checks the recovered ByteArray# kind/PrimRep.
+            // The auditor API self-test separately asserts evaluated=true.
+            audit(size(literal(value, proof)), true)
+        }
+        for (value in listOf("", "-1", "+1", "00", "01", " 1", "1 ", "1.0", "0x10", "١"))
+            audit(literal(value, exact), false, "invalid-literal-value")
+        val bad = listOf("long" to "IntRep", "long" to "WordRep", "object" to "BoxedRep (Just Lifted)",
+            "object" to "BoxedRep Nothing", "unknown" to "BoxedRep (Just Unlifted)", "data" to "BoxedRep (Just Unlifted)",
+            "closure" to "BoxedRep (Just Unlifted)").map { (kind, rep) -> mapOf("kind" to kind, "primReps" to listOf(rep), "evaluated" to true) } + listOf(
+            mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true),
+            mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to true, "aggregate" to "unboxed-tuple", "components" to emptyList<Any>()),
+            mapOf("kind" to "unknown", "primReps" to listOf("WordRep"), "evaluated" to true, "aggregate" to "unboxed-sum", "tagSlot" to 0,
+                "alternativeSlots" to listOf(emptyList<Int>(), emptyList<Int>()), "alternatives" to List(2) { mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true) }),
+            mapOf("kind" to "vector", "primReps" to listOf("VecRep 2 Int64ElemRep"), "evaluated" to true, "vector" to mapOf("lanes" to 2, "element" to "Int64ElemRep")))
+        for (proof in bad) audit(literal("1", proof), false)
+        for (proof in listOf(exact, null, unknown)) audit(size(literal("18446744073709551616", proof)), true)
+        for (proof in listOf("data", "closure", "unknown").map { exact + ("kind" to it) } +
+            listOf("BoxedRep (Just Lifted)", "BoxedRep Nothing", "IntRep", "WordRep").map { exact + ("primReps" to listOf(it)) })
+            audit(size(literal("18446744073709551616", proof)), false)
+        audit(listOf("case", listOf("lit", "int", "0"), "scrutinee", listOf(
+            listOf("lit", listOf("bignat", "1"), emptyList<String>(), listOf("lit", "int", "1")),
+            listOf("default", null, emptyList<String>(), listOf("lit", "int", "0")))), false, "alternative-kind")
+        assertEquals(50, serial)
+    }
+    @Test fun everyModelByteReconstructsMagnitudeAndSentinels() {
+        for ((seed, value) in values.withIndex()) {
+            val bytes = ((value.abs().bitLength() + 63) / 64) * 8
+            var rebuilt = BigInteger.ZERO
+            for (index in 0 until bytes) {
+                val position = if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) index else index / 8 * 8 + 7 - index % 8
+                rebuilt = rebuilt.or(BigInteger.valueOf(expected("magnitudeByte", seed.toLong(), index.toLong(), values)).shiftLeft(position * 8))
+            }
+            assertEquals(value.abs(), rebuilt)
+            assertEquals(-1L, expected("magnitudeByte", seed.toLong(), -1, values))
+            assertEquals(-1L, expected("magnitudeByte", seed.toLong(), bytes.toLong(), values))
+        }
+        assertEquals(0L, expected("magnitudeSize", 0, 0, values))
+    }
     @Test fun exactUnliftedLiteralProofRejectsScalarAggregateAndBoxedForgeries() {
         val exact = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
         val bad = listOf(
@@ -194,7 +380,9 @@ class BigNatLiteralTest {
                 "aggregate" to "unboxed-tuple", "components" to emptyList<Any>()),
             mapOf("kind" to "unknown", "primReps" to listOf("WordRep"), "evaluated" to true,
                 "aggregate" to "unboxed-sum", "tagSlot" to 0, "alternativeSlots" to listOf(emptyList<Int>(), emptyList<Int>()),
-                "alternatives" to List(2) { mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true) }))
+                "alternatives" to List(2) { mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true) }),
+            mapOf("kind" to "vector", "primReps" to listOf("VecRep 2 Int64ElemRep"), "evaluated" to true,
+                "vector" to mapOf("lanes" to 2, "element" to "Int64ElemRep")))
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             fun size(proof: Map<String, Any?>?, bind: Boolean): List<Any?> {
                 val scalar = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)

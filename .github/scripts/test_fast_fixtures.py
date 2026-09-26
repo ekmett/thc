@@ -1076,6 +1076,7 @@ class FixturePreparationTest(unittest.TestCase):
             "thc.runtime.FloatingTupleTest": ("floating-tuples", ["floating-tuple"]),
             "thc.runtime.SqrtPrimitiveTest": ("sqrt", ["sqrt"]),
             "thc.runtime.ScalarBitCastTest": ("scalar-bitcasts", ["scalar-bitcasts"]),
+            "thc.runtime.BigNatLiteralTest": ("bignat-literals", ["bignat-literals"]),
             "thc.runtime.SimdFloatVectorTest": ("simd-floatx4", ["simd-floatx4"]),
             "thc.runtime.SimdDoubleVectorTest": ("simd-doublex2", ["simd-doublex2"]),
             "thc.runtime.SimdFloatByteArrayTest": ("simd-floatx4-bytearray", ["simd-floatx4-bytearray"]),
@@ -1197,6 +1198,45 @@ class FixturePreparationTest(unittest.TestCase):
                         path.unlink()
                     self.assertEqual([group_id], prepare()["rebuilt"])
                     self.assertEqual([], prepare()["rebuilt"])
+
+    def test_bignat_uses_haskell_and_preserves_original_source_outputs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["bignat-literals"]
+        self.assertEqual("bignat-literals", owners["thc.runtime.BigNatLiteralTest"])
+        self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}], group["commands"])
+        originals = {"vendor/ghc-9.14.1/GHC/Internal/Bignum/" + name + suffix
+                     for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot")}
+        originals.update(("vendor/ghc-9.14.1/include/WordSize.h", "vendor/ghc-9.14.1/LICENSE"))
+        self.assertEqual({"build/bignat-literals"} | originals, set(group["outputs"]))
+        self.assertEqual({"test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/BigNatLiteralAudit.hs",
+                          "compiler/test-fixtures/BigNatLiteralAuditNative.hs", "compiler/export-boot.py"}, set(group["sources"]))
+        self.assertTrue(all((project / name).is_file() for name in group["sources"]))
+        self.assertIn('"$fixture_bin" bignat-literals', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        for name in ("prepare-bignat-literals.py", "bignat_literal_model.py", "test-bignat-literals.py"):
+            self.assertFalse((project / "scripts" / name).exists())
+        cache = fast_fixtures.fast_inputs
+        pins = {}
+        for name in cache.BIGNAT_VENDOR:
+            path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('original source\n'); pins[name] = fast_fixtures._digest(path)
+        records = []
+        manifest_path = 'build/bignat-literals/manifest.json'
+        for name in cache.BIGNAT_OUTPUTS - {manifest_path}:
+            path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('{}\n' if name.endswith('.json') else 'fixture\n')
+            records.append({'path': name, 'sha256': fast_fixtures._digest(path)})
+        (self.root / manifest_path).write_text(json.dumps({'artifacts': records}))
+        # Installed-interface overlays are not reusable fixture payload.
+        overlay = self.root / 'build/bignat-literals/boot/interfaces/unused.hi'
+        overlay.parent.mkdir(parents=True); overlay.symlink_to(self.root / 'not-present')
+        with mock.patch.object(cache, 'vendor_pins', return_value=pins):
+            self.assertEqual(cache.BIGNAT_OUTPUTS | cache.BIGNAT_VENDOR, set(fast_fixtures._output_hashes(self.root, group)))
+            corrupted = self.root / 'build/bignat-literals/oracle.tsv'
+            corrupted.write_text('corrupt\n')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
     def test_scalar_bitcasts_use_haskell_producer_and_keep_native_inputs(self):
         project = Path(__file__).resolve().parents[2]

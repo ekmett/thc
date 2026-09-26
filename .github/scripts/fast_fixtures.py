@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "828c285d1c9c05c1bc296f9bbb7e1d1adf27b6b500f6ef81c6f207ab788db25a"
+FULL_PREPARATION_PLAN = "619e2b794214700649669833fef2a3e5cd2cf299f0d0443721844edca79dc831"
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
     "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -290,6 +290,13 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"][0] == "build/bignat-literals":
+        name = "build/bignat-literals/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = fast_inputs.bignat_artifact_hashes(manifest)
+        pins = fast_inputs.vendor_pins(root)
+        expected.update({path: pins[path] for path in fast_inputs.BIGNAT_VENDOR})
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-stack-formatter"]:
         return _formatter_output_hashes(root)
     if group["outputs"] == ["build/original-gmp"]:
@@ -459,7 +466,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
+        if name in ("build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

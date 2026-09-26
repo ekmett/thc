@@ -14,7 +14,6 @@ python3 scripts/prepare-floating-tuples.py
 python3 scripts/prepare-tag-to-enum-audit.py
 python3 scripts/prepare-show-int.py
 python3 scripts/prepare-show-word-list.py
-python3 scripts/prepare-bignat-literals.py
 python3 scripts/prepare-narrow-literal-proofs.py
 python3 scripts/prepare-short-bytes-slices.py
 sh scripts/prepare-aggregate-frontier.sh
@@ -33,6 +32,7 @@ fixture_bin=$(cabal list-bin exe:thc-fixtures --offline)
 "$fixture_bin" bit
 "$fixture_bin" word-floating
 "$fixture_bin" scalar-bitcasts
+"$fixture_bin" bignat-literals
 "$fixture_bin" floating-address
 "$fixture_bin" floating-byte-offset
 "$fixture_bin" narrow-byte-offset

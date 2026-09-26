@@ -366,6 +366,18 @@
       "outputs": ["build/sqrt"],
       "sources": ["test/haskell-fixtures/SqrtFixtures.hs", "test/haskell-fixtures/Main.hs", "compiler/test-fixtures/SqrtAudit.hs", "compiler/test-fixtures/SqrtAuditNative.hs"]
     },
+    "bignat-literals": {
+      "junit": ["thc.runtime.BigNatLiteralTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}],
+      "outputs": ["build/bignat-literals",
+        "vendor/ghc-9.14.1/GHC/Internal/Bignum/BigNat.hs", "vendor/ghc-9.14.1/GHC/Internal/Bignum/BigNat.hs-boot",
+        "vendor/ghc-9.14.1/GHC/Internal/Bignum/Integer.hs", "vendor/ghc-9.14.1/GHC/Internal/Bignum/Integer.hs-boot",
+        "vendor/ghc-9.14.1/GHC/Internal/Bignum/Natural.hs", "vendor/ghc-9.14.1/GHC/Internal/Bignum/Natural.hs-boot",
+        "vendor/ghc-9.14.1/include/WordSize.h", "vendor/ghc-9.14.1/LICENSE"],
+      "sources": ["test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/BigNatLiteralAudit.hs",
+        "compiler/test-fixtures/BigNatLiteralAuditNative.hs", "compiler/export-boot.py"]
+    },
     "scalar-bitcasts": {
       "junit": ["thc.runtime.ScalarBitCastTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}],
