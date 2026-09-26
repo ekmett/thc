@@ -46,6 +46,7 @@ class WindowsCpuAffinityTest {
 
     @Test fun selectionRespectsBothGroupAndSparseHardMask() {
         val cpu = WindowsCpuAffinity.Cpu(81, 4, 63)
+        assertEquals(CpuCoordinate(4, 63), cpu.coordinate, "OS group/processor is not CPU Set ID 81")
         assertTrue(WindowsCpuAffinity.eligible(cpu, 4, Long.MIN_VALUE, intArrayOf()))
         assertTrue(WindowsCpuAffinity.eligible(cpu, 4, Long.MIN_VALUE, intArrayOf(81)))
         assertFalse(WindowsCpuAffinity.eligible(cpu, 0, Long.MIN_VALUE, intArrayOf()))

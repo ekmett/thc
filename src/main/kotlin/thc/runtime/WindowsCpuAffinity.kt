@@ -26,6 +26,8 @@ internal class WindowsCpuAffinity private constructor(
     override val count: Int get() = cpus.size
     override val mode: CpuAffinityMode get() = CpuAffinityMode.ADVISORY
 
+    override fun coordinate(index: Int): CpuCoordinate? = cpus.getOrNull(index)?.coordinate
+
     override fun bindCurrent(index: Int): AutoCloseable? = available {
         if (Thread.currentThread().isVirtual) return@available null
         val cpu = cpus.getOrNull(index) ?: return@available null
@@ -59,7 +61,9 @@ internal class WindowsCpuAffinity private constructor(
         }
     }
 
-    internal data class Cpu(val id: Int, val group: Int, val index: Int)
+    internal data class Cpu(val id: Int, val group: Int, val index: Int) {
+        val coordinate: CpuCoordinate get() = CpuCoordinate(group, index)
+    }
 
     companion object {
         private val platformApi: Api? by lazy { available { Api() } }

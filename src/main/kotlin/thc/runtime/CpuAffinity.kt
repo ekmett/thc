@@ -14,9 +14,13 @@ import java.lang.invoke.MethodHandle
 /** Support is not a promise that the OS will accept a particular request. */
 internal enum class CpuAffinityMode { UNAVAILABLE, ADVISORY, PINNED }
 
+/** OS coordinates, not a logical capability or a Windows CPU Set identifier. */
+internal data class CpuCoordinate(val group: Int, val processor: Int)
+
 internal interface NativeCpuAffinity {
     val count: Int
     val mode: CpuAffinityMode
+    fun coordinate(index: Int): CpuCoordinate? = null
     fun bindCurrent(index: Int): AutoCloseable?
     fun resetCurrent(): AutoCloseable?
 }
@@ -28,6 +32,11 @@ internal class CpuAffinity internal constructor(
 ) {
     val count: Int = minOf(native?.count ?: Int.MAX_VALUE, availableProcessors.coerceAtLeast(1))
     val mode: CpuAffinityMode get() = native?.mode ?: CpuAffinityMode.UNAVAILABLE
+
+    /** The same quota-bounded dense mapping that bindCurrent selects. Immutable
+     * context eligibility, not a fresh query of a possibly pinned carrier. */
+    fun coordinate(index: Int): CpuCoordinate? =
+        if (index in 0 until count) native?.coordinate(index) else null
 
     @TruffleBoundary fun bindCurrent(capability: Long): AutoCloseable? =
         native?.bindCurrent(Math.floorMod(capability, count.toLong()).toInt())
@@ -56,6 +65,9 @@ internal class LinuxCpuAffinity private constructor(
 ) : NativeCpuAffinity {
     override val count: Int get() = cpus.size
     override val mode = CpuAffinityMode.PINNED
+
+    override fun coordinate(index: Int): CpuCoordinate? =
+        cpus.getOrNull(index)?.let { CpuCoordinate(0, it) }
 
     internal fun currentMask(): ByteArray? = optionalAffinity {
         Arena.ofConfined().use { arena ->
