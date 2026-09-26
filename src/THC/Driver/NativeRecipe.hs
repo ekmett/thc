@@ -21,6 +21,8 @@ import Distribution.PackageDescription.Parsec (parseGenericPackageDescriptionMay
 import Distribution.PackageDescription.Configuration (flattenPackageDescription)
 import Distribution.Parsec (eitherParsec)
 import Distribution.Simple.LocalBuildInfo (lookupComponent, componentBuildInfo)
+import Distribution.Types.ComponentName (ComponentName(CExeName))
+import Distribution.Types.UnqualComponentName (unUnqualComponentName)
 import Distribution.Utils.Path (getSymbolicPath)
 import GHC.Generics (Generic)
 import Numeric (showHex)
@@ -141,6 +143,21 @@ componentNativeObjects native dist allRoots component = do
   roots <- componentRoots dist component
   modules <- field component "modules"
   kind <- field component "type" :: IO String
+  haskellRoots <- if kind == "exe" then do
+    name <- field component "name"
+    executableName <- case eitherParsec name of
+      Right (CExeName value) -> pure (unUnqualComponentName value)
+      _ -> fail "Cabal executable build-info has an invalid component name"
+    arguments <- field component "compiler-args"
+    -- Cabal 3.16 build-info reports the base build directory, but its GHC
+    -- builder puts executable artifacts in <name>/<name>-tmp beneath it.
+    -- Recognize only that exact layout, still requiring the paired interface
+    -- and rejecting any native receipt for the same object below.
+    artifacts <- mapM canonicalizePath
+      [directory </> executableName </> (executableName ++ "-tmp") |
+        (flag,directory) <- zip arguments (drop 1 arguments), flag `elem` ["-odir", "-outputdir"]]
+    pure (nub (roots ++ artifacts))
+    else pure roots
   let names = nub (modules ++ ["Main" | kind == "exe"])
       expected = [joinPath (splitModule name) | name <- names]
       owns path = any (`within` path) roots &&
@@ -152,7 +169,7 @@ componentNativeObjects native dist allRoots component = do
         object = extension `elem` [".o", ".dyn_o", ".p_o", ".p_dyn_o"]
         iface = replaceExtension path (drop 1 extension ++ "-unused")
         hi = case extension of ".o" -> replaceExtension path "hi"; ".dyn_o" -> replaceExtension path "dyn_hi"; _ -> iface
-        moduleObject = any (\root -> dropExtension (makeRelative root path) `elem` expected) roots
+        moduleObject = any (\root -> dropExtension (makeRelative root path) `elem` expected) haskellRoots
     receiptExists <- doesFileExist (recipePath (native </> "cache/thc/native-recipes-v1") path)
     unless (not (object && moduleObject && receiptExists))
       (fail ("Cabal Haskell/native object collision: " ++ path))

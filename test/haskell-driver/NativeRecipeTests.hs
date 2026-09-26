@@ -93,6 +93,53 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       hidden <- tryIOError $ withScalarBitcode native dist [dist,child] compiler "/unused" "proof-0.1-inplace" component
         (const (pure ()))
       assertBool "public declaration guard rejects hidden C after receipt loss" (isLeft hidden)
+  , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
+      let native = root </> "native"
+          dist = native </> "build/scalar-first-0.1.0.0/x/oracle"
+          build = dist </> "build"
+          artifacts = build </> "oracle/oracle-tmp"
+          output = artifacts </> "Main.o"
+          receipts = native </> "cache/thc/native-recipes-v1"
+          -- Cabal 3.16.1's actual Linux scalar fixture build-info: modules is
+          -- empty and every output flag reports the base, not oracle-tmp.
+          component = object
+            ["type" .= ("exe" :: String), "name" .= ("exe:oracle" :: String),
+             "modules" .= ([] :: [String]), "src-files" .= (["Main.hs"] :: [String]),
+             "hs-src-dirs" .= (["app"] :: [String]), "src-dir" .= root,
+             "cabal-file" .= ("scalar-first.cabal" :: String),
+             "compiler-args" .= ["-outputdir",build,"-odir",build,"-hidir",build,
+               "-hiedir",build </> "extra-compilation-artifacts/hie","-stubdir",build]]
+          inventory = componentNativeObjects native dist [build] component
+      createDirectoryIfMissing True artifacts
+      writeFile (root </> "scalar-first.cabal") $ unlines
+        ["cabal-version: 3.0","name: scalar-first","version: 0.1.0.0","build-type: Simple",
+         "executable oracle","  main-is: Main.hs","  hs-source-dirs: app","  build-depends: base"]
+      mapM_ (\suffix -> writeFile (artifacts </> "Main" <.> suffix) suffix) ["o","hi","dyn_o","dyn_hi"]
+      assertEqual "Cabal executable temporary layout contains Haskell objects" [] =<< inventory
+      ensureNativeRecipes native dist [build] "/unused" component (fail "no-C executable must not rebuild")
+      noC <- withScalarBitcode native dist [build] "/unused" "/unused" "scalar-first-inplace-oracle"
+        component (pure . maybe True (const False))
+      assertBool "ordinary executable requires no C recipe or native tools" noC
+      let unrelated = build </> "other/other-tmp"
+      createDirectoryIfMissing True unrelated
+      writeFile (unrelated </> "Main.o") "unknown object"
+      writeFile (unrelated </> "Main.hi") "interface"
+      assertEqual "same basename in an unknown directory still requires a receipt"
+        [unrelated </> "Main.o"] =<< inventory
+      removePathForcibly unrelated
+      removeFile (artifacts </> "Main.hi")
+      assertEqual "known executable object without an interface still requires a receipt" [output] =<< inventory
+      writeFile (artifacts </> "Main.hi") "interface"
+      compiler <- canonicalizePath "/usr/bin/true"
+      writeFile "Main.c" "int hidden_native_state;"
+      captureNativeRecipe receipts compiler ["-c","Main.c","-o",output]
+      collision <- tryIOError inventory
+      assertBool "executable interface cannot conceal a native receipt" (isLeft collision)
+      removeFile (recipePath receipts output)
+      appendFile (root </> "scalar-first.cabal") "  c-sources: Main.c\n"
+      hidden <- tryIOError $ withScalarBitcode native dist [build] compiler "/unused" "scalar-first-inplace-oracle"
+        component (const (pure ()))
+      assertBool "executable declaration guard rejects hidden C after receipt loss" (isLeft hidden)
   , TestCase $ withScratch $ \root -> do
       let native = root </> "native"; dist = native </> "build"; component = metadata root dist
       createDirectoryIfMissing True dist
