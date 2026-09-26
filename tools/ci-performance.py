@@ -21,6 +21,13 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
+
+def require(condition, message):
+    """Evidence and launch guards must remain active under python -O."""
+    if not condition:
+        raise AssertionError(message)
+
+
 ORIGINAL = '4c116a8493eafad4077a1c5eb9c046bff56fe3c4'
 POLICY = ['-Dpolyglot.compiler.InliningRecursionDepth=2',
           '-Dpolyglot.compiler.InliningExpansionBudget=12000',
@@ -117,16 +124,16 @@ def freeze(out, baseline, selection):
     root = Path(__file__).resolve().parents[1]
     checkouts = [('current', root)]
     if selection['suite'] == 'standard':
-        assert baseline is not None, 'Pass --baseline-checkout for the standard suite'
+        require(baseline is not None, 'Pass --baseline-checkout for the standard suite')
         baseline = baseline.resolve(strict=True)
-        assert revision(baseline) == ORIGINAL, 'Unexpected baseline checkout'
+        require(revision(baseline) == ORIGINAL, 'Unexpected baseline checkout')
         checkouts.insert(0, ('original', baseline))
     frozen = out / 'frozen'
-    assert not frozen.exists(), 'Frozen inputs already exist'
+    require(not frozen.exists(), 'Frozen inputs already exist')
     frozen.mkdir(parents=True)
     for name, checkout in checkouts:
         libraries = sorted((checkout / 'build/install/thc/lib').glob('*.jar'))
-        assert libraries, f'Missing built libraries: {name}'
+        require(libraries, f'Missing built libraries: {name}')
         for path in libraries:
             copy_file(path, frozen / name / 'lib' / path.name)
         shutil.copytree(checkout / 'src/main', frozen / name / 'src/main')
@@ -141,7 +148,7 @@ def freeze(out, baseline, selection):
     source_manifest = root / 'build/map/modules.txt'
     modules = [(source_manifest.parent / line.strip()).resolve(strict=True)
                for line in source_manifest.read_text().splitlines() if line.strip()]
-    assert modules and len(modules) == len(set(modules))
+    require(modules and len(modules) == len(set(modules)), 'Missing or duplicate Core modules')
     copied_modules = []
     for index, path in enumerate(modules):
         target = frozen / 'map' / f'{index:02}-{path.name}'
@@ -181,9 +188,10 @@ def freeze(out, baseline, selection):
 def verify(out):
     frozen = out / 'frozen'
     records = json.loads((out / 'immutable-manifest.json').read_text())['files']
-    assert sorted(str(path.relative_to(frozen)) for path in frozen.rglob('*') if path.is_file()) == sorted(record['path'] for record in records), 'Frozen file inventory changed'
+    require(sorted(str(path.relative_to(frozen)) for path in frozen.rglob('*') if path.is_file()) ==
+            sorted(record['path'] for record in records), 'Frozen file inventory changed')
     for record in records:
-        assert sha(frozen / record['path']) == record['sha256'], f'Frozen input changed: {record["path"]}'
+        require(sha(frozen / record['path']) == record['sha256'], f'Frozen input changed: {record["path"]}')
 
 
 def run(out, command, name, timeout, environment=None):
@@ -238,7 +246,7 @@ def check_configuration(out, java, name, compact_control=None):
         flags.append('-XX:' + ('+' if compact_control else '-') + 'UseCompactObjectHeaders')
         suffix = '-compact-on' if compact_control else '-compact-off'
     expected = [line.split('\t') for line in (frozen / 'map/oracle.tsv').read_text().splitlines() if line]
-    assert len(expected) == 18, 'Expected the full 18-input Map oracle'
+    require(len(expected) == 18, 'Expected the full 18-input Map oracle')
     verify(out)
     classpath = [str(frozen / runtime / 'lib/*')]
     if runtime == 'current':
@@ -251,10 +259,12 @@ def check_configuration(out, java, name, compact_control=None):
     lines = log.read_text().splitlines()
     for phase in ('before-requested-compilation', 'after-requested-compilation'):
         actual = [line.split('\t')[2:] for line in lines if line.startswith('VERIFIED_MAP\t' + phase + '\t')]
-        assert actual == [row[1:] for row in expected], f'Incomplete Map check: {name} {phase}'
+        require(actual == [row[1:] for row in expected], f'Incomplete Map check: {name} {phase}')
     diagnostics = json.loads(next(line.removeprefix('MAP_DIAGNOSTICS ') for line in lines if line.startswith('MAP_DIAGNOSTICS ')))
-    assert diagnostics['backend'] == 'bytecode' and diagnostics['unsupportedTraps'] == 0
-    assert diagnostics['sourceNotesEnabled'] is True and diagnostics['sourceRootCount'] > 0
+    require(diagnostics['backend'] == 'bytecode' and diagnostics['unsupportedTraps'] == 0,
+            'Map requires the bytecode backend with no unsupported traps')
+    require(diagnostics['sourceNotesEnabled'] is True and diagnostics['sourceRootCount'] > 0,
+            'Map requires retained source notes')
     return {'configuration': name, 'compactControl': compact_control, 'beforeRows': 18, 'afterRows': 18, 'diagnostics': diagnostics}
 
 
@@ -269,11 +279,13 @@ def check(out, java):
 
 def compare(out, name, java_home):
     checks = json.loads((out / 'checks.json').read_text())
-    assert checks['passed'] is True, 'All Map configurations must pass before timing'
+    require(checks['passed'] is True, 'All Map configurations must pass before timing')
     if name == 'compact-headers':
-        assert json.loads((out / 'compact-status.json').read_text())['readyToTime'] is True
+        require(json.loads((out / 'compact-status.json').read_text())['readyToTime'] is True,
+                'Compact-header compatibility must pass before timing')
     elif name in ('combined', 'all-on'):
-        assert json.loads((out / 'combined-status.json').read_text())['compatibilityPassed'] is True
+        require(json.loads((out / 'combined-status.json').read_text())['compatibilityPassed'] is True,
+                'Selected compatibility must pass before timing')
     verify(out)
     frozen = out / 'frozen'
     selection = suite_config(out)
@@ -295,7 +307,8 @@ def compare(out, name, java_home):
             command += ['--' + side + '-tools-jar', frozen / runtime / 'tools/thc-tools.jar']
     run(out, command, 'compare-' + name, 3000)
     validation = json.loads((out / 'comparisons' / name / 'validation.json').read_text())
-    assert validation['passed'] is True and validation['validatedWindows'] == 45
+    require(validation['passed'] is True and validation['validatedWindows'] == 45,
+            'Expected 45 validated timing windows')
     verify(out)
 
 
@@ -303,7 +316,7 @@ def full_tests(out, name, flags):
     root = Path(json.loads((out / 'run.json').read_text())['repository'])
     source = root / 'build/test-results/test'
     destination = out / 'test-results' / name
-    assert not destination.exists(), 'Compatibility results already exist'
+    require(not destination.exists(), 'Compatibility results already exist')
     # Default results are already archived. Do not mistake stale XML for this run.
     if source.exists():
         shutil.rmtree(source)
@@ -324,24 +337,24 @@ def full_tests(out, name, flags):
             for key in totals:
                 totals[key] += int(suite.attrib.get(key, 0))
         write_json(out / (name + '-test-totals.json'), totals)
-    assert totals['tests'] >= 148 and all(totals[key] == 0 for key in ('failures', 'errors', 'skipped')), totals
+    require(totals['tests'] >= 148 and all(totals[key] == 0 for key in ('failures', 'errors', 'skipped')), totals)
     return totals
 
 
 def verify_test_sources(out):
     root = Path(json.loads((out / 'run.json').read_text())['repository'])
-    assert revision(root) == suite_config(out)['currentCommit'], 'Source commit changed'
+    require(revision(root) == suite_config(out)['currentCommit'], 'Source commit changed')
     for subtree in ('src/main', 'src/diagnostics', 'src/test'):
         frozen = out / 'frozen/current' / subtree
         expected = {str(path.relative_to(frozen)): sha(path) for path in frozen.rglob('*') if path.is_file()}
         actual = {str(path.relative_to(root / subtree)): sha(path)
                   for path in (root / subtree).rglob('*') if path.is_file()}
-        assert actual == expected, 'Compatibility source tree changed: ' + subtree
+        require(actual == expected, 'Compatibility source tree changed: ' + subtree)
 
 
 def combined(out, java_home):
     selection = suite_config(out)
-    assert selection['suite'] in ('combined', 'all-on'), 'Selected action requires combined or all-on suite'
+    require(selection['suite'] in ('combined', 'all-on'), 'Selected action requires combined or all-on suite')
     comparison, = selection['requiredComparisons']
     _, candidate = selection['comparisons'][comparison]
     status = {'suite': selection['suite'], 'comparison': comparison, 'selectedOptions': selection['selectedOptions'], 'configurations': selection['configurations'],
@@ -381,7 +394,7 @@ def combined(out, java_home):
 
 def compact(out, java_home):
     """An incompatible VM/compiler records a failed optional lane, without losing prior results."""
-    assert suite_config(out)['suite'] == 'standard', 'Compact action requires the standard suite'
+    require(suite_config(out)['suite'] == 'standard', 'Compact action requires the standard suite')
     verify(out)
     status = {'optional': True, 'passed': False, 'readyToTime': False, 'stage': 'full-tests'}
     status_path = out / 'compact-status.json'
@@ -414,7 +427,7 @@ def compact(out, java_home):
         command += ['--jvm-option=' + flag for flag in CONFIGURATIONS['class-owned-baseline'][1]]
         run(out, command, 'compact-object-sizes', 180)
         sizes = (out / 'compact-object-sizes/sizes.out').read_text()
-        assert 'VM_OPTION\tUseCompactObjectHeaders\ttrue' in sizes, 'Compact object headers were not active'
+        require('VM_OPTION\tUseCompactObjectHeaders\ttrue' in sizes, 'Compact object headers were not active')
         status.update(stage='timing', readyToTime=True)
         write_json(status_path, status)
         compare(out, 'compact-headers', java_home)
@@ -438,7 +451,8 @@ def finish(out):
     for name in selection['requiredComparisons']:
         path = out / 'comparisons' / name
         validation = json.loads((path / 'validation.json').read_text())
-        assert validation['passed'] is True and validation['validatedWindows'] == 45
+        require(validation['passed'] is True and validation['validatedWindows'] == 45,
+                'Expected 45 validated timing windows')
         comparisons[name] = json.loads((path / 'summary.json').read_text())
     if selection['suite'] == 'standard':
         status = json.loads((out / 'compact-status.json').read_text())
@@ -447,7 +461,8 @@ def finish(out):
         experiment = {'compactHeaders': status}
     else:
         status = json.loads((out / 'combined-status.json').read_text())
-        assert status['compatibilityPassed'] is True and status['timingAccepted'] is True
+        require(status['compatibilityPassed'] is True and status['timingAccepted'] is True,
+                'Selected compatibility and timing must both pass')
         experiment = {'combined': status}
     summary = {**experiment, 'suite': selection['suite'], 'scope': json.loads((out / 'run.json').read_text())['scope'],
                'immutableInputsUnchanged': True, 'comparisons': comparisons}
@@ -490,7 +505,7 @@ def main():
         elif args.action == 'combined':
             combined(out, java_home)
         else:
-            assert args.comparison, 'Pass --comparison'
+            require(args.comparison, 'Pass --comparison')
             compare(out, args.comparison, java_home)
 
 
