@@ -402,6 +402,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
+        internal val stableNames = thc.runtime.StableNames()
         internal val nativeAddresses = thc.runtime.NativeAddresses(env)
         internal val nativeAllocations = thc.runtime.ManagedNativeAllocations(env)
         internal val weaks = thc.runtime.ManagedWeaks()
@@ -495,7 +496,7 @@ class Language : TruffleLanguage<Language.State>() {
                 }
             }
         } finally {
-            try { context.weaks.close() } finally {
+            try { try { context.weaks.close() } finally { context.stableNames.close() } } finally {
                 try { context.stablePointers.close() } finally {
                     try { context.nativeAddresses.close() } finally { context.nativeAllocations.close() }
                 }

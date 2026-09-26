@@ -385,6 +385,14 @@
         "thc.cabal"
       ]
     },
+    "stable-names": {
+      "junit": ["thc.runtime.StableNamesTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-names"]}],
+      "outputs": ["build/stable-names"],
+      "sources": ["examples/StableNames.hs", "compiler/test-fixtures/StableNamesNative.hs",
+        "test/haskell-fixtures/StableNameFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/core-capabilities.json", "scripts/audit-core.py"]
+    },
     "stable-pointers": {
       "junit": ["thc.runtime.StablePointerTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-pointers"]}],

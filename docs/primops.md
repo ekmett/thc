@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1024 / 1491 (68.7%).**
+**Implementation coverage: 1026 / 1491 (68.8%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1024 | A runtime implementation is registered in the capability inventory. |
-| Missing | 467 | No runtime implementation is registered. |
+| Implemented | 1026 | A runtime implementation is registered in the capability inventory. |
+| Missing | 465 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -495,6 +495,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `ltWord32#` — arity 2 — Numeric scalar signature
 - [x] `ltWord64#` — arity 2 — Numeric scalar signature
 - [x] `ltWord8#` — arity 2 — Numeric scalar signature
+- [x] `makeStableName#` — arity 2 — Stable-name operation
 - [x] `makeStablePtr#` — arity 2 — Stable-pointer operation
 - [x] `maskAsyncExceptions#` — arity 2 — Specialized lowering
 - [x] `maskUninterruptible#` — arity 2 — Specialized lowering
@@ -879,6 +880,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `sizeofSmallMutableArray#` — arity 1 — Boxed-array operation
 - [x] `sqrtDouble#` — arity 1 — Numeric scalar signature
 - [x] `sqrtFloat#` — arity 1 — Numeric scalar signature
+- [x] `stableNameToInt#` — arity 1 — Stable-name operation
 - [x] `subInt16#` — arity 2 — Numeric scalar signature
 - [x] `subInt32#` — arity 2 — Numeric scalar signature
 - [x] `subInt64#` — arity 2 — Numeric scalar signature
@@ -1245,7 +1247,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `insertWord16X32#` — arity 3
 - [ ] `insertWord8X32#` — arity 3
 - [ ] `insertWord8X64#` — arity 3
-- [ ] `makeStableName#` — arity 2
 - [ ] `maxInt16X32#` — arity 2
 - [ ] `maxInt8X32#` — arity 2
 - [ ] `maxInt8X64#` — arity 2
@@ -1464,7 +1465,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `shuffleWord8X32#` — arity 3
 - [ ] `shuffleWord8X64#` — arity 3
 - [ ] `spark#` — arity 2
-- [ ] `stableNameToInt#` — arity 1
 - [ ] `timesInt16X32#` — arity 2
 - [ ] `timesInt8X32#` — arity 2
 - [ ] `timesInt8X64#` — arity 2

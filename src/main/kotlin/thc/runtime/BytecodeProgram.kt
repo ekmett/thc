@@ -2518,6 +2518,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         else -> e.builder.endObserveWeak()
                     }
                 }
+            } else if (fn[0] == "prim" && StableNameOp.named(fn[1] as String) != null) {
+                val operation = StableNameOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                if (operation == StableNameOp.MAKE) tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginMakeStableName(destination.single())
+                    operands.forEach { it.emit(e) }
+                    e.builder.endMakeStableName()
+                } else ProvenExpression(Expression { e ->
+                    e.builder.beginHashStableName()
+                    operands.single().emit(e)
+                    e.builder.endHashStableName()
+                }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

@@ -519,6 +519,7 @@ executable thc-fixtures
     STMFixtures
     HintTraceFixtures
     StablePointerFixtures
+    StableNameFixtures
     WeakFixtures
     ShrinkByteArrayFixtures
     ByteArrayFixtures

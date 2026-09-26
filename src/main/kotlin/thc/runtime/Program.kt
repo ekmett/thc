@@ -2430,6 +2430,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 operation.validate(operands.map { it.representation }, flags, tupleProof)
                 WeakExpression(operation, operands.toTypedArray()).proven(tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && StableNameOp.named(fn[1] as String) != null) {
+                val operation = StableNameOp.named(fn[1] as String)!!
+                operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
+                when (operation) {
+                    StableNameOp.MAKE -> MakeStableName(operands[0], operands[1])
+                    StableNameOp.HASH -> HashStableName(operands[0])
+                }.proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && StablePointerOp.named(fn[1] as String) != null) {
                 val operation = StablePointerOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)

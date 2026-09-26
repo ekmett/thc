@@ -1493,6 +1493,35 @@ class Audit:
                             self.issue('primitive-representation', owner, path,
                                        'mkWeak#: finalizer requires State# -> (# State#, lifted value #)')
                 mutvar = self.cap.get('managedMutVarPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                stable_name = self.cap.get('managedStableNamePrimitives', {}).get(function[1]) if function[0] == 'prim' else None
+                if stable_name is not None:
+                    def name_role(rep, role):
+                        if not isinstance(rep, dict) or 'aggregate' in rep or is_vector(rep):
+                            return False
+                        kind, reps = rep.get('kind'), rep.get('primReps')
+                        if role == 'state':
+                            return kind == 'void' and reps == []
+                        if role == 'int':
+                            return kind == 'long' and reps == ['IntRep']
+                        if role == 'name':
+                            return kind == 'object' and reps == ['BoxedRep (Just Unlifted)']
+                        return role == 'boxed' and kind in ('object', 'data', 'closure') and reps in (
+                            ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)'])
+                    actual = [self.expression_rep(argument) for argument in arguments]
+                    expected = stable_name['arguments']
+                    expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in actual]
+                    if len(actual) != len(expected) or flags != expected_flags or any(
+                            not name_role(rep, role) for rep, role in zip(actual, expected)):
+                        self.issue('primitive-representation', owner, path, function[1] + ': StableName# arguments required')
+                    output = stable_name['result']
+                    if isinstance(output, list):
+                        fields = proof.get('components') if isinstance(proof, dict) else None
+                        valid = self.is_tuple(proof) and isinstance(fields, list) and len(fields) == 2 and all(
+                            name_role(rep, role) for rep, role in zip(fields, output)) and proof.get('primReps') == fields[1]['primReps']
+                    else:
+                        valid = name_role(proof, output)
+                    if not valid:
+                        self.issue('primitive-representation', owner, path, function[1] + ': StableName# result required')
                 stable_ptr = self.cap.get('managedStablePtrPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
                 if stable_ptr is not None:
                     def stable_role(rep, role):

@@ -35,12 +35,20 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """stable-names delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
+STABLE_NAME_ENTRIES = ("sameLifted", "sameUnlifted", "differentUnlifted", "unevaluatedName")
+STABLE_NAME_COMMANDS = ("ghc-version", "native-build", "native-run",
+                       *(f"{stage}-export" for stage in ("pre", "post")),
+                       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in STABLE_NAME_ENTRIES))
+STABLE_NAME_OUTPUTS = frozenset("build/stable-names/" + name for name in (
+    "manifest.json", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+        for suffix in ("core/StableNames.json", *(f"{entry}-audit.json" for entry in STABLE_NAME_ENTRIES))),
+    *(f"commands/{command}.{suffix}" for command in STABLE_NAME_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
                             "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
 SCALAR_MEMORY_ENTRIES = ("memoryCase", "pinCase", "thawCase", "shrinkCase", "differenceCase",
@@ -1144,6 +1152,20 @@ def scalar_memory_artifact_hashes(manifest):
     return artifacts
 
 
+def stable_name_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and manifest.get("entries") == list(STABLE_NAME_ENTRIES) and
+            manifest.get("stages") == ["pre", "post"] and isinstance(manifest.get("native"), list) and
+            len(manifest["native"]) == 20 and all(type(value) is int for value in manifest["native"]),
+            "Invalid stable-name provenance")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == STABLE_NAME_OUTPUTS - {"build/stable-names/manifest.json"},
+            "Incomplete stable-name artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid stable-name artifact hash")
+    return artifacts
+
+
 def delimited_artifact_hashes(manifest):
     require(type(manifest.get("schema")) is int and manifest["schema"] == 1 and manifest.get("ghc") == "9.14.1",
             "Invalid delimited-continuation manifest")
@@ -1198,6 +1220,8 @@ def allowed_payload(name, pins):
         return name in HINT_TRACE_OUTPUTS
     if parts[1] == "scalar-memory-utilities":
         return name in SCALAR_MEMORY_OUTPUTS
+    if parts[1] == "stable-names":
+        return name in STABLE_NAME_OUTPUTS
     if parts[1] == "delimited-continuations":
         return name in DELIMITED_OUTPUTS
     if parts[1] == "bignat-literals":
@@ -1387,6 +1411,8 @@ def inventory(root, current, read, core_files, verified=None):
             scalar_memory_artifact_hashes(doc)
         if name == "build/delimited-continuations/manifest.json":
             delimited_artifact_hashes(doc)
+        if name == "build/stable-names/manifest.json":
+            stable_name_artifact_hashes(doc)
         if name == "build/bignat-literals/manifest.json":
             bignat_artifact_hashes(doc)
         if name == "build/pinned-addresses/manifest.json":

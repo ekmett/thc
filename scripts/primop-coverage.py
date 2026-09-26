@@ -77,6 +77,7 @@ def classify(data, capability, scalars):
                                ('managedArrayPrimitives', 'Boxed-array operation'),
                                ('managedMutVarPrimitives', 'Mutable-reference operation'),
                                ('managedStablePtrPrimitives', 'Stable-pointer operation'),
+                               ('managedStableNamePrimitives', 'Stable-name operation'),
                                ('managedWeakPrimitives', 'Weak-pointer operation'),
                                ('managedThreadPrimitives', 'Thread operation'),
                                ('managedSTMPrimitives', 'STM operation'),
