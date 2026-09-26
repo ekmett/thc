@@ -186,6 +186,8 @@
     },
     "src/main/kotlin/thc/runtime/IntegerVectorPrimitives.kt": {
       "junit": [
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
         "thc.runtime.Int32VectorMemoryProofTest",
         "thc.runtime.Int32VectorStorageTest",
         "thc.runtime.SimdInt16VectorTest",
@@ -1268,6 +1270,7 @@
     },
     "scripts/simd-families.json": {
       "junit": [
+        "thc.runtime.Simd128ArrayNativeTest",
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
       "python": [

@@ -35,7 +35,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 thread-status thread-label hint-trace thread-inventory boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -104,6 +104,18 @@ HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
       for suffix in ("core/HintTraceAudit.json", "hints.audit.json", "traces.audit.json",
                      "event.audit.json", "marker.audit.json", "binary.audit.json", "addressHints.audit.json"))))
+SIMD128_ARRAY_ENTRIES = tuple(shape + operation + mode
+    for shape in ("int8X16", "word8X16", "int16X8", "word16X8", "int64X2", "word64X2")
+    for operation in ("Index", "Read", "Write") for mode in ("Packed", "Scalar"))
+SIMD128_ARRAY_COMMANDS = ("ghc-version", "native-build", "native-oracle",
+    *(stage + "-export" for stage in ("pre", "post")),
+    *(stage + "-" + name + "-audit" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES))
+SIMD128_ARRAY_OUTPUTS = frozenset("build/simd128-arrays/" + name for name in (
+    "manifest.json", "inputs.tsv", "oracle.tsv", "native/oracle",
+    *(stage + "-core/Simd128ArrayAudit.json" for stage in ("pre", "post")),
+    *(stage + "-" + name + "-audit.json" for stage in ("pre", "post") for name in SIMD128_ARRAY_ENTRIES),
+    *("commands/" + command + "." + suffix for command in SIMD128_ARRAY_COMMANDS
+      for suffix in ("stdout", "stderr", "command.json"))))
 BIGNAT_ENTRIES = ("integerRoundTrip", "naturalRoundTrip", "integerLiteral", "naturalLiteral",
                   "magnitudeSize", "magnitudeByte", "magnitudeWord", "magnitudeSign")
 BIGNAT_AUDITS = (*BIGNAT_ENTRIES, "integerAddFrontier", "naturalAddFrontier", "missing-source")
@@ -308,6 +320,7 @@ NATIVE_EXECUTABLES = frozenset({"build/unsafe-equality/api/predicate", "build/fl
     "build/pinned-addresses/native/pinned-address-oracle",
     "build/integer-completion/native/integer-completion-oracle",
     "build/hint-trace/native/oracle",
+    "build/simd128-arrays/native/oracle",
     "build/simd-capability-smoke/native/simd-smoke-oracle",
     "build/original-stdio/native/original-stdio-oracle",
     "build/original-stdio-read/native/original-stdio-read-oracle",
@@ -1174,6 +1187,8 @@ def allowed_payload(name, pins):
         return name in ("build/libdw-unavailable/manifest.json", "build/libdw-unavailable/oracle.json", "build/libdw-unavailable/foreign-labels.json")
     if parts[1] == "native-addresses":
         return name in ("build/native-addresses/manifest.json", "build/native-addresses/oracle.json")
+    if parts[1] == "simd128-arrays":
+        return name in SIMD128_ARRAY_OUTPUTS
     if parts[1] == "native-malloc":
         return name in ("build/native-malloc/manifest.json", "build/native-malloc/oracle.txt")
     if parts[1] == "original-strerror":

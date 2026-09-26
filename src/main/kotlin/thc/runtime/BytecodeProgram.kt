@@ -3849,6 +3849,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         ProvenExpression(Expression { e ->
             val b = e.builder
             when (operation.family) {
+                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
+                    operation.isWrite -> b.beginWriteVectorByteArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorByteArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorByteArray(operation.scalarOffset)
+                }
+                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
+                    operation.isWrite -> b.beginWriteVectorShortArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorShortArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorShortArray(operation.scalarOffset)
+                }
+                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
+                    operation.isWrite -> b.beginWriteVectorLongArray(operation.scalarOffset)
+                    operation.isRead -> b.beginReadVectorLongArray(operation.scalarOffset)
+                    else -> b.beginIndexVectorLongArray(operation.scalarOffset)
+                }
                 VectorMemoryFamily.INT32 -> when {
                     operation.isWrite -> b.beginWriteVector32Array(operation.scalarOffset)
                     operation.isRead -> b.beginReadVector32Array(operation.scalarOffset)
@@ -3872,6 +3887,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             operands.forEach { it.emit(e) }
             when (operation.family) {
+                VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8 -> when {
+                    operation.isWrite -> b.endWriteVectorByteArray()
+                    operation.isRead -> b.endReadVectorByteArray()
+                    else -> b.endIndexVectorByteArray()
+                }
+                VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16 -> when {
+                    operation.isWrite -> b.endWriteVectorShortArray()
+                    operation.isRead -> b.endReadVectorShortArray()
+                    else -> b.endIndexVectorShortArray()
+                }
+                VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64 -> when {
+                    operation.isWrite -> b.endWriteVectorLongArray()
+                    operation.isRead -> b.endReadVectorLongArray()
+                    else -> b.endIndexVectorLongArray()
+                }
                 VectorMemoryFamily.INT32 -> when {
                     operation.isWrite -> b.endWriteVector32Array()
                     operation.isRead -> b.endReadVector32Array()

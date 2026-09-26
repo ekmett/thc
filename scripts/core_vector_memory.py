@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact local Int32X4/Word32X4/FloatX4/DoubleX2 memory; no vector aggregate transport.
+"""Exact 128-bit ByteArray vector memory; no escaping State/vector read tuple.
 
 The pinned exporter places its sole physical vector annotation on the logical
 State/vector tuple too. Only an immediate, exactly checked read case accepts it.
 """
-from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, VECTOR_FLOAT_REP, VECTOR_DOUBLE_REP, signature_matches
+from core_vectors import VECTOR32_REP, VECTOR_WORD32_REP, VECTOR_FLOAT_REP, VECTOR_DOUBLE_REP, signature_matches, OPERATIONS as VECTOR_OPERATIONS
 
 STATE = dict(kind='void', primReps=[], evaluated=True)
 ARRAY = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
@@ -35,6 +35,19 @@ VECTOR_PROOFS = {**dict.fromkeys(SIGNED_OPERATIONS, VECTOR32_REP),
                  **dict.fromkeys(UNSIGNED_OPERATIONS, VECTOR_WORD32_REP),
                  **dict.fromkeys(FLOAT_OPERATIONS, VECTOR_FLOAT_REP),
                  **dict.fromkeys(DOUBLE_OPERATIONS, VECTOR_DOUBLE_REP)}
+
+# Memory moves bits: signedness remains an exact VecRep contract, while the
+# underlying public JVM carrier is shared by each signed/unsigned pair.
+for scalar, lanes in (('Int8', 16), ('Word8', 16), ('Int16', 8),
+                      ('Word16', 8), ('Int64', 2), ('Word64', 2)):
+    shape = scalar + 'X' + str(lanes)
+    proof = VECTOR_OPERATIONS['broadcast' + shape + '#'][1]
+    for verb, operations in (('index', INDICES), ('read', READS), ('write', WRITES)):
+        for suffix in (shape + 'Array#', scalar + 'ArrayAs' + shape + '#'):
+            name = verb + suffix
+            operations.add(name)
+            VECTOR_PROOFS[name] = proof
+OPERATIONS = READS | INDICES | WRITES
 
 
 def require(condition, detail):

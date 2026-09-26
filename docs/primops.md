@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 975 / 1491 (65.4%).**
+**Implementation coverage: 1011 / 1491 (67.8%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 975 | A runtime implementation is registered in the capability inventory. |
-| Missing | 516 | No runtime implementation is registered. |
+| Implemented | 1011 | A runtime implementation is registered in the capability inventory. |
+| Missing | 480 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -346,15 +346,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `indexFloatOffAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexFloatX4Array#` — arity 2 — Specialized lowering
 - [x] `indexInt16Array#` — arity 2 — Byte-array operation
+- [x] `indexInt16ArrayAsInt16X8#` — arity 2 — Specialized lowering
 - [x] `indexInt16OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexInt16X8Array#` — arity 2 — Specialized lowering
 - [x] `indexInt32Array#` — arity 2 — Byte-array operation
 - [x] `indexInt32ArrayAsInt32X4#` — arity 2 — Specialized lowering
 - [x] `indexInt32OffAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexInt32X4Array#` — arity 2 — Specialized lowering
 - [x] `indexInt64Array#` — arity 2 — Byte-array operation
+- [x] `indexInt64ArrayAsInt64X2#` — arity 2 — Specialized lowering
 - [x] `indexInt64OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexInt64X2Array#` — arity 2 — Specialized lowering
 - [x] `indexInt8Array#` — arity 2 — Byte-array operation
+- [x] `indexInt8ArrayAsInt8X16#` — arity 2 — Specialized lowering
 - [x] `indexInt8OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexInt8X16Array#` — arity 2 — Specialized lowering
 - [x] `indexIntArray#` — arity 2 — Byte-array operation
 - [x] `indexIntOffAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexSmallArray#` — arity 2 — Boxed-array operation
@@ -363,13 +369,17 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `indexWideCharArray#` — arity 2 — Byte-array operation
 - [x] `indexWideCharOffAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexWord16Array#` — arity 2 — Byte-array operation
+- [x] `indexWord16ArrayAsWord16X8#` — arity 2 — Specialized lowering
 - [x] `indexWord16OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord16X8Array#` — arity 2 — Specialized lowering
 - [x] `indexWord32Array#` — arity 2 — Byte-array operation
 - [x] `indexWord32ArrayAsWord32X4#` — arity 2 — Specialized lowering
 - [x] `indexWord32OffAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexWord32X4Array#` — arity 2 — Specialized lowering
 - [x] `indexWord64Array#` — arity 2 — Byte-array operation
+- [x] `indexWord64ArrayAsWord64X2#` — arity 2 — Specialized lowering
 - [x] `indexWord64OffAddr#` — arity 2 — Pointer scalar signature
+- [x] `indexWord64X2Array#` — arity 2 — Specialized lowering
 - [x] `indexWord8Array#` — arity 2 — Byte-array operation
 - [x] `indexWord8ArrayAsAddr#` — arity 2 — Pointer or pinned-memory operation
 - [x] `indexWord8ArrayAsChar#` — arity 2 — Byte-array operation
@@ -385,6 +395,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `indexWord8ArrayAsWord16#` — arity 2 — Byte-array operation
 - [x] `indexWord8ArrayAsWord32#` — arity 2 — Byte-array operation
 - [x] `indexWord8ArrayAsWord64#` — arity 2 — Byte-array operation
+- [x] `indexWord8ArrayAsWord8X16#` — arity 2 — Specialized lowering
 - [x] `indexWord8OffAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexWord8OffAddrAsAddr#` — arity 2 — Pointer scalar signature
 - [x] `indexWord8OffAddrAsChar#` — arity 2 — Pointer scalar signature
@@ -400,6 +411,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `indexWord8OffAddrAsWord16#` — arity 2 — Pointer scalar signature
 - [x] `indexWord8OffAddrAsWord32#` — arity 2 — Pointer scalar signature
 - [x] `indexWord8OffAddrAsWord64#` — arity 2 — Pointer scalar signature
+- [x] `indexWord8X16Array#` — arity 2 — Specialized lowering
 - [x] `indexWordArray#` — arity 2 — Byte-array operation
 - [x] `indexWordOffAddr#` — arity 2 — Pointer scalar signature
 - [x] `insertDoubleX2#` — arity 3 — Specialized lowering
@@ -755,15 +767,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `readFloatOffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readFloatX4Array#` — arity 3 — Specialized lowering
 - [x] `readInt16Array#` — arity 3 — Byte-array operation
+- [x] `readInt16ArrayAsInt16X8#` — arity 3 — Specialized lowering
 - [x] `readInt16OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readInt16X8Array#` — arity 3 — Specialized lowering
 - [x] `readInt32Array#` — arity 3 — Byte-array operation
 - [x] `readInt32ArrayAsInt32X4#` — arity 3 — Specialized lowering
 - [x] `readInt32OffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readInt32X4Array#` — arity 3 — Specialized lowering
 - [x] `readInt64Array#` — arity 3 — Byte-array operation
+- [x] `readInt64ArrayAsInt64X2#` — arity 3 — Specialized lowering
 - [x] `readInt64OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readInt64X2Array#` — arity 3 — Specialized lowering
 - [x] `readInt8Array#` — arity 3 — Byte-array operation
+- [x] `readInt8ArrayAsInt8X16#` — arity 3 — Specialized lowering
 - [x] `readInt8OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readInt8X16Array#` — arity 3 — Specialized lowering
 - [x] `readIntArray#` — arity 3 — Byte-array operation
 - [x] `readIntOffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readMVar#` — arity 2 — MVar operation
@@ -776,13 +794,17 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `readWideCharArray#` — arity 3 — Byte-array operation
 - [x] `readWideCharOffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord16Array#` — arity 3 — Byte-array operation
+- [x] `readWord16ArrayAsWord16X8#` — arity 3 — Specialized lowering
 - [x] `readWord16OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord16X8Array#` — arity 3 — Specialized lowering
 - [x] `readWord32Array#` — arity 3 — Byte-array operation
 - [x] `readWord32ArrayAsWord32X4#` — arity 3 — Specialized lowering
 - [x] `readWord32OffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord32X4Array#` — arity 3 — Specialized lowering
 - [x] `readWord64Array#` — arity 3 — Byte-array operation
+- [x] `readWord64ArrayAsWord64X2#` — arity 3 — Specialized lowering
 - [x] `readWord64OffAddr#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord64X2Array#` — arity 3 — Specialized lowering
 - [x] `readWord8Array#` — arity 3 — Byte-array operation
 - [x] `readWord8ArrayAsAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord8ArrayAsChar#` — arity 3 — Byte-array operation
@@ -798,6 +820,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `readWord8ArrayAsWord16#` — arity 3 — Byte-array operation
 - [x] `readWord8ArrayAsWord32#` — arity 3 — Byte-array operation
 - [x] `readWord8ArrayAsWord64#` — arity 3 — Byte-array operation
+- [x] `readWord8ArrayAsWord8X16#` — arity 3 — Specialized lowering
 - [x] `readWord8OffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord8OffAddrAsAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord8OffAddrAsChar#` — arity 3 — Pointer or pinned-memory operation
@@ -813,6 +836,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `readWord8OffAddrAsWord16#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord8OffAddrAsWord32#` — arity 3 — Pointer or pinned-memory operation
 - [x] `readWord8OffAddrAsWord64#` — arity 3 — Pointer or pinned-memory operation
+- [x] `readWord8X16Array#` — arity 3 — Specialized lowering
 - [x] `readWordArray#` — arity 3 — Byte-array operation
 - [x] `readWordOffAddr#` — arity 3 — Pointer or pinned-memory operation
 - [x] `reallyUnsafePtrEquality#` — arity 2 — Specialized lowering
@@ -991,15 +1015,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `writeFloatOffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeFloatX4Array#` — arity 4 — Specialized lowering
 - [x] `writeInt16Array#` — arity 4 — Byte-array operation
+- [x] `writeInt16ArrayAsInt16X8#` — arity 4 — Specialized lowering
 - [x] `writeInt16OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeInt16X8Array#` — arity 4 — Specialized lowering
 - [x] `writeInt32Array#` — arity 4 — Byte-array operation
 - [x] `writeInt32ArrayAsInt32X4#` — arity 4 — Specialized lowering
 - [x] `writeInt32OffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeInt32X4Array#` — arity 4 — Specialized lowering
 - [x] `writeInt64Array#` — arity 4 — Byte-array operation
+- [x] `writeInt64ArrayAsInt64X2#` — arity 4 — Specialized lowering
 - [x] `writeInt64OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeInt64X2Array#` — arity 4 — Specialized lowering
 - [x] `writeInt8Array#` — arity 4 — Byte-array operation
+- [x] `writeInt8ArrayAsInt8X16#` — arity 4 — Specialized lowering
 - [x] `writeInt8OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeInt8X16Array#` — arity 4 — Specialized lowering
 - [x] `writeIntArray#` — arity 4 — Byte-array operation
 - [x] `writeIntOffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeMutVar#` — arity 3 — Mutable-reference operation
@@ -1010,13 +1040,17 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `writeWideCharArray#` — arity 4 — Byte-array operation
 - [x] `writeWideCharOffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord16Array#` — arity 4 — Byte-array operation
+- [x] `writeWord16ArrayAsWord16X8#` — arity 4 — Specialized lowering
 - [x] `writeWord16OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord16X8Array#` — arity 4 — Specialized lowering
 - [x] `writeWord32Array#` — arity 4 — Byte-array operation
 - [x] `writeWord32ArrayAsWord32X4#` — arity 4 — Specialized lowering
 - [x] `writeWord32OffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord32X4Array#` — arity 4 — Specialized lowering
 - [x] `writeWord64Array#` — arity 4 — Byte-array operation
+- [x] `writeWord64ArrayAsWord64X2#` — arity 4 — Specialized lowering
 - [x] `writeWord64OffAddr#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord64X2Array#` — arity 4 — Specialized lowering
 - [x] `writeWord8Array#` — arity 4 — Byte-array operation
 - [x] `writeWord8ArrayAsAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord8ArrayAsChar#` — arity 4 — Byte-array operation
@@ -1032,6 +1066,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `writeWord8ArrayAsWord16#` — arity 4 — Byte-array operation
 - [x] `writeWord8ArrayAsWord32#` — arity 4 — Byte-array operation
 - [x] `writeWord8ArrayAsWord64#` — arity 4 — Byte-array operation
+- [x] `writeWord8ArrayAsWord8X16#` — arity 4 — Specialized lowering
 - [x] `writeWord8OffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord8OffAddrAsAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord8OffAddrAsChar#` — arity 4 — Pointer or pinned-memory operation
@@ -1047,6 +1082,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `writeWord8OffAddrAsWord16#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord8OffAddrAsWord32#` — arity 4 — Pointer or pinned-memory operation
 - [x] `writeWord8OffAddrAsWord64#` — arity 4 — Pointer or pinned-memory operation
+- [x] `writeWord8X16Array#` — arity 4 — Specialized lowering
 - [x] `writeWordArray#` — arity 4 — Byte-array operation
 - [x] `writeWordOffAddr#` — arity 4 — Pointer or pinned-memory operation
 - [x] `xor#` — arity 2 — Numeric scalar signature
@@ -1113,7 +1149,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexFloatX8OffAddr#` — arity 2
 - [ ] `indexInt16ArrayAsInt16X16#` — arity 2
 - [ ] `indexInt16ArrayAsInt16X32#` — arity 2
-- [ ] `indexInt16ArrayAsInt16X8#` — arity 2
 - [ ] `indexInt16OffAddrAsInt16X16#` — arity 2
 - [ ] `indexInt16OffAddrAsInt16X32#` — arity 2
 - [ ] `indexInt16OffAddrAsInt16X8#` — arity 2
@@ -1121,7 +1156,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexInt16X16OffAddr#` — arity 2
 - [ ] `indexInt16X32Array#` — arity 2
 - [ ] `indexInt16X32OffAddr#` — arity 2
-- [ ] `indexInt16X8Array#` — arity 2
 - [ ] `indexInt16X8OffAddr#` — arity 2
 - [ ] `indexInt32ArrayAsInt32X16#` — arity 2
 - [ ] `indexInt32ArrayAsInt32X8#` — arity 2
@@ -1133,25 +1167,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexInt32X4OffAddr#` — arity 2
 - [ ] `indexInt32X8Array#` — arity 2
 - [ ] `indexInt32X8OffAddr#` — arity 2
-- [ ] `indexInt64ArrayAsInt64X2#` — arity 2
 - [ ] `indexInt64ArrayAsInt64X4#` — arity 2
 - [ ] `indexInt64ArrayAsInt64X8#` — arity 2
 - [ ] `indexInt64OffAddrAsInt64X2#` — arity 2
 - [ ] `indexInt64OffAddrAsInt64X4#` — arity 2
 - [ ] `indexInt64OffAddrAsInt64X8#` — arity 2
-- [ ] `indexInt64X2Array#` — arity 2
 - [ ] `indexInt64X2OffAddr#` — arity 2
 - [ ] `indexInt64X4Array#` — arity 2
 - [ ] `indexInt64X4OffAddr#` — arity 2
 - [ ] `indexInt64X8Array#` — arity 2
 - [ ] `indexInt64X8OffAddr#` — arity 2
-- [ ] `indexInt8ArrayAsInt8X16#` — arity 2
 - [ ] `indexInt8ArrayAsInt8X32#` — arity 2
 - [ ] `indexInt8ArrayAsInt8X64#` — arity 2
 - [ ] `indexInt8OffAddrAsInt8X16#` — arity 2
 - [ ] `indexInt8OffAddrAsInt8X32#` — arity 2
 - [ ] `indexInt8OffAddrAsInt8X64#` — arity 2
-- [ ] `indexInt8X16Array#` — arity 2
 - [ ] `indexInt8X16OffAddr#` — arity 2
 - [ ] `indexInt8X32Array#` — arity 2
 - [ ] `indexInt8X32OffAddr#` — arity 2
@@ -1159,7 +1189,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexInt8X64OffAddr#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X16#` — arity 2
 - [ ] `indexWord16ArrayAsWord16X32#` — arity 2
-- [ ] `indexWord16ArrayAsWord16X8#` — arity 2
 - [ ] `indexWord16OffAddrAsWord16X16#` — arity 2
 - [ ] `indexWord16OffAddrAsWord16X32#` — arity 2
 - [ ] `indexWord16OffAddrAsWord16X8#` — arity 2
@@ -1167,7 +1196,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexWord16X16OffAddr#` — arity 2
 - [ ] `indexWord16X32Array#` — arity 2
 - [ ] `indexWord16X32OffAddr#` — arity 2
-- [ ] `indexWord16X8Array#` — arity 2
 - [ ] `indexWord16X8OffAddr#` — arity 2
 - [ ] `indexWord32ArrayAsWord32X16#` — arity 2
 - [ ] `indexWord32ArrayAsWord32X8#` — arity 2
@@ -1179,25 +1207,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `indexWord32X4OffAddr#` — arity 2
 - [ ] `indexWord32X8Array#` — arity 2
 - [ ] `indexWord32X8OffAddr#` — arity 2
-- [ ] `indexWord64ArrayAsWord64X2#` — arity 2
 - [ ] `indexWord64ArrayAsWord64X4#` — arity 2
 - [ ] `indexWord64ArrayAsWord64X8#` — arity 2
 - [ ] `indexWord64OffAddrAsWord64X2#` — arity 2
 - [ ] `indexWord64OffAddrAsWord64X4#` — arity 2
 - [ ] `indexWord64OffAddrAsWord64X8#` — arity 2
-- [ ] `indexWord64X2Array#` — arity 2
 - [ ] `indexWord64X2OffAddr#` — arity 2
 - [ ] `indexWord64X4Array#` — arity 2
 - [ ] `indexWord64X4OffAddr#` — arity 2
 - [ ] `indexWord64X8Array#` — arity 2
 - [ ] `indexWord64X8OffAddr#` — arity 2
-- [ ] `indexWord8ArrayAsWord8X16#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X32#` — arity 2
 - [ ] `indexWord8ArrayAsWord8X64#` — arity 2
 - [ ] `indexWord8OffAddrAsWord8X16#` — arity 2
 - [ ] `indexWord8OffAddrAsWord8X32#` — arity 2
 - [ ] `indexWord8OffAddrAsWord8X64#` — arity 2
-- [ ] `indexWord8X16Array#` — arity 2
 - [ ] `indexWord8X16OffAddr#` — arity 2
 - [ ] `indexWord8X32Array#` — arity 2
 - [ ] `indexWord8X32OffAddr#` — arity 2
@@ -1300,7 +1324,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readFloatX8OffAddr#` — arity 3
 - [ ] `readInt16ArrayAsInt16X16#` — arity 3
 - [ ] `readInt16ArrayAsInt16X32#` — arity 3
-- [ ] `readInt16ArrayAsInt16X8#` — arity 3
 - [ ] `readInt16OffAddrAsInt16X16#` — arity 3
 - [ ] `readInt16OffAddrAsInt16X32#` — arity 3
 - [ ] `readInt16OffAddrAsInt16X8#` — arity 3
@@ -1308,7 +1331,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readInt16X16OffAddr#` — arity 3
 - [ ] `readInt16X32Array#` — arity 3
 - [ ] `readInt16X32OffAddr#` — arity 3
-- [ ] `readInt16X8Array#` — arity 3
 - [ ] `readInt16X8OffAddr#` — arity 3
 - [ ] `readInt32ArrayAsInt32X16#` — arity 3
 - [ ] `readInt32ArrayAsInt32X8#` — arity 3
@@ -1320,25 +1342,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readInt32X4OffAddr#` — arity 3
 - [ ] `readInt32X8Array#` — arity 3
 - [ ] `readInt32X8OffAddr#` — arity 3
-- [ ] `readInt64ArrayAsInt64X2#` — arity 3
 - [ ] `readInt64ArrayAsInt64X4#` — arity 3
 - [ ] `readInt64ArrayAsInt64X8#` — arity 3
 - [ ] `readInt64OffAddrAsInt64X2#` — arity 3
 - [ ] `readInt64OffAddrAsInt64X4#` — arity 3
 - [ ] `readInt64OffAddrAsInt64X8#` — arity 3
-- [ ] `readInt64X2Array#` — arity 3
 - [ ] `readInt64X2OffAddr#` — arity 3
 - [ ] `readInt64X4Array#` — arity 3
 - [ ] `readInt64X4OffAddr#` — arity 3
 - [ ] `readInt64X8Array#` — arity 3
 - [ ] `readInt64X8OffAddr#` — arity 3
-- [ ] `readInt8ArrayAsInt8X16#` — arity 3
 - [ ] `readInt8ArrayAsInt8X32#` — arity 3
 - [ ] `readInt8ArrayAsInt8X64#` — arity 3
 - [ ] `readInt8OffAddrAsInt8X16#` — arity 3
 - [ ] `readInt8OffAddrAsInt8X32#` — arity 3
 - [ ] `readInt8OffAddrAsInt8X64#` — arity 3
-- [ ] `readInt8X16Array#` — arity 3
 - [ ] `readInt8X16OffAddr#` — arity 3
 - [ ] `readInt8X32Array#` — arity 3
 - [ ] `readInt8X32OffAddr#` — arity 3
@@ -1346,7 +1364,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readInt8X64OffAddr#` — arity 3
 - [ ] `readWord16ArrayAsWord16X16#` — arity 3
 - [ ] `readWord16ArrayAsWord16X32#` — arity 3
-- [ ] `readWord16ArrayAsWord16X8#` — arity 3
 - [ ] `readWord16OffAddrAsWord16X16#` — arity 3
 - [ ] `readWord16OffAddrAsWord16X32#` — arity 3
 - [ ] `readWord16OffAddrAsWord16X8#` — arity 3
@@ -1354,7 +1371,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readWord16X16OffAddr#` — arity 3
 - [ ] `readWord16X32Array#` — arity 3
 - [ ] `readWord16X32OffAddr#` — arity 3
-- [ ] `readWord16X8Array#` — arity 3
 - [ ] `readWord16X8OffAddr#` — arity 3
 - [ ] `readWord32ArrayAsWord32X16#` — arity 3
 - [ ] `readWord32ArrayAsWord32X8#` — arity 3
@@ -1366,25 +1382,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `readWord32X4OffAddr#` — arity 3
 - [ ] `readWord32X8Array#` — arity 3
 - [ ] `readWord32X8OffAddr#` — arity 3
-- [ ] `readWord64ArrayAsWord64X2#` — arity 3
 - [ ] `readWord64ArrayAsWord64X4#` — arity 3
 - [ ] `readWord64ArrayAsWord64X8#` — arity 3
 - [ ] `readWord64OffAddrAsWord64X2#` — arity 3
 - [ ] `readWord64OffAddrAsWord64X4#` — arity 3
 - [ ] `readWord64OffAddrAsWord64X8#` — arity 3
-- [ ] `readWord64X2Array#` — arity 3
 - [ ] `readWord64X2OffAddr#` — arity 3
 - [ ] `readWord64X4Array#` — arity 3
 - [ ] `readWord64X4OffAddr#` — arity 3
 - [ ] `readWord64X8Array#` — arity 3
 - [ ] `readWord64X8OffAddr#` — arity 3
-- [ ] `readWord8ArrayAsWord8X16#` — arity 3
 - [ ] `readWord8ArrayAsWord8X32#` — arity 3
 - [ ] `readWord8ArrayAsWord8X64#` — arity 3
 - [ ] `readWord8OffAddrAsWord8X16#` — arity 3
 - [ ] `readWord8OffAddrAsWord8X32#` — arity 3
 - [ ] `readWord8OffAddrAsWord8X64#` — arity 3
-- [ ] `readWord8X16Array#` — arity 3
 - [ ] `readWord8X16OffAddr#` — arity 3
 - [ ] `readWord8X32Array#` — arity 3
 - [ ] `readWord8X32OffAddr#` — arity 3
@@ -1488,7 +1500,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `writeFloatX8OffAddr#` — arity 4
 - [ ] `writeInt16ArrayAsInt16X16#` — arity 4
 - [ ] `writeInt16ArrayAsInt16X32#` — arity 4
-- [ ] `writeInt16ArrayAsInt16X8#` — arity 4
 - [ ] `writeInt16OffAddrAsInt16X16#` — arity 4
 - [ ] `writeInt16OffAddrAsInt16X32#` — arity 4
 - [ ] `writeInt16OffAddrAsInt16X8#` — arity 4
@@ -1496,7 +1507,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `writeInt16X16OffAddr#` — arity 4
 - [ ] `writeInt16X32Array#` — arity 4
 - [ ] `writeInt16X32OffAddr#` — arity 4
-- [ ] `writeInt16X8Array#` — arity 4
 - [ ] `writeInt16X8OffAddr#` — arity 4
 - [ ] `writeInt32ArrayAsInt32X16#` — arity 4
 - [ ] `writeInt32ArrayAsInt32X8#` — arity 4
@@ -1508,25 +1518,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `writeInt32X4OffAddr#` — arity 4
 - [ ] `writeInt32X8Array#` — arity 4
 - [ ] `writeInt32X8OffAddr#` — arity 4
-- [ ] `writeInt64ArrayAsInt64X2#` — arity 4
 - [ ] `writeInt64ArrayAsInt64X4#` — arity 4
 - [ ] `writeInt64ArrayAsInt64X8#` — arity 4
 - [ ] `writeInt64OffAddrAsInt64X2#` — arity 4
 - [ ] `writeInt64OffAddrAsInt64X4#` — arity 4
 - [ ] `writeInt64OffAddrAsInt64X8#` — arity 4
-- [ ] `writeInt64X2Array#` — arity 4
 - [ ] `writeInt64X2OffAddr#` — arity 4
 - [ ] `writeInt64X4Array#` — arity 4
 - [ ] `writeInt64X4OffAddr#` — arity 4
 - [ ] `writeInt64X8Array#` — arity 4
 - [ ] `writeInt64X8OffAddr#` — arity 4
-- [ ] `writeInt8ArrayAsInt8X16#` — arity 4
 - [ ] `writeInt8ArrayAsInt8X32#` — arity 4
 - [ ] `writeInt8ArrayAsInt8X64#` — arity 4
 - [ ] `writeInt8OffAddrAsInt8X16#` — arity 4
 - [ ] `writeInt8OffAddrAsInt8X32#` — arity 4
 - [ ] `writeInt8OffAddrAsInt8X64#` — arity 4
-- [ ] `writeInt8X16Array#` — arity 4
 - [ ] `writeInt8X16OffAddr#` — arity 4
 - [ ] `writeInt8X32Array#` — arity 4
 - [ ] `writeInt8X32OffAddr#` — arity 4
@@ -1534,7 +1540,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `writeInt8X64OffAddr#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X16#` — arity 4
 - [ ] `writeWord16ArrayAsWord16X32#` — arity 4
-- [ ] `writeWord16ArrayAsWord16X8#` — arity 4
 - [ ] `writeWord16OffAddrAsWord16X16#` — arity 4
 - [ ] `writeWord16OffAddrAsWord16X32#` — arity 4
 - [ ] `writeWord16OffAddrAsWord16X8#` — arity 4
@@ -1542,7 +1547,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `writeWord16X16OffAddr#` — arity 4
 - [ ] `writeWord16X32Array#` — arity 4
 - [ ] `writeWord16X32OffAddr#` — arity 4
-- [ ] `writeWord16X8Array#` — arity 4
 - [ ] `writeWord16X8OffAddr#` — arity 4
 - [ ] `writeWord32ArrayAsWord32X16#` — arity 4
 - [ ] `writeWord32ArrayAsWord32X8#` — arity 4
@@ -1554,25 +1558,21 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [ ] `writeWord32X4OffAddr#` — arity 4
 - [ ] `writeWord32X8Array#` — arity 4
 - [ ] `writeWord32X8OffAddr#` — arity 4
-- [ ] `writeWord64ArrayAsWord64X2#` — arity 4
 - [ ] `writeWord64ArrayAsWord64X4#` — arity 4
 - [ ] `writeWord64ArrayAsWord64X8#` — arity 4
 - [ ] `writeWord64OffAddrAsWord64X2#` — arity 4
 - [ ] `writeWord64OffAddrAsWord64X4#` — arity 4
 - [ ] `writeWord64OffAddrAsWord64X8#` — arity 4
-- [ ] `writeWord64X2Array#` — arity 4
 - [ ] `writeWord64X2OffAddr#` — arity 4
 - [ ] `writeWord64X4Array#` — arity 4
 - [ ] `writeWord64X4OffAddr#` — arity 4
 - [ ] `writeWord64X8Array#` — arity 4
 - [ ] `writeWord64X8OffAddr#` — arity 4
-- [ ] `writeWord8ArrayAsWord8X16#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X32#` — arity 4
 - [ ] `writeWord8ArrayAsWord8X64#` — arity 4
 - [ ] `writeWord8OffAddrAsWord8X16#` — arity 4
 - [ ] `writeWord8OffAddrAsWord8X32#` — arity 4
 - [ ] `writeWord8OffAddrAsWord8X64#` — arity 4
-- [ ] `writeWord8X16Array#` — arity 4
 - [ ] `writeWord8X16OffAddr#` — arity 4
 - [ ] `writeWord8X32Array#` — arity 4
 - [ ] `writeWord8X32OffAddr#` — arity 4
