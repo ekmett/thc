@@ -376,6 +376,7 @@ executable thc
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
     THC.Driver.NativeRecipe
+    THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
     THC.Driver.GhcProxy
@@ -419,6 +420,7 @@ test-suite driver-tests
     StoreProjectTests
     EmptyStoreProjectTests
     ScalarBitcodeTests
+    PackageNativeTests
     NativeRecipeTests
     RuntimeShimTests
     InstalledForeignTests
@@ -427,6 +429,7 @@ test-suite driver-tests
     THC.Driver.InstalledForeign
     THC.Driver.Lock
     THC.Driver.NativeRecipe
+    THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
   build-tool-depends: thc:thc
@@ -724,6 +727,7 @@ executable thc-fixtures
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
     THC.Driver.NativeRecipe
+    THC.Driver.PackageNative
     THC.Driver.ScalarBitcode
     THC.Driver.Installed
     THC.Driver.InstalledForeign
