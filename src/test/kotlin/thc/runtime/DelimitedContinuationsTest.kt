@@ -254,7 +254,7 @@ class DelimitedContinuationsTest {
                     override fun execute(frame: VirtualFrame): Any? = when (frame.arguments[0]) {
                         0 -> DelimitedControl.tag(this, local)
                         1 -> DelimitedControl.tag(this, foreignTag)
-                        2 -> foreignStack.resume(site, frame, null)
+                        2 -> foreignStack.resume(site, frame.materialize(), null)
                         else -> DelimitedControl.tag(this, 0L)
                     }
                 }.callTarget

@@ -385,6 +385,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val packageCbits = thc.runtime.PackageScalarLibraries(env)
         internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
+        internal val stackAnnotations = ThreadLocal.withInitial { thc.runtime.StackAnnotationState.EMPTY }
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
         @JvmField internal val stm = thc.runtime.ManagedSTM()
         internal val files = thc.runtime.ManagedFiles(env, threads)

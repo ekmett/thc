@@ -184,11 +184,7 @@ internal class TupleDispatch @JvmOverloads constructor(private val destination: 
     fun execute(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {
         try { executeCall(frame, function, arguments) }
         catch (cut: DelimitedCut) {
-            val pending = cut.frames.lastOrNull()
-            if (destination is AstTupleDestination && !(pending?.frame === frame &&
-                    (pending.step as? DelimitedPendingApplication)?.destination === destination))
-                cut.append(frame, DelimitedTupleStep(destination, this))
-            throw cut
+            throw DelimitedControl.tupleCut(cut, frame.materialize(), destination, this)
         }
     }
     @ExplodeLoop private fun executeCall(frame: VirtualFrame, function: Closure, arguments: Array<Any?>) {

@@ -347,6 +347,7 @@
     "compiler/test-fixtures/ClosureInspectionAudit.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "compiler/test-fixtures/ClosureInspectionNative.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "src/main/kotlin/thc/runtime/ClosureInspection.kt": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "src/main/kotlin/thc/runtime/StackAnnotations.kt": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
     "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "compiler/test-fixtures/HintTraceNative.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "test/haskell-fixtures/STMFixtures.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": [".github/scripts/test_fast_fixtures.py"]},

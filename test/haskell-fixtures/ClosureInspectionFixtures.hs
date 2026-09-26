@@ -18,7 +18,7 @@ prepareClosureInspection root = do
       manifest = output </> "manifest.json"
       source = "compiler/test-fixtures/ClosureInspectionAudit.hs"
       driver = "compiler/test-fixtures/ClosureInspectionNative.hs"
-      entries = ["payload", "sizeConsistent", "pointerCount", "notStack", "noCCS", "noProvenance", "cleared"] :: [String]
+      entries = ["payload", "sizeConsistent", "pointerCount", "notStack", "noCCS", "noProvenance", "cleared", "annotated", "annotatedResume"] :: [String]
   createDirectoryIfMissing True output
   old <- doesFileExist manifest
   when old (removeFile manifest)
@@ -37,7 +37,7 @@ prepareClosureInspection root = do
     "-i" ++ (root </> "compiler/test-fixtures"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") [] ""
-  unless (length (lines observations) == 35) (die "Closure inspection native row count")
+  unless (length (lines observations) == 45) (die "Closure inspection native row count")
   writeFile (output </> "oracle.tsv") observations
   plugin <- listDirectory (root </> "compiler/THC")
   scripts <- listDirectory (root </> "scripts")
@@ -50,6 +50,6 @@ prepareClosureInspection root = do
   artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
     directory </> "core/ClosureInspectionAudit.json"] ++ [directory </> entry ++ ".audit.json" | entry <- entries])
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "entries" .= entries, "nativeRows" .= (35 :: Int),
+    "entries" .= entries, "nativeRows" .= (45 :: Int),
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "closure-inspection: original Core for six primops and 35 native observations"
+  putStrLn "closure-inspection: original Core for seven primops and 45 native observations"

@@ -10,5 +10,6 @@ main = forM_ [minBound, -1, 0, 1, maxBound :: Int] $ \x@(I# n) ->
   forM_ [("payload", I# (C.payload n)), ("sizeConsistent", I# (C.sizeConsistent n)),
     ("pointerCount", I# (C.pointerCount n)), ("notStack", I# (C.notStack n)),
     ("noCCS", I# (C.noCCS n)), ("noProvenance", I# (C.noProvenance n)),
-    ("cleared", I# (C.cleared n))] $ \(name, result) ->
+    ("cleared", I# (C.cleared n)), ("annotated", I# (C.annotated n)),
+    ("annotatedResume", I# (C.annotatedResume n))] $ \(name, result) ->
       putStrLn (name ++ "\t" ++ show x ++ "\t" ++ show result)

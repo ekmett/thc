@@ -53,10 +53,14 @@ class ManagedStackFrame internal constructor(
  *
  * The snapshot records names and source coordinates; it is not an executable
  * continuation, native StgStack layout or IPE table. It cannot resume a computation.
- * No call targets, nodes, frames, arguments or Source objects escape capture.
+ * Frame metadata retains no call targets, nodes, frames, arguments or Source objects.
+ * Explicit guest annotateStack# payloads are separately retained lazily in [annotations].
  */
-class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>, internal val ownerToken: Any?) {
+class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>, internal val ownerToken: Any?,
+                                               annotations: List<Any?>) {
     val frames: List<ManagedStackFrame> = immutableStackList(frames)
+    /** Newest annotation first; payloads are never forced or rendered via toString. */
+    val annotations: List<Any?> = immutableStackList(annotations)
 
     /** Source-only JVM diagnostics; GHC's own formatter consumes the compatibility layer. */
     fun renderLines(): List<String> = immutableStackList(frames.map { frame ->
@@ -131,7 +135,8 @@ class ManagedStackSnapshot private constructor(frames: List<ManagedStackFrame>, 
             }
             if (captured.isEmpty()) throw RuntimeFault("Stack capture found no live guest frames")
             val owner = if (currentRoot.languageInfo == null) null else Language.currentState(current).stackSnapshots.token
-            return ManagedStackSnapshot(captured, owner)
+            val annotations = if (owner == null) emptyList() else StackAnnotations.current(current).values()
+            return ManagedStackSnapshot(captured, owner, annotations)
         }
 
         private fun coreLocation(node: Node?): CoreSourceLocation? {

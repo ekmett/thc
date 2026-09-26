@@ -6,12 +6,12 @@ GHC 9.14.1 exposes **1491 primops** on the pinned 64-bit target. This list is
 generated from `allThePrimOps`, the [runtime capabilities](../scripts/core-capabilities.json)
 and the [shared scalar signatures](../src/main/resources/thc/scalar-primop-signatures.json).
 
-**Implementation coverage: 1389 / 1491 (93.2%).**
+**Implementation coverage: 1390 / 1491 (93.2%).**
 
 | Status | Count | Meaning |
 | --- | ---: | --- |
-| Implemented | 1389 | A runtime implementation is registered in the capability inventory. |
-| Missing | 102 | No runtime implementation is registered. |
+| Implemented | 1390 | A runtime implementation is registered in the capability inventory. |
+| Missing | 101 | No runtime implementation is registered. |
 
 Implemented means translating the GHC operation to a sensible runtime implementation and
 checking it with ordinary tests. It does not require formal proof or exhaustive input testing.
@@ -116,6 +116,7 @@ Shared runtime gaps are not automatically attributed to every operation using th
 - [x] `andWord16#` — arity 2 — Numeric scalar signature
 - [x] `andWord32#` — arity 2 — Numeric scalar signature
 - [x] `andWord8#` — arity 2 — Numeric scalar signature
+- [x] `annotateStack#` — arity 3 — Specialized lowering
 - [x] `asinDouble#` — arity 1 — Numeric scalar signature
 - [x] `asinFloat#` — arity 1 — Numeric scalar signature
 - [x] `asinhDouble#` — arity 1 — Numeric scalar signature
@@ -1478,7 +1479,6 @@ Shared runtime gaps are not automatically attributed to every operation using th
 <summary>Remaining GHC primops, in name order</summary>
 
 - [ ] `addrToAny#` — arity 1
-- [ ] `annotateStack#` — arity 3
 - [ ] `anyToAddr#` — arity 2
 - [ ] `compactAdd#` — arity 3
 - [ ] `compactAddWithSharing#` — arity 3

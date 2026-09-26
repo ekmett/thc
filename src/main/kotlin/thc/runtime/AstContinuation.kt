@@ -15,6 +15,7 @@ internal interface AstResumeStep {
 
 /** Built only while unwinding an interrupted AST activation. Steps run leaf first. */
 internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : ControlFlowException() {
+    private val annotations = StackAnnotations.current(null)
     private val steps = ArrayList<AstResumeStep>()
 
     fun append(step: AstResumeStep): AstCapture {
@@ -23,7 +24,7 @@ internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : Co
     }
 
     fun freeze(sourceRoot: GuestRoot, frame: MaterializedFrame): AstContinuation =
-        AstContinuation(sourceRoot, yielded, logicalMask, frame, steps.toList())
+        AstContinuation(sourceRoot, yielded, logicalMask, frame, steps.toList(), annotations)
 
     fun appendRemaining(old: List<AstResumeStep>, first: Int): AstCapture {
         for (i in first until old.size) steps.add(old[i])
@@ -37,7 +38,8 @@ internal class AstContinuation(
     override val yielded: Any?,
     private val logicalMask: MaskingState,
     private val frame: MaterializedFrame,
-    private val steps: List<AstResumeStep>
+    private val steps: List<AstResumeStep>,
+    private val annotations: StackAnnotationState
 ) : SavedGuestContinuation {
     override val identity: Any get() = this
     private val claimed = AtomicBoolean()
@@ -45,8 +47,10 @@ internal class AstContinuation(
     override fun continueWith(input: Any?): Any? {
         if (!claimed.compareAndSet(false, true)) fault("AST continuation was already resumed")
         val ambient = SynchronousMasking.current(sourceRoot)
+        val ambientAnnotations = StackAnnotations.current(sourceRoot)
         try {
             SynchronousMasking.set(sourceRoot, logicalMask)
+            StackAnnotations.set(sourceRoot, annotations)
             var answer = input
             for (index in steps.indices) {
                 answer = try { steps[index].resume(frame, answer) }
@@ -57,6 +61,9 @@ internal class AstContinuation(
                 }
             }
             return answer
-        } finally { SynchronousMasking.set(sourceRoot, ambient) }
+        } finally {
+            SynchronousMasking.set(sourceRoot, ambient)
+            StackAnnotations.set(sourceRoot, ambientAnnotations)
+        }
     }
 }

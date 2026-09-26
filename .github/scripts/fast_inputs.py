@@ -134,7 +134,7 @@ HINT_TRACE_OUTPUTS = frozenset("build/hint-trace/" + name for name in (
 CLOSURE_INSPECTION_OUTPUTS = frozenset("build/closure-inspection/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "core/ClosureInspectionAudit.json",
     *(name + ".audit.json" for name in ("payload", "sizeConsistent", "pointerCount", "notStack",
-                                       "noCCS", "noProvenance", "cleared"))))
+                                       "noCCS", "noProvenance", "cleared", "annotated", "annotatedResume"))))
 SIMD_WIDE_ARRAY_ENTRIES = tuple(shape + operation + mode
     for shape in ("int8X32","word8X32","int8X64","word8X64","int16X32","word16X32",
                   "int16X16","word16X16","int32X8","word32X8","int32X16","word32X16","int64X4","word64X4","int64X8","word64X8","floatX8","floatX16","doubleX4","doubleX8")

@@ -53,7 +53,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'closure-inspection']}],
                          manifest['groups']['closure-inspection']['commands'])
         self.assertIn('"$fixture_bin" closure-inspection', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
-        self.assertEqual(11, len(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS))
+        self.assertEqual(13, len(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS))
         self.assertTrue(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         for name in fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS:
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(name, {}), name)
