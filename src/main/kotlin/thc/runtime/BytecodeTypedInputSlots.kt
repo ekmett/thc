@@ -9,6 +9,10 @@ import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 
+/** Parse-time lane destinations keep wide instructions below JVM method-size limits. */
+internal class BytecodeVectorLanes(
+    @field:CompilationFinal(dimensions = 1) val slots: Array<LocalAccessor>)
+
 /** Exact vector metadata and one replay-local slot; no activation or payload is retained here. */
 internal class BytecodeVectorSlots(proof: CoreRepresentation,
     @field:CompilationFinal(dimensions = 1) private val slots: Array<LocalAccessor>) {

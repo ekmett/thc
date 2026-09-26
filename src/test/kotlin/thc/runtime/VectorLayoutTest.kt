@@ -44,7 +44,7 @@ class VectorLayoutTest {
             CoreRepresentations.parse(mapOf("kind" to "vector", "evaluated" to true,
                 "primReps" to listOf("VecRep ${shape["lanes"]} ${shape["element"]}"),
                 "vector" to mapOf("lanes" to shape["lanes"], "element" to shape["element"])))
-        }.also { assertEquals(24, it.size) }
+        }.also { assertEquals(30, it.size) }
     }
     private fun withLanguage(action: (Language) -> Unit) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").build().use { context ->
