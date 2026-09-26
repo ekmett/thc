@@ -228,10 +228,9 @@ class SumAuditTest(unittest.TestCase):
 
     def test_ordinary_inputs_and_captures_require_capabilities_other_boundaries_reject(self):
         proof=summ()
-        for mode in ('formal','argument','capture','let','erased-let','heap-field','join-capture','join-formal'):
+        for mode in ('argument','capture','let','erased-let','heap-field','join-capture','join-formal'):
             with self.subTest(mode=mode):
                 module=fixture();root=module['bindings'][0]['expr'];case=root[2]
-                if mode=='formal':root[1].append(binder('unused',proof))
                 if mode=='argument':case[1][2]=[module['bindings'][1]['expr'][2]]
                 if mode=='capture':case[3][0][3]=lam([],var('case',proof),proof)
                 if mode=='let':root[2]=['let',False,[binding('bad',case[1],proof)],lit(),dict(rep=INT)]
@@ -244,7 +243,7 @@ class SumAuditTest(unittest.TestCase):
                     join=binding('j',lam([binder('n',proof if mode=='join-formal' else INT)],body,INT))
                     join.update(joinValueArity=1,joinResultRep=INT,info=dict(joinArity=1))
                     case[3][0][3]=['let',False,[join],lit(),dict(rep=INT)]
-                if mode in ('formal', 'capture'):
+                if mode=='capture':
                     self.accepted(module)
                     disabled=dict(ENABLED, aggregateInputs=[], aggregateCaptures=[])
                     report=run(module,cap=disabled)
@@ -257,7 +256,7 @@ class SumAuditTest(unittest.TestCase):
                     continue
                 else:
                     report=self.rejected(module)
-                expected={'formal':'formal argument','argument':'argument','capture':'capture','let':'let binding',
+                expected={'argument':'argument','capture':'capture','let':'let binding',
                           'erased-let':'let binding','heap-field':'argument',
                           'join-capture':'join capture','join-formal':'formal argument'}[mode]
                 self.assertTrue(any(i['detail']=='unboxed-sum '+expected for i in report['issues']),report['issues'])
@@ -296,6 +295,10 @@ class SumAuditTest(unittest.TestCase):
         self.accepted(module)
         disabled=dict(ENABLED,aggregateInputs=[])
         self.assertTrue(any(i['detail']=='unboxed-sum argument' for i in run(module,cap=disabled)['issues']))
+        self.assertTrue(any(i['detail']=='unboxed-sum formal argument' for i in run(module,cap=disabled)['issues']))
+        # A supported internal sum worker is not a signed-Long public host ABI.
+        report=self.rejected(module,'consume')
+        self.assertTrue(any(i['path']=='/entry' and i['detail']=='unboxed-sum host argument' for i in report['issues']))
         changed=copy.deepcopy(module)
         changed['bindings'][0]['expr'][2][3]=[True]
         self.assertTrue(any(i['code']=='application-levity' for i in self.rejected(changed)['issues']))

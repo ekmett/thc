@@ -75,8 +75,8 @@ Float/Double leaves, local join results and zero-width State components.
 PAPs, overapplication and tail transfers. [Empty inputs](empty-tuple-inputs.md)
 and [empty join inputs](empty-tuple-joins.md) have no physical payload fields.
 [Tuple join inputs](tuple-joins.md) use parallel typed frame moves, including
-the original GHC floating-formatting worker. Ordinary tuple captures and
-sum join inputs remain unsupported.
+the original GHC floating-formatting worker. [Ordinary tuple captures](tuple-captures.md)
+retain owned typed properties; sum join inputs remain unsupported.
 [Aggregate constructor fields](aggregate-heap-fields.md) flatten exact tuple and
 binary-sum layouts into owned typed heap properties.
 

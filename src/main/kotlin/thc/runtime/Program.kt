@@ -2146,29 +2146,24 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val vectorDestinations = arrayListOf<IntArray?>()
         for (id in captured) {
             val local = outer.locals.getValue(id)
-            if (local.proof.isSum) {
+            if (local.proof.isTypedTransport) {
                 CoreRepresentations.requireInput(local.proof)
                 val fields = ArgumentLayout.leaves(local.proof)
                 val sources = local.tupleSlots
                 if (local.cell || sources?.size != fields.size)
-                    throw UnsupportedCore("Sum capture requires exact typed locals")
-                // The sum remains a logical alias. Its owned capture consists of
-                // ordinary typed tag/payload properties, including nullable inactive refs.
+                    throw UnsupportedCore("Aggregate capture requires exact typed locals")
+                // Logical aggregates remain aliases of owned typed properties.
+                // Void leaves have no fields; vector leaves keep their raw species.
                 val destinations = IntArray(fields.size) { index ->
                     val field = fields[index]
-                    captureFields += Local(sources[index], field.isLong, field, false)
-                    vectorDestinations += null
-                    scope.layout.bind("$id captured sum field $index").also { captureDestinations += it }
+                    val destination = scope.layout.bind("$id captured field $index")
+                    captureFields += Local(sources[index], field.isLong, field, false,
+                        tupleSlots = if (field.isVector) intArrayOf(sources[index]) else null)
+                    vectorDestinations += if (field.isVector) intArrayOf(destination) else null
+                    captureDestinations += destination
+                    destination
                 }
                 scope.bindTuple(id, local.proof, destinations)
-            } else if (local.proof.isVector) {
-                CoreRepresentations.requireInput(local.proof)
-                if (local.cell || local.tupleSlots?.size != 1)
-                    throw UnsupportedCore("Vector capture requires one raw-vector local")
-                val lanes = IntArray(1) { scope.layout.bind("$id captured vector") }
-                captureFields += local
-                vectorDestinations += lanes
-                captureDestinations += scope.bindTuple(id, local.proof, lanes).slot
             } else {
                 CoreRepresentations.requireScalar(local.proof, "capture")
                 captureFields += local

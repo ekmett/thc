@@ -1060,7 +1060,8 @@ class AuditTest(unittest.TestCase):
         producer[2] = ['case', original, 'held',
                        [['default', None, [], region, dict(binders=[])]],
                        dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
-        report = run_tuple(module)
+        disabled = dict(TUPLE_CAP, aggregateCaptures=[])
+        report = audit_core.Audit([('tuple.json', module)], disabled).run(['root'])
         self.assertIn('unboxed-tuple capture', [i['detail'] for i in report['issues']])
 
     def test_recursive_join_identity_shadows_outer_tuple_for_capture_checks(self):
@@ -1571,7 +1572,7 @@ class EmptyTupleInputTests(unittest.TestCase):
             call[2][0] = ['void', dict(rep=self.state)]
             self.assertIn('aggregate-shape', {i['code'] for i in self.audit(module)['issues']}, local_alias)
 
-    def test_empty_formal_cannot_be_captured_by_a_nested_function(self):
+    def test_empty_formal_capture_is_logical_but_requires_capture_capability(self):
         module = self.fixture([self.empty])
         worker = module['bindings'][1]
         inner = ['lam', [dict(id='x', lifted=False, rep=LONG)],
@@ -1579,7 +1580,9 @@ class EmptyTupleInputTests(unittest.TestCase):
         worker['expr'][2] = inner
         worker['expr'][3]['resultRep'] = CLOSURE
         module['bindings'][0]['expr'][6]['rep'] = CLOSURE
-        self.assertIn('unboxed-tuple capture', [i['detail'] for i in self.audit(module)['issues']])
+        self.assertTrue(self.audit(module)['accepted'])
+        self.assertIn('unboxed-tuple capture', [i['detail'] for i in
+            self.audit(module, cap=dict(self.capability, aggregateCaptures=[]))['issues']])
 
     def test_genuine_native_empty_input_exports_are_accepted(self):
         paths = [ROOT.parent / f'build/empty-tuple-input/{stage}-core/EmptyTupleInputAudit.json' for stage in ['pre', 'post']]
