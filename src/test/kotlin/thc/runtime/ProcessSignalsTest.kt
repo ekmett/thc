@@ -152,7 +152,7 @@ class ProcessSignalsTest {
             val fake = object : ProcessSignalTransport {
                 private var old = -1
                 private var received = false
-                override fun install(action: Int) = NativeProcessSignals.Result(old.also { old = action }, 0)
+                override fun install(action: Int) = ProcessSignalTransport.Result(old.also { old = action }, 0)
                 override fun take(): ByteArray? {
                     if (received) delivered.countDown()
                     return events.take().takeUnless { it.isEmpty() }?.also { received = true }
