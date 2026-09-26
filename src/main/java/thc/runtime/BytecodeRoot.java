@@ -2361,6 +2361,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         public static boolean isLong(Object value) { return value instanceof Long; }
     }
 
+    /** Internal ordering of exact integral case labels, including Word# bit patterns. */
+    @Operation
+    @ConstantOperand(type = long.class, name = "pivot")
+    public static final class LiteralBelow {
+        @Specialization public static boolean test(long pivot, long value) { return value < pivot; }
+    }
+
     @Operation
     @ConstantOperand(type = DataLayout.class, name = "layout")
     @ConstantOperand(type = int.class, name = "index")

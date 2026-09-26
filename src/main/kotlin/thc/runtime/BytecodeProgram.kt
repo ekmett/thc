@@ -3730,6 +3730,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
+            // Disjoint integral labels can be partitioned without evaluating an
+            // arm. Signed ordering is internal: Word# labels keep all 64 bits.
+            // Keep small cases and any duplicate labels in their original order.
+            val ordered = if (binderProof.isLong && explicit.size > 8 &&
+                explicit.all { it.kind == "lit" && it.value is Long } &&
+                explicit.map { it.value }.toSet().size == explicit.size)
+                explicit.sortedBy { it.value as Long } else null
             val resultProof = CoreRepresentations.expression(expr)
             CoreRepresentations.validateDeclaredCaseResult(resultProof, alternatives.map { it.body.proof })
             CoreRepresentations.validateAggregateCaseResult(resultProof, alternatives.map { it.body.proof })
@@ -3796,7 +3803,53 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     emitChoice(index + 1)
                     if (destination == null) b.endConditional() else b.endIfThenElse()
                 }
-                emitChoice(0)
+                if (ordered == null) emitChoice(0) else {
+                    // A linear Conditional ladder makes every later arm part of
+                    // every earlier merge during partial escape analysis. Branch
+                    // through a shallow decision tree to one copy of each arm and
+                    // one shared default, then join only the selected result.
+                    val result = if (destination == null) b.createLocal("literal case result", null) else null
+                    val labels = ordered.map { b.createLabel() }
+                    val unmatched = b.createLabel()
+                    val complete = b.createLabel()
+                    fun dispatch(from: Int, end: Int) {
+                        if (end - from <= 8) {
+                            for (index in from until end) {
+                                b.beginIfThen()
+                                b.beginMatchLiteral(ordered[index].value!!)
+                                read(binder, false).emit(e)
+                                b.endMatchLiteral()
+                                b.emitBranch(labels[index])
+                                b.endIfThen()
+                            }
+                            b.emitBranch(unmatched)
+                        } else {
+                            val middle = (from + end) ushr 1
+                            b.beginIfThenElse()
+                            b.beginLiteralBelow(ordered[middle].value as Long)
+                            read(binder, false).emit(e)
+                            b.endLiteralBelow()
+                            b.beginBlock(); dispatch(from, middle); b.endBlock()
+                            b.beginBlock(); dispatch(middle, end); b.endBlock()
+                            b.endIfThenElse()
+                        }
+                    }
+                    fun selected(alt: Alternative) {
+                        if (result != null) b.beginStoreLocal(result)
+                        emitAlternative(alt)
+                        if (result != null) b.endStoreLocal()
+                        b.emitBranch(complete)
+                    }
+                    dispatch(0, ordered.size)
+                    ordered.forEachIndexed { index, alt ->
+                        b.emitLabel(labels[index])
+                        selected(alt)
+                    }
+                    b.emitLabel(unmatched)
+                    if (fallback == null) b.emitFailCase() else selected(fallback)
+                    b.emitLabel(complete)
+                    if (result != null) b.emitLoadLocal(result)
+                }
                 b.endBlock()
                 e.locals.remove(binder.id)
             }, mergedProof))

@@ -4,7 +4,8 @@
 module ContinuationFixtures (prepareCoreContinuation) where
 
 import Control.Monad (unless)
-import FixtureSupport (run)
+import Data.Aeson (toJSON)
+import FixtureSupport (hashes, run, writeJson)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -15,9 +16,14 @@ prepareCoreContinuation root = do
   let base = root </> "build/core-continuation"
       source = "compiler/test-fixtures/CoreContinuationAudit.hs"
       lazySource = "compiler/test-fixtures/LazyIOCallbackAudit.hs"
+      literalSource = "compiler/test-fixtures/LargeLiteralCaseAudit.hs"
   mapM_ (createDirectoryIfMissing True . (base </>)) ["core", "ghc", "native"]
   _ <- run root [("THC_CORE_OUT", base </> "core"), ("THC_GHC_OUT", base </> "ghc")]
-       "compiler/export.sh" [source, lazySource] ""
+       "compiler/export.sh" [source, lazySource, literalSource] ""
+  mapM_ (\entry -> run root [] "python3"
+      ["scripts/audit-core.py", base </> "core/LargeLiteralCaseAudit.json",
+       "--entry", entry, "--output", base </> ("literal-" ++ entry ++ "-audit.json")] "")
+      ["largeInt", "largeWordCheck", "largeLazy", "boxInt"]
   mapM_ (\(entry, report) -> run root [] "python3"
       ["scripts/audit-core.py", base </> "core/LazyIOCallbackAudit.json",
        "--entry", entry, "--output", base </> report] "")
@@ -88,3 +94,12 @@ prepareCoreContinuation root = do
   lazyNative <- run root [] (base </> "lazy-native-oracle") [] ""
   unless (lazyNative == "42\n77\n43\n44\n") (die "lazy IO callbacks disagree with native GHC")
   writeFile (base </> "lazy-native-output.txt") lazyNative
+  _ <- run root [] ghc ["-O2", "-odir", base </> "native", "-hidir", base </> "native",
+       "-main-is", "LargeLiteralCaseAudit.main", "-o", base </> "literal-native-oracle", literalSource] ""
+  literalNative <- run root [] (base </> "literal-native-oracle") [] ""
+  unless (length (lines literalNative) == 52) (die "large literal case oracle row count differs")
+  writeFile (base </> "literal-native-output.txt") literalNative
+  literalHashes <- hashes root [literalSource, "test/haskell-fixtures/ContinuationFixtures.hs",
+    "build/core-continuation/core/LargeLiteralCaseAudit.json",
+    "build/core-continuation/literal-native-output.txt"]
+  writeJson (base </> "literal-manifest.json") (toJSON literalHashes)

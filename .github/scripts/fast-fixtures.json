@@ -995,7 +995,7 @@
       ]
     },
     "core-continuation": {
-      "junit": ["thc.runtime.CoreContinuationNativeTest"],
+      "junit": ["thc.runtime.CoreContinuationNativeTest", "thc.runtime.LargeLiteralCaseNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "core-continuation"]}],
       "outputs": ["build/core-continuation"],
       "sources": [
@@ -1004,6 +1004,7 @@
         "test/haskell-fixtures/Main.hs",
         "thc.cabal",
         "compiler/test-fixtures/CoreContinuationAudit.hs",
+        "compiler/test-fixtures/LargeLiteralCaseAudit.hs",
         "compiler/test-fixtures/CoreContinuationNative.hs",
         "compiler/test-fixtures/LazyIOCallbackAudit.hs",
         "compiler/test-fixtures/LazyIOCallbackNative.hs"
