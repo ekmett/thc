@@ -17,7 +17,7 @@ are different claims; each report identifies which it establishes.
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |
 | Mutable references | [ST/STRef with lazy lifted storage](mutvars.md) |
 | Stable names | [Non-evaluating weak identity tokens](stable-names.md) |
-| Compact regions | [Copied graphs, membership, sharing and cycles](compact-regions.md); serialized block import remains unsupported |
+| Compact regions | [Copied graphs, membership, sharing, cycles and context-local serialized blocks](compact-regions.md); no cross-context/process import or GHC wire-format compatibility |
 | Boxed atomic updates | [Pointer CAS and lazy atomic modification](boxed-cas.md) |
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
 | Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md), including [bounded C finalizers](c-finalizers.md); no automatic GC/ephemerons |
@@ -43,7 +43,9 @@ non-profiling cost centres, and absent closure provenance on the JVM target.
 
 The generated [primop checklist](primops.md) lists every primop from the pinned
 GHC 9.14.1 API. It distinguishes implemented and missing operations; concrete
-runtime limitations are documented separately. The [capability contract](../scripts/core-capabilities.json)
+runtime limitations are documented [primop by primop in the behavior reference](primop-behavior.md).
+That page distinguishes concrete restrictions from target choices and performance
+hints. The [capability contract](../scripts/core-capabilities.json)
 is the machine-readable declaration used by the auditor.
 
 | Area | Contracts and evidence |

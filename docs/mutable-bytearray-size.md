@@ -1,7 +1,7 @@
 # Mutable byte-array size
 
 Pinned GHC 9.14.1 defines two distinct primitives. `getSizeofMutableByteArray#`
-accepts one unlifted managed `byte[]` and scalar `State#`, returning the logical
+accepts one unlifted managed byte array and scalar `State#`, returning the logical
 unboxed pair `(# State#, Int# #)`. Both backends evaluate/check State before reading
 length and publish the size through one primitive Long destination. State consumes
 no tuple storage. The result does not use a boxed pair or generic aggregate carrier.
@@ -10,8 +10,10 @@ no tuple storage. The result does not use a boxed pair or generic aggregate carr
 `Int#` result. It uses the existing typed array-length path. Its GHC warning matters:
 it is unsafe around shrinking/resizing of the same reference. Native controls query
 only live, stable references. After resize, all accesses use the returned array;
-there is no promise about retired aliases. `shrinkMutableByteArray#` stays unsupported,
-and this slice does not alter direct byte[] storage or add a logical-size wrapper.
+there is no promise about retired aliases. `shrinkMutableByteArray#` now changes
+an owned allocation's logical size in place; both queries observe that size,
+not retained backing capacity. Pointer-cell truncation and host-array limits
+are listed in the [behavior reference](primop-behavior.md#addresses-pinning-and-pointer-containing-storage).
 
 The fresh preparer retains original OPAQUE `getSizeWorker`/`pureSizeWorker` calls in
 both pre/post Core and checks exact pinned signatures and ten strict audits.
@@ -36,4 +38,5 @@ auditor proof checks with `python3 scripts/test-core-bytearrays.py`, and the mod
 native-comparison and compiled-path tests together with
 `./gradlew --no-daemon test --tests thc.runtime.MutableByteArraySizeTest`.
 For dense handoff use `JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true` and selected-task
-`test --rerun` with the same test filter. No public Text closure or shrink support is claimed.
+`test --rerun` with the same test filter. This original size-query fixture is not
+the separate shrink implementation's evidence, nor a public Text closure claim.

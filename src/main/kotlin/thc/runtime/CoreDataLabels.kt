@@ -6,8 +6,8 @@ package thc.runtime
 import thc.Language
 
 /** Only the genuine read-only Word32 RTS label has a managed equivalent.
- * Its value is the live high-water mark of this context's logical guest Java
- * carriers (at least one), not GHC's physical -N setting or capability resizing.
+ * Its value is this context's CPU capacity snapshotted before guest pinning
+ * (at least one), not the number of guest carriers or dynamic GHC -N resizing.
  * Event-manager reconfiguration based on shrinking capabilities is still outside
  * the supported runtime contract. */
 internal object CoreDataLabels {

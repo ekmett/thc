@@ -109,6 +109,7 @@ extra-source-files:
   docs/driver.md
   docs/wide-floating-fma.md
   docs/documentation.md
+  docs/primop-behavior.md
   docs/site/index.md
   docs/site/embedding.md
   docs/site/jvm.md

@@ -6,7 +6,8 @@
 Both interpreters lower the eight GHC 9.14.1 MVar primitives: `newMVar#`,
 `takeMVar#`, `putMVar#`, `readMVar#`, `tryTakeMVar#`, `tryPutMVar#`,
 `tryReadMVar#` and `isEmptyMVar#`. This is a managed-cell foundation for Handle
-locking, not support for ordinary `putStrLn` or the complete Handle call graph.
+locking; MVar coverage alone is not coverage of the complete Handle call graph.
+The [driver's current executable IO path](driver.md) includes ordinary output.
 
 ## Representation and effects
 
@@ -37,6 +38,11 @@ Truffle interruptible callback, and safepoint retries reuse that token. A wakeup
 delivers an already committed operation: it does not compete for the cell again.
 Terminal cancellation removes only a still-pending request and releases its
 offered payload; it cannot revoke or replay a committed transfer.
+
+There is no GC-driven `BlockedIndefinitelyOnMVar` detection. A pending
+`takeMVar#`, `putMVar#` or `readMVar#` with no future partner needs supported
+asynchronous interruption or embedding cancellation to terminate. See the
+[current primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions).
 
 The bytecode backend also uses these requests for
 [asynchronous exception delivery](async-exceptions.md). Interruption cancels

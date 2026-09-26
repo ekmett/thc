@@ -31,6 +31,7 @@ guides =
   , Guide "docs/interface-foreign.md" "interface-foreign" "Foreign artifacts"
   , Guide "docs/polyglot.md" "polyglot" "Polyglot calls"
   , Guide "docs/bytecode.md" "bytecode" "Bytecode backend"
+  , Guide "docs/primop-behavior.md" "primop-behavior" "Primop behavior and limits"
   , Guide "docs/contributing.md" "contributing" "Development"
   , Guide "docs/documentation.md" "documentation" "Build this site"
   ]

@@ -32,22 +32,24 @@ change. Complete byte copies between pinned owners preserve references, and
 complete fills invalidate them. A Sulong buffer view and managed pointer cells
 cannot coexist in one allocation because raw C writes cannot track references.
 Handing out a raw byte-array alias likewise prevents later pointer-cell writes.
-Ordinary unpinned byte arrays remain raw `byte[]`; each pinned allocation adds
-one owner object and creates its cell map only on the first pointer write.
-Pinned owner accesses synchronize to order pointer-cell changes. Ordinary
-unpinned arrays retain their direct byte-array fast path. Concurrent raw writes
-to one guest array remain outside this narrow contract.
+Ordinary guest byte arrays also have allocation owners; pointer-cell maps are
+created only when needed. Owner accesses synchronize to order pointer-cell
+changes. Numeric accesses use the backing byte storage while respecting the
+owner's logical bounds and cell protections.
 Scalar byte-array reads and writes inspect only their touched range, so a
 disjoint numeric field remains usable beside a pointer cell. Vector operations
-on a pinned array still require a raw view and therefore cannot mix with
-pointer cells in that allocation.
+also validate their touched range: disjoint numeric regions and complete-cell
+overwrites are permitted, while pointer-cell byte exposure or partial overlap
+is rejected.
 An aligned full-width numeric overwrite releases the replaced pointer;
 partial overlap fails before changing bytes or references.
 
 Pinning and power-of-two alignment are logical properties of managed storage,
-not physical JVM heap pinning or native process pointers. There is no address
-to integer conversion, arbitrary memory dereference, allocation/free FFI, or
-general foreign-call machinery in this slice.
+not physical JVM heap pinning or native process pointers. The separate
+[native address projection](native-addresses.md) and owned native allocation
+paths do not make mutable managed arrays arbitrary C pointers. See the
+[primop behavior reference](primop-behavior.md#addresses-pinning-and-pointer-containing-storage)
+for the current interoperability boundaries.
 
 `readWord32OffAddr#`, `readWordOffAddr#`, `readInt32OffAddr#` and
 `readIntOffAddr#` also read managed literal or byte-array storage. Their offsets

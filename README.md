@@ -135,7 +135,8 @@ The tests include ordinary list, `STRef`, array, `ShortByteString`, `IntMap`,
 interpreters and compiled guest code. The [coverage guide](docs/README.md) links
 the individual contracts, native checks and remaining gaps; the generated
 [primop checklist](docs/primops.md) counts implemented and missing operations,
-with concrete runtime limitations documented separately. Tuple, vector and pointer
+with [known behavior differences and limits](docs/primop-behavior.md) documented
+primop by primop. Tuple, vector and pointer
 representations do not make an implementation incomplete.
 
 An explicit [full-Core locale/iconv proof group](docs/original-iconv.md) exercises

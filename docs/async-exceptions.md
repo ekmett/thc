@@ -96,5 +96,7 @@ cabal run thc-fixtures --offline -- uncaught-self
 
 General AST callers, arbitrary JVM/native foreign calls and blocking file operations
 do not gain resumable asynchronous interruption from this implementation. The
-three admitted thread primops are marked partial in the coverage inventory;
-other GHC scheduling and thread-inspection primitives remain separate work.
+implementation count does not imply unrestricted asynchronous delivery. See the
+[primop-by-primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions)
+for current restrictions, and [scheduling](thread-scheduling.md) and
+[thread inspection](thread-inventory.md) for the implemented operations.

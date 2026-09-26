@@ -108,7 +108,9 @@ Unsupported reachable paths are reported before a normal run. Development
 benchmarks can explicitly use diagnostic traps, but success on one path does
 not establish support for the rest of the program. The
 [coverage index](../README.md) and [primop checklist](../primops.md) record the
-current contracts and gaps.
+current contracts and gaps. The [primop behavior reference](../primop-behavior.md)
+names known differences, restrictions and intentional target choices primop by
+primop; implementation coverage is not a claim of identical GHC RTS behavior.
 
 ## Documentation
 

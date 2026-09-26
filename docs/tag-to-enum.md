@@ -4,7 +4,7 @@ The saturated `tagToEnum# @T tag` path retains `T` before Core type erasure. The
 
 The application carries `enumFamily: {typeConstructor, constructors}`. Both names are full exported identities; the constructor list preserves GHC's original order. Every constructor record repeats that descriptor. The exporter adds the entire family to `exprCons`, including imported constructors absent from the expression tree. Both backends and the auditor check all records, one-based constructor tags, zero fields, and exact `IntRep` operand and lifted data result proofs. Pretty names and the shared reference representation cannot establish an enum family. The descriptor is the retained compile-time nominal proof; consistency checks do not reconstruct an erased Haskell type from its JVM class.
 
-The general `primop-coverage.py` name/arity inventory reads only the generic `primitives` table, so its advertised count excludes this separately gated `tagToEnum` capability. The native fixture, strict auditor and runtime tests establish the bounded coverage described here.
+The `primop-coverage.py` inventory includes this separately gated `tagToEnum` capability as an implementation. The [behavior reference](primop-behavior.md#enumeration-constructors) records the valid enumeration families still excluded. The native fixture, strict auditor and runtime tests establish the coverage described here.
 
 Only exactly saturated primitive applications are accepted. `tagToEnum#` is deliberately absent from the generic primitive arity table: a bare primitive, primitive PAP, missing descriptor, or contradictory family is rejected. Ordinary function PAPs containing a saturated primitive body still work. Lifted enum applications retain normal thunk laziness.
 
@@ -24,4 +24,4 @@ python3 scripts/test-core-enums.py
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --tests thc.runtime.TagToEnumTest --rerun
 ```
 
-This removes one genuine `Typeable.sameTypeRep` frontier; it does not supply missing Typeable/unsafe-equality interface unfoldings, implement `dataToTag#`, or claim that the full original array ErrorCall path is executable.
+This fixture removed one `Typeable.sameTypeRep` frontier; it does not by itself establish the complete original array ErrorCall path. The separate `dataToTagSmall#` and `dataToTagLarge#` implementations now cover constructor-to-tag operations, including parameterized algebraic families.

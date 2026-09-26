@@ -15,7 +15,7 @@ generation:
 | --- | --- |
 | `make docs-haskell` | Haddock for `lib:thc` under `build/docs/haskell/` |
 | `make docs-jvm` | Mixed Java/Kotlin Dokka under `build/docs/jvm/` |
-| `make docs` | Both references, ten curated guides and one navigable site in `build/site/` |
+| `make docs` | Both references, eleven curated guides and one navigable site in `build/site/` |
 | `make docs-check` | Recheck the assembled site's links, fragments, assets and revision |
 
 `docs` runs the two generators sequentially, with at most two compiler workers.

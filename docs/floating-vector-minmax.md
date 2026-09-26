@@ -5,8 +5,9 @@ each taking two exact vector values and returning the same shape. Both AST
 and bytecode use the existing generated typed operations. Fixed-width Java
 Vector API operations return raw `FloatVector` or `DoubleVector` values, with
 no THC wrapper or boxed lane fallback. Exact shape remains in `VecRep` metadata;
-see the [SIMD representation contract](simd.md). These primops remain partial in
-the coverage checklist.
+see the [SIMD representation contract](simd.md). All twelve count as implemented;
+their numerical portability caveat is recorded in the
+[primop behavior reference](primop-behavior.md#floating-simd-portability).
 
 The runtime follows Java floating semantics. If either operand is NaN, the
 result is NaN; payload and sign selection are unspecified. Negative zero orders

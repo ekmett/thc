@@ -125,6 +125,10 @@ class PrimopChecklistTest(unittest.TestCase):
         text = coverage.checklist(data, cap)
         self.assertIn('0 / 0 (0.0%)', text)
 
+    def test_checklist_links_the_primop_behavior_reference(self):
+        self.assertIn('[primop behavior reference](primop-behavior.md)',
+                      coverage.checklist(self.derive(), self.capability))
+
     def test_stale_scalar_table_or_wrong_target_cannot_mark_support(self):
         for mutation in ('undeclared', 'arity', 'target'):
             scalars = copy.deepcopy(self.scalars)

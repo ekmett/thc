@@ -62,6 +62,11 @@ and has appropriate tests. Tuple/vector results, managed storage, Sulong pointer
 abstractions, GHC preconditions and the chosen target are not automatic partial
 support. Record concrete missing behavior separately; no universal correctness
 proof or certification layer is required for the implementation metric.
+Maintain `docs/primop-behavior.md` when adding or resolving a known primop
+behavioral difference. Name the exact operations, the observable behavior or
+rejection, and any backend/platform scope; keep the linked detailed guide and
+capability notes consistent. Do not hide concrete limitations behind the
+implementation percentage or classify ordinary target representations as gaps.
 
 Accumulate related primops and their fixtures/proofs into substantial, reviewed,
 tested checkpoints. Workers own substantial chunks end-to-end and may rebuild

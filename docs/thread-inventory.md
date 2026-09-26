@@ -17,7 +17,8 @@ thread is bound, so the native comparison explicitly executes in `forkIO`.
 
 The array result uses GHC's unlifted `ThreadId#` elements. `indexArray#` and
 `readArray#` now also transport unlifted object references without forcing or
-boxing them. Array allocation/writes retain their existing lifted-element gate.
+boxing them. Array allocation and writes also admit either known boxed levity;
+unlifted thread identities do not require a lifted wrapper.
 
 ## Example and evidence
 
