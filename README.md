@@ -169,8 +169,11 @@ and compiled calls on both backends; full `Integer` and `Natural` coverage is
 still separate work.
 
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
-complete boot-library closure, full FFI coverage, and stack-safe non-tail
-evaluation remain unfinished. The script-level scalar entry is integer-only;
+complete boot-library closure and full FFI coverage remain unfinished.
+[Async-enabled AST evaluation](docs/async-exceptions.md) now bounds nested calls
+and thunk forcing with saved continuations. Deep evaluation inside an active
+STM transaction remains unsupported; other modes keep their existing stack
+behavior. The script-level scalar entry is integer-only;
 `thc run` has the narrower `IO ()` path described above. The experimental
 [managed export API](docs/site/embedding.md) also exposes declared scalar
 functions and IO actions through polyglot bindings. Host vector arguments and
