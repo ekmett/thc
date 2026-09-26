@@ -6,6 +6,63 @@ a Haskell ahead-of-time compiler. Native packaging of the interpreter, guest
 runtime compilation, and program-specific ahead-of-time compilation are separate
 deliverables.
 
+**Current checkpoint:** a real native THC executable loads the original exported
+Haskell Core and returns native GHC's `5050` for `sumLoop 100` and `210` for
+`caseList 20`. Both AST and bytecode backends pass in both handoff modes: eight
+checks. The optimizing Truffle runtime is included, but explicit guest compilation
+fails with frame-materialization/inlining bailouts. This establishes native
+packaging and interpretation, not native guest-JIT execution or guest AOT.
+Sulong/FFI and a full Haskell executable lifecycle remain unverified.
+
+## Reproduce the working pure image
+
+The working checkpoint incorporates main `981b360c`, the lazy-fork interpreter
+transition, native-file binding isolation and primitive unsigned interop queries.
+Use the pinned GraalVM `25.3.4.1` JDK/Native Image and GHC `9.14.1` toolchains
+described in the repository setup instructions, with `JAVA_HOME` selecting that
+JDK. From the repository root:
+
+```sh
+./gradlew --max-workers=2 installDist
+./compiler/export.sh examples/THC/Fixtures.hs
+bash scripts/native-image-pure.sh
+build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json sumLoop 100
+build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json caseList 20
+```
+
+The [probe script](../scripts/native-image-pure.sh) uses the installed runtime
+JARs, excludes LLVM/NFI dependencies deliberately, and reads the exact audited
+[initialization inventory](../scripts/native-image/pure-initialization.txt).
+The versioned script was then rebuilt independently and passed the same eight
+native result checks, rather than merely transcribing the successful command.
+It bounds the builder to an 8 GiB heap and two compiler threads. On a shared
+development host, put the build and the probe inside the host's existing
+build-directory resource lease. An optional script argument selects the output
+path. This is an explicit compatibility probe, not a shipping distribution.
+
+The commands above select the default bytecode backend. Add `-Dthc.backend=ast`
+before the Core paths for AST, and `-Dthc.handoffSlabs=true` for dense handoff
+storage. All four combinations produce both expected results. Adding `--compile`
+after the integer exercises the separate explicit-compilation check; all four
+backend/workload checks currently fail rather than silently substituting an
+interpreter. The first call after successful installation remains a future
+acceptance gate.
+
+The original successful build took 114.03 seconds and 3,550,308 KiB peak RSS on
+the shared Linux x86-64 host; its file size was 67.25 MiB. These are bounded
+compatibility measurements, not isolated startup or throughput benchmarks.
+The image contains no frozen guest program: it reads those Core files at run
+time. Generated Truffle DSL field-access descriptors must be prepared at image
+build time because the pinned image implementation replaces their reflective
+fields with native offsets. Preparing those exact descriptors removed the
+first executable's runtime `InlineSupport.UnsafeField.declaringClass` failure.
+The signing key, guest contexts and native resource owners are not initialized
+as part of this inventory. Runtime graph preparation for guest JIT continues
+separately; the working interpretation recipe does not use the larger diagnostic
+preparation list.
+
+## Earlier build investigation
+
 **First-phase result:** no native executable linked, so native execution,
 guest-JIT installation in an executable, executable size and startup remain
 unverified. The investigation produced reproducible build blockers, one small
