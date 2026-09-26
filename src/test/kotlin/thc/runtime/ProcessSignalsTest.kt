@@ -22,6 +22,10 @@ import thc.loadEntry
 
 class ProcessSignalsTest {
     private val descriptor = Json.parse(javaClass.getResource("/core/original-signal-install-descriptor.json")!!.readText()) as Map<String, Any?>
+    // Original unix System.Posix.Signals core/39.json SHA256
+    // f4f562a283aec06f517c9187d13d47b93b876a5f0f807af999bcbd6cab1d44dc;
+    // all six original calls have this descriptor, differing from TopHandler only in unit.
+    private val unixDescriptor = Json.parse(javaClass.getResource("/core/original-unix-signal-install-descriptor.json")!!.readText()) as Map<String, Any?>
     private val arguments = (descriptor.getValue("argumentReps") as List<Map<String, Any?>>).map { it + ("evaluated" to true) }
     private val result = descriptor.getValue("resultRep") as Map<String, Any?>
     private val metadata = mapOf("rep" to result, "foreignCall" to descriptor)
@@ -30,12 +34,13 @@ class ProcessSignalsTest {
     private val state = arguments.last()
     private val unitId = "ghc-internal:GHC.Internal.Tuple.()"
     private fun variable(id: String, proof: Map<String, Any?>) = listOf("var", id, mapOf("rep" to proof))
-    private fun application() = listOf("app", variable("original-signal-fcall", closure),
-        arguments.mapIndexed { i, rep -> variable("a$i", rep) }, List(4) { false }, false, false, metadata)
-    private fun module(recordSignal: Boolean = false): Map<String, Any?> {
+    private fun application(original: Map<String, Any?> = descriptor) = listOf("app", variable("original-signal-fcall", closure),
+        arguments.mapIndexed { i, rep -> variable("a$i", rep) }, List(4) { false }, false, false,
+        metadata + ("foreignCall" to original))
+    private fun module(recordSignal: Boolean = false, original: Map<String, Any?> = descriptor): Map<String, Any?> {
         val inputs = arguments.mapIndexed { i, rep -> mapOf("id" to "a$i", "lifted" to false, "rep" to rep) }
         val binding = mapOf("id" to "install", "name" to "install", "arity" to 4, "lifted" to true,
-            "rep" to closure, "expr" to listOf("lam", inputs, application(), mapOf("rep" to closure, "resultRep" to result)))
+            "rep" to closure, "expr" to listOf("lam", inputs, application(original), mapOf("rep" to closure, "resultRep" to result)))
         val ioResult = mapOf("kind" to "unknown", "primReps" to listOf("BoxedRep (Just Lifted)"),
             "evaluated" to false, "aggregate" to "unboxed-tuple", "components" to listOf(state, boxed))
         val returned = listOf("app", listOf("con", "tuple2", 2, mapOf("rep" to closure)),
@@ -94,9 +99,9 @@ class ProcessSignalsTest {
         for (backend in listOf("ast", "bytecode")) inside { body(it, backend) }
     }
     private fun program(language: Language, backend: String, recordSignal: Boolean = false,
-                        async: Boolean = true): ExecutableProgram =
-        if (backend == "ast") Program(language, module(recordSignal), async)
-        else BytecodeProgram(language, module(recordSignal), async)
+                        async: Boolean = true, original: Map<String, Any?> = descriptor): ExecutableProgram =
+        if (backend == "ast") Program(language, module(recordSignal, original), async)
+        else BytecodeProgram(language, module(recordSignal, original), async)
 
     @Test fun hardContextExitSurvivesBothHostCleanupSteps() {
         val death = ThreadDeath()
@@ -146,8 +151,24 @@ class ProcessSignalsTest {
         assertThrows(RuntimeFault::class.java) { CoreSignalForeign.validateHeads(forged) }
     }
 
-    @Test fun compiledEmbeddingDenialRemainsAHostFaultOnBothBackends() = onBackends { language, backend ->
-        val program = program(language, backend)
+    @Test fun unixUsesTheExactSameAbiAndRejectsUnrelatedUnits() {
+        val target = descriptor.getValue("target") as Map<String, Any?>
+        assertEquals(descriptor + ("target" to (target + ("unit" to "unix-2.8.8.0-inplace"))), unixDescriptor)
+        val unixMetadata = metadata + ("foreignCall" to unixDescriptor)
+        assertTrue(CoreSignalForeign.named(unixMetadata))
+        assertEquals(ProcessSignalOp.INSTALL, CoreSignalForeign.validate(unixMetadata, arguments, List(4) { false }, result))
+        for (unit in listOf(null, "unix", "unix-2.8.7.0-inplace", "other", 1L)) {
+            val wrong = metadata + ("foreignCall" to (descriptor + ("target" to (target + ("unit" to unit)))))
+            assertFalse(CoreSignalForeign.named(wrong))
+            assertThrows(RuntimeFault::class.java) { CoreSignalForeign.validate(wrong, arguments, List(4) { false }, result) }
+        }
+    }
+
+    @Test fun compiledEmbeddingDenialRemainsAHostFaultOnBothBackends() = compiledEmbeddingDenial(descriptor)
+    @Test fun compiledUnixEmbeddingDenialRemainsAHostFaultOnBothBackends() = compiledEmbeddingDenial(unixDescriptor)
+
+    private fun compiledEmbeddingDenial(original: Map<String, Any?>) = onBackends { language, backend ->
+        val program = program(language, backend, original = original)
         val target = program.entryTarget("install")
         val state = Language.currentState()
         state.threads.enterCurrent()
@@ -330,7 +351,8 @@ class ProcessSignalsTest {
         val manifest = Json.parse(File(root, "build/process-signals/manifest.json").readText()) as Map<String, Any?>
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/ProcessSignalsNative.hs",
             "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c",
-            "src/test/resources/core/original-signal-install-descriptor.json"))
+            "src/test/resources/core/original-signal-install-descriptor.json",
+            "src/test/resources/core/original-unix-signal-install-descriptor.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("build/process-signals/oracle.txt",
             "build/process-signals/native-controls.txt"), "build/process-signals/")
         assertEquals("[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5])]\n", File(root, "build/process-signals/oracle.txt").readText())

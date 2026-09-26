@@ -233,6 +233,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    ('unix-2.8.8.0-inplace', 'stg_sig_install'): OPERATIONS['stg_sig_install'],
     **{('unix-2.8.8.0-inplace', symbol): operation for symbol, operation in WAIT_STATUS_OPERATIONS.items()},
     **{('text-2.1.3-inplace', symbol): operation for symbol, operation in TEXT_OPERATIONS.items()},
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcFastStringTable'): OPERATIONS['getOrSetLibHSghcFastStringTable'],

@@ -8,6 +8,12 @@ for SIGHUP, SIGINT, SIGQUIT and SIGTERM. These are the four handlers installed
 temporarily by GHC 9.14.1's library-level `runGhc` and `runGhcT`; importing the
 compiler library alone does not install them.
 
+The same bridge accepts the exact `stg_sig_install` declarations from
+`ghc-internal` and the pinned `unix-2.8.8.0-inplace` library. Both use the
+original `GHC.Internal.Conc.Signal.runHandlersPtr` dispatcher; admitting Unix's
+declaration does not grant an embedding context process-signal authority or
+change the supported signals and actions.
+
 DFL, IGN, HAN and RST actions and a null signal mask are supported. Other
 signals, non-null masks and Windows delivery remain outside
 this bridge's current implementation.
