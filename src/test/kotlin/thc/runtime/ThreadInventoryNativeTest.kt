@@ -79,6 +79,7 @@ class ThreadInventoryNativeTest {
             }
             "lazyFork" -> {
                 assertEquals(2, lambdas(entry)); assertEquals(1, lambdas("makeAction"))
+                ThreadInventoryCoreEvidence.inlinedStateWrapper(proof)
                 assertEquals(2, lambdas("actionHead"))
                 assertEquals(1, references(entry, "makeAction"))
                 assertEquals(1, references("makeAction", "actionHead"))
@@ -123,10 +124,10 @@ class ThreadInventoryNativeTest {
                 assertEquals("var", discarded[0])
                 val bottom = proof.allBindings.getValue(discarded[1] as String)["expr"] as List<*>
                 assertEquals(listOf("prim", "raise#"), (bottom[1] as List<*>).take(2))
-                // Two public/state roots, makeAction, lazy head thunk,
+                // Public root (the proven State# wrapper is inlined), makeAction, lazy head thunk,
                 // head/child roots, readiness message thunk, awaitStatus.
-                // The ninth cached root is the already-forced published CAF.
-                (2L + 1L + 1L + 2L + 1L + 1L) to 9
+                // The eighth cached root is the already-forced published CAF.
+                (1L + 1L + 1L + 2L + 1L + 1L) to 8
             }
             else -> error("No fork call-count proof for $entry")
         }
@@ -322,7 +323,7 @@ class ThreadInventoryNativeTest {
                 @Suppress("UNCHECKED_CAST")
                 val module = Json.parse(File(directory, "$stage/core/ThreadInventory.json").readText()) as Map<String, Any?>
                 val proof = ThreadInventoryCoreEvidence(module, "selfInventory")
-                assertEquals(4L, proof.compiledCalls(1), "Public, state, and occurrences at indices zero and one")
+                assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined")
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 assertEquals(java.lang.Boolean.getBoolean(HANDOFF_PROPERTY), language.handoffLayouts.enabled)
                 println("THREAD_INVENTORY_BOUNDARY_HANDOFF=${language.handoffLayouts.enabled}")
@@ -362,15 +363,14 @@ class ThreadInventoryNativeTest {
                         assertEquals(11L, Calls.target(entry, arrayOf(0L, 1L)))
                         val negative = count() - before
                         val interpreted = interpretedCalls(active).mapIndexed { i, value -> value - calls[i] }
-                        val sourceCalls = mapOf("lambda token" to 1, "lambda s" to 1,
-                            "lambda wanted, threads, i" to 2)
+                        val sourceCalls = mapOf("lambda token" to 1, "lambda wanted, threads, i" to 2)
                         assertEquals(proof.labels, sourceCalls.keys)
                         println("THREAD_INVENTORY_BOUNDARY $stage/$backendName negative=$negative interpreted=" +
                             active.mapIndexed { i, target -> target.rootNode.name to interpreted[i] }.toMap())
                         // Reprofiling the shared JVM boundary always bypasses the
                         // outer entry, but previously compiled Java call sites can
                         // bypass inner entries too. Account for the actual paths;
-                        // do not assume that only one of the four calls interpreted.
+                        // do not assume that only one of the three calls interpreted.
                         assertEquals(1, interpreted[active.indexOf(entry)], "The outer entry deliberately bypasses code")
                         active.forEachIndexed { i, target ->
                             assertTrue(interpreted[i] in 0..sourceCalls.getValue(target.rootNode.name),

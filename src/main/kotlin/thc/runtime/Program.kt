@@ -1613,7 +1613,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
 }
 private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
     fun once(frame: VirtualFrame): Any? {
-        val root = rootNode as FunctionRoot
+        val root = rootNode as? FunctionRoot ?: fault("Invalid self-loop function root")
         root.forceEntry(frame)
         root.pollBeforeBody(this)
         val entry = root.handoff
@@ -1627,14 +1627,14 @@ private class SelfRepeater(@field:Child private var body: FunctionBody, private 
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: HandoffTailCall) {
-        val root = rootNode as FunctionRoot
+        val root = rootNode as? FunctionRoot ?: fault("Invalid self-loop function root")
         if (!root.isSelf(tail.target)) throw tail
         if (metrics.enabled) metrics.incrementSelfTailReentries()
         root.restoreHandoff(frame, tail.arguments, false)
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
     catch (tail: TailCall) {
-        val root = rootNode as FunctionRoot
+        val root = rootNode as? FunctionRoot ?: fault("Invalid self-loop function root")
         if (!root.isSelf(tail.target)) throw tail
         if (metrics.enabled) metrics.incrementSelfTailReentries()
         root.restoreTail(frame, tail)

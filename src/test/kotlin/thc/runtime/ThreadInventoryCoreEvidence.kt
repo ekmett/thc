@@ -25,13 +25,14 @@ internal class ThreadInventoryCoreEvidence(module: Map<String, Any?>, private va
         "boundQuery", "snapshotSize" -> 0
         else -> error("No source call-count proof for $name")
     }
-    private val once = if (name == "forkSnapshot") 3 else 2
+    private val originalOnce = if (name == "forkSnapshot") 3 else 2
+    private val once = originalOnce - 1 // The proven immediate State# wrapper is beta-reduced.
     val labels: Set<String>
 
     init {
         val root = evidence.root["expr"] as List<Any?>
         val lambdas = evidence.guestLambdas(root)
-        assertEquals(once, lambdas.size, "$name public, immediate state, and optional child roots")
+        assertEquals(originalOnce, lambdas.size, "$name public, immediate state, and optional child roots")
         assertEquals("lam", root[0])
         val immediate = root[2] as List<*>
         assertEquals("app", immediate[0])
@@ -40,7 +41,8 @@ internal class ThreadInventoryCoreEvidence(module: Map<String, Any?>, private va
         for (lambda in lambdas.drop(1))
             assertEquals(listOf("State# RealWorld"), (lambda[1] as List<Map<*, *>>).map { it["type"] })
 
-        val originalRoots = lambdas.toMutableList()
+        val inlined = inlinedStateWrapper(evidence)
+        val originalRoots = lambdas.filter { it !== inlined }.toMutableList()
         if (scans == 0) {
             assertEquals(1, evidence.bindings.size)
             assertEquals(emptyList<String>(), evidence.globalReferences(root))
@@ -127,6 +129,31 @@ internal class ThreadInventoryCoreEvidence(module: Map<String, Any?>, private va
     }
 
     companion object {
+        /** Prove the eliminated wrapper from original Core, never target discovery. */
+        fun inlinedStateWrapper(evidence: ArrayCoreEvidence): List<*> {
+            val root = evidence.root["expr"] as List<*>
+            assertEquals("lam", root[0])
+            val call = root[2] as List<*>
+            assertEquals("app", call[0])
+            assertEquals(listOf(listOf(false), false, false), call.subList(3, 6))
+            val lambda = call[1] as List<*>
+            assertEquals("lam", lambda[0])
+            val parameter = (lambda[1] as List<*>).single() as Map<*, *>
+            val voidRep = mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true)
+            assertEquals("State# RealWorld", parameter["type"])
+            assertEquals(false, parameter["lifted"])
+            assertEquals(false, parameter["coercion"])
+            assertEquals(voidRep, parameter["rep"])
+            val argument = (call[2] as List<*>).single() as List<*>
+            assertEquals("void", argument[0])
+            assertEquals(voidRep, (argument.last() as Map<*, *>)["rep"])
+            val immediate = evidence.bindings.flatMap { evidence.nodes(it["expr"]) }.filter {
+                it.firstOrNull() == "app" && (it.getOrNull(1) as? List<*>)?.firstOrNull() == "lam"
+            }
+            assertSame(call, immediate.single(), "Exactly one immediate State# lambda can be eliminated")
+            return lambda
+        }
+
         private val targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
         fun valid(target: RootCallTarget) = targetClass.getMethod("isValidLastTier").invoke(target) == true
         fun rawCompile(target: RootCallTarget) {
