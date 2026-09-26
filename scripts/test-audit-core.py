@@ -96,6 +96,40 @@ class CompactSignatureTest(unittest.TestCase):
             self.assertIn('invalid compact signature', str(audit.issues), name)
 
 
+class CpuAffinityQueryTest(unittest.TestCase):
+    def calls(self):
+        descriptors = json.loads((ROOT.parent / 'src/test/resources/core/cpu-affinity-descriptors.json').read_text())
+        for descriptor in descriptors.values():
+            state = dict(descriptor['argumentReps'][0], evaluated=True)
+            yield ['app', ['var', 'query', dict(rep=CLOSURE)], [['var', 's', dict(rep=state)]],
+                   [False], False, False,
+                   dict(rep=dict(descriptor['resultRep'], evaluated=True), foreignCall=descriptor)], state
+
+    def inspect(self, call, state, shadow=False, package=False):
+        audit = audit_core.Audit([], CAP)
+        if package:
+            audit.package_scalar_links['main'] = dict(unit='main', abi=[])
+        audit.polyglot_call(call, dict(s=state, **({'query': CLOSURE} if shadow else {})), 'root', 'root')
+        return audit
+
+    def test_real_declarations_and_native_fallback_precedence(self):
+        for call, state in self.calls():
+            for package in (False, True):
+                audit = self.inspect(call, state, package=package)
+                self.assertEqual([], audit.issues)
+                self.assertEqual(1, len(audit.foreign_calls))
+
+    def test_abi_state_and_shadowing_fail_closed(self):
+        for call, state in self.calls():
+            for key, value in (('safety', 'safe'), ('convention', 'prim'), ('arity', 2),
+                               ('schema', True), ('suppliedArity', True), ('resultRep', LONG)):
+                changed = copy.deepcopy(call)
+                changed[6]['foreignCall'][key] = value
+                self.assertTrue(self.inspect(changed, state).issues, key)
+            self.assertTrue(self.inspect(call, LONG).issues)
+            self.assertTrue(self.inspect(call, state, shadow=True).issues)
+
+
 class PackageScalarOperandTest(unittest.TestCase):
     """Call-proof controls only; no invented component or bitcode is executed."""
     def call(self, primitive):

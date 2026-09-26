@@ -75,11 +75,14 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
     implementation("org.graalvm.truffle:truffle-api:$graalVersion")
+    // Affinity reset deliberately targets the pinned compiler-listener API.
+    compileOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
     kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testAnnotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
+    testImplementation("org.graalvm.truffle:truffle-runtime:$graalVersion")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }

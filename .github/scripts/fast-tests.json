@@ -11,6 +11,9 @@
     ]
   },
   "leafSources": {
+    "src/main/kotlin/thc/runtime/CoreCpuAffinity.kt": {
+      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "src/main/kotlin/thc/runtime/GuestEnvironment.kt": {
       "junit": ["thc.runtime.GuestEnvironmentTest"], "python": []
     },

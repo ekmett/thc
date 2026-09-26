@@ -1,0 +1,24 @@
+{
+  "thc_cpu_affinity_v1_support": {
+    "schema": 1,
+    "target": {"kind": "static", "symbol": "thc_cpu_affinity_v1_support", "unit": "main", "isFunction": true},
+    "convention": "ccall", "safety": "unsafe", "arity": 1, "suppliedArity": 1,
+    "argumentReps": [{"primReps": [], "kind": "void", "evaluated": false}],
+    "resultRep": {
+      "primReps": ["Int32Rep"], "kind": "unknown", "evaluated": false, "aggregate": "unboxed-tuple",
+      "components": [{"primReps": [], "kind": "void", "evaluated": true},
+                     {"primReps": ["Int32Rep"], "kind": "long", "evaluated": true}]
+    }
+  },
+  "thc_cpu_affinity_v1_applied": {
+    "schema": 1,
+    "target": {"kind": "static", "symbol": "thc_cpu_affinity_v1_applied", "unit": "main", "isFunction": true},
+    "convention": "ccall", "safety": "unsafe", "arity": 1, "suppliedArity": 1,
+    "argumentReps": [{"primReps": [], "kind": "void", "evaluated": false}],
+    "resultRep": {
+      "primReps": ["Int32Rep"], "kind": "unknown", "evaluated": false, "aggregate": "unboxed-tuple",
+      "components": [{"primReps": [], "kind": "void", "evaluated": true},
+                     {"primReps": ["Int32Rep"], "kind": "long", "evaluated": true}]
+    }
+  }
+}

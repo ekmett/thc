@@ -28,7 +28,7 @@ class ThreadSchedulingTest {
     private val directory = File(root, "build/thread-scheduling")
     private val entries = listOf("emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter",
         "pinnedFork", "otherCounter", "timedDelay")
-    private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
+    private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).allowNativeAccess(true)
         .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.SingleTierCompilationThreshold", "10000000")
         .option("engine.CompilationFailureAction", "Throw").build()
@@ -106,6 +106,8 @@ class ThreadSchedulingTest {
                         for (identity in threads.snapshot().filterIsInstance<GuestThreadId>().filter { it.forked }) {
                             identity.carrier.get()?.let { carrier -> carrier.join(5000); assertFalse(carrier.isAlive) }
                             assertEquals(GuestThreadStatus.FINISHED, threads.status(identity))
+                            if (threads.cpuAffinity.mode == CpuAffinityMode.PINNED)
+                                assertTrue(identity.affinityApplied, "Native forkOn request was accepted")
                         }
                         assertEquals(0, language.handoffState.get().arguments.depth)
                         assertEquals(0, language.handoffState.get().results.depth)
@@ -163,7 +165,7 @@ class ThreadSchedulingTest {
         try {
             child.start(); assertTrue(ready.await(5, TimeUnit.SECONDS))
             assertTrue(target.get().capabilityLocked)
-            assertEquals(0L, target.get().capability)
+            assertEquals(7L % threads.capabilityCount(), target.get().capability)
             threads.setAllocationCounter(1_000_000L, target.get())
             release.countDown(); child.join(5000); assertFalse(child.isAlive)
             failure.get()?.let { throw AssertionError("counter child failed", it) }

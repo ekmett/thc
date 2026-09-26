@@ -51,16 +51,18 @@ class EnabledCapabilitiesTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val threads = Language.currentState().threads
+                val cpuCount = threads.cpuAffinity.count.toLong()
+                assertTrue(cpuCount in 1..Runtime.getRuntime().availableProcessors().toLong())
                 threads.enterCurrent()
                 try {
                     val program = if (backend == "ast") Program(language, module()) else BytecodeProgram(language, module())
                 val target = program.entryTarget("read")
                 fun read() = Calls.target(target, arrayOf(0L, Unit)) as Long
-                repeat(100) { assertEquals(1L, read()) }
+                repeat(100) { assertEquals(cpuCount, read()) }
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                 valid(target)
                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                assertEquals(1L, read())
+                assertEquals(cpuCount, read())
                 assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                 valid(target)
 
@@ -71,12 +73,12 @@ class EnabledCapabilitiesTest {
                 }
                 worker.start(); worker.join()
                 workerFailure.get()?.let { throw AssertionError("Guest carrier registration failed", it) }
-                assertEquals(2L, read(), "The RTS label must observe a later guest carrier")
+                assertEquals(cpuCount, read(), "Guest carriers share the available CPU capacity")
                 valid(target)
 
                 val cell = CoreDataLabels.fromCore("enabled_capabilities",
                     CoreRepresentations.parse(address))
-                assertEquals(2L, ManagedAddressRead.WORD32.read(cell, 0))
+                assertEquals(cpuCount, ManagedAddressRead.WORD32.read(cell, 0))
                 for (operation in ManagedAddressRead.entries.filter { it != ManagedAddressRead.WORD32 })
                     assertThrows(RuntimeFault::class.java) { operation.read(cell, 0) }
                 assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.read(cell, 1) }
@@ -100,7 +102,7 @@ class EnabledCapabilitiesTest {
                     }
                     finally { foreign.leave() }
                 }
-                assertEquals(2L, ManagedAddressRead.WORD32.read(cell, 0))
+                assertEquals(cpuCount, ManagedAddressRead.WORD32.read(cell, 0))
                 assertTrue(cell.sameLocation(cell))
                 assertThrows(RuntimeFault::class.java) { cell.sameLocation(foreignCell) }
                 } finally { threads.leaveCurrent() }

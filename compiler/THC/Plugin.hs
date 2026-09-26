@@ -645,8 +645,10 @@ polyglotForeign v = case isFCallId_maybe v of
       unpackFS symbol `elem` ["thc_polyglot_v1_eval", "thc_polyglot_v1_read_member", "thc_polyglot_v1_execute_int"]
   Just (Foreign.CCall (Foreign.CCallSpec
     (Foreign.StaticTarget _ symbol _ True) Foreign.CCallConv safety)) ->
-      safety `elem` [Foreign.PlaySafe, Foreign.PlayRisky]
-      && case javascriptSource (unpackFS symbol) of Just _ -> True; Nothing -> False
+      (safety == Foreign.PlayRisky && unpackFS symbol `elem`
+        ["thc_cpu_affinity_v1_support", "thc_cpu_affinity_v1_applied"]) ||
+      (safety `elem` [Foreign.PlaySafe, Foreign.PlayRisky]
+       && case javascriptSource (unpackFS symbol) of Just _ -> True; Nothing -> False)
   _ -> False
 
 exprRaw :: Ctx -> CoreExpr -> J

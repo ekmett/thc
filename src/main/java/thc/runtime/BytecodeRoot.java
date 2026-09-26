@@ -3261,6 +3261,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             throw fail("Expected managed Addr# for RTS shared CAF store");
         }
     }
+    /** Public query declarations use the same tuple destination as ordinary CInt IO calls. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = boolean.class, name = "applied")
+    public static final class CpuAffinityQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination, boolean applied,
+                Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GuestThreads threads = GuestThreads.current(node);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    applied ? (threads.currentIdentity().getAffinityApplied() ? 1L : 0L) : threads.getCpuAffinity().getMode().ordinal());
+        }
+    }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")

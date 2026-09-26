@@ -17,6 +17,8 @@ import java.lang.ref.WeakReference
 internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, val capability: Long,
                              carrier: Thread, internal val forked: Boolean, internal val capabilityLocked: Boolean = false) {
     internal val carrier = WeakReference(carrier)
+    // Outcome of this fork's initial native request, not a perpetual OS promise.
+    var affinityApplied = false
     @Volatile internal var status = GuestThreadStatus.RUNNING
     @Volatile internal var lastOutcome = GuestThreadStatus.FINISHED
     // Guarded by owner; host work outside outer guest entries is not charged.
@@ -48,9 +50,10 @@ internal class GuestThreadExtent internal constructor(private val identity: Gues
     }
 }
 
-/** Active guest entries own one logical capability per Java carrier, scoped to this context. */
+/** Guest identities are carrier-local; logical capabilities describe CPU capacity. */
 internal class GuestThreads internal constructor(
     private val maskingState: ThreadLocal<MaskingState>,
+    val cpuAffinity: CpuAffinity = CpuAffinity.discover(false),
     private val wake: (Thread) -> Unit
 ) {
     /** This is execution permission, not the observable Haskell masking state. */
@@ -64,6 +67,7 @@ internal class GuestThreads internal constructor(
 
     constructor(env: TruffleLanguage.Env, maskingState: ThreadLocal<MaskingState>) : this(
         maskingState,
+        CpuAffinity.discover(env.isNativeAccessAllowed),
         { target ->
             env.submitThreadLocal(arrayOf(target), object : ThreadLocalAction(true, false) {
                 // Only wake the target's safepoint. An async exception needs a saved guest cut.
@@ -82,8 +86,8 @@ internal class GuestThreads internal constructor(
 
     private class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus)
     private val threads = HashMap<Long, GuestThread>()
-    // Weak keys release dead Java carriers. Numbers are never recycled, so a
-    // retained finished ThreadId still names its original logical capability.
+    // Weak keys release dead Java carriers; retained IDs keep their assigned
+    // capability, which other carriers may also use.
     private val identities = WeakHashMap<Thread, GuestThreadId>()
     // A retained ThreadId# keeps a finished guest observable even after its
     // Java carrier is collected. This registry itself retains neither.
@@ -94,10 +98,10 @@ internal class GuestThreads internal constructor(
     // The RTS registration retains the Weak# capability, never its ThreadId#
     // key or a numeric Java-thread snapshot. Signal delivery is not admitted yet.
     private var mainThreadWeak: MainThreadWeakKey? = null
-    private var allocatedCapabilities = 0L
+    private var nextCapability = 0L
     @TruffleBoundary @Synchronized internal fun capabilityCount(): Long {
         if (closed) fault("Guest context has closed")
-        return allocatedCapabilities
+        return cpuAffinity.count.toLong()
     }
     @Synchronized fun registerMainThread(key: MainThreadWeakKey) {
         check(!closed) { "Guest context has closed" }
@@ -163,8 +167,8 @@ internal class GuestThreads internal constructor(
         check(prior == null || prior.thread === current) { "Java thread ID was reused before guest completion" }
         if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
         val identity = identities.getOrPut(current) {
-            val selected = if (capability == null) allocatedCapabilities++
-                else Math.floorMod(capability, allocatedCapabilities.coerceAtLeast(1L))
+            val selected = Math.floorMod(capability ?: nextCapability, cpuAffinity.count.toLong())
+            if (capability == null) nextCapability = (selected + 1L) % cpuAffinity.count
             GuestThreadId(id, this, selected, current, forked, capability != null).also { knownThreads[it] = Unit }
         }
         check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }

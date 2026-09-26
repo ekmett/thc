@@ -17,6 +17,11 @@ fun defaultBackend(): String = System.getProperty("thc.backend", System.getenv("
 /** Fixed settings only; IO authority is chosen by the context factory. */
 internal enum class ContextProfile { NATIVE, SYNCHRONOUS_TEST, LAUNCHER }
 
+// Snapshot before launcher-created guest pins can affect HotSpot's thread-local
+// availableProcessors query. Match pinned Graal's default (CompilerThreads=0)
+// policy, while preserving explicit system-property settings including 0/-1.
+private val launcherCompilerThreads = if (Runtime.getRuntime().availableProcessors() >= 4) "2" else "1"
+
 internal fun Context.Builder.withContextProfile(profile: ContextProfile): Context.Builder {
     allowCreateThread(true).useSystemExit(false)
     if (profile == ContextProfile.NATIVE) return this
@@ -26,6 +31,7 @@ internal fun Context.Builder.withContextProfile(profile: ContextProfile): Contex
         .option("engine.CompilationFailureAction", "Throw")
     if (profile == ContextProfile.SYNCHRONOUS_TEST) return this
     return allowEnvironmentAccess(EnvironmentAccess.INHERIT)
+        .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads") ?: launcherCompilerThreads)
         .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
         .option("engine.SingleTierCompilationThreshold", "10000")
         .option("compiler.CompilationTimeout", "30")

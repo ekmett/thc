@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.CpuAffinityApiTest",
     "thc.runtime.ManagedCompactsTest",
     "thc.runtime.CompactImagesTest",
     "thc.runtime.ManagedSTMTest",

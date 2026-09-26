@@ -17,16 +17,15 @@ MVar. Terminal overrides are 16 for normal completion and 17 for an uncaught
 guest exception. A runtime implementation failure remains a diagnostic error;
 it is not relabeled as a Haskell exception.
 
-Each context allocates one logical capability to each Java carrier it encounters.
-Capabilities are numbered from zero, grow on demand, and are never recycled
-within that context. They describe managed execution ownership, not physical
-CPUs. Concurrent Java carriers have distinct capabilities; blocked threads keep
-their capability. Weak carrier references let retained thread identities preserve
-their last capability without retaining dead Java threads. Any future capability
-count API must use the allocated slot count, including currently idle slots;
-count, affinity, and `forkOn#` operations are currently unsupported. The locked
-result is zero because no admitted operation installs `TSO_LOCKED` affinity.
-Masking, Java-thread binding, and capability locking are separate concepts.
+Each context snapshots the available CPU capacity before guest pinning. Ordinary
+carriers share zero-based capability indices round-robin; `forkOn#` selects an
+index modulo that count and requests native CPU affinity on a best-effort basis.
+The locked result records that request, not OS acceptance. More guest threads do
+not increase the capability count. Weak carrier references let retained thread
+identities preserve their assigned capability without retaining dead Java threads.
+See [scheduling and affinity](thread-scheduling.md) for platform support and
+`fork#`'s inherited-affinity reset. Masking, Java-thread binding, capability
+locking, and physical CPU affinity remain separate concepts.
 
 `ThreadId#` equality remains Java thread ID plus context identity. A live host
 carrier outside all guest entries is in foreign execution, and subsequent host

@@ -124,6 +124,8 @@ extra-source-files:
   docs/site/mascot.js
   docs/ghc-core.md
   docs/interface-foreign.md
+  docs/cpu-affinity-api.md
+  examples/THC/CpuAffinity.hs
   docs/original-posix-dup.md
   docs/original-termios.md
   docs/original-sigset.md
@@ -275,6 +277,28 @@ flag full-core-tests
   description: Enable tests requiring a configured full-Core GHC installation
   default: False
   manual: True
+
+-- Public application API; no GHC API or JVM dependency for native callers.
+library runtime
+  visibility: public
+  hs-source-dirs: runtime
+  exposed-modules: THC
+  c-sources: runtime/cpu-affinity.c
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite cpu-affinity-api
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/haskell-affinity
+  build-depends: base >= 4.22 && < 4.23, thc:runtime
+  default-language: Haskell2010
+  ghc-options: -Wall -threaded
+  if flag(development)
+    ghc-options: -Werror
 
 library
   hs-source-dirs: compiler

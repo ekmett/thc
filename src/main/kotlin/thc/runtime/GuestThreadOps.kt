@@ -311,10 +311,15 @@ internal object GuestThreadOps {
         val child = state.env.newTruffleThreadBuilder(Runnable {
             var registered = false
             var outcome = GuestThreadStatus.FINISHED
+            var affinity: AutoCloseable? = null
             try {
+                affinity = if (capability == null) threads.cpuAffinity.resetCurrent()
+                    else threads.cpuAffinity.bindCurrent(capability)
                 threads.enterCurrent(inheritedMask, forked = true, externalAsync = asyncEnabled, capability = capability)
                 registered = true
-                identity.set(threads.currentIdentity())
+                identity.set(threads.currentIdentity().also {
+                    it.affinityApplied = capability != null && affinity != null
+                })
                 ready.countDown()
                 root.call(action)
             } catch (uncaught: UncaughtForkAsync) {
@@ -333,10 +338,13 @@ internal object GuestThreadOps {
                 throw failure
             } finally {
                 if (!registered) ready.countDown()
-                if (registered) threads.leaveCurrent(outcome)
+                try { if (registered) threads.leaveCurrent(outcome) }
+                finally { affinity?.close() }
             }
-        }).build()
-        child.start()
+        }).virtual(false).build()
+        // pthreads inherit their creator's mask. Start with context eligibility,
+        // not a possibly pinned parent's singleton, even during Truffle entry.
+        threads.cpuAffinity.resetCurrent().use { child.start() }
         TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, awaitRegistration, ready)
         registrationFailure.get()?.let { throw RuntimeFault("fork# child registration failed: ${it.javaClass.simpleName}") }
         return identity.get() ?: fault("fork# child did not publish its ThreadId#")

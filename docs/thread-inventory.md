@@ -55,10 +55,10 @@ counts and native background thread ordering are intentionally not equated.
 
 ## Spark and scheduler boundary
 
-`par#`, `spark#`, `getSpark#`, `numSparks#` and `forkOn#` remain unsupported.
-Pinned GHC's `par#` returns one regardless of acceptance, but that is not a license
-to replace scheduling with a constant. `numSparks#` counts a capability's local
-queue, not running Java threads.
+`par#` and `spark#` are implemented as discarded hints without evaluating the
+lifted argument; `getSpark#` and `numSparks#` describe an empty spark pool.
+`forkOn#` creates a real managed platform thread with best-effort CPU affinity.
+See [scheduling](thread-scheduling.md). `numSparks#` is not a Java thread count.
 
 A speculative evaluator can diverge or block without its result ever being
 demanded. A managed-thread pool must therefore abandon speculative work safely
@@ -67,5 +67,5 @@ no general captured cancellation continuation; an interrupted owned thunk can
 enter the unresumable state. Merely adding worker threads would either hang
 context shutdown or damage a subsequently demanded thunk. The current bytecode
 async machinery does not establish the missing both-backend spark scheduler.
-Logical capabilities are monotonic Java-carrier identities, not a `forkOn#`
-affinity scheduler. No spark admission or parallel-speedup claim is made here.
+Logical capability indices describe available CPU capacity and can be shared by
+many guest threads. No spark admission or parallel-speedup claim is made here.

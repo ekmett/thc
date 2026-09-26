@@ -119,6 +119,12 @@ between Haskell threads. An interrupted shared thunk keeps its continuation, so
 another thread can resume it without repeating completed work. Thread identities
 are Java thread IDs scoped to their THC context.
 
+`forkOn#` requests best-effort CPU affinity; ordinary `fork#` clears an inherited
+pin, and capability queries report available CPU capacity rather than guest-thread
+count. The base-only public [`THC` module](docs/cpu-affinity-api.md) exposes support
+and per-fork acceptance queries. See [scheduling](docs/thread-scheduling.md) for
+Linux/Windows behavior and the local Graal compiler-worker affinity reset.
+
 The [polyglot example](docs/polyglot.md) calls JavaScript from Haskell with
 `foreign import javascript`. GHC checks the declarations; THC implements them
 with Truffle interop. Run `scripts/javascript-demo.sh` to try it. A lower-level

@@ -654,6 +654,25 @@ class Audit:
 
         target = call.get('target') if isinstance(call, dict) else None
         symbol = target.get('symbol') if isinstance(target, dict) else None
+        if symbol in ('thc_cpu_affinity_v1_support', 'thc_cpu_affinity_v1_applied'):
+            try:
+                core_original_foreign.validate_head(function, function[1] in bound or function[1] in self.bindings)
+                state = {'kind': 'void', 'primReps': [], 'evaluated': False}
+                result = {'kind': 'unknown', 'primReps': ['Int32Rep'], 'evaluated': False,
+                          'aggregate': 'unboxed-tuple', 'components': [dict(state, evaluated=True),
+                          {'kind': 'long', 'primReps': ['Int32Rep'], 'evaluated': True}]}
+                expected = dict(schema=1, target=target, convention='ccall', safety='unsafe',
+                                arity=1, suppliedArity=1, argumentReps=[state], resultRep=result)
+                if (any(type(call.get(key)) is not int for key in ('schema', 'arity', 'suppliedArity')) or
+                        set(target) != {'kind', 'symbol', 'unit', 'isFunction'} or target['kind'] != 'static' or
+                        target['isFunction'] is not True or call != expected or len(arguments) != 1 or
+                        expr[3] != [False] or self.shape(self.expression_rep(expr)) != self.shape(result)):
+                    raise ValueError('THC CPU-affinity query requires its exact v1 State#/CInt ABI')
+                self.original_stack_operand(arguments[0], None, bound, 0)
+                self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+            except (ValueError, KeyError, TypeError, IndexError) as error:
+                self.issue('foreign-call', owner, path, str(error))
+            return True
         package_link = self.package_scalar_links.get(target.get('unit')) if isinstance(target, dict) else None
         package_abi = next((entry for entry in package_link['abi'] if entry['symbol'] == symbol), None) if package_link else None
         if package_link is not None and package_abi is None:

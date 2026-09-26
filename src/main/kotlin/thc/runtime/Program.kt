@@ -2142,9 +2142,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val floatDecode = if (fn[0] == "prim") FloatDecodeOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
-            val packageScalar = CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
+            val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
+            val packageScalar = if (cpuAffinity == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
-                CoreRepresentations.metadata(expr)?.get("rep"), packageScalarLinks)
+                CoreRepresentations.metadata(expr)?.get("rep"), packageScalarLinks) else null
             // A verified package owner takes precedence over similarly named RTS symbols.
             val foreignMetadata = if (packageScalar == null) CoreRepresentations.metadata(expr) else null
             val stackClone = CoreStackForeign.validate(foreignMetadata,
@@ -2193,10 +2194,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (!allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (cpuAffinity == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
-            if (stackClone) {
+            if (cpuAffinity != null) {
+                val state = compile(args.single(), scope, false)
+                CoreBoundThreadForeign.validateOperand(state.representation,
+                    if (args.single()[0] == "var") scope.locals[args.single()[1]]?.proof ?: globalProofs[args.single()[1]] else null)
+                CpuAffinityQuery(cpuAffinity, state).proven(tupleProof.copy(evaluated = true))
+            } else if (stackClone) {
                 CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val state = args.single()
                 CoreStackForeign.validateBinding(if (state[0] == "var")

@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 @Timeout(20)
 class GuestThreadStatusTest {
-    private fun registry() = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+    private fun registry() = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }, CpuAffinity(null, 2)) { }
 
     @Test fun hostReentryKeepsJavaIdentityCapabilityAndForeignStatus() {
         val threads = registry()
@@ -43,7 +43,7 @@ class GuestThreadStatusTest {
         try {
             assertSame(id, threads.currentIdentity())
             assertEquals(GuestThreadStatus.RUNNING, threads.status(id))
-            assertEquals(1L, threads.capabilityCount())
+            assertEquals(2L, threads.capabilityCount())
             val other = registry()
             other.enterCurrent()
             try {
@@ -55,7 +55,7 @@ class GuestThreadStatusTest {
         } finally { threads.leaveCurrent() }
     }
 
-    @Test fun actualMVarWaitsExposeTheirReasonsAndRetainDistinctCapabilitiesAfterCompletion() {
+    @Test fun actualMVarWaitsExposeTheirReasonsAndShareBoundedCpuCapabilities() {
         val threads = registry()
         threads.enterCurrent()
         val parent = threads.currentIdentity()
@@ -85,7 +85,7 @@ class GuestThreadStatusTest {
                     assertTrue(request.hasWaitingThread())
                     val id = identity.get()
                     assertEquals(worker.threadId(), id.javaId)
-                    assertNotEquals(parent.capability, id.capability)
+                    assertEquals((retained.size + 1L) % 2L, id.capability)
                     assertEquals(if (read) GuestThreadStatus.MVAR_READ else GuestThreadStatus.MVAR, threads.status(id))
                     retained += id
                 } finally {
@@ -96,8 +96,9 @@ class GuestThreadStatusTest {
                 failure.get()?.let { throw AssertionError("worker failed", it) }
                 assertEquals(GuestThreadStatus.FINISHED, threads.status(identity.get()))
             }
-            assertNotEquals(retained[0].capability, retained[1].capability, "Logical capability numbers are not recycled")
-            assertEquals(3L, threads.capabilityCount())
+            assertEquals(1L, retained[0].capability)
+            assertEquals(parent.capability, retained[1].capability, "More threads do not invent more CPUs")
+            assertEquals(2L, threads.capabilityCount())
         } finally { threads.leaveCurrent() }
     }
 
