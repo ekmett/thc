@@ -381,6 +381,8 @@ class Language : TruffleLanguage<Language.State>() {
     internal val handoffLayouts: thc.runtime.HandoffLayouts get() = currentState(null).handoffLayouts
     internal val handoffState = locals.createContextThreadLocal { _, _ -> thc.runtime.HandoffState() }
     private val threadPollState = locals.createContextThreadLocal { context, thread -> context.threads.pollState(thread) }
+    private val threadMaskingState = locals.createContextThreadLocal { context, thread -> context.maskingState.cell(thread) }
+    private val threadAnnotations = locals.createContextThreadLocal { context, thread -> context.stackAnnotations.cell(thread) }
     class State(val env: Env, language: Language) {
         internal val shutdown = java.util.concurrent.atomic.AtomicReference<thc.runtime.GuestShutdown>()
         internal val managedExports = ManagedExportRegistry(this, language)
@@ -388,10 +390,12 @@ class Language : TruffleLanguage<Language.State>() {
         internal val handoffLayouts = thc.runtime.HandoffLayouts(language)
         internal val javaScriptImports = thc.runtime.JavaScriptImports()
         internal val packageCbits = thc.runtime.PackageScalarLibraries(env)
-        internal val maskingState = ThreadLocal.withInitial { thc.runtime.MaskingState.UNMASKED }
-        internal val stackAnnotations = ThreadLocal.withInitial { thc.runtime.StackAnnotationState.EMPTY }
+        internal val maskingState = thc.runtime.CarrierLocal(thc.runtime.MaskingState.UNMASKED)
+        internal val stackAnnotations = thc.runtime.CarrierLocal(thc.runtime.StackAnnotationState.EMPTY)
         internal val threads = thc.runtime.GuestThreads(env, maskingState)
         internal val threadPollState = language.threadPollState
+        internal val threadMaskingState = language.threadMaskingState
+        internal val threadAnnotations = language.threadAnnotations
         internal val runtimeTrace = thc.runtime.RuntimeTraceServices(env.err())
         internal val runtimeJit = thc.runtime.RuntimeJitServices(language)
         @JvmField internal val stm = thc.runtime.ManagedSTM()

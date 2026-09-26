@@ -1,5 +1,10 @@
 # September 26 performance regression investigation
 
+The [controlled follow-up](controlled.md) records the later four-fork scalar
+matrix, a second context-state lookup repair, and another preserved failure in
+the unchanged warmed Map harness. The screening observations below remain the
+historical first checkpoint; they are not relabeled as controlled measurements.
+
 First tested checkpoint: repair bytecode async-poll graph expansion, retain the
 failed baseline, and make benchmark launches match production's Vector module
 configuration. Genuine Map bytecode execution now completes the checks that

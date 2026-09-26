@@ -40,6 +40,13 @@ of compiled guest loops without disabling asynchronous delivery. See the
 [September 26 investigation](../bench/results/performance-regressions-20260926/README.md)
 for the graph regression and native-result checks.
 
+Masking and stack-annotation reads likewise use context-thread-local mutable
+cells. Boundary setters and the thread registry's legacy `ThreadLocal` interface
+update those same cells; they are not cached copies of guest state. Leaving a
+carrier resets its masking cell, and different contexts/carriers do not share
+cells. This keeps root-entry snapshots and continuation checks from crossing a
+boundary into Java thread-local map lookups on ordinary calls.
+
 ## Saved evaluation
 
 A bytecode Yield materializes the frame on the interruption path. Locals,

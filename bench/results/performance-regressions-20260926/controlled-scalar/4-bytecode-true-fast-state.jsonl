@@ -1,0 +1,8 @@
+{"phase":"context","elapsedNs":168719445,"callingThreadAllocatedBytes":17634984,"heapUsedBytes":29360128,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"phase":"load","elapsedNs":297049729,"callingThreadAllocatedBytes":48133576,"heapUsedBytes":11376856,"gcCount":6,"gcTimeMs":7,"failure":null}
+{"phase":"firstResult","elapsedNs":59701328,"callingThreadAllocatedBytes":1577456,"heapUsedBytes":7890896,"gcCount":3,"gcTimeMs":3,"failure":null}
+{"phase":"training200","elapsedNs":192000019,"callingThreadAllocatedBytes":4146280,"heapUsedBytes":14182352,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"phase":"compile","elapsedNs":160744844,"callingThreadAllocatedBytes":357064,"heapUsedBytes":14182352,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"phase":"firstCompiledResult","elapsedNs":95982,"callingThreadAllocatedBytes":864,"heapUsedBytes":14182352,"gcCount":0,"gcTimeMs":0,"failure":null}
+{"backend":"bytecode","bytecodeRootCount":3,"sourceNotesEnabled":true,"sourceSpanCount":343,"sourceRootCount":2,"localJoinCount":0,"localJoinTransfers":0,"instrumented":true,"thunkEvaluationsByLabel":{},"compiledEntries":201,"leadingCaseReturns":0,"thunkEvaluations":0,"thunkHits":0,"blackholes":0,"directCacheMisses":2,"indirectCalls":0,"tailBounces":0,"selfTailReentries":0,"trampolineIterations":0,"papAllocations":0,"unsupportedPolicy":"reject-at-load","deferredUnsupported":[],"unsupportedTraps":0,"frames":"Bytecode DSL primitive locals; selective StaticShape captures","stackPolicy":"tail-safe; non-tail calls and nested thunk forcing use host stack","threadPolicy":"context-owned Java threads; resumable asynchronous delivery"}
+{"phase":"close","elapsedNs":1870524,"callingThreadAllocatedBytes":183696,"heapUsedBytes":14182352,"gcCount":0,"gcTimeMs":0,"failure":null}

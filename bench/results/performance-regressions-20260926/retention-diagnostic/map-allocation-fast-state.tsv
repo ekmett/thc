@@ -1,0 +1,8 @@
+[0.266s][info][jfr,startup] Started recording 1. No limit specified, using maxsize=250MB as default.
+[0.266s][info][jfr,startup] 
+[0.266s][info][jfr,startup] Use jcmd 96 JFR.dump name=1 to copy recording data to file.
+mapAggregate	1	768	10000	43300546704	2262728148
+mapAggregate	2	768	10000	43300546704	2254957233
+mapAggregate	3	768	10000	43300546704	2255565009
+mapAggregate	4	768	10000	43300546704	2244500867
+mapAggregate	5	768	10000	43300546704	2242393280

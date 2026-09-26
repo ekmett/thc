@@ -49,8 +49,16 @@ fun main(args: Array<String>) {
             "host" to (target === host), "original" to (target === original)).also { state ->
             for (method in listOf("isValidLastTier", "getCodeAddress", "getCallCount", "getCallAndLoopCount",
                 "getSuccessfulCompilationCount")) state[method] = targetType.getMethod(method).invoke(target)
-            state["invalidationReason"] = target.javaClass.getDeclaredMethod("getInvalidationReason")
-                .apply { isAccessible = true }.invoke(target)
+            try {
+                state["invalidationReason"] = target.javaClass.getDeclaredMethod("getInvalidationReason")
+                    .apply { isAccessible = true }.invoke(target)
+            } catch (failure: ReflectiveOperationException) {
+                // The pinned runtime's private accessor can reject a reset
+                // generic InstalledCode after cold-method reprofiling. Record
+                // that inspection failure without masking the compile failure
+                // whose finally block requested this snapshot.
+                state["invalidationReasonError"] = (failure.cause ?: failure).toString()
+            }
         }
         fun snapshot(phase: String, calls: Int) {
             val active = NodeUtil.findAllNodeInstances(host.rootNode, DirectCallNode::class.java)
