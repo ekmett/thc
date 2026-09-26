@@ -9,7 +9,8 @@
 -- @source-notes@ to retain source-location metadata. The direct serializers
 -- consume genuine GHC Core and do not establish runtime support or link native
 -- foreign products. This library is tied to the selected GHC API version.
-module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serializePostTidyCoreWithAnnotations) where
+module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serializePostTidyCoreWithAnnotations,
+                   serializePostTidyCoreWithAnnotationsBytes) where
 
 import GHC.Plugins
 import GHC.Iface.Env (lookupOrig)
@@ -38,6 +39,7 @@ import qualified THC.ForeignExports as Exports
 import qualified THC.ForeignExportProvenance as ExportProvenance
 import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
+import THC.JSON (J(..), json, jsonBytes)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
@@ -193,31 +195,6 @@ resolvedJavaScriptType ty =
     _ -> False
   where
     scalar value = eqType value intTy || eqType value doubleTy
-
-data J = O [(String,J)] | A [J] | S String | N Integer | B Bool | Z
-
-json :: J -> String
-json value = render value ""
-  where
-    -- Append directly to the enclosing output instead of copying each child's
-    -- complete String at every ancestor. Deep Core with source-note metadata
-    -- otherwise spends minutes repeatedly copying the same JSON characters.
-    render :: J -> ShowS
-    render (O xs) = showChar '{' . separated field xs . showChar '}'
-    render (A xs) = showChar '[' . separated render xs . showChar ']'
-    render (S s) = showChar '"' . foldr ((.) . escape) id s . showChar '"'
-    render (N n) = shows n
-    render (B b) = showString (if b then "true" else "false")
-    render Z = showString "null"
-    field (key, item) = render (S key) . showChar ':' . render item
-    separated :: (a -> ShowS) -> [a] -> ShowS
-    separated _ [] = id
-    separated item (x:xs) = item x . foldr (\y rest -> showChar ',' . item y . rest) id xs
-    escape '"' = showString "\\\""
-    escape '\\' = showString "\\\\"
-    escape c | ord c < 32 = showString "\\u" . showString (replicate (4-length h) '0') . showString h
-      where h = showHex (ord c) ""
-    escape c = showChar c
 
 num :: Integral a => a -> J
 num = N . toInteger
@@ -911,7 +888,17 @@ serializePostTidyCore flags opts m tycons program foreignArtifacts =
 -- the late source plugin does not: use the emitted interface to recover this
 -- optional inventory, never a process-local table or a previous export file.
 serializePostTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO String
-serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
+serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations =
+  (\value -> json value ++ "\n") <$> postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+
+-- | The same ordered document in UTF-8 bytes, without a full output String.
+-- Callers must force the strict ByteString before emitting a success response.
+serializePostTidyCoreWithAnnotationsBytes :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
+serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations =
+  (\value -> BS.snoc (jsonBytes value) 10) <$> postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+
+postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
+postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
   associations <- either (ioError . userError . ("THC: " ++)) pure
     (Exports.readStaticExports m annotations program)
   -- A boxed identity need not inspect or construct its argument in Core. Host
@@ -926,7 +913,7 @@ serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifact
   provenance <- exportProvenanceFields m annotations program foreignArtifacts
   imports <- importProvenanceFields m annotations foreignArtifacts result
   let annotated = case result of O fields -> O (fields ++ exports ++ provenance ++ imports); _ -> result
-  pure (json (withForeignArtifacts foreignArtifacts annotated) ++ "\n")
+  pure (withForeignArtifacts foreignArtifacts annotated)
   where
     exportKey (Exports.ExportName unit modName occurrence _) = unit ++ ":" ++ modName ++ "." ++ occurrence
 

@@ -122,7 +122,8 @@ internal class CompactCopyNode(metrics: Metrics, private val failures: Array<Glo
                         val copy = layout.allocate()
                         publish(copy, layout.compactBytes())
                         for (index in layout.arity - 1 downTo 0) {
-                            if (layout.compactPointer(index)) pending.addLast(Copy(layout.read(value, index)) {
+                            if (layout.inactiveSumReference(value, index)) layout.initialize(copy, index, null)
+                            else if (layout.compactPointer(index)) pending.addLast(Copy(layout.read(value, index)) {
                                 layout.initialize(copy, index, it)
                             }) else layout.copyCompactScalar(value, copy, index)
                         }

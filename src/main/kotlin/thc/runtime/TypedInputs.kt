@@ -384,6 +384,8 @@ private class InputCallArm(private val source: InputSource, private val count: I
             if (AstControl.enabled(this)) AstControl.complete(this, answer, target,
                 if (arity == count) destination?.shape else null) else answer
         } catch (cut: AstCapture) {
+            // Input-loan cleanup has completed before this cold snapshot.
+            CompilerDirectives.transferToInterpreter()
             val savedValues = values?.copyOf()
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? = finish(frame, input, savedValues)
@@ -395,6 +397,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
         if (arity < count) {
             val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
             catch (cut: AstCapture) {
+                CompilerDirectives.transferToInterpreter()
                 val savedValues = values?.copyOf()
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? =
@@ -460,6 +463,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                 if (AstControl.enabled(this)) AstControl.complete(this, answer, target,
                     if (exact) destination?.shape else null) else answer
             } catch (cut: AstCapture) {
+                CompilerDirectives.transferToInterpreter()
                 val savedValues = values?.copyOf()
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? =
@@ -473,6 +477,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             offset = next
             function = try { requireClosure(AstControl.force(frame, this, force, result)) }
             catch (cut: AstCapture) {
+                CompilerDirectives.transferToInterpreter()
                 val savedValues = values?.copyOf()
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? =

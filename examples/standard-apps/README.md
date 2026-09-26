@@ -12,6 +12,12 @@ properties. The 14 public-API checks also pass actual THC full startup/shutdown
 in both backends and handoff modes; the exact opt-in and remaining upstream
 guest-suite limits are recorded separately in that recipe.
 
+The [original containers benchmark recipe](containers/README.md) selects the
+upstream `containers-tests:bench:intmap-benchmarks` component and its unchanged
+`-DTESTING` library. It separates the native listing and single-case control
+from Core acquisition, strict admission and actual guest execution; this is
+not the THC-specific Map/Set microbenchmark suite.
+
 ## Recorded baseline
 
 On Linux x86-64 with GHC 9.14.1, all four pinned native `--version` commands
@@ -148,7 +154,7 @@ names are `HsColour`, `alex`, `happy`, and `doctest` respectively. The first
 guest attempt is:
 
 ```sh
-"$THC_DRIVER" run "$PACKAGE_DIR" --exe "$EXE" --thc-root "$THC_ROOT" \
+"$THC_DRIVER" run "$EXE" --project-dir "$PACKAGE_DIR" --thc-root "$THC_ROOT" \
   --dist-dir "$THC_ROOT/build/standard-apps/$EXE-guest" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
   --installed-core required --ghc-source "$GHC_SOURCE" -- --version

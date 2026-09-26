@@ -1470,6 +1470,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val gcForeign = CoreGcForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"), true)
             val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
@@ -1497,9 +1499,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val memcpy = CoreMemcpyForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val memorySearch = CoreMemorySearchForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (gcForeign == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -1805,6 +1809,32 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.last().emit(e)
                     e.builder.endRtsDiagnostic()
                 }
+            } else if (gcForeign != null) {
+                CoreGcForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreGcForeign.validateOperand(gcForeign, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (gcForeign.result != null) {
+                        e.builder.beginGcForeignQuery(destination.single(), gcForeign)
+                        operands.single().emit(e)
+                        e.builder.endGcForeignQuery()
+                    } else if (gcForeign == GcForeignOp.STATS) {
+                        check(destination.isEmpty())
+                        e.builder.beginUnavailableRtsStats()
+                        operands.forEach { it.emit(e) }
+                        e.builder.endUnavailableRtsStats()
+                    } else {
+                        check(destination.isEmpty())
+                        e.builder.beginRequestGarbageCollection(gcForeign)
+                        operands.single().emit(e)
+                        e.builder.endRequestGarbageCollection()
+                    }
+                    if (enableAsync && gcForeign.safety == "safe") emitAsyncPoll(e)
+                }
             } else if (boundThreadForeign || allocationCounterForeign) {
                 CoreBoundThreadForeign.validateHead(fn, defined)
                 val argument = args.single()
@@ -1960,6 +1990,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (nativeAllocation == NativeAllocationOp.MALLOC) e.builder.endNativeMalloc()
                     else if (nativeAllocation == NativeAllocationOp.REALLOC) e.builder.endNativeRealloc()
                     else e.builder.endNativeFree()
+                }
+            } else if (memorySearch != null) {
+                CoreMemorySearchForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreMemorySearchForeign.validateOperand(memorySearch, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    if (memorySearch == MemorySearchOp.COMPARE) e.builder.beginOriginalMemcmp(destination.single())
+                    else e.builder.beginOriginalMemchr(destination.single())
+                    operands.forEach { it.emit(e) }
+                    if (memorySearch == MemorySearchOp.COMPARE) e.builder.endOriginalMemcmp()
+                    else e.builder.endOriginalMemchr()
                 }
             } else if (memmove) {
                 CoreMemmoveForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -3433,7 +3478,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else {
             val constructor = if (fn[0] == "con") dataLayout(fn[1] as String) else null
-            if (constructor != null && args.size > constructor.arity)
+            if (constructor != null && args.size > constructor.logicalArity)
                 throw RuntimeFault("Constructor arity mismatch: ${fn[1]}")
             val strict = if (constructor != null && (fn[2] as Number).toInt() == args.size)
                 strictConstructorFields(fn[1] as String, args.size) else null
@@ -3446,8 +3491,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }?.takeIf { args.size >= it.size }
             val operands = args.mapIndexed { index, arg ->
                 val lifted = flags[index] as? Boolean ?: throw UnsupportedCore("Unknown argument levity")
-                val vectorField = constructor?.vectorProof(index)
-                argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
+                val aggregate = constructor?.logicalProof(index)?.takeIf { it.isAggregate }
+                val vectorField = if (aggregate == null) constructor?.vectorProof(constructor.fieldOffset(index)) else null
+                if (aggregate != null && strict != null) {
+                    if (lifted) throw RuntimeFault("Aggregate constructor operand must be unlifted")
+                    compile(arg, scope, false).also { TupleShape.requireCompatible(aggregate, it.proof, component = true) }
+                } else argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
                     allowEmpty = vectorField != null || fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted).also { operand ->
                     if (vectorField != null) {
                         if (!operand.proof.isVector) throw RuntimeFault("Constructor vector field requires an exact vector operand")
@@ -3571,11 +3620,23 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else -> throw RuntimeFault("Invalid Core alternative kind $kind")
                 }
                 val ids = alt[2] as List<String>; val layout = value as? DataLayout
-                if (layout != null && layout.arity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
+                if (layout != null && layout.logicalArity != ids.size) throw RuntimeFault("Constructor field/binder mismatch")
                 val metadata = CoreRepresentations.alternativeBinders(alt)
-                val fields = ids.mapIndexed { index, id ->
-                    val vector = layout?.vectorProof(index)
-                    if (vector != null) {
+                val fields = ids.flatMapIndexed { index, id ->
+                    val physical = layout?.fieldOffset(index) ?: index
+                    val aggregate = layout?.logicalProof(index)?.takeIf { it.isAggregate }
+                    val vector = if (aggregate == null) layout?.vectorProof(physical) else null
+                    if (aggregate != null) {
+                        val record = metadata.getOrNull(index) ?: throw RuntimeFault("Missing aggregate constructor binder proof")
+                        if (record["lifted"] != false) throw RuntimeFault("Aggregate constructor binder must be unlifted")
+                        val actual = CoreRepresentations.binder(record)
+                        TupleShape.requireCompatible(aggregate, actual, component = true)
+                        val proof = aggregate.refine(actual)
+                        val leaves = if (proof.isSum) SumShape.storage(proof) else TupleShape.flatten(proof)
+                        val lanes = leaves.mapIndexed { leaf, rep -> Local(nextLocal++, "$id aggregate $leaf", rep.isLong, rep) }
+                        child.bindTuple(id, proof, lanes)
+                        lanes.map { listOf(it) }
+                    } else if (vector != null) {
                         val record = metadata.getOrNull(index) ?: throw UnsupportedCore("Missing vector constructor binder proof")
                         if (record["lifted"] != false) throw UnsupportedCore("Vector constructor binder must be unlifted")
                         val proof = CoreRepresentations.binder(record).refine(vector)
@@ -3583,10 +3644,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             Local(nextLocal++, "$id vector lane $lane", leaf.isLong, leaf)
                         }
                         child.bindTuple(id, proof, lanes)
-                        lanes
-                    } else listOf(bind(child, id, layout?.isLong(index) == true,
+                        listOf(lanes)
+                    } else listOf(listOf(bind(child, id, layout?.isLong(physical) == true,
                         (metadata.getOrNull(index)?.let { CoreRepresentations.binder(it) } ?: CoreRepresentation.UNKNOWN)
-                            .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) }))
+                            .let { it.copy(evaluated = layout != null && fieldIsEvaluated(alt[1] as String, index)) })))
                 }
                 Alternative(kind, value, fields, compile(alt[3] as List<Any?>, child, tail))
             }
@@ -3677,6 +3738,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             } else {
             val strict = strictConstructorFields(id, arity)
             val layout = dataLayout(id)
+            if (arity != 0 && layout.hasAggregateFields)
+                throw UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs")
             if (arity == 0) construct(layout, emptyList()) else {
                 // A PAP keeps its prefix lazy; saturation discharges worker
                 // strictness before restoring the post-worker field proofs.
@@ -4456,19 +4519,24 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     private fun construct(layout: DataLayout, args: List<Expression>) = evaluated(Expression { e ->
         val b = e.builder
-        if ((0 until layout.arity).none(layout::isVector)) {
+        if (!layout.hasAggregateFields && (0 until layout.arity).none(layout::isVector)) {
             b.beginConstruct(layout); args.forEach { it.emit(e) }; b.endConstruct()
         } else {
             b.beginBlock()
-            val fields = args.mapIndexed { index, argument ->
-                if (layout.isVector(index)) {
-                    val lanes = List(layout.fieldWidth(index)) { lane -> b.createLocal("field $index vector $lane", "object") }
+            val fields = args.flatMapIndexed { index, argument ->
+                val physical = layout.fieldOffset(index)
+                if (layout.logicalProof(index)?.isAggregate == true) {
+                    val slots = List(layout.logicalWidth(index)) { b.createLocal("field $index aggregate $it", null) }
+                    argument.emitTuple(e, slots)
+                    slots.map { listOf(it) }
+                } else if (layout.isVector(physical)) {
+                    val lanes = List(layout.fieldWidth(physical)) { lane -> b.createLocal("field $index vector $lane", "object") }
                     argument.emitTuple(e, lanes)
-                    lanes
+                    listOf(lanes)
                 } else {
                     val field = b.createLocal("field $index", null)
                     b.beginStoreLocal(field); argument.emit(e); b.endStoreLocal()
-                    listOf(field)
+                    listOf(listOf(field))
                 }
             }
             val value = b.createLocal("constructed ${layout.id}", "object")

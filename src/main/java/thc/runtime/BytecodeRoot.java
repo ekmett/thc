@@ -1359,6 +1359,28 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalMemcmp {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress left, ManagedAddress right, long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    left.compareBytes(right, count));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalMemchr {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress source, long needle, long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    source.findByte(needle, count));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalMemmove {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress target, ManagedAddress source, long count, Object state, @Bind("$node") Node node) {
@@ -3364,6 +3386,31 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     RuntimeServices.trace(node, (int) operation, token, address, length));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = GcForeignOp.class, name = "operation")
+    public static final class GcForeignQuery {
+        @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
+                GcForeignOp operation, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, operation.invoke());
+        }
+    }
+    @Operation
+    @ConstantOperand(type = GcForeignOp.class, name = "operation")
+    public static final class RequestGarbageCollection {
+        @Specialization public static void collect(GcForeignOp operation, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            operation.invoke();
+        }
+    }
+    @Operation
+    public static final class UnavailableRtsStats {
+        @Specialization public static void unavailable(ManagedAddress address, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            GcForeignOp.STATS.invoke();
         }
     }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */

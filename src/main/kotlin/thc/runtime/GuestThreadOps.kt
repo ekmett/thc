@@ -251,11 +251,12 @@ private class ForkActionRoot(private val language: Language, initialShape: Tuple
             // It does not own the thunk or a continuation to resume.
             throw UncaughtForkAsync(blocked.request)
         }
-        val shape = GuestThreadOps.actionResult(action, asyncEnabled)
         val callee = dispatch ?: run {
             // A lazy action discovers its tuple shape in the child. Installing
             // that child's dispatch tree must remain outside guest compilation.
+            // Known closures were already validated before this root was made.
             CompilerDirectives.transferToInterpreterAndInvalidate()
+            val shape = GuestThreadOps.actionResult(action, asyncEnabled)
             insert(TupleDispatch(ForkDestination(shape, language), Metrics(false), 1, false))
                 .also { dispatch = it }
         }

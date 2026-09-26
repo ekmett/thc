@@ -12,6 +12,20 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  test/fixtures/run-native-archive/cabal.project
+  test/fixtures/run-native-archive/mixed/native-archive-mixed.cabal
+  test/fixtures/run-native-archive/mixed/native.c
+  test/fixtures/run-native-archive/mixed/src/*.hs
+  test/fixtures/run-native-archive/mixed/app/Main.hs
+  test/fixtures/run-native-archive/unresolved/native-archive-unresolved.cabal
+  test/fixtures/run-native-archive/unresolved/native.c
+  test/fixtures/run-native-archive/unresolved/Unresolved.hs
+  test/fixtures/run-wcwidth/cabal.project
+  test/fixtures/run-wcwidth/wcwidth-ffi.cabal
+  test/fixtures/run-wcwidth/src/Width.hs
+  test/fixtures/run-wcwidth/app/Main.hs
+  compiler/test-fixtures/GcStatsAudit.hs
+  docs/gc-stats-clock.md
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
   compiler/test-fixtures/OriginalErfNative.hs
@@ -261,6 +275,12 @@ extra-source-files:
   test/fixtures/run-pure/run-pure.cabal
   test/fixtures/run-pure/app/Main.hs
   test/fixtures/run-pure/app/Answer.hs
+  test/fixtures/run-benchmark/cabal.project
+  test/fixtures/run-benchmark/run-benchmark.cabal
+  test/fixtures/run-benchmark/src/Answer.hs
+  test/fixtures/run-benchmark/bench/Main.hs
+  test/fixtures/run-benchmark/bench/Check.hs
+  test/fixtures/run-benchmark/detailed/Detailed.hs
   test/fixtures/run-project/cabal.project
   test/fixtures/run-project/dep-data/dep-data.cabal
   test/fixtures/run-project/dep-data/src/Answer.hs
@@ -398,6 +418,7 @@ library
     THC.ForeignExports
     THC.ForeignExportProvenance
     THC.ForeignImportProvenance
+    THC.JSON
     THC.Sources
     THC.Wired
   build-depends:
@@ -409,6 +430,21 @@ library
     ghc == 9.14.1,
     ghc-boot == 9.14.1
   default-language: Haskell2010
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite interface-json
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/interface-json, compiler
+  other-modules: THC.JSON
+  build-depends:
+    base >= 4.22 && < 4.23,
+    bytestring >= 0.12.2 && < 0.13,
+    HUnit >= 1.6 && < 1.7,
+    text >= 2.1 && < 2.2
+  default-language: Haskell2010
+  ghc-options: -Wall
   if flag(development)
     ghc-options: -Werror
 
@@ -480,6 +516,7 @@ test-suite driver-tests
     PlanTests
     RunTests
     RunOptionsTests
+    BenchmarkTests
     ProjectTests
     StoreProjectTests
     EmptyStoreProjectTests
@@ -704,6 +741,7 @@ executable thc-fixtures
   main-is: Main.hs
   other-modules:
     AggregateFixtures
+    AggregateHeapFixtures
     GraphFixtures
     IntegerCompletionFixtures
     ContinuationFixtures
@@ -759,6 +797,7 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
+    MemorySearchFixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
@@ -768,6 +807,7 @@ executable thc-fixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
+    GcStatsFixtures
     FloatForeignFixtures
     GhcApiFixtures
     RtsDiagnosticFixtures
@@ -775,7 +815,9 @@ executable thc-fixtures
     PackageScalarFixtures
     StablePtrFFIFixtures
     PackageNativeOriginalsFixtures
+    PackageNativeArchiveFixtures
     GetEntropyFixtures
+    WcwidthFixtures
     HashableFfiFixtures
     OriginalTermiosFixtures
     OriginalTcsetattrFixtures

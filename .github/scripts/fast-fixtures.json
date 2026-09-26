@@ -331,6 +331,14 @@
         "test/haskell-fixtures/Main.hs", "thc.cabal"
       ]
     },
+    "original-memory-search": {
+      "junit": ["thc.runtime.OriginalMemorySearchTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memory-search"]}],
+      "outputs": ["build/original-memory-search"],
+      "sources": ["compiler/test-fixtures/OriginalMemorySearchAudit.hs", "compiler/test-fixtures/OriginalMemorySearchNative.hs",
+        "test/haskell-fixtures/MemorySearchFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-gmp": {
       "junit": ["thc.runtime.OriginalGmpTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-gmp", "--require-supported"]}],

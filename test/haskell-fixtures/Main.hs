@@ -8,6 +8,7 @@
 module Main (main) where
 
 import AggregateFixtures (prepareAggregate)
+import AggregateHeapFixtures (prepareAggregateHeap)
 import CompactRegionsFixtures (prepareCompactRegions, prepareCompactSerialization)
 import GraphFixtures (prepareGraph)
 import IntegerCompletionFixtures (prepareIntegerCompletion)
@@ -65,17 +66,21 @@ import ProcessSignalFixtures (prepareProcessSignals)
 import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
+import MemorySearchFixtures (prepareMemorySearch)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import CompilerRtsFixtures (prepareCompilerRts)
+import GcStatsFixtures (prepareGcStats)
 import FloatForeignFixtures (prepareFloatForeign)
 import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
 import PackageScalarFixtures (preparePackageScalar)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
+import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
+import WcwidthFixtures (prepareWcwidth)
 import HashableFfiFixtures (prepareHashableFfi)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
@@ -962,7 +967,9 @@ main = do
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
     ["package-native-originals"] -> preparePackageNativeOriginals root
+    ["package-native-archives"] -> preparePackageNativeArchives root
     ["getentropy"] -> prepareGetEntropy root
+    ["wcwidth"] -> prepareWcwidth root
     ["hashable-ffi"] -> prepareHashableFfi root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
@@ -975,6 +982,7 @@ main = do
     ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
+    ["original-memory-search"] -> prepareMemorySearch root
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root
     ["file-wait"] -> prepareFileWait root
@@ -988,11 +996,14 @@ main = do
     ["closure-inspection"] -> prepareClosureInspection root
     ["stable-pointers"] -> prepareStablePointers root
     ["compiler-rts"] -> prepareCompilerRts root
+    ["gc-stats"] -> prepareGcStats root
     ["float-foreign"] -> prepareFloatForeign root
     "ghc-api" : probes -> prepareGhcApi root probes
     ["record-fields"] -> prepareRecordFields root
     ["stable-names"] -> prepareStableNames root
     ["sum-join"] -> prepareSumJoins root
+    ["aggregate-heap"] -> prepareAggregateHeap root False
+    ["aggregate-heap", "--export-only"] -> prepareAggregateHeap root True
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
     [family] | family `elem` ["bytearray", "mutable-bytearrays", "resize-bytearrays", "mutable-bytearray-size", "compare-byte-arrays"] -> prepareByteArrayFamily root family
@@ -1034,4 +1045,4 @@ main = do
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root
     _ | not (null args), Just specs <- traverse arraySpec args -> mapM_ (prepareArray root) specs
-    _ -> die "Usage: thc-fixtures (rubbish-literals|rts-shutdown|interface-core|core-continuation|delimited-continuations|arithmetic-exceptions [--core-only]|mask-functions|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|boxed-cas|original-fcntl|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|stable-names|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|unaligned-scalar-memory|aligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"
+    _ -> die "Usage: thc-fixtures (gc-stats|rubbish-literals|rts-shutdown|interface-core|core-continuation|delimited-continuations|arithmetic-exceptions [--core-only]|mask-functions|live-async|thread-async|thread-status|thread-label|thread-inventory|uncaught-self|original-stack|original-stack-formatter|boxed-array-extensions|boxed-cas|original-fcntl|original-stdio [OPTIONS]|original-stdio-read|original-handle-readiness|original-stdio-close|original-posix-dup|original-stdio-seek|original-stdio-truncate|original-strerror|original-fd-ready|file-wait|original-gmp [--require-supported]|original-rts-locks [--require-supported]|rts-diagnostics|mutvar|stm|stable-pointers|stable-names|weak-explicit|shrink-bytearrays|bytearray|mutable-bytearrays|resize-bytearrays|mutable-bytearray-size|compare-byte-arrays|int32x4-bytearray|word32x4-bytearray|floatx4-bytearray|doublex2-bytearray [--export-only] [--ghc-option=OPTION]|atomic-int-arrays|bit|integer|integer-completion|signed-narrow|explicit64|word-floating|scalar-bitcasts|bignat-literals [--check-only]|float-decode|floating-remainder|fused-floating|simd-floatx4-fma|simd-wide-floating-fma|sqrt|unsafe-equality [--check-only]|floating-address|atomic-address|floating-byte-offset|narrow-byte-offset|int32-byte-offset|unaligned-scalar-memory|aligned-scalar-memory|explicit64-arrays|tuple-arithmetic|pinned-addresses [--native-only|--export-only] [--allow-unsupported]|pinned-pointer-cells|managed-address-reads|graph-bfs|address-array-copy|small-arrays|int-arrays|int8-arrays|int16-arrays|int32-arrays|double-arrays|float-word-arrays ...)"

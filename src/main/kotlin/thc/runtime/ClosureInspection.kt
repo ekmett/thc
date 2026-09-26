@@ -43,7 +43,8 @@ internal object ClosureInspection {
                 descriptor = "constructor ${value.layout.id}"
                 tag = 1
                 for (index in 0 until value.layout.arity)
-                    if (value.layout.fieldWidth(index) != 0) field(value.layout.inspect(value, index),
+                    if (value.layout.inactiveSumReference(value, index)) field(0L, false)
+                    else if (value.layout.fieldWidth(index) != 0) field(value.layout.inspect(value, index),
                         !value.layout.isLong(index) && !value.layout.isFloat(index) &&
                             !value.layout.isDouble(index) && !value.layout.isVector(index))
             }

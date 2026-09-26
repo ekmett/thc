@@ -23,23 +23,31 @@ wide views, odd tails, enormous indices and failed State effects.
 Canonical signed `int16` syntax is accepted only in `[-32768,32767]`, including
 literal alternatives. Both `int16` and the already parsed `word16` forms now
 provide intrinsic exact representation proofs. The shared 16/32-bit proof
-helper preserves the reviewed rule: absent or genuinely unconstrained
-unknown/null metadata can refine from literal syntax; contradictory known
-representations and malformed records fail. No int8 literal support is added.
+helper refines absent or genuinely unconstrained unknown/null metadata from
+literal syntax. Known integral metadata names may share the Long carrier;
+the literal tag still determines range and signed interpretation. Incompatible
+carriers and malformed records fail. Strict exporter auditing separately checks
+GHC's exact type identities. No int8 literal support is added.
 
 The native JVM matrix runs interpreted and compiled before/after Tidy, on AST
 and bytecode, with inlining enabled and disabled. It discovers active split
 targets (including bytecode instruction caches), compiles callees first and
-requires exactly two guest entries, unchanged target identities and valid
+requires exactly one guest entry per array call (the immediate runRW State
+lambda is beta-reduced), unchanged target identities and valid
 last-tier code after every measured invocation. There are no settling calls,
-retries or raised runtime limits. This covers 19,344 array invocations and 112
-literal invocations per handoff configuration: 19,456 calls / 38,912 guest
-entries. Result/argument loans and references must be released, warmed result
+retries or raised runtime limits. This covers 19,344 array invocations per
+handoff configuration. Each literal metadata variant adds 112 invocations and
+224 guest entries: the opaque worker retains two executable roots. Both genuine
+and unconstrained literal metadata variants are tested. Result/argument loans
+and references must be released, warmed result
 pools reused, and supported execution must have no traps or blackholes.
 
-Malformed width, signedness, arity, State and representation-flag controls run
-on both backends and load policies. Unknown tuple leaves retain the existing
-diagnostic frontier: strict mode rejects them at load; diagnostic mode records
+Wrong-carrier, arity, State, tuple-shape and representation-flag controls run
+on both backends and load policies. Same-Long scalar and index metadata aliases
+execute against the independent byte model; the selected primitive still
+determines element width and signedness. A unilateral tuple payload change
+still conflicts with an unchanged case-binder contract. Unknown tuple leaves
+retain the existing diagnostic frontier: strict mode rejects them at load; diagnostic mode records
 the reason and must trap exactly once on demand without handoff leaks. Other
 contradictory positive contracts still fail during loading.
 
@@ -121,8 +129,8 @@ The two noinline controls each use seven seeds, including signed64 endpoints:
 order; both-endian model tests do not claim native big-endian execution.
 
 Every array root has one reachable global plus exactly one unconditional,
-immediately applied zero-slot `State# RealWorld` lambda: two guest entries per
-call. The literal controls have the entry and opaque worker, also two guest
+immediately applied zero-slot `State# RealWorld` lambda: after beta-reduction,
+one guest entry per call. The literal controls retain the entry and opaque worker, two guest
 entries. Structural checks traverse dictionary-held expressions and join bodies;
 only complete, proven local join prefixes are exempt from function counting.
 These counts exclude the host bridge. Separate JVM tests must compile the actual
@@ -145,7 +153,7 @@ On eak-quartus, Linux x86_64, GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
   with zero failures, errors or skips. `installDist` passed in both modes;
   dense handoff used a forced rebuild/rerun.
 - Each mode passed all 19,456 measured compiled invocations / 38,912 exact guest
-  entries described above, preserving per-call identity and last-tier checks.
+  entries before runRW beta-reduction, preserving per-call identity and last-tier checks.
 - Python passed without skips: 9 new model, 9 ByteArray contract, 47 auditor,
   4 primop inventory, 5 Int model, 9 Double model, 7 Int32 model and 13 Float/Word
   model tests. All sixteen source and twenty-nine artifact hashes were rechecked

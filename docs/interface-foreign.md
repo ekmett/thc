@@ -46,9 +46,12 @@ the Core bundle. Native Cabal compilation still uses the selected GHC and its
 configured native compiler. LLVM acquisition is a sensible second compilation,
 not a requirement to reproduce the native object's exact bytes.
 
-Support covers static `ccall`/`capi` with a scalar, address or void result. Unsafe calls
-may take scalar arguments, `Addr#`, `ByteArray#` and `MutableByteArray#`; safe
-calls currently require scalar arguments and a scalar or void result only.
+Support covers static `ccall`/`capi` with a scalar, address or void result.
+Unsafe calls may take scalar arguments, `Addr#`, `ByteArray#` and
+`MutableByteArray#`. As a temporary compatibility policy requested on
+2026-09-26, safe declarations accept the same carriers through the existing
+unsafe pointer transport. Their original `safe` metadata is retained; this
+does not claim full GHC safe-FFI scheduling or callback semantics.
 Pointer results retain the runtime's pointer ownership/lifetime boundary.
 Pure source imports and IO
 imports both retain GHC's actual State-token worker ABI and original safety.
@@ -132,8 +135,8 @@ links libc. Original `splitmix-0.1.3.2` uses this through its unchanged safe
 storage, not a copied Haskell array. Real native/pinned addresses remain
 in-place; an ordinary unpinned heap buffer cannot be projected into libc.
 The provider does not manufacture entropy, change libc status returns, or
-replace the original package's error fallback. It does not expand admission
-of safe imports with pointer arguments or results.
+replace the original package's error fallback. The separate temporary
+safe-pointer policy does not relax native pointer projection restrictions.
 
 The `getentropy` fixture captures the unchanged package through the production
 GHC proxy and linker, checks the retained Core strictly, and records native
@@ -146,6 +149,28 @@ Random bytes are not compared bit-for-bit or claimed as an entropy-quality test.
 THC_SPLITMIX_SOURCE=/path/to/splitmix-0.1.3.2 cabal run exe:thc-fixtures -- getentropy
 cabal test driver-tests --test-options=--package-native-only
 ./gradlew --continue getEntropyDefault getEntropyDense
+```
+
+Linux x86-64 also admits libc `wcwidth` at its exact `i32 (i32)` ABI and
+records the explicit libc dependency in the embedded-LLVM artifact. This is
+the native locale-sensitive implementation used by Tasty's original
+`foreign import capi safe "wchar.h wcwidth" :: CWchar -> CInt`; no Unicode
+width table or unconditional width-one substitute is introduced. Its `-1`
+result is preserved, so Tasty's existing Haskell fallback remains responsible
+for displaying an undefined-width character as width one.
+
+The `wcwidth` fixture retains the original Tasty source/declaration and license,
+then compiles that exact declaration and fallback in a small genuine GHC/CAPI
+package. Native GHC observations in the C and C.UTF-8 locales cover ASCII,
+controls, combining marks, wide characters and invalid code points. Both
+backends compare the raw and fallback results before and from the first
+installed compiled call, with a thread-local native locale restored after each
+check. This focused declaration test is separate from running the whole Tasty
+or AD test suite.
+
+```sh
+THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
+./gradlew --continue wcwidthDefault wcwidthDense
 ```
 
 The unchanged `erf-2.0.0.0` package has source-pure imports whose emitted
@@ -166,6 +191,48 @@ exercise concurrent scalar C calls, GC, deferred delivery on return, completed
 result resumption and exceptional cleanup in interpreted and compiled entries.
 This tranche does not claim interruptible native blocking calls, callbacks,
 bound OS threads or native errno behavior.
+
+Acquisition may retain unsupported package-native obligations in
+`packageNativeArchive` (`thc-package-native-archive-v1`, `execution=not-linked`).
+The original import declarations, emitted calls and foreign products remain
+unchanged. A verified declaration inventory records the exact excluded emitted
+signatures; supported imports in the same module can still receive their real
+compiled adapters. Reachability rejects bindings containing an excluded call
+before evaluation. Genuine incompatible declarations of one C symbol additionally
+retain `conflictingImports`: the exact original emitted signature witnesses,
+possibly from different modules of that component. Both widths remain excluded;
+no result conversion or guessed callee prototype is manufactured. Compatible
+safe/unsafe declarations and the existing same-C-ABI pointer/signedness adapters
+are not conflicts. An unclassified non-static declaration inventory is honestly
+module-wide, as is a component whose verified LLVM retains unresolved external
+symbols. The latter preserves its actual compiled artifact and build inputs,
+including the checked artifact digest, but does not load it into Sulong.
+
+Only recognized unsupported cases enter this path. Malformed import metadata,
+changed retained products, compiler failures, invalid LLVM, stale object receipts
+and artifact/hash failures remain fatal. Initializers, finalizers and additional
+foreign files retain their existing global admission checks. A published
+acquisition manifest is still not a successful reachable audit or guest run.
+The `package-native-archives` fixture group builds real mixed-import and
+unresolved-component packages, including two modules declaring one symbol with
+different result widths. Its native oracle performs the interruptible effect,
+while `packageNativeArchivesDefault` and `packageNativeArchivesDense` verify
+supported calls (also inside the conflicting module) and rejection before any
+excluded effect in both runtimes. The original network-3.2.9.0 capture exposed
+this case for `recvmsg` and `sendmsg`: `Network.Socket.Buffer` declares `CInt`
+results while `Network.Socket.ByteString.Internal` declares `CSsize` results.
+
+Temporarily admitted safe pointer calls reuse the same synchronous foreign
+extent and pointer transport as unsafe calls, without copies or automatic
+pinning. Native access, context ownership, live StablePtr identities, allocation
+borrows and result normalization before the call lease closes remain mandatory.
+The existing safe post-return poll is retained: a pointer result is stored before
+async delivery, and resumption does not repeat C's effect. Focused controls cover
+aliasing, pinned offset identity, opaque returned addresses, StablePtr lifetime,
+and interpreted/first-installed AST and bytecode return/resumption in both
+handoff modes. This compatibility policy remains temporary; general retained
+buffers, callbacks, interruptible calls and GHC capability handoff are not
+implemented by admitting these declarations.
 
 Four primitive bit-pattern entrypoints using the original erf package's public API
 pass the strict reachable audit and match 88 native observations, including
@@ -308,11 +375,12 @@ arbitrary mixed native packages already run.
 ## Package C/CAPI calls
 
 The separate `thc-package-c-ffi-v1` profile extends the runtime link boundary
-for ordinary package C code. It accepts static, unsafe `ccall` and `capi`
+for ordinary package C code. It accepts static `ccall` and `capi`
 entries with machine-word and 8/16/32/64-bit signed/unsigned integers,
 `FloatRep`, `DoubleRep`, `AddrRep`, `ByteArray#` and `MutableByteArray#`
 arguments, and numeric, opaque pointer or void results. Source-level pure imports still use
-GHC's emitted State-threaded foreign worker. A CAPI value import is executed
+GHC's emitted State-threaded foreign worker. Unsafe calls and temporarily admitted
+safe calls use the same carriers as described above. A CAPI value import is executed
 through its original generated function wrapper.
 
 `packageNativeLink` retains the complete component ABI and bitcode identity;
@@ -343,7 +411,7 @@ Focused tests execute the same C source through Sulong and an actual host-native
 shared library, including context and lifetime controls. This does not implement
 GHC's C `hs_deref_stable_ptr`/closure ABI or callbacks into guest Haskell.
 
-This slice does not support safe/interruptible calls, general retained buffers,
+This slice does not support full GHC safe-FFI semantics, interruptible calls, general retained buffers,
 callbacks, foreign exports, initialization/finalization or arbitrary extra
 native libraries. Within one call, aliases share their allocation transport and
 a small C bridge produces Sulong's allocation-relative pointer, preserving C

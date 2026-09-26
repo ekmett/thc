@@ -22,7 +22,7 @@ fixture environment = TestLabel "original array and bytestring memory calls" $ T
     installedPkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
     ghcSource <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
     let output = scratch environment </> "library-memory-full-core"
-        command = ["run", project, "--exe", "library-memory", "--installed-core", "required",
+        command = ["run", "--project-dir", project, "library-memory", "--installed-core", "required",
           "--thc-root", thcRoot environment, "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\path -> ["--with-ghc", path]) installedGhc ++
           maybe [] (\path -> ["--with-ghc-pkg", path]) installedPkg ++

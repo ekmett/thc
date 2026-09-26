@@ -402,6 +402,9 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                     val next = offset + count
                     val result = try { scalar.call(frame, function.target, packet, false) }
                     catch (cut: AstCapture) {
+                        // Match scalar generic dispatch: save interrupted
+                        // suffixes in the interpreter without invalidation.
+                        CompilerDirectives.transferToInterpreter()
                         val savedArguments = arguments.copyOf()
                         throw cut.append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? =
@@ -410,6 +413,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                     }
                     val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
                     catch (cut: AstCapture) {
+                        CompilerDirectives.transferToInterpreter()
                         val savedArguments = arguments.copyOf()
                         throw cut.append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? {
@@ -428,6 +432,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                         DelimitedControl.captureBytecode(answer, null)
                         force.execute(frame, answer)
                     } catch (cut: DelimitedCut) {
+                        CompilerDirectives.transferToInterpreter()
                         val remaining = arguments.copyOf()
                         val next = offset + count
                         throw cut.append(frame, object : DelimitedPendingApplication {

@@ -90,4 +90,16 @@ internal class ArrayCoreEvidence(module: Map<String, Any?>, private val name: St
         stateLambda(root["expr"])
         return guestLambdas(root["expr"]).size
     }
+
+    /** Exclude only the independently checked runRW State# beta-redex.
+     * Keep the exported lambda inventory above for structural evidence. */
+    fun loweredStateLambdas(expr: Any?): List<List<Any?>> {
+        val state = stateLambda(expr)
+        return guestLambdas(expr).filter { it !== state }
+    }
+
+    fun loweredImmediateStateCalls(): Int {
+        immediateStateCalls() // Preserve the closed-global and exact-source checks.
+        return loweredStateLambdas(root["expr"]).size
+    }
 }

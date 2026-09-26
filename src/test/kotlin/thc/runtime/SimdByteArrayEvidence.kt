@@ -79,6 +79,11 @@ internal object SimdByteArrayEvidence {
         assertEquals(commands.size, (manifest["commands"] as List<*>).size)
     }
     fun controls(root: File, family: String, manifest: Map<String, Any?>) {
+        val directory = "build/simd-$family-bytearray"
+        for (attempt in listOf("prepare-run-123", "$directory/prepare-run-", "$directory/prepare-run-../escape",
+            "$directory/prepare-run-123/child", "/$directory/prepare-run-123", "build/other/prepare-run-123")) {
+            assertThrows(AssertionError::class.java, { inventory(root, family, manifest + ("attempt" to attempt)) }, attempt)
+        }
         // Validate every required omission, duplicate, malformed hash, and escaping addition.
         // This stays metadata-only; the existing native tests hash the actual bytes.
         for (field in listOf("sources", "artifacts")) {

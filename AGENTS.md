@@ -55,6 +55,12 @@ bytecode backend contracts and the pinned GHC/Graal toolchain requirements.
 
 ## Verification and handoff
 
+Keep benchmark tooling, but do not publish summaries of development benchmark
+runs until the user requests publication. Preserve run evidence locally. Existing
+high-level performance claims are not a mandate to add new measurements to docs.
+Prioritize matched THC-versus-native-GHC comparisons; THC before/after results
+are useful diagnostics, not substitutes for that comparison.
+
 The objective is a working compiler/JIT with reasonable GHC semantics, not formal
 equivalence to every GHC RTS detail. Implement a sensible translation and test it
 in proportion to its risk. Ordinary arithmetic needs ordinary regression and

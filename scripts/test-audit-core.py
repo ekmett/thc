@@ -42,6 +42,44 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class AggregateHeapFieldTest(unittest.TestCase):
+    empty = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple', components=[], primReps=[])
+    sum_rep = dict(kind='unknown', evaluated=True, aggregate='unboxed-sum',
+                   alternatives=[empty, REFERENCE], primReps=['WordRep', 'BoxedRep (Just Lifted)'],
+                   tagSlot=0, alternativeSlots=[[], [1]])
+
+    def check(self, proof, mutation=None, saturated=True, cap=None):
+        info = dict(id='Box', name='Box', kind='boxed', arity=1, fieldTypes=[proof],
+                    fieldReps=[proof['primReps']], fieldLifted=[False], strictFields=[True])
+        argument = ['var', 'payload', dict(rep=copy.deepcopy(proof))]
+        expression = ['app', ['con', 'Box', 1], [argument], [False], False, False, dict(rep=dict(REFERENCE, evaluated=True))]
+        if mutation:
+            mutation(info, expression)
+        audit = audit_core.Audit([('heap.json', dict(schema=1, ghc='9.14.1', bindings=[], constructors=[info]))], cap or CAP)
+        audit.walk(expression if saturated else expression[1], {'payload': proof}, 'root', '/expr')
+        return audit.issues
+
+    def test_direct_saturated_sum_empty_and_nested_tuple_fields(self):
+        nested = dict(self.empty, components=[LONG, dict(self.empty, components=[REFERENCE], primReps=REFERENCE['primReps'])],
+                      primReps=LONG['primReps'] + REFERENCE['primReps'])
+        address = dict(kind='address', evaluated=True, primReps=['AddrRep'])
+        address_tuple = dict(self.empty, components=[address], primReps=['AddrRep'])
+        for proof in (self.empty, self.sum_rep, nested, address_tuple):
+            self.assertEqual([], self.check(proof))
+            self.assertTrue(self.check(proof, cap=dict(CAP, aggregateHeapFields=[])))
+            self.assertTrue(self.check(proof, saturated=False))
+
+    def test_constructor_shape_arity_and_levity_stay_checked(self):
+        mutations = [lambda info, expr: info.update(fieldReps=[['WordRep']]),
+                     lambda info, expr: info.update(fieldLifted=[True]),
+                     lambda info, expr: expr[3].__setitem__(0, True),
+                     lambda info, expr: expr[2][0][2].update(rep=LONG),
+                     lambda info, expr: info.update(fieldTypes=[dict(self.sum_rep, alternativeSlots=[[], [0]])]),
+                     lambda info, expr: info.update(arity=2)]
+        for mutation in mutations:
+            self.assertTrue(self.check(copy.deepcopy(self.sum_rep), mutation))
+
+
 class ReportStreamTest(unittest.TestCase):
     def test_report_stream_matches_previous_format_without_one_large_write(self):
         class Sink(io.StringIO):
@@ -1939,6 +1977,72 @@ class OriginalMemmoveDeclarationTest(unittest.TestCase):
             wrong = fixture.fixture(declaration)
             wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
             self.assertFalse(fixture.audit(wrong)['accepted'])
+
+
+class OriginalMemorySearchDeclarationTest(unittest.TestCase):
+    def test_exact_cint_csize_and_address_result_contracts(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            kind = 'void' if rep is None else 'address' if rep == 'AddrRep' else 'long'
+            return dict(kind=kind, primReps=[] if rep is None else [rep], evaluated=evaluated)
+        for symbol, second, result in [('memcmp', 'AddrRep', 'Int32Rep'), ('memchr', 'Int32Rep', 'AddrRep')]:
+            output = dict(kind='unknown', primReps=[result], evaluated=False, aggregate='unboxed-tuple',
+                          components=[scalar(None, True), scalar(result, True)])
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='bytestring-0.12.2.0-inplace', isFunction=True),
+                convention='ccall', safety='unsafe', arity=4, suppliedArity=4,
+                argumentReps=list(map(scalar, ['AddrRep', second, 'Word64Rep', None])), resultRep=output)
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+            for key, value in [('safety', 'safe'), ('convention', 'capi'), ('arity', 3), ('schema', True)]:
+                bad = copy.deepcopy(declaration); bad[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
+            for unit in ['foreign', 'ghc-internal']:
+                bad = copy.deepcopy(declaration); bad['target']['unit'] = unit
+                self.assertEqual(unit == 'ghc-internal' and symbol == 'memcmp', fixture.audit(fixture.fixture(bad))['accepted'])
+            bad = copy.deepcopy(declaration); bad['argumentReps'][2] = scalar('WordRep')
+            self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
+
+
+class OriginalGcStatsDeclarationTest(unittest.TestCase):
+    """Synthetic ABI negatives; real declarations execute in GcStatsNativeTest."""
+    def test_closed_original_gc_stats_and_clock_abis(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        for symbol, arguments, output, safety in (
+                ('getRTSStatsEnabled', (None,), 'IntRep', 'safe'),
+                ('getRTSStats', ('AddrRep', None), None, 'safe'),
+                ('performGC', (None,), None, 'safe'),
+                ('performMajorGC', (None,), None, 'safe'),
+                ('performBlockingMajorGC', (None,), None, 'safe'),
+                ('getMonotonicNSec', (None,), 'Word64Rep', 'unsafe')):
+            declaration = dict(schema=1, target=dict(kind='static', symbol=symbol,
+                unit='ghc-internal', isFunction=True), convention='ccall', safety=safety,
+                arity=len(arguments), suppliedArity=len(arguments),
+                argumentReps=[scalar(rep) for rep in arguments],
+                resultRep=dict(kind='unknown', primReps=[] if output is None else [output],
+                    evaluated=False, aggregate='unboxed-tuple', components=[scalar(None, True)] +
+                    ([] if output is None else [scalar(output, True)])))
+            module = fixture.fixture(declaration)
+            report = fixture.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+            self.assertFalse(fixture.audit(module, disabled)['accepted'])
+            for key, value in (('safety', 'unsafe' if safety == 'safe' else 'safe'),
+                               ('convention', 'capi'), ('arity', 0), ('suppliedArity', 0),
+                               ('schema', True), ('resultRep', LONG)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, key))
+            for key, value in (('unit', 'main'), ('isFunction', False), ('symbol', symbol + '_alias')):
+                wrong = copy.deepcopy(declaration); wrong['target'][key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, key))
+            for index in range(len(arguments)):
+                wrong = fixture.fixture(declaration)
+                wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
+                self.assertFalse(fixture.audit(wrong)['accepted'], (symbol, index))
 
 
 class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):

@@ -296,10 +296,10 @@ class FloatWordArrayNativeTest {
         val exact = exactPrimitives[name]
         if (exact == null) {
             require(evidence.primitiveCounts.keys.containsAll(requiredPrimitives(name))) { "$name lost a required primitive" }
-            return evidence.immediateStateCalls().toLong()
+            return evidence.loweredImmediateStateCalls().toLong()
         }
         require(exact == evidence.primitiveCounts) { "$name primitive movement changed" }
-        if (name == "aliasWordBytes") return evidence.immediateStateCalls().toLong()
+        if (name == "aliasWordBytes") return evidence.loweredImmediateStateCalls().toLong()
         val root = evidence.root["expr"] as List<Any?>
         evidence.stateLambda(root)
         val read = name == "moveFloatBits"
@@ -325,11 +325,11 @@ class FloatWordArrayNativeTest {
             require(rep["aggregate"] == "unboxed-tuple" && rep["primReps"] == listOf("FloatRep"))
             require(rep["components"] == listOf(mapOf("primReps" to emptyList<String>(), "kind" to "void", "evaluated" to true), lane))
         } else require(rep == lane)
-        return (evidence.guestLambdas(root).size + calls.size * evidence.guestLambdas(expr).size).toLong()
+        return (evidence.loweredStateLambdas(root).size + calls.size * evidence.guestLambdas(expr).size).toLong()
     }
     @Test fun corePrimitiveEvidenceRejectsMissingExtraAndWrongCounts() {
         for ((stage, paths) in manifest()["stages"] as Map<String, List<String>>) {
-            for (name in names) assertEquals(if (name in listOf("moveFloatBits", "indexFloatBits")) 3L else 2L,
+            for (name in names) assertEquals(if (name in listOf("moveFloatBits", "indexFloatBits")) 2L else 1L,
                 checkCore(ArrayCoreEvidence(merged(paths), name), name), "$stage/$name")
             for (name in names.take(4)) for (primitive in requiredPrimitives(name)) {
                 val module = merged(paths); val evidence = ArrayCoreEvidence(module, name)
@@ -438,10 +438,8 @@ class FloatWordArrayNativeTest {
                             val formals = expression[1] as List<Map<String, Any?>>
                             return "lambda ${formals.joinToString { it["name"].toString() }}"
                         }
-                        val rootExpression = bindings.single { it["name"] == name }["expr"] as List<*>
-                        val stateCall = rootExpression[2] as List<*>
-                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet() +
-                            lambdaLabel(stateCall[1] as List<*>)
+                        // The checked immediate runRW State# lambda is beta-reduced.
+                        val expectedLabels = bindings.map { lambdaLabel(it["expr"] as List<*>) }.toSet()
                         // Resolve read-only metadata before the unchanged interpreted warmup.
                         val probes = snapshotProbes(entry)
                         var targets = emptyList<RootCallTarget>()
@@ -499,7 +497,7 @@ class FloatWordArrayNativeTest {
         else -> "aliasWordBytes"
     }
 
-    @Test fun exactFloatAndWordStateShapesAndSaturationAreRequiredInBothLoadModes() {
+    @Test fun longAliasesExecuteWhileFloatStateShapeAndSaturationGuardsRemain() {
         val paths = paths()
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
@@ -551,7 +549,19 @@ class FloatWordArrayNativeTest {
                             } else metadata["rep"] = payload
                         }
                     }
-                    if (diagnostic && mutation == 15 && operation.tuple) {
+                    val word = operation in listOf(ByteArrayOp.READ_WORD, ByteArrayOp.WRITE_WORD, ByteArrayOp.INDEX_WORD)
+                    // Tuple payload metadata must still agree with its case binder.
+                    val sameCarrier = mutation == 6 || (word && !operation.tuple && (mutation == 7 || mutation in 10..14))
+                    if (sameCarrier) {
+                        val name = owner(operation)
+                        val p = program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
+                        for (seed in listOf(5L, 0x80000000L, Long.MIN_VALUE)) {
+                            assertEquals(model(name, seed),
+                                Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue(name), arrayOf(seed))),
+                                "$backend/$operation/mutation$mutation/$diagnostic/$seed")
+                            released(language)
+                        }
+                    } else if (diagnostic && mutation == 15 && operation.tuple) {
                         // An unknown tuple component is the existing unsupported
                         // aggregate frontier, not a supported scalar contract.
                         // Diagnostic mode may defer it, but must trap on demand.
