@@ -192,7 +192,7 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
     }
     @CompilationFinal(dimensions = 1)
     private val offsets = IntArray(fields.size + 1).also { offsets ->
-        for (index in fields.indices) offsets[index + 1] = offsets[index] + (fields[index].vector?.lanes ?: 1)
+        for (index in fields.indices) offsets[index + 1] = offsets[index] + 1
     }
     val storageSize: Int get() = offsets.last()
     fun fieldWidth(index: Int): Int = offsets[index + 1] - offsets[index]
@@ -242,7 +242,7 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
     /** Bytecode stack operands use the same selective immutable capture shape. */
     @ExplodeLoop
     fun captureValues(values: Array<Any?>): CapturedFrame {
-        check(fields.none { it.vector != null }) { "Vector captures require primitive lane sources" }
+        check(fields.none { it.vector != null }) { "Vector captures require typed local sources" }
         check(values.size == fields.size)
         val environment = shape.factory.create(this, allocationKey)
         for (index in fields.indices) fields[index].initialize(environment, values[index])

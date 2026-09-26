@@ -17,6 +17,7 @@ import thc.Language
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
+import jdk.incubator.vector.*
 
 private typealias VectorCore = List<Any?>
 private typealias VectorRep = Map<String, Any?>
@@ -139,15 +140,16 @@ class BytecodeVectorTransportTest {
     private fun check(program: BytecodeProgram, language: Language, family: Family, name: String, input: Long) {
         val root = program.entryTarget(name).rootNode as BytecodeRoot
         val shape = requireNotNull(root.tupleResult)
-        assertEquals(family.lanes, shape.width)
+        assertEquals(1, shape.width)
         assertTrue(shape.proof.isVector); assertFalse(shape.proof.isTuple)
         val result = ownedTupleResult(Calls.target(root.callTarget, arrayOf(0L, input)), shape)
+        val raw = VectorLayout(shape.proof).require(shape.layout.getObject(result, 0))
         for (lane in 0 until family.lanes) {
             val value = input + lane
             val label = "${family.name}/$name/$input/lane=$lane"
             when (family.laneName) {
-                "Float" -> assertEquals(value.toFloat().toRawBits(), shape.layout.getFloat(result, lane).toRawBits(), label)
-                "Double" -> assertEquals(value.toDouble().toRawBits(), shape.layout.getDouble(result, lane).toRawBits(), label)
+                "Float" -> assertEquals(value.toFloat().toRawBits(), (raw as FloatVector).lane(lane).toRawBits(), label)
+                "Double" -> assertEquals(value.toDouble().toRawBits(), (raw as DoubleVector).lane(lane).toRawBits(), label)
                 else -> {
                     val expected = when (family.laneName) {
                         "Int8" -> value.toByte().toLong(); "Word8" -> value and 255L
@@ -155,7 +157,18 @@ class BytecodeVectorTransportTest {
                         "Int32" -> value.toInt().toLong(); "Word32" -> value and 0xffff_ffffL
                         else -> value
                     }
-                    assertEquals(expected, shape.layout.getLong(result, lane), label)
+                    val signed = when (raw) {
+                        is ByteVector -> raw.lane(lane).toLong()
+                        is ShortVector -> raw.lane(lane).toLong()
+                        is IntVector -> raw.lane(lane).toLong()
+                        is LongVector -> raw.lane(lane)
+                        else -> error("Expected integral raw vector")
+                    }
+                    val actual = when (family.laneName) {
+                        "Word8" -> signed and 255L; "Word16" -> signed and 65535L
+                        "Word32" -> signed and 0xffff_ffffL; else -> signed
+                    }
+                    assertEquals(expected, actual, label)
                 }
             }
         }
@@ -174,9 +187,10 @@ class BytecodeVectorTransportTest {
             assertEquals(1, prefix.suppliedCount); assertEquals(1, prefix.arity); assertEquals(0, prefix.supplied.size)
             assertNotNull(prefix.typedSupplied)
             val input = (program.entryTarget("worker").rootNode as GuestRoot).typedInput!!
-            assertEquals(2, input.logical.logicalArity); assertEquals(family.lanes + 1, input.logical.physicalArity)
-            assertEquals(family.lanes, prefix.typedSupplied!!.layout.reps.size)
-            assertTrue(prefix.typedSupplied!!.layout.reps.none { it == "reference" })
+            assertEquals(2, input.logical.logicalArity); assertEquals(2, input.logical.physicalArity)
+            assertEquals(1, prefix.typedSupplied!!.layout.reps.size)
+            assertTrue(prefix.typedSupplied!!.layout.isObject(0))
+            VectorLayout(CoreRepresentations.parse(family.vector)).require(prefix.typedSupplied!!.layout.getObject(prefix.typedSupplied!!, 0))
             released(language)
         }
     }
@@ -257,9 +271,10 @@ class BytecodeVectorTransportTest {
                 val shape = requireNotNull((entry.rootNode as BytecodeRoot).tupleResult)
                 fun check(value: Long) {
                     val result = ownedTupleResult(Calls.target(entry, arrayOf(0L, value)), shape)
+                    val raw = shape.layout.getObject(result, 0)
                     for (index in 0 until family.lanes) {
-                        if (floating) assertEquals(value.toInt(), shape.layout.getFloat(result, index).toRawBits())
-                        else assertEquals(value, shape.layout.getDouble(result, index).toRawBits())
+                        if (floating) assertEquals(value.toInt(), (raw as FloatVector).lane(index).toRawBits())
+                        else assertEquals(value, (raw as DoubleVector).lane(index).toRawBits())
                     }
                     released(language)
                 }

@@ -1833,7 +1833,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val local = outer.locals.getValue(id)
             if (local.proof.isVector) {
                 CoreRepresentations.requireInput(local.proof)
-                if (local.cell || local.tupleSlots?.size != local.proof.vector!!.lanes)
+                if (local.cell || local.tupleSlots?.size != 1)
                     throw UnsupportedCore("Vector capture requires primitive lane locals")
             } else CoreRepresentations.requireScalar(local.proof, "capture")
         }
@@ -1849,7 +1849,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val environmentSlots = captured.mapIndexed { index, id ->
             val local = outer.locals.getValue(id)
             if (local.proof.isVector) {
-                val lanes = IntArray(local.proof.vector!!.lanes) { lane -> scope.layout.bind("$id captured vector lane $lane") }
+                val lanes = IntArray(1) { scope.layout.bind("$id captured vector") }
                 environmentVectorSlots[index] = lanes
                 scope.bindTuple(id, local.proof, lanes).slot
             } else scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
@@ -2564,7 +2564,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     if (vector != null) {
                         if (metadata.getOrNull(index)?.get("lifted") != false)
                             throw UnsupportedCore("Vector constructor binder must be unlifted")
-                        val lanes = IntArray(vector.vector!!.lanes) { lane -> child.layout.bind("$id constructor vector lane $lane") }
+                        val lanes = IntArray(1) { child.layout.bind("$id constructor vector") }
                         vectorFields[index] = lanes
                         child.bindTuple(id, proof, lanes).slot
                     } else child.bind(id, layout?.isLong(index) == true, proof).slot
@@ -2623,7 +2623,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                         argumentProofs += proofs[index]
                         LocalRead(slot, cell = false).proven(proofs[index])
                     } else {
-                        val lanes = IntArray(vector.vector!!.lanes) { lane -> layout.bind("field$index vector lane $lane") }
+                        val lanes = IntArray(1) { layout.bind("field$index vector") }
                         TupleShape.flatten(vector).forEachIndexed { lane, proof ->
                             argumentSlots += lanes[lane]
                             argumentIndices += ArgumentLayout.offset(inputLayout, index) + lane
