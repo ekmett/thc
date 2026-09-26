@@ -3,6 +3,9 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -38,23 +41,21 @@ class SimdFloatFmaTest {
         val x = Float.fromBits(0x3f800001)
         val y = Float.fromBits(0x3f7ffffe)
         assertEquals(0.0f, x * y - 1f)
-        assertEquals(bits(-Math.scalb(1.0f, -46)), bits(FloatX4.fused(0,
-            FloatX4.broadcast(x), FloatX4.broadcast(y), FloatX4.broadcast(-1f)).lane(0)))
+        assertEquals(bits(-Math.scalb(1.0f, -46)), bits(BytecodeRoot.VectorFloatFused.apply(0, FloatVector.broadcast(FloatVector.SPECIES_128, x), FloatVector.broadcast(FloatVector.SPECIES_128, y), FloatVector.broadcast(FloatVector.SPECIES_128, -1f)).lane(0)))
         for (operation in 0..3) {
-            val a = FloatX4.pack(0f, -0f, 2f, -2f)
-            val b = FloatX4.pack(0f, 0f, 3f, 3f)
-            val c = FloatX4.pack(0f, -0f, 4f, -4f)
-            val actual = FloatX4.fused(operation, a, b, c)
+            val a = FloatVector.broadcast(FloatVector.SPECIES_128, 0f).withLane(1, -0f).withLane(2, 2f).withLane(3, -2f)
+            val b = FloatVector.broadcast(FloatVector.SPECIES_128, 0f).withLane(1, 0f).withLane(2, 3f).withLane(3, 3f)
+            val c = FloatVector.broadcast(FloatVector.SPECIES_128, 0f).withLane(1, -0f).withLane(2, 4f).withLane(3, -4f)
+            val actual = BytecodeRoot.VectorFloatFused.apply(operation, a, b, c)
             for (lane in 0..3) same(model(operation, Triple(a.lane(lane), b.lane(lane), c.lane(lane))),
                 bits(actual.lane(lane)), "$operation/$lane")
         }
-        assertEquals(0L, bits(FloatX4.fused(2, FloatX4.broadcast(0f),
-            FloatX4.broadcast(0f), FloatX4.broadcast(0f)).lane(0)), "Negating the rounded answer would give -0")
-        val wide = FloatX8Fused.apply(0, FloatX8.broadcast(x), FloatX8.broadcast(y), FloatX8.broadcast(-1f))
-        val wideLanes = listOf(wide.lane0, wide.lane1, wide.lane2, wide.lane3, wide.lane4, wide.lane5, wide.lane6, wide.lane7)
+        assertEquals(0L, bits(BytecodeRoot.VectorFloatFused.apply(2, FloatVector.broadcast(FloatVector.SPECIES_128, 0f), FloatVector.broadcast(FloatVector.SPECIES_128, 0f), FloatVector.broadcast(FloatVector.SPECIES_128, 0f)).lane(0)), "Negating the rounded answer would give -0")
+        val wide = BytecodeRoot.VectorFloat8Fused.apply(0, FloatVector.broadcast(FloatVector.SPECIES_256, x), FloatVector.broadcast(FloatVector.SPECIES_256, y), FloatVector.broadcast(FloatVector.SPECIES_256, -1f))
+        val wideLanes = listOf(wide.lane(0), wide.lane(1), wide.lane(2), wide.lane(3), wide.lane(4), wide.lane(5), wide.lane(6), wide.lane(7))
         wideLanes.forEach { assertEquals(bits(-Math.scalb(1.0f, -46)), bits(it)) }
-        val zero = FloatX8Fused.apply(2, FloatX8.broadcast(0f), FloatX8.broadcast(0f), FloatX8.broadcast(0f))
-        listOf(zero.lane0, zero.lane1, zero.lane2, zero.lane3, zero.lane4, zero.lane5, zero.lane6, zero.lane7)
+        val zero = BytecodeRoot.VectorFloat8Fused.apply(2, FloatVector.broadcast(FloatVector.SPECIES_256, 0f), FloatVector.broadcast(FloatVector.SPECIES_256, 0f), FloatVector.broadcast(FloatVector.SPECIES_256, 0f))
+        listOf(zero.lane(0), zero.lane(1), zero.lane(2), zero.lane(3), zero.lane(4), zero.lane(5), zero.lane(6), zero.lane(7))
             .forEach { assertEquals(0L, bits(it), "Negating the rounded answer would give -0") }
     }
 
@@ -81,26 +82,24 @@ class SimdFloatFmaTest {
         val x = Double.fromBits(0x3ff0000000000001L)
         val y = Double.fromBits(0x3feffffffffffffeL)
         assertEquals(0.0, x * y - 1.0)
-        assertEquals((-Math.scalb(1.0, -104)).toRawBits(), DoubleX2.fused(0,
-            DoubleX2.broadcast(x), DoubleX2.broadcast(y), DoubleX2.broadcast(-1.0)).lane(0).toRawBits())
+        assertEquals((-Math.scalb(1.0, -104)).toRawBits(), BytecodeRoot.VectorDoubleFused.apply(0, DoubleVector.broadcast(DoubleVector.SPECIES_128, x), DoubleVector.broadcast(DoubleVector.SPECIES_128, y), DoubleVector.broadcast(DoubleVector.SPECIES_128, -1.0)).lane(0).toRawBits())
         val controls = listOf(Triple(0.0, 0.0, 0.0), Triple(-0.0, 0.0, -0.0),
             Triple(2.0, 3.0, 4.0), Triple(Double.POSITIVE_INFINITY, 0.0, 1.0),
             Triple(Double.NaN, 1.0, 0.0), Triple(Double.MAX_VALUE, 2.0, -Double.MAX_VALUE))
         for (operation in 0..3) for ((a,b,c) in controls) {
             val expected = Math.fma(if (operation >= 2) -a else a, b, if (operation and 1 != 0) -c else c)
-            val actual = DoubleX2.fused(operation, DoubleX2.broadcast(a), DoubleX2.broadcast(b), DoubleX2.broadcast(c)).lane(0)
+            val actual = BytecodeRoot.VectorDoubleFused.apply(operation, DoubleVector.broadcast(DoubleVector.SPECIES_128, a), DoubleVector.broadcast(DoubleVector.SPECIES_128, b), DoubleVector.broadcast(DoubleVector.SPECIES_128, c)).lane(0)
             if (expected.isNaN()) assertTrue(actual.isNaN(), "NaN payload is unspecified")
             else assertEquals(expected.toRawBits(), actual.toRawBits(), "$operation/$a/$b/$c")
         }
-        assertEquals(0L, DoubleX2.fused(2, DoubleX2.broadcast(0.0),
-            DoubleX2.broadcast(0.0), DoubleX2.broadcast(0.0)).lane(0).toRawBits())
-        val wide = DoubleX4Fused.apply(0, DoubleX4.broadcast(x), DoubleX4.broadcast(y), DoubleX4.broadcast(-1.0))
-        listOf(wide.lane0, wide.lane1, wide.lane2, wide.lane3)
+        assertEquals(0L, BytecodeRoot.VectorDoubleFused.apply(2, DoubleVector.broadcast(DoubleVector.SPECIES_128, 0.0), DoubleVector.broadcast(DoubleVector.SPECIES_128, 0.0), DoubleVector.broadcast(DoubleVector.SPECIES_128, 0.0)).lane(0).toRawBits())
+        val wide = BytecodeRoot.VectorDouble4Fused.apply(0, DoubleVector.broadcast(DoubleVector.SPECIES_256, x), DoubleVector.broadcast(DoubleVector.SPECIES_256, y), DoubleVector.broadcast(DoubleVector.SPECIES_256, -1.0))
+        listOf(wide.lane(0), wide.lane(1), wide.lane(2), wide.lane(3))
             .forEach { assertEquals((-Math.scalb(1.0, -104)).toRawBits(), it.toRawBits()) }
         for (operation in 0..3) for ((a,b,c) in controls) {
             val expected = Math.fma(if (operation >= 2) -a else a, b, if (operation and 1 != 0) -c else c)
-            val actual = DoubleX4Fused.apply(operation, DoubleX4.broadcast(a), DoubleX4.broadcast(b), DoubleX4.broadcast(c))
-            for (lane in listOf(actual.lane0, actual.lane1, actual.lane2, actual.lane3)) {
+            val actual = BytecodeRoot.VectorDouble4Fused.apply(operation, DoubleVector.broadcast(DoubleVector.SPECIES_256, a), DoubleVector.broadcast(DoubleVector.SPECIES_256, b), DoubleVector.broadcast(DoubleVector.SPECIES_256, c))
+            for (lane in listOf(actual.lane(0), actual.lane(1), actual.lane(2), actual.lane(3))) {
                 if (expected.isNaN()) assertTrue(lane.isNaN(), "NaN payload is unspecified")
                 else assertEquals(expected.toRawBits(), lane.toRawBits(), "$operation/$a/$b/$c")
             }
@@ -242,7 +241,7 @@ class SimdFloatFmaTest {
                         val inputLayout = requireNotNull(workerRoot.typedInput)
                         val resultShape = requireNotNull(workerRoot.tupleResult)
                         assertEquals(3, inputLayout.logical.logicalArity)
-                        assertEquals(3 * laneCount, inputLayout.logical.physicalArity)
+                        assertEquals(3, inputLayout.logical.physicalArity)
                         assertEquals(when {
                             vector512 && double -> GeneratedVectors.vectorDoubleX8
                             vector512 -> GeneratedVectors.vectorFloatX16

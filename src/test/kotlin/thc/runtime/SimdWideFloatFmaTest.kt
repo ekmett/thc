@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
+
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -32,20 +35,20 @@ class SimdWideFloatFmaTest {
         val x = Float.fromBits(0x3f800001)
         val y = Float.fromBits(0x3f7ffffe)
         assertEquals(0f, x * y - 1f)
-        val result = FloatX16Fused.apply(0, FloatX16.broadcast(x), FloatX16.broadcast(y), FloatX16.broadcast(-1f))
-        val zero = FloatX16Fused.apply(2, FloatX16.broadcast(0f), FloatX16.broadcast(0f), FloatX16.broadcast(0f))
-        val floatLanes = { value: FloatX16 -> listOf(value.lane0,value.lane1,value.lane2,value.lane3,
-            value.lane4,value.lane5,value.lane6,value.lane7,value.lane8,value.lane9,value.lane10,value.lane11,
-            value.lane12,value.lane13,value.lane14,value.lane15) }
+        val result = BytecodeRoot.VectorFloat16Fused.apply(0, FloatVector.broadcast(FloatVector.SPECIES_512, x), FloatVector.broadcast(FloatVector.SPECIES_512, y), FloatVector.broadcast(FloatVector.SPECIES_512, -1f))
+        val zero = BytecodeRoot.VectorFloat16Fused.apply(2, FloatVector.broadcast(FloatVector.SPECIES_512, 0f), FloatVector.broadcast(FloatVector.SPECIES_512, 0f), FloatVector.broadcast(FloatVector.SPECIES_512, 0f))
+        val floatLanes = { value: FloatVector -> listOf(value.lane(0),value.lane(1),value.lane(2),value.lane(3),
+            value.lane(4),value.lane(5),value.lane(6),value.lane(7),value.lane(8),value.lane(9),value.lane(10),value.lane(11),
+            value.lane(12),value.lane(13),value.lane(14),value.lane(15)) }
         floatLanes(result).forEach { assertEquals((-Math.scalb(1f,-46)).toRawBits(), it.toRawBits()) }
         floatLanes(zero).forEach { assertEquals(0, it.toRawBits(), "Negating the rounded result would give -0") }
         val a = Double.fromBits(0x3ff0000000000001L)
         val b = Double.fromBits(0x3feffffffffffffeL)
         assertEquals(0.0, a * b - 1.0)
-        val doubleResult = DoubleX8Fused.apply(0, DoubleX8.broadcast(a), DoubleX8.broadcast(b), DoubleX8.broadcast(-1.0))
-        val doubleZero = DoubleX8Fused.apply(2, DoubleX8.broadcast(0.0), DoubleX8.broadcast(0.0), DoubleX8.broadcast(0.0))
-        val doubleLanes = { value: DoubleX8 -> listOf(value.lane0,value.lane1,value.lane2,value.lane3,
-            value.lane4,value.lane5,value.lane6,value.lane7) }
+        val doubleResult = BytecodeRoot.VectorDouble8Fused.apply(0, DoubleVector.broadcast(DoubleVector.SPECIES_512, a), DoubleVector.broadcast(DoubleVector.SPECIES_512, b), DoubleVector.broadcast(DoubleVector.SPECIES_512, -1.0))
+        val doubleZero = BytecodeRoot.VectorDouble8Fused.apply(2, DoubleVector.broadcast(DoubleVector.SPECIES_512, 0.0), DoubleVector.broadcast(DoubleVector.SPECIES_512, 0.0), DoubleVector.broadcast(DoubleVector.SPECIES_512, 0.0))
+        val doubleLanes = { value: DoubleVector -> listOf(value.lane(0),value.lane(1),value.lane(2),value.lane(3),
+            value.lane(4),value.lane(5),value.lane(6),value.lane(7)) }
         doubleLanes(doubleResult).forEach { assertEquals((-Math.scalb(1.0,-104)).toRawBits(), it.toRawBits()) }
         doubleLanes(doubleZero).forEach { assertEquals(0L, it.toRawBits(), "Negating the rounded result would give -0") }
     }

@@ -19,11 +19,20 @@ tuple fields, owned closure/thunk captures and boxed constructor fields.
 Recursive or lifted vector let bindings, sum fields and public host vector
 arguments/results remain outside that contract.
 
-The initial generator emitted six concrete carriers with final primitive fields, typed
-AST nodes and exact proof checks under `build/generated/simd`. Each arithmetic
-method uses a fixed Vector API species. Two marked regions in the existing
-bytecode loader/root contain concrete operation calls and specializations;
-normal builds check these regions without rewriting source files.
+The current generator emits typed AST nodes and exact proof checks under
+`build/generated/simd`. It emits no nominal vector carrier classes or arithmetic
+helper facades: each operation uses the appropriate raw Vector API type and
+fixed species directly at its primop site. Two marked regions in the existing
+bytecode loader/root contain the corresponding concrete specializations;
+normal builds check these regions without rewriting source files. Pack emits a
+broadcast/withLane construction, unpack reads lanes, and ordinary arithmetic
+returns the raw vector result. Species validation uses the existing vector
+metadata owner. Activation transport stores one raw vector reference; dense
+primitive fields remain the explicit heap-storage boundary.
+
+These representation changes require fresh compiled tests and chain/loop graph
+inspection. The retained historical captures do not establish vector continuity
+for the new implementation; see the [graph evidence limits](simd.md).
 
 Refresh the checked regions and validate the pinned GHC machine contracts:
 
@@ -74,7 +83,7 @@ Target flags may be passed explicitly as `--ghc-option=...`; the manifest record
 them, toolchain identity, generated sources, exact inputs, oracle and exported
 Core. Run the prepared experiment explicitly with
 `./gradlew --no-daemon simdFamiliesExperimentTest --rerun` after full
-native preparation. Ordinary `test` keeps the fixture-free carrier and proof
+native preparation. Ordinary `test` keeps the fixture-free Vector API and proof
 checks; it excludes the four prepared experiment methods. The native JVM gates
 require both pre/post Core and byte-identical native/model TSVs. Early wider-shape
 gates use the prepared model and are named separately. Both preserve exact

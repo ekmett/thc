@@ -405,7 +405,7 @@ class Int32VectorMemoryProofTest {
                 override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
             }
             val arguments = mutableListOf<Expr>(operand("array") { bytes }, operand("index") { Long.MAX_VALUE })
-            if (operation.isWrite) arguments.add(operand("vector") { Int32X4(1, 2, 3, 4) })
+            if (operation.isWrite) arguments.add(operand("vector") { IntVector.broadcast(IntVector.SPECIES_128, 1).withLane(1, 2).withLane(2, 3).withLane(3, 4) })
             arguments.add(operand("state") { throw failure })
             val expression = VectorByteArrayExpression(operation, arguments.toTypedArray())
             val sentinel = Any(); var published: Any? = sentinel

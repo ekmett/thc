@@ -144,7 +144,7 @@ class ShrinkByteArrayTest {
 
     @Test fun vectorsObserveShrunkBoundsWithoutLosingValidPrefix() {
         val owner = ManagedByteArray.allocateGuest(32)
-        val vector = Int32X4(1, 2, 3, 4)
+        val vector = IntVector.broadcast(IntVector.SPECIES_128, 1).withLane(1, 2).withLane(2, 3).withLane(3, 4)
         ManagedByteArray.writeInt32VectorGuest(owner, 0, vector, false)
         owner.shrink(16)
         val read = ManagedByteArray.readInt32VectorGuest(owner, 0, false)

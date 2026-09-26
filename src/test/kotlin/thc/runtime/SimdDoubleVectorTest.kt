@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.DoubleVector
+
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.bytecode.Instruction
@@ -16,7 +18,6 @@ import thc.CoreModules
 import thc.Json
 import thc.Language
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -71,12 +72,7 @@ class SimdDoubleVectorTest {
         assertFalse(TupleShape.compatible(proof, CoreVectors.proof))
         assertEquals(List(2) { "DoubleRep" }, CoreVectors.unpackedDouble.primReps)
         assertTrue(CoreVectors.unpackedDouble.components!!.all { it.isDouble })
-        val fields = DoubleX2::class.java.declaredFields
-        assertEquals(1, fields.size)
-        assertEquals("jdk.incubator.vector.DoubleVector", fields.single().type.name)
-        assertTrue(Modifier.isPrivate(fields.single().modifiers) && Modifier.isFinal(fields.single().modifiers))
-        assertTrue(DoubleX2::class.java.declaredConstructors.all { Modifier.isPrivate(it.modifiers) })
-        assertEquals(Double::class.javaPrimitiveType, DoubleX2::class.java.getMethod("lane", Int::class.javaPrimitiveType).returnType)
+        assertEquals(Double::class.javaPrimitiveType, DoubleVector::class.java.getMethod("lane", Int::class.javaPrimitiveType).returnType)
         assertThrows(RuntimeFault::class.java) { proof.refine(CoreVectors.unpackedDouble) }
         assertThrows(RuntimeFault::class.java) { proof.refine(CoreVectors.proof32) }
         assertThrows(RuntimeFault::class.java) { CoreVectors.caseResult(listOf(proof, CoreVectors.proof32)) }
@@ -107,20 +103,19 @@ class SimdDoubleVectorTest {
             0.5, -1.0, 1.0, 9007199254740992.0, 9007199254740994.0)
         for ((i, a) in values.withIndex()) for ((j, b) in values.withIndex()) {
             val lanes = doubleArrayOf(a, values[(i + 3) % values.size])
-            val packed = DoubleX2.pack(lanes[0], lanes[1])
-            val broadcast = DoubleX2.broadcast(b)
+            val packed = DoubleVector.broadcast(DoubleVector.SPECIES_128, lanes[0]).withLane(1, lanes[1])
+            val broadcast = DoubleVector.broadcast(DoubleVector.SPECIES_128, b)
             for (lane in 0..1) {
                 assertEquals(lanes[lane].toRawBits(), packed.lane(lane).toRawBits(), "movement $i/$j/$lane")
                 assertEquals(b.toRawBits(), broadcast.lane(lane).toRawBits(), "broadcast $i/$j/$lane")
-                sameDouble(lanes[lane] + b, DoubleX2.add(packed, broadcast).lane(lane), "add $i/$j/$lane")
-                sameDouble(lanes[lane] - b, DoubleX2.subtract(packed, broadcast).lane(lane), "subtract $i/$j/$lane")
-                sameDouble(lanes[lane] * b, DoubleX2.multiply(packed, broadcast).lane(lane), "multiply $i/$j/$lane")
+                sameDouble(lanes[lane] + b, (packed).add(broadcast).lane(lane), "add $i/$j/$lane")
+                sameDouble(lanes[lane] - b, (packed).sub(broadcast).lane(lane), "subtract $i/$j/$lane")
+                sameDouble(lanes[lane] * b, (packed).mul(broadcast).lane(lane), "multiply $i/$j/$lane")
             }
         }
-        val product = DoubleX2.multiply(DoubleX2.broadcast(Double.fromBits(0x3ff0000000000001)),
-            DoubleX2.broadcast(Double.fromBits(0x3feffffffffffffe)))
-        sameDouble(0.0, DoubleX2.add(product, DoubleX2.broadcast(-1.0)).lane(0), "separate rounding, not FMA")
-        val precise = DoubleX2.add(DoubleX2.broadcast(1.0), DoubleX2.broadcast(Math.scalb(1.0, -52)))
+        val product = (DoubleVector.broadcast(DoubleVector.SPECIES_128, Double.fromBits(0x3ff0000000000001))).mul(DoubleVector.broadcast(DoubleVector.SPECIES_128, Double.fromBits(0x3feffffffffffffe)))
+        sameDouble(0.0, (product).add(DoubleVector.broadcast(DoubleVector.SPECIES_128, -1.0)).lane(0), "separate rounding, not FMA")
+        val precise = (DoubleVector.broadcast(DoubleVector.SPECIES_128, 1.0)).add(DoubleVector.broadcast(DoubleVector.SPECIES_128, Math.scalb(1.0, -52)))
         sameDouble(Double.fromBits(0x3ff0000000000001), precise.lane(0), "binary64 precision, not binary32")
     }
 

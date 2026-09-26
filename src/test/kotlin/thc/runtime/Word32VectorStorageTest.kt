@@ -3,18 +3,19 @@
 
 package thc.runtime
 
-import java.lang.reflect.Modifier
+import jdk.incubator.vector.IntVector
+
 import java.math.BigInteger
 import java.nio.ByteOrder
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class Word32VectorStorageTest {
-    private fun lanes(value: Word32X4) = intArrayOf(value.first, value.second, value.third, value.fourth)
+    private fun lanes(value: IntVector) = intArrayOf(value.lane(0), value.lane(1), value.lane(2), value.lane(3))
         .map { it.toLong() and 0xffff_ffffL }.toLongArray()
-    private fun vector(values: LongArray): Word32X4 {
+    private fun vector(values: LongArray): IntVector {
         assertTrue(values.size == 4 && values.all { it in 0L..0xffff_ffffL })
-        return Word32X4(values[0].toInt(), values[1].toInt(), values[2].toInt(), values[3].toInt())
+        return IntVector.broadcast(IntVector.SPECIES_128, values[0].toInt()).withLane(1, values[1].toInt()).withLane(2, values[2].toInt()).withLane(3, values[3].toInt())
     }
     private fun shift(byte: Int) = 8 * (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 3 - byte)
     private fun loadModel(bytes: ByteArray, offset: Int) = LongArray(4) { lane ->
@@ -45,27 +46,24 @@ class Word32VectorStorageTest {
             val offset = offsetModel(size, index, scalarOffset)
             val label = "size=$size/index=$index/scalar=$scalarOffset"
             if (offset == null) {
-                val read = assertThrows(RuntimeFault::class.java, { Word32X4.readArray(bytes, index, scalarOffset) }, label)
+                val read = assertThrows(RuntimeFault::class.java, { readIntVectorArray(bytes, index, scalarOffset, "Word32X4") }, label)
                 assertEquals("Word32X4 ByteArray# range outside its backing storage", read.message, label)
                 assertArrayEquals(before, bytes, "failed read $label")
-                val write = assertThrows(RuntimeFault::class.java, { Word32X4.writeArray(bytes, index, vector(values), scalarOffset) }, label)
+                val write = assertThrows(RuntimeFault::class.java, { writeIntVectorArray(bytes, index, vector(values), scalarOffset, "Word32X4") }, label)
                 assertEquals("Word32X4 ByteArray# range outside its backing storage", write.message, label)
                 assertArrayEquals(before, bytes, "no partial write $label")
             } else {
-                assertArrayEquals(loadModel(before, offset), lanes(Word32X4.readArray(bytes, index, scalarOffset)), label)
+                assertArrayEquals(loadModel(before, offset), lanes(readIntVectorArray(bytes, index, scalarOffset, "Word32X4")), label)
                 assertArrayEquals(before, bytes, "read preserved storage $label")
                 val expected = before.copyOf()
                 storeModel(expected, offset, values)
-                Word32X4.writeArray(bytes, index, vector(values), scalarOffset)
+                writeIntVectorArray(bytes, index, vector(values), scalarOffset, "Word32X4")
                 assertArrayEquals(expected, bytes, "full vector and sentinel neighbours $label")
             }
         }
     }
 
-    @Test fun fourFinalIntFieldsPreserveEveryUnsignedLaneBitAtBothOffsetUnits() {
-        val fields = Word32X4::class.java.declaredFields
-        assertEquals(4, fields.size)
-        assertTrue(fields.all { it.type == Int::class.javaPrimitiveType && Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
+    @Test fun rawVectorPreservesEveryUnsignedLaneBitAtBothOffsetUnits() {
         val patterns = listOf(
             longArrayOf(0, 0x7fff_ffffL, 0x8000_0000L, 0xffff_ffffL),
             longArrayOf(0x0123_4567L, 0x89ab_cdefL, 0x55aa_55aaL, 0xaa55_aa55L),
@@ -79,8 +77,8 @@ class Word32VectorStorageTest {
                 val expected = ByteArray(48) { (it * 29 + 83).toByte() }
                 val actual = expected.copyOf()
                 storeModel(expected, offset, values)
-                assertArrayEquals(values, lanes(Word32X4.readArray(expected, index, scalarOffset)))
-                Word32X4.writeArray(actual, index, vector(values), scalarOffset)
+                assertArrayEquals(values, lanes(readIntVectorArray(expected, index, scalarOffset, "Word32X4")))
+                writeIntVectorArray(actual, index, vector(values), scalarOffset, "Word32X4")
                 assertArrayEquals(expected, actual)
             }
     }
@@ -88,22 +86,22 @@ class Word32VectorStorageTest {
     @Test fun byteAliasesAndOverlappingStoresKeepLoadedUnsignedSnapshots() {
         val bytes = ByteArray(48) { (it * 19 + 131).toByte() }
         val alias = bytes
-        val captured = Word32X4.readArray(bytes, 1, true)
+        val captured = readIntVectorArray(bytes, 1, true, "Word32X4")
         val original = loadModel(bytes, 4)
-        assertArrayEquals(loadModel(bytes, 16), lanes(Word32X4.readArray(alias, 1, false)))
-        assertArrayEquals(lanes(Word32X4.readArray(alias, 1, false)), lanes(Word32X4.readArray(bytes, 4, true)))
+        assertArrayEquals(loadModel(bytes, 16), lanes(readIntVectorArray(alias, 1, false, "Word32X4")))
+        assertArrayEquals(lanes(readIntVectorArray(alias, 1, false, "Word32X4")), lanes(readIntVectorArray(bytes, 4, true, "Word32X4")))
         for (byte in 0..15) {
             alias[4 + byte] = (alias[4 + byte].toInt() xor 0x80).toByte()
-            assertArrayEquals(loadModel(bytes, 4), lanes(Word32X4.readArray(bytes, 1, true)))
+            assertArrayEquals(loadModel(bytes, 4), lanes(readIntVectorArray(bytes, 1, true, "Word32X4")))
             assertArrayEquals(original, lanes(captured), "loaded unsigned snapshot after byte $byte mutation")
         }
         val expected = bytes.copyOf()
         storeModel(expected, 8, original)
-        Word32X4.writeArray(alias, 2, captured, true)
+        writeIntVectorArray(alias, 2, captured, true, "Word32X4")
         assertArrayEquals(expected, bytes, "overlapping store uses captured raw lane bits")
         for (index in 0L..8L)
-            assertArrayEquals(loadModel(expected, (index * 4).toInt()), lanes(Word32X4.readArray(bytes, index, true)))
+            assertArrayEquals(loadModel(expected, (index * 4).toInt()), lanes(readIntVectorArray(bytes, index, true, "Word32X4")))
         for (index in 0L..2L)
-            assertArrayEquals(loadModel(expected, (index * 16).toInt()), lanes(Word32X4.readArray(alias, index, false)))
+            assertArrayEquals(loadModel(expected, (index * 16).toInt()), lanes(readIntVectorArray(alias, index, false, "Word32X4")))
     }
 }

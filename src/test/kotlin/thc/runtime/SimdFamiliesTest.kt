@@ -4,6 +4,14 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import jdk.incubator.vector.ByteVector
+import jdk.incubator.vector.ShortVector
+import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.LongVector
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
+import jdk.incubator.vector.VectorOperators
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
@@ -15,7 +23,6 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import thc.*
 import java.io.File
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -56,21 +63,23 @@ class SimdFamiliesTest {
         assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
     }
 
-    @Test fun generatedCarriersHaveOnlyFinalPrimitiveLanes() {
-        for ((carrier, count, primitive) in listOf(Triple(Word64X2::class.java, 2, Long::class.javaPrimitiveType),
-            Triple(Word32X8::class.java, 8, Int::class.javaPrimitiveType),
-            Triple(Int32X8::class.java, 8, Int::class.javaPrimitiveType), Triple(Int32X16::class.java, 16, Int::class.javaPrimitiveType),
-            Triple(FloatX8::class.java, 8, Float::class.javaPrimitiveType), Triple(DoubleX4::class.java, 4, Double::class.javaPrimitiveType),
-            Triple(Int64X4::class.java, 4, Long::class.javaPrimitiveType), Triple(Int64X8::class.java, 8, Long::class.javaPrimitiveType),
-            Triple(Word64X4::class.java, 4, Long::class.javaPrimitiveType), Triple(Word64X8::class.java, 8, Long::class.javaPrimitiveType),
-            Triple(Word32X16::class.java, 16, Int::class.javaPrimitiveType),
-            Triple(FloatX16::class.java, 16, Float::class.javaPrimitiveType), Triple(DoubleX8::class.java, 8, Double::class.javaPrimitiveType),
-            Triple(Int16X16::class.java, 16, Short::class.javaPrimitiveType), Triple(Word16X16::class.java, 16, Short::class.javaPrimitiveType))) {
-            val fields = carrier.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }
-            assertEquals(count, fields.size)
-            assertTrue(fields.all { it.type == primitive && Modifier.isFinal(it.modifiers) && !Modifier.isStatic(it.modifiers) })
-            assertEquals((0 until count).map { "lane$it" }.toSet(), fields.map { it.name }.toSet())
-        }
+    @Test fun rawVectorBoundariesRejectWrongSpeciesAndElementTypes() {
+        val shorts = ShortVector.broadcast(ShortVector.SPECIES_128, 0).withLane(1, 1).withLane(2, -1).withLane(3, Short.MIN_VALUE).withLane(4, Short.MAX_VALUE).withLane(5, 5).withLane(6, 6).withLane(7, 7)
+        assertEquals(ShortVector.SPECIES_128, shorts.species())
+        assertEquals(listOf(0, 1, -1, -32768, 32767, 5, 6, 7), (0 until 8).map { shorts.lane(it).toInt() })
+        assertEquals(shorts, CoreVectors.requireShort(shorts, ShortVector.SPECIES_128))
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireShort(shorts, ShortVector.SPECIES_256) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireInt(shorts, IntVector.SPECIES_128) }
+        for (wrong in listOf(null, 1L, shortArrayOf(1, 2)))
+            assertThrows(RuntimeFault::class.java) { CoreVectors.requireShort(wrong, ShortVector.SPECIES_128) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireByte(ByteVector.zero(ByteVector.SPECIES_128), ByteVector.SPECIES_256) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireInt(IntVector.zero(IntVector.SPECIES_128), IntVector.SPECIES_256) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireLong(LongVector.zero(LongVector.SPECIES_128), LongVector.SPECIES_256) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireFloat(FloatVector.zero(FloatVector.SPECIES_128), FloatVector.SPECIES_256) }
+        assertThrows(RuntimeFault::class.java) { CoreVectors.requireDouble(DoubleVector.zero(DoubleVector.SPECIES_128), DoubleVector.SPECIES_256) }
+        for (index in listOf(-1L, 8L, Long.MIN_VALUE, Long.MAX_VALUE))
+            assertThrows(RuntimeFault::class.java) { CoreVectors.laneIndex(index, 8) }
+        for (index in 0L..7L) assertEquals(index.toInt(), CoreVectors.laneIndex(index, 8))
     }
 
     @Test fun exactLaneSignWidthLogicalTupleAndCallingProofsRemainRequired() {
@@ -128,7 +137,7 @@ class SimdFamiliesTest {
             CoreRepresentations.requireInput(vector)
             val input = ArgumentLayout.fromProofs(listOf(vector))!!
             assertTrue(input.requiresTyped)
-            assertEquals(vector.vector!!.lanes, input.physicalArity)
+            assertEquals(1, input.physicalArity)
             assertThrows(RuntimeFault::class.java) {
                 ArgumentLayout.validate(input, 0, ArgumentLayout.fromProofs(listOf(tuple)), 0, 1)
             }
@@ -139,13 +148,13 @@ class SimdFamiliesTest {
     }
 
     @Test fun insertRejectsInvalidMachineIndicesBeforeAnyNarrowing() {
-        val original = Word64X2(1L, 2L)
+        val original = LongVector.broadcast(LongVector.SPECIES_128, 1L).withLane(1, 2L)
         for (index in listOf(-1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE, 0x1_0000_0000L)) {
-            assertThrows(RuntimeFault::class.java) { Word64X2.insert(original, -1L, index) }
-            assertThrows(RuntimeFault::class.java) { GeneratedVectorInsert.insert(DoubleX2.broadcast(1.0), 2.0, index) }
+            assertThrows(RuntimeFault::class.java) { (original).withLane(CoreVectors.laneIndex(index, 2), -1L) }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.GeneratedDoubleX2Insert.apply(DoubleVector.broadcast(DoubleVector.SPECIES_128, 1.0), 2.0, index) }
         }
         for (index in listOf(-1L, 16L, Long.MAX_VALUE, 0x1_0000_0000L)) {
-            assertThrows(RuntimeFault::class.java) { GeneratedVectorInsert.insert(Word8X16.broadcast(1), 2, index) }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.GeneratedInt8X16Insert.apply(ByteVector.broadcast(ByteVector.SPECIES_128, 1), 2, index) }
         }
     }
 
@@ -172,29 +181,29 @@ class SimdFamiliesTest {
     }
 
     @Test fun word32X16ExtremaUseUnsignedLaneOrderAcrossTheFullCarrier() {
-        val left = Word32X16.insert(Word32X16.broadcast(Int.MIN_VALUE), -1, 15L)
-        val right = Word32X16.insert(Word32X16.broadcast(Int.MAX_VALUE), 0, 15L)
-        val minimum = Word32X16.min(left, right)
-        val maximum = Word32X16.max(left, right)
-        assertEquals(Int.MAX_VALUE, minimum.lane0)
-        assertEquals(Int.MAX_VALUE, minimum.lane7)
-        assertEquals(0, minimum.lane15)
-        assertEquals(Int.MIN_VALUE, maximum.lane0)
-        assertEquals(Int.MIN_VALUE, maximum.lane7)
-        assertEquals(-1, maximum.lane15)
+        val left = (IntVector.broadcast(IntVector.SPECIES_512, Int.MIN_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), -1)
+        val right = (IntVector.broadcast(IntVector.SPECIES_512, Int.MAX_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), 0)
+        val minimum = (left).lanewise(VectorOperators.UMIN, right)
+        val maximum = (left).lanewise(VectorOperators.UMAX, right)
+        assertEquals(Int.MAX_VALUE, minimum.lane(0))
+        assertEquals(Int.MAX_VALUE, minimum.lane(7))
+        assertEquals(0, minimum.lane(15))
+        assertEquals(Int.MIN_VALUE, maximum.lane(0))
+        assertEquals(Int.MIN_VALUE, maximum.lane(7))
+        assertEquals(-1, maximum.lane(15))
     }
 
     @Test fun int32X16ExtremaKeepSignedLanesAndExactShape() {
-        val left = Int32X16.insert(Int32X16.broadcast(Int.MIN_VALUE), -1, 15L)
-        val right = Int32X16.insert(Int32X16.broadcast(Int.MAX_VALUE), 0, 15L)
-        val minimum = Int32X16.min(left, right)
-        val maximum = Int32X16.max(left, right)
-        assertEquals(Int.MIN_VALUE, minimum.lane0)
-        assertEquals(Int.MIN_VALUE, minimum.lane7)
-        assertEquals(-1, minimum.lane15)
-        assertEquals(Int.MAX_VALUE, maximum.lane0)
-        assertEquals(Int.MAX_VALUE, maximum.lane7)
-        assertEquals(0, maximum.lane15)
+        val left = (IntVector.broadcast(IntVector.SPECIES_512, Int.MIN_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), -1)
+        val right = (IntVector.broadcast(IntVector.SPECIES_512, Int.MAX_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), 0)
+        val minimum = (left).min(right)
+        val maximum = (left).max(right)
+        assertEquals(Int.MIN_VALUE, minimum.lane(0))
+        assertEquals(Int.MIN_VALUE, minimum.lane(7))
+        assertEquals(-1, minimum.lane(15))
+        assertEquals(Int.MAX_VALUE, maximum.lane(0))
+        assertEquals(Int.MAX_VALUE, maximum.lane(7))
+        assertEquals(0, maximum.lane(15))
         val proof = GeneratedVectors.proofInt32X16
         for (name in listOf("minInt32X16#", "maxInt32X16#")) {
             CoreVectors.validate(name, listOf(proof, proof), proof)
@@ -211,18 +220,18 @@ class SimdFamiliesTest {
     }
 
     @Test fun short16ExtremaDistinguishSignedFromUnsignedOrder() {
-        val signedLeft = Int16X16.insert(Int16X16.broadcast(Short.MIN_VALUE), -1, 15L)
-        val signedRight = Int16X16.insert(Int16X16.broadcast(Short.MAX_VALUE), 0, 15L)
-        val unsignedLeft = Word16X16.insert(Word16X16.broadcast(Short.MIN_VALUE), -1, 15L)
-        val unsignedRight = Word16X16.insert(Word16X16.broadcast(Short.MAX_VALUE), 0, 15L)
-        val signedMin = Int16X16.min(signedLeft, signedRight)
-        val signedMax = Int16X16.max(signedLeft, signedRight)
-        val unsignedMin = Word16X16.min(unsignedLeft, unsignedRight)
-        val unsignedMax = Word16X16.max(unsignedLeft, unsignedRight)
-        assertEquals(listOf(-32768, -32768, -1), listOf(signedMin.lane0, signedMin.lane7, signedMin.lane15).map { it.toInt() })
-        assertEquals(listOf(32767, 32767, 0), listOf(signedMax.lane0, signedMax.lane7, signedMax.lane15).map { it.toInt() })
-        assertEquals(listOf(32767, 32767, 0), listOf(unsignedMin.lane0, unsignedMin.lane7, unsignedMin.lane15).map { it.toInt() and 0xffff })
-        assertEquals(listOf(32768, 32768, 65535), listOf(unsignedMax.lane0, unsignedMax.lane7, unsignedMax.lane15).map { it.toInt() and 0xffff })
+        val signedLeft = (ShortVector.broadcast(ShortVector.SPECIES_256, Short.MIN_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), -1)
+        val signedRight = (ShortVector.broadcast(ShortVector.SPECIES_256, Short.MAX_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), 0)
+        val unsignedLeft = (ShortVector.broadcast(ShortVector.SPECIES_256, Short.MIN_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), -1)
+        val unsignedRight = (ShortVector.broadcast(ShortVector.SPECIES_256, Short.MAX_VALUE)).withLane(CoreVectors.laneIndex(15L, 16), 0)
+        val signedMin = (signedLeft).min(signedRight)
+        val signedMax = (signedLeft).max(signedRight)
+        val unsignedMin = (unsignedLeft).lanewise(VectorOperators.UMIN, unsignedRight)
+        val unsignedMax = (unsignedLeft).lanewise(VectorOperators.UMAX, unsignedRight)
+        assertEquals(listOf(-32768, -32768, -1), listOf(signedMin.lane(0), signedMin.lane(7), signedMin.lane(15)).map { it.toInt() })
+        assertEquals(listOf(32767, 32767, 0), listOf(signedMax.lane(0), signedMax.lane(7), signedMax.lane(15)).map { it.toInt() })
+        assertEquals(listOf(32767, 32767, 0), listOf(unsignedMin.lane(0), unsignedMin.lane(7), unsignedMin.lane(15)).map { it.toInt() and 0xffff })
+        assertEquals(listOf(32768, 32768, 65535), listOf(unsignedMax.lane(0), unsignedMax.lane(7), unsignedMax.lane(15)).map { it.toInt() and 0xffff })
         for ((family, proof, wrongSign) in listOf(
             Triple("Int16X16", GeneratedVectors.proofInt16X16, GeneratedVectors.proofWord16X16),
             Triple("Word16X16", GeneratedVectors.proofWord16X16, GeneratedVectors.proofInt16X16))) {

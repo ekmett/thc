@@ -3,6 +3,10 @@
 
 package thc.runtime
 
+import jdk.incubator.vector.IntVector
+import jdk.incubator.vector.FloatVector
+import jdk.incubator.vector.DoubleVector
+
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import java.lang.foreign.ValueLayout
@@ -225,22 +229,22 @@ internal object ManagedByteArray {
         if (value is ManagedAllocation)
             value.accessVector(index, scalarOffset, scalarWidth, writable) { action(it) }
         else action(require(value))
-    @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): Int32X4 =
-        vectorGuest(value, index, scalarOffset, 4, false) { Int32X4.readArray(it, index, scalarOffset) }
-    @JvmStatic fun writeInt32VectorGuest(value: Any?, index: Long, vector: Int32X4, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { Int32X4.writeArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): Word32X4 =
-        vectorGuest(value, index, scalarOffset, 4, false) { Word32X4.readArray(it, index, scalarOffset) }
-    @JvmStatic fun writeWord32VectorGuest(value: Any?, index: Long, vector: Word32X4, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { Word32X4.writeArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): FloatX4 =
-        vectorGuest(value, index, scalarOffset, 4, false) { FloatX4.readArray(it, index, scalarOffset) }
-    @JvmStatic fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatX4, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 4, true) { FloatX4.writeArray(it, index, vector, scalarOffset) }
-    @JvmStatic fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): DoubleX2 =
-        vectorGuest(value, index, scalarOffset, 8, false) { DoubleX2.readArray(it, index, scalarOffset) }
-    @JvmStatic fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleX2, scalarOffset: Boolean) =
-        vectorGuest(value, index, scalarOffset, 8, true) { DoubleX2.writeArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readInt32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
+        vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Int32X4") }
+    @JvmStatic fun writeInt32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 4, true) { writeIntVectorArray(it, index, vector, scalarOffset, "Int32X4") }
+    @JvmStatic fun readWord32VectorGuest(value: Any?, index: Long, scalarOffset: Boolean): IntVector =
+        vectorGuest(value, index, scalarOffset, 4, false) { readIntVectorArray(it, index, scalarOffset, "Word32X4") }
+    @JvmStatic fun writeWord32VectorGuest(value: Any?, index: Long, vector: IntVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 4, true) { writeIntVectorArray(it, index, vector, scalarOffset, "Word32X4") }
+    @JvmStatic fun readFloatVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): FloatVector =
+        vectorGuest(value, index, scalarOffset, 4, false) { readFloatVectorArray(it, index, scalarOffset) }
+    @JvmStatic fun writeFloatVectorGuest(value: Any?, index: Long, vector: FloatVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 4, true) { writeFloatVectorArray(it, index, vector, scalarOffset) }
+    @JvmStatic fun readDoubleVectorGuest(value: Any?, index: Long, scalarOffset: Boolean): DoubleVector =
+        vectorGuest(value, index, scalarOffset, 8, false) { readDoubleVectorArray(it, index, scalarOffset) }
+    @JvmStatic fun writeDoubleVectorGuest(value: Any?, index: Long, vector: DoubleVector, scalarOffset: Boolean) =
+        vectorGuest(value, index, scalarOffset, 8, true) { writeDoubleVectorArray(it, index, vector, scalarOffset) }
     @JvmStatic fun require(value: Any?): ByteArray = when (value) {
         is ByteArray -> value
         is ManagedAllocation -> value.wholeBytesForPrimitive()

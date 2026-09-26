@@ -412,7 +412,7 @@ class FloatVectorMemoryProofTest {
                 override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
             }
             val arguments = mutableListOf<Expr>(operand("array") { bytes }, operand("index") { Long.MAX_VALUE })
-            if (operation.isWrite) arguments.add(operand("vector") { FloatX4.pack(1f, 2f, 3f, 4f) })
+            if (operation.isWrite) arguments.add(operand("vector") { FloatVector.broadcast(FloatVector.SPECIES_128, 1f).withLane(1, 2f).withLane(2, 3f).withLane(3, 4f) })
             arguments.add(operand("state") { throw failure })
             val expression = VectorByteArrayExpression(operation, arguments.toTypedArray())
             val sentinel = Any(); var published: Any? = sentinel

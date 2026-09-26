@@ -3,25 +3,25 @@
 
 package thc.runtime
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
-import com.oracle.truffle.api.frame.VirtualFrame
 import jdk.incubator.vector.FloatVector
 import jdk.incubator.vector.DoubleVector
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
+import com.oracle.truffle.api.frame.VirtualFrame
 
 internal class VectorFloatPack(@field:Child private var argument: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {
     init { representation = CoreVectors.proofFloat }
-    override fun execute(frame: VirtualFrame): FloatX4 {
+    override fun execute(frame: VirtualFrame): FloatVector {
         argument.executeTuple(frame, slots)
-        return FloatX4.pack(frame.getFloat(slots[0]), frame.getFloat(slots[1]),
-            frame.getFloat(slots[2]), frame.getFloat(slots[3]))
+        return FloatVector.broadcast(FloatVector.SPECIES_128, frame.getFloat(slots[0])).withLane(1, frame.getFloat(slots[1])).withLane(2, frame.getFloat(slots[2])).withLane(3, frame.getFloat(slots[3]))
     }
 }
 internal class VectorFloatUnpack(@field:Child private var argument: Expr) : Expr() {
     init { representation = CoreVectors.unpackedFloat }
     override fun execute(frame: VirtualFrame): Any = fault("Vector unpack requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val value = argument.execute(frame) as? FloatX4 ?: fault("Expected FloatX4#")
+        val value = CoreVectors.requireFloat(argument.execute(frame), FloatVector.SPECIES_128)
         FrameAccess.writeFloat(frame, slots[offset], value.lane(0))
         FrameAccess.writeFloat(frame, slots[offset + 1], value.lane(1))
         FrameAccess.writeFloat(frame, slots[offset + 2], value.lane(2))
@@ -36,30 +36,35 @@ internal class VectorFloatOperation(name: String, @field:Children private var ar
         else -> throw RuntimeFault("Invalid FloatX4 operation")
     }
     init { representation = CoreVectors.proofFloat }
-    override fun execute(frame: VirtualFrame): FloatX4 = when (operation) {
-        0 -> FloatX4.broadcast(arguments[0].executeRequiredFloat(frame))
-        1 -> FloatX4.add(vector(frame, 0), vector(frame, 1))
-        2 -> FloatX4.subtract(vector(frame, 0), vector(frame, 1))
-        3 -> FloatX4.multiply(vector(frame, 0), vector(frame, 1))
-        in 4..7 -> FloatX4.fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2))
+    override fun execute(frame: VirtualFrame): FloatVector = when (operation) {
+        0 -> FloatVector.broadcast(FloatVector.SPECIES_128, arguments[0].executeRequiredFloat(frame))
+        1 -> (vector(frame, 0)).add(vector(frame, 1))
+        2 -> (vector(frame, 0)).sub(vector(frame, 1))
+        3 -> (vector(frame, 0)).mul(vector(frame, 1))
+        in 4..7 -> fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2))
         else -> fault("Invalid FloatX4 operation")
     }
-    private fun vector(frame: VirtualFrame, index: Int): FloatX4 = arguments[index].execute(frame) as? FloatX4 ?: fault("Expected FloatX4#")
+    private fun fused(operation: Int, a: FloatVector, b: FloatVector, c: FloatVector): FloatVector {
+        val left = if (operation >= 2) a.neg() else a
+        val addend = if (operation and 1 != 0) c.neg() else c
+        return left.fma(b, addend)
+    }
+    private fun vector(frame: VirtualFrame, index: Int): FloatVector = CoreVectors.requireFloat(arguments[index].execute(frame), FloatVector.SPECIES_128)
 }
 
 internal class VectorDoublePack(@field:Child private var argument: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {
     init { representation = CoreVectors.proofDouble }
-    override fun execute(frame: VirtualFrame): DoubleX2 {
+    override fun execute(frame: VirtualFrame): DoubleVector {
         argument.executeTuple(frame, slots)
-        return DoubleX2.pack(frame.getDouble(slots[0]), frame.getDouble(slots[1]))
+        return DoubleVector.broadcast(DoubleVector.SPECIES_128, frame.getDouble(slots[0])).withLane(1, frame.getDouble(slots[1]))
     }
 }
 internal class VectorDoubleUnpack(@field:Child private var argument: Expr) : Expr() {
     init { representation = CoreVectors.unpackedDouble }
     override fun execute(frame: VirtualFrame): Any = fault("Vector unpack requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val value = argument.execute(frame) as? DoubleX2 ?: fault("Expected DoubleX2#")
+        val value = CoreVectors.requireDouble(argument.execute(frame), DoubleVector.SPECIES_128)
         FrameAccess.writeDouble(frame, slots[offset], value.lane(0))
         FrameAccess.writeDouble(frame, slots[offset + 1], value.lane(1))
         return null
@@ -72,119 +77,74 @@ internal class VectorDoubleOperation(name: String, @field:Children private var a
         else -> throw RuntimeFault("Invalid DoubleX2 operation")
     }
     init { representation = CoreVectors.proofDouble }
-    override fun execute(frame: VirtualFrame): DoubleX2 = when (operation) {
-        0 -> DoubleX2.broadcast(arguments[0].executeRequiredDouble(frame))
-        1 -> DoubleX2.add(vector(frame, 0), vector(frame, 1))
-        2 -> DoubleX2.subtract(vector(frame, 0), vector(frame, 1))
-        3 -> DoubleX2.multiply(vector(frame, 0), vector(frame, 1))
-        in 4..7 -> DoubleX2.fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2))
+    override fun execute(frame: VirtualFrame): DoubleVector = when (operation) {
+        0 -> DoubleVector.broadcast(DoubleVector.SPECIES_128, arguments[0].executeRequiredDouble(frame))
+        1 -> (vector(frame, 0)).add(vector(frame, 1))
+        2 -> (vector(frame, 0)).sub(vector(frame, 1))
+        3 -> (vector(frame, 0)).mul(vector(frame, 1))
+        in 4..7 -> fused(operation - 4, vector(frame, 0), vector(frame, 1), vector(frame, 2))
         else -> fault("Invalid DoubleX2 operation")
     }
-    private fun vector(frame: VirtualFrame, index: Int): DoubleX2 = arguments[index].execute(frame) as? DoubleX2 ?: fault("Expected DoubleX2#")
-}
-
-/** Only transient Vector API values; the existing FloatX8 owns eight primitive fields. */
-internal object FloatX8Fused {
-    private fun vector(a: FloatX8): FloatVector = FloatVector.broadcast(FloatVector.SPECIES_256, a.lane0)
-        .withLane(1, a.lane1).withLane(2, a.lane2).withLane(3, a.lane3)
-        .withLane(4, a.lane4).withLane(5, a.lane5).withLane(6, a.lane6).withLane(7, a.lane7)
-
-    @JvmStatic fun apply(operation: Int, a: FloatX8, b: FloatX8, c: FloatX8): FloatX8 {
-        if (operation !in 0..3) fault("Invalid FloatX8 fused operation")
-        // Negate operands before the single rounding, not the rounded result.
-        val left = vector(a).let { if (operation >= 2) it.neg() else it }
-        val addend = vector(c).let { if (operation and 1 != 0) it.neg() else it }
-        val result = left.fma(vector(b), addend)
-        return FloatX8(result.lane(0), result.lane(1), result.lane(2), result.lane(3),
-            result.lane(4), result.lane(5), result.lane(6), result.lane(7))
+    private fun fused(operation: Int, a: DoubleVector, b: DoubleVector, c: DoubleVector): DoubleVector {
+        val left = if (operation >= 2) a.neg() else a
+        val addend = if (operation and 1 != 0) c.neg() else c
+        return left.fma(b, addend)
     }
+    private fun vector(frame: VirtualFrame, index: Int): DoubleVector = CoreVectors.requireDouble(arguments[index].execute(frame), DoubleVector.SPECIES_128)
 }
 
 internal class VectorFloat8Fused(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = CoreVectors.fusedFloat8.indexOf(name)
     init { representation = GeneratedVectors.proofFloatX8 }
-    override fun execute(frame: VirtualFrame): FloatX8 =
-        FloatX8Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
-    private fun vector(frame: VirtualFrame, index: Int): FloatX8 =
-        arguments[index].execute(frame) as? FloatX8 ?: fault("Expected FloatX8#")
-}
-
-/** Four owned primitive lanes, with only transient Vector API values. */
-internal object DoubleX4Fused {
-    private fun vector(a: DoubleX4): DoubleVector = DoubleVector.broadcast(DoubleVector.SPECIES_256, a.lane0)
-        .withLane(1, a.lane1).withLane(2, a.lane2).withLane(3, a.lane3)
-
-    @JvmStatic fun apply(operation: Int, a: DoubleX4, b: DoubleX4, c: DoubleX4): DoubleX4 {
-        if (operation !in 0..3) fault("Invalid DoubleX4 fused operation")
-        // Negation precedes the single rounding, including signed-zero cases.
-        val left = vector(a).let { if (operation >= 2) it.neg() else it }
-        val addend = vector(c).let { if (operation and 1 != 0) it.neg() else it }
-        val result = left.fma(vector(b), addend)
-        return DoubleX4(result.lane(0), result.lane(1), result.lane(2), result.lane(3))
+    override fun execute(frame: VirtualFrame): FloatVector {
+        if (operation !in 0..3) fault("Invalid FloatX8 fused operation")
+        val a = vector(frame, 0); val b = vector(frame, 1); val c = vector(frame, 2)
+        val left = if (operation >= 2) a.neg() else a
+        val addend = if (operation and 1 != 0) c.neg() else c
+        return left.fma(b, addend)
     }
+    private fun vector(frame: VirtualFrame, index: Int): FloatVector =
+        CoreVectors.requireFloat(arguments[index].execute(frame), FloatVector.SPECIES_256)
 }
 
 internal class VectorDouble4Fused(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = CoreVectors.fusedDouble4.indexOf(name)
     init { representation = GeneratedVectors.proofDoubleX4 }
-    override fun execute(frame: VirtualFrame): DoubleX4 =
-        DoubleX4Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
-    private fun vector(frame: VirtualFrame, index: Int): DoubleX4 =
-        arguments[index].execute(frame) as? DoubleX4 ?: fault("Expected DoubleX4#")
-}
-
-/** 16 owned primitive lanes, with only transient Vector API values. */
-internal object FloatX16Fused {
-    private fun vector(a: FloatX16): FloatVector = FloatVector.broadcast(FloatVector.SPECIES_512, a.lane0)
-        .withLane(1, a.lane1).withLane(2, a.lane2).withLane(3, a.lane3).withLane(4, a.lane4)
-        .withLane(5, a.lane5).withLane(6, a.lane6).withLane(7, a.lane7).withLane(8, a.lane8)
-        .withLane(9, a.lane9).withLane(10, a.lane10).withLane(11, a.lane11).withLane(12, a.lane12)
-        .withLane(13, a.lane13).withLane(14, a.lane14).withLane(15, a.lane15)
-
-    @JvmStatic fun apply(operation: Int, a: FloatX16, b: FloatX16, c: FloatX16): FloatX16 {
-        if (operation !in 0..3) fault("Invalid FloatX16 fused operation")
-        // Negation precedes the single rounding, including signed-zero cases.
-        val left = vector(a).let { if (operation >= 2) it.neg() else it }
-        val addend = vector(c).let { if (operation and 1 != 0) it.neg() else it }
-        val result = left.fma(vector(b), addend)
-        return FloatX16(result.lane(0), result.lane(1), result.lane(2), result.lane(3),
-            result.lane(4), result.lane(5), result.lane(6), result.lane(7),
-            result.lane(8), result.lane(9), result.lane(10), result.lane(11),
-            result.lane(12), result.lane(13), result.lane(14), result.lane(15))
+    override fun execute(frame: VirtualFrame): DoubleVector {
+        if (operation !in 0..3) fault("Invalid DoubleX4 fused operation")
+        val a = vector(frame, 0); val b = vector(frame, 1); val c = vector(frame, 2)
+        val left = if (operation >= 2) a.neg() else a
+        val addend = if (operation and 1 != 0) c.neg() else c
+        return left.fma(b, addend)
     }
+    private fun vector(frame: VirtualFrame, index: Int): DoubleVector =
+        CoreVectors.requireDouble(arguments[index].execute(frame), DoubleVector.SPECIES_256)
 }
 
 internal class VectorFloat16Fused(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = CoreVectors.fusedFloat16.indexOf(name)
     init { representation = GeneratedVectors.proofFloatX16 }
-    override fun execute(frame: VirtualFrame): FloatX16 =
-        FloatX16Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
-    private fun vector(frame: VirtualFrame, index: Int): FloatX16 =
-        arguments[index].execute(frame) as? FloatX16 ?: fault("Expected FloatX16#")
-}
-
-/** 8 owned primitive lanes, with only transient Vector API values. */
-internal object DoubleX8Fused {
-    private fun vector(a: DoubleX8): DoubleVector = DoubleVector.broadcast(DoubleVector.SPECIES_512, a.lane0)
-        .withLane(1, a.lane1).withLane(2, a.lane2).withLane(3, a.lane3).withLane(4, a.lane4)
-        .withLane(5, a.lane5).withLane(6, a.lane6).withLane(7, a.lane7)
-
-    @JvmStatic fun apply(operation: Int, a: DoubleX8, b: DoubleX8, c: DoubleX8): DoubleX8 {
-        if (operation !in 0..3) fault("Invalid DoubleX8 fused operation")
-        // Negation precedes the single rounding, including signed-zero cases.
-        val left = vector(a).let { if (operation >= 2) it.neg() else it }
-        val addend = vector(c).let { if (operation and 1 != 0) it.neg() else it }
-        val result = left.fma(vector(b), addend)
-        return DoubleX8(result.lane(0), result.lane(1), result.lane(2), result.lane(3),
-            result.lane(4), result.lane(5), result.lane(6), result.lane(7))
+    override fun execute(frame: VirtualFrame): FloatVector {
+        if (operation !in 0..3) fault("Invalid FloatX16 fused operation")
+        val a = vector(frame, 0); val b = vector(frame, 1); val c = vector(frame, 2)
+        val left = if (operation >= 2) a.neg() else a
+        val addend = if (operation and 1 != 0) c.neg() else c
+        return left.fma(b, addend)
     }
+    private fun vector(frame: VirtualFrame, index: Int): FloatVector =
+        CoreVectors.requireFloat(arguments[index].execute(frame), FloatVector.SPECIES_512)
 }
 
 internal class VectorDouble8Fused(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = CoreVectors.fusedDouble8.indexOf(name)
     init { representation = GeneratedVectors.proofDoubleX8 }
-    override fun execute(frame: VirtualFrame): DoubleX8 =
-        DoubleX8Fused.apply(operation, vector(frame, 0), vector(frame, 1), vector(frame, 2))
-    private fun vector(frame: VirtualFrame, index: Int): DoubleX8 =
-        arguments[index].execute(frame) as? DoubleX8 ?: fault("Expected DoubleX8#")
+    override fun execute(frame: VirtualFrame): DoubleVector {
+        if (operation !in 0..3) fault("Invalid DoubleX8 fused operation")
+        val a = vector(frame, 0); val b = vector(frame, 1); val c = vector(frame, 2)
+        val left = if (operation >= 2) a.neg() else a
+        val addend = if (operation and 1 != 0) c.neg() else c
+        return left.fma(b, addend)
+    }
+    private fun vector(frame: VirtualFrame, index: Int): DoubleVector =
+        CoreVectors.requireDouble(arguments[index].execute(frame), DoubleVector.SPECIES_512)
 }
