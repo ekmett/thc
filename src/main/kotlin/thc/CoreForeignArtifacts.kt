@@ -125,6 +125,7 @@ internal object CoreForeignArtifacts {
     fun validateArchive(module: Map<*, *>) {
         if (version(module["schema"], 1)) {
             require(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs")) { "Foreign artifacts require Core schema 2" }
+            PackageScalarLinks.read(module)
             return
         }
         require(version(module["schema"], 2)) { "Unsupported Core schema: ${module["schema"]}" }

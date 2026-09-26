@@ -1037,6 +1037,54 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageScalarLong {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setLong(bytecode, frame,
+                    access.executeLong(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageScalarFloat {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setFloat(bytecode, frame,
+                    access.executeFloat(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodePackageScalarArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class LinkedPackageScalarDouble {
+        @Specialization public static void call(VirtualFrame frame, BytecodePackageScalarArguments arguments,
+                LocalAccessor destination, @Bind("$node") Node node,
+                @Cached(value = "createAccess(arguments)", neverDefault = true) PackageScalarAccess access) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            destination.setDouble(bytecode, frame,
+                    access.executeDouble(arguments.read(bytecode, frame), arguments.state(bytecode, frame)));
+        }
+        public static PackageScalarAccess createAccess(BytecodePackageScalarArguments arguments) {
+            return new PackageScalarAccess(arguments.getCall());
+        }
+    }
+
+    @Operation
     public static final class NativeFree {
         @Specialization public static void apply(ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);

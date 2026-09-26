@@ -10,8 +10,10 @@ internal enum class ProcessSignalOp(val symbol: String, val arguments: List<Stri
 
 internal object CoreSignalForeign {
     const val dispatcher = "ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr"
-    fun named(metadata: Map<String, Any?>?): Boolean =
-        ((metadata?.get("foreignCall") as? Map<*, *>)?.get("target") as? Map<*, *>)?.get("symbol") == "stg_sig_install"
+    fun named(metadata: Map<String, Any?>?): Boolean {
+        val target = (metadata?.get("foreignCall") as? Map<*, *>)?.get("target") as? Map<*, *>
+        return target?.get("symbol") == "stg_sig_install" && target["unit"] == "ghc-internal"
+    }
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
     private val descriptorKeys = setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep")

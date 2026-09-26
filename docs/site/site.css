@@ -87,7 +87,7 @@
 .thc-contact { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px 24px; }
 .thc-contact-copy { flex: 1 1 280px; min-width: 0; }
 .thc-contact-bot { flex: 0 1 240px; min-width: 0; margin-left: auto; text-align: right; }
-.thc-contact-bot video { display: block; width: 100%; height: auto; }
+.thc-contact-bot video { display: block; width: 100%; height: auto; cursor: pointer; }
 .thc-animation-toggle { border: 0; padding: 5px 0; background: transparent; color: var(--thc-muted); font: 11px/1.5 system-ui, sans-serif; cursor: pointer; }
 .thc-animation-toggle:hover { color: var(--thc-link); }
 .thc-animation-toggle:focus-visible { outline: 2px solid var(--thc-accent); outline-offset: 4px; }

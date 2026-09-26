@@ -1703,6 +1703,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
               private val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
+    private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
@@ -2021,47 +2022,52 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
-            val stackClone = CoreStackForeign.validate(CoreRepresentations.metadata(expr),
+            val packageScalar = CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
+                CoreRepresentations.metadata(expr)?.get("rep"), packageScalarLinks)
+            // A verified package owner takes precedence over similarly named RTS symbols.
+            val foreignMetadata = if (packageScalar == null) CoreRepresentations.metadata(expr) else null
+            val stackClone = CoreStackForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags)
-            val stackInfo = CoreStackInfoForeign.validate(CoreRepresentations.metadata(expr),
+            val stackInfo = CoreStackInfoForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val originalStdio = CoreOriginalStdio.validate(CoreRepresentations.metadata(expr),
+            val originalStdio = CoreOriginalStdio.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val capi = CoreCapiForeign.validate(CoreRepresentations.metadata(expr),
+            val capi = CoreCapiForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                 CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
-            val stableFree = CoreStablePointers.validate(CoreRepresentations.metadata(expr),
+            val stableFree = CoreStablePointers.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val sharedCAF = CoreSharedCAFStores.validate(CoreRepresentations.metadata(expr),
+            val sharedCAF = CoreSharedCAFStores.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val shutdown = CoreRtsShutdown.validate(CoreRepresentations.metadata(expr),
+            val shutdown = CoreRtsShutdown.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val mainThreadForeign = CoreMainThreadForeign.validate(CoreRepresentations.metadata(expr),
+            val mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val boundThreadForeign = CoreBoundThreadForeign.validate(CoreRepresentations.metadata(expr),
+            val boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val stringRts = CoreStringRtsForeign.validate(CoreRepresentations.metadata(expr),
+            val stringRts = CoreStringRtsForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(CoreRepresentations.metadata(expr),
+            val rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val managedFile = CoreManagedFiles.validate(CoreRepresentations.metadata(expr),
+            val managedFile = CoreManagedFiles.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val javascript = if (!stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
-            val md5 = if (javascript == null) CoreMd5Foreign.validate(CoreRepresentations.metadata(expr),
+            val javascript = if (packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null) CoreJavaScript.validate(expr, defined) else null
+            val md5 = if (javascript == null) CoreMd5Foreign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep")) else null
-            val gmp = CoreGmpForeign.validate(CoreRepresentations.metadata(expr),
+            val gmp = CoreGmpForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val processSignal = CoreSignalForeign.validate(CoreRepresentations.metadata(expr),
+            val processSignal = CoreSignalForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val nativeAllocation = CoreNativeAllocationForeign.validate(CoreRepresentations.metadata(expr),
+            val nativeAllocation = CoreNativeAllocationForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val memmove = CoreMemmoveForeign.validate(CoreRepresentations.metadata(expr),
+            val memmove = CoreMemmoveForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val memcpy = CoreMemcpyForeign.validate(CoreRepresentations.metadata(expr),
+            val memcpy = CoreMemcpyForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val libdw = CoreLibdwForeign.validate(CoreRepresentations.metadata(expr),
+            val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (!stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (stackClone) {
@@ -2097,6 +2103,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
                 CapiExpression(capi, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+            } else if (packageScalar != null) {
+                CoreCapiForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CorePackageScalarForeign.validateOperand(packageScalar, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                PackageScalarExpression(packageScalar, operands.toTypedArray(), tupleProof)
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))

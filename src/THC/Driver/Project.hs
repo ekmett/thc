@@ -29,7 +29,7 @@ import System.Directory (canonicalizePath, createDirectory, createDirectoryIfMis
 import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
-import System.FilePath ((</>), isAbsolute, makeRelative, normalise, splitDirectories,
+import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
                         takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
 import System.IO (IOMode(ReadMode), SeekMode(AbsoluteSeek), hClose, hGetContents,
                   hSetEncoding, openTempFile, stderr, utf8, withFile)
@@ -40,6 +40,8 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime)
+import THC.Driver.NativeRecipe (componentRoots, ensureNativeRecipes)
+import THC.Driver.ScalarBitcode (ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..))
@@ -78,7 +80,7 @@ data ExportContext = ExportContext
   , contextPluginLibrary :: FilePath, contextNative :: FilePath
   , contextCache :: FilePath, contextDriverHash :: String
   , contextGhc :: FilePath, contextGhcPkg :: Maybe FilePath
-  , contextDriver :: FilePath }
+  , contextDriver :: FilePath, contextRoot :: FilePath }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -119,30 +121,77 @@ runProject opts target = do
   requireFile pluginLibrary
   requireDirectory pluginDb
   let requested = distDirectory flags
-      output = if isAbsolute requested then requested else project </> requested
-      native = output </> "native"
+      requestedOutput = if isAbsolute requested then requested else project </> requested
       executable = runExecutable opts
+  createDirectoryIfMissing True requestedOutput
+  output <- canonicalizePath requestedOutput
+  let native = output </> "native"
       cabalArgs = ["build", "all", "--enable-build-info", "--project-file", "cabal.project",
-                   "--builddir", native] ++
-                  maybe [] (\path -> ["--with-compiler", path]) (ghcPath flags) ++
-                  maybe [] (\path -> ["--with-hc-pkg", path]) (ghcPkgPath flags)
-  createDirectoryIfMissing True output
+                   "--builddir", native]
   compiler <- case ghcPath flags of
     Just path -> canonicalizePath path
     Nothing -> findExecutable "ghc" >>= maybe (fail "GHC compiler not found") canonicalizePath
-  packageTool <- traverse canonicalizePath (ghcPkgPath flags)
+  packageTool <- Just <$> selectedPackageTool compiler (ghcPkgPath flags)
   source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
     runBuiltProject project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
                     source registeredLibrary
 
+-- Resolve the actual selected compiler's companion before Cabal sees the
+-- forwarding wrapper. The wrapper directory is not a GHC installation.
+selectedPackageTool :: FilePath -> Maybe FilePath -> IO FilePath
+selectedPackageTool ghc requested = do
+  inherited <- lookupEnv "GHC_PKG"
+  path <- case requested `orElse` inherited of
+    Just value -> if isAbsolute value then pure value else findExecutable value >>=
+      maybe (fail "selected ghc-pkg executable not found") pure
+    Nothing -> do
+      let candidates = [takeDirectory ghc </> "ghc-pkg-9.14.1", takeDirectory ghc </> "ghc-pkg"]
+      available <- filterM doesFileExist candidates
+      case available of value:_ -> pure value; [] -> fail "no ghc-pkg beside selected GHC"
+  packageTool <- canonicalizePath path
+  compilerVersion <- output ghc ["--numeric-version"]
+  packageVersion <- output packageTool ["--version"]
+  require (compilerVersion == "9.14.1" && packageVersion == "GHC package manager version 9.14.1")
+    "selected GHC and ghc-pkg must both be 9.14.1"
+  compilerDb <- canonicalizePath =<< output ghc ["--print-global-package-db"]
+  listing <- output packageTool ["--global", "--no-user-package-db", "list", "ghc-internal"]
+  packageDb <- case lines listing of value:_ -> canonicalizePath value; [] -> fail "ghc-pkg did not report its global database"
+  require (compilerDb == packageDb) "selected GHC and ghc-pkg global databases differ"
+  pure packageTool
+  where
+    orElse (Just value) _ = Just value
+    orElse Nothing other = other
+    output program arguments = do
+      (status, out, err) <- readCreateProcessWithExitCode (proc program arguments) ""
+      require (status == ExitSuccess) ("selected tool failed: " ++ program ++ ": " ++ take 4096 err)
+      pure (reverse (dropWhile (`elem` ['\r','\n']) (reverse out)))
+
 runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
                    Maybe FilePath -> String -> Maybe FilePath -> FilePath -> IO ()
 runBuiltProject project thcRoot runtime output native executable cabalArgs
                 pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary = do
-  runCommand True "cabal" cabalArgs project
+  driver <- getExecutablePath
+  let proxy = native </> "cache/thc/native-ghc"
+      receipts = native </> "cache/thc/native-recipes-v1"
+      packageTool = maybe (takeDirectory ghc </> "ghc-pkg") id ghcPkg
+      nativeArguments = cabalArgs ++ ["--with-compiler", proxy, "--with-hc-pkg", packageTool]
+  createDirectoryIfMissing True (takeDirectory proxy)
+  let wrapper = "#!/bin/sh\n# compiler " ++ shaHex (BL.toStrict (encode (ghc, packageTool))) ++
+        "\nexec \"$THC_PROXY_DRIVER\" ghc-proxy \"$@\"\n"
+  exists <- doesFileExist proxy
+  unchanged <- if exists then (== wrapper) <$> readFile proxy else pure False
+  unless unchanged (writeFile proxy wrapper)
+  permissions <- getPermissions proxy
+  setPermissions proxy (permissions {Directory.executable = True})
+  inherited <- getEnvironment
+  let overrides = [("THC_PROXY_DRIVER", driver), ("THC_PROXY_GHC", ghc),
+                   ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", "")]
+      environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
+      nativeBuild arguments = runCommandWithEnv True "cabal" arguments project (Just environment)
+  nativeBuild nativeArguments
   plan <- readJson (native </> "cache/plan.json")
   cabalVersion <- field plan "cabal-version"
   compilerId <- field plan "compiler-id"
@@ -152,10 +201,9 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   os <- field plan "os"
   arch <- field plan "arch"
   cacheRoot <- coreCacheDirectory
-  driver <- getExecutablePath
   driverHash <- digestFile driver
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -165,6 +213,30 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   -- did not build. Only the requested executable and its complete dependency
   -- closure have required build-info; a missing member of that closure fails.
   ordered <- dependencyClosure byId (unitId selected)
+  builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
+    Nothing -> pure False
+    Just path -> doesFileExist path) (filter unitLocal units)
+  builtComponents <- forM builtLocals $ \unit -> do
+    component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
+    pure (unit, component)
+  let localComponents = filter (\(unit, _) -> unitId unit `elem` map unitId ordered) builtComponents
+  roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
+    dist <- field (unitValue unit) "dist-dir"
+    componentRoots dist (componentValue component)
+  -- Repair missing native receipts through Cabal itself; never reconstruct
+  -- the missing compiler invocation from a binary setup-config.
+  forM_ localComponents $ \(unit, component) -> do
+    dist <- field (unitValue unit) "dist-dir"
+    ensureNativeRecipes native dist roots ghc (componentValue component) $ do
+      packageName <- field (unitValue unit) "pkg-name" :: IO String
+      componentName <- field (unitValue unit) "component-name" :: IO String
+      sourceRoot <- field (componentValue component) "src-dir"
+      let target = if componentName == "lib" then "lib:" ++ packageName else componentName
+      -- v2-build's monitor can say "up to date" after an intermediate .o is
+      -- deleted. Ask this same Cabal CLI's Simple Setup to build the component
+      -- directly; it owns and reads its own configured build representation.
+      runCommandWithEnv True "cabal" ["act-as-setup", "--build-type=Simple", "--", "build",
+        "--builddir=" ++ dist, target] sourceRoot (Just environment)
   let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
   installed <- if installedPolicy == "pinned" then pure Map.empty else do
@@ -202,7 +274,7 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
-      then Just <$> exportUnit context keys unit
+      then Just <$> exportUnit context roots keys unit
       else do
         if kind == "configured" then Just <$> maybe
           (fail ("Core bundle missing for Cabal store component " ++ unitId unit)) pure
@@ -815,9 +887,19 @@ readGlobalBundle path unit buildKey exportKey = do
       then Just (Bundle path (shaHex bytes) modules buildKey)
       else Nothing
 
-exportUnit :: ExportContext -> Map.Map String String -> Unit -> IO Bundle
-exportUnit context keys unit = do
-  component <- readComponent unit (contextCompiler context)
+exportUnit :: ExportContext -> [FilePath] -> Map.Map String String -> Unit -> IO Bundle
+exportUnit context roots keys unit = do
+  component <- readComponent unit context
+  dist <- field (unitValue unit) "dist-dir"
+  withScalarBitcode (contextNative context) dist roots (componentCompiler component)
+    (maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id (contextGhcPkg context))
+    (unitId unit) (componentValue component) $
+    exportConfiguredUnit context keys unit component
+
+exportConfiguredUnit :: ExportContext -> Map.Map String String -> Unit -> Component -> Maybe ScalarBitcode -> IO Bundle
+exportConfiguredUnit context keys unit component scalar = do
+  helper <- traverse (const (prepareInterfaceHelper context (contextRoot context))) scalar
+  helperHash <- traverse (digestFile . installedHelper) helper
   dist <- field (unitValue unit) "dist-dir"
   let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
       productRoots = nub [path | (flag, path) <- zip (componentArguments component)
@@ -842,16 +924,19 @@ exportUnit context keys unit = do
                      "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest]
                                            | (path, digest) <- nativeInputs],
                      "dependencies" .= [object ["id" .= identifier, "buildKey" .= identity]
-                                        | (identifier, identity) <- dependencies]]
+                                        | (identifier, identity) <- dependencies]] ++
+                    maybe [] (\recipe -> ["packageScalarRecipe" .= scalarBuildInputs recipe]) scalar
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
   pluginHash <- digestFile (contextPluginLibrary context)
-  let exporter = object ["pluginUnit" .= contextPluginUnit context,
+  let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
-                                         "-g", "-dynamic", "-dcore-lint"] :: [String])]
+                                         "-g", "-dynamic", "-dcore-lint"] :: [String])] ++
+                     maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
+                       "scalarInterfaceOptions" .= (["-fwrite-if-simplified-core", "-hisuf", "hi"] :: [String])]) helperHash
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey,
@@ -868,11 +953,11 @@ exportUnit context keys unit = do
       Just bundle -> pure bundle
       Nothing -> do
         when cached (removeFile destination)
-        freshExport context component unit buildKey exportKey buildInputs expected destination
+        freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination
 
-freshExport :: ExportContext -> Component -> Unit -> String -> String -> Value ->
+freshExport :: ExportContext -> Component -> Unit -> Maybe ScalarBitcode -> Maybe InstalledContext -> String -> String -> Value ->
                [String] -> FilePath -> IO Bundle
-freshExport context component unit buildKey exportKey buildInputs expected destination = do
+freshExport context component unit scalar helper buildKey exportKey buildInputs expected destination = do
   let localRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True localRoot
   (staging, handle) <- openTempFile localRoot "export-"
@@ -894,6 +979,7 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
            "-fplugin-opt=THC.Plugin:source-notes",
            "-fplugin-opt=THC.Plugin:foreign-import-provenance",
            "-g", "-dynamic", "-fforce-recomp", "-dcore-lint"] ++
+          maybe [] (const ["-fwrite-if-simplified-core", "-hisuf", "hi"]) scalar ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
@@ -907,10 +993,15 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
         ("Core artifact has wrong unit or boundary: " ++ path)
       bytes <- BS.readFile path
       pure (name, bytes)
-    let sorted = sortOn fst checked
-        actual = map fst sorted
+    let actual = sort (map fst checked)
     require (length actual == length (nub actual) && actual == expected)
       ("Core module inventory differs from Cabal build-info for " ++ unitId unit ++ ": " ++ show actual)
+    sorted <- case (scalar,helper) of
+      (Nothing,Nothing) -> pure (sortOn fst checked)
+      (Just recipe,Just selectedHelper) -> do
+        retained <- scalarInterfaceModules selectedHelper component unit objects expected
+        linkScalarBitcode recipe buildKey retained
+      _ -> fail "scalar cbits interface helper missing"
     let members = [("core/" ++ show index ++ ".json", bytes)
                   | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]
         modules = [object ["name" .= name, "boundary" .= boundary,
@@ -926,6 +1017,33 @@ freshExport context component unit buildKey exportKey buildInputs expected desti
       (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
     atomicBytes destination (BL.toStrict archive)
     pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey)) `finally` cleanup
+
+-- Source late-plugin JSON has no typed annotations. Recover the exact emitted
+-- full-Core interfaces through the selected GHC helper and Cabal's actual
+-- library registration; never graft an inferred proof onto that JSON.
+scalarInterfaceModules :: InstalledContext -> Component -> Unit -> FilePath -> [String] -> IO [(String,BS.ByteString)]
+scalarInterfaceModules helper component unit objects names = do
+  sourceDir <- field (componentValue component) "src-dir"
+  databases <- mapM (canonicalizePath . (sourceDir </>))
+    [path | (flag,path) <- zip (componentArguments component) (drop 1 (componentArguments component)),
+      flag == "-package-db"]
+  forM names $ \name -> do
+    let interface = objects </> map (\c -> if c == '.' then pathSeparator else c) name <.> "hi"
+        arguments = ["--libdir",installedLibdir helper,"--unit",unitId unit,"--module",name,
+          "--interface",interface,"--way","dynamic","--source-notes"] ++
+          concatMap (\database -> ["--package-db",database]) databases
+    requireFile interface
+    (status,output,diagnostic) <- readCreateProcessWithExitCode
+      (proc (installedHelper helper) arguments) {cwd=Just sourceDir} ""
+    require (status == ExitSuccess) ("scalar cbits interface acquisition failed: " ++ take 4096 (output ++ diagnostic))
+    response <- either fail pure (Aeson.eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+    require (jsonField response "schema" == Just (1::Int) && jsonField response "status" == Just ("loaded"::String))
+      "scalar cbits interface helper did not return full Core"
+    value <- field response "core"
+    require (jsonField value "unit" == Just (unitId unit) && jsonField value "module" == Just name &&
+      jsonField value "boundary" == Just boundary && jsonField value "ghc" == Just ("9.14.1"::String))
+      "scalar cbits interface identity or boundary mismatch"
+    pure (name,BL.toStrict (encode value))
 
 readBundle :: BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
 readBundle receipt path unit buildKey exportKey buildInputs expected = do
@@ -1053,16 +1171,21 @@ expectedModuleNames component = do
     require (length files == 1) "project executable must have one Haskell main source"
   pure (sort (modules ++ if componentType == "exe" then ["Main"] else []))
 
-readComponent :: Unit -> String -> IO Component
-readComponent unit compilerId = do
+readComponent :: Unit -> ExportContext -> IO Component
+readComponent = readComponentMetadata True
+
+readComponentMetadata :: Bool -> Unit -> ExportContext -> IO Component
+readComponentMetadata selected unit context = do
   location <- field (unitValue unit) "build-info"
   info <- readJson location
   compiler <- field info "compiler" :: IO Value
   flavour <- field compiler "flavour"
   actualCompilerId <- field compiler "compiler-id"
-  require (flavour == ("ghc" :: String) && actualCompilerId == compilerId)
+  require (flavour == ("ghc" :: String) && actualCompilerId == contextCompiler context)
     ("unsupported compiler in build-info for " ++ unitId unit)
-  compilerPath <- field compiler "path"
+  compilerPath <- canonicalizePath =<< field compiler "path"
+  require (not selected || compilerPath == contextNative context </> "cache/thc/native-ghc")
+    "Cabal build-info does not identify the transparent native compiler"
   components <- field info "components" :: IO [Value]
   componentName <- field (unitValue unit) "component-name" :: IO String
   matches <- filterM (\value -> do
@@ -1075,8 +1198,8 @@ readComponent unit compilerId = do
   arguments <- field value "compiler-args"
   require (hasPair "-this-unit-id" (unitId unit) arguments)
     ("compiler arguments have wrong unit ID for " ++ unitId unit)
-  sources <- sourcePaths value arguments
-  pure (Component value compilerPath arguments sources)
+  sources <- if selected then sourcePaths value arguments else pure []
+  pure (Component value (contextGhc context) arguments sources)
 
 sourcePaths :: Value -> [String] -> IO [(String, FilePath)]
 sourcePaths component arguments = do

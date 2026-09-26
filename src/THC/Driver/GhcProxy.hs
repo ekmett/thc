@@ -1,14 +1,17 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
--- Cabal invokes this transparent compiler only in a private store build.
+-- Cabal invokes this transparent compiler for ordinary owned native builds
+-- and private store builds.
 -- The native command is unchanged; a second invocation exports Core while
 -- Cabal's unpacked source and generated files still exist.
 module THC.Driver.GhcProxy (runGhcProxy) where
 
 import Control.Monad (unless, when)
 import System.Directory (createDirectoryIfMissing)
-import System.Environment (getEnv)
+import GHC.ResponseFile (expandResponse)
+import THC.Driver.NativeRecipe (captureNativeRecipe)
+import System.Environment (getEnv, lookupEnv)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
 import System.Process (rawSystem)
@@ -16,12 +19,12 @@ import System.Process (rawSystem)
 runGhcProxy :: [String] -> IO ()
 runGhcProxy arguments = do
   compiler <- getEnv "THC_PROXY_GHC"
+  options <- expandResponse arguments
   native <- rawSystem compiler arguments
   when (native /= ExitSuccess) (exitWith native)
-  options <- case arguments of
-    ['@':path] -> lines <$> readFile path
-    _ -> pure arguments
-  targetUnits <- lines <$> getEnv "THC_PROXY_GLOBAL_UNITS"
+  receipts <- lookupEnv "THC_PROXY_NATIVE_RECIPES"
+  mapM_ (\directory -> captureNativeRecipe directory compiler options) receipts
+  targetUnits <- maybe [] lines <$> lookupEnv "THC_PROXY_GLOBAL_UNITS"
   case ("--make" `elem` options, valueAfter "-this-unit-id" options) of
     (True, Just unit) | unit `elem` targetUnits -> do
       capture <- getEnv "THC_PROXY_CAPTURE"

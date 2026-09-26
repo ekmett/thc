@@ -9,6 +9,8 @@ import qualified PlanTests
 import qualified RunTests
 import qualified ProjectTests
 import qualified StoreProjectTests
+import qualified ScalarBitcodeTests
+import qualified NativeRecipeTests
 import qualified InstalledForeignTests
 import qualified TestSupportTests
 import TestSupport (setup)
@@ -18,6 +20,8 @@ main = do
   env <- setup
   counts <- runTestTT $ TestList
     [ InstalledForeignTests.tests
+    , ScalarBitcodeTests.tests
+    , NativeRecipeTests.tests
     , InstalledForeignTests.viewTests env
     , TestSupportTests.tests
     , PlanTests.tests env

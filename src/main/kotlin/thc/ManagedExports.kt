@@ -36,6 +36,7 @@ internal class ManagedExportRegistry(private val owner: Language.State, private 
             loading = true
         }
         try {
+            (plan.linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
             val program: ExecutableProgram = when (plan.backend) {
                 "ast" -> Program(language, plan.linked)
                 "bytecode" -> BytecodeProgram(language, plan.linked, true)

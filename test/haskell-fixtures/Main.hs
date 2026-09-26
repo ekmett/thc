@@ -47,6 +47,7 @@ import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import RtsDiagnosticFixtures (prepareRtsDiagnostics)
 import OriginalOpenFixtures (prepareOriginalOpen)
+import PackageScalarFixtures (preparePackageScalar)
 import OriginalTermiosFixtures (prepareOriginalTermios)
 import OriginalTcsetattrFixtures (prepareOriginalTcsetattr)
 import OriginalTcgetattrFixtures (prepareOriginalTcgetattr)
@@ -898,6 +899,7 @@ main = do
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
     ["original-open"] -> prepareOriginalOpen root
+    ["package-scalar-cbits"] -> preparePackageScalar root
     ["libdw-unavailable"] -> prepareLibdwUnavailable root
     ["original-termios"] -> prepareOriginalTermios root
     ["original-tcsetattr"] -> prepareOriginalTcsetattr root
