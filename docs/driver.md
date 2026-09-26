@@ -80,6 +80,10 @@ own `--ffi` argument after the literal `--`, where it is preserved without
 interpretation. The low-level JVM launcher accepts this selector before its
 entry command and also supports `--ffi=native` / `--ffi=managed`.
 
+`thc run TARGET --help` (or `-h`) displays driver help without building; the
+same ordering works for `acquire`. To request the guest's help instead, use
+`thc run TARGET ... -- --help`.
+
 Pass guest command-line arguments after a literal `--`:
 
 ```sh
