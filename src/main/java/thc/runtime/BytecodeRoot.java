@@ -1670,9 +1670,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 GmpForeignOp operation, Object first, Object second, Object third, Object fourth,
                 long a, long b, long c, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = ManagedGmp.invoke(node, operation, first, second, third, fourth, a, b, c);
-            if (operation.getResult() != null)
-                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            if (operation == GmpForeignOp.GET_DOUBLE || operation == GmpForeignOp.ENCODE_DOUBLE) {
+                double result = ManagedGmp.invokeDouble(node, operation, first, a, b);
+                destination.setDouble(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            } else {
+                long result = ManagedGmp.invoke(node, operation, first, second, third, fourth, a, b, c);
+                if (operation.getResult() != null)
+                    destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            }
         }
     }
 

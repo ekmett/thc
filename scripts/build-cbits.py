@@ -127,7 +127,7 @@ def main():
         artifact = output / "gmp-api.so"
         command = [*compiler, "-O1", "-g", "-fembed-bitcode", "-shared", "-fPIC",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
-                   str(source.relative_to(ROOT)), "-lgmp", "-o", str(artifact)]
+                   str(source.relative_to(ROOT)), "-lgmp", "-lm", "-o", str(artifact)]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
         source_files.append(source)

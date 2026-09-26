@@ -58,13 +58,14 @@ internal object CorePackageScalarForeign {
         val signature = link.abi.singleOrNull { candidate ->
             val expected = candidate.arguments + null
             candidate.symbol == target["symbol"] && candidate.convention == descriptor["convention"] &&
+                candidate.safety == descriptor["safety"] &&
                 declared.size == expected.size && expected.indices.all { scalar(declared[it], expected[it], true) } &&
                 result(descriptor["resultRep"], candidate.result, true)
         } ?: fault("Unlinked or ambiguous package C signature in scalar component: ${target["symbol"]}")
         check(descriptor.keys == setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep") &&
             number(descriptor["schema"], 1) && target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
             target["kind"] == "static" && target["isFunction"] == true &&
-            descriptor["convention"] == signature.convention && descriptor["safety"] == "unsafe", "static unsafe declaration")
+            descriptor["convention"] == signature.convention && descriptor["safety"] == signature.safety, "static exact-safety declaration")
         val expected = signature.arguments + null
         check(number(descriptor["arity"], expected.size) && number(descriptor["suppliedArity"], expected.size) &&
             arguments.size == expected.size && declared.size == expected.size && flags == List(expected.size) { false } &&

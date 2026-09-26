@@ -68,6 +68,21 @@ class SulongLimbProviderTest {
         assertThrows(RuntimeFault::class.java) { arithmetic.addWord(output(ByteArray(0)), input(), 1) }
         assertThrows(RuntimeFault::class.java) { arithmetic.compare(input(), input()) }
     }
+    @Test fun shiftsAndDoubleConversionKeepRoundingSignsAndPinnedAliases() = provider { arithmetic ->
+        val ordinary = bytes(0x5a5a, 0x5a5a)
+        assertEquals(1L, arithmetic.shiftRight(output(ordinary, 1), input(1, 1), 64, false))
+        assertArrayEquals(bytes(1, 0x5a5a), ordinary)
+        assertEquals(0L, arithmetic.shiftRight(output(ordinary, 1), input(1), 1, false))
+        assertEquals(1L, arithmetic.shiftRight(output(ordinary, 1), input(1), 1, true))
+        val pinned = ManagedAllocation.mutable(24, 8, pinned = true)
+        bytes(1, -1, 0x5a5a).forEachIndexed { index, value -> pinned.writeByte(index.toLong(), value.toLong() and 255) }
+        assertEquals(1L, arithmetic.shiftRight(LimbRegion.write(pinned, 2), LimbRegion.read(pinned, 2), 64, true))
+        assertArrayEquals(bytes(0, 1, 0x5a5a), ByteArray(24) { pinned.readByte(it.toLong()).toByte() })
+        assertEquals(0.0.toRawBits(), arithmetic.toDouble(input(), true, 123).toRawBits())
+        assertEquals((-0.0).toRawBits(), arithmetic.toDouble(input(1), true, -1075).toRawBits())
+        assertEquals(18446744073709551616.0, arithmetic.toDouble(input(1, 1), false, 0))
+        assertEquals(-18446744073709551616.0, arithmetic.toDouble(input(1, 1), true, 0))
+    }
     @Test fun allowedAliasesSnapshotInputsAndKeepCanaries() = provider { arithmetic ->
         val alias = bytes(-1, -1)
         assertEquals(1L, arithmetic.addWord(output(alias), LimbRegion.read(alias, 2), 1))
@@ -106,6 +121,12 @@ class SulongLimbProviderTest {
             { arithmetic.divideWord(out, -1, input(1), 2) },
             { arithmetic.divideWord(out, 0, input(1, 2), 0) },
             { arithmetic.moduloWord(input(), 0) },
+            { arithmetic.shiftRight(out, input(1, 2), 0, false) },
+            { arithmetic.shiftRight(out, input(1, 2), 128, false) },
+            { arithmetic.shiftRight(out, input(1, 2), -1, false) },
+            { arithmetic.shiftRight(out, input(1, 2), 64, false) },
+            { arithmetic.shiftRight(upper, lower, 1, false) },
+            { arithmetic.toDouble(LimbRegion.read(pointerOwner, 2), false, 0) },
             { arithmetic.quotient(out, input(1, 2), input(0)) },
             { arithmetic.divide(out, out, 0, input(1, 2), input(3)) },
             { arithmetic.divide(out, output(ByteArray(8)), 1, input(1, 2), input(3)) },

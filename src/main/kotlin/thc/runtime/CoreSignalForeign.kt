@@ -3,9 +3,25 @@
 
 package thc.runtime
 
-/** Exact GHC 9.14.1 TopHandler stg_sig_install declaration; delivery is bytecode only. */
+import com.oracle.truffle.api.frame.VirtualFrame
+
+/** Exact GHC 9.14.1 TopHandler stg_sig_install declaration. */
 internal enum class ProcessSignalOp(val symbol: String, val arguments: List<String?>, val result: String?) {
     INSTALL("stg_sig_install", listOf("Int32Rep", "Int32Rep", "AddrRep", null), "Int32Rep");
+}
+
+internal class InstallProcessSignal(@field:Children private var operands: Array<Expr>,
+    proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Nothing = fault("Signal installation requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val signal = operands[0].executeRequiredLong(frame)
+        val action = operands[1].executeRequiredLong(frame)
+        val mask = operands[2].executeRequiredAddress(frame)
+        requireVoidCarrier(operands[3].execute(frame))
+        FrameAccess.writeLong(frame, slots[offset], ManagedSignals.install(this, signal, action, mask))
+        return null
+    }
 }
 
 internal object CoreSignalForeign {

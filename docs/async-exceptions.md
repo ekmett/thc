@@ -13,6 +13,10 @@ The public request accepts an optional Boolean `asyncExceptions`. `true` enables
 saved asynchronous continuations on either backend; when omitted it defaults to
 `false` for AST and `true` for bytecode. A string such as `"true"` is rejected.
 `CoreModules.request(..., asyncExceptions = true)` exposes the same option.
+`loadEntry` also accepts a nullable `asyncExceptions` argument, defaulting to
+the optional strict `-Dthc.asyncExceptions=true|false` launcher property. With
+neither set, the backend defaults above are unchanged. Process signal dispatch
+requires the enabled mode; see [standalone process signals](process-signals.md).
 
 With async enabled, AST captures ordinary and typed calls, strict entry forcing,
 cases, lets, local joins, masks and handlers. Shared thunks retain unfinished

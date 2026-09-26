@@ -154,7 +154,12 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     @Synchronized fun bind(program: ExecutableProgram) {
         current()
         if (closed || binding != null) fault("Process signal dispatcher already bound")
-        if (program !is BytecodeProgram) fault("Process signal delivery requires the bytecode backend")
+        val async = when (program) {
+            is Program -> program.enableAsync
+            is BytecodeProgram -> program.enableAsync
+            else -> false
+        }
+        if (!async) fault("Process signal delivery requires asyncExceptions=true")
         binding = SignalDispatchRoot(language, program)
     }
     private fun current() {
@@ -172,7 +177,7 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
         if (signal != 2L && !reducedVmSignals)
             fault("GHC process signal handlers require the standalone JVM launcher with -Xrs")
         if (closed || stopping) fault("Process signal service is closed")
-        val root = binding ?: fault("Missing original bytecode signal dispatcher")
+        val root = binding ?: fault("Missing original signal dispatcher")
         val native = transport ?: factory().also { acquired ->
             transport = acquired
             val child = owner.env.newTruffleThreadBuilder(Runnable { consume(acquired, root) }).build()
@@ -312,8 +317,13 @@ internal class SignalDispatchRoot(language: Language, program: ExecutableProgram
     override fun execute(frame: VirtualFrame): Any {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L)
         val closure = requireClosure(force.execute(frame, action))
-        val target = closure.target.rootNode as? BytecodeRoot ?: fault("Signal dispatcher must be bytecode")
-        if (!target.isAsyncEnabled || target.tupleResult?.matches(shape) != true)
+        val target = closure.target.rootNode
+        val async = when (target) {
+            is FunctionRoot -> target.enableAsync
+            is BytecodeRoot -> target.isAsyncEnabled
+            else -> false
+        }
+        if (!async || (target as? GuestRoot)?.tupleResult?.matches(shape) != true)
             fault("Signal dispatcher requires an async IO unit tuple")
         dispatch.execute(frame, closure, arrayOf(pointer.create(arrayOf(frame.arguments[0])),
             signal.createLong(frame.arguments[1] as Long), Unit))

@@ -23,6 +23,10 @@ GMP_OPERATIONS = {
     '__gmpn_tdiv_qr': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
     'integer_gmp_mpn_tdiv_q': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
     'integer_gmp_mpn_tdiv_r': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', GMP_ARRAY, 'IntRep', None), (None,)),
+    'integer_gmp_mpn_rshift': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    'integer_gmp_mpn_rshift_2c': ((GMP_ARRAY, GMP_ARRAY, 'IntRep', 'WordRep', None), (None, 'WordRep')),
+    'integer_gmp_mpn_get_d': ((GMP_ARRAY, 'IntRep', 'IntRep', None), (None, 'DoubleRep')),
+    '__int_encodeDouble': (('IntRep', 'IntRep', None), (None, 'DoubleRep')),
 }
 GMP_SYMBOLS = frozenset(GMP_OPERATIONS)
 # The managed runtime has no native DWARF backend, matching RTS USE_LIBDW=0.

@@ -276,8 +276,9 @@ Compiler-library shared FastStrings, CAF retention and unique-counter data cells
 are documented separately in [compiler RTS services](compiler-rts.md); their
 support does not imply a native GHC object loader or complete GHC API coverage.
 Original `stg_sig_install` supports GHC's INT/QUIT/HUP/TERM handlers in the
-Linux x86_64 bytecode launcher with `-Xrs`; other signals, non-null masks, AST
-delivery and ordinary embedding contexts remain outside that service. See
+Linux x86_64 launcher with `-Xrs` and `asyncExceptions=true` on either backend
+(AST opt-in, bytecode default). Other signals, non-null masks and ordinary
+embedding contexts remain outside that service. See
 [process signal ownership and JVM consequences](process-signals.md).
 
 Core transport also has restrictions independent of any one primop: see the

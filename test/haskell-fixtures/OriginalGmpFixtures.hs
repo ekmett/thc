@@ -29,7 +29,9 @@ entries = [("originalAdd","__gmpn_add"),("originalAddWord","__gmpn_add_1"),
   ("originalModWord","__gmpn_mod_1"),("originalMul","__gmpn_mul"),
   ("originalMulWord","__gmpn_mul_1"),("originalSub","__gmpn_sub"),
   ("originalQuotRem","__gmpn_tdiv_qr"),("originalQuot","integer_gmp_mpn_tdiv_q"),
-  ("originalRem","integer_gmp_mpn_tdiv_r")]
+  ("originalRem","integer_gmp_mpn_tdiv_r"),
+  ("originalRShift","integer_gmp_mpn_rshift"),("originalRShiftNegative","integer_gmp_mpn_rshift_2c"),
+  ("originalGetDouble","integer_gmp_mpn_get_d"),("originalEncodeDouble","__int_encodeDouble")]
 
 -- Native observations only. Kotlin owns arithmetic and raw-ABI expectations.
 type Row = ((String,String,[Int],[Int],Int,Int,Int,Int,Int,Int,[Int],[Int]),
@@ -72,14 +74,14 @@ prepareOriginalGmp root requireSupported = do
   original <- case Package.parseInstalledPackageInfo (commandStdout registration) of
     Left errors -> die (show errors)
     Right (_,package) -> pure package
-  let backend = ModuleName.fromString "GHC.Internal.Bignum.Backend.GMP"
+  let exposedBackends = map ModuleName.fromString ["GHC.Internal.Bignum.Backend.GMP", "GHC.Internal.Bignum.Primitives"]
       exposed = Package.exposedModules original
       hidden = Package.hiddenModules original
-  unless (length (filter (== backend) hidden) == 1 &&
-      all ((/= backend) . Package.exposedName) exposed)
-    (die "Expected exactly the original hidden GMP module")
-  let visible = original { Package.exposedModules = exposed ++ [Package.ExposedModule backend Nothing],
-        Package.hiddenModules = filter (/= backend) hidden }
+      needExpose = filter (\backend -> all ((/= backend) . Package.exposedName) exposed) exposedBackends
+  unless (all (\backend -> length (filter (== backend) hidden) == 1) needExpose)
+    (die "Expected original GMP/primitive modules in installed registration")
+  let visible = original { Package.exposedModules = exposed ++ map (\backend -> Package.ExposedModule backend Nothing) needExpose,
+        Package.hiddenModules = filter (`notElem` needExpose) hidden }
       findDatabase index = do
         let candidate = directory </> "package-db-" ++ show index
         exists <- doesDirectoryExist (root </> candidate)
@@ -97,7 +99,7 @@ prepareOriginalGmp root requireSupported = do
   observed <- execute "native-observations" [] (root </> binary) []
   rows <- maybe (die "Malformed original GMP observations") pure
     (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe [Row])
-  unless (length rows == 92 && sort (Map.keys (Map.fromList [(entry,()) |
+  unless (length rows == 296 && sort (Map.keys (Map.fromList [(entry,()) |
       ((entry,_,_,_,_,_,_,_,_,_,_,_),_) <- rows])) == sort (map fst entries))
     (die "Unexpected original GMP observation inventory")
   let oracle = directory </> "oracle.json"
@@ -141,7 +143,7 @@ prepareOriginalGmp root requireSupported = do
      "nativeRows" .= length rows,"limbEncoding" .= ("signed-64-bit-pattern" :: String),
      "stages" .= Map.fromList [(stage,object ["modules" .= modules]) | (stage,modules,_,_) <- stages],
      "strictAccepted" .= requireSupported,"runtimeVerified" .= False,"installedArtifactsHashed" .= False,
-     "testPackageExposure" .= object ["module" .= ("GHC.Internal.Bignum.Backend.GMP" :: String),"database" .= database,
+     "testPackageExposure" .= object ["modules" .= map ModuleName.toFilePath exposedBackends,"database" .= database,
        "registration" .= configuration,"sameUnitAndLibraries" .= True,"installedDatabaseModified" .= False],
      "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,"commands" .= map commandRecord commands]
-  putStrLn "original-gmp: 92 native observations, eleven original declarations, pre/post strict audit receipts"
+  putStrLn "original-gmp: 296 native observations, fifteen original declarations, pre/post strict audit receipts"

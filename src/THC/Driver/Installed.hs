@@ -8,7 +8,7 @@ module THC.Driver.Installed
   ( InstalledContext(..), InstalledUnit(..), InstalledCore(..), MissingCore(..)
   , installedContext, discoverInstalled, validateReexports, acquireInstalled
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled
-  , emptyRegistration
+  , emptyRegistration, modulelessRegistration
   ) where
 
 import Control.Monad (filterM, foldM, forM, forM_, unless)
@@ -63,11 +63,26 @@ data MissingCore = MissingCore
 -- hs-libraries. Those archives do not imply Haskell modules or Core bodies;
 -- accepting their empty module inventory does not admit their foreign calls.
 emptyRegistration :: String -> [String] -> BS.ByteString -> Bool
-emptyRegistration identifier dependencies bytes = case parseInstalledPackageInfo bytes of
-  Left _ -> False
-  Right (_, info) -> prettyShow (Package.installedUnitId info) == identifier &&
-    sort (map prettyShow (Package.depends info)) == sort dependencies &&
-    null (Package.exposedModules info) && null (Package.hiddenModules info)
+emptyRegistration identifier dependencies bytes =
+  modulelessRegistration identifier dependencies bytes == Just []
+
+-- A facade such as happy-lib owns no modules but reexports concrete providers.
+-- Return those identities for the caller to check against its resolved Core
+-- dependency closure; a missing capture is not itself evidence of a facade.
+modulelessRegistration :: String -> [String] -> BS.ByteString -> Maybe [(String, String, String)]
+modulelessRegistration identifier dependencies bytes = do
+  (_, info) <- either (const Nothing) Just (parseInstalledPackageInfo bytes)
+  if prettyShow (Package.installedUnitId info) /= identifier ||
+     sort (map prettyShow (Package.depends info)) /= sort dependencies ||
+     not (null (Package.hiddenModules info)) then Nothing else do
+    reexports <- mapM concrete (Package.exposedModules info)
+    if length (nub (map (\(name, _, _) -> name) reexports)) == length reexports
+      then Just reexports else Nothing
+  where
+    concrete entry = case exposedReexport entry of
+      Just (OpenModule (DefiniteUnitId owner) name) ->
+        Just (prettyShow (exposedName entry), prettyShow owner, prettyShow name)
+      _ -> Nothing
 
 installedContext :: FilePath -> FilePath -> FilePath -> [FilePath] -> Value -> IO InstalledContext
 installedContext ghc pkg helper databases compiler = do
@@ -271,7 +286,11 @@ acquireInstalled context unit = go [] (installedInterfaces unit)
                   valueAt core "ghc" == Just ("9.14.1" :: String) &&
                   valueAt core "boundary" == Just ("optimized-Core-after-Tidy-before-CorePrep" :: String))
             (fail "thc-interface returned inconsistent Core identity/boundary")
-          go ((owner, name, BL.toStrict (encode core)) : modules) rest
+          -- Force each strict payload before visiting the next interface. A
+          -- lazy tuple field otherwise retains every decoded Aeson Core tree
+          -- until the whole package is packaged (notably the compiler itself).
+          let bytes = BL.toStrict (encode core)
+          bytes `seq` go ((owner, name, bytes) : modules) rest
         (ExitFailure 3, Just "unavailable") -> do
           unless (valueAt response "capability" == Just ("complete-interface-core" :: String) &&
                   valueAt response "unit" == Just (registeredId unit) &&

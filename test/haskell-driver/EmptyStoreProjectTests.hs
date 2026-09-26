@@ -4,12 +4,17 @@
 module EmptyStoreProjectTests (tests) where
 
 import Control.Exception (bracket)
+import Codec.Archive.Zip (addEntryToArchive, fromArchive, toArchiveOrFail, toEntry)
+import Data.Aeson (Value(..), encode)
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as Text
 import System.Directory (createDirectoryIfMissing, getModificationTime, removePathForcibly)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
-import THC.Driver.Installed (emptyRegistration)
+import THC.Driver.Installed (emptyRegistration, modulelessRegistration)
 import TestSupport
 
 tests :: Env -> Test
@@ -35,17 +40,32 @@ registrationTest = TestLabel "empty store registrations" $ TestCase $ do
   assertBool "dependency inventory can be nonempty but must match exactly"
     (emptyRegistration "empty-compat-0.1.0.0-abc" ["provider-1.0"]
       (original <> "depends: provider-1.0\n"))
+  let facade = original <> "depends: provider-1.0\nexposed-modules: Public from provider-1.0:Original\n"
+      inspect = modulelessRegistration "empty-compat-0.1.0.0-abc" ["provider-1.0"]
+  assertEqual "definite reexport retains exact alias/provider/module"
+    (Just [("Public", "provider-1.0", "Original")]) (inspect facade)
+  assertBool "facade is not a genuinely empty registration"
+    (not (emptyRegistration "empty-compat-0.1.0.0-abc" ["provider-1.0"] facade))
+  mapM_ (assertEqual "owned or malformed module inventories rejected" Nothing . inspect)
+    [ facade <> "hidden-modules: Private\n"
+    , original <> "depends: provider-1.0\nexposed-modules: Public\n"
+    , original <> "exposed-modules: Public from provider-1.0:Original\n"
+    , original <> "depends: provider-1.0\nexposed-modules: Public from provider-1.0:Original, Public from provider-1.0:Other\n"
+    ]
 
 -- Like nats on modern GHC: the package is a real source-built dependency, but
 -- its only Haskell module is disabled by the selected compiler condition.
--- The second dependency models libyaml-clib: a real C archive, no Haskell modules.
+-- A C-only archive models libyaml-clib, and the app imports its actual value
+-- through a reexport-only facade like happy-lib, without depending on the
+-- provider directly.
 emptyProjectTest :: Env -> Test
-emptyProjectTest env = TestLabel "conditional empty and C-only Cabal store libraries" $ TestCase $
+emptyProjectTest env = TestLabel "empty, C-only and reexport-only Cabal store libraries" $ TestCase $
   withFixtureNamed env "test/fixtures/run-store-project" "empty project" $ \project -> do
     let base = takeDirectory project
         dependency = base </> "dependency-source"
         shim = base </> "empty-source"
         nativeShim = base </> "native-source"
+        facade = base </> "facade-source"
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
           ["run", project, "--exe", "completed", "--thc-root", thcRoot env,
@@ -69,12 +89,22 @@ emptyProjectTest env = TestLabel "conditional empty and C-only Cabal store libra
        "  default-language: Haskell2010", "  c-sources: native.c"]
     writeText (nativeShim </> "native.c") "int native_marker(void) { return 42; }\n"
     sourceDist nativeShim
+    createDirectoryIfMissing True facade
+    writeText (facade </> "facade.cabal") $ unlines
+      ["cabal-version: 3.0", "name: facade", "version: 0.1.0.0",
+       "license: BSD-3-Clause", "build-type: Simple", "library",
+       "  default-language: Haskell2010", "  build-depends: dep-data ==0.1.0.0",
+       "  reexported-modules: Answer as PublicAnswer"]
+    sourceDist facade
     writeText (project </> "cabal.project")
-      "packages: app/app.cabal dep-data-0.1.0.0.tar.gz empty-compat-0.1.0.0.tar.gz native-only-0.1.0.0.tar.gz\n"
+      "packages: app/app.cabal dep-data-0.1.0.0.tar.gz empty-compat-0.1.0.0.tar.gz native-only-0.1.0.0.tar.gz facade-0.1.0.0.tar.gz\n"
     let description = project </> "app/app.cabal"
     text <- readText description
     writeText description (replaceText "dep-data ==0.1.0.0"
-      "dep-data ==0.1.0.0, empty-compat ==0.1.0.0, native-only ==0.1.0.0" text)
+      "facade ==0.1.0.0, empty-compat ==0.1.0.0, native-only ==0.1.0.0" text)
+    let mainSource = project </> "app/app/Main.hs"
+    mainText <- readText mainSource
+    writeText mainSource (replaceText "import Answer" "import PublicAnswer" mainText)
     priorCache <- lookupEnv "THC_CACHE_HOME"
     let restore = maybe (unsetEnv "THC_CACHE_HOME") (setEnv "THC_CACHE_HOME") priorCache
     bracket (setEnv "THC_CACHE_HOME" (base </> "cache")) (const restore) $ \_ -> do
@@ -110,6 +140,25 @@ emptyProjectTest env = TestLabel "conditional empty and C-only Cabal store libra
       assertBool "C-only registration validates its actual empty module inventory"
         (emptyRegistration nativeId [] (BS.pack nativeRegistration))
       nativeStamp <- getModificationTime nativePath
+      facadeId <- case filter ((== "facade") . string . (`field` "pkg-name"))
+        (objects plan "install-plan") of
+          [facadeUnit] -> pure (string (field facadeUnit "id"))
+          _ -> fail "expected exactly one real reexport-only store unit"
+      facadeUnit <- case filter ((== facadeId) . string . (`field` "id")) (objects manifest "units") of
+        [value] -> pure value
+        _ -> fail "facade dependency was discarded from package manifest"
+      assertEqual "facade owns no invented Core" [] (array (field facadeUnit "modules"))
+      let facadePath = string (field (field facadeUnit "bundle") "path")
+          dependencies = strings (field facadeUnit "depends")
+      facadeReceipt <- readCore facadePath "manifest.json"
+      providerId <- case dependencies of
+        [value] -> pure value
+        _ -> fail "facade must have one actual provider"
+      assertEqual "registered reexport names the real provider"
+        (Just [("PublicAnswer", providerId, "Answer")])
+        (modulelessRegistration facadeId dependencies
+          (BS.pack (string (field facadeReceipt "reexportRegistration"))))
+      facadeStamp <- getModificationTime facadePath
       stamp <- getModificationTime path
       audit <- readJson (output </> "audit.json")
       assertBool "unchanged strict package audit" (bool (field audit "accepted"))
@@ -119,3 +168,21 @@ emptyProjectTest env = TestLabel "conditional empty and C-only Cabal store libra
       assertNoStdout second
       assertEqual "validated empty bundle reused without rewriting" stamp =<< getModificationTime path
       assertEqual "validated C-only bundle reused without rewriting" nativeStamp =<< getModificationTime nativePath
+      assertEqual "validated facade bundle reused without rewriting" facadeStamp =<< getModificationTime facadePath
+      -- A cached facade cannot advertise a nonexistent module or an unrelated
+      -- unit, even when its registration parses and its own module list is empty.
+      originalBundle <- BL.fromStrict <$> BS.readFile facadePath
+      archive <- either fail pure (toArchiveOrFail originalBundle)
+      fields <- case facadeReceipt of Object value -> pure value; _ -> fail "missing facade receipt"
+      let registration = string (field facadeReceipt "reexportRegistration")
+          corrupt original replacement = bracket
+            (BL.writeFile facadePath (fromArchive (addEntryToArchive
+              (toEntry "manifest.json" 0 (encode (Object (KeyMap.insert "reexportRegistration"
+                (String (Text.pack (replaceText original replacement registration))) fields)))) archive)))
+            (const (BL.writeFile facadePath originalBundle)) $ \_ -> do
+              result <- invoke "bytecode"
+              assertFailure result
+              assertNoStdout result
+              assertContains "missing concrete store reexport provider" (err result)
+      corrupt ":Answer" ":MissingModule"
+      corrupt (providerId ++ ":Answer") "unrelated-0.1.0.0:Answer"

@@ -1347,11 +1347,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 else bodyScope.bindLocal(fields.single().name, fields.single())
             }
             val body = compile(definition.body, bodyScope.withSource(sources.binding(definition.binding, scope.source)), tail)
-            CoreRepresentations.requireNoSum(body.proof, "join result")
             ProvenExpression(body, body.proof.refine(definition.result.copy(evaluated = false)))
         }
         val entry = compile(expression, local, tail)
-        CoreRepresentations.requireNoSum(entry.proof, "join result")
         val proof = entry.proof.refine(CoreRepresentations.expression(expression).copy(evaluated = false))
         bodies.forEach { TupleShape.requireCompatible(proof, it.proof) }
         return ProvenExpression(ResultExpression { e, destination ->
@@ -1743,6 +1741,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         }
                         else -> fault("Invalid package C result representation")
                     }
+                    // Commit the result before the resumable guest cut. A pending
+                    // async exception never unwinds/replays the opaque foreign call.
+                    if (enableAsync && packageScalar.signature.safety == "safe") emitAsyncPoll(e)
                 }
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)

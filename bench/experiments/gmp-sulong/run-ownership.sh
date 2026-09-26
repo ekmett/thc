@@ -9,7 +9,7 @@ test "$(uname -s)" = Linux
 test "$(uname -m)" = x86_64
 mkdir -p build/gmp-ownership/classes
 "${THC_CLANG:-clang}" --target=x86_64-unknown-linux-gnu -O1 -g -fembed-bitcode -shared -fPIC \
-  src/main/c/gmp-api.c -lgmp -o build/gmp-ownership/gmp-api.so \
+  src/main/c/gmp-api.c -lgmp -lm -o build/gmp-ownership/gmp-api.so \
   >build/gmp-ownership/compile-c.log 2>&1
 readelf -Ws build/gmp-ownership/gmp-api.so >build/gmp-ownership/symbols.log 2>build/gmp-ownership/readelf-warnings.log
 for target in add add_1 sub cmp; do rg "UND.*__gmpn_${target}$" build/gmp-ownership/symbols.log; done

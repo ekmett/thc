@@ -48,7 +48,8 @@ the complete-Core GHC installation; ordinary runtime unit tests do not.
 
 `runGhc` installs handlers for SIGQUIT, SIGINT, SIGHUP and SIGTERM. The
 [standalone process signal bridge](process-signals.md) admits these on Linux
-x86_64 bytecode launches with `-Xrs`; embeddings and AST delivery remain separate.
+x86_64 launches with `-Xrs` and asynchronous continuations enabled. AST needs
+explicit `-Dthc.asyncExceptions=true`; ordinary embeddings remain unauthorized.
 Native object loading/GHCi, compiler RTS flags and other reachable foreign calls
 must be tested and implemented as they are encountered. These translations do
 not bypass strict Core admission.

@@ -38,6 +38,11 @@ thc repl
 `thc repl` is not yet implemented. The aim is to run complete programs, including
 their error paths.
 
+You can already run real generators and utilities: see the
+[Happy parser-generation and HsColour HTML command lines](../driver.md#run-real-applications).
+They use ordinary upstream packages and the complete-Core installation described
+below, with setup, expected output and current backend limits spelled out.
+
 Running on Truffle also gives Haskell a route into other languages. The
 [JavaScript example](../polyglot.md) already supports `foreign import javascript`.
 The [embedding guide](embedding.md) describes the current JVM entrypoints for

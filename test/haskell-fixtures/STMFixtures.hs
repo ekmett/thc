@@ -103,8 +103,8 @@ prepareSTM root = do
     _ -> die ("Malformed native STM row: " ++ line)
   let expected = Set.fromList ([(name,x) | name <- entries, x <- [-31,-1,0,1,17,63,4097]] ++
         [("concurrent",128),("either",0),("either",1)] ++
-        [(name ++ "-" ++ field,0) | name <- ["retry","inner"],
-          field <- ["caught","aborted","prefix","resumed","committed","prefix-after"]])
+        [(name ++ "-" ++ observation,0) | name <- ["retry","inner"],
+          observation <- ["caught","aborted","prefix","resumed","committed","prefix-after"]])
   unless (length rows == Set.size expected && Set.fromList rows == expected) $
     die "Native STM oracle has missing or duplicate rows"
   writeFile (root </> oracle) observations

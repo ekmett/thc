@@ -140,6 +140,7 @@ tasks.withType<Test>().configureEach {
             "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
             "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
             "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
+            "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
             "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
             "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
             "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
@@ -548,6 +549,26 @@ tasks.register<Test>("packageScalarFullCoreTest") {
         }
     }
 }
+for ((taskName, dense) in listOf("signalDispatchFullCoreDefault" to false, "signalDispatchFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC signal handler lookup and forked dispatch on both backends."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/signal-dispatch") { include("**/*.json", "oracle.txt", "installed/bundles/*.zip") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SignalDispatchFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original signal delivery requires a fresh test process") { true }
+        doFirst {
+            check(file("build/signal-dispatch/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- signal-dispatch"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stablePtrFfiFullCoreDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
@@ -564,6 +585,24 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
         doFirst {
             check(file("build/stableptr-ffi/manifest.json").isFile) {
                 "Select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- stableptr-ffi"
+            }
+        }
+    }
+}
+for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks original digest C++/zlib and safe erf/libm against native Haskell observations."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "erf-audit.json", "manifest.json", "sources/**") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("build/original-native/manifest.json").isFile) {
+                "Missing original digest fixture: set THC_DIGEST_SOURCE and run cabal run exe:thc-fixtures -- package-native-originals"
             }
         }
     }

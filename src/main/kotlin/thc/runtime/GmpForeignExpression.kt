@@ -10,6 +10,15 @@ internal class GmpForeignExpression(private val operation: GmpForeignOp,
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Original GMP call requires a State/result tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.form == GmpForm.ENCODE_DOUBLE || operation.form == GmpForm.GET_DOUBLE) {
+            val input = if (operation.form == GmpForm.GET_DOUBLE) operands[0].execute(frame) else null
+            val start = if (operation.form == GmpForm.GET_DOUBLE) 1 else 0
+            val a = operands[start].executeRequiredLong(frame)
+            val b = operands[start + 1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[start + 2].execute(frame))
+            FrameAccess.writeDouble(frame, slots[offset], ManagedGmp.invokeDouble(this, operation, input, a, b))
+            return null
+        }
         val first = operands[0].execute(frame)
         // Primitive counts/words stay long locals; object/primitive interleaving
         // follows the original FCallId argument order exactly.

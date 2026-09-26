@@ -8,14 +8,17 @@ import com.oracle.truffle.api.TruffleSafepoint
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import org.graalvm.polyglot.Context
 import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import thc.Json
 import thc.Language
+import thc.loadEntry
 
 class ProcessSignalsTest {
     private val descriptor = Json.parse(javaClass.getResource("/core/original-signal-install-descriptor.json")!!.readText()) as Map<String, Any?>
@@ -60,6 +63,7 @@ class ProcessSignalsTest {
                 mapOf("binders" to listOf(binder("infoAddress", address, false))))),
                 mapOf("rep" to ioResult, "binder" to binder("pointerBox", boxed, true)))
         }
+
         // Synthetic dispatcher consumer, not replacement evidence for original
         // Conc.Signal. It exercises the exact boxed Ptr/CInt/State transport.
         val dispatcher = mapOf("id" to CoreSignalForeign.dispatcher, "name" to "runHandlersPtr", "arity" to 3,
@@ -85,6 +89,14 @@ class ProcessSignalsTest {
             try { body(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
             finally { context.leave() }
         }
+
+    private fun onBackends(body: (Language, String) -> Unit) {
+        for (backend in listOf("ast", "bytecode")) inside { body(it, backend) }
+    }
+    private fun program(language: Language, backend: String, recordSignal: Boolean = false,
+                        async: Boolean = true): ExecutableProgram =
+        if (backend == "ast") Program(language, module(recordSignal), async)
+        else BytecodeProgram(language, module(recordSignal), async)
 
     @Test fun hardContextExitSurvivesBothHostCleanupSteps() {
         val death = ThreadDeath()
@@ -134,9 +146,8 @@ class ProcessSignalsTest {
         assertThrows(RuntimeFault::class.java) { CoreSignalForeign.validateHeads(forged) }
     }
 
-    @Test fun astRejectsDeliveryAndCompiledEmbeddingDenialInvalidatesAsHostFault() = inside { language ->
-        assertThrows(UnsupportedCore::class.java) { Program(language, module()) }
-        val program = BytecodeProgram(language, module(), true)
+    @Test fun compiledEmbeddingDenialRemainsAHostFaultOnBothBackends() = onBackends { language, backend ->
+        val program = program(language, backend)
         val target = program.entryTarget("install")
         val state = Language.currentState()
         state.threads.enterCurrent()
@@ -157,7 +168,8 @@ class ProcessSignalsTest {
             // Bytecode DSL resolveThrowable invalidates ordinary host faults;
             // only AbstractTruffleException and ControlFlowException bypass it.
             // Authority denial stays a RuntimeFault, not a catchable guest error.
-            assertEquals(false, target.javaClass.getMethod("isValidLastTier").invoke(target))
+            if (backend == "bytecode")
+                assertEquals(false, target.javaClass.getMethod("isValidLastTier").invoke(target))
             assertEquals(0, language.handoffState.get().results.depth)
             assertEquals(0, language.handoffState.get().results.retainedReferences())
             assertEquals(0, language.handoffState.get().arguments.depth)
@@ -165,9 +177,59 @@ class ProcessSignalsTest {
         } finally { state.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
     }
 
+    @Test fun synchronousDispatchIsRejectedBeforeTransportAcquisition() = onBackends { language, backend ->
+        val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = true) {
+            error("synchronous program must not acquire signal transport")
+        }
+        val failure = assertThrows(RuntimeFault::class.java) { service.bind(program(language, backend, async = false)) }
+        assertTrue(failure.message!!.contains("asyncExceptions=true"))
+        service.close()
+    }
+
+    @Test fun malformedLauncherAsyncPropertyFailsExplicitly() {
+        val previous = System.getProperty("thc.asyncExceptions")
+        try {
+            System.setProperty("thc.asyncExceptions", "enabled")
+            Context.newBuilder("thc").build().use { context ->
+                assertThrows(IllegalArgumentException::class.java) { loadEntry(context, emptyList(), "unused") }
+            }
+        } finally {
+            if (previous == null) System.clearProperty("thc.asyncExceptions")
+            else System.setProperty("thc.asyncExceptions", previous)
+        }
+    }
+
+    @Test fun launcherAsyncPropertyAndExplicitArgumentPreserveBackendDefaults(@TempDir directory: Path) {
+        val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+        val identity = mapOf("id" to "identity", "name" to "identity", "arity" to 1, "lifted" to true,
+            "rep" to closure, "expr" to listOf("lam", listOf(mapOf("id" to "x", "lifted" to false, "rep" to integer)),
+                variable("x", integer), mapOf("rep" to closure, "resultRep" to integer)))
+        val core = directory.resolve("SignalOptions.json").toFile()
+        core.writeText(Json.stringify(mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignalOptions",
+            "unit" to "main", "constructors" to emptyList<Any>(), "bindings" to listOf(identity))))
+        val previous = System.getProperty("thc.asyncExceptions")
+        try {
+            for (setting in listOf(null, "true", "false")) {
+                if (setting == null) System.clearProperty("thc.asyncExceptions")
+                else System.setProperty("thc.asyncExceptions", setting)
+                for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").build().use { context ->
+                    val action = loadEntry(context, listOf(core.path), "identity", backend = backend)
+                    assertEquals(setting?.toBooleanStrict() ?: (backend == "bytecode"),
+                        (Json.parse(action.getMember("diagnostics").asString()) as Map<*, *>)["asyncExceptions"])
+                    assertEquals(17L, action.execute(17L).asLong())
+                    val explicit = loadEntry(context, listOf(core.path), "identity", backend = backend, asyncExceptions = true)
+                    assertEquals(true, (Json.parse(explicit.getMember("diagnostics").asString()) as Map<*, *>)["asyncExceptions"])
+                }
+            }
+        } finally {
+            if (previous == null) System.clearProperty("thc.asyncExceptions")
+            else System.setProperty("thc.asyncExceptions", previous)
+        }
+    }
+
     @Test fun contextTransportKeepsOldActionsAndClosesAfterDelivery() {
         assumeTrue(System.getProperty("os.name") == "Linux")
-        inside { language ->
+        onBackends { language, backend ->
             val owner = Language.currentState()
             val events = LinkedBlockingQueue<ProcessSignalTransport.Event>()
             val delivered = CountDownLatch(4)
@@ -187,7 +249,7 @@ class ProcessSignalsTest {
                 override fun close() { closed.incrementAndGet() }
             }
             val service = ManagedSignals(owner, language, reducedVmSignals = true) { fake }
-            val program = BytecodeProgram(language, module(), true)
+            val program = program(language, backend)
             service.bind(program)
             assertThrows(RuntimeFault::class.java) { service.install(2L, -5L, ManagedAddress.nullAddress()) }
             service.authorizeLauncher()
@@ -209,11 +271,11 @@ class ProcessSignalsTest {
         }
     }
 
-    @Test fun extendedHandlersRequireReleasedVmSignalsBeforeAcquiringTransport() = inside { language ->
+    @Test fun extendedHandlersRequireReleasedVmSignalsBeforeAcquiringTransport() = onBackends { language, backend ->
         val service = ManagedSignals(Language.currentState(), language, reducedVmSignals = false) {
             error("denied request must not acquire a native signal transport")
         }
-        service.bind(BytecodeProgram(language, module(), true))
+        service.bind(program(language, backend))
         service.authorizeLauncher()
         for (signal in listOf(1L, 3L, 15L)) {
             val failure = assertThrows(RuntimeFault::class.java) {
@@ -224,9 +286,9 @@ class ProcessSignalsTest {
         service.close()
     }
 
-    @Test fun dispatcherPassesEachActualSignalThroughTheOriginalBoxedCIntShape() = inside { language ->
+    @Test fun dispatcherPassesEachActualSignalThroughTheOriginalBoxedCIntShape() = onBackends { language, backend ->
         val owner = Language.currentState()
-        val program = BytecodeProgram(language, module(recordSignal = true), true)
+        val program = program(language, backend, recordSignal = true)
         val target = SignalDispatchRoot(language, program).callTarget
         val address = owner.nativeAllocations.malloc(128L)
         owner.threads.enterCurrent()

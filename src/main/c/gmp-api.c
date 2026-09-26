@@ -4,6 +4,8 @@
 #include <gmp.h>
 #include <limits.h>
 #include <stdint.h>
+#include <math.h>
+#include <string.h>
 
 _Static_assert(CHAR_BIT == 8 && sizeof(int) == 4 && sizeof(mp_limb_t) == 8 && sizeof(mp_size_t) == 8 &&
                sizeof(void *) == 8 && GMP_NAIL_BITS == 0,
@@ -76,4 +78,46 @@ void thc_gmp_remainder(void *output, void *quotient_scratch,
                        void const *numerator, int64_t numerator_size,
                        void const *divisor, int64_t divisor_size) {
     thc_gmp_divide(quotient_scratch, output, 0, numerator, numerator_size, divisor, divisor_size);
+}
+
+/* GHC gmp_wrappers.c shift/get_d contracts, adapted from the BSD3-licensed
+ * wrappers Copyright (c) 2014 Herbert Valerio Riedel <hvr@gnu.org>.
+ * The host checks positive counts, exact capacities and permitted aliases.
+ * Scan discarded limbs before writing, including for exact-start aliases. */
+uint64_t thc_gmp_shift_right(void *output, void const *input, int64_t size,
+                             uint64_t count, int negative) {
+    mp_ptr out = output;
+    mp_srcptr in = input;
+    mp_size_t whole = count / GMP_NUMB_BITS;
+    unsigned bits = count % GMP_NUMB_BITS;
+    mp_size_t remaining = size - whole;
+    int discarded = 0;
+    if (negative) {
+        for (mp_size_t i = 0; i < whole; ++i) discarded |= in[i] != 0;
+        if (bits) discarded |= (in[whole] & ((((mp_limb_t)1) << bits) - 1)) != 0;
+    }
+    if (bits) {
+        mp_limb_t (*volatile call)(mp_ptr, mp_srcptr, mp_size_t, unsigned) = &__gmpn_rshift;
+        call(out, in + whole, remaining, bits);
+    } else {
+        memmove(out, in + whole, remaining * sizeof(mp_limb_t));
+        if (negative) out[remaining++] = 0;
+    }
+    if (discarded) {
+        mp_limb_t (*volatile add)(mp_ptr, mp_srcptr, mp_size_t, mp_limb_t) = &__gmpn_add_1;
+        add(out, out, remaining, 1);
+    }
+    return out[remaining - 1];
+}
+
+double thc_gmp_get_double(void const *input, int64_t size, int64_t exponent) {
+    mp_srcptr limbs = input;
+    if (size == 0 || ((size == 1 || size == -1) && limbs[0] == 0)) return 0.0;
+    const __mpz_struct value = { ._mp_alloc = 0, ._mp_size = (int)size, ._mp_d = (mp_ptr)limbs };
+    if (exponent == 0) return mpz_get_d(&value);
+    long scale = 0;
+    double fraction = mpz_get_d_2exp(&scale, &value);
+    /* Preserve the original LP64 wrapper's narrowing at the C-int ldexp ABI
+     * without introducing signed-overflow UB in the intermediate addition. */
+    return ldexp(fraction, (int32_t)((uint64_t)scale + (uint64_t)exponent));
 }

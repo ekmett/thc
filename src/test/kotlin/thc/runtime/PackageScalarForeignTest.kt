@@ -86,6 +86,23 @@ class PackageScalarForeignTest {
         }
     }
 
+    @Test fun safeCallDoesNotMatchAnUnsafeComponentAdapter() {
+        val original = link("safe-unit", "DoubleRep")
+        val safe = PackageScalarLink(original.unit, original.target, original.componentSha256, original.bitcodeSha256,
+            original.bytes, original.abi.map { it.copy(safety = "safe") })
+        val descriptor = mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to "stg_sig_install",
+            "unit" to "safe-unit", "isFunction" to true), "convention" to "ccall", "safety" to "safe",
+            "arity" to 2L, "suppliedArity" to 2L, "argumentReps" to listOf(scalar("DoubleRep", false), scalar(null, false)),
+            "resultRep" to result("DoubleRep", false))
+        fun validate(link: PackageScalarLink, safety: String = "safe") = CorePackageScalarForeign.validate(
+            mapOf("foreignCall" to (descriptor + ("safety" to safety)), "rep" to result("DoubleRep")),
+            listOf(scalar("DoubleRep"), scalar(null)), listOf(false, false), result("DoubleRep"), listOf(link))
+        assertEquals("safe", validate(safe)!!.signature.safety)
+        assertThrows(RuntimeFault::class.java) { validate(original) }
+        assertThrows(RuntimeFault::class.java) { validate(safe, "unsafe") }
+        assertThrows(RuntimeFault::class.java) { validate(safe, "interruptible") }
+    }
+
     @Test fun capiByteStorageAndAddressesKeepTheirExactVoidWorkerShape() {
         for (rep in listOf("ByteArray#", "MutableByteArray#", "AddrRep")) {
             val signature = PackageScalarSignature("wrapper", "unused", listOf(rep), "void", "capi")

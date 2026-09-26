@@ -43,11 +43,13 @@ class OriginalGmpTest {
             listOf("pre", "post").flatMap { stage -> listOf(
                 "$prefix/$stage/core/OriginalGmpAudit.json", "$prefix/$stage/core/THC.InterfaceClosure.json") }, "$prefix/")
         val rows = json("$prefix/oracle.json") as List<Map<String, Any?>>
-        assertEquals(92, rows.size)
+        assertEquals(296, rows.size)
         assertEquals(GmpForeignOp.entries.map { it.symbol }.toSet(), rows.map { it["symbol"] }.toSet())
         assertEquals(mapOf("originalAdd" to 15, "originalSub" to 15, "originalAddWord" to 8,
             "originalMulWord" to 8, "originalCmp" to 5, "originalMul" to 4, "originalDivWord" to 12,
-            "originalModWord" to 5, "originalQuotRem" to 8, "originalQuot" to 4, "originalRem" to 8),
+            "originalModWord" to 5, "originalQuotRem" to 8, "originalQuot" to 4, "originalRem" to 8,
+            "originalRShift" to 48, "originalRShiftNegative" to 24, "originalGetDouble" to 84,
+            "originalEncodeDouble" to 48),
             rows.groupingBy { it["entry"] as String }.eachCount())
         for (stage in listOf("pre", "post")) for (entry in rows.map { it["entry"] as String }.toSet()) {
             val audit = json("$prefix/$stage/$entry.audit.json") as Map<String, Any?>
@@ -76,7 +78,10 @@ class OriginalGmpTest {
         val arguments: Array<Any?> = when (row["entry"]) {
             "originalAdd", "originalSub", "originalMul", "originalQuot", "originalRem" ->
                 arrayOf(output, left, row["leftCount"], right, row["rightCount"])
-            "originalAddWord", "originalMulWord" -> arrayOf(output, left, row["leftCount"], row["word"])
+            "originalAddWord", "originalMulWord", "originalRShift", "originalRShiftNegative" ->
+                arrayOf(output, left, row["leftCount"], row["word"])
+            "originalGetDouble" -> arrayOf(left, row["word"], row["fractional"])
+            "originalEncodeDouble" -> arrayOf(row["word"], row["fractional"])
             "originalCmp" -> arrayOf(left, right, row["leftCount"])
             "originalDivWord" -> arrayOf(output, row["fractional"], left, row["leftCount"], row["word"])
             "originalModWord" -> arrayOf(left, row["leftCount"], row["word"])
@@ -117,7 +122,7 @@ class OriginalGmpTest {
         for (stage in listOf("pre", "post")) {
             val source = module(stage)
             val calls = OriginalStdioChecks.foreignCalls(source)
-            assertEquals(11, calls.size)
+            assertEquals(15, calls.size)
             assertEquals(GmpForeignOp.entries.toSet(), calls.map { call ->
                 val metadata = call[6] as Map<*, *>
                 CoreGmpForeign.validate(metadata, (call[2] as List<List<Any?>>).map {
@@ -145,7 +150,8 @@ class OriginalGmpTest {
                                     // The source-pure cmp/mod consumers are genuine global
                                     // aliases. The ordinary host dispatcher forces their CAF
                                     // and applies the resulting closure, retaining captures.
-                                    assertEquals(row["result"], Calls.target(host, arrayOf(value, observation.arguments)), label)
+                                    val returned = Calls.target(host, arrayOf(value, observation.arguments))
+                                    assertEquals(row["result"], if (returned is Double) returned.toRawBits() else returned, label)
                                     assertArrayEquals(bytes(row["leftAfter"]), observation.left, "$label left")
                                     assertArrayEquals(bytes(row["rightAfter"]), observation.right, "$label right")
                                     assertArrayEquals(bytes(row["outputAfter"]), observation.output, "$label output")

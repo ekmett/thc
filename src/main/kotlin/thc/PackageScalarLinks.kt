@@ -7,14 +7,14 @@ import java.util.HexFormat
 
 /** The C entry is namespaced by the complete component recipe, not the source symbol. */
 internal data class PackageScalarSignature(val symbol: String, val entry: String,
-    val arguments: List<String>, val result: String, val convention: String = "ccall")
+    val arguments: List<String>, val result: String, val convention: String = "ccall", val safety: String = "unsafe")
 
 internal class PackageScalarLink(val unit: String, val target: String,
     val componentSha256: String, val bitcodeSha256: String, val bytes: ByteArray,
-    val abi: List<PackageScalarSignature>) {
+    val abi: List<PackageScalarSignature>, val format: String = "llvm-bitcode") {
     fun same(other: PackageScalarLink): Boolean = this === other || unit == other.unit && target == other.target &&
         componentSha256 == other.componentSha256 && bitcodeSha256 == other.bitcodeSha256 &&
-        abi == other.abi && bytes.contentEquals(other.bytes)
+        abi == other.abi && format == other.format && bytes.contentEquals(other.bytes)
 }
 
 internal data class PackageScalarAdmission(val link: PackageScalarLink, val proved: Set<String>)
@@ -90,7 +90,9 @@ internal object PackageScalarLinks {
         val fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" +
             if (inputs) " buildInputs" else "")
         if (inputs) check(fields["buildInputs"] is Map<*, *>, "build inputs record")
-        check(version(fields["schema"], 1) && fields["format"] == "llvm-bitcode" &&
+        val format = text(fields["format"])
+        check(version(fields["schema"], 1) && (format == "llvm-bitcode" || native && format == "llvm-embedded-elf" &&
+            System.getProperty("os.name") == "Linux") &&
             fields["profile"] == (if (native) "thc-package-c-ffi-v1" else "thc-local-scalar-ccall-v1"), "link profile")
         val unit = text(fields["unit"])
         check(unit == module["unit"], "component owner")
@@ -113,25 +115,28 @@ internal object PackageScalarLinks {
             check(arguments.all { it in admitted } && entry["result"] in
                 (if (native) nativeReps - setOf("ByteArray#", "MutableByteArray#") + "void" else reps), "C ABI")
             val convention = if (native) text(entry["convention"]) else "ccall"
-            check(!native || convention in setOf("ccall", "capi") && entry["safety"] == "unsafe", "unsupported C calling convention/safety")
-            PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention)
+            val safety = if (native) text(entry["safety"]) else "unsafe"
+            check(!native || convention in setOf("ccall", "capi") && (safety == "unsafe" || safety == "safe" &&
+                entry["result"] != "AddrRep" && arguments.none { it in setOf("AddrRep", "ByteArray#", "MutableByteArray#") }),
+                "unsupported C calling convention/safety")
+            PackageScalarSignature(name, entry["entry"] as String, arguments.map { it as String }, entry["result"] as String, convention, safety)
         }
-        val ordered = compareBy<PackageScalarSignature>({ it.symbol }, { it.convention },
+        val ordered = compareBy<PackageScalarSignature>({ it.symbol }, { it.convention }, { it.safety },
             { it.arguments.joinToString("\u0000") }, { it.result })
         check(abi.isNotEmpty() && abi == abi.sortedWith(ordered) &&
-            abi.map { listOf(it.symbol, it.convention, it.arguments, it.result) }.distinct().size == abi.size,
+            abi.map { listOf(it.symbol, it.convention, it.safety, it.arguments, it.result) }.distinct().size == abi.size,
             "sorted unique ABI")
         val bySymbol = abi.groupBy { it.symbol }
         bySymbol.values.forEach { variants ->
             check(native || variants.size == 1, "duplicate scalar ABI symbol")
-            check(variants.map { listOf(it.convention, it.arguments.map { rep ->
+            check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
                 if (rep in setOf("ByteArray#", "MutableByteArray#")) "AddrRep" else rep }, it.result) }.distinct().size == 1,
                 "conflicting C ABI variants")
-            check(variants.map { listOf(it.convention, it.arguments.map { rep ->
+            check(variants.map { listOf(it.convention, it.safety, it.arguments.map { rep ->
                 if (rep == "MutableByteArray#") "ByteArray#" else rep }, it.result) }.distinct().size == variants.size,
                 "ambiguous byte-array mutability variants")
         }
-        val link = PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi)
+        val link = PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi, format)
         if (native && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"),
                 "foreign products lack import provenance")
@@ -172,18 +177,19 @@ internal object PackageScalarLinks {
             check((item["header"] == null || native && item["header"] is String &&
                 (item["header"] as String).isNotEmpty() && '\u0000' !in (item["header"] as String)) &&
                 item["unit"] in listOf(null, unit) && (item["isFunction"] == true || native && convention == "capi" && item["isFunction"] == false) &&
-                convention in (if (native) setOf("ccall", "capi") else setOf("ccall")) && item["safety"] == "unsafe" &&
-                item["normalizationRole"] == "representational", "static unsafe C import")
+                convention in (if (native) setOf("ccall", "capi") else setOf("ccall")) &&
+                item["safety"] in (if (native) setOf("unsafe", "safe") else setOf("unsafe")) &&
+                item["normalizationRole"] == "representational", "static supported C import")
             type(item["declaredType"]); type(item["normalizedType"])
             text(item["symbol"])
             val emitted = record(item["emitted"], "symbol unit convention safety arguments result")
             val name = if (native) text(emitted["symbol"]) else text(item["symbol"])
             val signature = requireNotNull(bySymbol[name]?.singleOrNull {
-                it.convention == convention && emitted["arguments"] == it.arguments + "void" &&
+                it.convention == convention && it.safety == item["safety"] && emitted["arguments"] == it.arguments + "void" &&
                     emitted["result"] == (if (it.result == "void") listOf("void") else listOf("void", it.result))
             }) { "Unlinked typed package C import variant: $name" }
             check(emitted["symbol"] == name && emitted["unit"] == unit && emitted["convention"] == signature.convention && convention == signature.convention &&
-                emitted["safety"] == "unsafe" && emitted["arguments"] == signature.arguments + "void" &&
+                emitted["safety"] == signature.safety && emitted["arguments"] == signature.arguments + "void" &&
                 emitted["result"] == (if (signature.result == "void") listOf("void") else listOf("void", signature.result)), "emitted ABI differs from compiled C")
             proved.add(signature.entry)
         }

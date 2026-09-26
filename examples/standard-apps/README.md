@@ -26,7 +26,9 @@ concrete frontier includes original `array` byte-array `memcpy`, `bytestring`
 Neither result is a guest application success. Later runtime improvements must
 be checked by rerunning the actual commands, not inferred from primop counts.
 
-## Demonstrated guest workload
+## Demonstrated guest workloads
+
+### HsColour
 
 HsColour 1.25 now passes actual THC `--version`, `--help`, and HTML generation
 from `TinyMath.hs`, using the metadata-only overlay below. Its original Haskell
@@ -47,9 +49,32 @@ memory/sentinel fix `c2055888`, guest environment/realloc `bb9462e3`, Unix
 unlink/original-interface admission `ee52423b`, and linear Core JSON exporter
 `e6eddb52`. The memory fixture independently passes native comparisons in the
 same four backend/mode combinations. The original unchanged HsColour package
-still has the declared-module limitation documented below. Alex, Happy and
-doctest are not claimed as guest successes by this checkpoint; their native
+still has the declared-module limitation documented below. That checkpoint did
+not establish Alex, Happy or doctest guest successes; their native
 baselines and genuine guest retry recipes remain below.
+
+### Happy
+
+Happy 2.2.1 now passes actual THC `--version` and parser generation from
+`TinyParser.y`, with unchanged upstream application and library sources.
+The top-level `happy-lib` library only reexports its five implementation
+libraries; it legitimately owns no Core. The driver now retains its original
+GHC registration and checks every definite reexport against the resolved
+dependency closure and captured provider module. No module bodies are invented.
+
+On runtime `a8774e09` with this reexport-only admission, the complete closure
+passes strict audit: 89,602 supplied bindings, 5,356 reachable, zero missing
+globals and zero issues. Guest `--version` stdout matches native byte-for-byte.
+Parser generation passes both handoff modes in both backends. All four guest
+outputs match the independent native 29,611-byte parser source (SHA-256
+`8abf4eed3720c5f02442ae914562879ffc63132114b56318b2735e0cbd50917f`), and native GHC
+compiles each generated parser, which prints `3` followed by a newline.
+
+Bytecode uses full executable startup/shutdown. AST uses the original raw
+`happy-2.2.1-inplace-happy:Main.main` entry; Happy closes its output file itself.
+This is execution of the original generator in THC, not native delegation,
+but does not establish general AST executable startup or whole-program JIT
+retention. The generated parsers themselves were tested with native GHC.
 
 ## Toolchain
 
@@ -70,6 +95,7 @@ index state):
 | hscolour-1.25 | `54ce30da55599e872fd38d927aa518369e2971b284acc67ed0caac6ae14cc77c` |
 | alex-3.5.4.2 | `df481dc960e2c59a30395f7335031fd4ef8773b8a42894a4f2320e00ff474418` |
 | happy-2.2.1 | `67199e97d398403b433be8490440e1ed4c1dc3f03f9de737c512bad1ca9f9e59` |
+| happy-lib-2.2.1 | `415ae0463233b7a73027a7f7409bc12208a72946ebf22eda584ac9454f3c0b67` |
 | doctest-0.25.0.2 | `e61383f35832987af781602c551347262919eb81537d5e7839edbb0fef920013` |
 
 Fetch with `cabal get PACKAGE-VERSION --index-state=2026-09-24T12:38:18Z
@@ -114,7 +140,11 @@ replace it with native execution or a synthetic Core module.
 For a source-tree Alex executable, export `alex_datadir="$ALEX_SOURCE/data"`
 for both the native and THC commands so its original `Paths_alex` module finds
 the actual packaged templates. This is a data-file location, not a replacement
-lexer generator. Native commands are:
+lexer generator. Likewise, unpack the pinned `happy-lib-2.2.1` archive and set
+`happy_lib_datadir="$HAPPY_LIB_SOURCE/data"` for both Happy commands when the
+temporary Cabal installation supplying the captured `Paths_happy_lib` no longer
+exists. The original templates and application sources remain unchanged.
+Native commands are:
 
 ```sh
 "$ALEX" -o "$OUT/Lexer.hs" "$INPUTS/TinyLexer.x"

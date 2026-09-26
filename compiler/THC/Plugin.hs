@@ -26,6 +26,7 @@ import GHC.Types.SourceError (throwErrors)
 import GHC.Driver.Errors.Types (GhcMessage(..))
 import GHC.Types.SourceText (SourceText(..))
 import GHC.Types.Name.Reader (RdrName(..))
+import GHC.Types.Name.Occurrence (occNameMangledFS)
 import GHC.Utils.Encoding.UTF8 (utf8DecodeByteString)
 import GHC.Builtin.Names (ioTyConName)
 import GHC.Builtin.Types (intTy, doubleTy, unitTy)
@@ -283,8 +284,14 @@ pretty d = showSDoc (dynFlags d) . ppr
 
 nameKey :: Name -> String
 nameKey n = case nameModule_maybe n of
-  Just m -> unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m) ++ "." ++ occNameString (nameOccName n)
-  Nothing -> occNameString (nameOccName n) ++ "_" ++ showSDocUnsafe (ppr (nameUnique n))
+  Just m -> unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m) ++ "." ++ occurrence
+  Nothing -> occurrence ++ "_" ++ showSDocUnsafe (ppr (nameUnique n))
+  where
+    -- GHC 9.14 gives selectors a constructor-qualified field namespace. An
+    -- ordinary exported alias can have the same spelling as its selector;
+    -- discarding the namespace merges the two IDs and creates a self-loop.
+    -- Use GHC's own symbol spelling, also shared by cross-module references.
+    occurrence = unpackFS (occNameMangledFS (nameOccName n))
 
 -- Cabal can compile the same module name in several distinct units. Keep the
 -- historical flat layout for fixtures, but let package exports preserve the

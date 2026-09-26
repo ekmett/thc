@@ -2421,11 +2421,15 @@ class OriginalGmpAuditTest(unittest.TestCase):
         '__gmpn_tdiv_qr': ((array, array, 'IntRep', array, 'IntRep', array, 'IntRep', None), None),
         'integer_gmp_mpn_tdiv_q': ((array, array, 'IntRep', array, 'IntRep', None), None),
         'integer_gmp_mpn_tdiv_r': ((array, array, 'IntRep', array, 'IntRep', None), None),
+        'integer_gmp_mpn_rshift': ((array, array, 'IntRep', 'WordRep', None), 'WordRep'),
+        'integer_gmp_mpn_rshift_2c': ((array, array, 'IntRep', 'WordRep', None), 'WordRep'),
+        'integer_gmp_mpn_get_d': ((array, 'IntRep', 'IntRep', None), 'DoubleRep'),
+        '__int_encodeDouble': (('IntRep', 'IntRep', None), 'DoubleRep'),
     }
 
     def fixture(self, symbol):
         def scalar(primitive, evaluated):
-            return dict(kind='void' if primitive is None else 'object' if primitive == self.array else 'long',
+            return dict(kind='void' if primitive is None else 'object' if primitive == self.array else 'double' if primitive == 'DoubleRep' else 'long',
                         primReps=[] if primitive is None else [primitive], evaluated=evaluated)
         arguments, output = self.signatures[symbol]
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
@@ -2460,7 +2464,7 @@ class OriginalGmpAuditTest(unittest.TestCase):
         if detail is not None:
             self.assertTrue(any(detail in str(i['detail']) for i in report['issues']), report)
 
-    def test_exact_eleven_shapes_require_explicit_capability(self):
+    def test_exact_fifteen_shapes_require_explicit_capability(self):
         self.assertEqual(set(self.signatures), core_original_foreign.GMP_SYMBOLS)
         for symbol in self.signatures:
             module = self.fixture(symbol)
