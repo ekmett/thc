@@ -11,8 +11,17 @@ import com.oracle.truffle.api.nodes.Node
 internal object AstControl {
     fun enabled(node: Node): Boolean = (node.rootNode as? FunctionRoot)?.enableAsync == true
 
-    private class ResumeChild(private val child: Any) : AstResumeStep {
+    private class ResumeChild(private val child: Any, private val node: Node) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input is AstChildSuspension) {
+                if (input.child !== child) fault("AST caller received an unrelated child cut")
+                val marker = when (child) {
+                    is Thunk -> ThunkSuspended(child, input.request)
+                    is CallSegment -> CallSegmentSuspended(child, asyncRequest = input.request, stackSpill = false)
+                    else -> fault("Invalid AST suspended child")
+                }
+                throw AstCapture(marker, SynchronousMasking.current(node)).append(this)
+            }
             val resumed = input as? ChildResume ?: fault("AST child continuation requires ChildResume")
             resumed.failure?.let { throw it }
             val valid = when (child) {
@@ -37,9 +46,9 @@ internal object AstControl {
         if (!enabled(node)) return force.execute(frame, value)
         return try { force.execute(frame, value) }
         catch (suspended: ThunkSuspended) {
-            throw AstCapture(suspended, SynchronousMasking.current(node)).append(ResumeChild(suspended.thunk))
+            throw AstCapture(suspended, SynchronousMasking.current(node)).append(ResumeChild(suspended.thunk, node))
         } catch (suspended: CallSegmentSuspended) {
-            throw AstCapture(suspended, SynchronousMasking.current(node)).append(ResumeChild(suspended.segment))
+            throw AstCapture(suspended, SynchronousMasking.current(node)).append(ResumeChild(suspended.segment, node))
         } catch (blocked: AsyncBlocked) {
             throw AstCapture(blocked.request, SynchronousMasking.current(node)).append(RetryForce(node, force, value))
         }
@@ -69,7 +78,7 @@ internal object AstControl {
         val callerMask = SynchronousMasking.current(node)
         val parkedMask = (saved.yielded as? CallSegmentSuspended)?.parkedActiveMask
         val segment = CallSegment(saved.identity, parkedMask ?: callerMask, callerMask, tupleShape ?: root.tupleResult)
-        val suspended = CallSegmentSuspended(segment, asyncRequest = saved.asyncRequest())
-        throw AstCapture(suspended, callerMask).append(ResumeChild(segment))
+        val suspended = CallSegmentSuspended(segment, asyncRequest = saved.asyncRequest(), stackSpill = saved.stackSpill())
+        throw AstCapture(suspended, callerMask).append(ResumeChild(segment, node))
     }
 }

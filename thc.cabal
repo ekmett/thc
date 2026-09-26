@@ -771,6 +771,7 @@ executable thc-fixtures
     UncaughtSelfFixtures
     ArithmeticExceptionFixtures
     MaskFunctionFixtures
+    DeepEvaluationFixtures
     InterfaceFixtures
     InstalledCacheFixtures
     InterfaceForeignFacts

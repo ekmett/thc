@@ -41,7 +41,7 @@ internal class AstTailYield(val continuation: SavedGuestContinuation, val target
 }
 
 internal object AsyncContinuations {
-    @JvmStatic fun isYieldMarker(value: Any?): Boolean = value === Unit ||
+    @JvmStatic fun isYieldMarker(value: Any?): Boolean = value === Unit || value === AstStackSpill ||
         value is ThunkSuspended || value is CallSegmentSuspended || value is AsyncRequest
 
     // Copy the delivery identity before publishing a shared continuation. Another

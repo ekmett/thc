@@ -64,6 +64,23 @@ path. AST capture also saves pending operands and caller suffixes from Java
 locals. Calls, active masks and annotation scopes form a saved continuation;
 ordinary execution does not allocate continuation records at each poll.
 
+Async-enabled AST roots also use these continuations to bound nested calls and
+thunk forcing. At the depth limit, they save the pending computation before
+entering another body and unwind to the current guest entry's driver. That
+driver resumes saved updates iteratively. This cut is not an asynchronous
+request: it does not enqueue, deliver or acknowledge an exception. An actual
+async request follows its saved handler scopes or the guest entry's normal
+uncaught-delivery protocol.
+Public calls, forked actions and reentrant callbacks have separate drivers, so
+an autonomous cut is consumed inside its guest extent. Completed effects,
+shared updates, masks and pending caller operands remain in their saved scopes.
+This support requires async-enabled AST; other backends and modes keep their
+existing stack behavior. A cut inside an active STM transaction is explicitly
+unsupported and aborts the attempt before publishing a saved continuation.
+Inline tuple carriers in async AST calls remain virtual at creation, but a cold
+capture can retain them as owned storage. Capture therefore need not repeatedly
+deoptimize compiled callers, and it does not retain a tuple-pool loan.
+
 When an evaluator abandons a shared thunk, the continuation replaces its
 original target and environment. Another Java thread can claim and resume it.
 The asynchronous exception belongs to the interrupted evaluator, not to the

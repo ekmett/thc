@@ -87,6 +87,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" closure-inspection
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
+"$fixture_bin" deep-evaluation
 "$fixture_bin" interface-core
 "$fixture_bin" record-fields
 python3 scripts/prepare-managed-md5.py
