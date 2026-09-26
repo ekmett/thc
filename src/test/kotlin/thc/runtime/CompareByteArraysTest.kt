@@ -221,6 +221,41 @@ class CompareByteArraysTest {
             } finally { context.leave() }
         }
     }
+    @Test fun mixedHeapPinnedAndImmutableInputsUseFirstInstalledComparisons() {
+        fun variants(bytes: ByteArray): List<Any> = listOf(bytes,
+            ManagedAllocation.mutable(bytes.size.toLong(), 8).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
+            ManagedAllocation.mutable(bytes.size.toLong(), 8, pinned = true).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
+            ManagedAllocation.immutable(bytes, 8))
+        val a = ByteArray(65) { (it * 61 + 128).toByte() }
+        val b = a.copyOf().also { it[64] = (it[64].toInt() xor 128).toByte() }
+        val left = variants(a); val right = variants(b)
+        val ranges = listOf(Triple(0L, 0L, 0L), Triple(65L, 65L, 0L), Triple(0L, 0L, 65L),
+            Triple(1L, 1L, 64L), Triple(3L, 4L, 31L), Triple(64L, 64L, 1L))
+        for (inlining in listOf(false, true)) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val p = program(language, synthetic(), backend)
+                val target = p.entryTarget("entry")
+                fun exercise(compiled: Boolean) {
+                    for (first in left) for (second in right) for ((from, to, size) in ranges) {
+                        val expected = ManagedByteArray.compare(a, from, b, to, size).compareTo(0)
+                        val before = count(p)
+                        val result = Calls.target(target, arrayOf(0L, first, from, second, to, size)) as Long
+                        assertEquals(expected, result.compareTo(0))
+                        if (compiled) {
+                            assertEquals(before + 1, count(p), "$backend/inlining=$inlining first installed mixed-storage call")
+                            valid(target, backend)
+                        }
+                        released(language)
+                    }
+                }
+                exercise(false)
+                compile(target)
+                exercise(true)
+            } finally { context.leave() }
+        }
+    }
     @Test fun exactSaturationLevityAndPrimitiveOccurrenceAndCarrierProofsAreMandatory() {
         for (backend in listOf("ast", "bytecode")) context().use { context ->
             context.initialize("thc"); context.enter()

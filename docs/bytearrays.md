@@ -15,9 +15,10 @@ The [Double-array extension](double-arrays.md) uses the same backing storage and
 typed Double result destinations for `readDoubleArray#`, `writeDoubleArray#`,
 and `indexDoubleArray#`.
 
-`ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference,
-represented directly by a mutable JVM primitive `byte[]`, with no wrapper
-object or per-byte boxing. They are
+`ByteArray#` and `MutableByteArray# s` are each one unlifted boxed reference.
+Guest allocations use an owner containing ordinary heap storage or pinned
+native storage; host-supplied primitive `byte[]` values retain their typed
+fast paths. Neither representation boxes individual bytes. They are
 not unboxed tuples. Allocation and freeze return logical
 `(# State# s, reference #)` results: two logical components, zero storage for
 the State# component, and one physical reference destination. Saturated
@@ -37,8 +38,9 @@ of native heap allocation rounding.
 `copyByteArray# :: ByteArray# -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s`
 returns only the zero-width state token. Both references retain exact unlifted
 boxed proofs. Fixed-child AST nodes and a typed bytecode operation evaluate all
-six operands before copying. The managed implementation uses `System.arraycopy`
-after checking both ranges at full width: nonnegative offsets/count, offsets at
+six operands before copying. Raw arrays use `System.arraycopy`; owned allocations
+copy their existing segments while preserving managed pointer cells. Both
+ranges are checked at full width: nonnegative offsets/count, offsets at
 most the array size, and count at most `size - offset`. It does not add offset
 and count before validation or narrow unchecked values. Zero-length copies at
 the ends are valid. GHC explicitly forbids the same array in immutable and mutable
@@ -52,8 +54,9 @@ allocation can still fail because of JVM limits or available memory. Reads and
 writes reject offsets outside `[0, size)` with `RuntimeFault`, without truncating
 large offsets. Native results for invalid accesses are not compared. Java's
 initial zeroes are not a promise about native uninitialized memory. This slice
-does not support raw pointers, pinned arrays, FFI, concurrent access, or unsafe
-alias misuse.
+does not authorize unsafe alias misuse. Owned storage also supports the separate
+[pinned/address operations](pinned-memory.md); comparison does not expose or
+convert that storage into a native pointer.
 
 The primitive contracts come from the pinned
 [GHC primop declarations](https://gitlab.haskell.org/ghc/ghc/-/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/compiler/GHC/Builtin/primops.txt.pp),
@@ -96,6 +99,21 @@ Both ranges are checked at full Long width before narrowing: nonnegative offsets
 and length, offsets no greater than size, and length no greater than
 `size - offset`. Empty ranges at either endpoint are valid. Comparing overlapping
 ranges of the same immutable array is valid and does not mutate storage.
+
+Raw/raw comparisons keep `Arrays.compareUnsigned`. If either argument is an
+allocation owner, comparison uses `MemorySegment.mismatch` on the existing
+storage and reads the two unsigned bytes at the first mismatch. It does not
+snapshot either range, copy immutable images, pin heap arrays, or expose a raw
+storage alias. Full logical-range and pointer-cell overlap checks run before
+the scan, even for aliases or an early mismatch; a pointer outside the compared
+range is harmless. Shrunk owners use their current logical size.
+
+Both owners remain locked through validation and comparison. Comparisons and
+copies share ascending identity-hash ordering and the same collision lock,
+including opposed operations. Mixed raw/owned comparisons retain the owner
+lock without changing the raw-array concurrency contract. The FFM path has a
+Truffle boundary to keep cold bounds/error formatting out of guest partial
+evaluation; the typed raw/raw path is unchanged.
 
 `cabal run exe:thc-fixtures --offline -- compare-byte-arrays` exports genuine pre/post-Tidy public
 ShortByteString `Ord`, `isPrefixOf`, and `isSuffixOf` workloads plus direct range
