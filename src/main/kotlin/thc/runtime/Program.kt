@@ -352,6 +352,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     @Child private var calls = ThunkTargetCache(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     private val tailCallProfile = BranchProfile.create()
+    private val resumeProfile = BranchProfile.create()
+    private val suspensionProfile = BranchProfile.create()
     @CompilationFinal @Volatile private var seenThunk = false
     @Suppress("UNUSED_PARAMETER")
     fun execute(frame: VirtualFrame, original: Any?): Any? {
@@ -370,7 +372,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 3 -> rethrowFailure(original)
                 4 -> fault("Interrupted thunk has no resumable continuation")
             }
-            val observed = if (original.state == 5) savedGuestContinuation(original.value) else null
+            val observed = if (original.state == 5) {
+                resumeProfile.enter()
+                savedGuestContinuation(original.value)
+            } else null
             val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
             // update/resume helpers needs this caller's frame; materializing
@@ -502,16 +507,19 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 val claim = synchronized(original.monitor) {
                     when (original.state) {
                         0 -> { original.owner = Thread.currentThread(); original.state = 1; claimedHere = true; 0 }
-                        5 -> if ((observed != null && original.value !== observed.identity) ||
-                            (observed == null &&
-                                (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
-                            continuation = savedGuestContinuation(original.value)
-                                ?: fault("Suspended thunk has no guest continuation")
-                            original.value = null // One owner consumes the one-shot continuation.
-                            original.owner = Thread.currentThread()
-                            original.state = 1
-                            claimedHere = true
-                            0
+                        5 -> {
+                            resumeProfile.enter()
+                            if ((observed != null && original.value !== observed.identity) ||
+                                (observed == null &&
+                                    (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
+                                continuation = savedGuestContinuation(original.value)
+                                    ?: fault("Suspended thunk has no guest continuation")
+                                original.value = null // One owner consumes the one-shot continuation.
+                                original.owner = Thread.currentThread()
+                                original.state = 1
+                                claimedHere = true
+                                0
+                            }
                         }
                         1 -> if (original.owner === Thread.currentThread()) 2 else 1
                         else -> 3
@@ -781,6 +789,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             }
             val saved = savedGuestContinuation(result)
             if (saved != null) {
+                suspensionProfile.enter()
                 if (saved.yielded is DelimitedCut)
                     fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
@@ -2141,31 +2150,39 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot < 0 && local.proof.kind == CoreKind.VOID } }
             .forEach { scope.bindVoid(it, outer.locals.getValue(it).proof) }
         val captured = freeLocals.filter { outer.locals.getValue(it).let { local -> local.slot >= 0 || local.proof.kind != CoreKind.VOID } }
-        captured.forEach { id ->
+        val captureFields = arrayListOf<Local>()
+        val captureDestinations = arrayListOf<Int>()
+        val vectorDestinations = arrayListOf<IntArray?>()
+        for (id in captured) {
             val local = outer.locals.getValue(id)
-            if (local.proof.isVector) {
+            if (local.proof.isTypedTransport) {
                 CoreRepresentations.requireInput(local.proof)
-                if (local.cell || local.tupleSlots?.size != 1)
-                    throw UnsupportedCore("Vector capture requires one raw-vector local")
-            } else CoreRepresentations.requireScalar(local.proof, "capture")
+                val fields = ArgumentLayout.leaves(local.proof)
+                val sources = local.tupleSlots
+                if (local.cell || sources?.size != fields.size)
+                    throw UnsupportedCore("Aggregate capture requires exact typed locals")
+                // Logical aggregates remain aliases of owned typed properties.
+                // Void leaves have no fields; vector leaves keep their raw species.
+                val destinations = IntArray(fields.size) { index ->
+                    val field = fields[index]
+                    val destination = scope.layout.bind("$id captured field $index")
+                    captureFields += Local(sources[index], field.isLong, field, false,
+                        tupleSlots = if (field.isVector) intArrayOf(sources[index]) else null)
+                    vectorDestinations += if (field.isVector) intArrayOf(destination) else null
+                    captureDestinations += destination
+                    destination
+                }
+                scope.bindTuple(id, local.proof, destinations)
+            } else {
+                CoreRepresentations.requireScalar(local.proof, "capture")
+                captureFields += local
+                vectorDestinations += null
+                captureDestinations += scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
+            }
         }
-        val captureSources = captured.flatMap { id ->
-            val local = outer.locals.getValue(id)
-            if (local.proof.isVector) local.tupleSlots!!.toList() else listOf(local.slot)
-        }.toIntArray()
-        val captureKinds = captured.map { id ->
-            val local = outer.locals.getValue(id)
-            !local.proof.isVector && local.primitive
-        }.toBooleanArray()
-        val environmentVectorSlots = arrayOfNulls<IntArray>(captured.size)
-        val environmentSlots = captured.mapIndexed { index, id ->
-            val local = outer.locals.getValue(id)
-            if (local.proof.isVector) {
-                val lanes = IntArray(1) { scope.layout.bind("$id captured vector") }
-                environmentVectorSlots[index] = lanes
-                scope.bindTuple(id, local.proof, lanes).slot
-            } else scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
-        }.toIntArray()
+        val captureSources = captureFields.map { if (it.proof.isVector) it.tupleSlots!![0] else it.slot }.toIntArray()
+        val environmentSlots = captureDestinations.toIntArray()
+        val environmentVectorSlots = vectorDestinations.toTypedArray()
         val argumentSlots = arrayListOf<Int>(); val argumentIndices = arrayListOf<Int>()
         val argumentProofs = arrayListOf<CoreRepresentation>()
         for ((index, arg) in args.withIndex()) {
@@ -2173,7 +2190,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val proof = CoreRepresentations.binder(arg).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
             if (proof.isTypedTransport) {
                 if (lifted) throw RuntimeFault("Typed formal cannot be lifted")
-                val fields = TupleShape.flatten(proof)
+                val fields = ArgumentLayout.leaves(proof)
                 val slots = IntArray(fields.size) { leaf -> scope.layout.bind("${arg["id"]} typed input $leaf") }
                 scope.bindTuple(arg["id"] as String, proof, slots)
                 fields.forEachIndexed { leaf, field ->
@@ -2186,12 +2203,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
         }
-        val captures = if (captured.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
-            captured.map { id -> outer.locals.getValue(id).proof.takeIf { it.isVector } }.toTypedArray(), captureKinds,
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isLong && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> if (local.cell) null else local.proof.referenceCarrier() } }.toTypedArray(),
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isFloat && local.proof.evaluated } }.toBooleanArray(),
-            captured.map { outer.locals.getValue(it).let { local -> !local.cell && local.proof.isDouble && local.proof.evaluated } }.toBooleanArray())
+        val captures = if (captureFields.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
+            captureFields.map { it.proof.takeIf { proof -> proof.isVector } }.toTypedArray(),
+            captureFields.map { !it.proof.isVector && it.primitive }.toBooleanArray(),
+            captureFields.map { !it.cell && it.proof.isLong && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
+            captureFields.map { !it.cell && it.proof.isFloat && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { !it.cell && it.proof.isDouble && it.proof.evaluated }.toBooleanArray())
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
         args.forEachIndexed { index, arg ->
@@ -3363,14 +3381,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
             argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index],
-                allowEmpty = target.proofs[index].isTuple, declaredLifted = lifted).also {
+                allowEmpty = target.proofs[index].isTypedTransport, declaredLifted = lifted).also {
                 CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
             }
         }.toTypedArray()
         val typedTemps = arrayOfNulls<IntArray>(nodes.size)
         val temps = IntArray(nodes.size) { index ->
             if (target.proofs[index].isTypedTransport) {
-                typedTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
+                typedTemps[index] = IntArray(ArgumentLayout.leaves(target.proofs[index]).size) {
                     scope.layout.bind("<join typed argument $index field $it>")
                 }
                 -1
@@ -3385,19 +3403,19 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         definitions.forEach { definition ->
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
-                CoreRepresentations.requireJoinInput(proof)
+                CoreRepresentations.requireInput(proof)
                 if (proof.isTypedTransport && representation(it)) throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 outer.locals[id]?.let { captured ->
                     if (captured.proof.isTypedTransport) {
-                        // A join stays in this activation: its lexical tuple is already
+                        // A join stays in this activation: its lexical aggregate is already
                         // held in typed frame slots, not in a closure environment.
                         CoreRepresentations.requireInput(captured.proof)
-                        val slots = captured.tupleSlots ?: throw RuntimeFault("Missing tuple join capture slots")
-                        if (slots.size != TupleShape.flatten(captured.proof).size || slots.any { it < 0 })
-                            throw RuntimeFault("Tuple join capture disagrees with its physical slots")
+                        val slots = captured.tupleSlots ?: throw RuntimeFault("Missing typed join capture slots")
+                        if (slots.size != ArgumentLayout.leaves(captured.proof).size || slots.any { it < 0 })
+                            throw RuntimeFault("Typed join capture disagrees with its physical slots")
                     } else CoreRepresentations.requireScalar(captured.proof, "join capture")
                 }
             }
@@ -3415,7 +3433,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
                 if (proof.isTypedTransport) {
-                    val lanes = IntArray(TupleShape.flatten(proof).size) {
+                    val lanes = IntArray(ArgumentLayout.leaves(proof).size) {
                         scope.layout.bind("${parameter["id"]} join typed field $it")
                     }
                     scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), lanes)

@@ -484,6 +484,51 @@ for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFul
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
+for ((taskName, dense) in listOf("sumInputFullCoreTest" to false, "sumInputFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original sum arguments, PAP prefixes and captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SumInputNativeTest") }
+        inputs.files(fileTree("build/sum-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled sum checks require a fresh process") { true }
+        doFirst { check(file("build/sum-input/manifest.json").isFile) { "Run thc-fixtures sum-input" } }
+    }
+}
+for ((taskName, dense) in listOf("tupleCaptureFullCoreTest" to false, "tupleCaptureFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original tuple closure/thunk captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.TupleCaptureNativeTest") }
+        inputs.files(fileTree("build/tuple-capture") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled tuple capture checks require a fresh process") { true }
+        doFirst { check(file("build/tuple-capture/manifest.json").isFile) { "Run thc-fixtures tuple-capture" } }
+    }
+}
+for ((taskName, dense) in listOf("sumJoinInputFullCoreTest" to false, "sumJoinInputFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original sum join inputs/captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SumJoinInputNativeTest") }
+        inputs.files(fileTree("build/sum-join-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }
+        doFirst { check(file("build/sum-join-input/manifest.json").isFile) { "Run thc-fixtures sum-join-input" } }
+    }
+}
 tasks.register<Test>("graphWorkloadTest") {
     group = "verification"
     description = "Checks the real containers BFS example against native GHC and an independent shortest-distance model."

@@ -1060,7 +1060,8 @@ class AuditTest(unittest.TestCase):
         producer[2] = ['case', original, 'held',
                        [['default', None, [], region, dict(binders=[])]],
                        dict(rep=proof, binder=dict(id='held', lifted=False, rep=proof))]
-        report = run_tuple(module)
+        disabled = dict(TUPLE_CAP, aggregateCaptures=[])
+        report = audit_core.Audit([('tuple.json', module)], disabled).run(['root'])
         self.assertIn('unboxed-tuple capture', [i['detail'] for i in report['issues']])
 
     def test_recursive_join_identity_shadows_outer_tuple_for_capture_checks(self):
@@ -1571,7 +1572,7 @@ class EmptyTupleInputTests(unittest.TestCase):
             call[2][0] = ['void', dict(rep=self.state)]
             self.assertIn('aggregate-shape', {i['code'] for i in self.audit(module)['issues']}, local_alias)
 
-    def test_empty_formal_cannot_be_captured_by_a_nested_function(self):
+    def test_empty_formal_capture_is_logical_but_requires_capture_capability(self):
         module = self.fixture([self.empty])
         worker = module['bindings'][1]
         inner = ['lam', [dict(id='x', lifted=False, rep=LONG)],
@@ -1579,7 +1580,9 @@ class EmptyTupleInputTests(unittest.TestCase):
         worker['expr'][2] = inner
         worker['expr'][3]['resultRep'] = CLOSURE
         module['bindings'][0]['expr'][6]['rep'] = CLOSURE
-        self.assertIn('unboxed-tuple capture', [i['detail'] for i in self.audit(module)['issues']])
+        self.assertTrue(self.audit(module)['accepted'])
+        self.assertIn('unboxed-tuple capture', [i['detail'] for i in
+            self.audit(module, cap=dict(self.capability, aggregateCaptures=[]))['issues']])
 
     def test_genuine_native_empty_input_exports_are_accepted(self):
         paths = [ROOT.parent / f'build/empty-tuple-input/{stage}-core/EmptyTupleInputAudit.json' for stage in ['pre', 'post']]
@@ -1884,7 +1887,12 @@ class LibdwUnavailableAuditTest(unittest.TestCase):
 
 class OriginalSignalDeclarationTest(unittest.TestCase):
     def test_exact_call_requires_capability_and_implicit_original_dispatcher(self):
-        resource = ROOT.parent / 'src/test/resources/core/original-signal-install-descriptor.json'
+        for name in ('original-signal-install-descriptor.json', 'original-unix-signal-install-descriptor.json'):
+            with self.subTest(resource=name):
+                self.check_original(name)
+
+    def check_original(self, name):
+        resource = ROOT.parent / 'src/test/resources/core' / name
         declaration = json.loads(resource.read_text())
         fixture = LibdwUnavailableAuditTest()
         module = fixture.fixture(declaration)
@@ -1902,6 +1910,12 @@ class OriginalSignalDeclarationTest(unittest.TestCase):
             wrong = copy.deepcopy(module)
             wrong['bindings'][0]['expr'][1][index]['rep'] = LONG
             self.assertFalse(fixture.audit(wrong, enabled)['accepted'])
+        for unit in (None, 'unix', 'unix-2.8.7.0-inplace', 'other', 1):
+            wrong = copy.deepcopy(declaration)
+            wrong['target']['unit'] = unit
+            malformed = fixture.fixture(wrong)
+            malformed['bindings'].append(bind(dispatcher, lit(0)))
+            self.assertFalse(fixture.audit(malformed, enabled)['accepted'])
 
 
 class NativeMallocDeclarationTest(unittest.TestCase):
@@ -2001,13 +2015,20 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='bytestring-0.12.2.0-inplace', isFunction=True),
                 convention='ccall', safety='unsafe', arity=4, suppliedArity=4,
                 argumentReps=list(map(scalar, ['AddrRep', second, 'Word64Rep', None])), resultRep=output)
-            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
-            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
-            self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+            for unit in ('bytestring-0.12.2.0-inplace', 'bytestring-0.12.2.0-119b',
+                         'bytestring-0.12.2.0-5637', 'bytestring-0.12.2.0-3f3f', 'bytestring-0.12.2.0'):
+                declaration['target']['unit'] = unit
+                self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], (symbol, unit))
+                disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != symbol])
+                self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'], (symbol, unit))
             for key, value in [('safety', 'safe'), ('convention', 'capi'), ('arity', 3), ('schema', True)]:
                 bad = copy.deepcopy(declaration); bad[key] = value
                 self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
-            for unit in ['foreign', 'ghc-internal']:
+            for unit in ['foreign', 'ghc-internal', 'bytestring-0.12.1.0-119b',
+                         'bytestring-0.12.2.0-119b-extra', 'bytestring-0.12.2.0-',
+                         'bytestring-0.12.2.0-119b extra', 'bytestring-0.12.2.0-119b:forged',
+                         'bytestring-0.12.2.0-119b\n', 'other-bytestring-0.12.2.0-119b',
+                         None, ['bytestring-0.12.2.0-119b']]:
                 bad = copy.deepcopy(declaration); bad['target']['unit'] = unit
                 self.assertEqual(unit == 'ghc-internal' and symbol == 'memcmp', fixture.audit(fixture.fixture(bad))['accepted'])
             bad = copy.deepcopy(declaration); bad['argumentReps'][2] = scalar('WordRep')
@@ -3228,6 +3249,36 @@ class STMContractTest(unittest.TestCase):
         self.assertIn('ghc-internal:GHC.Internal.Control.Exception.Base.nestedAtomically',
                       [binding['id'] for binding in report['missingGlobals']])
         self.assertNotIn('sameTVar#', CAP['primitives'])
+
+    def test_erased_stm_newtype_action_refines_only_the_same_lifted_object_carrier(self):
+        for name in ('atomically#', 'catchRetry#', 'catchSTM#'):
+            for index, role in enumerate(CAP['managedSTMPrimitives'][name]['arguments']):
+                if role != 'action':
+                    continue
+                original = self.fixture(name)
+                binder = original['bindings'][0]['expr'][1][index]
+                binder['rep'] = dict(kind='object', primReps=['BoxedRep (Just Lifted)'], evaluated=False)
+                report = audit_core.Audit([('newtype-stm.json', original)], CAP).run(['root'])
+                self.assertTrue(report['accepted'], (name, index, report['issues']))
+                for wrong in (LONG, dict(kind='float', primReps=['FloatRep'], evaluated=True),
+                              dict(kind='address', primReps=['AddrRep'], evaluated=True),
+                              dict(kind='void', primReps=[], evaluated=True),
+                              dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+                              dict(kind='closure', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+                              dict(kind='data', primReps=['BoxedRep (Just Lifted)'], evaluated=True),
+                              dict(kind='unknown', aggregate='unboxed-tuple', components=[REFERENCE],
+                                   primReps=['BoxedRep (Just Lifted)'], evaluated=True)):
+                    for site in ('binding', 'occurrence'):
+                        changed = copy.deepcopy(original)
+                        target = (changed['bindings'][0]['expr'][1][index] if site == 'binding' else
+                                  changed['bindings'][0]['expr'][2][1][2][index][2])
+                        target['rep'] = wrong
+                        bad = audit_core.Audit([('bad-newtype-stm.json', changed)], CAP).run(['root'])
+                        self.assertFalse(bad['accepted'], (name, index, site, wrong))
+                # A stored object does not grant a missing function occurrence.
+                changed = copy.deepcopy(original)
+                changed['bindings'][0]['expr'][2][1][2][index][2]['rep'] = copy.deepcopy(binder['rep'])
+                self.assertFalse(audit_core.Audit([('bad-action.json', changed)], CAP).run(['root'])['accepted'])
 
 
 class OriginalTextForeignAuditTests(unittest.TestCase):

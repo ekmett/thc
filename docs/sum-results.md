@@ -1,7 +1,8 @@
 # Typed binary unboxed sum results
 
 Both backends execute saturated binary unboxed sum constructors, guest function
-results, local join results, forwarding and immediate cases. The exact logical alternatives remain
+results, local join results, forwarding and immediate cases. [Ordinary inputs and
+captures](sum-inputs.md) share the same layout. The exact logical alternatives remain
 separate from GHC's physical `primReps`, `tagSlot` and `alternativeSlots` evidence.
 Boxed `Either`, ordinary boxed tuples and unlifted boxed references keep their
 ordinary one-reference representation; none becomes an unboxed sum by name,
@@ -42,20 +43,20 @@ the AST copies typed tag/payload region slots to the enclosing destination and
 clears its private scratch slots; bytecode writes directly to that destination.
 Recursive backedges and zero-arity joins do not allocate sum closures or result
 loans. An outer sum-returning join is a lexical control target, not a captured
-sum value. Actual sum captures and sum join arguments remain unsupported.
+sum value. [Sum join inputs and captures](sum-inputs.md) use the same typed
+frame slots, including parallel recursive transfers.
 
 Nested sums, tuples containing sums, nonbinary sums, integer-width conversion,
 address/vector leaves, `BoxedRep Nothing` and unknown logical or physical layouts
-remain unsupported. Sum arguments, partial sum constructors, captured sums,
-ordinary sum let bindings, join arguments/captures and
-public host sum results also remain unsupported. Function values returning sums
+remain unsupported. Partial sum constructors, ordinary sum let bindings and
+public host sum inputs/results also remain unsupported. Function values returning sums
 may still pass through existing scalar/reference closure paths, but a sum value
 cannot cross those excluded boundaries. Top-level sum storage is rejected in
 both strict and diagnostic mode; diagnostic mode does not invent a heap carrier.
 Unsupported cold function paths retain the existing diagnostic trap policy.
 Exact sum fields in saturated boxed constructors are supported separately through
 [owned aggregate heap storage](aggregate-heap-fields.md), retaining their tag and
-payload projections; this does not enable ordinary sum function parameters.
+payload projections. Ordinary sum function parameters are described [separately](sum-inputs.md).
 
 `check-sum-layout.py --prepare` retains 17 layout families and 130 native/model
 rows. Six retained-sum consumers plus a GHC-eliminated scalar control are accepted;

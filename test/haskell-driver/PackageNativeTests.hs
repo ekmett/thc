@@ -8,14 +8,62 @@ import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
-import Data.List (isInfixOf)
+import Data.List (isInfixOf, isPrefixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
-import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR)
+import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
+  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR)
+import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      let source = unlines ["define i64 @caller(ptr %0, i64 %1, i64 %2) {",
+            "  %3 = call i64 @callee(ptr %0, i64 %1, i64 %2)", "  ret i64 %3", "}",
+            "define i64 @callee(ptr nocapture readonly %0, i8 zeroext %1, i32 %2) {"]
+      case nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" source of
+        Nothing -> assertFailure "missing native integer argument bridge"
+        Just (declaration,body,witnesses) -> do
+          assertEqual "exact C definition declaration" "declare i64 @callee(ptr, i8 zeroext, i32)" declaration
+          assertBool "argument low bits become explicit" ("trunc i64 %a1 to i8" `isInfixOf` body && "trunc i64 %a2 to i32" `isInfixOf` body)
+          assertBool "return ABI does not change" ("ret i64 %r" `isInfixOf` body)
+          assertEqual "exact original signature witnesses" (filter ("define " `isPrefixOf`) (lines source)) witnesses
+      mapM_ (\target -> assertEqual "target-specific ABI lowering" Nothing
+        (nativeArgumentBridge target "callee" "caller" source)) ["aarch64-unknown-linux-gnu","x86_64-pc-windows-msvc"]
+  , TestCase $ do
+      let caller = "define i64 @caller(ptr %0, i64 %1) {\n  %2 = call i64 @callee(ptr %0, i64 %1)\n  ret i64 %2\n}\n"
+          bridge callee = nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" (caller ++ callee)
+      mapM_ (\callee -> assertEqual "unsupported ABI is never guessed" Nothing (bridge callee))
+        ["define i32 @callee(ptr %0, i8 %1) {", "define i64 @callee(i64 %0, i8 %1) {",
+         "define fastcc i64 @callee(ptr %0, i8 %1) {", "define i64 @callee(ptr %0, i8 %1, ...) {",
+         "define i64 @callee(ptr byval(i64) %0, i8 %1) {", "declare i64 @callee(ptr, i8)",
+         "define i64 @callee(ptr %0, float %1) {", "define i64 @callee(ptr %0, i64 %1) {"]
+  , TestCase $ do
+      let source = "define void @caller(i32 %0, i64 %1) {\n  call void @callee(i32 %0, i64 %1)\n  ret void\n}\ndefine void @callee(i16 signext %0, i16 zeroext %1) {"
+      case nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" source of
+        Nothing -> assertFailure "missing 16-bit native bridge"
+        Just (declaration,body,_) -> do
+          assertEqual "native extension attributes survive" "declare void @callee(i16 signext, i16 zeroext)" declaration
+          assertBool "32-bit argument truncates" ("trunc i32 %a0 to i16" `isInfixOf` body)
+          assertBool "64-bit argument truncates" ("trunc i64 %a1 to i16" `isInfixOf` body)
+          assertBool "void remains void" ("  ret void\n" `isInfixOf` body)
+  , TestCase $ do
+      let source = "define i64 @caller(ptr %0, i64 %1) {\n  %2 = call i64 @callee(ptr %0, i64 %1)\n  ret i64 %2\n}\ndefine i64 @callee(ptr dereferenceable(8) %0, i8 zeroext %1) {"
+      assertBool "nested ordinary attributes preserve parameter boundaries"
+        (case nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" source of Just _ -> True; _ -> False)
+      let candidate body = "define i64 @caller(i64 %0) {\n" ++ body ++
+            "}\ndefine i64 @callee(i8 zeroext %0) {"
+      mapM_ (\body -> assertEqual "do not replace unrelated or effectful adapter work" Nothing
+        (nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" (candidate body)))
+        ["  %1 = call i64 @different(i64 %0)\n  ret i64 %1\n",
+         "  store volatile i8 1, ptr @counter\n  %1 = call i64 @callee(i64 %0)\n  ret i64 %1\n",
+         "  %1 = call i64 @callee(i64 7)\n  ret i64 %1\n",
+         "  %1 = call i64 @callee(i64 %0)\n  ret i64 0\n",
+         "  %1 = call fastcc i64 @callee(i64 %0)\n  ret i64 %1\n"]
+      let swapped = "define i64 @caller(i64 %0, i64 %1) {\n  %2 = call i64 @callee(i64 %1, i64 %0)\n  ret i64 %2\n}\ndefine i64 @callee(i8 %0, i8 %1) {"
+      assertEqual "original argument ordering is required" Nothing
+        (nativeArgumentBridge "x86_64-unknown-linux-gnu" "callee" "caller" swapped)
+  , TestCase $ do
       let validate = validateNativeWidthIR "x86_64-unknown-linux-gnu"
       mapM_ (assertEqual "exact signed wchar_t/int ABI" (Right ()) . validate)
         ["declare i32 @wcwidth(i32)","declare noundef i32 @wcwidth(i32 noundef) #0"]
@@ -201,10 +249,21 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       (nativeCompilerArguments ["--make","-hide-all-packages","-Iinclude","-O2","-odir","/build",
         "-optc-DREAL=1","-package-db","/db","-package-id","base-unit","-main-is","Main","Main.hs"])
   , TestCase $ do
-      assertEqual "ordinary C data is permitted" (Right ()) (validateNativeIR "@counter = internal global i32 0\n")
-      mapM_ (assertBool "C-level initialization obligations remain excluded" . isLeft . validateNativeIR)
-        ["@llvm.global_ctors = appending global [1 x { i32, ptr, ptr }] []\n",
-         "@llvm.global_dtors = appending global [1 x { i32, ptr, ptr }] []\n"]
+      let source = unlines ["@__dso_handle = external hidden global i8",
+            "declare void @_ZNSt8ios_base4InitC1Ev(ptr noundef nonnull align 1 dereferenceable(1)) unnamed_addr #0",
+            "declare void @_ZNSt8ios_base4InitD1Ev(ptr noundef nonnull align 1 dereferenceable(1)) unnamed_addr #1",
+            "declare i32 @__cxa_atexit(ptr, ptr, ptr) local_unnamed_addr #2"]
+          symbols = nativeCxxInitSymbols ++ nativeLifecycleSymbols
+          validate = validateNativeLifecycleIR "x86_64-unknown-linux-gnu" symbols
+      assertEqual "exact original simdutf iostream lifecycle ABI" (Right ()) (validate source)
+      assertBool "different platform ABI is not guessed" (isLeft (validateNativeLifecycleIR "aarch64-unknown-linux-gnu" symbols source))
+      mapM_ (\line -> assertBool "malformed supported lifetime declaration remains fatal" (isLeft
+        (validateNativeLifecycleIR "x86_64-unknown-linux-gnu" ["__cxa_atexit"] line)))
+        ["declare i64 @__cxa_atexit(ptr, ptr, ptr)", "declare i32 @__cxa_atexit(ptr, ptr)",
+         "declare i32 @__cxa_atexit(ptr, ptr, ...)", "declare fastcc i32 @__cxa_atexit(ptr, ptr, ptr)",
+         "declare i32 @__cxa_atexit(ptr addrspace(1), ptr, ptr)"]
+      assertBool "DSO identity must retain its actual type" (isLeft
+        (validateNativeLifecycleIR "x86_64-unknown-linux-gnu" ["__dso_handle"] "@__dso_handle = external hidden global i64"))
   , TestCase $ do
       let roots = ["/package/dist/build"]
           allRoots = roots ++ ["/package/dist/build/tool/tool-tmp"]

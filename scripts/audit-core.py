@@ -358,12 +358,16 @@ class Audit:
     def supported_tuple_join_input(self, rep):
         return (self.supported_empty_join_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateJoinInputs', []) and tuple_input_proof_error(rep,
-                    allow_vectors='join-arguments' in self.cap.get('vectorTransport', [])) is None)
+                    allow_vectors='join-arguments' in self.cap.get('vectorTransport', []), allow_addresses=True) is None)
 
     def supported_tuple_input(self, rep):
         return (self.supported_empty_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep,
-                    allow_vectors='tuple-fields' in self.cap.get('vectorTransport', [])) is None)
+                    allow_vectors='tuple-fields' in self.cap.get('vectorTransport', []), allow_addresses=True) is None)
+
+    def supported_sum(self, rep, capability):
+        return ('unboxed-sum' in self.cap.get(capability, []) and is_sum(rep) and
+                sum_proof_error(rep) is None)
 
     def supported_vector(self, rep, boundary):
         return (boundary in self.cap.get('vectorTransport', []) and is_vector(rep) and
@@ -1195,8 +1199,11 @@ class Audit:
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
                 for index, binder in enumerate(expr[1]):
-                    if is_sum(binder.get('rep')):
+                    if is_sum(binder.get('rep')) and not self.supported_sum(binder.get('rep'),
+                            'aggregateJoinInputs' if index < join_prefix else 'aggregateInputs'):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-sum formal argument')
+                    if is_sum(binder.get('rep')) and binder.get('lifted') is not False:
+                        self.issue('application-levity', owner, path, 'Sum formal must be unlifted')
                     if is_vector(binder.get('rep')) and not self.supported_vector(binder['rep'],
                             'join-arguments' if index < join_prefix else 'arguments'):
                         self.issue('vector-boundary', owner, path, 'vector formal argument')
@@ -1210,19 +1217,22 @@ class Audit:
                         self.issue('application-levity', owner, path, 'Tuple formal must be unlifted')
                 captured = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                             if self.is_tuple_value(bound[key])}
-                if any(self.is_sum_value(bound[key]) for key in (self.free_variables(expr[2]) - ids) & bound.keys()):
-                    self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
+                sum_captures = [bound[key] for key in (self.free_variables(expr[2]) - ids) & bound.keys()
+                                if self.is_sum_value(bound[key])]
                 # The consumed join lambda branches within its enclosing frame;
                 # a residual lambda still allocates an ordinary closure.
                 local_join_prefix = join_prefix > 0 and join_prefix == len(expr[1])
+                if sum_captures and not all(self.supported_sum(rep,
+                        'aggregateJoinCaptures' if local_join_prefix else 'aggregateCaptures') for rep in sum_captures):
+                    self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
                 vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                                    if self.is_vector_value(bound[key])}
                 if vector_captures and not (
                         all(self.supported_vector(bound[key], 'join-captures' if local_join_prefix else 'captures')
                             for key in vector_captures)):
                     self.issue('vector-boundary', owner, path, 'vector capture')
-                if captured and not (local_join_prefix and
-                                     'unboxed-tuple' in self.cap.get('aggregateJoinCaptures', []) and
+                if captured and not ('unboxed-tuple' in self.cap.get(
+                                     'aggregateJoinCaptures' if local_join_prefix else 'aggregateCaptures', []) and
                                      all(self.supported_tuple_input(bound[key]) for key in captured)):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
@@ -1767,6 +1777,13 @@ class Audit:
                         if registers == ['BoxedRep Nothing'] and isinstance(rep, dict) and rep.get('primReps') in (
                                 ['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']):
                             stored = dict(stored, primReps=rep['primReps'])
+                        # An erased STM newtype cast refines an opaque lifted
+                        # object to its function type without changing carrier,
+                        # levity or evaluatedness. Runtime forcing still checks
+                        # that the value is actually a closure.
+                        if (role == 'action' and isinstance(stored, dict) and stored.get('kind') == 'object' and
+                                stored.get('primReps') == ['BoxedRep (Just Lifted)']):
+                            stored = dict(stored, kind='closure')
                         if isinstance(registers, list) and (
                                 self.shape(stored) != self.shape(rep) or
                                 stored.get('kind') != 'unknown' and not mvar_role(stored, role)):
@@ -1850,7 +1867,12 @@ class Audit:
                         except ValueError as error:
                             self.issue('constructor-arity', owner, path, str(error))
                     if not sum_constructor and not heap_aggregate and is_sum(self.effective_rep(argument, bound)):
-                        self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
+                        join = isinstance(target, dict) and '_join_arity' in target
+                        if (function[0] in ('prim', 'con') or not self.supported_sum(self.effective_rep(argument, bound),
+                                'aggregateJoinInputs' if join else 'aggregateInputs')):
+                            self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
+                        if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
+                            self.issue('application-levity', owner, path, 'Sum argument must be unlifted')
                     if tuple_constructor and self.is_tuple(proof) and isinstance(proof.get('components'), list):
                         components = proof['components']
                         if index < len(components):
@@ -1905,7 +1927,8 @@ class Audit:
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if 'joinValueArity' in binding:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
-                        if any(self.is_sum_value(bound[key]) for key in captured):
+                        if any(self.is_sum_value(bound[key]) and not self.supported_sum(bound[key], 'aggregateJoinCaptures')
+                               for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
                         if any(self.is_vector_value(bound[key]) and not self.supported_vector(bound[key], 'join-captures')
                                for key in captured):
@@ -2126,6 +2149,8 @@ class Audit:
                         self.issue('vector-boundary', key, '/entry', 'vector host result')
                     if formals is not None and any(self.is_tuple(proof) for proof in formals):
                         self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host argument')
+                    if formals is not None and any(is_sum(proof) for proof in formals):
+                        self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host argument')
                     if self.is_tuple(result):
                         self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if is_sum(self.known_result(expression)) or is_sum(self.bindings[key].get('rep')):

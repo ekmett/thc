@@ -25,6 +25,11 @@ Admission retains exact unsafe `ccall` metadata, including 32-bit `CInt`, 64-bit
 `CSize`, `Addr#` operands/results and the `State#` tuple. The original
 `ghc-internal` `memcmp` declaration has the same admitted ABI. This does not
 admit arbitrary libc signatures, callbacks or safe/blocking native calls.
+ByteString admission recognizes package version `bytestring-0.12.2.0`, optionally
+followed by a nonempty alphanumeric installed-unit suffix, as in the existing
+ByteString fixture producers. Exports retain their exact original unit IDs.
+Wrong packages/versions and malformed IDs, including whitespace and colon
+suffixes, reject; recognizing an installed unit does not relax its call ABI.
 
 ## Checks
 

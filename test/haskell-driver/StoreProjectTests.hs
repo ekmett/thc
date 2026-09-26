@@ -1,9 +1,10 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-module StoreProjectTests (tests, inplaceTests) where
+module StoreProjectTests (tests, inplaceTests, concurrentTests) where
 
-import Control.Exception (bracket)
+import Control.Concurrent (forkFinally, killThread, newEmptyMVar, putMVar, readMVar)
+import Control.Exception (bracket, throwIO)
 import Control.Monad (forM_, unless)
 import Data.Char (isHexDigit)
 import qualified Data.ByteString as BS
@@ -18,10 +19,80 @@ import qualified System.Process as Process
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 import THC.Driver.GhcProxy (ghcProxyCommand)
+import THC.Driver.Lock (withLock)
 
 tests :: Env -> Test
 tests env = TestList [proxyOptionsTest env, storeProjectTest env, customStoreProjectTest env,
-  inplaceTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+  inplaceTests env, concurrentTests env, nativeVariantsTest env False, nativeVariantsTest env True]
+
+concurrentTests :: Env -> Test
+concurrentTests env = TestLabel "overlapping project captures share immutable cache publications" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-store-project" "first" $ \first ->
+  withFixtureNamed env "test/fixtures/run-store-project" "second" $ \second ->
+  withCache (takeDirectory first </> "cache") $ do
+    let base = takeDirectory first
+        source = base </> "dependency-source"
+        facade = base </> "facade-source"
+        cache = base </> "cache/core-bundles/v1"
+        output project = takeDirectory project </> "output"
+        invoke project backend = run env (takeDirectory project) (Just backend) 240
+          ["run", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+           "--runtime", runtime env, "--dist-dir", output project]
+    copyTree (first </> "dep-data") source
+    sourceDist env source first
+    Directory.copyFile (first </> "dep-data-0.1.0.0.tar.gz") (second </> "dep-data-0.1.0.0.tar.gz")
+    forM_ [first, second] $ \project -> removePathForcibly (project </> "dep-data")
+    -- The second missing batch overlaps the first but is not identical, so the
+    -- two private exports may race to publish the same dep-data cache entry.
+    Directory.createDirectoryIfMissing True facade
+    writeText (facade </> "dep-extra.cabal") $ unlines
+      ["cabal-version: 3.0", "name: dep-extra", "version: 0.1.0.0",
+       "license: BSD-3-Clause", "build-type: Simple", "library",
+       "  reexported-modules: dep-data:Answer",
+       "  build-depends: dep-data ==0.1.0.0", "  default-language: Haskell2010"]
+    sourceDist env facade second
+    writeText (second </> "cabal.project")
+      "packages: app/app.cabal dep-data-0.1.0.0.tar.gz dep-extra-0.1.0.0.tar.gz\n"
+    let description = second </> "app/app.cabal"
+    original <- readText description
+    writeText description (replaceText "dep-data ==0.1.0.0" "dep-data ==0.1.0.0, dep-extra ==0.1.0.0" original)
+    Directory.createDirectoryIfMissing True cache
+    -- A separate producer retaining the old global lock must not block either
+    -- project. This is a synchronization control, not a timing benchmark.
+    withLock (cache </> "global-export.lock") $ do
+      completed <- newEmptyMVar
+      bracket (forkFinally (invoke second "bytecode") (putMVar completed))
+        (\thread -> killThread thread >> readMVar completed >> pure ()) $ \_ -> do
+          left <- invoke first "ast"
+          right <- readMVar completed >>= either throwIO pure
+          forM_ [("ast", left), ("bytecode", right)] $ \(backend, result) -> do
+            assertSuccess result
+            assertNoStdout result
+            assertBackend backend result
+    leftManifest <- readJson (output first </> "packages.json")
+    rightManifest <- readJson (output second </> "packages.json")
+    let dependency manifest = one (isPrefixOf "dep-data-" . string . (`field` "id")) (objects manifest "units")
+        leftUnit = dependency leftManifest
+        rightUnit = dependency rightManifest
+        identifier = string (field leftUnit "id")
+        bundle = field leftUnit "bundle"
+        path = string (field bundle "path")
+    assertEqual "shared store identity" identifier (string $ field rightUnit "id")
+    assertEqual "both manifests retain the same immutable publication" bundle (field rightUnit "bundle")
+    bytes <- BS.readFile path
+    stamp <- getModificationTime path
+    forM_ [first, second] $ \project -> do
+      assertReachable (output project) identifier
+      plan <- readJson (output project </> "native/cache/plan.json")
+      let executable = string (field (one ((== "exe:completed") . string . (`field` "component-name"))
+            (objects plan "install-plan")) "bin-file")
+      native <- runExe env project Nothing 60 executable []
+      assertSuccess native
+      assertNoStdout native
+      warm <- invoke project "bytecode"
+      assertSuccess warm
+      assertEqual "warm publication bytes unchanged" bytes =<< BS.readFile path
+      assertEqual "warm publication not replaced" stamp =<< getModificationTime path
 
 inplaceTests :: Env -> Test
 inplaceTests env = TestLabel "archive dependency retains its project-local dependency contents" $ TestCase $

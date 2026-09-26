@@ -46,6 +46,7 @@ prepareProcessSignals root = do
   BS.writeFile (root </> controls) (commandStdout captured)
   inputHashes <- hashes root [source, "src/main/c/native-process-signal-api.c",
     "src/test/c/native-process-signals-test.c", "src/test/resources/core/original-signal-install-descriptor.json",
+    "src/test/resources/core/original-unix-signal-install-descriptor.json",
     "test/haskell-fixtures/ProcessSignalFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs"]
   artifactHashes <- hashes root [oracle, controls]
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

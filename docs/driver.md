@@ -401,6 +401,14 @@ an unchanged `-inplace` ID cannot authorize stale Core after a local edit.
 archive and an ordinary archive, warm reuse, package-option and local-source invalidation
 against independent native execution and both THC backends.
 
+Dependency capture uses a private Cabal build per project. Only identical
+missing export batches share a long-lived capture lock; unrelated projects can
+capture concurrently. Overlapping batches serialize publication per content-keyed
+bundle and retain the first valid ZIP unchanged, so an already-written manifest's
+hash stays valid. Cache reads and publication still validate the complete package
+identity and local dependency inputs. The `--concurrent-store-only` driver test
+exercises two overlapping projects while holding the obsolete global lock.
+
 Compiler-conditional compatibility libraries and C-only packages can legitimately
 contain no Core modules (for example `nats` on modern GHC and `libyaml-clib`).
 For these units, the driver checks the registration from the same private Cabal
@@ -477,7 +485,8 @@ is drained concurrently and malformed UTF-8 remains a protocol failure.
 
 An optional `--ghc-source DIR` supplies the matching configured GHC 9.14.1
 source tree when original `Conc.Bound`, `System.Posix.Internals`, or Unix's
-`System.Posix.Files.PosixString` interfaces lack
+`System.Posix.Files.PosixString`, `System.Posix.Process.Internals`, and
+`System.Posix.Signals` interfaces lack
 THC's typed foreign annotations. It requires `--installed-core required` and
 currently supports native x86_64/aarch64 Linux with the original
 `_build/stage1/libraries/{ghc-internal,unix}/setup-config`, built interfaces and generated

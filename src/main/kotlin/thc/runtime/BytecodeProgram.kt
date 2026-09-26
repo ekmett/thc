@@ -315,29 +315,37 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
         context.inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
-        val freeVectors = (free - argumentIds).mapNotNull { id ->
+        val freeAggregates = (free - argumentIds).mapNotNull { id ->
             outer.tuples[id]?.let { (proof, fields) ->
-                if (!proof.isVector) throw UnsupportedCore("Unsupported Core aggregate capture: unboxed-tuple")
+                CoreRepresentations.requireInput(proof)
+                if (fields.size != ArgumentLayout.leaves(proof).size)
+                    throw RuntimeFault("Aggregate capture slot count mismatch")
                 Triple(id, proof, fields)
             }
         }
         val freeLocals = (free - argumentIds).filter { it in outer.locals }.map { outer.locals.getValue(it) }
         freeLocals.filter { it.id < 0 && it.proof.kind == CoreKind.VOID }.forEach { scope.bindVoid(it.name, it.proof) }
-        val captureSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
-        captureSources.forEach { CoreRepresentations.requireNoVector(it.proof, "capture") }
-        context.captures = captureSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
-        context.vectorCaptures = freeVectors.map { (id, proof, fields) ->
-            val lanes = TupleShape.flatten(proof).mapIndexed { lane, leaf ->
-                Local(nextLocal++, "$id captured vector slot $lane", leaf.isLong, leaf)
+        val scalarSources = freeLocals.filter { it.id >= 0 || it.proof.kind != CoreKind.VOID }
+        scalarSources.forEach { CoreRepresentations.requireScalar(it.proof, "capture") }
+        val scalarDestinations = scalarSources.map { bind(scope, it.name, it.primitive, it.proof, it.cell, it.entry, it.arityCertificate) }
+        val aggregateFields = freeAggregates.flatMap { (id, proof, sources) ->
+            val destinations = ArgumentLayout.leaves(proof).mapIndexed { index, field ->
+                Local(nextLocal++, "$id captured field $index", field.isLong, field)
             }
-            if (fields.size != lanes.size) throw RuntimeFault("Vector capture slot count mismatch")
-            scope.bindTuple(id, proof, lanes)
-            VectorCapture(proof, lanes)
+            scope.bindTuple(id, proof, destinations)
+            sources.zip(destinations)
         }
-        val vectorSources = freeVectors.flatMap { it.third }
-        val vectorCount = freeVectors.size
+        val scalarFields = aggregateFields.filterNot { it.second.proof.isVector }
+        val vectorFields = aggregateFields.filter { it.second.proof.isVector }
+        val captureSources = scalarSources + scalarFields.map { it.first }
+        context.captures = scalarDestinations + scalarFields.map { it.second }
+        context.vectorCaptures = vectorFields.map { (_, destination) ->
+            VectorCapture(destination.proof, listOf(destination))
+        }
+        val vectorSources = vectorFields.map { it.first }
+        val vectorCount = vectorFields.size
         context.captureLayout = if (captureSources.isEmpty() && vectorCount == 0) null else CaptureLayout.withVectors(language,
-            (List(captureSources.size) { null } + freeVectors.map { it.second }).toTypedArray(),
+            (List(captureSources.size) { null } + vectorFields.map { it.second.proof }).toTypedArray(),
             (captureSources.map { it.primitive } + List(vectorCount) { false }).toBooleanArray(),
             (captureSources.map { it.directLong } + List(vectorCount) { false }).toBooleanArray(),
             (captureSources.map { if (it.cell) null else it.proof.referenceCarrier() } + List(vectorCount) { null }).toTypedArray(),
@@ -1304,15 +1312,15 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         definitions.forEach { definition ->
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
-                CoreRepresentations.requireJoinInput(proof)
+                CoreRepresentations.requireInput(proof)
                 if (proof.isTypedTransport && representation(it))
-                    throw RuntimeFault(if (proof.isVector) "Vector join formal must be unlifted" else "Tuple join formal must be unlifted")
+                    throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 scope.tuples[id]?.let { (proof, fields) ->
                     CoreRepresentations.requireInput(proof)
-                    val leaves = TupleShape.flatten(proof)
+                    val leaves = ArgumentLayout.leaves(proof)
                     if (fields.size != leaves.size) throw RuntimeFault("Tuple join capture disagrees with its physical slots")
                     fields.forEachIndexed { index, field ->
                         if (!field.proof.present || !TupleShape.compatible(leaves[index], field.proof))

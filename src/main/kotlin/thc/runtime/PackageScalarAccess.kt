@@ -129,6 +129,10 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         entry.owner.stablePointers.validate(address)
                         continue
                     }
+                    if (address.returnedAddress() != null) {
+                        address.returnedAddress()!!.requireCurrent()
+                        continue
+                    }
                     if (address.nativeAllocation() != null) {
                         address.requireByteRegion(0)
                         continue
@@ -160,6 +164,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         address === ManagedAddress.nullAddress() -> PackageNativePointer(0L, lease)
                         address.stableHandle() != null ->
                             entry.owner.stablePointers.nativeTransport(address)
+                        address.returnedAddress() != null -> PackageNativePointer(address.toNativeBits(), lease)
                         address.nativeAllocation() != null -> {
                             address.requireByteRegion(0)
                             PackageNativePointer(address.toNativeBits(), lease)
@@ -169,7 +174,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 }
                 // Pointer results can alias call-scoped native transports. Read
                 // their bits before releasing leases and allocation borrows.
-                normalizeResult(entry, Calls.interop(calls, entry.receiver, converted))
+                normalizeResult(entry, Calls.interop(calls, entry.receiver, converted), addresses)
             } finally {
                 lease.open = false
                 Reference.reachabilityFence(addresses)
@@ -233,14 +238,34 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         return invoke(entry, arguments) as ManagedAddress
     }
 
-    private fun normalizeResult(entry: PackageScalarFunction, result: Any?): Any? {
+    private fun normalizeResult(entry: PackageScalarFunction, result: Any?, arguments: List<Pair<Int,ManagedAddress>> = emptyList()): Any? {
         if (!addressResult) return result
         if (numbers.isNull(result)) return ManagedAddress.nullAddress()
         if (!numbers.isPointer(result)) fault("Package C returned a non-native opaque pointer")
         val bits = numbers.asPointer(result)
-        // A return type never grants ownership or permission to dereference C
-        // storage. StablePtr identities are the sole recovered authority here.
-        return entry.owner.stablePointers.recoverToken(bits) ?: ManagedAddress.unownedNumeric(bits)
+        if (bits == 0L) return ManagedAddress.nullAddress()
+        entry.owner.stablePointers.recoverToken(bits)?.let { return it }
+        // Recover aliases while the original call's borrows are still held.
+        // In particular, another thread may already be waiting to free an
+        // argument; its owner must not disappear merely because it is retiring.
+        var backing: ManagedAddress? = null
+        for ((_,argument) in arguments) {
+            val candidate = argument.returnedAddress()?.backing ?: argument
+            if (!candidate.hasNativeStorage()) continue
+            val base = candidate.toNativeBits() - candidate.cbitsOffset()
+            val displacement = bits - base
+            if (java.lang.Long.compareUnsigned(displacement, candidate.cbitsSize()) <= 0) {
+                backing = candidate.plus(bits - candidate.toNativeBits())
+                break
+            }
+        }
+        if (backing == null) {
+            val recovered = entry.owner.nativeAllocations.recoverAddress(bits) ?: entry.owner.nativeAddresses.recover(bits)
+            if (recovered.hasNativeStorage() || recovered.nativeImageKey() != null) backing = recovered
+        }
+        // This tag permits forwarding a genuine native return, not guest byte
+        // dereference. Known backing retains prior lifetime authority only.
+        return ManagedAddress.fromReturnedAddress(PackageReturnedAddress(entry.owner, entry.alive, bits, backing))
     }
 }
 

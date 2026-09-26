@@ -78,7 +78,7 @@ class EmptyJoinInputs(unittest.TestCase):
         inner=outer['expr'][2][2][0];inner['id']='join';inner['name']='join';outer['expr'][2][3][1]=t.var('join')
         self.accepts(host)
         outer['expr'][2][3][2][0]=['void'];self.rejects(host,'aggregate-shape')
-    def test_cold_mismatch_and_empty_capture_stay_rejected(self):
+    def test_cold_mismatch_rejects_and_empty_capture_requires_capability(self):
         m=fixture();worker,call=parts(m);call[2][0]=['void',dict(rep=t.STATE)]
         body=m['bindings'][0]['expr'];m['bindings'][0]['expr']=['case',t.lit(0),'choice',[
             ['lit',['int','0'],[],t.lit()],['default',None,[],body]],dict(rep=t.LONG,binder=dict(id='choice',rep=t.LONG,lifted=False))]
@@ -86,7 +86,8 @@ class EmptyJoinInputs(unittest.TestCase):
         m=fixture();worker,_=parts(m)
         worker['expr'][2]=['lam',[],t.var('p0',t.tup()),dict(rep=t.CLOSURE,resultRep=t.tup())]
         worker['expr'][3]['resultRep']=t.CLOSURE;worker['joinResultRep']=t.CLOSURE
-        self.rejects(m,'aggregate-boundary')
+        self.accepts(m)
+        self.rejects(m,'aggregate-boundary',dict(CAP,aggregateCaptures=[]))
     def test_full_retained_typeable_frontier_removes_only_six_formals_and_34_calls(self):
         base=ROOT/'compiler/test-fixtures/empty-join-typeable';manifest=json.loads((base/'provenance.json').read_text())
         for row in manifest['sources']:

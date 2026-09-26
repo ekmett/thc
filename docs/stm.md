@@ -23,6 +23,13 @@ exception. Nested `atomically#` raises GHC's original `nestedAtomically`
 SomeException closure, retained through implicit dependency linking; the runtime
 does not fabricate its dictionary or exception value.
 
+An `STM` newtype stored in a constructor field has an opaque lifted-object
+binding representation. Its erased newtype cast supplies the closure occurrence
+used by `atomically#`, `catchRetry#` or `catchSTM#`. The strict auditor permits this
+refinement only within the same lifted boxed carrier; scalar, aggregate and
+unlifted contradictions still fail. Runtime action forcing still requires a real
+closure. This does not change State# or TVar# argument and result shapes.
+
 Retry validates and registers its read dependencies under the commit lock,
 then releases it and blocks through Truffle's interruptible safepoint API.
 Changed dependencies wake the waiter; unrelated or identical-pointer writes
@@ -80,7 +87,7 @@ cabal run exe:thc-fixtures --offline -- stm
 
 The Haskell producer exports pre/post-Tidy original Core, closes the implicit
 exception using complete installed GHC Core, performs strict audits and runs a
-57-row native oracle. Kotlin checks an independent arithmetic model, deterministic
+78-row native oracle. Kotlin checks an independent arithmetic model, deterministic
 conflicts and stale exceptions, real retry registration/wakeup, nested rollback,
 lazy and unlifted payloads, context boundaries and cleanup. Installed guest-entry
 checks inspect the first compiled call without settling or retries, with and
@@ -91,10 +98,13 @@ observe rollback before resumption, and force the abandoned enclosing thunk from
 another carrier. Repeated interruption must not replay the enclosing prefix or
 retain retry registrations. All native helpers execute afresh inside an opaque
 IO wrapper so the oracle does not accidentally memoize its own observations.
-The 336 compiled rows per handoff require exactly three guest roots for basic,
-lazy and unlifted payloads, or five for exception/alternative/nested-atomic rows:
-the public entry, `runRW#` lambda, atomic action, and (where present) protected
-action plus handler/right branch. The rejected nested atomic action never runs.
+The 504 compiled rows per handoff require exactly two guest roots for basic,
+lazy and unlifted payloads, or four for exception/alternative/nested-atomic rows:
+the public entry, atomic action, and (where present) protected action plus
+handler/right branch. The immediate `runRW#` State# lambda is beta-reduced.
+The three newtype-field cases also retain an opaque consumer, giving three roots
+for a simple action or five for an alternative/catch. The rejected nested atomic
+action never runs.
 All active targets must remain installed after each row. Callback orchestration
 is Kotlin-inlined to keep virtual frames out of heap closures; expected retry and
 conflict signals do not trigger an interpreter transfer at storage boundaries.

@@ -99,3 +99,20 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
 /** A context owns the callable and its lifetime; adopted interop nodes belong to call sites. */
 internal class PackageScalarFunction(val owner: Language.State, val signature: PackageScalarSignature,
     val receiver: Any, val alive: Assumption)
+
+/** Genuine C-returned pointer authority is context-scoped, not byte ownership.
+ * Retain an already known native backing only for lifetime/borrow validation;
+ * arbitrary int2Addr# bits never acquire this tag. */
+internal class PackageReturnedAddress(val owner: Language.State, private val alive: Assumption,
+    val bits: Long, val backing: ManagedAddress?) {
+    fun requireCurrent() {
+        if (Language.currentState() !== owner) fault("Returned package C pointer belongs to another context")
+        if (!alive.isValid) fault("Returned package C pointer registry is closed")
+        backing?.requireByteRegion(0)
+    }
+    fun plus(displacement: Long): PackageReturnedAddress {
+        requireCurrent()
+        return if (displacement == 0L) this else
+            PackageReturnedAddress(owner, alive, bits + displacement, backing?.plus(displacement))
+    }
+}

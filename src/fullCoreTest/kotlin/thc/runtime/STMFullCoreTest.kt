@@ -27,7 +27,8 @@ import java.util.zip.ZipFile
 @Timeout(180)
 class STMFullCoreTest {
     private val root = File(System.getProperty("thc.projectRoot"))
-    private val names = listOf("basic", "rollback", "alternative", "lazyPayload", "nestedAtomic", "unliftedPayload")
+    private val names = listOf("basic", "rollback", "alternative", "lazyPayload", "nestedAtomic", "unliftedPayload",
+        "newtypeField", "newtypeAlternative", "newtypeCatch")
     private fun context(inlining: Boolean = true) = Context.newBuilder("thc", "llvm")
         .allowNativeAccess(true).allowIO(IOAccess.ALL).allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -37,7 +38,7 @@ class STMFullCoreTest {
         val manifest = Json.parse(File(root, "build/stm/manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghc"])
         assertEquals(names, manifest["entries"])
-        assertEquals(57, (manifest["nativeRows"] as Number).toInt())
+        assertEquals(78, (manifest["nativeRows"] as Number).toInt())
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in manifest[kind] as Map<String, String>) {
                 val actual = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -71,6 +72,9 @@ class STMFullCoreTest {
         "lazyPayload" -> x + 42
         "nestedAtomic" -> x + 31
         "unliftedPayload" -> x + 9
+        "newtypeField" -> x + 11
+        "newtypeAlternative" -> x + 13
+        "newtypeCatch" -> x + 17
         else -> error(name)
     }
     private fun valid(target: RootCallTarget, label: String) = assertEquals(true,
@@ -114,8 +118,8 @@ class STMFullCoreTest {
     private fun native(inlining: Boolean, backend: String) {
         val manifest = fixture()
         val rows = File(root, "build/stm/oracle.tsv").readLines().map { it.split('\t') }
-        assertEquals(57, rows.size)
-        assertEquals(57, rows.map { it.take(2) }.toSet().size)
+        assertEquals(78, rows.size)
+        assertEquals(78, rows.map { it.take(2) }.toSet().size)
         val originals = rows.filter { it[0] in names }.groupBy { it[0] }
         assertEquals(names.toSet(), originals.keys)
         for ((stage, paths) in manifest["stages"] as Map<String, List<String>>) {
@@ -145,10 +149,17 @@ class STMFullCoreTest {
                     for ((input, expected) in cases) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         check(input, expected)
-                        // Original source has entry + runRW lambda + atomic action;
-                        // catch/orElse cases additionally enter action and handler.
+                        // The immediate runRW State# lambda is beta-reduced.
+                        // Original source has entry + atomic action; catch/orElse
+                        // additionally enter action and handler. Newtype-field
+                        // cases also retain their opaque consumer call.
                         // Nested atomically rejects before entering its inner action.
-                        val entered = if (name in listOf("rollback", "alternative", "nestedAtomic")) 5L else 3L
+                        val entered = when (name) {
+                            "rollback", "alternative", "nestedAtomic" -> 4L
+                            "newtypeAlternative", "newtypeCatch" -> 5L
+                            "newtypeField" -> 3L
+                            else -> 2L
+                        }
                         assertEquals(before + entered,
                             (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                             "$label exact original guest-root count on first installed call")
@@ -229,6 +240,35 @@ class STMFullCoreTest {
         val calls = nodes(consumer).filter { (it.firstOrNull() == "app") &&
             ((it.getOrNull(1) as? List<*>)?.getOrNull(1) as? String)?.let { name -> STMOp.named(name) } != null }
         assertEquals(STMOp.entries.map { it.primitive }.toSet(), calls.map { (it[1] as List<*>)[1] }.toSet())
+        val binders = mutableMapOf<String, CoreRepresentation>()
+        fun collectBinders(value: Any?) {
+            when (value) {
+                is Map<*, *> -> {
+                    val id = value["id"] as? String
+                    if (id != null && value["type"] is String) binders[id] = CoreRepresentations.parse(value["rep"])
+                    value.values.forEach(::collectBinders)
+                }
+                is List<*> -> value.forEach(::collectBinders)
+            }
+        }
+        collectBinders(consumer)
+        val newtypeActions = mutableSetOf<String>()
+        for (call in calls) {
+            val op = STMOp.named((call[1] as List<*>)[1] as String)!!
+            for ((index, argument) in (call[2] as List<List<Any?>>).withIndex()) {
+                if (op.arguments[index] != "action" || argument[0] != "var") continue
+                val stored = binders[argument[1]] ?: continue
+                if (stored.kind != CoreKind.OBJECT) continue
+                val occurrence = CoreRepresentations.expression(argument)
+                assertEquals(listOf("BoxedRep (Just Lifted)"), stored.primReps)
+                assertEquals(stored.primReps, occurrence.primReps)
+                assertEquals(CoreKind.CLOSURE, occurrence.kind)
+                assertEquals(CoreKind.CLOSURE, stored.refine(occurrence).kind)
+                newtypeActions += op.primitive
+            }
+        }
+        assertEquals(setOf("atomically#", "catchRetry#", "catchSTM#"), newtypeActions,
+            "The genuine optimized exports must retain the opaque STM/newtype field boundary")
         for (call in calls) {
             val op = STMOp.named((call[1] as List<*>)[1] as String)!!
             val args = (call[2] as List<List<Any?>>).map(CoreRepresentations::expression)

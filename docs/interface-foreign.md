@@ -56,11 +56,23 @@ Pointer results retain the runtime's pointer ownership/lifetime boundary.
 Pure source imports and IO
 imports both retain GHC's actual State-token worker ABI and original safety.
 Callbacks, interruptible calls, additional foreign-file products,
-initializers/finalizers and arbitrary extra native libraries remain outside this profile.
+and arbitrary extra native libraries remain outside this profile.
 Ordinary memory helpers supplied by Sulong/libc are allowed. C++ `.cc`, `.cpp`
 and `.cxx` sources retain their actual Cabal compiler arguments, including
-`-optcxx` options, and replay through GHC's C++ compiler phase. The LLVM link
-still rejects constructors/destructors and unresolved C++ runtime dependencies;
+`-optcxx` options, and replay through GHC's C++ compiler phase. Verified LLVM
+constructor/destructor arrays remain intact through linking and trimming.
+Sulong executes constructors once when the owning context loads the component;
+normal context close executes registered C++ `atexit` handlers and module
+destructors. Forced cancellation does not promise guest cleanup. No separate
+THC initializer runner or process-global destructor registration is introduced.
+
+On Linux x86-64, the original libstdc++ iostream `Init` constructor/destructor
+ABI has an explicit `-lstdc++` embedded-LLVM provider; this preserves the actual
+configured headers and does not substitute libc++. `__cxa_atexit` and the DSO
+identity use Sulong's context-owned runtime. The original declarations are
+checked before admission, even for otherwise archive-only components. Native
+libstdc++ internals remain process-shared, while package LLVM globals belong to
+their context. Other unresolved C++ runtime dependencies remain archive-only;
 this does not admit arbitrary C++ programs. Assembly sources remain unsupported.
 
 The source capture runs while Cabal's unpacked sources and generated headers
@@ -98,13 +110,40 @@ GHC caller prototypes in one C file would create spurious conflicting-type
 errors. Separation preserves both the original callee definition and the
 emitted caller ABI, without rewriting either declaration or guessing a header
 prototype. Both translation units and their real header dependencies contribute
-to the native component identity. The mixed-header fixture compares an existing
+to the native component identity.
+
+Direct caller translation units include only `HsFFI.h` for the emitted scalar
+types, not the broad `Rts.h` header. This also prevents unrelated libc
+declarations such as `FILE*` prototypes from colliding with opaque `Addr#`
+caller signatures. The original `fdopen`/`fclose` shape is exercised natively;
+unresolved libc execution remains archive-only, not implicitly linked by this
+source-capture correction. The mixed-header fixture compares an existing
 managed buffer passed as an opaque struct pointer and 8/32-bit argument-boundary
 behavior against native GHC with exact-width Haskell arguments. The retained
-machine-word caller variant also succeeds natively, but currently fails in
-Sulong when an i64 caller enters an i8/i32 C definition. A separate control retains the current rejection
-when an unowned static C pointer is returned and passed into another call; TU
-separation does not grant byte ownership to that numeric address.
+machine-word caller variant uses an explicit x86_64 Linux argument bridge when
+the verified LLVM caller and actual C definition establish ordinary C integer
+register slots. The bridge truncates i64/i32 arguments to the definition's
+i8/i16/i32 width and preserves its sign/zero-extension attributes. Original
+Haskell import metadata remains unchanged. The native GHC oracle includes
+negative and high-bit values, including signed/unsigned 16-bit parameters.
+The original LLVM definition lines, bridge source/hash and linked input hash
+are retained in build inputs. No return conversion, pointer conversion,
+variadic or non-C convention adaptation is inferred. Unrecognized signatures
+keep the original adapter.
+
+A genuine native pointer returned by package C code receives a context/lifetime
+tag and may be forwarded to another package call without projecting it as byte
+storage. This does not grant guest byte reads or writes. Arbitrary numeric
+`int2Addr#` values remain unforwardable. Returned aliases of known malloc,
+pinned or immutable native-image storage retain their existing backing for
+lifetime validation; synchronous calls hold the same ordered malloc borrows.
+Forwarding after a known malloc owner is freed, after registry closure or into
+another context rejects. Ownership managed entirely inside an external C API
+still follows that API's lifetime contract.
+Alias recovery happens before releasing the returning call's original borrows.
+No managed buffer is copied or pinned by this path. Non-native Sulong managed
+pointer results still reject; forwarding those requires a separate alias-aware
+managed-pointer implementation.
 
 The checksum source provider recognizes retained `zlib.h` imports for `adler32`
 and `crc32`, compiles unchanged upstream zlib 1.2.11 source with the package's
@@ -526,11 +565,21 @@ producer accepts a matching configured GHC 9.14.1 native Linux stage1 tree with
 the original GMP, Haskell2010 and NoImplicitPrelude ghc-internal configuration,
 and the configured Haskell2010 Unix library. It recompiles only
 `GHC.Internal.Conc.Bound`, `GHC.Internal.System.Posix.Internals`, and
-`System.Posix.Files.PosixString`, and only when their required annotation
+`System.Posix.Files.PosixString`, `System.Posix.Process.Internals`, and
+`System.Posix.Signals`, and only when their required annotation
 is absent. Cabal's saved configuration supplies CPP flags, language settings and
 the original dependency IDs. The selected compiler performs real code generation
 with `-fwrite-if-simplified-core`; the `-fno-code` interface path loses annotations
 and is not used here.
+
+The static-import producer also recognizes a stock `ccall` address declaration
+only after checking its typed binder, normalization and exact emitted address
+literal, with no call, header, C source, initializer, finalizer or foreign file.
+Such a declaration is omitted from the generated-stub call inventory, not given
+a function ABI. Its original Core address remains subject to separate strict
+address-label admission. For example, Unix's `&nocldstop` does not prevent proof
+of its unrelated generated signal-set wrappers; unknown data/function addresses
+still fail the strict audit when reachable.
 
 The tree's dynamic interfaces must match the selected installation byte for
 byte, and each target source must match its retained GHC self-recompilation

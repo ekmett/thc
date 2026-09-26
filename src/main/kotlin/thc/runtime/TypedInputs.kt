@@ -191,7 +191,7 @@ internal fun writeInputReference(frame: VirtualFrame, slot: Int, value: Any?) {
  * Other entry contracts continue through the ordinary typed dispatch. */
 internal fun supportsTypedSelf(formal: ArgumentLayout?, strict: BooleanArray, actual: ArgumentLayout): Boolean =
     formal?.requiresTyped == true && formal.logicalArity == actual.logicalArity &&
-        strict.indices.all { !strict[it] || formal.isTuple(it) || formal.isVector(it) || actual.proof(it).evaluated }
+        strict.indices.all { !strict[it] || formal.isTyped(it) || actual.proof(it).evaluated }
 
 /** Copies between separately owned typed storage; logical compatibility is checked before this operation. */
 @ExplodeLoop
@@ -505,7 +505,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
 @CompilerDirectives.TruffleBoundary
 internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray {
     if (root is BytecodeRoot && root.isAsyncEnabled || root is FunctionRoot && root.enableAsync) return intArrayOf()
-    return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTuple(it) && !input.logical.isVector(it) &&
+    return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTyped(it) &&
         input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
 }
 
@@ -539,7 +539,7 @@ private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, v
     for (i in start until start + count) {
         val proof = source.layout?.proof(i)
         if (proof?.isEmptyTuple == true) continue
-        if (proof?.isTuple == true || proof?.isVector == true) fault("Typed input cannot enter a scalar packet")
+        if (proof?.isTypedTransport == true) fault("Typed input cannot enter a scalar packet")
         val from = ArgumentLayout.offset(source.layout, i)
         result[to++] = when {
             proof?.isLong == true -> source.long(frame, node, values, from)
@@ -585,7 +585,7 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
             val proof = layout.proof(i)
             val offset = layout.offset(i)
             try {
-                if (proof.isTuple || proof.isVector) arguments[i].executeTuple(frame, source.slots, offset)
+                if (proof.isTypedTransport) arguments[i].executeTuple(frame, source.slots, offset)
                 else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
                 else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
                 else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
@@ -593,7 +593,7 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
             } catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                        if (!proof.isTuple && !proof.isVector) {
+                        if (!proof.isTypedTransport) {
                             if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], input as Long)
                             else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], input as Float)
                             else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], input as Double)
