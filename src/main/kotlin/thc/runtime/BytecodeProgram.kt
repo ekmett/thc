@@ -104,6 +104,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private class Emission(val builder: BytecodeRootGen.Builder) {
         val locals = mutableMapOf<Int, BytecodeLocal>()
         var checkpointRootEntry: BytecodeLocal? = null
+        var annotationRootEntry: BytecodeLocal? = null
         var continueLabel: BytecodeLabel? = null
         var typedInputSlots: BytecodeTypedInputSlots? = null
         val joins = mutableMapOf<JoinRegion, JoinEmission>()
@@ -388,6 +389,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", "object").also {
                     b.beginStoreLocal(it); b.emitCurrentMask(); b.endStoreLocal()
                 }
+                e.annotationRootEntry = b.createLocal("checkpoint root entry annotations", "object").also {
+                    b.beginStoreLocal(it); b.emitCurrentAnnotations(); b.endStoreLocal()
+                }
             }
             for (local in context.captures + context.vectorCaptures.flatMap { it.destinations } +
                     context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
@@ -480,6 +484,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 vector.destinations.map { LocalAccessor.constantOf(e.locals.getValue(it.id)) }.toTypedArray())
         }.toTypedArray()
 
+    /** Yield skips lexical finally. Save this activation's lazy annotations and
+     * park to its caller; the resumed instruction reinstalls the saved extent. */
+    private fun beginAnnotationYield(e: Emission) {
+        val b = e.builder
+        val active = b.createLocal("yielded annotations", "object")
+        b.beginResumeAnnotations(active)
+        b.beginYield()
+        b.beginParkAnnotations(checkNotNull(e.annotationRootEntry), active)
+    }
+    private fun endAnnotationYield(e: Emission) {
+        e.builder.endParkAnnotations()
+        e.builder.endYield()
+        e.builder.endResumeAnnotations()
+    }
+
     /** The cold Yield carries the exact bytecode frame; ordinary polls allocate no packet. */
     private fun emitAsyncPoll(e: Emission) {
         val b = e.builder
@@ -491,12 +510,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginBlock()
         b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
         b.beginReenterCallMask()
-        b.beginYield()
+        beginAnnotationYield(e)
         b.beginParkAsyncMask()
         b.emitLoadLocal(request)
         b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
         b.endParkAsyncMask()
-        b.endYield()
+        endAnnotationYield(e)
         b.emitLoadLocal(active)
         b.endReenterCallMask()
         b.endBlock()
@@ -534,12 +553,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
         b.beginStoreLocal(discard)
         b.beginReenterCallMask()
-        b.beginYield()
+        beginAnnotationYield(e)
         b.beginParkAsyncMask()
         b.emitLoadLocal(request)
         b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
         b.endParkAsyncMask()
-        b.endYield()
+        endAnnotationYield(e)
         b.emitLoadLocal(active)
         b.endReenterCallMask()
         b.endStoreLocal()
@@ -576,12 +595,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
         b.beginStoreLocal(discard)
         b.beginReenterCallMask()
-        b.beginYield()
+        beginAnnotationYield(e)
         b.beginParkAsyncMask()
         b.emitLoadLocal(request)
         b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
         b.endParkAsyncMask()
-        b.endYield()
+        endAnnotationYield(e)
         b.emitLoadLocal(active)
         b.endReenterCallMask()
         b.endStoreLocal()
@@ -661,9 +680,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginStoreLocal(result)
                         b.beginResumeForcedLocal(local, localValue.local.cell)
                         b.emitLoadLocal(suspended)
-                        b.beginYield()
+                        beginAnnotationYield(e)
                         b.emitLoadLocal(suspended)
-                        b.endYield()
+                        endAnnotationYield(e)
                         b.endResumeForcedLocal()
                         b.endStoreLocal()
                         b.endBlock()
@@ -695,7 +714,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginResumeForcedValue()
                         b.emitLoadLocal(operand)
                         b.emitLoadLocal(suspended)
-                        b.beginYield(); b.emitLoadLocal(suspended); b.endYield()
+                        beginAnnotationYield(e); b.emitLoadLocal(suspended); endAnnotationYield(e)
                         b.endResumeForcedValue()
                         b.endStoreLocal()
                         b.endBlock()
@@ -963,13 +982,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginResumeApplication()
         b.emitLoadLocal(suspended)
         b.beginReenterCallMask()
-        b.beginYield()
+        beginAnnotationYield(e)
         b.beginParkCallMask()
         b.emitLoadLocal(suspended)
         b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
         b.emitLoadLocal(callerMask)
         b.endParkCallMask()
-        b.endYield()
+        endAnnotationYield(e)
         b.emitLoadLocal(callerMask)
         b.endReenterCallMask()
         b.endResumeApplication()
@@ -2081,10 +2100,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.endStoreLocal()
                 }
             } else if (fn[0] == "prim" && (fn[1] in setOf("newPromptTag#", "prompt#", "control0#") ||
-                    delimited && fn[1] in setOf("catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#"))) {
+                    delimited && fn[1] in setOf("annotateStack#", "catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#"))) {
                 val name = fn[1] as String
                 if (name in setOf("newPromptTag#", "prompt#", "control0#"))
                     DelimitedControl.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
+                else if (name == "annotateStack#") StackAnnotations.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 else CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 val shape = TupleShape(tupleProof, language)
@@ -2099,9 +2119,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         }
                         "control0#" -> {
                             b.beginConsumeDelimited(slots)
-                            b.beginYield()
+                            beginAnnotationYield(e)
                             b.beginCaptureDelimited(shape); operands.forEach { it.emit(e) }; b.endCaptureDelimited()
-                            b.endYield()
+                            endAnnotationYield(e)
                             b.endConsumeDelimited()
                         }
                         else -> {
@@ -2117,7 +2137,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             b.endStoreLocal()
                             b.beginBlock()
                             b.beginStoreLocal(result)
-                            b.beginYield(); b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); b.endYield()
+                            beginAnnotationYield(e); b.beginDelimitedOnly(); b.emitLoadException(); b.endDelimitedOnly(); endAnnotationYield(e)
                             b.endStoreLocal()
                             b.endBlock()
                             b.endTryCatch()
@@ -2174,13 +2194,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginResumeIOAction(slots)
                                     b.emitLoadLocal(suspended)
                                     b.beginReenterCallMask()
-                                    b.beginYield()
+                                    beginAnnotationYield(e)
                                     b.beginParkCallMask()
                                     b.emitLoadLocal(suspended)
                                     b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
                                     b.emitLoadLocal(callerMask)
                                     b.endParkCallMask()
-                                    b.endYield()
+                                    endAnnotationYield(e)
                                     b.emitLoadLocal(callerMask)
                                     b.endReenterCallMask()
                                     b.endResumeIOAction()
@@ -2224,13 +2244,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginResumeTupleApplication(slots)
                                     b.emitLoadLocal(suspended)
                                     b.beginReenterCallMask()
-                                    b.beginYield()
+                                    beginAnnotationYield(e)
                                     b.beginParkCallMask()
                                     b.emitLoadLocal(suspended)
                                     b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
                                     b.emitLoadLocal(handlerMask)
                                     b.endParkCallMask()
-                                    b.endYield()
+                                    endAnnotationYield(e)
                                     b.emitLoadLocal(handlerMask)
                                     b.endReenterCallMask()
                                     b.endResumeTupleApplication()
@@ -2272,13 +2292,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     b.beginResumeTupleApplication(slots)
                                     b.emitLoadLocal(suspended)
                                     b.beginReenterCallMask()
-                                    b.beginYield()
+                                    beginAnnotationYield(e)
                                     b.beginParkCallMask()
                                     b.emitLoadLocal(suspended)
                                     b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
                                     b.emitLoadLocal(actionMask)
                                     b.endParkCallMask()
-                                    b.endYield()
+                                    endAnnotationYield(e)
                                     b.emitLoadLocal(actionMask)
                                     b.endReenterCallMask()
                                     b.endResumeTupleApplication()
@@ -2303,7 +2323,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginNoDuplicate(); operand.emit(e); b.endNoDuplicate()
                         b.beginConditional()
                         b.emitCheckpointArmed(checkpoint)
-                        b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
+                        beginAnnotationYield(e); b.emitLoadConstant(Unit); endAnnotationYield(e)
                         b.emitLoadConstant(Unit)
                         b.endConditional()
                         b.endBlock()
@@ -2414,6 +2434,26 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     }
                 }, tupleProof.copy(evaluated = true))
+            } else if (fn[0] == "prim" && fn[1] == "annotateStack#") {
+                StackAnnotations.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                val annotation = argument(args[0], scope, true)
+                val action = argument(args[1], scope, true)
+                val state = argument(args[2], scope, false)
+                val call = tupleApplication(TupleShape(tupleProof, language), action,
+                    listOf(ProvenExpression(Expression { it.builder.emitLoadConstant(Unit) }, state.proof)), scope, false)
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    b.beginBlock()
+                    b.beginRequireIOState(); state.emit(e); b.endRequireIOState()
+                    val prior = b.createLocal("annotation return", "object")
+                    b.beginStoreLocal(prior); b.beginEnterAnnotation(); annotation.emit(e); b.endEnterAnnotation(); b.endStoreLocal()
+                    b.beginTryFinally(Runnable {
+                        b.beginRestoreAnnotations(); b.emitLoadLocal(prior); b.endRestoreAnnotations()
+                    })
+                    call.emitTuple(e, destination)
+                    b.endTryFinally()
+                    b.endBlock()
+                }
             } else if (fn[0] == "prim" && fn[1] == "clearCCS#") {
                 CoreProfileAction.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val state = compile(args[1], scope, false)
@@ -2531,12 +2571,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
                         b.beginStoreLocal(discard)
                         b.beginReenterCallMask()
-                        b.beginYield()
+                        beginAnnotationYield(e)
                         b.beginParkAsyncMask()
                         b.emitLoadLocal(incoming)
                         b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
                         b.endParkAsyncMask()
-                        b.endYield()
+                        endAnnotationYield(e)
                         b.emitLoadLocal(active)
                         b.endReenterCallMask()
                         b.endStoreLocal()
@@ -3698,13 +3738,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginResumeTupleApplication(slots)
         b.emitLoadLocal(suspended)
         b.beginReenterCallMask()
-        b.beginYield()
+        beginAnnotationYield(e)
         b.beginParkCallMask()
         b.emitLoadLocal(suspended)
         b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
         b.emitLoadLocal(callerMask)
         b.endParkCallMask()
-        b.endYield()
+        endAnnotationYield(e)
         b.emitLoadLocal(callerMask)
         b.endReenterCallMask()
         b.endResumeTupleApplication()

@@ -1,7 +1,7 @@
 # Closure inspection on the JVM target
 
 `unpackClosure#`, `closureSize#`, `getApStackVal#`, `getCCSOf#`,
-`clearCCS#`, and `whereFrom#` have target-relative implementations on both
+`clearCCS#`, `whereFrom#`, and `annotateStack#` have target-relative implementations on both
 backends. Inspection does not enter its operand or any pointer payload.
 
 THC is not a GHC heap emulator. `unpackClosure#` returns a detached managed
@@ -30,13 +30,32 @@ closure IPE table is registered, so `whereFrom#` returns zero and leaves the
 destination untouched, exactly as the native absent-IPE path. The separate
 managed stack-source compatibility service is not a closure heap IPE table.
 
-The Haskell fixture producer compares seven original-Core examples with native
+The Haskell fixture producer compares nine original-Core examples with native
 GHC, including a raising pointer payload, absent provenance with a sentinel
 buffer, non-`AP_STACK` input, and non-profiling cost-centre behavior. Kotlin
 also checks detached images, raw primitive bits, pointer identities, independent
 storage and thunk states. Native heap headers and JVM headers are deliberately
 not compared byte-for-byte.
 
-`annotateStack#` remains a separate follow-up: its lazy annotation lifetime must
-survive continuation capture and restoration, rather than become a no-op or a
-synchronous-only admission restriction.
+`annotateStack#` retains its annotation without entering or rendering it while
+the supplied State action runs. Managed snapshots expose an immutable
+`annotations` list, newest first. An annotation is removed on normal return or
+exception; retained snapshots keep their explicit payloads. This metadata is
+separate from the original-library compatibility service's `RET_SMALL` images:
+it does not claim to expose GHC's raw `ANN_FRAME` layout.
+
+One-shot AST and bytecode continuations save their logical annotation chain and
+park it away from the carrier thread while suspended. Multi-shot delimited
+continuations carry annotations inside the matching prompt, rebasing the outer
+prefix to each resumer's ambient annotations. Capturing them again preserves
+the same lexical return boundaries. Contexts and carrier threads do not share
+ambient annotation state. This does not establish the existing, separate
+mixed one-shot asynchronous/delimited continuation composition gap.
+
+An inlining-enabled bytecode continuation test currently retires its installed
+handler in `ContinuationTupleDestination.consume` after producing the correct
+result and exact compiled-entry count. The annotation-free control reproduces
+the same VM trap; the annotation protocols themselves pass in both handoff modes.
+The strict retention assertions and failing control remain enabled. This is a
+known continuation-dispatch JIT-retention limitation, not a claim that the entire
+focused suite passes.

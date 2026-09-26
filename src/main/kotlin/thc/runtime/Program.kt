@@ -633,6 +633,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     private fun evaluateCallSegment(segment: CallSegment, continuation: SavedGuestContinuation,
                                     resumeMask: MaskingState, resumeValue: Any?): Any? {
         val carrierAmbient = SynchronousMasking.current(this)
+        val carrierAnnotations = StackAnnotations.current(this)
         try {
             SynchronousMasking.set(this, resumeMask)
             val returned = try { continuation.continueWith(resumeValue) }
@@ -683,7 +684,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         } catch (e: Throwable) {
             suspendCallOwned(segment)
             throw e
-        } finally { SynchronousMasking.set(this, carrierAmbient) }
+        } finally {
+            SynchronousMasking.set(this, carrierAmbient)
+            StackAnnotations.set(this, carrierAnnotations)
+        }
     }
 
     private fun publishCallContinuation(segment: CallSegment, continuation: SavedGuestContinuation,
@@ -751,10 +755,14 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 // the carrier's ambient mask must survive the entire resumed
                 // chain, including a tail-call trampoline.
                 val ambient = SynchronousMasking.current(this)
+                val ambientAnnotations = StackAnnotations.current(this)
                 try {
                     try { continuation.continueWith(resumeValue) }
                     catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
-                } finally { SynchronousMasking.set(this, ambient) }
+                } finally {
+                    SynchronousMasking.set(this, ambient)
+                    StackAnnotations.set(this, ambientAnnotations)
+                }
             }
             val result = if (returned is TailYield) returned.continuation else returned
             val saved = savedGuestContinuation(result)
@@ -2506,6 +2514,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     "killThread#" -> KillThread(operands[0], operands[1], operands[2], enableAsync, tupleProof)
                     else -> LabelThread(operands[0], operands[1], operands[2], tupleProof)
                 }
+            } else if (fn[0] == "prim" && fn[1] == "annotateStack#") {
+                StackAnnotations.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
+                if (enableAsync) AnnotatedAction(TupleShape(tupleProof, language as thc.Language),
+                    argument(args[0], scope, true), argument(args[1], scope, true),
+                    argument(args[2], scope, false), metrics, enableAsync)
+                else AnnotatedTuple(argument(args[0], scope, true), argument(args[2], scope, false),
+                    TupleApplication(language as thc.Language, TupleShape(tupleProof, language),
+                        argument(args[1], scope, true), arrayOf(Literal(Unit).proven(CoreRepresentations.expression(args[2]))), false, metrics))
             } else if (fn[0] == "prim" && fn[1] == "clearCCS#") {
                 CoreProfileAction.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 // There is no profiling CCS on this target. Invoke the action,

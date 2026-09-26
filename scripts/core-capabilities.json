@@ -1044,6 +1044,7 @@
     "getCurrentCCS#": 2,
     "getCCSOf#": 2,
     "clearCCS#": 2,
+    "annotateStack#": 3,
     "whereFrom#": 3,
     "closureSize#": 1,
     "unpackClosure#": 1,

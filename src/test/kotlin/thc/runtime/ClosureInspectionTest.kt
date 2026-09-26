@@ -52,7 +52,7 @@ class ClosureInspectionTest {
     private fun fixture(): Map<String, Any?> {
         val receipt = Json.parse(File(root, "build/closure-inspection/manifest.json").readText()) as Map<String, Any?>
         assertEquals("9.14.1", receipt["ghc"])
-        assertEquals(35L, receipt["nativeRows"])
+        assertEquals(45L, receipt["nativeRows"])
         for (kind in listOf("inputHashes", "artifactHashes"))
             for ((path, expected) in receipt[kind] as Map<String, String>) {
                 val digest = MessageDigest.getInstance("SHA-256").digest(File(root, path).readBytes())
@@ -61,17 +61,38 @@ class ClosureInspectionTest {
             }
         return receipt
     }
-    @Test fun originalCoreMatchesNativeWithoutEnteringInspectedPayloads() {
+    @Test fun originalCoreMatchesNativeWithoutEnteringInspectedPayloads() = runOriginal(false)
+
+    /** A counterfactual dispatcher control, not an additional original-Core oracle.
+     * Erase only the annotation scope; retain its action and every guest call. */
+    @Test fun annotationFreeResumptionKeepsInstalledTupleDispatch() = runOriginal(true)
+
+    private fun withoutAnnotations(value: Any?): Any? = when (value) {
+        is Map<*, *> -> value.mapValues { withoutAnnotations(it.value) }
+        is List<*> -> if (value.firstOrNull() == "app" &&
+            (value.getOrNull(1) as? List<*>)?.take(2) == listOf("prim", "annotateStack#")) {
+            val arguments = value[2] as List<*>
+            listOf("app", withoutAnnotations(arguments[1]), listOf(withoutAnnotations(arguments[2])),
+                listOf(false), value[4], value[5],
+                (value[6] as Map<String, Any?>).filterKeys { it != "callDemand" })
+        } else value.map(::withoutAnnotations)
+        else -> value
+    }
+
+    private fun runOriginal(eraseAnnotations: Boolean) {
         val receipt = fixture()
         val module = Json.parse(File(root, "build/closure-inspection/core/ClosureInspectionAudit.json").readText()) as Map<String, Any?>
         val rows = File(root, "build/closure-inspection/oracle.tsv").readLines().map { it.split('\t') }
-        assertEquals(35, rows.size)
+        assertEquals(45, rows.size)
         for (backend in listOf("ast", "bytecode")) for (name in receipt["entries"] as List<String>) {
+            if (eraseAnnotations && name != "annotatedResume") continue
             context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val source = CoreModules.reachable(module, listOf(name), true) + ("instrument" to true)
+                    val original = CoreModules.reachable(module, listOf(name), true)
+                    val source = (if (eraseAnnotations) withoutAnnotations(original) as Map<String, Any?> else original) +
+                        ("instrument" to true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, source) else BytecodeProgram(language, source)
                     val selected = rows.filter { it[0] == name }
                     fun check(row: List<String>) {
@@ -83,6 +104,8 @@ class ClosureInspectionTest {
                             "noCCS" -> 1L
                             "noProvenance" -> 123L
                             "cleared" -> input + 1
+                            "annotated" -> input + 2
+                            "annotatedResume" -> input + 21
                             else -> error(name)
                         }
                         assertEquals(model, row[2].toLong(), "native/$name/$input")
@@ -90,6 +113,7 @@ class ClosureInspectionTest {
                         val state = language.handoffState.get()
                         assertEquals(0, state.arguments.depth); assertEquals(0, state.results.depth)
                         assertEquals(0, state.arguments.retainedReferences()); assertEquals(0, state.results.retainedReferences())
+                        assertTrue(StackAnnotations.current(null).values().isEmpty(), "$backend/$name annotation return")
                     }
                     selected.forEach(::check)
                     val entry = program.entryTarget(name)
@@ -103,7 +127,8 @@ class ClosureInspectionTest {
                     }
                     // Source calls: entry, plus runRW lambda for three IO cases,
                     // plus clearCCS's actual State action for the clear case.
-                    val entries = when (name) { "noCCS", "noProvenance" -> 2; "cleared" -> 3; else -> 1 }
+                    val entries = when (name) { "noCCS", "noProvenance" -> 2; "cleared" -> 3;
+                        "annotated" -> 4; "annotatedResume" -> 7; else -> 1 }
                     for (row in selected) {
                         val before = (program.diagnostics()["compiledEntries"] as Number).toLong()
                         check(row)

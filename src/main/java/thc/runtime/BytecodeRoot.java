@@ -608,6 +608,49 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    @Operation public static final class CurrentAnnotations {
+        @Specialization public static StackAnnotationState current(@Bind("$node") Node node) {
+            return StackAnnotations.current(node);
+        }
+    }
+    @Operation public static final class EnterAnnotation {
+        @Specialization public static StackAnnotationState enter(Object annotation, @Bind Node node) {
+            return StackAnnotations.enter(node, annotation);
+        }
+    }
+    @Operation public static final class RestoreAnnotations {
+        @Specialization public static void restore(StackAnnotationState prior, @Bind Node node) {
+            StackAnnotations.set(node, prior);
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "rootEntry")
+    @ConstantOperand(type = LocalAccessor.class, name = "active")
+    public static final class ParkAnnotations {
+        @Specialization public static Object park(VirtualFrame frame, LocalAccessor rootEntry,
+                LocalAccessor active, Object marker, @Bind("$node") Node node) {
+            // Delimited capture unwinds through explicit annotation-return steps.
+            if (!(marker instanceof DelimitedCut)) {
+                BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+                active.setObject(bytecode, frame, StackAnnotations.current(node));
+                StackAnnotations.set(node, (StackAnnotationState) rootEntry.getObject(bytecode, frame));
+            }
+            return marker;
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "active")
+    public static final class ResumeAnnotations {
+        @Specialization public static Object resume(VirtualFrame frame, LocalAccessor active,
+                Object result, @Bind("$node") Node node) {
+            if (!(result instanceof DelimitedResume)) {
+                BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+                StackAnnotations.set(node, (StackAnnotationState) active.getObject(bytecode, frame));
+            }
+            return result;
+        }
+    }
+
     @Operation public static final class ParkCallMask {
         @Specialization public static DelimitedCut parkDelimited(DelimitedCut cut,
                 MaskingState rootEntry, MaskingState callerActive) { return cut; }
@@ -2537,6 +2580,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Language language, Metrics metrics, Object first, Object second, Object state,
                 @Cached(value = "create(language, metrics)", neverDefault = true) DelimitedActionSite site) {
             return switch (name) {
+                case "annotateStack#" -> site.annotated(frame, first, second, state, shape);
                 case "prompt#" -> site.prompt(frame, first, second, state, shape);
                 case "catch#" -> site.caught(frame, first, second, state, shape);
                 case "maskAsyncExceptions#" -> site.masked(frame, first, state, shape, MaskingState.MASKED_INTERRUPTIBLE);

@@ -3,7 +3,7 @@
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 module ClosureInspectionAudit where
 import GHC.Exts
-import GHC.Prim (closureSize#, unpackClosure#, getApStackVal#, getCCSOf#, clearCCS#, whereFrom#)
+import GHC.Prim (closureSize#, unpackClosure#, getApStackVal#, getCCSOf#, clearCCS#, whereFrom#, annotateStack#)
 
 data Box = Box Int#
 data Pair = Pair Int Int
@@ -45,3 +45,20 @@ noProvenance x = runRW# (\s0 -> case newPinnedByteArray# 128# s0 of
 cleared :: Int# -> Int#
 cleared x = runRW# (\s -> case clearCCS# (\t -> (# t, I# (x +# 1#) #)) s of
   (# _, I# result #) -> result)
+
+{-# OPAQUE annotated #-}
+annotated :: Int# -> Int#
+annotated x = runRW# (\s -> case annotateStack# (raise# (I# 91#) :: Int)
+  (\t -> annotateStack# (I# x) (\u -> (# u, I# (x +# 2#) #)) t) s of
+    (# _, I# result #) -> result)
+
+{-# OPAQUE annotatedResume #-}
+annotatedResume :: Int# -> Int#
+annotatedResume x = runRW# (\s0 -> case newPromptTag# s0 of
+  (# s1, tag #) -> case prompt# tag
+    (\s2 -> annotateStack# (I# 11#) (\s3 ->
+      case control0# tag (\k s4 ->
+        case k (\s5 -> (# s5, I# x #)) s4 of
+          (# s6, I# first #) -> k (\s7 -> (# s7, I# (first +# 1#) #)) s6) s3 of
+        (# s8, I# second #) -> (# s8, I# (second +# 10#) #)) s2) s1 of
+      (# _, I# result #) -> result)

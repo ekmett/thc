@@ -59,6 +59,7 @@ internal class DelimitedFrame(val frame: MaterializedFrame, val step: DelimitedS
 internal class DelimitedCut(val tag: PromptTag, val handler: Any?, val inputShape: TupleShape,
                            val capturedMask: MaskingState, node: Node) :
     AbstractTruffleException("Internal delimited continuation capture", null, 0, node) {
+    val capturedAnnotations = StackAnnotations.current(node)
     val frames = ArrayList<DelimitedFrame>()
     fun append(frame: VirtualFrame, step: DelimitedStep): DelimitedCut {
         frames.add(DelimitedFrame(frame.materialize(), step))
@@ -134,25 +135,42 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
     private val owner = cut.tag.owner
     private val inputShape = cut.inputShape
     private val initialMask = cut.capturedMask
+    private val initialAnnotations = cut.capturedAnnotations
     private val frames: List<DelimitedFrame>
     init {
         val copies = IdentityHashMap<MaterializedFrame, MaterializedFrame>()
         frames = cut.frames.map { DelimitedFrame(copies.getOrPut(it.frame) { copyContinuationFrame(it.frame) }, it.step) }
     }
 
-    fun resume(site: DelimitedActionSite, frame: VirtualFrame, action: Any?): Any? {
+    // The copied frame graph is a dynamic cold interpreter for saved suffixes.
+    // Its ordinary guest calls still use their installed targets; the graph
+    // itself must not be partially evaluated with nonconstant frame descriptors.
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    fun resume(site: DelimitedActionSite, frame: MaterializedFrame, action: Any?): Any? {
         if (Language.currentState(site) !== owner) fault("Continuation belongs to another context")
         val ambient = SynchronousMasking.current(site)
+        val ambientAnnotations = StackAnnotations.current(site)
+        val outsideAnnotations = (frames.lastOrNull { it.step is DelimitedAnnotationStep }?.step as? DelimitedAnnotationStep)?.prior
+        val annotationCopies = IdentityHashMap<StackAnnotationState, StackAnnotationState>()
         val copies = IdentityHashMap<MaterializedFrame, MaterializedFrame>()
-        val active = frames.map { DelimitedFrame(copies.getOrPut(it.frame) { copyContinuationFrame(it.frame) }, it.step) }
+        val active = frames.map {
+            val step = if (it.step is DelimitedAnnotationStep)
+                it.step.rebase(outsideAnnotations!!, ambientAnnotations, annotationCopies) else it.step
+            DelimitedFrame(copies.getOrPut(it.frame) { copyContinuationFrame(it.frame) }, step)
+        }
         val outerMask = active.lastOrNull { it.step is DelimitedMaskStep }?.step
         try {
             if (outerMask != null) SynchronousMasking.set(site, initialMask)
+            if (outsideAnnotations != null)
+                StackAnnotations.set(site, initialAnnotations.rebase(outsideAnnotations, ambientAnnotations, annotationCopies))
             val input = try { DelimitedResume(site.invoke(frame, action, arrayOf(Unit), inputShape)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
             catch (cut: DelimitedCut) { return transfer(site, cut, active, ambient, outerMask) }
             return run(site, active, input, ambient, outerMask)
-        } finally { SynchronousMasking.set(site, ambient) }
+        } finally {
+            SynchronousMasking.set(site, ambient)
+            StackAnnotations.set(site, ambientAnnotations)
+        }
     }
 
     private fun run(site: DelimitedActionSite, active: List<DelimitedFrame>, initial: DelimitedResume,
@@ -175,6 +193,7 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
         val owner = remaining.indexOfFirst { it.step is DelimitedTransferStep && it.step.accepts(flow) }
         if (owner < 0) throw flow
         val entry = remaining[owner]
+        remaining.take(owner).forEach { if (it.step is DelimitedAnnotationStep) it.step.unwind() }
         val after = remaining.drop(owner + 1)
         val input = try { DelimitedResume((entry.step as DelimitedTransferStep).transfer(entry.frame, flow, site)) }
         catch (failure: GuestException) { DelimitedResume(null, failure) }
@@ -199,7 +218,10 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
                 // that rebased prior rather than the original image's prior.
                 cut.frames.add(DelimitedFrame(entry.frame, step.recapture(ambient, outerMask)))
                 step.unwind(ambient, outerMask)
-            } else cut.frames.add(entry)
+            } else {
+                cut.frames.add(entry)
+                if (step is DelimitedAnnotationStep) step.unwind()
+            }
         }
         throw cut
     }
@@ -216,7 +238,7 @@ private class DelimitedContinuationRoot(language: Language, private val stack: D
     override fun bloom(frame: VirtualFrame): Long = frame.arguments[0] as Long or mask
     override fun execute(frame: VirtualFrame): Any? {
         requireVoidCarrier(frame.arguments[2])
-        return stack.resume(site, frame, frame.arguments[1])
+        return stack.resume(site, frame.materialize(), frame.arguments[1])
     }
 }
 
@@ -267,9 +289,27 @@ internal class DelimitedActionSite(private val language: Language, private val m
         catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedMaskStep(this, prior)) }
         finally { SynchronousMasking.set(this, prior) }
     }
+    fun annotated(frame: VirtualFrame, annotation: Any?, action: Any?, state: Any?, shape: TupleShape): Any? {
+        requireVoidCarrier(state)
+        val prior = StackAnnotations.enter(this, annotation)
+        return try { invoke(frame, action, arrayOf(Unit), shape) }
+        catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedAnnotationStep(this, prior)) }
+        finally { StackAnnotations.set(this, prior) }
+    }
 }
 
 internal object DelimitedControl {
+    /** Inspect the dynamic captured-step graph outside guest partial evaluation.
+     * Otherwise the temporarily sole loaded PendingApplication implementation
+     * creates a CHA dependency that a later generic-call compilation invalidates. */
+    @TruffleBoundary
+    fun tupleCut(cut: DelimitedCut, frame: MaterializedFrame, destination: TupleDestination, node: Node): DelimitedCut {
+        val pending = cut.frames.lastOrNull()
+        if (destination is AstTupleDestination && !(pending?.frame === frame &&
+                (pending.step as? DelimitedPendingApplication)?.destination === destination))
+            cut.append(frame, DelimitedTupleStep(destination, node))
+        return cut
+    }
     fun enabled(node: Node): Boolean = when (val root = node.rootNode) {
         is FunctionRoot -> root.enableDelimited
         is BytecodeRoot -> root.isDelimitedEnabled

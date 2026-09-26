@@ -56,24 +56,32 @@ internal object AstAsyncAdmission {
             val arguments = expression.getOrNull(2) as? List<*>
             val flags = expression.getOrNull(3) as? List<*>
             val name = if (head?.firstOrNull() == "prim") head.getOrNull(1) else null
-            val capturedRoute = when (name) {
-                "takeMVar#", "readMVar#" -> Route.TUPLE
-                "putMVar#" -> Route.OTHER
-                "waitRead#", "waitWrite#", "delay#" -> if (declared.kind == CoreKind.VOID &&
-                    declared.primReps == emptyList<String>()) Route.OTHER else null
-                "killThread#" -> if (declared.kind == CoreKind.VOID &&
-                    declared.primReps == emptyList<String>()) Route.OTHER else null
-                "yield#" -> if (declared.kind == CoreKind.VOID && declared.primReps == emptyList<String>())
-                    Route.OTHER else null
-                else -> null
+            if (name == "annotateStack#" && route == Route.TUPLE && arguments?.size == 3 &&
+                flags == listOf(true, true, false) &&
+                rawOperand(arguments[0] as? List<*>, false, formals) &&
+                rawOperand(arguments[2] as? List<*>, true, formals) &&
+                (rawOperand(arguments[1] as? List<*>, false, formals) ||
+                    (arguments[1] as? List<*>)?.let { it.firstOrNull() == "lam" && lambda(it) != Effect.MAY_SUSPEND } == true))
+                Effect.CAPTURED else {
+                val capturedRoute = when (name) {
+                    "takeMVar#", "readMVar#" -> Route.TUPLE
+                    "putMVar#" -> Route.OTHER
+                    "waitRead#", "waitWrite#", "delay#" -> if (declared.kind == CoreKind.VOID &&
+                        declared.primReps == emptyList<String>()) Route.OTHER else null
+                    "killThread#" -> if (declared.kind == CoreKind.VOID &&
+                        declared.primReps == emptyList<String>()) Route.OTHER else null
+                    "yield#" -> if (declared.kind == CoreKind.VOID && declared.primReps == emptyList<String>())
+                        Route.OTHER else null
+                    else -> null
+                }
+                // Unlifted operands pass through Evaluate. Their lexical carrier,
+                // not an occurrence's claimed evaluatedness, must rule out Force.
+                if (capturedRoute == route && arguments != null && flags?.size == arguments.size &&
+                    flags.all { it is Boolean } &&
+                    arguments.indices.all { index -> rawOperand(arguments[index] as? List<*>,
+                        flags[index] == false, formals) })
+                    Effect.CAPTURED else Effect.MAY_SUSPEND
             }
-            // Unlifted operands pass through Evaluate. Their lexical carrier,
-            // not an occurrence's claimed evaluatedness, must rule out Force.
-            if (capturedRoute == route && arguments != null && flags?.size == arguments.size &&
-                flags.all { it is Boolean } &&
-                arguments.indices.all { index -> rawOperand(arguments[index] as? List<*>,
-                    flags[index] == false, formals) })
-                Effect.CAPTURED else Effect.MAY_SUSPEND
         }
         "case" -> {
             val scrutinee = expression.getOrNull(1) as? List<*>
