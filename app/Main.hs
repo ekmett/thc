@@ -3,7 +3,7 @@
 
 module Main (main) where
 
-import Control.Monad (foldM)
+import Control.Monad (foldM, when)
 import Distribution.Simple.Utils (topHandler)
 import Distribution.Types.Flag (mkFlagName)
 import System.Console.GetOpt
@@ -15,7 +15,7 @@ import System.IO (hSetEncoding, stderr, stdout, utf8)
 import THC.Driver.Cabal
 import THC.Driver.GhcProxy (runGhcProxy)
 import THC.Driver.Json (renderJson)
-import THC.Driver.Project (runProject)
+import THC.Driver.Project (runProject, acquireProject)
 import THC.Driver.Run
 
 main :: IO ()
@@ -28,23 +28,30 @@ main = topHandler $ do
     ["--help"] -> putStr usage
     ["plan-package", "--help"] -> putStr usage
     ["run", "--help"] -> putStr runUsage
+    ["acquire", "--help"] -> putStr acquireUsage
     "plan-package" : rest -> case getOpt Permute options rest of
       (updates, targets, []) | length targets <= 1 -> do
         let opts = foldl (flip ($)) defaultPlanOptions updates
             target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
         planPackage opts target >>= putStrLn . renderJson
       (_, _, errors) -> die (concat errors ++ usage)
-    "run" : rest -> do
+    command : rest | command `elem` ["run", "acquire"] -> do
       let (driverArgs, suffix) = break (== "--") rest
           guestArgs = drop 1 suffix
-      case getOpt Permute runOptions driverArgs of
+          acquire = command == "acquire"
+          commandUsage = if acquire then acquireUsage else runUsage
+      when (acquire && not (null suffix)) $ die "acquire does not accept guest arguments"
+      case getOpt Permute (if acquire then acquireOptions else runOptions) driverArgs of
         (updates, targets, []) | length targets <= 1 -> do
-          opts <- either (die . (++ "\n" ++ runUsage)) pure $
+          opts <- either (die . (++ "\n" ++ commandUsage)) pure $
             foldM (flip ($)) (RunOptions defaultPlanOptions "" "" Nothing "pinned" Nothing Nothing guestArgs) updates
           let target = case targets of [] -> "."; [file] -> file; _ -> error "checked above"
           project <- doesFileExist (target </> "cabal.project")
-          if project then runProject opts target else runPackage opts target
-        (_, _, errors) -> die (concat errors ++ runUsage)
+          if acquire then do
+            when (not project) $ die "acquire requires a directory containing cabal.project"
+            acquireProject opts target
+          else if project then runProject opts target else runPackage opts target
+        (_, _, errors) -> die (concat errors ++ commandUsage)
     _ -> die usage
 
 options :: [OptDescr (PlanOptions -> PlanOptions)]
@@ -61,7 +68,7 @@ options =
     parseFlag name = (mkFlagName name, True)
 
 usage :: String
-usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [--runtime PATH]\n" options
+usage = usageInfo "Usage: thc plan-package [PACKAGE.cabal|DIR] [OPTIONS]\n\nConfigure one Simple Cabal package against installed global dependencies.\nEmits JSON; does not solve cabal.project, compile, export THC Core or repl.\n\nAlso available: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [--runtime PATH]\n                thc acquire DIR --exe NAME --thc-root DIR\n" options
 
 runOptions :: [OptDescr (RunOptions -> Either String RunOptions)]
 runOptions =
@@ -83,3 +90,10 @@ liftPlanOption (Option shorts longs argument description) = Option shorts longs 
 
 runUsage :: String
 runUsage = usageInfo "Usage: thc run [PACKAGE.cabal|DIR] --exe NAME --thc-root DIR [OPTIONS] [-- ARG...]\n\nBuild the selected Cabal executable, export and audit its GHC main :: IO (), then execute that action in THC.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nA DIR containing cabal.project uses Cabal's resolved multi-package plan and accepts NAME or PACKAGE:exe:NAME.\nFor an explicit .cabal file, the initial single-package path still requires no internal library or build-tool dependencies.\n" runOptions
+
+acquireOptions :: [OptDescr (RunOptions -> Either String RunOptions)]
+acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
+  not (any (`elem` ["runtime", "ffi"]) names)]
+
+acquireUsage :: String
+acquireUsage = usageInfo "Usage: thc acquire DIR --exe NAME --thc-root DIR [OPTIONS]\n\nBuild the selected cabal.project executable and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native executable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" acquireOptions

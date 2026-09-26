@@ -8,7 +8,9 @@ baselines, never evidence that the application ran under THC.
 The [lens recipe](lens/README.md) adds public-API traversal, prism and state
 examples plus the unchanged upstream HUnit, property and Template Haskell
 tests. Its native baseline passes 14 example checks, 55 unit tests and 25
-properties; guest results are recorded separately in that recipe.
+properties. The 14 public-API checks also pass actual THC full startup/shutdown
+in both backends and handoff modes; the exact opt-in and remaining upstream
+guest-suite limits are recorded separately in that recipe.
 
 ## Recorded baseline
 
@@ -38,17 +40,21 @@ The generated 1,167-byte HTML file is byte-for-byte identical to the independent
 native output (SHA-256
 `c856e73e0f7b07edf9acea97a185def081ddc5e2e8552f30d3cc0e85fb17e267`).
 
-The HTML comparison passes both handoff modes in both backends: bytecode uses
-the full executable startup/shutdown; AST runs the original raw `Main.main`
-entry and the application closes its output file itself. This is not a claim
-that AST supports general executable startup, or that the whole application
-remains JIT compiled. These are real guest executions, not native subprocesses.
+The HTML comparison passes both handoff modes in both backends. At runtime
+`16d4aafe`, AST additionally passes the full generated `main::Main.main` and
+`GHC.Internal.TopHandler.flushStdHandles` lifecycle with explicit
+`-Dthc.asyncExceptions=true`, including native-matching `--version`, `--help`
+and HTML output. The original retained package manifest was re-audited with
+both entrypoints, with the same clean counts above. These are real guest
+executions, not native subprocesses, and do not establish arbitrary executable
+compatibility or whole-program JIT retention.
 
-The tested runtime checkpoint is `fdbf7e39`, combining the original library
+The earlier runtime checkpoint was `fdbf7e39`, combining the original library
 memory/sentinel fix `c2055888`, guest environment/realloc `bb9462e3`, Unix
 unlink/original-interface admission `ee52423b`, and linear Core JSON exporter
 `e6eddb52`. The memory fixture independently passes native comparisons in the
-same four backend/mode combinations. The original unchanged HsColour package
+same four backend/mode combinations; its AST application check used raw
+`Main.main`. The original unchanged HsColour package
 still has the declared-module limitation documented below. That checkpoint did
 not establish Alex, Happy or doctest guest successes; their native
 baselines and genuine guest retry recipes remain below.
@@ -70,11 +76,37 @@ outputs match the independent native 29,611-byte parser source (SHA-256
 `8abf4eed3720c5f02442ae914562879ffc63132114b56318b2735e0cbd50917f`), and native GHC
 compiles each generated parser, which prints `3` followed by a newline.
 
-Bytecode uses full executable startup/shutdown. AST uses the original raw
-`happy-2.2.1-inplace-happy:Main.main` entry; Happy closes its output file itself.
-This is execution of the original generator in THC, not native delegation,
-but does not establish general AST executable startup or whole-program JIT
-retention. The generated parsers themselves were tested with native GHC.
+Bytecode uses full executable startup/shutdown. The earlier AST check used raw
+`happy-2.2.1-inplace-happy:Main.main`; at runtime `16d4aafe`, AST also passes
+the complete generated `main::Main.main` and original `flushStdHandles`
+lifecycle with explicit `-Dthc.asyncExceptions=true`, in both handoff modes.
+The retained package manifest re-audits both entrypoints with the same clean
+counts above. Version stdout and generated source again match native exactly;
+native GHC compiles both new generated parsers, each printing `3\n`.
+This runs the original generator in THC, not through native delegation;
+the generated parsers themselves run under native GHC. Whole-program JIT
+retention and arbitrary executable compatibility are not established.
+
+### Alex
+
+A fresh re-audit of the retained original Alex 3.5.4.2 package capture passes:
+104,454 supplied bindings, 5,092 reachable, zero missing globals and zero issues.
+Full-bytecode lexer generation from `TinyLexer.x` passes in both handoff modes
+on unmodified public runtime `981b360c`. The AST backend's original raw
+`alex-3.5.4.2-inplace-alex:Main.main` also passes both modes on `a8774e09`;
+full-bytecode `--version` matches native stdout at that earlier checkpoint.
+All four generated sources match the native 34,688-byte output byte-for-byte
+when given the same absolute input path (Alex includes that path in line
+pragmas). Native GHC compiles all four lexers, which print `["sum","+","42"]`
+followed by a newline. See the [copy-paste commands](../../docs/driver.md#alex-generate-a-lexer).
+
+Earlier bytecode runs on `a8774e09` failed in both modes with
+`GraphTooBigBailoutException` in the original Handle output lambda (graph size
+100,004 against the 100,000 limit), truncating output at 16,384 bytes. Those
+failures are retained; the unmodified `981b360c` controls above succeed without
+relaxing compiler limits. They do not attribute the fix to a particular
+intervening change or establish whole-program JIT retention. The AST result
+remains a raw-main check, not a general executable-startup claim.
 
 ## Toolchain
 
@@ -124,9 +156,13 @@ guest attempt is:
 
 The suffix after `--` is the guest command line. Keep the resulting `audit.json`,
 `packages.json`, native build receipts and Core ZIPs: a failure before launch is
-an export/admission blocker, not an application execution result. General
-original executable startup currently uses the bytecode backend. Do not silently
-replace it with native execution or a synthetic Core module.
+an export/admission blocker, not an application execution result. Bytecode
+enables asynchronous exceptions by default. For the verified Happy/HsColour
+AST generated-main lifecycle, set `THC_BACKEND=ast` and add
+`-Dthc.asyncExceptions=true` to `JAVA_OPTS`; the AST default remains synchronous.
+Keep the Linux launcher's `-Xrs` process-signal setting. See the
+[full lifecycle command](../../docs/driver.md#happy-generate-a-parser).
+Do not silently replace guest execution with native execution or synthetic Core.
 
 ## Real inputs
 

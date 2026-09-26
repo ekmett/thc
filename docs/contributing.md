@@ -86,6 +86,13 @@ task: select only `testDense` to repeat that mode, or use `testHandoffModes
 compilation dependencies to run again. Existing `test` and its
 `JAVA_TOOL_OPTIONS` selection remain supported.
 
+For first-compiled-call checks, a valid guest target is not by itself sufficient:
+HotSpot can retire Truffle's shared call-entry stub while retaining the guest
+code. Private compilation setup must restore that prerequisite, as the public
+`EntryValue.compile` path does, without executing a settling guest call. The
+original-Core continuation and mask tests include forced-stub-retirement controls;
+keep their first-effect and no-replay assertions intact.
+
 ### Generated instruction metadata
 
 The pinned Truffle 25.3.4.1 processor emits one large

@@ -18,6 +18,19 @@ action. The complete installed-Core project provider instead runs GHC's generate
 using the same program and Handle CAFs. Standalone `build` and `repl` commands
 remain absent.
 
+`thc acquire DIR --exe NAME --thc-root DIR` uses the same `cabal.project` native
+build and complete dependency-closure export as `run`, but stops after atomically
+publishing `DIST/packages.json`. It does not invoke the reachable-Core auditor,
+the THC runtime, or the built native executable. This separates source acquisition
+from potentially expensive audit and execution for large application closures.
+Compiler/plugin setup, source and installed-Core provenance checks, typed native
+artifact admission, and manifest construction remain mandatory. A successful
+acquisition does **not** establish runtime support or an accepted reachable audit.
+An existing `audit.json` in a reused output directory is not refreshed or endorsed.
+Acquisition accepts the build/provider options shared with `run`, including
+`--dist-dir`, `--installed-core` and `--ghc-source`; it requires `cabal.project`
+and rejects runtime-only `--runtime`, `--ffi`, and the guest `--` suffix.
+
 IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
 stderr by default. Guest output and failure reports are unchanged. To append the runtime metrics JSON after a successful action, set
 `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"` when invoking `thc run`.
@@ -93,11 +106,14 @@ using the same full-Core environment and backend/startup distinction above.
 ## Run real applications
 
 The following Linux x86_64 examples run the original **Happy 2.2.1** parser
-generator and **HsColour 1.25** highlighter inside THC. Their generated files
+generator, **HsColour 1.25** highlighter and **Alex 3.5.4.2** lexer generator
+inside THC. Their generated files
 have been compared byte-for-byte with native GHC in both backends and both
 handoff modes. These command lines select bytecode, which runs the complete
-executable startup/shutdown. The AST checks use the original raw `Main.main`
-instead; they are not a general executable-lifecycle claim. See the
+executable startup/shutdown. Happy and HsColour also pass that full lifecycle
+on AST with explicit `-Dthc.asyncExceptions=true`; earlier synchronous AST
+checks used raw `Main.main`. This establishes these workloads, not arbitrary
+executable compatibility or whole-program JIT retention. See the
 [application results and pinned source hashes](../examples/standard-apps/README.md).
 
 Start in a built THC checkout with the complete-Core GHC 9.14.1 installation
@@ -116,9 +132,9 @@ THC_APPS="$THC_ROOT/build/real-programs"
 THC_OUTPUT="$THC_APPS/output"
 mkdir -p "$THC_OUTPUT"
 
-cabal get happy-2.2.1 happy-lib-2.2.1 hscolour-1.25 \
+cabal get happy-2.2.1 happy-lib-2.2.1 alex-3.5.4.2 hscolour-1.25 \
   --index-state=2026-09-24T12:38:18Z --destdir="$THC_APPS"
-for package in happy-2.2.1 hscolour-1.25; do
+for package in happy-2.2.1 alex-3.5.4.2 hscolour-1.25; do
   printf '%s\n' 'packages: .' 'tests: False' 'benchmarks: False' \
     'index-state: 2026-09-24T12:38:18Z' > "$THC_APPS/$package/cabal.project"
 done
@@ -160,6 +176,23 @@ THC_BACKEND=bytecode "$THC_ROOT/build/install/thc/bin/thc" \
 
 Keep `happy_lib_datadir` set and retain the manifest's referenced Core bundles.
 
+For the verified AST startup/shutdown path, use the same generated main and
+shutdown entries, with asynchronous exceptions explicitly enabled:
+
+```sh
+THC_BACKEND=ast JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=true" \
+  "$THC_ROOT/build/install/thc/bin/thc" \
+  --run-executable "@$THC_APPS/happy-guest/packages.json" \
+  main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
+  happy -o "$THC_OUTPUT/Parser-ast.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
+```
+
+The same environment selection works for the HsColour command below. AST still
+defaults to synchronous mode; bytecode still defaults to asynchronous mode.
+Keep the Linux launcher's `-Xrs` setting: original GHC startup installs its
+[process signal handlers](process-signals.md), under the same explicit
+launcher authority on either backend.
+
 ### HsColour: generate HTML
 
 HsColour needs the checked metadata-only patch listing its existing home
@@ -179,9 +212,38 @@ Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
 An unchanged HsColour package still has the declared-module inventory limitation;
 the patch is explicit, not an automatic source rewrite by THC.
 
+### Alex: generate a lexer
+
+Alex 3.5.4.2 uses its original packaged templates, without an application-source
+patch. The full-bytecode workload below passed both handoff modes on public
+runtime `981b360c`; the application notes retain the earlier failing checkpoint.
+
+```sh
+export alex_datadir="$THC_APPS/alex-3.5.4.2/data"
+THC_BACKEND=bytecode "$THC_DRIVER" run "$THC_APPS/alex-3.5.4.2" \
+  --exe alex --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/alex-guest" \
+  --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
+  --installed-core required --ghc-source "$GHC_SOURCE" -- \
+  -o "$THC_OUTPUT/Lexer.hs" "$THC_ROOT/examples/standard-apps/TinyLexer.x"
+
+"$GHC" -O1 -outputdir "$THC_OUTPUT/lexer-objects" \
+  "$THC_OUTPUT/Lexer.hs" -o "$THC_OUTPUT/lexer"
+"$THC_OUTPUT/lexer"
+```
+
+The lexer prints `["sum","+","42"]`. Alex runs in THC; native GHC compiles and
+runs the generated lexer. Keep `alex_datadir` set for later guest invocations.
+
 Doctest and Pandoc remain development targets, not demonstrated runnable commands
 here. Native baselines, strict Core admission and actual THC execution are
 reported separately in the application notes.
+
+For library-based programs, the [lens example](../examples/standard-apps/lens/README.md)
+has 14 passing public-API checks, and the [ad Kahn example](../examples/standard-apps/ad/README.md)
+has ten passing differentiation and sharing checks. Both run their original
+libraries with full startup/shutdown in both backends and handoff modes; the
+linked recipes distinguish these guest successes from the larger upstream
+test suites still being brought up.
 
 ## Build and exercise
 

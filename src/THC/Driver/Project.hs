@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module THC.Driver.Project
-  (runProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
+  (runProject, acquireProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
 
 import Control.Exception (evaluate, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -93,9 +93,22 @@ boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
 
 runProject :: RunOptions -> FilePath -> IO ()
-runProject opts target = do
-  require (not (null (runExecutable opts))) "run requires --exe NAME"
-  require (not (null (runThcRoot opts))) "run requires --thc-root DIR"
+runProject = buildProject AuditAndRun
+
+-- Acquisition performs the same native build, source/interface export and
+-- atomic manifest publication as run. A published manifest is not an audit or
+-- runtime admission result. Keep this boundary explicit for large closures.
+acquireProject :: RunOptions -> FilePath -> IO ()
+acquireProject = buildProject AcquireOnly
+
+data ProjectAction = AcquireOnly | AuditAndRun deriving Eq
+
+buildProject :: ProjectAction -> RunOptions -> FilePath -> IO ()
+buildProject action opts target = do
+  require (action /= AcquireOnly || null (runArguments opts)) "acquire does not accept guest arguments"
+  let command = if action == AcquireOnly then "acquire" else "run"
+  require (not (null (runExecutable opts))) (command ++ " requires --exe NAME")
+  require (not (null (runThcRoot opts))) (command ++ " requires --thc-root DIR")
   require (runInstalledCore opts `elem` ["required", "pinned"])
     "--installed-core must be required or pinned"
   require (runGhcSource opts == Nothing || runInstalledCore opts == "required")
@@ -107,8 +120,9 @@ runProject opts target = do
   requireFile (project </> "cabal.project")
   thcRoot <- canonicalizePath (runThcRoot opts)
   runtime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) makeAbsolute (runRuntime opts)
-  requireFile runtime
-  requireFile (thcRoot </> "scripts/audit-core.py")
+  when (action == AuditAndRun) $ do
+    requireFile runtime
+    requireFile (thcRoot </> "scripts/audit-core.py")
   let buildPlugin = thcRoot </> "compiler/build.sh"
       overrides = maybe [] (\path -> [("GHC", path)]) (ghcPath flags) ++
                   maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
@@ -143,7 +157,7 @@ runProject opts target = do
   packageTool <- Just <$> selectedPackageTool compiler (ghcPkgPath flags)
   source <- traverse canonicalizePath (runGhcSource opts)
   withProjectLock output $
-    runBuiltProject project thcRoot runtime output native executable cabalArgs
+    runBuiltProject action project thcRoot runtime output native executable cabalArgs
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
                     source registeredLibrary (runFfiMode opts) (runArguments opts)
 
@@ -177,10 +191,10 @@ selectedPackageTool ghc requested = do
       require (status == ExitSuccess) ("selected tool failed: " ++ program ++ ": " ++ take 4096 err)
       pure (reverse (dropWhile (`elem` ['\r','\n']) (reverse out)))
 
-runBuiltProject :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
+runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
                    Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Maybe FfiMode -> [String] -> IO ()
-runBuiltProject project thcRoot runtime output native executable cabalArgs
+runBuiltProject action project thcRoot runtime output native executable cabalArgs
                 pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary ffiMode guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
@@ -323,16 +337,17 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
                                "units" .= (described ++ wired)])
-  runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
-                              "--entry", entry] ++
-                             (if lifecycle then ["--entry", shutdown] else []) ++
-                             ["--io-main", "--output", audit]) thcRoot
-  -- Full-Core main and shutdown share one program and its Handle CAFs.
-  -- Execute relative paths from the Cabal project just as the native binary does.
-  let programName = reverse (takeWhile (/= ':') (reverse executable))
-  runCommand False runtime (runtimeLaunchArguments ffiMode (if lifecycle
-      then ["--run-executable", '@' : manifest, entry, shutdown]
-      else ["--run-io", '@' : manifest, entry]) programName guestArguments) project
+  when (action == AuditAndRun) $ do
+    runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
+                                "--entry", entry] ++
+                               (if lifecycle then ["--entry", shutdown] else []) ++
+                               ["--io-main", "--output", audit]) thcRoot
+    -- Full-Core main and shutdown share one program and its Handle CAFs.
+    -- Execute relative paths from the Cabal project just as the native binary does.
+    let programName = reverse (takeWhile (/= ':') (reverse executable))
+    runCommand False runtime (runtimeLaunchArguments ffiMode (if lifecycle
+        then ["--run-executable", '@' : manifest, entry, shutdown]
+        else ["--run-io", '@' : manifest, entry]) programName guestArguments) project
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do

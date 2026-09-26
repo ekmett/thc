@@ -26,6 +26,7 @@ main = do
   env <- setup
   arguments <- getArgs
   selected <- case arguments of
+    ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
     ["--store-inventory-only"] -> pure [EmptyStoreProjectTests.tests env]
@@ -45,6 +46,6 @@ main = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--run-options-only|--run-ffi-only|--store-inventory-only]"
+    _ -> die "Usage: driver-tests [--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

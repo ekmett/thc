@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-module ProjectTests (tests) where
+module ProjectTests (tests, acquisitionTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
@@ -16,7 +16,53 @@ import qualified THC.Driver.NativeRecipe as NativeRecipe
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestList [projectTests env, cstringTests env]
+tests env = TestList [acquisitionTests env, projectTests env, cstringTests env]
+
+acquisitionTests :: Env -> Test
+acquisitionTests env = TestLabel "project acquisition stops before audit and execution" $ TestCase $
+  -- This real program builds with GHC, but its partial pinned-Core closure is
+  -- rejected by the strict auditor (see cstringTests). Acquisition must succeed
+  -- without claiming that audit result or launching the guest.
+  withFixtureNamed env "test/fixtures/run-fail-frontier" "project café" $ \project ->
+  withCache (scratch env </> "core-cache") $ do
+    let base = takeDirectory project
+        output = base </> "acquired"
+        arguments = ["acquire", project, "--exe", "fail-frontier", "--thc-root", thcRoot env,
+                     "--dist-dir", output]
+    forM_ [["--", "guest"], ["--"], ["--runtime", "/missing/thc"], ["--ffi", "native"]] $ \extra -> do
+      rejected <- run env base Nothing 30 (arguments ++ extra)
+      assertFailure rejected
+      assertNoStdout rejected
+      published <- doesFileExist (output </> "packages.json")
+      assertBool "CLI rejects runtime options before acquisition" (not published)
+    notProject <- run env base Nothing 30
+      ["acquire", base, "--exe", "fail-frontier", "--thc-root", thcRoot env]
+    assertFailure notProject
+    assertContains "acquire requires a directory containing cabal.project" (err notProject)
+    acquired <- run env base Nothing 240 arguments
+    assertSuccess acquired
+    assertNoStdout acquired
+    manifest <- readJson (output </> "packages.json")
+    assertEqual "manifest format" "thc-core-packages" (string $ field manifest "format")
+    assertEqual "manifest schema" 1 (number $ field manifest "schema")
+    let units = objects manifest "units"
+        supplied = [unit | unit <- units, not (null $ objects unit "modules")]
+    assertBool "genuine executable and boot-library Core acquired" (length supplied >= 2)
+    forM_ supplied $ \unit -> requireFile (string $ field (field unit "bundle") "path")
+    plan <- readJson (output </> "native/cache/plan.json")
+    let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
+                    (objects plan "install-plan")
+    requireFile (string $ field entry "bin-file")
+    audited <- doesFileExist (output </> "audit.json")
+    assertBool "acquisition does not start the reachable auditor" (not audited)
+    -- Existing reports are historical evidence, never silently replaced by an
+    -- acquisition-only rerun or presented as acceptance of the new manifest.
+    writeText (output </> "audit.json") "retained older audit evidence\n"
+    repeated <- run env base Nothing 240 arguments
+    assertSuccess repeated
+    assertNoStdout repeated
+    assertEqual "prior audit untouched" "retained older audit evidence\n"
+      =<< readText (output </> "audit.json")
 
 projectTests :: Env -> Test
 projectTests env = TestLabel "three-package project native versus THC run" $ TestCase $
