@@ -35,6 +35,9 @@ main = do
     emit "lazyPayload" P.lazyPayload x
     emit "nestedAtomic" P.nestedAtomic x
     emit "unliftedPayload" P.unliftedPayload x
+    emit "newtypeField" P.newtypeField x
+    emit "newtypeAlternative" P.newtypeAlternative x
+    emit "newtypeCatch" P.newtypeCatch x
   cell <- new 0
   gate <- newEmptyMVar
   done <- newEmptyMVar
