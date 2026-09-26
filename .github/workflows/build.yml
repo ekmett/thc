@@ -357,6 +357,7 @@ jobs:
             build/short-bytes-slices/native/short-bytes-slices-oracle
             build/unsafe-equality/
             build/proxy-void/
+            build/unix-libc/
             build/test-results/
             build/mask-functions/
             build/deep-evaluation/

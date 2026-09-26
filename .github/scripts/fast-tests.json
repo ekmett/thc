@@ -28,7 +28,7 @@
       "junit": ["thc.runtime.GuestEnvironmentTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt": {
-      "junit": ["thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/GhcBCO.kt": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
@@ -336,6 +336,10 @@
     }
   },
   "owners": {
+    "src/test/kotlin/thc/runtime/UnixLibcTest.kt": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/ProxyVoidFixtures.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "compiler/test-fixtures/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "compiler/test-fixtures/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
@@ -706,7 +710,7 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt": {
-      "junit": ["thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest"],
+      "junit": ["thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt": {
@@ -1051,7 +1055,7 @@
       "python": []
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
-      "junit": [
+      "junit": ["thc.runtime.UnixLibcTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.HintTraceTest",
@@ -1454,7 +1458,7 @@
       "python": []
     },
     "test/haskell-fixtures/Main.hs": {
-      "junit": [
+      "junit": ["thc.runtime.UnixLibcTest",
         "thc.runtime.ClosureInspectionTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.ThreadSchedulingTest",

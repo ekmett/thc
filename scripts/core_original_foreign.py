@@ -245,6 +245,8 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol]
+       for symbol in ('close', 'dup', 'isatty', 'getenv')},
     ('unix-2.8.8.0-inplace', 'stg_sig_install'): OPERATIONS['stg_sig_install'],
     **{('unix-2.8.8.0-inplace', symbol): operation for symbol, operation in WAIT_STATUS_OPERATIONS.items()},
     **{('text-2.1.3-inplace', symbol): operation for symbol, operation in TEXT_OPERATIONS.items()},
@@ -260,6 +262,10 @@ LIBRARY_OPERATIONS = {
     ('bytestring-0.12.2.0-inplace', 'memcmp'): OPERATIONS['memcmp'],
     ('bytestring-0.12.2.0-inplace', 'memchr'): OPERATIONS['memchr'],
 }
+
+
+def unix_libc_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
 def bytestring_unit(unit):
@@ -371,6 +377,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
                  symbol in ('memcmp', 'memchr', 'strlen') and bytestring_unit(target.get('unit')) or
+                 symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
             'static supported installed-library function target')
     allowed_safety = safety if isinstance(safety, tuple) else (safety,)

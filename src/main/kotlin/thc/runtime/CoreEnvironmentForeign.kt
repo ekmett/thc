@@ -78,8 +78,9 @@ internal object CoreEnvironmentForeign {
         val operation = EnvironmentOp.entries.firstOrNull { it.symbol == target["symbol"] } ?: return null
         check(descriptor.keys == descriptorKeys && exact(descriptor["schema"], 1), "descriptor schema")
         check(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,
-            "static ghc-internal function target")
+            target["kind"] == "static" && (target["unit"] == "ghc-internal" ||
+                operation == EnvironmentOp.GET && isOriginalUnixUnit(target["unit"])) && target["isFunction"] == true,
+            "static supported installed-library function target")
         check(descriptor["convention"] == "ccall" && descriptor["safety"] == "unsafe", "convention/safety")
         val count = operation.arguments.size
         check(exact(descriptor["arity"], count) && exact(descriptor["suppliedArity"], count), "saturated arity")
