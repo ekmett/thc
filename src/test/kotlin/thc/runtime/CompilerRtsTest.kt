@@ -85,4 +85,21 @@ class CompilerRtsTest {
         assertThrows(RuntimeFault::class.java) { registry.dereference(winner) }
         foreign.close()
     }
+
+    @Test fun fastStringNativeTokenRemainsRootedUntilContextDisposal() {
+        val context = Context.newBuilder("thc").allowNativeAccess(true).build()
+        lateinit var token: StablePointerToken
+        context.initialize("thc"); context.enter()
+        try {
+            val registry = Language.currentState().stablePointers
+            val winner = registry.make(Any())
+            registry.getOrSetSharedCAF(SharedCAFStore.FAST_STRING, winner)
+            token = registry.nativeTransport(winner)
+            assertTrue(registry.equal(winner, registry.recoverToken(token.bits)!!))
+            assertThrows(RuntimeFault::class.java) { registry.free(winner) }
+            assertTrue(token.isPointer())
+            assertSame(token, registry.nativeTransport(winner))
+        } finally { context.leave(); context.close() }
+        assertFalse(token.isPointer())
+    }
 }
