@@ -762,6 +762,8 @@ class Audit:
                         or symbol in ('isFloatNaN', 'isFloatInfinite', 'isFloatFinite', 'isFloatDenormalized', 'isFloatNegativeZero',
                                       'isDoubleNaN', 'isDoubleInfinite', 'isDoubleFinite', 'isDoubleDenormalized', 'isDoubleNegativeZero',
                                       'rintFloat', 'rintDouble')
+                        or symbol in ('getRTSStatsEnabled', 'getRTSStats', 'performGC', 'performMajorGC',
+                                      'performBlockingMajorGC', 'getMonotonicNSec')
                         or symbol in ('getOrSetSystemEventThreadEventManagerStore',
                                       'getOrSetGHCConcSignalSignalHandlerStore',
                                       'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',

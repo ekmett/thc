@@ -16,6 +16,8 @@ extra-source-files:
   test/fixtures/run-wcwidth/wcwidth-ffi.cabal
   test/fixtures/run-wcwidth/src/Width.hs
   test/fixtures/run-wcwidth/app/Main.hs
+  compiler/test-fixtures/GcStatsAudit.hs
+  docs/gc-stats-clock.md
   compiler/test-fixtures/RubbishLiteralAudit.hs
   compiler/test-fixtures/OriginalDigestNative.hs
   compiler/test-fixtures/OriginalErfNative.hs
@@ -796,6 +798,7 @@ executable thc-fixtures
     OriginalFdReadyFixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
+    GcStatsFixtures
     FloatForeignFixtures
     GhcApiFixtures
     RtsDiagnosticFixtures
