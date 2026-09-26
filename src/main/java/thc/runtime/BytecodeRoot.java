@@ -3049,156 +3049,177 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorByteArray {
-        @Specialization public static ByteVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readByteVectorGuest(value, index, scalarOffset);
+        @Specialization public static ByteVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readByteVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorByteArray {
-        @Specialization public static ByteVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static ByteVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readByteVectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readByteVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorByteArray {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, ByteVector vector, Object state) {
-            vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, ByteVector vector, Object state) {
+            vector = CoreVectors.requireByte(vector, ByteVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeByteVectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeByteVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorShortArray {
-        @Specialization public static ShortVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readShortVectorGuest(value, index, scalarOffset);
+        @Specialization public static ShortVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readShortVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorShortArray {
-        @Specialization public static ShortVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static ShortVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readShortVectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readShortVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorShortArray {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, ShortVector vector, Object state) {
-            vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, ShortVector vector, Object state) {
+            vector = CoreVectors.requireShort(vector, ShortVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeShortVectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeShortVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorLongArray {
-        @Specialization public static LongVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readLongVectorGuest(value, index, scalarOffset);
+        @Specialization public static LongVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readLongVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorLongArray {
-        @Specialization public static LongVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static LongVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readLongVectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readLongVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorLongArray {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, LongVector vector, Object state) {
-            vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, LongVector vector, Object state) {
+            vector = CoreVectors.requireLong(vector, LongVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeLongVectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeLongVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVector32Array {
-        @Specialization public static IntVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readInt32VectorGuest(value, index, scalarOffset);
+        @Specialization public static IntVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readInt32VectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVector32Array {
-        @Specialization public static IntVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static IntVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readInt32VectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readInt32VectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVector32Array {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, IntVector vector, Object state) {
-            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, IntVector vector, Object state) {
+            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeInt32VectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeInt32VectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorWord32Array {
-        @Specialization public static IntVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readWord32VectorGuest(value, index, scalarOffset);
+        @Specialization public static IntVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readWord32VectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorWord32Array {
-        @Specialization public static IntVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static IntVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readWord32VectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readWord32VectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorWord32Array {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, IntVector vector, Object state) {
-            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, IntVector vector, Object state) {
+            vector = CoreVectors.requireInt(vector, IntVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeWord32VectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeWord32VectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorFloatArray {
-        @Specialization public static FloatVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readFloatVectorGuest(value, index, scalarOffset);
+        @Specialization public static FloatVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readFloatVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorFloatArray {
-        @Specialization public static FloatVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static FloatVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readFloatVectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readFloatVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorFloatArray {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, FloatVector vector, Object state) {
-            vector = CoreVectors.requireFloat(vector, FloatVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, FloatVector vector, Object state) {
+            vector = CoreVectors.requireFloat(vector, FloatVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeFloatVectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeFloatVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class IndexVectorDoubleArray {
-        @Specialization public static DoubleVector index(boolean scalarOffset, Object value, long index) {
-            return ManagedByteArray.readDoubleVectorGuest(value, index, scalarOffset);
+        @Specialization public static DoubleVector index(boolean scalarOffset, int vectorBytes, Object value, long index) {
+            return ManagedByteArray.readDoubleVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class ReadVectorDoubleArray {
-        @Specialization public static DoubleVector read(boolean scalarOffset, Object value, long index, Object state) {
+        @Specialization public static DoubleVector read(boolean scalarOffset, int vectorBytes, Object value, long index, Object state) {
             ManagedByteArray.requireState(state);
-            return ManagedByteArray.readDoubleVectorGuest(value, index, scalarOffset);
+            return ManagedByteArray.readDoubleVectorGuest(value, index, scalarOffset, vectorBytes);
         }
     }
     @Operation @ConstantOperand(type = boolean.class, name = "scalarOffset")
+    @ConstantOperand(type = int.class, name = "vectorBytes")
     public static final class WriteVectorDoubleArray {
-        @Specialization public static Object write(boolean scalarOffset, Object value, long index, DoubleVector vector, Object state) {
-            vector = CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128);
+        @Specialization public static Object write(boolean scalarOffset, int vectorBytes, Object value, long index, DoubleVector vector, Object state) {
+            vector = CoreVectors.requireDouble(vector, DoubleVector.SPECIES_128.withShape(jdk.incubator.vector.VectorShape.forBitSize(vectorBytes * 8)));
             ManagedByteArray.requireState(state);
-            ManagedByteArray.writeDoubleVectorGuest(value, index, vector, scalarOffset);
+            ManagedByteArray.writeDoubleVectorGuest(value, index, vector, scalarOffset, vectorBytes);
             return kotlin.Unit.INSTANCE;
         }
     }

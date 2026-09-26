@@ -89,6 +89,8 @@ current APIs.
 
 The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
 lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.
+All fourteen admitted wide shapes also support [packed and scalar-offset
+byte-array memory](simd-wide-array-memory.md).
 The [floating vector min/max operations](floating-vector-minmax.md) use Java
 NaN and signed-zero rules with separate native finite-input comparisons.
 The [512-bit floating fused operations](wide-floating-fma.md) use genuine wide

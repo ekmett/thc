@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.SimdWideArrayProofTest",
     "thc.runtime.Simd128ArrayProofTest",
     "thc.LauncherDiagnosticsTest",
     "thc.runtime.EnabledCapabilitiesTest",
@@ -47,6 +48,13 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "simd-wide-arrays": {
+      "junit": ["thc.runtime.SimdWideArrayNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd-wide-arrays"]}],
+      "outputs": ["build/simd-wide-arrays"],
+      "sources": ["compiler/test-fixtures/SimdWideArrayAudit.hs", "compiler/test-fixtures/SimdWideArrayScalar.hs",
+        "compiler/test-fixtures/SimdWideArrayNative.hs", "test/haskell-fixtures/SimdWideArrayFixtures.hs", "scripts/simd-families.json"]
+    },
     "simd128-arrays": {
       "junit": ["thc.runtime.Simd128ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "simd128-arrays"]}],
