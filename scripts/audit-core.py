@@ -1199,8 +1199,8 @@ class Audit:
             elif tag == 'lam':
                 ids = self.binder_ids(expr[1], owner, path + '/binders')
                 for index, binder in enumerate(expr[1]):
-                    if is_sum(binder.get('rep')) and (index < join_prefix or
-                            not self.supported_sum(binder.get('rep'), 'aggregateInputs')):
+                    if is_sum(binder.get('rep')) and not self.supported_sum(binder.get('rep'),
+                            'aggregateJoinInputs' if index < join_prefix else 'aggregateInputs'):
                         self.issue('aggregate-boundary', owner, path, 'unboxed-sum formal argument')
                     if is_sum(binder.get('rep')) and binder.get('lifted') is not False:
                         self.issue('application-levity', owner, path, 'Sum formal must be unlifted')
@@ -1219,12 +1219,12 @@ class Audit:
                             if self.is_tuple_value(bound[key])}
                 sum_captures = [bound[key] for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                                 if self.is_sum_value(bound[key])]
-                if sum_captures and (join_prefix > 0 or
-                        not all(self.supported_sum(rep, 'aggregateCaptures') for rep in sum_captures)):
-                    self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
                 # The consumed join lambda branches within its enclosing frame;
                 # a residual lambda still allocates an ordinary closure.
                 local_join_prefix = join_prefix > 0 and join_prefix == len(expr[1])
+                if sum_captures and not all(self.supported_sum(rep,
+                        'aggregateJoinCaptures' if local_join_prefix else 'aggregateCaptures') for rep in sum_captures):
+                    self.issue('aggregate-boundary', owner, path, 'unboxed-sum capture')
                 vector_captures = {key for key in (self.free_variables(expr[2]) - ids) & bound.keys()
                                    if self.is_vector_value(bound[key])}
                 if vector_captures and not (
@@ -1868,8 +1868,8 @@ class Audit:
                             self.issue('constructor-arity', owner, path, str(error))
                     if not sum_constructor and not heap_aggregate and is_sum(self.effective_rep(argument, bound)):
                         join = isinstance(target, dict) and '_join_arity' in target
-                        if (function[0] in ('prim', 'con') or join or
-                                not self.supported_sum(self.effective_rep(argument, bound), 'aggregateInputs')):
+                        if (function[0] in ('prim', 'con') or not self.supported_sum(self.effective_rep(argument, bound),
+                                'aggregateJoinInputs' if join else 'aggregateInputs')):
                             self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
                         if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
                             self.issue('application-levity', owner, path, 'Sum argument must be unlifted')
@@ -1927,7 +1927,8 @@ class Audit:
                         self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple let binding')
                     if 'joinValueArity' in binding:
                         captured = (self.free_variables(binding['expr']) - (ids if recursive else set())) & bound.keys()
-                        if any(self.is_sum_value(bound[key]) for key in captured):
+                        if any(self.is_sum_value(bound[key]) and not self.supported_sum(bound[key], 'aggregateJoinCaptures')
+                               for key in captured):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-sum join capture')
                         if any(self.is_vector_value(bound[key]) and not self.supported_vector(bound[key], 'join-captures')
                                for key in captured):

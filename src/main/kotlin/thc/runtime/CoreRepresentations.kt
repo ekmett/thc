@@ -169,13 +169,8 @@ internal object CoreRepresentations {
         else if (proof.isVector) VectorLayout.validate(proof)
         else requireScalar(proof, "argument")
     }
-    /** Joins retain logical arity and flatten tuple/vector operands into this frame. */
-    fun requireJoinInput(proof: CoreRepresentation) {
-        if (proof.isTuple || proof.isVector) requireInput(proof)
-        else requireScalar(proof, "join argument")
-    }
     fun requireJoinArgument(expected: CoreRepresentation, actual: CoreRepresentation) {
-        requireJoinInput(actual)
+        requireInput(actual)
         if (expected.isTuple || actual.isTuple) {
             if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
                 throw RuntimeFault("Local join requires matching exact tuple argument proof")
@@ -183,6 +178,10 @@ internal object CoreRepresentations {
         if (expected.isVector || actual.isVector) {
             if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))
                 throw RuntimeFault("Local join requires matching exact vector argument proof")
+        }
+        if (expected.isSum || actual.isSum) {
+            if (!expected.isSum || !actual.isSum || !TupleShape.compatible(expected, actual))
+                throw RuntimeFault("Local join requires matching exact sum argument proof")
         }
     }
     fun requireScalar(proof: CoreRepresentation, boundary: String) {

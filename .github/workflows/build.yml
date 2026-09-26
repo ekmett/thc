@@ -123,6 +123,10 @@ jobs:
         run: |
           cabal run exe:thc-fixtures --offline -- sum-input
           ./gradlew sumInputFullCoreTest sumInputFullCoreDenseTest
+      - name: Check original binary sum join inputs and captures
+        run: |
+          cabal run exe:thc-fixtures --offline -- sum-join-input
+          ./gradlew sumJoinInputFullCoreTest sumJoinInputFullCoreDenseTest
       - name: Check original tuple closure and thunk captures
         run: |
           cabal run exe:thc-fixtures --offline -- tuple-capture
@@ -362,6 +366,7 @@ jobs:
             build/sum-layout/
             build/sum-result/
             build/sum-input/
+            build/sum-join-input/
             build/tuple-capture/
             build/tuple-return/
             build/state-tuple/checks.json

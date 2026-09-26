@@ -43,12 +43,13 @@ the AST copies typed tag/payload region slots to the enclosing destination and
 clears its private scratch slots; bytecode writes directly to that destination.
 Recursive backedges and zero-arity joins do not allocate sum closures or result
 loans. An outer sum-returning join is a lexical control target, not a captured
-sum value. Actual sum join captures and sum join arguments remain unsupported.
+sum value. [Sum join inputs and captures](sum-inputs.md) use the same typed
+frame slots, including parallel recursive transfers.
 
 Nested sums, tuples containing sums, nonbinary sums, integer-width conversion,
 address/vector leaves, `BoxedRep Nothing` and unknown logical or physical layouts
-remain unsupported. Partial sum constructors, ordinary sum let bindings, join
-arguments/captures and public host sum inputs/results also remain unsupported. Function values returning sums
+remain unsupported. Partial sum constructors, ordinary sum let bindings and
+public host sum inputs/results also remain unsupported. Function values returning sums
 may still pass through existing scalar/reference closure paths, but a sum value
 cannot cross those excluded boundaries. Top-level sum storage is rejected in
 both strict and diagnostic mode; diagnostic mode does not invent a heap carrier.

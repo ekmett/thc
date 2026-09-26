@@ -3381,14 +3381,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val nodes = args.mapIndexed { index, arg ->
             val lifted = flags.getOrNull(index) as? Boolean ?: throw RuntimeFault("Missing join argument levity")
             argument(arg, scope, lifted && !callStrict[index] && !target.entryStrict[index],
-                allowEmpty = target.proofs[index].isTuple, declaredLifted = lifted).also {
+                allowEmpty = target.proofs[index].isTypedTransport, declaredLifted = lifted).also {
                 CoreRepresentations.requireJoinArgument(target.proofs[index], it.representation)
             }
         }.toTypedArray()
         val typedTemps = arrayOfNulls<IntArray>(nodes.size)
         val temps = IntArray(nodes.size) { index ->
             if (target.proofs[index].isTypedTransport) {
-                typedTemps[index] = IntArray(TupleShape.flatten(target.proofs[index]).size) {
+                typedTemps[index] = IntArray(ArgumentLayout.leaves(target.proofs[index]).size) {
                     scope.layout.bind("<join typed argument $index field $it>")
                 }
                 -1
@@ -3403,19 +3403,19 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         definitions.forEach { definition ->
             definition.parameters.forEach {
                 val proof = CoreRepresentations.binder(it)
-                CoreRepresentations.requireJoinInput(proof)
+                CoreRepresentations.requireInput(proof)
                 if (proof.isTypedTransport && representation(it)) throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
             (freeVariables(definition.body) - formals - shadowed).forEach { id ->
                 outer.locals[id]?.let { captured ->
                     if (captured.proof.isTypedTransport) {
-                        // A join stays in this activation: its lexical tuple is already
+                        // A join stays in this activation: its lexical aggregate is already
                         // held in typed frame slots, not in a closure environment.
                         CoreRepresentations.requireInput(captured.proof)
-                        val slots = captured.tupleSlots ?: throw RuntimeFault("Missing tuple join capture slots")
-                        if (slots.size != TupleShape.flatten(captured.proof).size || slots.any { it < 0 })
-                            throw RuntimeFault("Tuple join capture disagrees with its physical slots")
+                        val slots = captured.tupleSlots ?: throw RuntimeFault("Missing typed join capture slots")
+                        if (slots.size != ArgumentLayout.leaves(captured.proof).size || slots.any { it < 0 })
+                            throw RuntimeFault("Typed join capture disagrees with its physical slots")
                     } else CoreRepresentations.requireScalar(captured.proof, "join capture")
                 }
             }
@@ -3433,7 +3433,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val lifted = representation(parameter)
                 val proof = CoreRepresentations.binder(parameter).let { if (lifted) it.copy(evaluated = entryStrict[index]) else it }
                 if (proof.isTypedTransport) {
-                    val lanes = IntArray(TupleShape.flatten(proof).size) {
+                    val lanes = IntArray(ArgumentLayout.leaves(proof).size) {
                         scope.layout.bind("${parameter["id"]} join typed field $it")
                     }
                     scope.bindTuple(parameter["id"] as String, proof.copy(evaluated = true), lanes)

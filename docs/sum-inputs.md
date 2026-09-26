@@ -21,8 +21,15 @@ padding and do not appear as pointers in closure inspection. Constructors clear
 inactive fields before publishing the tag; captures and PAPs copy that state.
 There is no new boxed sum value or payload array.
 
+Local joins accept the same exact sum layouts and capture enclosing sums through
+their existing typed frame slots. A transfer first evaluates every operand into
+scratch slots, then moves all tag/payload fields in parallel; recursive swaps
+therefore preserve both operands. Completed transfers clear scratch references.
+A closure escaping a join owns its captured sum fields independently of that
+activation. Logical alternatives remain checked even when physical layouts match.
+
 Nested/nonbinary sums, tuples containing sums, address/vector or unresolved sum
-payloads, ordinary sum let/global storage, sum join inputs/captures and public
+payloads, ordinary sum let/global storage and public
 host sum parameters/results remain excluded. Scalar host roots may use all the
 supported sum operations internally. Unsaturated sum constructors remain excluded.
 
@@ -33,6 +40,8 @@ With the pinned GHC 9.14.1 and Graal/JDK 25 toolchain:
 ```sh
 cabal run exe:thc-fixtures --offline -fdevelopment -- sum-input
 ./gradlew sumInputFullCoreTest sumInputFullCoreDenseTest
+cabal run exe:thc-fixtures --offline -fdevelopment -- sum-join-input
+./gradlew sumJoinInputFullCoreTest sumJoinInputFullCoreDenseTest
 ./gradlew testDefault --tests thc.runtime.SumInputLayoutTest \
   testDense --tests thc.runtime.SumInputLayoutTest
 ```
@@ -45,3 +54,10 @@ both handoff modes with inlining enabled and disabled, checking compiled target 
 references. Reused escaped closures and PAPs outlive their creator frames;
 separate controls check logical-layout mismatches, ownership and null padding.
 Source, exporter, auditor, native and artifact hashes reject stale evidence.
+
+The sum-join fixture adds 259 native observations across seven roots in both
+export stages. It covers forwarding, recursive swaps, mutual recursion, lexical
+and escaped captures, empty payloads, lazy bottom fields and changing tags.
+Exact transfer counts include the nonrecursive wrappers retained by GHC around
+the two recursive loops; structural checks confirm those wrappers in each export.
+The same interpreted and first-compiled-call checks run with and without inlining.
