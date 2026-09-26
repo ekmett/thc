@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, field, readJson) where
+module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, field, readJson) where
 
 import Control.Monad (forM, unless)
 import Data.Aeson (Value, FromJSON, decodeStrict', fromJSON, Result(..), object, (.=))
@@ -37,7 +37,12 @@ data InstalledFixture = InstalledFixture
 -- complete-Core validation, native companion linkage, TargetLayout and ZIP/cache
 -- provenance. A stock thin-interface compiler is an explicit missing prerequisite.
 prepareInstalledCore :: FilePath -> FilePath -> IO InstalledFixture
-prepareInstalledCore root directory = do
+prepareInstalledCore root directory = prepareInstalledCoreUnits root directory []
+
+-- Additional original library units use the same complete-Core acquisition and
+-- dependency closure as ghc-internal; no source or synthetic binding substitute.
+prepareInstalledCoreUnits :: FilePath -> FilePath -> [String] -> IO InstalledFixture
+prepareInstalledCoreUnits root directory libraries = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
@@ -84,7 +89,13 @@ prepareInstalledCore root directory = do
         | otherwise = do
             unit <- Installed.discoverInstalled selected identifier
             discover (unit:seen) (Installed.installedDepends unit ++ todo)
-  units <- discover [] [internal]
+  additional <- forM libraries $ \library -> do
+    registered <- run (library ++ "-unit") providerPkg
+      ["--global", "--no-user-package-db", "field", library, "id", "--simple-output"]
+    case BS.words (commandStdout registered) of
+      [identifier] -> pure (BS.unpack identifier)
+      _ -> die ("Expected one selected registration: " ++ library)
+  units <- discover [] (internal : additional)
   Installed.validateReexports units
   internalRegistration <- case [Installed.registration unit | unit <- units,
                                 Installed.registeredId unit == internal] of

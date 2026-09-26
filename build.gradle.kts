@@ -447,6 +447,28 @@ tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
         }
     }
 }
+for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "compactRegionsFullCoreDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original ghc-compact with explicitly prepared complete GHC Core."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/compact-regions") {
+            include("**/*.json", "oracle.tsv", "installed/bundles/*.zip", "native/oracle")
+        })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.CompactRegionsNativeTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original compact-region evidence requires a fresh process") { true }
+        doFirst {
+            check(file("build/compact-regions/manifest.json").isFile) {
+                "Select full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- compact-regions"
+            }
+        }
+    }
+}
 tasks.register<Test>("stmFullCoreTest") {
     group = "verification"
     description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."

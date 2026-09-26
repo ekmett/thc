@@ -1,6 +1,7 @@
 {
   "schema": 1,
   "fixtureFreeJunit": [
+    "thc.runtime.ManagedCompactsTest",
     "thc.runtime.ManagedSTMTest",
     "thc.runtime.SimdWideArrayProofTest",
     "thc.runtime.Simd128ArrayProofTest",

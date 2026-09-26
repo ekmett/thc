@@ -41,6 +41,35 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class CompactSignatureTest(unittest.TestCase):
+    def test_seven_compact_signatures_and_wrong_scalar_carriers(self):
+        roles = {
+            'state': dict(kind='void', primReps=[], evaluated=True),
+            'word': dict(kind='long', primReps=['WordRep'], evaluated=True),
+            'int': dict(kind='long', primReps=['IntRep'], evaluated=True),
+            'region': dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True),
+            'lifted': REFERENCE,
+        }
+        self.assertEqual(7, len(CAP['managedCompactPrimitives']))
+        for name, signature in CAP['managedCompactPrimitives'].items():
+            arguments = [['var', str(i), dict(rep=roles[role])] for i, role in enumerate(signature['arguments'])]
+            output = roles[signature['result']]
+            if signature['result'] != 'state':
+                output = dict(kind='unknown', primReps=output['primReps'], evaluated=True,
+                              aggregate='unboxed-tuple', components=[roles['state'], output])
+            expression = ['app', ['prim', name], arguments,
+                          [r == 'lifted' for r in signature['arguments']], False, False, dict(rep=output)]
+            bound = {str(i): roles[role] for i, role in enumerate(signature['arguments'])}
+            audit = audit_core.Audit([], CAP)
+            audit.walk(expression, bound, 'root', 'root', tuple_result=output)
+            self.assertEqual([], audit.issues, (name, audit.issues))
+            bad = copy.deepcopy(expression)
+            bad[2][0][2]['rep'] = dict(kind='double', primReps=['DoubleRep'], evaluated=True)
+            audit = audit_core.Audit([], CAP)
+            audit.walk(bad, bound, 'root', 'root', tuple_result=output)
+            self.assertIn('invalid compact signature', str(audit.issues), name)
+
+
 class PackageScalarOperandTest(unittest.TestCase):
     """Call-proof controls only; no invented component or bitcode is executed."""
     def call(self, primitive):

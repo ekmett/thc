@@ -120,6 +120,14 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         checkSlots(slots.size, offset)
         initializeRaw(owner, frame.getObject(slots[offset]))
     }
+    /** Cold graph copying initializes a fresh owner's final primitive lanes. */
+    fun copy(source: Any, target: Any) {
+        for (index in 0 until lanes) when (lane) {
+            "FloatRep" -> properties[index].setFloat(target, properties[index].getFloat(source))
+            "DoubleRep" -> properties[index].setDouble(target, properties[index].getDouble(source))
+            else -> putLong(target, index, getLong(source, index))
+        }
+    }
     fun restore(owner: Any, frame: Frame, slots: IntArray, offset: Int) {
         checkSlots(slots.size, offset)
         FrameAccess.writeObject(frame, slots[offset], restoreRaw(owner))

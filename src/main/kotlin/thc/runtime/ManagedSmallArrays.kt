@@ -8,6 +8,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 /** SmallArray# has its own storage carrier, so ordinary Array# operations
  * cannot accidentally accept it despite their identical unlifted Core rep. */
 internal class SmallArrayStorage(val elements: Array<Any?>) {
+    @Volatile internal var frozen = false
     @Volatile var logicalSize: Int = elements.size
         private set
     @Synchronized fun shrink(size: Long) {
@@ -35,7 +36,8 @@ internal object ManagedSmallArray {
     }
     @JvmStatic fun compareExchange(array: SmallArrayStorage, index: Long, expected: Any?, replacement: Any?): Any? =
         ManagedArray.compareExchange(array.elements, index(array, index).toLong(), expected, replacement)
-    @JvmStatic fun freeze(array: SmallArrayStorage): SmallArrayStorage = array
+    @JvmStatic fun freeze(array: SmallArrayStorage): SmallArrayStorage = array.also { it.frozen = true }
+    @JvmStatic fun thaw(array: SmallArrayStorage): SmallArrayStorage = array.also { it.frozen = false }
     private fun range(array: SmallArrayStorage, offset: Long, count: Long) {
         val size = size(array)
         if (offset < 0 || offset > size || count < 0 || count > size - offset)
@@ -107,12 +109,12 @@ internal fun smallArrayExpression(operation: SmallArrayOp, proof: CoreRepresenta
     SmallArrayOp.CAS -> CasSmallArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
     SmallArrayOp.SHRINK -> ShrinkSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.INDEX -> IndexSmallArrayExpression(operands[0], operands[1])
-    SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> FreezeSmallArrayExpression(operands[0], operands[1])
+    SmallArrayOp.FREEZE, SmallArrayOp.UNSAFE_THAW -> FreezeSmallArrayExpression(operands[0], operands[1], operation == SmallArrayOp.FREEZE)
     SmallArrayOp.SIZE, SmallArrayOp.SIZE_MUTABLE -> SizeSmallArrayExpression(operands[0])
     SmallArrayOp.GET_SIZE_MUTABLE -> GetSizeSmallArrayExpression(operands[0], operands[1])
     SmallArrayOp.CLONE -> CloneSmallArrayExpression(operands[0], operands[1], operands[2])
     SmallArrayOp.CLONE_MUTABLE, SmallArrayOp.SAFE_FREEZE, SmallArrayOp.THAW ->
-        CopySmallArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        CopySmallArrayExpression(operands[0], operands[1], operands[2], operands[3], operation == SmallArrayOp.SAFE_FREEZE)
     SmallArrayOp.COPY, SmallArrayOp.COPY_MUTABLE -> TransferSmallArrayExpression(operation == SmallArrayOp.COPY_MUTABLE,
         operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
 }.proven(proof.copy(evaluated = true))
@@ -186,12 +188,13 @@ private class CasSmallArrayExpression(@field:Child private var array: Expr, @fie
         return null
     }
 }
-private class FreezeSmallArrayExpression(@field:Child private var array: Expr, @field:Child private var state: Expr) : Expr() {
+private class FreezeSmallArrayExpression(@field:Child private var array: Expr, @field:Child private var state: Expr,
+    private val freeze: Boolean) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val storage = ManagedSmallArray.require(array.execute(frame))
         requireVoidCarrier(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], ManagedSmallArray.freeze(storage))
+        FrameAccess.write(frame, slots[offset], if (freeze) ManagedSmallArray.freeze(storage) else ManagedSmallArray.thaw(storage))
         return null
     }
 }
@@ -212,18 +215,19 @@ private class GetSizeSmallArrayExpression(@field:Child private var array: Expr, 
 
 private class CloneSmallArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
     @field:Child private var count: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): SmallArrayStorage = ManagedSmallArray.slice(
-        ManagedSmallArray.require(array.execute(frame)), offset.executeRequiredLong(frame), count.executeRequiredLong(frame))
+    override fun execute(frame: VirtualFrame): SmallArrayStorage = ManagedSmallArray.freeze(ManagedSmallArray.slice(
+        ManagedSmallArray.require(array.execute(frame)), offset.executeRequiredLong(frame), count.executeRequiredLong(frame)))
 }
 private class CopySmallArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
-    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    @field:Child private var count: Expr, @field:Child private var state: Expr, private val freeze: Boolean) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val storage = ManagedSmallArray.require(array.execute(frame))
         val start = this.offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
         requireVoidCarrier(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], ManagedSmallArray.slice(storage, start, length))
+        val copy = ManagedSmallArray.slice(storage, start, length)
+        FrameAccess.write(frame, slots[offset], if (freeze) ManagedSmallArray.freeze(copy) else copy)
         return null
     }
 }

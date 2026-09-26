@@ -10,6 +10,14 @@ import java.lang.invoke.MethodHandles
  * references, never CompilationFinal and never entered by storage operations. */
 internal object ManagedArray {
     private val ELEMENT = MethodHandles.arrayElementVarHandle(Array<Any?>::class.java)
+    // Object[] has identity equality. Weak metadata records GHC's frozen info-table
+    // distinction without replacing the existing array carrier or retaining it.
+    private val frozen = java.util.WeakHashMap<Array<Any?>, Boolean>()
+    @JvmStatic @Synchronized fun isFrozen(array: Array<Any?>): Boolean = frozen.containsKey(array)
+    @JvmStatic @Synchronized fun thaw(array: Array<Any?>): Array<Any?> {
+        frozen.remove(array)
+        return array
+    }
     @JvmStatic fun allocate(size: Long, initial: Any?): Array<Any?> {
         if (size < 0 || size > Int.MAX_VALUE.toLong()) fault("Array# size outside the managed allocation domain")
         return Array(size.toInt()) { initial }
@@ -60,8 +68,11 @@ internal object ManagedArray {
         if (!mutableSource && source === destination) fault("copyArray# requires distinct arrays")
         System.arraycopy(source, sourceOffset.toInt(), destination, destinationOffset.toInt(), count.toInt())
     }
-    /** The managed collector requires no info-table transition; preserve storage identity. */
-    @JvmStatic fun freeze(array: Array<Any?>): Array<Any?> = array
+    /** Preserve storage identity and retain the immutable-pointer-array distinction. */
+    @JvmStatic @Synchronized fun freeze(array: Array<Any?>): Array<Any?> {
+        frozen[array] = true
+        return array
+    }
 }
 
 /** GHC's levity-polymorphic elements are boxed references of either known levity.
@@ -148,10 +159,10 @@ internal fun arrayExpression(operation: ArrayOp, proof: CoreRepresentation, oper
     ArrayOp.READ -> ReadArrayExpression(operands[0], operands[1], operands[2])
     ArrayOp.WRITE -> WriteArrayExpression(operands[0], operands[1], operands[2], operands[3])
     ArrayOp.CAS -> CasArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
-    ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> FreezeArrayExpression(operands[0], operands[1])
+    ArrayOp.FREEZE, ArrayOp.UNSAFE_THAW -> FreezeArrayExpression(operands[0], operands[1], operation == ArrayOp.FREEZE)
     ArrayOp.INDEX -> IndexArrayExpression(operands[0], operands[1])
     ArrayOp.CLONE -> CloneArrayExpression(operands[0], operands[1], operands[2])
-    ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> CopyArrayExpression(operands[0], operands[1], operands[2], operands[3])
+    ArrayOp.FREEZE_COPY, ArrayOp.THAW, ArrayOp.CLONE_MUTABLE -> CopyArrayExpression(operands[0], operands[1], operands[2], operands[3], operation == ArrayOp.FREEZE_COPY)
     ArrayOp.SIZE, ArrayOp.SIZE_MUTABLE -> SizeArrayExpression(operands[0])
     ArrayOp.COPY, ArrayOp.COPY_MUTABLE -> TransferArrayExpression(operation == ArrayOp.COPY_MUTABLE,
         operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
@@ -207,12 +218,13 @@ private class CasArrayExpression(@field:Child private var array: Expr, @field:Ch
         return null
     }
 }
-private class FreezeArrayExpression(@field:Child private var array: Expr, @field:Child private var state: Expr) : Expr() {
+private class FreezeArrayExpression(@field:Child private var array: Expr, @field:Child private var state: Expr,
+    private val freeze: Boolean) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val storage = ManagedArray.require(array.execute(frame))
         requireVoidCarrier(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], ManagedArray.freeze(storage))
+        FrameAccess.write(frame, slots[offset], if (freeze) ManagedArray.freeze(storage) else ManagedArray.thaw(storage))
         return null
     }
 }
@@ -232,7 +244,7 @@ private class CloneArrayExpression(@field:Child private var array: Expr, @field:
         val storage = ManagedArray.require(array.execute(frame))
         val start = offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
-        return ManagedArray.slice(storage, start, length)
+        return ManagedArray.freeze(ManagedArray.slice(storage, start, length))
     }
 }
 private class SizeArrayExpression(@field:Child private var array: Expr) : Expr() {
@@ -255,14 +267,15 @@ private class TransferArrayExpression(private val mutableSource: Boolean,
     }
 }
 private class CopyArrayExpression(@field:Child private var array: Expr, @field:Child private var offset: Expr,
-    @field:Child private var count: Expr, @field:Child private var state: Expr) : Expr() {
+    @field:Child private var count: Expr, @field:Child private var state: Expr, private val freeze: Boolean) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val storage = ManagedArray.require(array.execute(frame))
         val start = this.offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
         requireVoidCarrier(state.execute(frame))
-        FrameAccess.write(frame, slots[offset], ManagedArray.slice(storage, start, length))
+        val copy = ManagedArray.slice(storage, start, length)
+        FrameAccess.write(frame, slots[offset], if (freeze) ManagedArray.freeze(copy) else copy)
         return null
     }
 }

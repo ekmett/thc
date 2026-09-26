@@ -239,6 +239,26 @@ class DataLayout private constructor(
         return fields[index].read(value)
     }
 
+    /** Cold graph copying preserves the exact layout; Addr# fields are not
+     * pointers to guest closures and therefore do not enter the traversal. */
+    internal fun compactPointer(index: Int): Boolean =
+        exactFieldReps[index] == "LiftedRep" || exactFieldReps[index] == "UnliftedRep"
+    internal fun compactBytes(): Long = 8L + fields.indices.sumOf { index ->
+        fields[index].vector?.let { it.proof.vector!!.lanes.toLong() *
+            when (it.proof.vector.element) {
+                "Int8ElemRep", "Word8ElemRep" -> 1
+                "Int16ElemRep", "Word16ElemRep" -> 2
+                "Int32ElemRep", "Word32ElemRep", "FloatElemRep" -> 4
+                else -> 8
+            } } ?: if (fields[index].isVoid()) 0L else 8L
+    }
+    internal fun copyCompactScalar(source: DataValue, target: DataValue, index: Int) {
+        if (!owns(source) || !owns(target)) fault("Compact constructor layout mismatch")
+        val field = fields[index]
+        if (field.vector != null) field.vector.copy(source, target)
+        else field.initialize(target, field.read(source))
+    }
+
     /** The RTS selector in atomicModifyMutVar2# requires a lifted first field. */
     internal fun readFirstLifted(value: DataValue): Any? {
         if (fields.firstOrNull()?.isLifted != true)

@@ -204,6 +204,8 @@ object CoreModules {
                     val name = expr[1] as String
                     if (thc.runtime.CoreFileWait.named(name)) reference(thc.runtime.CoreFileWait.badFd, emptySet())
                     CoreArithmeticExceptions.payload(name)?.let { reference(it, emptySet()) }
+                    if (thc.runtime.CompactOp.named(name)?.adds == true)
+                        thc.runtime.CompactOp.failures.forEach { reference(it, emptySet()) }
                     if (name == "atomically#") reference(thc.runtime.STMOp.NESTED, emptySet())
                 }
                 "lam" -> {
@@ -402,6 +404,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val stablePointers = thc.runtime.StablePointers()
+        @JvmField internal val compactRegions = thc.runtime.ManagedCompacts()
         internal val nativeAddresses = thc.runtime.NativeAddresses(env)
         internal val nativeAllocations = thc.runtime.ManagedNativeAllocations(env)
         internal val weaks = thc.runtime.ManagedWeaks()
