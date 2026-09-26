@@ -6,7 +6,8 @@ package thc.runtime
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.CoreModules
 import thc.EntryValue
 import thc.Json
@@ -62,21 +63,26 @@ class AsyncStrictEntryNativeTest {
         return module + mapOf("bindings" to bindings, "instrument" to true)
     }
 
-    @Test fun blockedDynamicPapDemandsUnusedStrictFormalInsideOriginalCatch() {
+    @ParameterizedTest @ValueSource(strings = ["bytecode", "ast"])
+    fun blockedDynamicPapDemandsUnusedStrictFormalInsideOriginalCatch(backend: String) {
         for (stage in listOf("pre", "post")) {
             val module = fixture(stage)
             Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").build().use { context ->
                 context.initialize("thc")
-                lateinit var program: BytecodeProgram
+                lateinit var program: ExecutableProgram
                 lateinit var state: Language.State
                 lateinit var functions: Map<String, org.graalvm.polyglot.Value>
                 context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     state = Language.currentState()
-                    program = BytecodeProgram(language, module, true)
+                    // Retain one graph for the dynamic PAP and all synchronizing
+                    // entries; each call still crosses the public EntryValue ABI.
+                    program = if (backend == "ast") Program(language, module, true)
+                        else BytecodeProgram(language, module, true)
+                    assertEquals(backend, program.diagnostics()["backend"])
                     assertEquals(true, (program.entryTarget("strictWorker").rootNode as GuestRoot).entryStrict[0])
                     functions = entries.filter { it in setOf("strictEntry", "takeReady", "takeRunning", "releaseGate", "forceShared", "prefixCount", "warmLoop") }
                         .associateWith { context.asValue(EntryValue(program, it, 1)) }
@@ -92,14 +98,14 @@ class AsyncStrictEntryNativeTest {
                 val target = Thread({
                     try { result.complete(call("strictEntry")) }
                     catch (failure: Throwable) { result.completeExceptionally(failure) }
-                }, "thc-strict-entry-target")
+                }, "thc-$backend-$stage-strict-entry-target")
                 target.isDaemon = true
                 target.start()
                 val ready = CompletableFuture<Long>()
                 val waiter = Thread({
                     try { ready.complete(call("takeReady")) }
                     catch (failure: Throwable) { ready.completeExceptionally(failure) }
-                }, "thc-strict-entry-ready")
+                }, "thc-$backend-$stage-strict-entry-ready")
                 waiter.isDaemon = true
                 waiter.start()
                 try {
