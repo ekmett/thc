@@ -125,8 +125,10 @@ runProject opts target = do
       executable = runExecutable opts
   createDirectoryIfMissing True requestedOutput
   output <- canonicalizePath requestedOutput
+  (wantedPackage, wantedComponent) <- executableSelection executable
+  let targetComponent = maybe "" (++ ":") wantedPackage ++ wantedComponent
   let native = output </> "native"
-      cabalArgs = ["build", "all", "--enable-build-info", "--project-file", "cabal.project",
+      cabalArgs = ["build", targetComponent, "--enable-build-info", "--project-file", "cabal.project",
                    "--builddir", native]
   compiler <- case ghcPath flags of
     Just path -> canonicalizePath path
@@ -209,8 +211,8 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
   require (Map.size byId == length units) "Cabal plan has duplicate unit IDs"
   selected <- selectExecutable executable units
-  -- The plan also lists optional tests and benchmarks that `cabal build all`
-  -- did not build. Only the requested executable and its complete dependency
+  -- The plan can also list unrelated executables, tests and benchmarks.
+  -- Only the requested executable and its complete dependency
   -- closure have required build-info; a missing member of that closure fails.
   ordered <- dependencyClosure byId (unitId selected)
   builtLocals <- filterM (\unit -> case jsonField (unitValue unit) "build-info" of
@@ -270,7 +272,10 @@ runBuiltProject project thcRoot runtime output native executable cabalArgs
                   installedOwner item `notElem` registered && Map.notMember (installedOwner item) byId) bundles)
       "installed Core owner collides with another Cabal unit"
     pure (Map.fromList bundles)
-  globalBundles <- prepareGlobalBundles context project globals
+  selectedPackage <- field (unitValue selected) "pkg-name"
+  selectedComponent <- field (unitValue selected) "component-name"
+  globalBundles <- prepareGlobalBundles context project
+    (selectedPackage ++ ":" ++ selectedComponent) globals
   (_, described) <- foldlM (\(keys, acc) unit -> do
     kind <- optionalField (unitValue unit) "type" ("" :: String)
     bundle <- if unitLocal unit
@@ -671,14 +676,16 @@ readUnit value = do
   style <- optionalField value "style" ("" :: String)
   pure (Unit identifier value dependencies (kind == "configured" && style == "local"))
 
+executableSelection :: String -> IO (Maybe String, String)
+executableSelection target = case split ':' target of
+  [name] | not (null name) -> pure (Nothing, "exe:" ++ name)
+  [package, "exe", name] | not (null package) && not (null name) ->
+    pure (Just package, "exe:" ++ name)
+  _ -> fail "--exe must be NAME or PACKAGE:exe:NAME"
+
 selectExecutable :: String -> [Unit] -> IO Unit
 selectExecutable target units = do
-  let pieces = split ':' target
-  (wantedPackage, wantedComponent) <- case pieces of
-    [name] | not (null name) -> pure (Nothing, "exe:" ++ name)
-    [package, "exe", name] | not (null package) && not (null name) ->
-      pure (Just package, "exe:" ++ name)
-    _ -> fail "--exe must be NAME or PACKAGE:exe:NAME"
+  (wantedPackage, wantedComponent) <- executableSelection target
   matches <- filterM (\unit -> if not (unitLocal unit) then pure False else do
     component <- optionalField (unitValue unit) "component-name" ("" :: String)
     package <- optionalField (unitValue unit) "pkg-name" ("" :: String)
@@ -733,9 +740,9 @@ exporterIdentity context = do
                                 "foreign-import-provenance",
                                 "-g", "-dynamic", "-dcore-lint"] :: [String])]
 
-prepareGlobalBundles :: ExportContext -> FilePath -> [Unit] -> IO (Map.Map String Bundle)
-prepareGlobalBundles _ _ [] = pure Map.empty
-prepareGlobalBundles context project units = do
+prepareGlobalBundles :: ExportContext -> FilePath -> String -> [Unit] -> IO (Map.Map String Bundle)
+prepareGlobalBundles _ _ _ [] = pure Map.empty
+prepareGlobalBundles context project target units = do
   let lockDir = contextCache context </> "core-bundles/v1"
   createDirectoryIfMissing True lockDir
   withLock (lockDir </> "global-export.lock") $ do
@@ -747,7 +754,7 @@ prepareGlobalBundles context project units = do
       pure (unit, buildKey, exportKey, path, hit)
     let missing = [(unit, buildKey, exportKey, path)
                   | (unit, buildKey, exportKey, path, Nothing) <- located]
-    when (not (null missing)) $ captureGlobalUnits context project (map first4 missing) missing
+    when (not (null missing)) $ captureGlobalUnits context project target (map first4 missing) missing
     pairs <- forM located $ \(unit, buildKey, exportKey, path, hit) -> do
       bundle <- case hit of
         Just value -> pure value
@@ -758,9 +765,9 @@ prepareGlobalBundles context project units = do
     pure (Map.fromList pairs)
   where first4 (unit, _, _, _) = unit
 
-captureGlobalUnits :: ExportContext -> FilePath -> [Unit] ->
+captureGlobalUnits :: ExportContext -> FilePath -> String -> [Unit] ->
                       [(Unit, String, String, FilePath)] -> IO ()
-captureGlobalUnits context project requested missing = do
+captureGlobalUnits context project target requested missing = do
   let stagingRoot = contextNative context </> "cache/thc/staging"
   createDirectoryIfMissing True stagingRoot
   (staging, handle) <- openTempFile stagingRoot "store-export-"
@@ -776,7 +783,9 @@ captureGlobalUnits context project requested missing = do
         capture = staging </> "capture"
         -- Cabal's offline mode rejects Hackage sources in a fresh store even
         -- when their tarballs are cached; use its normal source cache here.
-        arguments = ["--store-dir=" ++ store, "build", "all",
+        -- Rebuild only the selected executable's closure. `all` also builds
+        -- unrelated tests/apps and their dependencies in this fresh store.
+        arguments = ["--store-dir=" ++ store, "build", target,
                      "--enable-build-info", "--project-file", "cabal.project",
                      "--builddir", dist, "--with-compiler", wrapper] ++
                     maybe [] (\path -> ["--with-hc-pkg", path]) (contextGhcPkg context)

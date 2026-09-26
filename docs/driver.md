@@ -111,7 +111,11 @@ cabal run thc -- run test/fixtures/run-project \
 ```
 
 The project path requires cabal-install 3.16 and GHC 9.14.1. Cabal performs the
-normal native build, including preprocessing and compile-time Haskell. The driver
+normal native build, including preprocessing and compile-time Haskell, for the
+selected executable and its dependency closure. Both this build and a cold
+store-Core acquisition target that executable, not every sibling application,
+test or benchmark in the project. An unrelated unbuildable executable therefore
+does not block the selected workload. The driver
 reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
 unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
 It writes one compressed Core ZIP per local component under
