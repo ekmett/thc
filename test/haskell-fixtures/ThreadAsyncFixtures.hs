@@ -37,7 +37,7 @@ prepareThreadAsync root = do
       lazySource = "compiler/test-fixtures/LazyForkAudit.hs"
       lazyDriver = "compiler/test-fixtures/LazyForkNative.hs"
       entries = ["forkAndThrow", "killUncaught", "selfThrow", "maskedUnmaskSelf",
-        "yieldProbe", "yieldMasked"]
+        "promptSelfThrow", "promptMaskedUnmaskSelf", "yieldProbe", "yieldMasked"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -86,7 +86,7 @@ prepareThreadAsync root = do
   writeFile (output </> "oracle.txt") actual
   extras <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["extras", "+RTS", "-N2", "-RTS"] ""
-  unless (extras == "5\n-1\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
+  unless (extras == "5\n-1\n-1\n-1\n-1\n") (die "Public thread uncaught/self delivery oracle disagreed")
   writeFile (output </> "extra-oracle.txt") extras
   yielded <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["yield", "+RTS", "-N2", "-RTS"] ""
@@ -116,7 +116,7 @@ prepareThreadAsync root = do
   artifactHashes <- hashes root artifacts
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
     "entry" .= ("forkAndThrow" :: String), "entries" .= entries, "stages" .= stages,
-    "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1, -1] :: [Int]),
+    "native" .= ([43, 44] :: [Int]), "extraNative" .= ([5, -1, -1, -1, -1] :: [Int]),
     "yieldNative" .= ([37, 39] :: [Int]),
     "lazyNative" .= ([52, 53] :: [Int]),
     "inputHashes" .= sourceHashes,
@@ -138,6 +138,9 @@ supportedThreadContract entry (Object report) = hasPublicThreadPrimitives && cas
               "killUncaught" -> ["fork#", "myThreadId#", "killThread#"]
               "selfThrow" -> ["myThreadId#", "killThread#", "catch#"]
               "maskedUnmaskSelf" -> ["myThreadId#", "killThread#", "catch#",
+                "maskUninterruptible#", "unmaskAsyncExceptions#", "getMaskingState#"]
+              "promptSelfThrow" -> ["prompt#", "myThreadId#", "killThread#", "catch#"]
+              "promptMaskedUnmaskSelf" -> ["prompt#", "myThreadId#", "killThread#", "catch#",
                 "maskUninterruptible#", "unmaskAsyncExceptions#", "getMaskingState#"]
               "lazyFork" -> ["fork#", "killThread#"]
               "yieldProbe" -> ["yield#", "getMaskingState#"]

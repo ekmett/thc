@@ -131,3 +131,19 @@ maskedUnmaskSelf token =
     (\_ s -> (# s, Box (-1#) #)) realWorld# of
       (# s6, Box result #) -> case getMaskingState# s6 of
         (# _, outside #) -> token +# result +# 100# *# outside
+
+-- A real prompt selects delimited catch/mask lowering for these unchanged
+-- self-delivery callees; neither wrapper captures a saved continuation.
+{-# OPAQUE promptSelfThrow #-}
+promptSelfThrow :: Int# -> Int#
+promptSelfThrow token = runRW# (\s0 ->
+  case newPromptTag# s0 of { (# s1, tag #) ->
+  case prompt# tag (\s -> case selfThrow token of value -> (# s, Box value #)) s1 of
+    (# _, Box result #) -> result })
+
+{-# OPAQUE promptMaskedUnmaskSelf #-}
+promptMaskedUnmaskSelf :: Int# -> Int#
+promptMaskedUnmaskSelf token = runRW# (\s0 ->
+  case newPromptTag# s0 of { (# s1, tag #) ->
+  case prompt# tag (\s -> case maskedUnmaskSelf token of value -> (# s, Box value #)) s1 of
+    (# _, Box result #) -> result })

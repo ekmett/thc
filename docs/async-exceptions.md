@@ -28,6 +28,11 @@ external sends and delivery to non-resumable children before enqueueing.
 Nested entry does not upgrade a thread lifetime
 that was registered without external delivery support.
 
+Disabled-mode self-delivery also reaches a live delimited `catch#` when prompts
+are present. Crossing an already-saved multi-shot continuation is different:
+its saved catch frames do not handle the async-origin request. See
+[delimited continuations](delimited-continuations.md) for that boundary.
+
 Managed foreign reverse entries create fresh bound guest identities on the same
 carrier. They start unmasked and cannot claim the suspended caller's mailbox.
 Self-directed delivery compares logical identities, so sending to that caller

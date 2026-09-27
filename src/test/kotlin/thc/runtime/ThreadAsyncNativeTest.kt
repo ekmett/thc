@@ -102,7 +102,7 @@ class ThreadAsyncNativeTest {
                 assertEquals(expected, bytes.joinToString("") { "%02x".format(it) }, "Stale $path")
             }
         assertEquals(listOf("43", "44"), File(root, "build/thread-async/oracle.txt").readLines())
-        assertEquals(listOf("5", "-1", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
+        assertEquals(listOf("5", "-1", "-1", "-1", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
         assertEquals(listOf("37", "39"), File(root, "build/thread-async/yield-oracle.txt").readLines())
         assertEquals(listOf("52", "53"), File(root, "build/thread-async/lazy-oracle.txt").readLines())
     }
@@ -159,6 +159,14 @@ class ThreadAsyncNativeTest {
         exercise("selfThrow", listOf(-1, 0), backend = "ast", asyncExceptions = false)
     @Test fun astSynchronousSelfDeliveryRestoresTheOuterMask() =
         exercise("maskedUnmaskSelf", listOf(-1, 0), backend = "ast", asyncExceptions = false)
+    @Test fun delimitedSelfDeliveryReachesTheOriginalHandler() =
+        exercise("promptSelfThrow", listOf(-1, 0), asyncExceptions = false)
+    @Test fun delimitedSelfDeliveryRestoresTheOuterMask() =
+        exercise("promptMaskedUnmaskSelf", listOf(-1, 0), asyncExceptions = false)
+    @Test fun astDelimitedSelfDeliveryReachesTheOriginalHandler() =
+        exercise("promptSelfThrow", listOf(-1, 0), backend = "ast", asyncExceptions = false)
+    @Test fun astDelimitedSelfDeliveryRestoresTheOuterMask() =
+        exercise("promptMaskedUnmaskSelf", listOf(-1, 0), backend = "ast", asyncExceptions = false)
     @Test fun forkedChildOwnsAndResumesTheSharedLazyActionHead() =
         exercise("lazyFork", listOf(52, 53), "LazyForkAudit")
     @Test fun astForkedChildOwnsAndResumesTheSharedLazyActionHead() =

@@ -19,6 +19,7 @@ import thc.Json
 import thc.Language
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicReference
 
 @Timeout(120)
 class DelimitedContinuationsTest {
@@ -231,6 +232,119 @@ class DelimitedContinuationsTest {
                 assertTrue(continuation.delimitedControlEnabled)
                 assertTrue(DelimitedControl.enabled(continuation))
                 ThreadInventoryCoreEvidence.released(language)
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun liveCatchAcknowledgesOnlySelfDeliveryAndKeepsItsPayloadLazy() {
+        Context.newBuilder("thc").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val threads = Language.currentState().threads
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val payload = Thunk(object : GuestRoot(language, FrameLayout().build()) {
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any = error("Delimited catch forced the payload")
+                }.callTarget, null)
+                val deliveryTarget = AtomicReference<GuestThreadId>()
+                val seen = AtomicReference<AsyncRequest>()
+                var calls = 0
+                var handlerMask = MaskingState.UNMASKED
+                var failHandler = false
+                val handlerFailure = RuntimeFault("handler failure")
+                val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                    init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any = try {
+                        GuestThreadOps.killSelf(this, deliveryTarget.get(), payload)
+                    } catch (delivered: AsyncDelivery) {
+                        seen.set(delivered.request)
+                        throw delivered // Preserve the real async-origin control object.
+                    }
+                }.callTarget)
+                val handler = Closure(null, arity = 2, target = object : GuestRoot(language, FrameLayout().build()) {
+                    init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        calls++
+                        assertSame(payload, frame.arguments[1])
+                        assertSame(payload, seen.get().payload)
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, seen.get().state)
+                        assertEquals(handlerMask, SynchronousMasking.current(this))
+                        if (failHandler) throw handlerFailure
+                        return shape.layout.create().also { shape.layout.setObject(it, 0, payload) }
+                    }
+                }.callTarget)
+                val root = object : GuestRoot(language, FrameLayout().build()) {
+                    @field:Child private var site = DelimitedActionSite(language, Metrics(false))
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any? = site.caught(frame, action, handler, Unit, shape)
+                    fun resumeSaved(): Any? {
+                        val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor)
+                        val cut = DelimitedCut(PromptTag(Language.currentState(this)), null, shape,
+                            SynchronousMasking.current(this), this)
+                        cut.frames.add(DelimitedFrame(frame, DelimitedCatchStep(site, handler, shape)))
+                        return DelimitedStack(cut, shape).resume(site, frame, action)
+                    }
+                }
+                threads.enterCurrent(externalAsync = false)
+                try {
+                    val self = threads.currentIdentity()
+                    deliveryTarget.set(self)
+                    for (mask in MaskingState.entries) {
+                        SynchronousMasking.set(root, mask)
+                        handlerMask = if (mask == MaskingState.UNMASKED) MaskingState.MASKED_INTERRUPTIBLE else mask
+                        val result = Calls.target(root.callTarget, arrayOf(0L)) as HandoffStorage
+                        assertSame(payload, shape.layout.getObject(result, 0))
+                        assertTrue(seen.get().forceSelf)
+                        assertEquals(self.logicalId, seen.get().targetId)
+                        assertEquals(mask, SynchronousMasking.current(root))
+                        assertNull(threads.poll(root))
+                        assertEquals(0, payload.state)
+                    }
+                    assertEquals(3, calls, "Exactly one handler invocation per self request")
+                    SynchronousMasking.set(root, MaskingState.UNMASKED)
+                    handlerMask = MaskingState.MASKED_INTERRUPTIBLE
+                    failHandler = true
+                    assertSame(handlerFailure, assertThrows(RuntimeFault::class.java) {
+                        Calls.target(root.callTarget, arrayOf(0L))
+                    })
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
+                    assertEquals(4, calls)
+
+                    // Saved multi-shot catch frames do not yet route async-origin
+                    // delivery. Preserve that boundary and the original request.
+                    failHandler = false
+                    SynchronousMasking.set(root, MaskingState.MASKED_UNINTERRUPTIBLE)
+                    val escaped = assertThrows(AsyncDelivery::class.java) { root.resumeSaved() }
+                    assertSame(seen.get(), escaped.request)
+                    assertTrue(escaped.request.forceSelf)
+                    assertEquals(AsyncRequestState.CLAIMED, escaped.request.state)
+                    assertEquals(4, calls, "Unsupported saved crossing must not become GuestException")
+                    assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(root))
+                    escaped.request.acknowledge()
+                    SynchronousMasking.set(root, MaskingState.UNMASKED)
+
+                    // The same carrier may host a distinct callback identity.
+                    // Its external send must not enter the caller's mailbox or handler.
+                    val foreign = threads.enterForeign(ForeignSafety.SAFE)
+                    try {
+                        threads.enterCurrent(externalAsync = false)
+                        try {
+                            assertNotSame(self, threads.currentIdentity())
+                            assertThrows(UnsupportedCore::class.java) { Calls.target(root.callTarget, arrayOf(0L)) }
+                            assertEquals(4, calls)
+                        } finally { threads.leaveCurrent() }
+                    } finally { threads.leaveForeign(foreign) }
+                    assertSame(self, threads.currentIdentity())
+                    assertNull(threads.poll(root), "Rejected external send never entered the mailbox")
+                    assertEquals(0, payload.state)
+                    ThreadInventoryCoreEvidence.released(language)
+                } finally { threads.leaveCurrent() }
             } finally { context.leave() }
         }
     }
