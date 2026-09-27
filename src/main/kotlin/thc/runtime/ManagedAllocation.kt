@@ -134,14 +134,21 @@ internal class ManagedAllocation private constructor(
     }
 
     @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
-        mutable()
-        if (exposedToNative || exposedAsRawBytes)
-            fault("Cannot store a managed pointer in a raw-exposed array")
+        requireAddressCell(offset)
         val start = range(offset, pointerBytes.toLong())
         invalidate(start, pointerBytes)
         pointerCapable = true
         segment.asSlice(start.toLong(), pointerBytes.toLong()).fill(0)
         cells()[start] = value
+    }
+
+    /** Validate native pointer-result storage before an external operation.
+     * The caller retains this monitor until publishing the actual pointer. */
+    @Synchronized internal fun requireAddressCell(offset: Long) {
+        mutable()
+        if (exposedToNative || exposedAsRawBytes)
+            fault("Cannot store a managed pointer in a raw-exposed array")
+        range(offset, pointerBytes.toLong())
     }
 
     @Synchronized internal fun requireByteRegion(offset: Long, count: Long, writable: Boolean) {

@@ -20,6 +20,30 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.directoryStream) {
+            if (operation == OriginalStdioOp.FDOPENDIR) {
+                val fd = operands[0].executeRequiredLong(frame)
+                requireVoidCarrier(operands[1].execute(frame))
+                FrameAccess.writeObject(frame, slots[offset], CoreOriginalStdio.current(this).openDirectoryFd(fd))
+            } else {
+                val first = operands[0].executeRequiredAddress(frame)
+                val second = if (operation == OriginalStdioOp.READDIR) operands[1].executeRequiredAddress(frame) else null
+                requireVoidCarrier(operands.last().execute(frame))
+                if (operation == OriginalStdioOp.OPENDIR)
+                    FrameAccess.writeObject(frame, slots[offset], CoreOriginalStdio.current(this).openDirectory(first))
+                else {
+                    val streams = CoreOriginalStdio.directories(this)
+                    if (operation == OriginalStdioOp.DIRENT_NAME)
+                        FrameAccess.writeObject(frame, slots[offset], streams.name(first))
+                    else if (operation == OriginalStdioOp.READDIR)
+                        FrameAccess.writeLong(frame, slots[offset], streams.read(first, second!!))
+                    else if (operation == OriginalStdioOp.CLOSEDIR)
+                        FrameAccess.writeLong(frame, slots[offset], streams.closeStream(first))
+                    else streams.freeEntry(first)
+                }
+            }
+            return null
+        }
         if (operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT) {
             val fd = operands[0].executeRequiredLong(frame)
             val path = operands[1].executeRequiredAddress(frame)

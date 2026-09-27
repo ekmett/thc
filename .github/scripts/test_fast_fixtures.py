@@ -1045,13 +1045,13 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest['groups']['original-posix-stat']
-        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest', 'OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest'):
+        for name in ('OriginalPosixStatTest', 'PosixStatAbiTest', 'OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest', 'OriginalDirectoryStreamsTest'):
             self.assertEqual('original-posix-stat', owners['thc.runtime.' + name])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-posix-stat']}], group['commands'])
         self.assertIn('"$fixture_bin" original-posix-stat', (project / 'scripts/prepare-tests.sh').read_text())
         self.assertIn('build/original-posix-stat/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-posix-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertEqual(['build/original-posix-stat', 'build/original-path-stat', 'build/original-path-mode', 'build/original-path-link', 'build/original-path-access', 'build/original-unlinkat', 'build/original-fstatat', 'build/original-current-directory'], group['outputs'])
+        self.assertEqual(['build/original-posix-stat', 'build/original-path-stat', 'build/original-path-mode', 'build/original-path-link', 'build/original-path-access', 'build/original-unlinkat', 'build/original-fstatat', 'build/original-current-directory', 'build/original-directory-streams'], group['outputs'])
         self.assertIn('compiler/test-fixtures/OriginalPathStatAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalPathStatFixtures.hs', group['sources'])
         self.assertIn('build/original-path-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -1442,6 +1442,56 @@ class FixturePreparationTest(unittest.TestCase):
                     mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
                 self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
             path = self.root / 'build/original-current-directory/pre.json'
+            path.write_text('mutated')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            path.unlink(); path.symlink_to(scratch / 'link')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+            path.unlink()
+            with self.assertRaises(FileNotFoundError): fast_fixtures._output_hashes(self.root, group)
+        with mock.patch.object(fast_fixtures.platform, 'system', return_value='Darwin'):
+            self.assertEqual({'build/original-posix-stat/manifest.json'}, set(fast_fixtures._output_hashes(self.root, group)))
+
+    def test_directory_streams_receipt_excludes_scratch_and_checks_every_artifact(self):
+        cache = fast_fixtures.fast_inputs
+        name = 'build/original-directory-streams/manifest.json'
+        artifacts = {}
+        for relative in cache.ORIGINAL_DIRECTORY_STREAMS_OUTPUTS - {name}:
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n')
+            artifacts[relative] = cache.digest(path)
+        receipt = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
+            entries=list(cache.ORIGINAL_DIRECTORY_STREAMS_ENTRIES), installedArtifactsHashed=False, privateRebuiltUnix=True, unixSourceReceipt='build/original-directory-streams/unix-source.json',
+                    unixArchiveSha256='a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e', artifactHashes=artifacts)
+        (self.root / name).write_text(json.dumps(receipt))
+        scratch = self.root / 'build/original-directory-streams/native-paths'
+        scratch.mkdir()
+        (scratch / 'link').symlink_to('/definitely/missing/current_directory-target')
+        ghc = self.root / 'build/original-directory-streams/ghc'
+        ghc.mkdir()
+        (ghc / 'abi-probe').write_bytes(b'excluded probe binary')
+        old = self.root / 'build/original-posix-stat/manifest.json'
+        old.parent.mkdir(); old.write_text('{"supported": false}\n')
+        # The original POSIX preparation now owns both independently closed
+        # pathname receipts. Neither may hide the other during recursion.
+        sibling_name = 'build/original-unlinkat/manifest.json'
+        sibling_artifacts = {}
+        for relative in cache.ORIGINAL_UNLINKAT_OUTPUTS - {sibling_name}:
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('unlinkat fixture\n')
+            sibling_artifacts[relative] = cache.digest(path)
+        (self.root / sibling_name).write_text(json.dumps(dict(receipt,
+            directoryUnit="directory-1.3.10.0-inplace", entries=list(cache.ORIGINAL_UNLINKAT_ENTRIES), artifactHashes=sibling_artifacts)))
+        group = {'outputs': ['build/original-posix-stat', 'build/original-unlinkat', 'build/original-directory-streams']}
+        with mock.patch.object(fast_fixtures.platform, 'system', return_value='Linux'):
+            expected = fast_fixtures._output_hashes(self.root, group)
+            self.assertEqual(cache.ORIGINAL_DIRECTORY_STREAMS_OUTPUTS | cache.ORIGINAL_UNLINKAT_OUTPUTS |
+                             {'build/original-posix-stat/manifest.json'}, set(expected))
+            with mock.patch.object(fast_fixtures, 'FULL_REQUIRED', set(expected)), \
+                    mock.patch.object(fast_fixtures, 'FULL_OUTPUT_ROOTS', frozenset(group['outputs'])):
+                self.assertEqual(set(expected), set(fast_fixtures._full_output_hashes(self.root)))
+            path = self.root / 'build/original-directory-streams/pre.json'
             path.write_text('mutated')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
             path.unlink(); path.symlink_to(scratch / 'link')

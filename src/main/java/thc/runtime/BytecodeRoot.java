@@ -1723,6 +1723,56 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalDirectoryPointer {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = operation == OriginalStdioOp.OPENDIR
+                ? CoreOriginalStdio.current(node).openDirectory(address)
+                : CoreOriginalStdio.directories(node).name(address);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalFdopendir {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long fd, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ManagedAddress result = CoreOriginalStdio.current(node).openDirectoryFd(fd);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalReaddir {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress stream, ManagedAddress output, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.directories(node).read(stream, output);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalDirectoryRelease {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            if (operation == OriginalStdioOp.CLOSEDIR) {
+                long result = CoreOriginalStdio.directories(node).closeStream(address);
+                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            } else CoreOriginalStdio.directories(node).freeEntry(address);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalGetcwd {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress output, long capacity, Object state, @Bind("$node") Node node) {

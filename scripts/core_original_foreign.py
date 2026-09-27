@@ -10,6 +10,16 @@ These declarations alone do not enable complete decoding or remote capture.
 import re
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+DIRECTORY_STREAM_OPERATIONS = {
+    'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziPosixPathZCopendir':
+        ('capi', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziCommonZCfdopendir':
+        ('capi', 'unsafe', ('Int32Rep', None), (None, 'AddrRep')),
+    'closedir': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_readdir': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_d_name': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    '__hscore_free_dirent': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
+}
 WAIT_STATUS_OPERATIONS = {
     f'ghczuwrapperZC{index}ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZC{name}':
         ('capi', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep'))
@@ -94,6 +104,7 @@ TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosix
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
 OPERATIONS = {
+    **DIRECTORY_STREAM_OPERATIONS,
     **TEXT_OPERATIONS,
     **BYTESTRING_DECIMAL_OPERATIONS,
     'fps_sort': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None,)),
@@ -272,6 +283,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in DIRECTORY_STREAM_OPERATIONS.items()},
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink', 'chdir', 'getcwd')},
     ('unix-2.8.8.0-inplace', 'geteuid'): OPERATIONS['geteuid'],
     ('unix-2.8.8.0-inplace', 'mkdir'): OPERATIONS['mkdir'],
@@ -315,7 +327,7 @@ def operation_symbol(target):
     if isinstance(symbol, str):
         canonical = re.sub(r'unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC',
                            'unixzm2zi8zi8zi0zminplaceZC', symbol)
-        if canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS:
+        if canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS or canonical in DIRECTORY_STREAM_OPERATIONS:
             return canonical
         canonical_directory = re.sub(r'directoryzm1zi3zi10zi0zm(?:inplace|[0-9a-f]+)ZC',
                                      'directoryzm1zi3zi10zi0zminplaceZC', symbol)
@@ -455,6 +467,11 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
                 'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
                 'matching installed unix wait-status unit and symbol')
+    if symbol in DIRECTORY_STREAM_OPERATIONS:
+        unit = target.get('unit')
+        require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
+                'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
+                'matching installed unix directory-stream unit and symbol')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
@@ -465,7 +482,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
-                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS) and unix_libc_unit(target.get('unit')) or
+                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS, *DIRECTORY_STREAM_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  symbol in ('unlinkat', DIRECTORY_FSTATAT) and directory_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),

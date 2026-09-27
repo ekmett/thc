@@ -225,6 +225,43 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalCurrentDirectoryAudit.o', 'ghc/abi-probe', 'native/oracle', 'unix-source/unix.cabal', 'unix-build/build/libHSunix.so', 'unknown.json'):
             self.assertFalse(cache.allowed_payload('build/original-current-directory/' + suffix, {}))
 
+    def test_original_directory_streams_closed_receipt(self):
+        name = 'build/original-directory-streams/manifest.json'
+        outputs = cache.ORIGINAL_DIRECTORY_STREAMS_OUTPUTS
+        self.assertEqual(68, len(outputs))
+        self.assertEqual(cache.platform.system() == 'Linux', name in DECLARED_REQUIRED)
+        artifacts = {path: 'a' * 64 for path in outputs - {name}}
+        good = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
+                    entries=list(cache.ORIGINAL_DIRECTORY_STREAMS_ENTRIES), installedArtifactsHashed=False,
+                    privateRebuiltUnix=True, unixSourceReceipt='build/original-directory-streams/unix-source.json',
+                    unixArchiveSha256='a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e', artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.original_directory_streams_artifact_hashes(good))
+        for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-02fc', 'unix-2.8.8.0-deadbeef'):
+            self.assertEqual(artifacts, cache.original_directory_streams_artifact_hashes(dict(good, unixUnit=unit)))
+        for unit in (None, 42, 'unix-2.8.8.0', 'unix-2.8.8.0-',
+                     'unix-2.8.8.0-ABCD', 'unix-2.8.8.0-xyz',
+                     'unix-2.8.7.0-02fc', 'directory-2.8.8.0-02fc',
+                     'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-02fc:forged'):
+            with self.assertRaises(cache.CacheMiss, msg=unit):
+                cache.original_directory_streams_artifact_hashes(dict(good, unixUnit=unit))
+        for label in ('pre-audit-directoryOpen', 'post-audit-directoryFree'):
+            self.assertIn('build/original-directory-streams/logs/' + label + '.command.json', outputs)
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
+                        dict(entries=[]), dict(installedArtifactsHashed=True),
+                        dict(privateRebuiltUnix=False), dict(unixSourceReceipt="wrong"), dict(unixArchiveSha256="a" * 64),
+                        dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
+                        dict(artifactHashes={**artifacts, 'build/original-directory-streams/pre.json': 'bad'})):
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_directory_streams_artifact_hashes(dict(good, **changes))
+        for path in artifacts:
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_directory_streams_artifact_hashes(dict(good,
+                    artifactHashes={key: value for key, value in artifacts.items() if key != path}))
+        for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalDirectoryStreamsAudit.o', 'ghc/abi-probe', 'native/oracle', 'unix-source/unix.cabal', 'unix-build/build/libHSunix.so', 'unknown.json'):
+            self.assertFalse(cache.allowed_payload('build/original-directory-streams/' + suffix, {}))
+
     def test_original_current_directory_archive_roundtrip_preserves_source_receipt(self):
         name = 'build/original-current-directory/manifest.json'
         receipt_name = 'build/original-current-directory/unix-source.json'

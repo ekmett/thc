@@ -408,6 +408,62 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    @TruffleBoundary internal fun openDirectoryOriginal(path: ManagedAddress): ManagedAddress {
+        val bytes = originalPathBytes(path)
+        var address = ManagedAddress.nullAddress()
+        result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Directory streams require the explicit NativeIO context")
+            }
+            address = provider.directoryStreams.open(bytes)
+            0L
+        }
+        return address
+    }
+
+    /** fdopendir consumes exactly the successful input descriptor. Its private
+     * kernel duplicate shares the open description with surviving dup aliases.
+     * Failure leaves the guest descriptor for the original Unix caller to close. */
+    @TruffleBoundary internal fun openDirectoryDescriptor(fd: Long): ManagedAddress {
+        var address = ManagedAddress.nullAddress()
+        var postCommitFailure: Throwable? = null
+        result {
+            val entry = descriptor(fd)
+            synchronized(entry.owner) {
+                val provider = synchronized(this) {
+                    if (disposed || entry.closed || descriptors[fd] !== entry)
+                        fail(4, "Closed or unknown THC file descriptor: $fd")
+                    nativeProvider ?: fail(7, "Directory streams require the explicit NativeIO context")
+                }
+                val native = entry.owner.native ?: fail(4, "Directory fd is not a native resource")
+                val acquired = provider.directoryStreams.fromDescriptor(native)
+                var published = false
+                try {
+                    var wakeFailure: Throwable? = null
+                    val last = synchronized(this) {
+                        if (disposed || entry.closed || descriptors[fd] !== entry)
+                            fail(4, "Directory descriptor was closed during acquisition")
+                        descriptors.remove(fd)
+                        wakeFailure = invalidate(entry)
+                        --entry.owner.references == 0L
+                    }
+                    // The original logical descriptor is consumed. A consumed
+                    // close errno cannot report a failed fdopendir afterwards.
+                    published = true
+                    address = acquired
+                    if (last) try { retire(entry.owner) } catch (_: IOException) { }
+                    postCommitFailure = wakeFailure
+                } finally {
+                    if (!published) provider.directoryStreams.abandon(acquired)
+                }
+            }
+            0L
+        }
+        postCommitFailure?.let { throw it }
+        return address
+    }
+
     /** Anonymous kernel descriptors use the same namespace, aliases and close
      * protocol as original open. Reserve every result before native acquisition;
      * partial acquisition and failed publication close every acquired lease. */

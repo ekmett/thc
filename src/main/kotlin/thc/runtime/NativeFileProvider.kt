@@ -86,6 +86,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     private val library: Any
     private val leases = linkedSetOf<NativeFileLease>()
     private var disposed = false
+    internal val directoryStreams = NativeDirectoryStreams(directory)
     private val statSize: Int
     private val termiosSize: Int
 
@@ -408,6 +409,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
             leases.toList()
         }
         var failed: Throwable? = null
+        try { directoryStreams.close() } catch (failure: Throwable) { failed = failure }
         for (lease in pending) try { retire(lease) } catch (failure: Throwable) {
             if (failed == null) failed = failure else if (failed !== failure) failed.addSuppressed(failure)
         }

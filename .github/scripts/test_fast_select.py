@@ -1101,7 +1101,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(39, len(consumers))
+        self.assertEqual(40, len(consumers))
         self.assertIn("thc.runtime.OriginalHandleReadinessNativeTest", consumers)
         self.assertIn("thc.runtime.OriginalTermiosTest", consumers)
 
@@ -1113,6 +1113,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.OriginalUnlinkAtTest", consumers)
         self.assertIn("thc.runtime.OriginalFstatAtTest", consumers)
         self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", consumers)
+        self.assertIn("thc.runtime.OriginalDirectoryStreamsTest", consumers)
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
