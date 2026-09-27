@@ -210,11 +210,7 @@ jobs:
           python3 scripts/test-simd-families.py
           python3 scripts/test-floatx4-model.py
           python3 scripts/test-doublex2-model.py
-          python3 scripts/test-int16x8-model.py
-          python3 scripts/test-int8x16-model.py
           python3 scripts/test-word8x16-model.py
-          python3 scripts/test-word16x8-model.py
-          python3 scripts/test-word32x4-model.py
           python3 scripts/test-int32x4-multiply-model.py
           python3 scripts/test-core-vector-memory.py
           python3 scripts/test-core-word32-vector-memory.py

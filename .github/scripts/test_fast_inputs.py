@@ -367,6 +367,25 @@ class FastInputTests(unittest.TestCase):
         for path in ('native/OriginalMemsetNative.o', 'native/other-oracle', 'unreviewed.json'):
             self.assertFalse(cache.allowed_payload('build/original-memset/' + path, {}))
 
+    def test_integer_simd_migration_keeps_closed_native_and_export_only_receipts(self):
+        for family, (_, rows) in cache.INTEGER_SIMD_FAMILIES.items():
+            for native in (False, True):
+                outputs = cache.integer_simd_outputs(family, native)
+                artifacts = {name: 'a' * 64 for name in outputs - {f'build/{family}/provenance.json'}}
+                good = dict(stages=['pre', 'post'] if native else ['pre'], modelRows=rows,
+                            nativeRows=rows if native else None, modelMatched=True if native else None,
+                            positiveAuditsAccepted=True, proofNegativeControlsPassed=True,
+                            artifacts=[dict(path=name, sha256=digest) for name, digest in artifacts.items()])
+                self.assertEqual(artifacts, cache.integer_simd_artifact_hashes(family, good))
+                for path in outputs:
+                    self.assertTrue(cache.allowed_payload(path, {}), path)
+                for changes in (dict(nativeRows=rows-1), dict(modelRows=0), dict(proofNegativeControlsPassed=False),
+                                dict(artifacts=good['artifacts'][1:]), dict(artifacts=good['artifacts'] + good['artifacts'][:1])):
+                    with self.assertRaises(cache.CacheMiss):
+                        cache.integer_simd_artifact_hashes(family, dict(good, **changes))
+            for extra in ('commands/unknown.stdout', 'native/foreign-oracle', 'MUTATED-unreviewed.json'):
+                self.assertFalse(cache.allowed_payload(f'build/{family}/{extra}', {}))
+
     def test_memory_search_closed_receipt(self):
         manifest_path = 'build/original-memory-search/manifest.json'
         outputs = cache.MEMORY_SEARCH_OUTPUTS
@@ -1956,7 +1975,8 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/c/bytestring-utf8-api.c",
                           "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                           "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
-                          "src/main/kotlin/thc/runtime/VectorMemory.kt"), cache.RUNTIME_INPUTS)
+                          "src/main/kotlin/thc/runtime/VectorMemory.kt",
+                          "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"), cache.RUNTIME_INPUTS)
         with patch.object(cache, "toolchain", return_value={}):
             sources = cache.identity(root)["sources"]
         for name in (*cache.RUNTIME_INPUTS, *("compiler/THC/" + name + ".hs" for name in
