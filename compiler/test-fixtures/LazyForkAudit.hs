@@ -3,6 +3,16 @@
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 -- Keep the work before the State# lambda in the shared action head.
 {-# OPTIONS_GHC -fno-do-lambda-eta-expansion #-}
+
+-- |
+-- Module      : LazyForkAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for lazy fork audit Core and metadata.
 module LazyForkAudit where
 
 import GHC.Exts

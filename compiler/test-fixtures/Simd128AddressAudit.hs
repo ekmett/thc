@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
+
+-- |
+-- Module      : Simd128AddressAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Pinned storage and keepAlive# retain the public Addr# frontier natively.
 -- The interior pointer exercises negative offsets without out-of-bounds access.
 module Simd128AddressAudit where

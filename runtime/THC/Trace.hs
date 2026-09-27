@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ScopedTypeVariables, Trustworthy #-}
 
--- | Context-local structured diagnostics. Selecting JFR never starts a JVM
+-- |
+-- Module      : THC.Trace
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Context-local structured diagnostics. Selecting JFR never starts a JVM
 -- recording; an enabled sink is not evidence that a recording is consuming it.
 module THC.Trace
   ( Available(..), TraceSink(..), getTraceSink, supportedTraceSinks

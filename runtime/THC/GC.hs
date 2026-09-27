@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE Trustworthy #-}
 
--- | JVM-wide collector statistics. These queries neither force a collection
+-- |
+-- Module      : THC.GC
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- JVM-wide collector statistics. These queries neither force a collection
 -- nor enable monitoring. Values are independently sampled and cumulative.
 module THC.GC (Available(..), CollectorStats(..), collectors) where
 

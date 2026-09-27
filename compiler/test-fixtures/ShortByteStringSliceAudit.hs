@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE BangPatterns, MagicHash #-}
+
+-- |
+-- Module      : ShortByteStringSliceAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for short byte string slice audit Core and metadata.
 module ShortByteStringSliceAudit where
 import GHC.Exts (Int(I#), Int#)
 import Data.Word (Word8)

@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Package-owned C/C++/CAPI acquisition. Compile the real configured source and
+-- |
+-- Module      : THC.Driver.PackageNative
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Host filesystem/process services and the configured native toolchain
+--
+-- Package-owned C/C++/CAPI acquisition. Compile the real configured source and
 -- retained GHC wrappers while Cabal's headers exist; carry LLVM, not guesses
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative

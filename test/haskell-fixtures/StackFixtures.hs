@@ -3,6 +3,15 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : StackFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
+-- Fixture acquisition support for stack.
 module StackFixtures (prepareOriginalStack, prepareOriginalStackFormatter, exportOriginalStackSource) where
 
 import Control.Monad (forM, unless, when)

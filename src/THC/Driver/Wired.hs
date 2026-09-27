@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : THC.Driver.Wired
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Host filesystem/process services and the configured native toolchain
+--
+-- Produce wired-module and source artifacts used by project Core acquisition.
 module THC.Driver.Wired
   ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes
   , exportPinnedCore, probeTargetLayout ) where

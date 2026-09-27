@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, ScopedTypeVariables #-}
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; declared foreign symbols required at link/run time
+--
+-- Check runtime service statuses and tracing cleanup with native GHC fallbacks.
 module Main (main) where
 
 import Control.Exception

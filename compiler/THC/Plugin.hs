@@ -2,7 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE LambdaCase #-}
--- | GHC 9.14.1 plugin and direct serializers for THC's executable Core format.
+
+-- |
+-- Module      : THC.Plugin
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- GHC 9.14.1 plugin and direct serializers for THC's executable Core format.
 --
 -- Use @-fplugin=THC.Plugin@ with the output directory as the first plugin
 -- option. Package exports require @post-tidy@ and @unit-qualified@; add

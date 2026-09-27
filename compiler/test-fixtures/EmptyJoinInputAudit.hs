@@ -3,6 +3,16 @@
 
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr #-}
+
+-- |
+-- Module      : EmptyJoinInputAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for empty join input audit Core and metadata.
 module EmptyJoinInputAudit where
 import GHC.Exts
 

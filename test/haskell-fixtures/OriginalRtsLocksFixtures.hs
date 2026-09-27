@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : OriginalRtsLocksFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- Fixture acquisition support for original rts locks.
 module OriginalRtsLocksFixtures (prepareOriginalRtsLocks) where
 
 import Control.Monad (forM, unless)

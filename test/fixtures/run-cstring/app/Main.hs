@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 internal library APIs
+--
+-- Executable for the @run-cstring@ integration fixture.
 module Main where
 
 import GHC.Exts (Addr#, Char(C#), Int(I#), Int#, (+#), (==#), ord#, raise#,

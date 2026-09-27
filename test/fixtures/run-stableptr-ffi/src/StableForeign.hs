@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE CApiFFI, ForeignFunctionInterface, MagicHash, UnboxedTuples #-}
+
+-- |
+-- Module      : StableForeign
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC C API FFI; declared native headers and libraries
+--
+-- Module for the @run-stableptr-ffi@ integration fixture.
 module StableForeign (stableRoundtrip, stableLazy) where
 import Foreign.C.Types (CInt(..))
 import Foreign.StablePtr

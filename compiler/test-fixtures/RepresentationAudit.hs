@@ -3,6 +3,15 @@
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude, RankNTypes, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion #-}
+
+-- |
+-- Module      : RepresentationAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Compiler-only representation evidence, including types THC does not execute.
 module RepresentationAudit where
 import GHC.Exts (Int#, Addr#, (+#), (-#), (<=#))

@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, Unsafe #-}
 
--- | Private versioned FFI boundary. Raw selectors and pointers are hazardous;
+-- |
+-- Module      : THC.Internal.RuntimeABI
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Private versioned FFI boundary. Raw selectors and pointers are hazardous;
 -- applications should use the typed service modules, not this implementation.
 module THC.Internal.RuntimeABI
   ( Available(..), query, queryInt, queryWord64, queryEnum, queryText, control, traceCall

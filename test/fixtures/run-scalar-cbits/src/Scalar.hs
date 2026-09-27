@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash, UnboxedTuples, ForeignFunctionInterface #-}
+
+-- |
+-- Module      : Scalar
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; declared foreign symbols required at link/run time
+--
+-- Module for the @run-scalar-cbits@ integration fixture.
 module Scalar (scalarInt32, scalarInt64, scalarFloat, scalarDouble, scalarMixed) where
 import GHC.Exts
 import GHC.Int (Int32(..), Int64(..))

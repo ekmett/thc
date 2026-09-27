@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- |
+-- Module      : THC.Driver.NativeArgumentBridge
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Linux x86_64 C ABI; verified LLVM input
+--
+-- Bridge verified LLVM integer argument widths for the Linux x86_64 C ABI.
 module THC.Driver.NativeArgumentBridge (nativeArgumentBridge) where
 
 import Control.Monad (guard)

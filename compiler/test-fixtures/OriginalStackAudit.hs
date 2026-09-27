@@ -1,6 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : OriginalStackAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 internal library APIs
+--
 -- Original imports deliberately remain intact: no replacement FFI or formatter.
 module OriginalStackAudit
   ( captureOriginal, decodeOriginal, renderOriginal

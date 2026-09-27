@@ -1,5 +1,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC Template Haskell
+--
+-- Exercise generated lenses, traversals and state updates on a small portfolio.
 module Main (main) where
 
 import Control.Lens

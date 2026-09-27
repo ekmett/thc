@@ -1,7 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
--- | Export-only lowering for operations that GHC itself eliminates after Core.
+-- |
+-- Module      : THC.Wired
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- Export-only lowering for operations that GHC itself eliminates after Core.
 -- These templates are never inserted into the optimized ModGuts or passed back
 -- through Core simplification: unary-class erasure changes the apparent Core
 -- type, exactly as GHC.CoreToStg.myCollectArgs does at the representation boundary.

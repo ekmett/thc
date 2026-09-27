@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- |
+-- Module      : THC.RuntimeServices
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : THC runtime API with native GHC fallbacks
+--
+-- Exercise typed runtime, memory, thread and tracing service queries.
 module THC.RuntimeServices (main, runtimeSmoke, memorySmoke, threadSmoke, traceSmoke) where
 
 import qualified THC.GC as GC

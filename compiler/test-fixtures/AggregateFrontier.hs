@@ -2,6 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude, UnboxedTuples, UnboxedSums #-}
+
+-- |
+-- Module      : AggregateFrontier
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Negative coverage only: these are native GHC programs, not supported THC entries.
 -- OPAQUE keeps the producer/call boundaries present under the ordinary -O2 pipeline.
 module AggregateFrontier where

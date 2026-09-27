@@ -1,7 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, Unsafe #-}
--- | Private foreign-exception controls. Arbitrary pointers and foreign object construction
+
+-- |
+-- Module      : THC.Internal.Exception
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Private foreign-exception controls. Arbitrary pointers and foreign object construction
 -- are unsafe; use the abstract, typed @THC.Exception@ interface instead.
 module THC.Internal.Exception (ForeignException(..), boxForeign, projectForeign, exceptionText) where
 

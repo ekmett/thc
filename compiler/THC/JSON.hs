@@ -1,7 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
--- | The producer's ordered JSON representation and byte-exact renderers.
+-- |
+-- Module      : THC.JSON
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Haskell with the imported library dependencies
+--
+-- The producer's ordered JSON representation and byte-exact renderers.
 module THC.JSON (J(..), json, jsonBytes) where
 
 import qualified Data.ByteString as BS

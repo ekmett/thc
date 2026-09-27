@@ -3,6 +3,14 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : OriginalStdioTruncateFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : POSIX; depends on the unix package
+--
 -- The installed GHC declaration supplies Core; a private native fd supplies
 -- observations. Kotlin owns the independent model and compiled comparisons.
 module OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate) where

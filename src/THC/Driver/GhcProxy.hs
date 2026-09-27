@@ -1,6 +1,14 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : THC.Driver.GhcProxy
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC utilities and host filesystem/process services
+--
 -- Cabal invokes this transparent compiler for ordinary owned native builds
 -- and private store builds.
 -- The native command is unchanged; a second invocation exports Core while

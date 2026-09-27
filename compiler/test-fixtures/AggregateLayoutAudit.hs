@@ -4,6 +4,15 @@
 {-# LANGUAGE DataKinds, ExplicitForAll, KindSignatures, MagicHash #-}
 {-# LANGUAGE NoImplicitPrelude, PolyKinds, TypeFamilies, UnboxedSums, UnboxedTuples, UnliftedNewtypes #-}
 {-# LANGUAGE StandaloneKindSignatures, UnliftedDatatypes #-}
+
+-- |
+-- Module      : AggregateLayoutAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Metadata-only coverage: these declarations are checked by native GHC, but
 -- their unboxed boundaries are deliberately rejected by the THC runtime.
 module AggregateLayoutAudit where

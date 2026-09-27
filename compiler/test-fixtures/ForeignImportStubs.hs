@@ -4,6 +4,16 @@
 #ifdef THC_EXTRA_FILE
 {-# LANGUAGE TemplateHaskell #-}
 #endif
+
+-- |
+-- Module      : ForeignImportStubs
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC C API FFI; declared native headers and libraries
+--
+-- Compiler fixture for foreign import stubs Core and metadata.
 module ForeignImportStubs where
 import Foreign.C.Types
 import GHC.Exts (Int#, (+#))

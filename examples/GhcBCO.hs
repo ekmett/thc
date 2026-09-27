@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
+
+-- |
+-- Module      : GhcBCO
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- GHC 9.14.1's actual BCO wire format, built with ordinary primops. This is
 -- intentionally not THC Core bytecode and needs no native pointer fabrication.
 module GhcBCO where

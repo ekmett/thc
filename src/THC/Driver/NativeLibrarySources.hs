@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- |
+-- Module      : THC.Driver.NativeLibrarySources
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Haskell with the imported library dependencies
+--
+-- Validate exact native-library source and LLVM inputs for supported acquisition profiles.
 module THC.Driver.NativeLibrarySources
   ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR,
     validateNativeWidthIR, nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR ) where

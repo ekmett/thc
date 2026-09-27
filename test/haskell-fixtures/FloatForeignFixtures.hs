@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : FloatForeignFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- Fixture acquisition support for float foreign.
 module FloatForeignFixtures (prepareFloatForeign) where
 
 import Control.Monad (forM, unless)

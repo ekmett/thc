@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash #-}
+
+-- |
+-- Module      : THC.SequenceWorkload
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Example entry points exercising sequence workload.
 module THC.SequenceWorkload
   ( sequenceBuild, sequenceEnds, sequenceAppend, sequenceSplit
   , sequenceIndexUpdate, sequenceAggregate, sequenceLazyPayloads

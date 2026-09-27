@@ -3,6 +3,15 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : THC.Driver.Project
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
+-- Plan project components and acquire reproducible, dependency-closed Core bundles.
 module THC.Driver.Project
   (runProject, acquireProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
 

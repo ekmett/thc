@@ -2,6 +2,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : THC.Driver.InstalledForeign
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
 -- An acquisition-only view of genuine recompiled interfaces. Native compilation
 -- always retains the caller's compiler, package database and installed libraries.
 module THC.Driver.InstalledForeign

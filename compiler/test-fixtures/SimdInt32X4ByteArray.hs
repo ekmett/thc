@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
+
+-- |
+-- Module      : SimdInt32X4ByteArray
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for simd int32 x4 byte array Core and metadata.
 module SimdInt32X4ByteArray where
 
 import GHC.Exts

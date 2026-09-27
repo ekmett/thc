@@ -2,6 +2,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : THC.Driver.Installed
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
 -- GHC-independent discovery and subprocess boundary. Only thc-interface links
 -- the selected GHC API. Never substitute ordinary unfoldings for a full payload.
 module THC.Driver.Installed

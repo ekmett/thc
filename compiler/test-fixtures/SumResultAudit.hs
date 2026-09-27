@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, UnboxedTuples, UnboxedSums #-}
+
+-- |
+-- Module      : SumResultAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for sum result audit Core and metadata.
 module SumResultAudit where
 import GHC.Exts
 

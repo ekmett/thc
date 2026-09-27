@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Cache inputs for package C acquisition, independent of native object
+-- |
+-- Module      : THC.Driver.NativeCache
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Host filesystem/process services and the configured native toolchain
+--
+-- Cache inputs for package C acquisition, independent of native object
 -- equivalence. A selected tool or freshly captured translation unit must not
 -- disappear behind an older Core bundle with the same Cabal object identity.
 module THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity) where

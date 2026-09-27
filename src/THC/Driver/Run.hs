@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : THC.Driver.Run
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
+-- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
   ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runResolvedPackage
   ) where

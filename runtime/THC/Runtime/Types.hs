@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE DeriveFunctor, Safe #-}
 
--- | Shared public result type, re-exported by the service modules.
+-- |
+-- Module      : THC.Runtime.Types
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC (Safe Haskell, derived Functor)
+--
+-- Shared public result type, re-exported by the service modules.
 module THC.Runtime.Types (Available(..)) where
 
 -- | An absent metric is not zero. Queries never enable JVM-wide monitoring.

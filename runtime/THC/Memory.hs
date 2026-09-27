@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE Trustworthy #-}
 
--- | Read-only memory accounting. A record contains independently sampled
+-- |
+-- Module      : THC.Memory
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Read-only memory accounting. A record contains independently sampled
 -- fields, not an atomic snapshot. All sizes are bytes.
 module THC.Memory
   ( Available(..), MemoryUsage(..), NativeAllocationUsage(..)

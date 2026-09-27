@@ -1,5 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- |
+-- Module      : THC.CpuAffinity
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : THC runtime API with native GHC fallbacks
+--
+-- Query affinity support and exercise the public affinity-aware fork API.
 module THC.CpuAffinity (main, supportQuery, acceptanceQuery) where
 
 import Control.Concurrent (newEmptyMVar, putMVar, takeMVar)

@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, Trustworthy #-}
 
--- | Current-thread observations. No API exposes a carrier handle, arbitrary
+-- |
+-- Module      : THC.Thread
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Current-thread observations. No API exposes a carrier handle, arbitrary
 -- host-thread access, raw pinning or Java interruption. Guest forks currently
 -- use platform threads; affinity operations refuse virtual-thread callers.
 module THC.Thread

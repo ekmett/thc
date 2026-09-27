@@ -4,6 +4,16 @@
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 -- Keep the deprecated pure size primop as a distinct stable-reference case.
 {-# OPTIONS_GHC -Wno-deprecations #-}
+
+-- |
+-- Module      : MutableByteArraySizeAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for mutable byte array size audit Core and metadata.
 module MutableByteArraySizeAudit where
 import GHC.Exts
 
