@@ -1223,7 +1223,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             if "StackInfoTestLayout" in source:
                 consumers.update(select.junit_info(source)[0])
         self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
-                          "thc.runtime.OriginalStackDecoderCallTest"}, consumers)
+                          "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest",
+                          "thc.runtime.ReturnedForeignPointerTest"}, consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
