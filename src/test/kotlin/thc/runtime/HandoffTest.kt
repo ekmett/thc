@@ -5,10 +5,12 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.CompilerDirectives
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
+import com.oracle.truffle.api.nodes.DirectCallNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -17,6 +19,23 @@ import thc.executionContext
 
 /** The object boundary remains real; every transport assertion also runs interpreted. */
 class HandoffTest {
+    @Test fun detachedTailCallerRejectsBeforeLoanOrPacketMutation() = withLanguage { language ->
+        val layout = FrameLayout()
+        val entry = HandoffEntry.create(language, layout, listOf(proof), proof, false)!!
+        val target = object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any = error("Detached caller reached dispatch")
+        }.callTarget
+        val caller = HandoffCaller(target, entry, Metrics(false))
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
+        val packet = arrayOf<Any?>(17L, 23L)
+        val failure = assertThrows(IllegalStateException::class.java) {
+            caller.call(frame, packet, DirectCallNode.create(target), true)
+        }
+        assertEquals("Check failed.", failure.message)
+        assertArrayEquals(arrayOf(17L, 23L), packet)
+        assertReleased(language.handoffState.get())
+    }
+
     private val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val closureRep = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
     private val proof = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
