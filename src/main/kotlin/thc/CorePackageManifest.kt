@@ -20,11 +20,22 @@ object CorePackageManifest {
     private data class VerifiedBundle(val bytes: ByteArray, val centralNames: List<String>)
     private data class OrderedVisit(val targetLayout: TargetLayout?)
 
-    private fun inventory(id: String, modules: List<*>): List<String> = modules.map { item ->
+    private fun moduleIndex(id: String, module: Map<*, *>): Map<*, *>? {
+        if (!module.containsKey("index")) return null
+        val index = module["index"] as? Map<*, *> ?: error("Invalid JSON index in GHC unit $id")
+        require(index.keys == setOf("path", "sha256") && index["path"] is String &&
+            (index["sha256"] as? String)?.matches(sha256) == true) { "Invalid JSON index reference in $id" }
+        return index
+    }
+
+    private fun inventory(id: String, modules: List<*>): List<String> = modules.flatMap { item ->
         val module = item as? Map<*, *> ?: error("Invalid module record in GHC unit $id")
         val name = module["path"] as? String ?: error("Missing module path in $id")
-        require(safeRelative(name) && name != "manifest.json") { "Invalid ZIP module path in $id: $name" }
-        name
+        val names = listOfNotNull(name, moduleIndex(id, module)?.get("path") as String?)
+        require(names.all { safeRelative(it) && it !in setOf("manifest.json", "inplace-manifest.json") }) {
+            "Invalid module/index path in $id: $names"
+        }
+        names
     }
 
     private fun bundleLayout(id: String, modules: List<*>, centralNames: List<String>, entryNames: List<String>,
@@ -124,7 +135,7 @@ object CorePackageManifest {
     }
 
     private fun orderedBundle(id: String, verified: VerifiedBundle, modules: List<*>,
-                              accept: (Any?, ByteArray) -> Unit): OrderedVisit? {
+                              accept: (Any?, ByteArray, ByteArray?) -> Unit): OrderedVisit? {
         val paths = inventory(id, modules)
         val withoutInputs = listOf("manifest.json") + paths
         val withInputs = listOf("manifest.json", "inplace-manifest.json") + paths
@@ -147,7 +158,12 @@ object CorePackageManifest {
                 val index = member("manifest.json")
                 val inputs = if (hasInputs) member("inplace-manifest.json") else null
                 val layout = bundleLayout(id, modules, verified.centralNames, verified.centralNames, index, inputs)
-                paths.forEachIndexed { offset, path -> accept(modules[offset], member(path)) }
+                modules.forEach { item ->
+                    val module = item as Map<*, *>
+                    val bytes = member(module["path"] as String)
+                    val sidecar = moduleIndex(id, module)?.let { member(it["path"] as String) }
+                    accept(item, bytes, sidecar)
+                }
                 require(zip.nextEntry == null) { "ZIP entries differ from declared modules in $id" }
                 OrderedVisit(layout)
             }
@@ -159,8 +175,37 @@ object CorePackageManifest {
     internal data class VisitResult(val targetLayout: TargetLayout?, val manifestSha256: String,
                                     val manifestPath: String, val foreignExceptionBridgeUnit: String?)
 
-    @Suppress("UNCHECKED_CAST")
+    /** Read only the package directory when an index is declared. Module JSON,
+     * ZIP members and sidecars are authenticated at replay before admission.
+     */
+    internal fun indexedRequestIdentity(manifestPath: String): VisitResult? {
+        val path = Path.of(manifestPath).toRealPath()
+        val bytes = Files.readAllBytes(path)
+        val document = Json.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *>
+            ?: error("Invalid Core package manifest: $path")
+        require(document["format"] == "thc-core-packages" && document["schema"] == 1L &&
+            document["ghc"] == "9.14.1") { "Core package manifest requires schema 1 / GHC 9.14.1: $path" }
+        val units = document["units"] as? List<*> ?: error("Missing package units: $path")
+        val indexed = units.any { unit -> ((unit as? Map<*, *>)?.get("modules") as? List<*>)
+            ?.any { (it as? Map<*, *>)?.containsKey("index") == true } == true }
+        if (!indexed) return null
+        val bridge = document["foreignExceptionBridgeUnit"]
+        require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }
+        return VisitResult(null, digest(bytes), path.toString(), bridge as String?)
+    }
+
     internal fun visitModules(manifestPath: String, expectedSha256: String? = null,
+                              accept: (Map<String, Any?>, String) -> Unit): VisitResult =
+        visitModules(manifestPath, expectedSha256, true, true, { _, _ -> }, accept)
+
+    internal fun visitRuntimeModules(manifestPath: String, expectedSha256: String,
+        sourceNotesEnabled: Boolean, indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
+        accept: (Map<String, Any?>) -> Unit): VisitResult =
+        visitModules(manifestPath, expectedSha256, sourceNotesEnabled, false, indexed) { module, _ -> accept(module) }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun visitModules(manifestPath: String, expectedSha256: String?, sourceNotesEnabled: Boolean,
+                              materializeText: Boolean, indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
                               accept: (Map<String, Any?>, String) -> Unit): VisitResult {
         val manifest = Path.of(manifestPath).toRealPath()
         val root = manifest.parent
@@ -182,78 +227,102 @@ object CorePackageManifest {
         val seenModules = hashSetOf<Pair<String, String>>()
         var count = 0
         var targetLayout: TargetLayout? = null
-        for (record in units) {
-            val unit = record as? Map<String, Any?> ?: error("Invalid package unit: $manifest")
-            val id = unit["id"] as? String ?: error("Missing GHC unit ID: $manifest")
-            require(id.isNotEmpty() && seenUnits.add(id)) { "Invalid or duplicate GHC unit ID: $id" }
-            val depends = unit["depends"] as? List<*> ?: error("Missing dependencies for GHC unit $id")
-            require(depends.all { it is String && it.isNotEmpty() } && depends.distinct().size == depends.size) {
-                "Invalid dependencies for GHC unit $id"
-            }
-            val modules = unit["modules"] as? List<*> ?: error("Missing module list for GHC unit $id")
-            fun consume(item: Any?, bytes: ByteArray, bundled: Boolean) {
-                val module = item as? Map<String, Any?> ?: error("Invalid module record in GHC unit $id")
-                val name = module["name"] as? String ?: error("Missing module name in GHC unit $id")
-                require(name.isNotEmpty() && seenModules.add(id to name)) { "Duplicate GHC module: $id:$name" }
-                require(module["boundary"] == boundary) { "Package module must be post-Tidy: $id:$name" }
-                val relative = module["path"] as? String ?: error("Missing path for $id:$name")
-                if (bundled) require(safeRelative(relative)) { "Invalid ZIP module path: $relative" }
-                val expected = module["sha256"] as? String ?: error("Missing SHA-256 for $id:$name")
-                require(expected.matches(sha256)) { "Invalid SHA-256 for $id:$name" }
-                // Hash and embed the same bytes: a concurrent rewrite cannot
-                // substitute an unchecked module between validation and load.
-                val actual = digest(bytes)
-                require(actual == expected) { "Core package artifact hash mismatch: $id:$name at $relative" }
-                val text = bytes.toString(Charsets.UTF_8)
-                val source = Json.parse(text) as? Map<String, Any?>
-                    ?: error("Invalid Core package artifact: $relative")
-                CoreForeignArtifacts.validateArchive(source)
-                require(source["ghc"] == "9.14.1" &&
-                    source["unit"] == id && source["module"] == name && source["boundary"] == boundary) {
-                    "Core package unit/module/boundary mismatch: $id:$name at $relative"
+        val adapter = CoreJsonBindings(sourceNotesEnabled)
+        val opened = ArrayList<CoreJsonIndex>()
+        try {
+            for (record in units) {
+                val unit = record as? Map<String, Any?> ?: error("Invalid package unit: $manifest")
+                val id = unit["id"] as? String ?: error("Missing GHC unit ID: $manifest")
+                require(id.isNotEmpty() && seenUnits.add(id)) { "Invalid or duplicate GHC unit ID: $id" }
+                val depends = unit["depends"] as? List<*> ?: error("Missing dependencies for GHC unit $id")
+                require(depends.all { it is String && it.isNotEmpty() } && depends.distinct().size == depends.size) {
+                    "Invalid dependencies for GHC unit $id"
                 }
-                val prefix = "$id:$name."
-                val alias = "main::$name.main"
-                val bindings = source["bindings"] as? List<*> ?: error("Missing bindings in $id:$name")
-                for (binding in bindings) {
-                    val key = (binding as? Map<*, *>)?.get("id") as? String
-                    require(key != null && (key.startsWith(prefix) || key == alias)) {
-                        "Foreign binding owner in $id:$name at $relative: $key"
+                val modules = unit["modules"] as? List<*> ?: error("Missing module list for GHC unit $id")
+                // Preserve legacy loose-file path acceptance. Indexed packages and
+                // ZIPs additionally require an unambiguous paired inventory.
+                val paths = if (unit.containsKey("bundle") || modules.any { (it as? Map<*, *>)?.containsKey("index") == true })
+                    inventory(id, modules) else emptyList()
+                require(paths.distinct().size == paths.size) { "Duplicate module/index path in $id" }
+                fun consume(item: Any?, bytes: ByteArray, indexBytes: ByteArray?, bundled: Boolean) {
+                    val module = item as? Map<String, Any?> ?: error("Invalid module record in GHC unit $id")
+                    val name = module["name"] as? String ?: error("Missing module name in GHC unit $id")
+                    require(name.isNotEmpty() && seenModules.add(id to name)) { "Duplicate GHC module: $id:$name" }
+                    require(module["boundary"] == boundary) { "Package module must be post-Tidy: $id:$name" }
+                    val relative = module["path"] as? String ?: error("Missing path for $id:$name")
+                    if (bundled) require(safeRelative(relative)) { "Invalid ZIP module path: $relative" }
+                    val expected = module["sha256"] as? String ?: error("Missing SHA-256 for $id:$name")
+                    require(expected.matches(sha256)) { "Invalid SHA-256 for $id:$name" }
+                    // Hash and embed the same bytes: a concurrent rewrite cannot
+                    // substitute an unchecked module between validation and load.
+                    val actual = digest(bytes)
+                    require(actual == expected) { "Core package artifact hash mismatch: $id:$name at $relative" }
+                    val reference = moduleIndex(id, module)
+                    val sourceIndex = reference?.let {
+                        require(indexBytes != null && digest(indexBytes) == it["sha256"]) {
+                            "Core JSON index hash mismatch: $id:$name at ${it["path"]}"
+                        }
+                        indexBytes.inputStream().use { stream -> CoreJsonIndex.loadSidecar(bytes, stream) }.also(opened::add)
                     }
+                    val text = if (sourceIndex == null || materializeText) bytes.toString(Charsets.UTF_8) else ""
+                    val source = if (sourceIndex != null && !materializeText) adapter.module(sourceIndex.root)
+                        else Json.parse(text) as? Map<String, Any?> ?: error("Invalid Core package artifact: $relative")
+                    CoreForeignArtifacts.validateArchive(source)
+                    require(source["ghc"] == "9.14.1" &&
+                        source["unit"] == id && source["module"] == name && source["boundary"] == boundary) {
+                        "Core package unit/module/boundary mismatch: $id:$name at $relative"
+                    }
+                    val prefix = "$id:$name."
+                    val alias = "main::$name.main"
+                    val bindings = source["bindings"] as? List<*> ?: error("Missing bindings in $id:$name")
+                    for (binding in bindings) {
+                        val key = (binding as? Map<*, *>)?.get("id") as? String
+                        require(key != null && (key.startsWith(prefix) || key == alias)) {
+                            "Foreign binding owner in $id:$name at $relative: $key"
+                        }
+                    }
+                    count++
+                    accept(source, text)
+                    sourceIndex?.let { indexed(it, adapter) }
                 }
-                count++
-                accept(source, text)
-            }
-            val unitLayout = if (unit.containsKey("bundle")) {
-                val record = unit["bundle"] as? Map<String, Any?> ?: error("Invalid ZIP bundle for $id")
-                val verified = verifiedBundle(id, record)
-                val ordered = orderedBundle(id, verified, modules) { item, bytes -> consume(item, bytes, true) }
-                if (ordered != null) ordered.targetLayout else {
-                    val fallback = bundle(id, verified, modules)
+                val unitLayout = if (unit.containsKey("bundle")) {
+                    val record = unit["bundle"] as? Map<String, Any?> ?: error("Invalid ZIP bundle for $id")
+                    val verified = verifiedBundle(id, record)
+                    val ordered = orderedBundle(id, verified, modules) { item, bytes, sidecar -> consume(item, bytes, sidecar, true) }
+                    if (ordered != null) ordered.targetLayout else {
+                        val fallback = bundle(id, verified, modules)
+                        for (item in modules) {
+                            val relative = (item as? Map<*, *>)?.get("path") as? String
+                                ?: error("Missing module path in $id")
+                            val sidecar = moduleIndex(id, item as Map<*, *>)?.let {
+                                fallback.entries[it["path"]] ?: error("Missing ZIP JSON index in $id: ${it["path"]}")
+                            }
+                            consume(item, fallback.entries[relative] ?: error("Missing ZIP module in $id: $relative"), sidecar, true)
+                        }
+                        fallback.targetLayout
+                    }
+                } else {
                     for (item in modules) {
                         val relative = (item as? Map<*, *>)?.get("path") as? String
                             ?: error("Missing module path in $id")
-                        consume(item, fallback.entries[relative] ?: error("Missing ZIP module in $id: $relative"), true)
+                        val sidecar = moduleIndex(id, item as Map<*, *>)?.let { artifact(root, it["path"] as String) }
+                        consume(item, artifact(root, relative), sidecar, false)
                     }
-                    fallback.targetLayout
+                    null
                 }
-            } else {
-                for (item in modules) {
-                    val relative = (item as? Map<*, *>)?.get("path") as? String
-                        ?: error("Missing module path in $id")
-                    consume(item, artifact(root, relative), false)
+                unitLayout?.let { layout ->
+                    require(targetLayout == null || targetLayout == layout) {
+                        "Conflicting GHC target layouts across package bundles"
+                    }
+                    targetLayout = layout
                 }
-                null
             }
-            unitLayout?.let { layout ->
-                require(targetLayout == null || targetLayout == layout) {
-                    "Conflicting GHC target layouts across package bundles"
-                }
-                targetLayout = layout
-            }
+            require(count != 0) { "Core package manifest has no executable modules: $manifest" }
+            return VisitResult(targetLayout, manifestSha256, manifest.toString(), bridgeUnit as String?)
+        } catch (failure: Throwable) {
+            opened.forEach(CoreJsonIndex::close)
+            throw failure
         }
-        require(count != 0) { "Core package manifest has no executable modules: $manifest" }
-        return VisitResult(targetLayout, manifestSha256, manifest.toString(), bridgeUnit as String?)
     }
 
     internal fun appendModules(destination: StringBuilder, manifestPath: String): TargetLayout? {
