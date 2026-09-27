@@ -4,17 +4,116 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
+import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
 import thc.executionContext
 
 class GenericInputCallInvariantTest {
+    private class ReferenceAccess(language: Language, private val write: Boolean) : RootNode(language) {
+        private val source = ScalarArrayInputSource(null)
+        var entries = 0
+        var compiledEntries = 0
+        var argumentOrder = 0
+        var completed = 0
+        private fun argument(frame: VirtualFrame, index: Int): Any? {
+            argumentOrder = argumentOrder * 10 + index + 1
+            return frame.arguments[index]
+        }
+        override fun execute(frame: VirtualFrame): Any? {
+            entries++
+            if (CompilerDirectives.inCompiledCode()) compiledEntries++
+            @Suppress("UNCHECKED_CAST")
+            val values = argument(frame, 0) as Array<Any?>?
+            val index = argument(frame, 1) as Int
+            val result = if (write) {
+                val value = argument(frame, 2)
+                source.setReference(frame, this, values, index, value)
+                value
+            } else source.reference(frame, this, values, index)
+            completed++
+            return result
+        }
+    }
+
+    private fun coldReferenceAccess(write: Boolean, action: (ReferenceAccess, RootCallTarget) -> Unit) =
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw").build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val root = ReferenceAccess(language, write)
+                    val target = root.callTarget
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    // Restore the shared entry stub without executing a settling guest call.
+                    val runtime = Truffle.getRuntime()
+                    runtime.javaClass.getMethod("bypassedInstalledCode",
+                        Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                    assertEquals(0, root.entries)
+                    assertEquals(0, root.argumentOrder)
+                    action(root, target)
+                    assertSame(target, root.callTarget)
+                    assertEquals(1, root.entries, "The operation must execute once, including failure paths")
+                    assertEquals(1, root.compiledEntries, "The first call must enter installed code")
+                    assertEquals(if (write) 123 else 12, root.argumentOrder)
+                } finally { context.leave() }
+            }
+
+    @Test fun scalarReferenceReadPreservesNullElementsAndIdentityOnItsFirstInstalledCall() {
+        for (value in listOf(Any(), null)) coldReferenceAccess(false) { root, target ->
+            val sentinel = Any()
+            val values = arrayOf<Any?>(sentinel, value)
+            assertSame(value, Calls.target(target, arrayOf(values, 1)))
+            assertSame(sentinel, values[0]); assertSame(value, values[1])
+            assertEquals(1, root.completed)
+            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+        }
+    }
+
+    @Test fun scalarReferenceWritePreservesNullElementsAndIdentityOnItsFirstInstalledCall() {
+        for (value in listOf(Any(), null)) coldReferenceAccess(true) { root, target ->
+            val sentinel = Any()
+            val values = arrayOf<Any?>(sentinel, Any())
+            assertSame(value, Calls.target(target, arrayOf(values, 1, value)))
+            assertSame(sentinel, values[0]); assertSame(value, values[1])
+            assertEquals(1, root.completed)
+            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+        }
+    }
+
+    @Test fun scalarReferenceNullArrayKeepsItsOriginalFailureAfterArgumentEvaluation() {
+        for (write in listOf(false, true)) coldReferenceAccess(write) { root, target ->
+            // Both operands are invalid: the original null assertion must precede bounds checking.
+            val failure = assertThrows(NullPointerException::class.java) {
+                Calls.target(target, arrayOf(null, -1, Any()))
+            }
+            assertEquals(NullPointerException::class.java, failure.javaClass)
+            assertNull(failure.message)
+            assertEquals(0, root.completed)
+        }
+    }
+
+    @Test fun scalarReferenceBoundsFailureLeavesTheArrayUntouchedOnItsFirstInstalledCall() {
+        for (write in listOf(false, true)) for (index in listOf(-1, 2)) coldReferenceAccess(write) { root, target ->
+            val sentinel = Any()
+            val values = arrayOf<Any?>(sentinel, null)
+            assertThrows(ArrayIndexOutOfBoundsException::class.java) {
+                Calls.target(target, arrayOf(values, index, Any()))
+            }
+            assertSame(sentinel, values[0]); assertNull(values[1])
+            assertEquals(0, root.completed)
+        }
+    }
+
     private fun dispatch(target: RootCallTarget, values: Array<Any?>): Any? {
         val call = GenericInputCall(ScalarArrayInputSource(null), 1, false, Metrics(false), null, 0)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
