@@ -1116,6 +1116,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": ["thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.ByteStringSortTest",
         "thc.runtime.ByteStringDecimalTest",
         "thc.runtime.UnixLibcTest",
