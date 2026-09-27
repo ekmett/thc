@@ -11,6 +11,8 @@ kotlin.collections.AbstractList$Companion
 kotlin.collections.EmptyIterator
 kotlin.collections.EmptyList
 kotlin.collections.EmptyMap
+# EmptyMap entry/key views return this fieldless immutable singleton.
+kotlin.collections.EmptySet
 kotlin.enums.EnumEntriesList
 kotlin.jvm.functions.Function0
 kotlin.jvm.internal.CollectionToArray
