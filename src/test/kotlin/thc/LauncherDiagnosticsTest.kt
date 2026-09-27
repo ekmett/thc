@@ -13,9 +13,50 @@ import java.lang.reflect.InvocationTargetException
 import java.nio.file.Path
 
 @ResourceLock(Resources.SYSTEM_ERR)
+@ResourceLock(Resources.SYSTEM_OUT)
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 class LauncherDiagnosticsTest {
     @TempDir lateinit var directory: Path
+
+    @Test fun scalarCompileChecksTheImmediateCallWithoutAdditionalTraining() {
+        val body = listOf("app", listOf("prim", "+#"),
+            listOf(listOf("var", "input"), listOf("lit", "int", "1")), listOf(false, false))
+        val expression = listOf("lam", listOf(mapOf("id" to "input", "name" to "input", "lifted" to false)), body)
+        val module = mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "Synthetic.LauncherCompilation",
+            "constructors" to emptyList<Any>(), "bindings" to listOf(mapOf(
+                "id" to "entry", "name" to "entry", "arity" to 1, "lifted" to true, "expr" to expression)))
+        val source = directory.resolve("scalar.json").toFile().also { it.writeText(Json.stringify(module)) }
+        val oldBackend = System.getProperty("thc.backend")
+        val oldOut = System.out; val oldErr = System.err
+        try {
+            for (backend in listOf("ast", "bytecode")) for (compiled in listOf(false, true)) {
+                val out = ByteArrayOutputStream(); val err = ByteArrayOutputStream()
+                PrintStream(out, true, Charsets.UTF_8).use { stdout ->
+                    PrintStream(err, true, Charsets.UTF_8).use { stderr ->
+                        System.setProperty("thc.backend", backend)
+                        System.setOut(stdout); System.setErr(stderr)
+                        main(arrayOf(source.absolutePath, "entry", "7") + if (compiled) arrayOf("--compile") else emptyArray())
+                    }
+                }
+                assertEquals("8", out.toString(Charsets.UTF_8).trim())
+                val diagnostics = Json.parse(err.toString(Charsets.UTF_8).trim()) as Map<*, *>
+                if (compiled) {
+                    val call = diagnostics["firstInstalledCall"] as Map<*, *>
+                    assertTrue((call["compiledEntriesAfter"] as Number).toLong() >
+                        (call["compiledEntriesBefore"] as Number).toLong())
+                    val installation = diagnostics["explicitCompilation"] as Map<*, *>
+                    assertEquals(true, installation["sameTargets"])
+                    assertEquals(true, installation["validLastTier"])
+                } else {
+                    assertFalse(diagnostics.containsKey("firstInstalledCall"))
+                    assertFalse(diagnostics.containsKey("explicitCompilation"))
+                }
+            }
+        } finally {
+            System.setOut(oldOut); System.setErr(oldErr)
+            if (oldBackend == null) System.clearProperty("thc.backend") else System.setProperty("thc.backend", oldBackend)
+        }
+    }
 
     @Test fun artifactVerificationIsExplicitAndNeverConsumesGuestArguments() {
         val host = arrayOf("--ffi=native", "--run-io", "@packages.json", "main")

@@ -228,11 +228,37 @@ internal fun launch(arguments: Array<String>) {
     val input = args[2].toLong()
     executionContext(fileIO = false, ffiMode = ffiMode).use { context ->
         val function = loadEntry(context, modules, entry, jsonSidecars = sidecars, verifyArtifacts = verifyArtifacts)
+        fun installed(diagnostics: Map<*, *>) {
+            val observation = diagnostics["explicitCompilation"] as Map<*, *>
+            check((observation["targetCount"] as Number).toInt() > 0 &&
+                observation["sameTargets"] == true && observation["validLastTier"] == true) {
+                "Explicitly installed guest targets changed or became invalid"
+            }
+        }
+        var before: Long? = null
         if (args.drop(3).contains("--compile")) {
+            // Existing profile training precedes installation; never settle or retry
+            // the first public call after the explicit compile request.
             repeat(40) { function.execute(input + (it and 3)).asLong() }
             function.invokeMember("compile")
+            val diagnostics = Json.parse(function.getMember("diagnostics").asString()) as Map<*, *>
+            installed(diagnostics)
+            before = (diagnostics["compiledEntries"] as Number).toLong()
         }
-        println(function.execute(input).asLong())
-        System.err.println(function.getMember("diagnostics").asString())
+        val result = function.execute(input).asLong()
+        var diagnostics = function.getMember("diagnostics").asString()
+        if (before != null) {
+            @Suppress("UNCHECKED_CAST")
+            val after = Json.parse(diagnostics) as Map<String, Any?>
+            val entries = (after["compiledEntries"] as Number).toLong()
+            check(entries > before) {
+                "First post-install call did not enter compiled guest code"
+            }
+            installed(after)
+            diagnostics = Json.stringify(after + ("firstInstalledCall" to mapOf(
+                "compiledEntriesBefore" to before, "compiledEntriesAfter" to entries)))
+        }
+        println(result)
+        System.err.println(diagnostics)
     }
 }

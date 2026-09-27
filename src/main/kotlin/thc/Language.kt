@@ -982,6 +982,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
     private val shutdownValue = shutdownEntry?.let(program::entryValue)
     private val shutdownTarget = shutdownResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
     private val lifecycleStarted = if (shutdownTarget == null) null else java.util.concurrent.atomic.AtomicBoolean()
+    @Volatile private var installedCompilation: Pair<RootCallTarget, List<CallTarget>>? = null
     init { require((shutdownValue == null) == (shutdownTarget == null)) }
     @ExportMessage fun isExecutable() = ioTarget == null
     @ExportMessage fun execute(arguments: Array<Any?>,
@@ -1033,10 +1034,28 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
     @ExportMessage @CompilerDirectives.TruffleBoundary
     fun readMember(member: String): Any {
         return when {
-            member == "diagnostics" -> Json.stringify(program.diagnostics())
+            member == "diagnostics" -> {
+                val installed = installedCompilation
+                Json.stringify(if (installed == null) program.diagnostics() else
+                    program.diagnostics() + ("explicitCompilation" to compilationObservation(installed)))
+            }
             member == "bytecode" && program.hasBytecode -> program.bytecodeDump()
             else -> throw UnknownIdentifierException.create(member)
         }
+    }
+    private fun compilationTargets(original: RootCallTarget): List<CallTarget> =
+        (NodeUtil.findAllNodeInstances(guestTarget.rootNode, DirectCallNode::class.java)
+            .filter { it.callTarget === original }.map { it.currentCallTarget }.distinct()
+            .ifEmpty { listOf(original) } + guestTarget).distinct()
+
+    /** Observe the installation without executing, compiling or repairing any target. */
+    private fun compilationObservation(installed: Pair<RootCallTarget, List<CallTarget>>): Map<String, Any> {
+        val current = compilationTargets(installed.first)
+        val targets = installed.second
+        val validity = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget").getMethod("isValidLastTier")
+        return mapOf("targetCount" to targets.size,
+            "sameTargets" to (current.size == targets.size && targets.all { saved -> current.any { it === saved } }),
+            "validLastTier" to targets.all { validity.invoke(it) == true })
     }
     @ExportMessage fun isMemberInvocable(member: String) = if (ioTarget != null) member == "runIO" else member == "compile"
     @ExportMessage @CompilerDirectives.TruffleBoundary
@@ -1078,18 +1097,17 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
         if (member != "compile") throw UnknownIdentifierException.create(member)
         if (ioTarget != null) throw UnknownIdentifierException.create(member)
         require(arguments.isEmpty()) { "compile takes no arguments" }
+        installedCompilation = null
         val original = program.entryTarget(entry)
         // The host root is not cloned, but its guest direct call may be split.
         // Compile the targets this stable dispatch tree actually invokes, not
         // only the original target retained by the Haskell closure identity.
-        val targets = NodeUtil.findAllNodeInstances(guestTarget.rootNode, DirectCallNode::class.java)
-            .filter { it.callTarget === original }.map { it.currentCallTarget }.distinct()
-            .ifEmpty { listOf(original) }
+        val targets = compilationTargets(original)
         val cls = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
         // The executable value enters through this stable bridge. Install it
         // as well as its active guest callees so an explicit host compilation
         // request covers the actual public call path.
-        for (target in (targets + guestTarget).distinct()) {
+        for (target in targets) {
             require(cls.isInstance(target)) { "Graal optimizing Truffle runtime required" }
             cls.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
             check(cls.getMethod("isValidLastTier").invoke(target) == true) { "Guest code was not installed" }
@@ -1099,6 +1117,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
         // prerequisite without executing guest code or settling a public call.
         val runtime = Truffle.getRuntime()
         runtime.javaClass.getMethod("bypassedInstalledCode", cls).invoke(runtime, guestTarget)
+        installedCompilation = original to targets
         return true
     }
 }
