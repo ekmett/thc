@@ -71,8 +71,18 @@ class IntArrayTest {
             for (index in listOf(Long.MIN_VALUE, -1L, (size / 8).toLong(),
                 Int.MAX_VALUE.toLong(), 1L shl 32, 1L shl 61, Long.MAX_VALUE)) {
                 val before = bytes.copyOf()
-                assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt(bytes, index) }
-                assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt(bytes, index, Long.MIN_VALUE) }
+                assertEquals("ByteArray# Int index outside its backing storage",
+                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt(bytes, index) }.message)
+                assertEquals("ByteArray# Int index outside its backing storage",
+                    assertThrows(RuntimeFault::class.java) {
+                        ManagedByteArray.writeInt(bytes, index, Long.MIN_VALUE)
+                    }.message)
+                assertEquals("ByteArray# scalar index outside its backing storage",
+                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.readIntGuest(bytes, index) }.message)
+                assertEquals("ByteArray# scalar index outside its backing storage",
+                    assertThrows(RuntimeFault::class.java) {
+                        ManagedByteArray.writeIntGuest(bytes, index, Long.MIN_VALUE)
+                    }.message)
                 assertArrayEquals(before, bytes, "size=$size/index=$index")
             }
         }
