@@ -13,7 +13,8 @@
 -- Forward-only container construction. Five private auxiliary streams are
 -- appended to the executable stream, followed by an EOF directory. The data
 -- handle is never sought or patched. No construction sidecars are published.
-module THC.Compact.Writer (Streams, streamOffset, appendBytes, appendRecord, writeContainer) where
+module THC.Compact.Writer
+  ( Streams, streamOffset, appendBytes, appendRecord, writeContainer, writeContainerPrepared, writeContainerStreamed ) where
 
 import Control.Exception (IOException, bracket, bracketOnError, catch)
 import Control.Monad (foldM, unless)
@@ -61,14 +62,31 @@ appendRecord streams segment record = do
 -- closed and removed on failure; auxiliary files are also removed on success.
 -- Existing output remains intact if construction or framing validation fails.
 writeContainer :: FilePath -> BS.ByteString -> Word32 -> (Streams -> IO Word64) -> IO Footer
-writeContainer destination facts summaries produce = bracketOnError
+writeContainer destination facts = writeContainerPrepared destination (const (pure facts))
+
+-- | Prepare small known-start facts while interning their strings in the
+-- auxiliary stream. Preparation cannot emit executable bytes. Header facts are
+-- complete before the prefix is written; no output seek or fixup is needed.
+writeContainerPrepared :: FilePath -> (Streams -> IO BS.ByteString) -> Word32 -> (Streams -> IO Word64) -> IO Footer
+writeContainerPrepared destination prepare summaries produce =
+  writeContainerStreamed destination prepare $ \streams -> do
+    count <- produce streams
+    pure (count,summaries)
+
+-- | Derive summaries while emitting executable records, then put those actual
+-- end-derived facts in the footer without a body prepass.
+writeContainerStreamed :: FilePath -> (Streams -> IO BS.ByteString) -> (Streams -> IO (Word64,Word32)) -> IO Footer
+writeContainerStreamed destination prepare produce = bracketOnError
   (openBinaryTempFile directory "compact-data.tmp") cleanup $ \(path, output) -> do
     footer <- withAuxiliaries 5 [] $ \auxiliaries -> do
+      streams <- Streams <$> mapM (\handle -> (,) handle <$> newIORef 0) (output : auxiliaries)
+      facts <- prepare streams
+      preparedData <- streamOffset streams ExecutableData
+      unless (preparedData == 0) (fail "Compact fact preparation emitted executable data")
       let header = Header 1 0 (fromIntegral (BS.length facts))
       BL.hPut output (runPut (putHeader header))
       BS.hPut output facts
-      streams <- Streams <$> mapM (\handle -> (,) handle <$> newIORef 0) (output : auxiliaries)
-      count <- produce streams
+      (count,summaries) <- produce streams
       let Streams handles = streams
       lengths <- mapM (readIORef . snd) handles
       (_, spans) <- foldM nextSpan (headerSize+headerFactsLength header, []) lengths

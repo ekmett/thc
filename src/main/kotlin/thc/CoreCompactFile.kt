@@ -17,7 +17,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
     data class Statistics(val acquisitions: Long, val physicalOpens: Long, val cacheHits: Long,
         val mappedBytes: Long, val headerBytesRead: Long, val lookupBytesRead: Long,
         val lookupComparisons: Long, val dataBytesRead: Long, val stringBytesRead: Long,
-        val debugBytesRead: Long, val hashBytesRead: Long)
+        val debugBytesRead: Long, val hashBytesRead: Long, val decodedBindings: Long, val decodedModules: Long)
     class Counters {
         var acquisitions = 0L
         var physicalOpens = 0L
@@ -30,8 +30,11 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
         var stringBytesRead = 0L
         var debugBytesRead = 0L
         var hashBytesRead = 0L
+        var decodedBindings = 0L
+        var decodedModules = 0L
         @Synchronized fun statistics() = Statistics(acquisitions, physicalOpens, cacheHits, mappedBytes,
-            headerBytesRead, lookupBytesRead, lookupComparisons, dataBytesRead, stringBytesRead, debugBytesRead, hashBytesRead)
+            headerBytesRead, lookupBytesRead, lookupComparisons, dataBytesRead, stringBytesRead, debugBytesRead, hashBytesRead,
+            decodedBindings, decodedModules)
     }
     val counters = Counters()
     private var closed = false
@@ -111,6 +114,29 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
         null
     }
 
+    /** Exhaustive verification only. Ordinary lookup never walks this table. */
+    fun verifyBindingOffsets(visit: (Long) -> Unit) = synchronized(counters) {
+        check(verifyArtifacts) { "Complete compact binding inspection requires explicit verification" }
+        val current = mapping()
+        val span = current.header[CoreCompactFormat.Segment.SYMBOLS]
+        val cursor = CoreCompactCursor(CoreCompactCursor.slice(current.bytes, span.offset, span.length))
+        var previous: ByteArray? = null
+        try {
+            while (cursor.remaining != 0L) {
+                val digest = cursor.bytes(16)
+                previous?.let { require(java.util.Arrays.compareUnsigned(it, digest) < 0) {
+                    "Unordered or duplicate compact Core fingerprint"
+                } }
+                previous = digest
+                val offset = cursor.offset()
+                require(offset < current.header[CoreCompactFormat.Segment.DATA].length) {
+                    "Invalid compact Core binding offset: $offset"
+                }
+                visit(offset)
+            }
+        } finally { counters.lookupBytesRead += cursor.position }
+    }
+
     /** The callback must finish while this file owns its mapping lease. */
     fun <T> data(offset: Long, decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
         val current = mapping()
@@ -137,11 +163,17 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
     }
 
     fun <T> debug(segment: CoreCompactFormat.Segment, decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
+        debugAt(segment, 0, mapping().header[segment].length, decode)
+    }
+
+    fun <T> debugAt(segment: CoreCompactFormat.Segment, offset: Long, length: Long,
+                    decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
         require(segment in setOf(CoreCompactFormat.Segment.NAMES, CoreCompactFormat.Segment.FILENAMES,
             CoreCompactFormat.Segment.LINE_COLUMNS)) { "Not a compact Core debug segment" }
         val current = mapping()
         val span = current.header[segment]
-        val cursor = CoreCompactCursor(CoreCompactCursor.slice(current.bytes, span.offset, span.length))
+        val selected = CoreCompactCursor.slice(current.bytes, span.offset, span.length)
+        val cursor = CoreCompactCursor(CoreCompactCursor.slice(selected, offset, length))
         try { decode(cursor) } finally { counters.debugBytesRead += cursor.position }
     }
 

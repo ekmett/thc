@@ -11,6 +11,7 @@ import com.oracle.truffle.api.interop.TruffleObject
 import com.oracle.truffle.api.interop.UnsupportedMessageException
 import com.oracle.truffle.api.library.ExportLibrary
 import com.oracle.truffle.api.library.ExportMessage
+import com.oracle.truffle.api.utilities.TriState
 import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
 import java.lang.ref.WeakReference
@@ -364,11 +365,12 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
     private val logicalSize: LongSupplier = LongSupplier { bytes.capacity().toLong() },
     private val baseOffset: Long = 0,
     private val nativeImage: Supplier<NativeReadOnlyPointer>? = null,
-    private val nativeAddress: LongSupplier? = null) : TruffleObject {
+    private val nativeAddress: LongSupplier? = null,
+    private val identity: Any = bytes) : TruffleObject {
     @JvmOverloads constructor(bytes: ByteArray, writable: Boolean,
         logicalSize: LongSupplier = LongSupplier { bytes.size.toLong() }, baseOffset: Long = 0,
-        nativeImage: Supplier<NativeReadOnlyPointer>? = null) :
-        this(ByteBuffer.wrap(bytes), writable, logicalSize, baseOffset, nativeImage)
+        nativeImage: Supplier<NativeReadOnlyPointer>? = null, identity: Any = bytes) :
+        this(ByteBuffer.wrap(bytes), writable, logicalSize, baseOffset, nativeImage, identity = identity)
     private val little = bytes.duplicate().order(ByteOrder.LITTLE_ENDIAN)
     private val big = bytes.duplicate().order(ByteOrder.BIG_ENDIAN)
     private var pointer: NativeReadOnlyPointer? = null
@@ -377,6 +379,13 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
         require(!writable || nativeImage == null) { "Mutable C buffers cannot use immutable native images" }
         require(baseOffset >= 0 && baseOffset <= logicalSize.asLong) { "C buffer address exceeds its allocation" }
     }
+
+    /** New transport views are still the same original allocation, including
+     * read-only and writable aliases. No native address is fabricated. */
+    @ExportMessage fun isIdenticalOrUndefined(other: Any): TriState =
+        if (other is CbitsBuffer) TriState.valueOf(identity === other.identity && baseOffset == other.baseOffset)
+        else TriState.UNDEFINED
+    @ExportMessage fun identityHashCode(): Int = 31 * System.identityHashCode(identity) + baseOffset.hashCode()
 
     @Synchronized @ExportMessage fun isPointer(): Boolean = nativeAddress != null || pointer?.isPointer() == true
     @Synchronized @ExportMessage fun toNative() {

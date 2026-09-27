@@ -12,7 +12,7 @@
 -- Native selected-record decoder for round-trip controls and flat inspection.
 -- Earlier shape definitions are addressed directly; no preceding Core tree is
 -- decoded to find a selected binding. Runtime mmap ownership is independent.
-module THC.Compact.Decode (decodeBindingAt, decodeExprAt, decodeRepAt) where
+module THC.Compact.Decode (decodeBindingAt, decodeExprAt, decodeRepAt, decodeFacts) where
 
 import Control.Monad (replicateM, unless)
 import Data.Binary.Get hiding (Decoder)
@@ -24,6 +24,7 @@ import qualified Data.Set as Set
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word64)
 import THC.Compact.Core
+import THC.Compact.Facts
 import THC.Compact.Wire
 
 data Decoder = Decoder
@@ -42,6 +43,181 @@ decodeExprAt bytes strings offset = runAt bytes offset (expression (Decoder byte
 
 decodeRepAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Rep, Word64)
 decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder bytes strings offset Set.empty))
+
+-- | Header facts decode independently of all executable and debug bytes.
+decodeFacts :: BS.ByteString -> BS.ByteString -> Either String Facts
+decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty)) bytes
+
+facts :: Decoder -> Get Facts
+facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+  <*> present (list decoder (string decoder)) <*> present (targetLayout decoder)
+  <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
+  <*> present (exceptionBridge decoder) <*> present (string decoder)
+  <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
+
+targetLayout :: Decoder -> Get TargetLayout
+targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+  <*> getUVar <*> boolean <*> getUVar <*> enumeration <*> string decoder <*> boolean
+  <*> replicateM (length targetNumberNames) getUVar
+
+foreignArtifacts :: Decoder -> Get ForeignArtifacts
+foreignArtifacts decoder = ForeignArtifacts <$> getUVar <*> string decoder <*> present stubs <*> list decoder file
+  where
+    stubs = Stubs <$> string decoder <*> string decoder <*> list decoder labelRecord <*> list decoder labelRecord
+    labelRecord = Label <$> boolean <*> string decoder <*> string decoder <*> string decoder
+    file = ForeignFile <$> string decoder <*> string decoder <*> string decoder
+
+exceptionBridge :: Decoder -> Get ExceptionBridge
+exceptionBridge decoder = ExceptionBridge <$> getUVar <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+
+constructor :: Decoder -> Get Constructor
+constructor decoder = Constructor <$> string decoder <*> getUVar <*> getUVar <*> enumeration
+  <*> list decoder boolean <*> list decoder (arrayElement boolean)
+  <*> list decoder (arrayElement (list decoder primRep)) <*> list decoder (inlineRepresentation decoder)
+  <*> present getUVar <*> present (enumFamily decoder) <*> present (tagFamily decoder)
+inlineRepresentation :: Decoder -> Get Rep
+inlineRepresentation decoder = do
+  layout <- inlineShape
+  Rep layout <$> evaluation layout
+  where inlineShape = shapeFields decoder inlineShape
+
+provenance :: Decoder -> Int -> Get ModuleProvenance
+provenance decoder slot = case slot of
+  0 -> ForeignLinkRecord <$> foreignLink decoder
+  1 -> ImportsRecord <$> importProof decoder
+  2 -> ImportsRecord <$> importProof decoder
+  3 -> ExportsRecord <$> exports decoder
+  4 -> RegistrationRecord <$> registration decoder
+  5 -> ScalarLinkRecord <$> scalarLink decoder
+  6 -> NativeLinkRecord <$> nativeLink decoder
+  7 -> NativeArchiveRecord <$> nativeArchive decoder
+  _ -> fail "Unimplemented nonempty compact provenance record"
+
+foreignLink :: Decoder -> Get ForeignLink
+foreignLink decoder = ForeignLink <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> blob decoder <*> string decoder <*> list decoder (string decoder)
+  <*> list decoder pair <*> present (list decoder pair)
+  where pair = (,) <$> string decoder <*> string decoder
+
+linkPayload :: Decoder -> Get LinkPayload
+linkPayload decoder = LinkPayload <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> string decoder <*> blob decoder
+
+scalarLink :: Decoder -> Get ScalarLink
+scalarLink decoder = ScalarLink <$> linkPayload decoder <*> list decoder entry
+  where entry = ScalarABI <$> string decoder <*> string decoder <*> list decoder (string decoder) <*> string decoder
+
+blob :: Decoder -> Get BS.ByteString
+blob decoder = count decoder >>= getByteString
+
+nativeLink :: Decoder -> Get NativeLink
+nativeLink decoder = NativeLink <$> linkPayload decoder <*> list decoder entry
+  <*> present (nativeBuildInputs decoder) <*> present (list decoder (string decoder))
+  where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
+          <*> list decoder (string decoder) <*> string decoder
+
+nativeBuildInputs :: Decoder -> Get NativeBuildInputs
+nativeBuildInputs decoder = NativeBuildInputs <$> list decoder group <*> list decoder provider
+  <*> present (list decoder (nativeDependency decoder)) <*> list decoder library <*> strings <*> list decoder bridge
+  where
+    strings = list decoder (string decoder)
+    group = getWord8 >>= \kind -> case kind of
+      0 -> SingleCompile <$> compileInput decoder
+      1 -> GroupCompile <$> list decoder (compileInput decoder)
+      _ -> fail "Unknown native compilation group tag"
+    provider = NativeProvider <$> string decoder <*> strings <*> string decoder <*> string decoder
+      <*> string decoder <*> compileInput decoder
+    library = NativeLibrary <$> string decoder <*> strings <*> string decoder <*> string decoder <*> strings
+    bridge = ArgumentBridge <$> string decoder <*> string decoder <*> string decoder <*> string decoder
+      <*> list decoder strings
+
+compileInput :: Decoder -> Get CompileInput
+compileInput decoder = CompileInput <$> string decoder <*> string decoder <*> list decoder (string decoder)
+  <*> present (string decoder) <*> string decoder <*> string decoder
+  <*> list decoder ((,) <$> string decoder <*> string decoder)
+
+nativeDependency :: Decoder -> Get NativeDependency
+nativeDependency decoder = NativeDependency <$> string decoder <*> string decoder <*> sourceIdentity decoder
+  <*> string decoder <*> string decoder <*> list decoder archive <*> list decoder productRecord
+  where
+    archive = ArchiveProduct <$> string decoder <*> string decoder
+      <*> list decoder ((,) <$> string decoder <*> string decoder)
+    productRecord = NativeProduct <$> (NativePiece <$> string decoder <*> string decoder <*> string decoder
+      <*> string decoder <*> string decoder <*> compileInput decoder) <*> string decoder
+
+sourceIdentity :: Decoder -> Get SourceIdentity
+sourceIdentity decoder = SourceIdentity <$> optionalString <*> present (list decoder (string decoder))
+  <*> optionalString <*> optionalString <*> optionalString <*> optionalString
+  <*> present (list decoder ((,) <$> string decoder <*> boolean))
+  <*> optionalString <*> optionalString <*> optionalString
+  where optionalString = present (string decoder)
+
+nativeArchive :: Decoder -> Get NativeArchive
+nativeArchive decoder = NativeArchive <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> list decoder (emittedCall decoder) <*> present (string decoder)
+  <*> list decoder (string decoder) <*> present (nativeLink decoder)
+  <*> present (list decoder (emittedCall decoder)) <*> present entryResolution
+  where
+    entryResolution = EntryResolution <$> getUVar <*> string decoder <*> string decoder <*> list decoder entry
+      <*> string decoder <*> list decoder (string decoder)
+    entry = EntryClosure <$> string decoder <*> string decoder <*> list decoder (string decoder)
+
+qualifiedName :: Decoder -> Get QualifiedName
+qualifiedName decoder = QualifiedName <$> string decoder <*> string decoder <*> string decoder <*> string decoder
+
+foreignType :: Decoder -> Get ForeignType
+foreignType decoder = getWord8 >>= \kind -> case kind of
+  0 -> ForeignTyCon <$> qualifiedName decoder <*> list decoder recurse
+  1 -> ForeignApplication <$> recurse <*> recurse
+  2 -> ForeignArrow <$> recurse <*> recurse <*> recurse
+  3 -> ForeignVariable <$> getUVar
+  4 -> ForeignForall <$> recurse <*> recurse
+  _ -> fail "Unknown compact foreign type tag"
+  where recurse = foreignType decoder
+
+importProof :: Decoder -> Get ImportProof
+importProof decoder = ImportProof <$> getUVar <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> string decoder <*> status
+  where
+    status = getWord8 >>= \kind -> case kind of
+      0 -> ImportsUnclassified <$> string decoder
+      1 -> ImportsRejected <$> string decoder
+      2 -> ImportsVerified <$> getUVar <*> foreignArtifacts decoder <*> list decoder association
+        <*> list decoder (foreignCallWith decoder (inlineRepresentation decoder))
+      _ -> fail "Unknown compact import provenance status"
+    association = ImportAssociation <$> qualifiedName decoder <*> present (string decoder)
+      <*> string decoder <*> present (string decoder) <*> boolean <*> enumeration <*> enumeration
+      <*> foreignType decoder <*> foreignType decoder <*> string decoder <*> emittedCall decoder
+
+emittedCall :: Decoder -> Get EmittedCall
+emittedCall decoder = EmittedCall <$> string decoder <*> present (string decoder) <*> enumeration <*> enumeration
+  <*> list decoder (string decoder) <*> list decoder (string decoder)
+
+exports :: Decoder -> Get Exports
+exports decoder = Exports <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> list decoder association
+  where
+    association = ExportAssociation <$> qualifiedName decoder <*> string decoder <*> enumeration
+      <*> foreignType decoder <*> foreignType decoder <*> string decoder <*> list decoder (foreignType decoder)
+      <*> foreignType decoder <*> enumeration
+
+registration :: Decoder -> Get Registration
+registration decoder = Registration <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> status
+  where
+    status = getWord8 >>= \kind -> case kind of
+      0 -> RegistrationUnclassified <$> string decoder
+      1 -> RegistrationRejected <$> string decoder
+      2 -> RegistrationVerified <$> list decoder (qualifiedName decoder) <*> getUVar
+        <*> foreignArtifacts decoder <*> exports decoder
+      _ -> fail "Unknown compact export registration status"
+
+arrayElement :: Get a -> Get (Presence a)
+arrayElement parser = do
+  value <- present parser
+  case value of
+    Missing -> fail "Absent compact array element"
+    _ -> pure value
 
 runAt :: BS.ByteString -> Word64 -> Get a -> Either String (a, Word64)
 runAt bytes offset parser = do
@@ -117,16 +293,12 @@ expression decoder = do
     2 -> Lit metadata <$> literal decoder
     3 -> Lam metadata <$> list decoder (binder decoder) <*> child
     4 -> Con metadata <$> string decoder <*> getUVar
-    5 -> App metadata <$> child <*> list decoder child <*> list decoder liftedElement <*> boolean <*> boolean
+    5 -> App metadata <$> child <*> list decoder child <*> list decoder (arrayElement boolean) <*> boolean <*> boolean
     6 -> Let metadata <$> boolean <*> list decoder (binding decoder) <*> child
     7 -> Case metadata <$> child <*> getUVar <*> present (binder decoder) <*> list decoder (alternative decoder)
     _ -> pure (Void metadata)
   where
     child = expression decoder
-    liftedElement = do
-      value <- present boolean
-      unless (value /= Missing) (fail "Absent compact argument-lifted array element")
-      pure value
 
 meta :: Decoder -> Get Meta
 meta decoder = Meta <$> present (representation decoder) <*> present (representation decoder)
@@ -147,8 +319,11 @@ tagFamily :: Decoder -> Get TagFamily
 tagFamily decoder = TagFamily <$> enumFamily decoder <*> getUVar <*> boolean
 
 foreignCall :: Decoder -> Get ForeignCall
-foreignCall decoder = ForeignCall <$> getUVar <*> target <*> enumeration <*> enumeration
-  <*> getUVar <*> getUVar <*> list decoder (representation decoder) <*> representation decoder
+foreignCall decoder = foreignCallWith decoder (representation decoder)
+
+foreignCallWith :: Decoder -> Get Rep -> Get ForeignCall
+foreignCallWith decoder representationValue = ForeignCall <$> getUVar <*> target <*> enumeration <*> enumeration
+  <*> getUVar <*> getUVar <*> list decoder representationValue <*> representationValue
   <*> present (string decoder) <*> present (string decoder)
   where
     target = getWord8 >>= \kind -> case kind of
@@ -190,9 +365,12 @@ shapeUse decoder = do
     _ -> fail "Unknown compact shape-use tag"
 
 shapeDefinition :: Decoder -> Get Shape
-shapeDefinition decoder = Shape <$> enumeration <*> present (list decoder primRep)
+shapeDefinition decoder = shapeFields decoder (shapeUse decoder)
+
+shapeFields :: Decoder -> Get Shape -> Get Shape
+shapeFields decoder child = Shape <$> enumeration <*> present (list decoder primRep)
   <*> present vector <*> present enumeration
-  <*> present (list decoder (shapeUse decoder)) <*> present (list decoder (shapeUse decoder))
+  <*> present (list decoder child) <*> present (list decoder child)
   <*> present getUVar <*> present (list decoder (list decoder getUVar))
 
 evaluation :: Shape -> Get Evaluation

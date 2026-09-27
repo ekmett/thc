@@ -30,6 +30,7 @@ import Test.HUnit hiding (path)
 import THC.Compact.Wire
 import THC.Compact.Writer
 import SemanticTests (semanticTests)
+import DebugTests (debugTests)
 
 data Vector = Vector String String String
 instance FromJSON Vector where
@@ -41,7 +42,7 @@ main = do
   vectors <- BS.readFile "test/compact-core/golden/integers-v1.json" >>= either fail pure . eitherDecodeStrict'
   headerGolden <- readHex "test/compact-core/golden/header-v1.hex"
   footerGolden <- readHex "test/compact-core/golden/footer-v1.hex"
-  result <- runTestTT (TestList [tests vectors headerGolden footerGolden, semanticTests])
+  result <- runTestTT (TestList [tests vectors headerGolden footerGolden, semanticTests, debugTests])
   if errors result + failures result == 0 then pure () else exitFailure
 
 tests :: [Vector] -> BS.ByteString -> BS.ByteString -> Test

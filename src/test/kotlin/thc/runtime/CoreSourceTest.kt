@@ -116,12 +116,13 @@ class CoreSourceTest {
                 "endLine" to 3, "endColumn" to 1, "charIndex" to null, "charLength" to null, "label" to "missing")))
         val source = CoreSources(module)
         val location = source.expression(listOf("var", "x", mapOf("source" to "span")))!!
-        assertFalse(location.section.source.hasCharacters())
-        assertTrue(location.section.isAvailable)
-        assertEquals(2, location.section.startLine)
-        assertEquals(2, location.section.endLine, "Without the preceding line's text only the exact start point is representable")
-        assertEquals(4, location.section.startColumn)
-        assertEquals(4, location.section.endColumn)
+        val section = requireNotNull(location.section)
+        assertFalse(section.source.hasCharacters())
+        assertTrue(section.isAvailable)
+        assertEquals(2, section.startLine)
+        assertEquals(2, section.endLine, "Without the preceding line's text only the exact start point is representable")
+        assertEquals(4, section.startColumn)
+        assertEquals(4, section.endColumn)
         assertEquals(3, location.notes.single().endLine)
         assertEquals(1, location.notes.single().endColumn, "Original exclusive end must not be rewritten")
         assertNull(CoreSources(module + ("sourceNotesEnabled" to false)).expression(listOf("var", "x", mapOf("source" to "span"))))
@@ -136,10 +137,11 @@ class CoreSourceTest {
                 .expression(listOf("var", "x", mapOf("source" to "span")))!!
         }
         for (position in listOf(location(1000, 80, 1001, 1), location(1, 1, 1, 1))) {
-            assertFalse(position.section.source.hasCharacters(), "Unverified GHC columns must use location-only source")
-            assertTrue(position.section.isAvailable)
+            val section = requireNotNull(position.section)
+            assertFalse(section.source.hasCharacters(), "Unverified GHC columns must use location-only source")
+            assertTrue(section.isAvailable)
         }
-        assertEquals(1000, location(1000, 80, 1001, 1).section.startLine)
+        assertEquals(1000, requireNotNull(location(1000, 80, 1001, 1).section).startLine)
         val bad = mapOf("id" to "bad", "file" to "available", "startLine" to 1, "startColumn" to 1,
             "endLine" to 1, "endColumn" to 2, "charIndex" to 0.5, "charLength" to 1)
         assertThrows(RuntimeFault::class.java) { CoreSources(mapOf("sourceFiles" to listOf(file), "sourceSpans" to listOf(bad))) }
@@ -151,8 +153,9 @@ class CoreSourceTest {
             "sourceSpans" to listOf(mapOf("id" to "emoji", "file" to "unicode", "startLine" to 1, "startColumn" to 2,
                 "endLine" to 1, "endColumn" to 3, "charIndex" to 1, "charLength" to 2))))
         val location = source.expression(listOf("var", "x", mapOf("source" to "emoji")))!!
-        assertEquals("😀", location.section.characters.toString())
-        assertEquals(2, location.section.charLength)
-        assertEquals(content, location.section.source.characters.toString())
+        val section = requireNotNull(location.section)
+        assertEquals("😀", section.characters.toString())
+        assertEquals(2, section.charLength)
+        assertEquals(content, section.source.characters.toString())
     }
 }

@@ -6,13 +6,31 @@ package thc.runtime
 
 import com.oracle.truffle.api.source.Source
 import com.oracle.truffle.api.source.SourceSection
+import thc.CoreCompactRecords
 
 /** Original GHC coordinates retain their exclusive end, even when source text is unavailable. */
 internal data class CoreSourceNote(val id: String, val section: SourceSection, val label: String?,
     val startLine: Int, val startColumn: Int, val endLine: Int, val endColumn: Int)
 
 /** A node has one debugger location and all source-note provenance from collapsed ticks. */
-internal data class CoreSourceLocation(val section: SourceSection, val notes: List<CoreSourceNote>)
+internal class CoreSourceLocation private constructor(
+    val compactOrigin: CoreCompactRecords.Origin?, private val resolve: () -> CoreSourceLocation?
+) {
+    private data class Details(val section: SourceSection, val notes: List<CoreSourceNote>)
+    private var eager: Details? = null
+    constructor(section: SourceSection, notes: List<CoreSourceNote>) : this(null, { null }) {
+        eager = Details(section, notes)
+    }
+    private val resolved: CoreSourceLocation? by lazy(resolve)
+    val section: SourceSection? get() = eager?.section ?: resolved?.section
+    val notes: List<CoreSourceNote> get() = eager?.notes ?: resolved?.notes.orEmpty()
+
+    companion object {
+        fun compact(origin: CoreCompactRecords.Origin, enabled: Boolean) = CoreSourceLocation(origin) {
+            if (enabled) origin.debug?.location(origin.dataOffset) else null
+        }
+    }
+}
 
 /** Parsing-only metadata. Constructing locations never reads files or adds executable nodes. */
 internal class CoreSources(moduleData: Map<String, Any?>) {
@@ -80,6 +98,9 @@ internal class CoreSources(moduleData: Map<String, Any?>) {
         location(binding, inherited)
 
     private fun location(metadata: Map<String, Any?>?, inherited: CoreSourceLocation?): CoreSourceLocation? {
+        (metadata?.get("compactOrigin") as? CoreCompactRecords.Origin)?.let {
+            return CoreSourceLocation.compact(it, enabled)
+        }
         if (!enabled) return null
         val primary = metadata?.get("source") as? String
         val ids = metadata?.get("sourceNotes") as? List<String> ?: emptyList()

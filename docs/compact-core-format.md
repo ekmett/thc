@@ -1,10 +1,12 @@
 # Compact Core container
 
-This is the shared version 1 wire contract under implementation. Framing,
-integer primitives, scoped assembly and typed executable-record encoding/decoding
-have native controls. Header facts, conversion, debug maps and runtime integration
-are not yet complete.
-Existing JSON and unit-directory routes remain available and unchanged.
+Version 1 containers support opt-in loading through both runtime backends.
+The native converter writes typed executable and header records, shared strings,
+and optional name/source maps. The runtime decodes selected bindings on demand,
+including all eight module-level foreign provenance families. Source locations
+resolve when requested; original display names are available through explicit
+lookup APIs. General runtime labels do not yet use the name map.
+The project driver still publishes JSON unit artifacts by default.
 
 ## Assembly and addressing
 
@@ -240,9 +242,9 @@ fieldTypes, p(u sumArity), p(EnumFamily), p(TagFamily)`. ConstructorKind tags
 including void/coercion slots, not source-level field counts. `InlineRep` uses
 the same shape and evaluation grammar, but recursively inlines shapes with no
 ShapeUse tag or data references; header constructors therefore require no
-executable-body access. Typed header facts and the remaining module-level foreign
-provenance families are still pending this tranche; nonempty unmapped fields
-must be rejected by the converter, not discarded or embedded as generic JSON.
+executable-body access. Nonempty module-level foreign provenance families without
+a typed payload schema are rejected by the converter, not discarded or embedded
+as generic JSON.
 
 ### Header facts
 
@@ -252,11 +254,11 @@ list(Constructor), p(ForeignArtifacts), p(ForeignExceptionBridge),
 p(str foreignExceptionBridgeUnit)`, then eight typed optional provenance fields:
 `foreignLink`, `staticForeignImportStubs`, `staticForeignImports`,
 `staticForeignExports`, `staticForeignExportRegistration`, `packageScalarLink`,
-`packageNativeLink`, `packageNativeArchive`, in that order. The initial header
-tranche accepts only missing/null for these last eight slots and rejects known
-records until their typed payload schemas are implemented. It does not omit,
-guess or hide those records in JSON text. This is a conversion limitation, not
-permission to execute a module without its original foreign admission facts.
+`packageNativeLink`, `packageNativeArchive`, in that order. Their typed payload
+schemas are specified below; missing/null remain distinct in every slot. The
+converter rejects unknown fields instead of omitting, guessing or hiding them
+in JSON text. These records preserve original admission facts; their presence
+does not replace existing ABI, ownership or native-access checks.
 
 `TargetLayout` carries `u documentSchema`, then four compiler strings (`id`,
 `abi`, `platform`, `way`), then `u layoutSchema, b profiled, u wordBytes,
@@ -298,6 +300,210 @@ remain semantic/provenance content, not optional display-name debug data.
 `ForeignExceptionBridge` is `u schema, str unit, str module, str box, str project,
 str payloadType, str exceptionType`; its unit reference remains semantic too.
 
+### Retained import and export provenance
+
+This ordered grammar is implemented by the typed-header codec. Header
+slots `staticForeignImportStubs` and `staticForeignImports` use `ImportProof`;
+`staticForeignExports` uses `Exports`; `staticForeignExportRegistration` uses
+`Registration`. The surrounding `p(T)` presence bytes are unchanged.
+
+`QualifiedName` is four semantic strings: `str unit, str module, str occurrence,
+str namespace`. These names identify declarations and type constructors; they
+are not optional display names. `ForeignType` has these one-byte tags:
+
+| Tag | Type | Payload |
+| ---: | --- | --- |
+| 0 | tycon | `QualifiedName, list(ForeignType) arguments` |
+| 1 | application | `ForeignType function, ForeignType argument` |
+| 2 | function | `ForeignType multiplicity, ForeignType argument, ForeignType result` |
+| 3 | bound-variable | `u index` |
+| 4 | forall | `ForeignType binderKind, ForeignType body` |
+
+Binder indices preserve their original scope. Declared and representationally
+normalized types are separate operative provenance, not pretty text.
+
+`ImportProof` is `u schema, str scope, str execution, str profile, str unit,
+str module, ImportStatus`. Status tag 0 UNCLASSIFIED and tag 1 REJECTED each
+carry a reason `str`. Tag 2 VERIFIED carries `u wordBits, ForeignArtifacts,
+list(ImportAssociation), list(HeaderForeignCall) expectedCalls`.
+`ImportAssociation` is `QualifiedName binder, p(str header), str symbol,
+p(str unit), b isFunction, Convention, Safety, ForeignType declaredType,
+ForeignType normalizedType, str normalizationRole, EmittedCall`.
+`EmittedCall` is `str symbol, p(str unit), Convention, Safety, list(str)
+arguments, list(str) result`; its exact ABI labels include the original void
+slots. `HeaderForeignCall` has the existing ForeignCall order, except that
+every argument/result representation uses `InlineRep`, never a DATA shape
+reference. Complete expected-call order and multiplicity remain intact without
+reading executable bodies during metadata admission.
+
+`Exports` is `u schema, str producer, str scope, str execution, str unit,
+str module, list(ExportAssociation)`. `ExportAssociation` is `QualifiedName
+binder, str symbol, Convention, ForeignType declaredType, ForeignType
+normalizedType, str normalizationRole, list(ForeignType) arguments,
+ForeignType result, Effect`; Effect tags 0/1 mean pure/io.
+
+`Registration` is `u schema, str scope, str execution, str profile,
+RegistrationStatus`. Status tags 0 UNCLASSIFIED and 1 REJECTED carry a reason
+`str`; tag 2 VERIFIED carries `list(QualifiedName) roots, u wordBits,
+ForeignArtifacts expectedForeign, Exports expectedExports`. Retained product
+and export-inventory equality remain the existing admission rules; encoding
+these records does not grant new foreign execution authority.
+
+### Linked and archived native products
+
+`blob` is `u byteLength` followed by those raw bytes. Original canonical
+lowercase `bitcodeHex` is decoded to this blob, not UTF-8 or optional debug;
+the inspector reconstructs its exact hex representation. Hash strings remain
+the original producer evidence, never rewritten by conversion.
+
+`foreignLink` uses `u schema, str format, str unit, str module, str sourceSha256,
+str bitcodeSha256, blob, str target, list(str) symbols, list(SymbolKind) abi,
+p(list(HeaderHash)) headerHashes`. `SymbolKind` is `str symbol, str kind`;
+`HeaderHash` is `str name, str sha256`.
+
+`LinkPayload` is `u schema, str format, str profile, str unit, str target,
+str componentSha256, str bitcodeSha256, blob`.
+`packageScalarLink` is `LinkPayload, list(ScalarABI)`; `ScalarABI` is
+`str symbol, str entry, list(str) arguments, str result`.
+`packageNativeLink` is `LinkPayload, list(NativeABI), p(NativeBuildInputs),
+p(list(str)) availableEntries`. `NativeABI` is `str symbol, str entry,
+Convention, Safety, list(str) arguments, str result`.
+
+`NativeBuildInputs` is `list(CompileGroup) translationUnits,
+list(NativeProvider), p(list(NativeDependency)), list(NativeLibrary),
+list(str) unresolved, list(ArgumentBridge)`.
+`CompileGroup` tag 0 carries one `CompileInput`; tag 1 carries
+`list(CompileInput)`, preserving original wrapper groups versus individual C
+translation units. `CompileInput` is `str compiler, str clang, list(str)
+arguments, p(str language), str nativeTarget, str target, list(FileHash)`.
+`FileHash` is `str path, str sha256`.
+`NativeProvider` is `str provider, list(str) symbols, str bitcode,
+str bitcodeSha256, str target, CompileInput`.
+`NativeLibrary` is `str provider, list(str) symbols, str compiler,
+str compilerSha256, list(str) arguments`.
+`ArgumentBridge` is `str profile, str source, str sourceSha256,
+str inputBitcodeSha256, list(list(str)) definitions`.
+
+`NativeDependency` is `str profile, str unit, SourceIdentity,
+str registration, str registrationSha256, list(ArchiveProduct),
+list(NativeProduct)`.
+`SourceIdentity` is `p(str id), p(list(str)) depends, p(str type),
+p(str style), p(str pkg-name), p(str pkg-version), p(list(Flag)) flags,
+p(str component-name), p(str pkg-src-sha256), p(str pkg-cabal-sha256)`;
+`Flag` is `str name, b enabled`, ordered by name with no duplicate names.
+`ArchiveProduct` is `str path, str sha256, list(HeaderHash) members`.
+`NativeProduct` is `NativePiece, str bitcodeSha256`; `NativePiece` is
+`str root, str object, str objectSha256, str bitcode, str target, CompileInput`.
+These preserve actual resolved C-only unit and archive membership evidence.
+
+`packageNativeArchive` is `u schema, str profile, str execution, str unit,
+str module, list(EmittedCall) unsupportedImports, p(str unclassifiedReason),
+list(str) unresolvedSymbols, p(NativeLink) artifact,
+p(list(EmittedCall)) conflictingImports, p(EntryResolution)`.
+`EntryResolution` is `u schema, str profile, str inputBitcodeSha256,
+list(EntryClosure), str outputBitcodeSha256, list(str) unresolved`;
+`EntryClosure` is `str entry, str bitcodeSha256, list(str) unresolved`.
+Failed full links and successful selected closures remain separate records;
+conversion neither promotes archives to executable products nor changes recipes.
+
+### Optional debug tables
+
+The following table grammar is implemented by the optional-debug producer.
+A nonempty debug segment ends with a 16-byte local directory: `u64LE indexStart,
+u64LE rowCount`. Payload bytes precede the fixed-width rows; the rows end exactly
+at that directory. Offsets in a debug table address that same debug segment,
+except for explicitly identified DATA positions and common-string spans. There
+is no auxiliary string-ID table. An absent debug segment has length zero and no
+directory. Reading semantic header or executable records never reads these tables.
+
+The name table has 32-byte rows: `u64LE topBindingDataOffset, u64LE ordinalSlot,
+u64LE nameStart, u64LE nameLength`. Rows are sorted by the unsigned numeric key
+pair, with no duplicate keys. Slot 0 names the top-level binding; local ordinal
+`n` uses slot `n + 1`. Lookup is exact, not predecessor-based. Name payloads are
+raw UTF-8 bytes in this segment, independent of the common-string segment.
+The enclosing binding's immutable DATA offset scopes local ordinals. Original
+names are display data; no loader or linker resolution depends on their presence.
+The reserved first key `UINT64_MAX` names header constructors instead of DATA:
+slot `constructorIndex + 1` selects the original constructor display name; slot
+0 is unused. This reserved key cannot be a real DATA position. Readers compare
+keys unsigned and expose constructor-name lookup separately from binding origins.
+
+Each source table has 24-byte rows: `u64LE dataStart, u64LE dataEndExclusive,
+u64LE payloadOffset`. Rows are ordered by DATA start and have nonempty,
+nonoverlapping ranges. Lookup finds the predecessor start, then requires the
+requested position to be below its end. A position outside every range has no
+location. A payload starts with one byte: tag 0 is explicitly no source; tag 1
+has the typed location payload below. Producers record entry, no-source and
+restoration transitions; equal adjacent states can coalesce independently in
+the two tables. An inherited source cannot bleed past its actual range.
+
+Filename tag 1 is `list(File)`; `File` is `str originalFileId, str path,
+p(str content)`. These are common UTF-8 spans, read only for an explicit source
+request. Missing/null content keeps location-only source behavior. Line/column
+tag 1 is `u primaryIndex, list(Note)`. `Note` is `text originalSpanId,
+p(text label), u startLine, u startColumn, u endLine, u endColumn,
+p(u charIndex), p(u charLength)`, where `text` means `u UTF8ByteLength` followed
+by that many inline UTF-8 bytes in this source segment. All counts, indices,
+coordinates and optional payload integers here use the canonical ULEB64 and
+`p(T)` grammar above, not fixed-width integers. Coordinates are one-based and
+end-exclusive; character offsets retain the original exporter values.
+
+The filename and coordinate lists have equal count and corresponding order for
+the selected location. They retain ordered, distinct effective source-note
+provenance, including inherited notes; `primaryIndex` selects the debugger
+location and must be within that list. The independently coalesced tables need
+not have matching range boundaries. Readers check selected rows/payloads and
+matching lists locally, without a debug-table prescan. Binder/expression origins
+retain immutable container identity and DATA position through cloning/inlining.
+
+## Explicit conversion and inspection
+
+Build the native tool with `cabal build exe:thc-compact --offline -fdevelopment`.
+It currently accepts one flat Core JSON module at a time:
+
+```sh
+cabal run exe:thc-compact -- encode Module.json Module.thcc
+cabal run exe:thc-compact -- decode Module.thcc inspected.json
+cabal run exe:thc-compact -- source Module.thcc 0
+cabal run exe:thc-compact -- name Module.thcc 0 0
+```
+
+Normal encoding preserves supplied original names and source notes, recording
+origins while semantic records are emitted. The explicit `--without-debug` option
+omits those maps. Unknown semantic fields and malformed provenance fail conversion.
+Header constructors, target-layout facts, foreign artifacts, native-link recipes
+and exception-bridge facts are typed. Linked bitcode is stored as raw bytes and
+reconstructed as canonical hexadecimal by the JSON inspector.
+The converter is not yet a default project-publication path.
+
+`decode` is an explicit full-module semantic inspection, separate from runtime
+demand loading. It emits flat records with deterministic `@local/N` identities
+and synthetic display names, not recovered original spellings. `source` and
+`name` inspect original debug values separately at the requested exact DATA
+origin/name key; they do not decode executable records. The semantic dump preserves only the
+two operative entry-type facts, not arbitrary pretty types or printed IdInfo.
+For lossless IEEE inspection it emits `float-bits` and `double-bits` literals with
+unsigned decimal bit payloads; this converter accepts those tags in addition to
+the reference exporter's decimal `float` and `double` values. The inspection-only
+bit tags do not extend the legacy JVM JSON reader. Encoding the inspected form
+preserves signed zero and NaN payload bits.
+
+The opt-in manifest representation retains the original module `sha256`, name,
+boundary and four actual summary booleans. Its `compact` field contains `path`,
+the container `sha256`, and `format: "thc-compact-core-v1"`. Original unit identity,
+dependencies and any real canonical `targetLayout` remain in the unit descriptor.
+Compact paths are absolute. Each nonempty unit selects either compact containers
+for all its modules or the JSON/symbol pair; units with different storage formats
+may share one manifest. Compact module records contain no JSON extents or index.
+
+The runtime shares immutable mappings while each Context owns its decoded
+bindings and CAF state. Ordinary cold references do not open their modules;
+constructor, foreign registration and exception-bridge requirements can demand
+module metadata. Normal loads check framing and accessed records without a
+whole-file hash or body scan. Explicit artifact verification hashes a fresh
+mapping, retains that same mapping, and enumerates the selected module's bindings
+for admission checks. It does not open unrelated modules.
+
 ## Shared controls
 
 Manual byte vectors live in
@@ -308,6 +514,20 @@ They are not a valid typed Core module. The integer vectors cover canonical
 thresholds and signed/unsigned endpoints. The native Haskell tests also reject
 truncation, overlong integers, overflow, invalid versions/reserved fields and
 inconsistent segment extents. Kotlin consumes the same byte contract independently.
+
+`nested-shared-rep-v1.hex` is a manually specified 62-byte executable-segment
+fragment, not encoder-generated expected output. Its first Rep starts at 0:
+an outer tuple shape definition at 0 contains an inner singleton tuple definition
+at 11, whose IntRep/long leaf definition is at 21. The outer tuple's second
+component is a direct reference to the same inner shape at 11. Outer and inner
+tuple `primReps` are respectively `[IntRep,IntRep]` and `[IntRep]`; all unused
+shape fields are missing, not null. The first occurrence's evaluation tree is
+`false[true[false], false[true]]`. A second Rep at offset 50 references the outer
+shape at 0 and carries `true[false[true], true[false]]`, ending at 62. Every
+evaluation flag is known. This independently fixes both recursive layout sharing
+and distinct evaluatedness at every child occurrence. Native and JVM controls
+decode the manual bytes against those explicit trees; the producer is also
+checked against the same bytes, not against its own round-trip output.
 
 Run the focused native checks with `cabal test compact-core-tests --offline
 -fdevelopment --test-show-details=direct` using the repository's pinned GHC.

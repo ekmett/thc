@@ -263,7 +263,7 @@ class ManagedStackSnapshotTest {
     }
 
     @Test fun copiedNotesRetainExclusiveEndsAndDoNotKeepMutableNodesOrLists() {
-        val section = location().section
+        val section = requireNotNull(location().section)
         val notes = arrayListOf(CoreSourceNote("original", section, "source label", 91, 7, 92, 1))
         val probe = Probe(null, location(notes))
         assertEquals(7L, Calls.target(probe.callTarget, arrayOf(0L)))

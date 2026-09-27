@@ -507,16 +507,39 @@ library compact-core
     THC.Compact.Wire
     THC.Compact.Writer
     THC.Compact.Core
+    THC.Compact.Facts
+    THC.Compact.Module
+    THC.Compact.JSON
+    THC.Compact.Inspect
     THC.Compact.Encode
     THC.Compact.Decode
+    THC.Compact.Debug
+    THC.Compact.Annotations
   build-depends:
+    thc:core-json-index,
+    aeson >= 2.3 && < 2.4,
     base >= 4.22 && < 4.23,
     binary >= 0.8.9 && < 0.9,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
     directory >= 1.3 && < 1.4,
     filepath >= 1.5 && < 1.6,
-    text >= 2.1 && < 2.2
+    text >= 2.1 && < 2.2,
+    transformers >= 0.6 && < 0.7,
+    vector >= 0.13 && < 0.14
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
+executable thc-compact
+  main-is: Main.hs
+  hs-source-dirs: compiler/compact-tool
+  build-depends:
+    thc:compact-core,
+    base >= 4.22 && < 4.23,
+    aeson >= 2.3 && < 2.4,
+    bytestring >= 0.12.2 && < 0.13
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)
@@ -526,9 +549,10 @@ test-suite compact-core-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   hs-source-dirs: test/compact-core
-  other-modules: SemanticTests
+  other-modules: SemanticTests DebugTests
   build-depends:
     thc:compact-core,
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     aeson >= 2.3 && < 2.4,
     binary >= 0.8.9 && < 0.9,

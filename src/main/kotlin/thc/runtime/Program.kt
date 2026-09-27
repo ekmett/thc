@@ -275,7 +275,9 @@ internal abstract class Expr : Node() {
     protected val typedVectorLayout: VectorLayout? get() = vectorLayout
     @CompilationFinal var coreSourceLocation: CoreSourceLocation? = null
     fun located(location: CoreSourceLocation?): Expr { coreSourceLocation = location; return this }
-    override fun getSourceSection(): SourceSection? = coreSourceLocation?.section ?: parent?.encapsulatingSourceSection
+    override fun getSourceSection(): SourceSection? = coreSourceLocation.let {
+        if (it == null) parent?.encapsulatingSourceSection else it.section
+    }
     fun proven(proof: CoreRepresentation): Expr { representation = proof; return this }
     open fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int = 0): Any? {
         val layout = vectorLayout
@@ -1865,8 +1867,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         fun initialize(slot: Int, kind: FrameSlotKind) {
             if (descriptor.getSlotKind(slot) == FrameSlotKind.Illegal) descriptor.setSlotKind(slot, kind)
         }
-        // Compose the cold-entry preparation from 0fd54325 with the same
-        // exact carriers selected by buildFrame, including narrow JVM Int.
+        // These carriers are already required by buildFrame. Establish their
+        // slot kinds before publishing the root, not on its first compiled call.
+        // An asynchronously forced argument may still contain a thunk here.
         for (i in argumentSlots.indices) {
             if (enableAsync && argumentIndices[i] + entryArgumentOffset in strictArgumentPositions) continue
             val proof = argumentProofs.getOrNull(i) ?: continue
@@ -1880,6 +1883,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             }
             initialize(argumentSlots[i], kind)
         }
+        // Dense entry first snapshots its owned packet, independently of the
+        // formal slots. Its immutable physical layout fixes these carriers too.
         handoff?.let { entry ->
             for (i in entry.snapshotSlots.indices) initialize(entry.snapshotSlots[i], when {
                 entry.arguments.isInt(i) -> FrameSlotKind.Int
@@ -2290,7 +2295,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return try { action() } finally { currentSource = previous }
     }
     private fun rootSource(body: Expr): CoreSourceLocation? = (body.coreSourceLocation ?: currentSource).also {
-        if (it != null) attachedRootCount++
+        if (it != null && sources.enabled) attachedRootCount++
     }
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()
@@ -2589,7 +2594,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
-    private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
+    private fun literal(kind: String, encoded: Any?, proof: CoreRepresentation? = null): Any {
+        if (encoded is CoreFloatingLiteral) return encoded.decode(kind)
+        val value = encoded as? String ?: throw UnsupportedCore("Malformed Core literal payload")
+        return when (kind) {
         "rubbish" -> rubbishLiterals.decode(requireNotNull(proof))
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
@@ -2607,6 +2615,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout as? TargetLayout)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
+        }
     }
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expr {
         CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
@@ -2662,7 +2671,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 ?: globals[id]?.let { GlobalRead(it).proven(proof ?: globalProofs.getValue(id)) }
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
+        "lit" -> Literal(literal(expr[1] as String, expr[2], CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) it.proven(CoreRepresentations.narrowLiteralProof(expr))
             else if (expr[1] == "bignat") it.proven(BigNatLiterals.proof(expr))
             else if (expr[1] == "rubbish") it.proven(RubbishLiterals.proof(expr)) else it

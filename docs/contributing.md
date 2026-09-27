@@ -151,6 +151,14 @@ and malformed-input controls. Add
 argument description in an existing generated source without modifying it.
 The check is also part of Gradle's `check` task.
 
+The same pinned normalization adds a read-only `Builder.isParsingSources()`
+accessor. Callers can test the builder's existing mode before resolving lazy
+source arguments; ordinary `BytecodeConfig.DEFAULT` construction does not need
+debug data. `./gradlew testBytecodeSourceModeAccessor` checks the generated
+accessor and rejects unknown processor versions or builder shapes.
+`BytecodeLazySourceModeTest` checks explicit source-information replay without
+changing root identity, instructions or instruction arguments.
+
 `scripts/try.sh --handoff-modes` prepares the full fixture set once and batches
 installation, diagnostic tools and both test forks. Native ABI probes still run
 once per Gradle graph because their complete host/compiler/header inputs are not

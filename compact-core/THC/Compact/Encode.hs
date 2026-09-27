@@ -1,5 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Module      : THC.Compact.Encode
@@ -11,29 +12,357 @@
 --
 -- One-pass typed executable encoding. Shapes are interned independently of
 -- occurrence states; strings append directly to their private auxiliary stream.
-module THC.Compact.Encode (Encoder, newEncoder, encodeBinding, encodeExpr, encodeRep, internString) where
+module THC.Compact.Encode
+  ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl ) where
 
-import Control.Monad (unless, void)
+import Control.Monad (unless, void, when)
 import Data.Binary.Put
 import Data.Bits ((.&.), shiftR)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Lazy as BL
 import Data.IORef
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word8, Word64)
 import THC.Compact.Core
+import THC.Compact.Annotations
+import THC.Compact.Facts
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 data Encoder = Encoder !Streams !(IORef (Map.Map BS.ByteString Span)) !(IORef (Map.Map Shape Word64))
+  !(Maybe (IORef Builder.Builder)) !(IORef Bool) !(IORef (Maybe RecordObserver))
 
 newEncoder :: Streams -> IO Encoder
-newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty
+newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty <*> pure Nothing <*> newIORef False <*> newIORef Nothing
+
+-- | Attach optional display-only origin recording for subsequent DATA records.
+setRecordObserver :: Encoder -> Maybe RecordObserver -> IO ()
+setRecordObserver (Encoder _ _ _ _ _ observer) = writeIORef observer
+
+observe :: Encoder -> RecordKind -> IO a -> IO a
+observe (Encoder streams _ _ _ _ observer) kind action = do
+  selected <- readIORef observer
+  case selected of
+    Nothing -> action
+    Just callbacks -> do
+      streamOffset streams ExecutableData >>= enterRecord callbacks kind
+      result <- action
+      streamOffset streams ExecutableData >>= leaveRecord callbacks
+      pure result
+
+-- | Derived during expression emission, without a separate Core-body walk.
+containsDelimitedControl :: Encoder -> IO Bool
+containsDelimitedControl (Encoder _ _ _ _ found _) = readIORef found
+
+-- | Encode only the bounded known-start record in memory, while appending its
+-- strings to the auxiliary stream. Constructor shapes are inline: admitting
+-- header facts never requires reading an executable-body shape definition.
+encodeFacts :: Encoder -> Facts -> IO BS.ByteString
+encodeFacts (Encoder streams strings shapes _ found observer) facts = do
+  output <- newIORef mempty
+  let encoder = Encoder streams strings shapes (Just output) found observer
+  number encoder (factsSchema facts)
+  mapM_ (string encoder) [factsGhc facts, factsUnit facts, factsModule facts, factsBoundary facts]
+  present encoder (list encoder (string encoder)) (factsProvidedModules facts)
+  present encoder (targetLayout encoder) (factsTargetLayout facts)
+  list encoder (constructor encoder) (factsConstructors facts)
+  present encoder (foreignArtifacts encoder) (factsForeign facts)
+  present encoder (exceptionBridge encoder) (factsExceptionBridge facts)
+  present encoder (string encoder) (factsExceptionBridgeUnit facts)
+  unless (length (factsPendingProvenance facts) == length pendingProvenanceNames)
+    (fail "Compact header requires eight provenance-presence slots")
+  mapM_ (\(slot,value) -> present encoder (provenance encoder slot) value)
+    (zip [0..] (factsPendingProvenance facts))
+  BL.toStrict . Builder.toLazyByteString <$> readIORef output
+
+targetLayout :: Encoder -> TargetLayout -> IO ()
+targetLayout encoder value = do
+  number encoder (targetDocumentSchema value)
+  mapM_ (string encoder) [targetCompilerId value,targetCompilerAbi value,targetCompilerPlatform value,targetCompilerWay value]
+  number encoder (targetLayoutSchema value)
+  boolean encoder (targetProfiled value)
+  number encoder (targetWordBytes value)
+  enumeration encoder (targetEndianness value)
+  string encoder (targetPlatform value)
+  boolean encoder (targetTablesNextToCode value)
+  unless (length (targetNumbers value) == length targetNumberNames) (fail "Incomplete compact target-layout numbers")
+  mapM_ (number encoder) (targetNumbers value)
+
+foreignArtifacts :: Encoder -> ForeignArtifacts -> IO ()
+foreignArtifacts encoder (ForeignArtifacts schema execution stubs files) = do
+  number encoder schema
+  string encoder execution
+  present encoder putStubs stubs
+  list encoder putFile files
+  where
+    putStubs (Stubs header source initializers finalizers) = do
+      string encoder header
+      string encoder source
+      list encoder putLabel initializers
+      list encoder putLabel finalizers
+    putLabel (Label initializer unit moduleName name) = boolean encoder initializer >> mapM_ (string encoder) [unit,moduleName,name]
+    putFile (ForeignFile language source extension) = mapM_ (string encoder) [language,source,extension]
+
+exceptionBridge :: Encoder -> ExceptionBridge -> IO ()
+exceptionBridge encoder (ExceptionBridge schema unit moduleName box project payload exception) =
+  number encoder schema >> mapM_ (string encoder) [unit,moduleName,box,project,payload,exception]
+
+constructor :: Encoder -> Constructor -> IO ()
+constructor encoder value = do
+  string encoder (constructorId value)
+  number encoder (constructorArity value)
+  number encoder (constructorTag value)
+  enumeration encoder (constructorKind value)
+  list encoder (boolean encoder) (constructorStrictFields value)
+  unless (all (/= Missing) (constructorFieldLifted value) && all (/= Missing) (constructorFieldReps value))
+    (fail "Absent compact constructor array element")
+  list encoder (present encoder (boolean encoder)) (constructorFieldLifted value)
+  list encoder (present encoder (list encoder (primRep encoder))) (constructorFieldReps value)
+  list encoder (inlineRep encoder) (constructorFieldTypes value)
+  present encoder (number encoder) (constructorSumArity value)
+  present encoder (enumFamily encoder) (constructorEnumFamily value)
+  present encoder (tagFamily encoder) (constructorTagFamily value)
+inlineRep :: Encoder -> Rep -> IO ()
+inlineRep encoder (Rep layout state) = inlineShape layout >> evaluation encoder layout state
+  where
+    inlineShape shape = do
+      enumeration encoder (shapeKind shape)
+      present encoder (list encoder (primRep encoder)) (shapePrimReps shape)
+      present encoder (vector encoder) (shapeVector shape)
+      present encoder (enumeration encoder) (shapeAggregate shape)
+      present encoder (list encoder inlineShape) (shapeComponents shape)
+      present encoder (list encoder inlineShape) (shapeAlternatives shape)
+      present encoder (number encoder) (shapeTagSlot shape)
+      present encoder (list encoder (list encoder (number encoder))) (shapeAlternativeSlots shape)
+
+provenance :: Encoder -> Int -> ModuleProvenance -> IO ()
+provenance encoder slot value = case (slot,value) of
+  (0,ForeignLinkRecord proof) -> foreignLink encoder proof
+  (1,ImportsRecord proof) -> importProof encoder proof
+  (2,ImportsRecord proof) -> importProof encoder proof
+  (3,ExportsRecord proof) -> exports encoder proof
+  (4,RegistrationRecord proof) -> registration encoder proof
+  (5,ScalarLinkRecord proof) -> scalarLink encoder proof
+  (6,NativeLinkRecord proof) -> nativeLink encoder proof
+  (7,NativeArchiveRecord proof) -> nativeArchive encoder proof
+  _ -> fail "Unimplemented or mismatched compact provenance slot"
+
+foreignLink :: Encoder -> ForeignLink -> IO ()
+foreignLink encoder (ForeignLink schema format unit moduleName sourceSha bitcodeSha bytes target symbols abi headers) = do
+  number encoder schema
+  mapM_ (string encoder) [format,unit,moduleName,sourceSha,bitcodeSha]
+  blob encoder bytes
+  string encoder target
+  list encoder (string encoder) symbols
+  list encoder pair abi
+  present encoder (list encoder pair) headers
+  where pair (name,digest) = string encoder name >> string encoder digest
+
+linkPayload :: Encoder -> LinkPayload -> IO ()
+linkPayload encoder (LinkPayload schema format profile unit target componentSha bitcodeSha bytes) = do
+  number encoder schema
+  mapM_ (string encoder) [format,profile,unit,target,componentSha,bitcodeSha]
+  blob encoder bytes
+
+scalarLink :: Encoder -> ScalarLink -> IO ()
+scalarLink encoder (ScalarLink payload abi) = linkPayload encoder payload >> list encoder entry abi
+  where entry (ScalarABI symbol name arguments result) = do
+          string encoder symbol
+          string encoder name
+          list encoder (string encoder) arguments
+          string encoder result
+
+blob :: Encoder -> BS.ByteString -> IO ()
+blob encoder bytes = number encoder (fromIntegral (BS.length bytes)) >> emit encoder (putByteString bytes)
+
+nativeLink :: Encoder -> NativeLink -> IO ()
+nativeLink encoder (NativeLink payload abi inputs entries) = do
+  linkPayload encoder payload
+  list encoder entry abi
+  present encoder (nativeBuildInputs encoder) inputs
+  present encoder (list encoder (string encoder)) entries
+  where entry (NativeABI symbol name convention safety arguments result) = do
+          string encoder symbol
+          string encoder name
+          enumeration encoder convention
+          enumeration encoder safety
+          list encoder (string encoder) arguments
+          string encoder result
+
+nativeBuildInputs :: Encoder -> NativeBuildInputs -> IO ()
+nativeBuildInputs encoder (NativeBuildInputs units providers dependencies libraries unresolved bridges) = do
+  list encoder group units
+  list encoder provider providers
+  present encoder (list encoder (nativeDependency encoder)) dependencies
+  list encoder library libraries
+  strings unresolved
+  list encoder bridge bridges
+  where
+    strings = list encoder (string encoder)
+    group (SingleCompile input) = tag encoder 0 >> compileInput encoder input
+    group (GroupCompile inputs) = tag encoder 1 >> list encoder (compileInput encoder) inputs
+    provider (NativeProvider name symbols path digest target input) = do
+      string encoder name
+      strings symbols
+      mapM_ (string encoder) [path,digest,target]
+      compileInput encoder input
+    library (NativeLibrary name symbols compiler digest arguments) = do
+      string encoder name
+      strings symbols
+      string encoder compiler
+      string encoder digest
+      strings arguments
+    bridge (ArgumentBridge profile source sourceSha inputSha definitions) = do
+      mapM_ (string encoder) [profile,source,sourceSha,inputSha]
+      list encoder strings definitions
+
+compileInput :: Encoder -> CompileInput -> IO ()
+compileInput encoder (CompileInput compiler clang arguments language nativeTarget target files) = do
+  string encoder compiler
+  string encoder clang
+  list encoder (string encoder) arguments
+  present encoder (string encoder) language
+  string encoder nativeTarget
+  string encoder target
+  list encoder (\(path,digest) -> string encoder path >> string encoder digest) files
+
+nativeDependency :: Encoder -> NativeDependency -> IO ()
+nativeDependency encoder (NativeDependency profile unit source registrationText digest archives products) = do
+  string encoder profile
+  string encoder unit
+  sourceIdentity encoder source
+  string encoder registrationText
+  string encoder digest
+  list encoder archive archives
+  list encoder productRecord products
+  where
+    archive (ArchiveProduct path hash members) = do
+      string encoder path
+      string encoder hash
+      list encoder (\(name,value) -> string encoder name >> string encoder value) members
+    productRecord (NativeProduct (NativePiece root path hash bitcode target input) bitcodeSha) = do
+      mapM_ (string encoder) [root,path,hash,bitcode,target]
+      compileInput encoder input
+      string encoder bitcodeSha
+
+sourceIdentity :: Encoder -> SourceIdentity -> IO ()
+sourceIdentity encoder (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha) = do
+  optionalString unit
+  present encoder (list encoder (string encoder)) depends
+  mapM_ optionalString [kind,style,name,version]
+  present encoder (list encoder (\(key,value) -> string encoder key >> boolean encoder value)) flags
+  mapM_ optionalString [component,sourceSha,cabalSha]
+  where optionalString = present encoder (string encoder)
+
+nativeArchive :: Encoder -> NativeArchive -> IO ()
+nativeArchive encoder (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts resolution) = do
+  number encoder schema
+  mapM_ (string encoder) [profile,execution,unit,moduleName]
+  list encoder (emittedCall encoder) unsupported
+  present encoder (string encoder) reason
+  list encoder (string encoder) unresolved
+  present encoder (nativeLink encoder) artifact
+  present encoder (list encoder (emittedCall encoder)) conflicts
+  present encoder entryResolution resolution
+  where
+    entryResolution (EntryResolution schema' profile' inputSha entries outputSha dependencies) = do
+      number encoder schema'
+      string encoder profile'
+      string encoder inputSha
+      list encoder entry entries
+      string encoder outputSha
+      list encoder (string encoder) dependencies
+    entry (EntryClosure name digest unresolved') = do
+      string encoder name
+      string encoder digest
+      list encoder (string encoder) unresolved'
+
+qualifiedName :: Encoder -> QualifiedName -> IO ()
+qualifiedName encoder (QualifiedName unit moduleName occurrence namespace) =
+  mapM_ (string encoder) [unit,moduleName,occurrence,namespace]
+
+foreignType :: Encoder -> ForeignType -> IO ()
+foreignType encoder value = case value of
+  ForeignTyCon name arguments -> tag encoder 0 >> qualifiedName encoder name >> list encoder recurse arguments
+  ForeignApplication function argument -> tag encoder 1 >> recurse function >> recurse argument
+  ForeignArrow multiplicity argument result -> tag encoder 2 >> recurse multiplicity >> recurse argument >> recurse result
+  ForeignVariable index -> tag encoder 3 >> number encoder index
+  ForeignForall kind body -> tag encoder 4 >> recurse kind >> recurse body
+  where recurse = foreignType encoder
+
+importProof :: Encoder -> ImportProof -> IO ()
+importProof encoder (ImportProof schema scope execution profile unit moduleName status) = do
+  number encoder schema
+  mapM_ (string encoder) [scope,execution,profile,unit,moduleName]
+  case status of
+    ImportsUnclassified reason -> tag encoder 0 >> string encoder reason
+    ImportsRejected reason -> tag encoder 1 >> string encoder reason
+    ImportsVerified wordBits original associations calls -> do
+      tag encoder 2
+      number encoder wordBits
+      foreignArtifacts encoder original
+      list encoder association associations
+      list encoder (foreignCallWith encoder (inlineRep encoder)) calls
+  where
+    association (ImportAssociation binderName header symbol owner function convention safety declared normalized role emitted) = do
+      qualifiedName encoder binderName
+      present encoder (string encoder) header
+      string encoder symbol
+      present encoder (string encoder) owner
+      boolean encoder function
+      enumeration encoder convention
+      enumeration encoder safety
+      foreignType encoder declared
+      foreignType encoder normalized
+      string encoder role
+      emittedCall encoder emitted
+
+emittedCall :: Encoder -> EmittedCall -> IO ()
+emittedCall encoder (EmittedCall symbol unit convention safety arguments result) = do
+  string encoder symbol
+  present encoder (string encoder) unit
+  enumeration encoder convention
+  enumeration encoder safety
+  list encoder (string encoder) arguments
+  list encoder (string encoder) result
+
+exports :: Encoder -> Exports -> IO ()
+exports encoder (Exports schema producer scope execution unit moduleName associations) = do
+  number encoder schema
+  mapM_ (string encoder) [producer,scope,execution,unit,moduleName]
+  list encoder association associations
+  where
+    association (ExportAssociation binderName symbol convention declared normalized role arguments result effect) = do
+      qualifiedName encoder binderName
+      string encoder symbol
+      enumeration encoder convention
+      foreignType encoder declared
+      foreignType encoder normalized
+      string encoder role
+      list encoder (foreignType encoder) arguments
+      foreignType encoder result
+      enumeration encoder effect
+
+registration :: Encoder -> Registration -> IO ()
+registration encoder (Registration schema scope execution profile status) = do
+  number encoder schema
+  mapM_ (string encoder) [scope,execution,profile]
+  case status of
+    RegistrationUnclassified reason -> tag encoder 0 >> string encoder reason
+    RegistrationRejected reason -> tag encoder 1 >> string encoder reason
+    RegistrationVerified roots wordBits original expected -> do
+      tag encoder 2
+      list encoder (qualifiedName encoder) roots
+      number encoder wordBits
+      foreignArtifacts encoder original
+      exports encoder expected
 
 -- | Intern semantic UTF-8, never literal raw bytes. Referenced string spans are
 -- direct byte positions, with no separate string-ID table.
 internString :: Encoder -> BS.ByteString -> IO Span
-internString (Encoder streams strings _) bytes = do
+internString (Encoder streams strings _ _ _ _) bytes = do
   table <- readIORef strings
   case Map.lookup bytes table of
     Just ref -> pure ref
@@ -45,7 +374,9 @@ internString (Encoder streams strings _) bytes = do
       pure ref
 
 emit :: Encoder -> Put -> IO ()
-emit (Encoder streams _ _) = void . appendRecord streams ExecutableData
+emit (Encoder streams _ _ Nothing _ _) = void . appendRecord streams ExecutableData
+emit (Encoder _ _ _ (Just output) _ _) = \record ->
+  modifyIORef' output (<> Builder.lazyByteString (runPut record))
 
 tag :: Encoder -> Word8 -> IO ()
 tag encoder = emit encoder . putWord8
@@ -76,7 +407,7 @@ identity encoder value = case value of
   Local ordinal -> tag encoder 1 >> number encoder ordinal
 
 encodeBinding :: Encoder -> Binding -> IO Word64
-encodeBinding encoder@(Encoder streams _ _) binding = do
+encodeBinding encoder@(Encoder streams _ _ _ _ _) binding = observe encoder (BindingRecord (bindingIdentity binding)) $ do
   start <- streamOffset streams ExecutableData
   identity encoder (bindingIdentity binding)
   enumeration encoder (bindingEntryType binding)
@@ -92,7 +423,7 @@ encodeBinding encoder@(Encoder streams _ _) binding = do
   pure start
 
 binder :: Encoder -> Binder -> IO ()
-binder encoder value = do
+binder encoder value = observe encoder (BinderRecord (binderOrdinal value)) $ do
   number encoder (binderOrdinal value)
   enumeration encoder (binderEntryType value)
   present encoder (boolean encoder) (binderLifted value)
@@ -107,9 +438,12 @@ idInfo encoder (IdInfo joinArity cbvEligible marks) = do
   present encoder (list encoder (boolean encoder)) marks
 
 encodeExpr :: Encoder -> Expr -> IO ()
-encodeExpr encoder expression = case expression of
+encodeExpr encoder@(Encoder _ _ _ _ found _) expression = observe encoder ExpressionRecord $ case expression of
   Var metadata key -> prefix 0 metadata >> identity encoder key
-  Prim metadata name -> prefix 1 metadata >> string encoder name
+  Prim metadata name -> do
+    when (name == "prompt#" || name == "control0#")
+      (writeIORef found True)
+    prefix 1 metadata >> string encoder name
   Lit metadata value -> prefix 2 metadata >> literal encoder value
   Lam metadata parameters body -> prefix 3 metadata >> list encoder (binder encoder) parameters >> child body
   Con metadata key arity -> prefix 4 metadata >> string encoder key >> number encoder arity
@@ -163,7 +497,10 @@ tagFamily :: Encoder -> TagFamily -> IO ()
 tagFamily encoder (TagFamily family limit small) = enumFamily encoder family >> number encoder limit >> boolean encoder small
 
 foreignCall :: Encoder -> ForeignCall -> IO ()
-foreignCall encoder value = do
+foreignCall encoder = foreignCallWith encoder (encodeRep encoder)
+
+foreignCallWith :: Encoder -> (Rep -> IO ()) -> ForeignCall -> IO ()
+foreignCallWith encoder representation value = do
   number encoder (foreignSchema value)
   case foreignTarget value of
     StaticTarget symbol unit isFunction -> do
@@ -176,15 +513,15 @@ foreignCall encoder value = do
   enumeration encoder (foreignSafety value)
   number encoder (foreignArity value)
   number encoder (foreignSuppliedArity value)
-  list encoder (encodeRep encoder) (foreignArgumentReps value)
-  encodeRep encoder (foreignResultRep value)
+  list encoder representation (foreignArgumentReps value)
+  representation (foreignResultRep value)
   present encoder (string encoder) (foreignIntrinsic value)
   present encoder (string encoder) (foreignJavaScriptSource value)
 
 alternative :: Encoder -> Alternative -> IO ()
 alternative encoder value = case value of
   DefaultAlt binders body -> tag encoder 0 >> suffix binders body
-  DataAlt constructor binders body -> tag encoder 1 >> string encoder constructor >> suffix binders body
+  DataAlt constructorKey binders body -> tag encoder 1 >> string encoder constructorKey >> suffix binders body
   LiteralAlt discriminator binders body -> tag encoder 2 >> literal encoder discriminator >> suffix binders body
   where suffix binders body = list encoder (binder encoder) binders >> encodeExpr encoder body
 
@@ -192,7 +529,7 @@ encodeRep :: Encoder -> Rep -> IO ()
 encodeRep encoder (Rep layout state) = shapeUse encoder layout >> evaluation encoder layout state
 
 shapeUse :: Encoder -> Shape -> IO ()
-shapeUse encoder@(Encoder streams _ shapes) layout = do
+shapeUse encoder@(Encoder streams _ shapes _ _ _) layout = do
   table <- readIORef shapes
   case Map.lookup layout table of
     Just offset -> tag encoder 1 >> number encoder offset

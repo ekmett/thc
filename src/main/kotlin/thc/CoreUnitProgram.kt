@@ -18,7 +18,9 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     override val hasBytecode get() = backend == "bytecode"
     override fun bytecodeDump(): String = demand.preparedPrograms().joinToString("\n\n") { it.bytecodeDump() }
     private val totals = ArrayList<CoreJsonSymbols.Counters>()
-    private val sources = directory.open(input["verifyArtifacts"] == true, input["sourceNotesEnabled"] != false, totals::add)
+    private val compactTotals = ArrayList<CoreCompactFile.Counters>()
+    private val sources = directory.open(input["verifyArtifacts"] == true, input["sourceNotesEnabled"] != false,
+        totals::add, compactTotals::add)
     private val constructors = HashMap<String, Map<String, Any?>>()
     private val admittedModules = HashMap<CoreUnitDirectory.ModuleRecord, Map<String, Any?>>()
     private val admissions = HashMap<CoreUnitDirectory.ModuleRecord, CoreModuleAdmission>()
@@ -220,6 +222,19 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         result["coreUnitVerifiedModuleBytes"] = counters.sumOf { it.verifiedModuleBytes }
         result["coreUnitPhysicalMappingOpens"] = counters.sumOf { it.physicalMappingOpens }
         result["coreUnitMappingCacheHits"] = counters.sumOf { it.mappingCacheHits }
+        val compact = compactTotals.map { it.statistics() }
+        result["coreCompactModuleOpens"] = compact.sumOf { it.acquisitions }
+        result["coreCompactMappedBytes"] = compact.sumOf { it.mappedBytes }
+        result["coreCompactHeaderBytesRead"] = compact.sumOf { it.headerBytesRead }
+        result["coreCompactLookupBytesRead"] = compact.sumOf { it.lookupBytesRead }
+        result["coreCompactDataBytesRead"] = compact.sumOf { it.dataBytesRead }
+        result["coreCompactStringBytesRead"] = compact.sumOf { it.stringBytesRead }
+        result["coreCompactDebugBytesRead"] = compact.sumOf { it.debugBytesRead }
+        result["coreCompactHashBytesScanned"] = compact.sumOf { it.hashBytesRead }
+        result["coreCompactDecodedBindings"] = compact.sumOf { it.decodedBindings }
+        result["coreCompactDecodedModules"] = compact.sumOf { it.decodedModules }
+        result["coreCompactPhysicalMappingOpens"] = compact.sumOf { it.physicalOpens }
+        result["coreCompactMappingCacheHits"] = compact.sumOf { it.cacheHits }
         result["looseConsumerBindingHeaders"] = consumerBindings.size
         result.putAll(consumerStatistics())
         return result

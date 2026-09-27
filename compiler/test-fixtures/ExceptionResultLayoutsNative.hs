@@ -30,12 +30,17 @@ maskTag Unmasked = 0
 maskTag MaskedUninterruptible = 1
 maskTag MaskedInterruptible = 2
 
+incrementPrefix :: IORef Int -> IO ()
+incrementPrefix count = do
+  completed <- readIORef count
+  writeIORef count $! completed + 1
+
 boxedControl :: Int -> Int -> IO (Int, Int, Int)
 boxedControl mode n = do
   count <- newIORef 0
   value <- catch
     (mask $ \restore -> uninterruptibleMask_ $ restore $ do
-      writeIORef count 1
+      incrementPrefix count
       case mode of
         1 -> throwIO (ExceptionPayload n)
         2 -> do
@@ -73,6 +78,12 @@ layoutValue name value = case name of
 
 main :: IO ()
 main = do
+  -- Repetition must be observable: the old idempotent write of one fails this.
+  repeated <- newIORef 0
+  incrementPrefix repeated
+  incrementPrefix repeated
+  repetitions <- readIORef repeated
+  if repetitions /= 2 then error "native repeated prefix did not count twice" else pure ()
   args <- getArgs
   case args of
     [name, modeText] -> mapM_ (emit name (read modeText)) [-17, 0, 23]

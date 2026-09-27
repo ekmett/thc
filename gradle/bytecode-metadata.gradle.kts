@@ -178,6 +178,80 @@ class BytecodeMetadataSplitter {
     }
 }
 
+/** Expose the pinned builder's existing source-mode bit before callers resolve
+ * lazy source arguments. This changes no parser state or emitted instruction. */
+class BytecodeSourceModeAccessor {
+    val version = "25.3.4.1"
+    private val builder = "    public static final class Builder extends BytecodeBuilder {\n"
+    private val field = "        private final boolean parseSources;\n"
+    private val accessor = "\n        // THC lazy source-mode accessor v1\n" +
+        "        public boolean isParsingSources() { return parseSources; }\n"
+
+    fun transform(source: String, processorVersion: String): String {
+        require(processorVersion == version) { "Review the source-mode accessor before changing Truffle $version to $processorVersion." }
+        val unix = source.replace("\r\n", "\n")
+        fun shape(condition: Boolean) { require(condition) { "Unexpected Truffle source-mode builder shape." } }
+        shape(!unix.contains('\r'))
+        val crlf = source.contains("\r\n")
+        shape(!crlf || source == unix.replace("\n", "\r\n"))
+        val start = unix.indexOf(builder)
+        val at = unix.indexOf(field)
+        shape(start >= 0 && unix.indexOf(builder, start + 1) < 0)
+        shape(at > start && unix.indexOf(field, at + 1) < 0)
+        val original = if (unix.contains("isParsingSources") || unix.contains("THC lazy source-mode")) {
+            shape(unix.startsWith(accessor, at + field.length))
+            unix.removeRange(at + field.length, at + field.length + accessor.length).also {
+                shape(!it.contains("isParsingSources") && !it.contains("THC lazy source-mode"))
+            }
+        } else unix
+        val result = original.substring(0, at + field.length) + accessor + original.substring(at + field.length)
+        return if (crlf) result.replace("\n", "\r\n") else result
+    }
+
+    fun fixture() = "public class SourceModeFixture {\n" +
+        "    static class BytecodeBuilder {}\n" + builder + field +
+        "        public Builder(boolean enabled) { parseSources = enabled; }\n" +
+        "    }\n}\n"
+}
+
+val testBytecodeSourceModeAccessor = tasks.register("testBytecodeSourceModeAccessor") {
+    group = "verification"
+    description = "Check the pinned generated builder's read-only lazy source-mode accessor."
+    inputs.file("gradle/bytecode-metadata.gradle.kts")
+    doLast {
+        val patch = BytecodeSourceModeAccessor()
+        val original = patch.fixture()
+        val transformed = patch.transform(original, patch.version)
+        check(original != transformed)
+        check(patch.transform(transformed, patch.version) == transformed)
+        check(patch.transform(original.replace("\n", "\r\n"), patch.version) == transformed.replace("\n", "\r\n"))
+        fun reject(source: String, version: String = patch.version) {
+            check(runCatching { patch.transform(source, version) }.exceptionOrNull() is IllegalArgumentException)
+        }
+        reject(original, "next-version")
+        reject(original.replace("private final boolean parseSources", "private boolean parseSources"))
+        reject(original.replace("extends BytecodeBuilder", "extends ChangedBuilder"))
+        reject(original.replace("        private final boolean parseSources;\n", ""))
+        reject(original + "        private final boolean parseSources;\n")
+        reject(transformed.replace("return parseSources", "return true"))
+        reject(transformed + "// isParsingSources\n")
+        reject(original.replaceFirst("\n", "\r\n"))
+        val directory = temporaryDir.resolve("sourceMode").apply { mkdirs() }
+        val input = directory.resolve("SourceModeFixture.java").apply { writeText(transformed) }
+        check(checkNotNull(ToolProvider.getSystemJavaCompiler()).run(null, null, null, "-d", directory.path, input.path) == 0)
+        URLClassLoader(arrayOf(directory.toURI().toURL()), null).use { loader ->
+            val builder = loader.loadClass("SourceModeFixture\$Builder")
+            val constructor = builder.getConstructor(Boolean::class.javaPrimitiveType)
+            val getter = builder.getMethod("isParsingSources")
+            for (enabled in listOf(false, true)) {
+                val instance = constructor.newInstance(enabled)
+                repeat(2) { check(getter.invoke(instance) == enabled) }
+            }
+        }
+        logger.lifecycle("Source-mode accessor: compiled false/true controls, version/shape/newline/idempotence checks passed.")
+    }
+}
+
 val testBytecodeMetadataSplit = tasks.register("testBytecodeMetadataSplit") {
     group = "verification"
     description = "Check lossless, fail-closed splitting of generated Truffle instruction argument metadata."
@@ -230,7 +304,7 @@ val testBytecodeMetadataSplit = tasks.register("testBytecodeMetadataSplit") {
     }
 }
 
-tasks.named("check") { dependsOn(testBytecodeMetadataSplit) }
+tasks.named("check") { dependsOn(testBytecodeMetadataSplit, testBytecodeSourceModeAccessor) }
 tasks.matching { it.name == "kaptKotlin" }.configureEach {
     inputs.file("gradle/bytecode-metadata.gradle.kts")
     doLast {
@@ -239,7 +313,8 @@ tasks.matching { it.name == "kaptKotlin" }.configureEach {
         }
         val source = layout.buildDirectory.file("generated/source/kapt/main/thc/runtime/BytecodeRootGen.java").get().asFile
         val before = source.readText()
-        val after = BytecodeMetadataSplitter().transform(before, checkNotNull(dependency.version))
+        val version = checkNotNull(dependency.version)
+        val after = BytecodeSourceModeAccessor().transform(BytecodeMetadataSplitter().transform(before, version), version)
         if (before != after) source.writeText(after)
     }
 }

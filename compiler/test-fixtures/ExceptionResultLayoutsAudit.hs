@@ -35,7 +35,8 @@ int8Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -56,7 +57,8 @@ word8Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -77,7 +79,8 @@ int16Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -98,7 +101,8 @@ word16Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -119,7 +123,8 @@ int32Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -140,7 +145,8 @@ word32Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -161,7 +167,8 @@ int64Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -182,7 +189,8 @@ word64Result mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -203,7 +211,8 @@ floatResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -224,7 +233,8 @@ doubleResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -245,7 +255,8 @@ emptyResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -266,7 +277,8 @@ nestedResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -287,7 +299,8 @@ sumResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -308,7 +321,8 @@ vectorResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -329,7 +343,8 @@ unliftedResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Payload n) s6;
           2# -> case myThreadId# s6 of { (# s7, tid #) ->
@@ -350,7 +365,8 @@ unliftedPayloadResult mode n = runRW# (\s0 ->
   case newMutVar# (Payload 0#) s0 of { (# s1, count #) ->
   case catch# (\s2 -> maskAsyncExceptions# (\s3 ->
     maskUninterruptible# (\s4 -> unmaskAsyncExceptions# (\s5 ->
-      case writeMutVar# count (Payload 1#) s5 of { s6 ->
+      case (case readMutVar# count s5 of { (# s5a, Payload completed #) ->
+        writeMutVar# count (Payload (completed +# 1#)) s5a }) of { s6 ->
         case mode of {
           1# -> raiseIO# (Product n bottom) s6;
           _ -> case n +# 7# of { v -> (# s6, v #) } }
