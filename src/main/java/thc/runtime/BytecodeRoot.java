@@ -5512,6 +5512,46 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Fallback public static long invalid(Object x) { throw fail("Expected primitive Long"); }
     }
 
+    // Generic DSL operands make these declarations stateless. The compiler has
+    // selected the exact carrier, but the actual ingress still checks it.
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticStoreLong {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            local.setLong(bytecode, frame, staticLong(value));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticLoadLong {
+        @Specialization public static long apply(VirtualFrame frame, LocalAccessor local,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            return staticLong(local.getObject(bytecode, frame));
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = int.class, name = "operation")
+    public static final class StaticLongArithmetic {
+        @Specialization public static long apply(int operation, Object left, Object right) {
+            long x = staticLong(left);
+            long y = staticLong(right);
+            return switch (operation) {
+                case 0 -> x + y;
+                case 1 -> x - y;
+                case 2 -> x * y;
+                default -> throw fail("Invalid static Long arithmetic operation");
+            };
+        }
+    }
+
+    private static long staticLong(Object value) {
+        if (value instanceof Long result) return result;
+        throw fail("Expected primitive Long");
+    }
+
     private static RuntimeFault fail(String message) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         return new RuntimeFault(message);

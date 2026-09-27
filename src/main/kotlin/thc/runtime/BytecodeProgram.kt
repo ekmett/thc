@@ -9,6 +9,7 @@ import com.oracle.truffle.api.bytecode.BytecodeConfig
 import com.oracle.truffle.api.bytecode.BytecodeLabel
 import com.oracle.truffle.api.bytecode.BytecodeLocal
 import com.oracle.truffle.api.bytecode.LocalAccessor
+import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.source.SourceSection
 import thc.Language
 
@@ -118,6 +119,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private class Emission(val builder: BytecodeRootGen.Builder) {
         val locals = mutableMapOf<Int, BytecodeLocal>()
+        val staticLocals = mutableSetOf<Int>()
         var checkpointRootEntry: BytecodeLocal? = null
         var annotationRootEntry: BytecodeLocal? = null
         var continueLabel: BytecodeLabel? = null
@@ -196,6 +198,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         override val proof get() = local.proof
         override fun emit(emission: Emission) {
             val b = emission.builder
+            if (local.id in emission.staticLocals) {
+                b.emitStaticLoadLong(emission.locals.getValue(local.id))
+                return
+            }
             val integer = local.directLong || resolve && local.proof.isLong && local.proof.evaluated
             val floating = local.directFloat || resolve && local.proof.isFloat && local.proof.evaluated
             val double = local.directDouble || resolve && local.proof.isDouble && local.proof.evaluated
@@ -479,7 +485,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
             for (local in context.captures + context.vectorCaptures.flatMap { it.destinations } +
                     context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
-                e.locals[local.id] = b.createLocal(local.name, if (local.primitive) "primitive" else "object")
+                // Exactly one store, through restoreArgument. Joins, self loops,
+                // typed ingress and resumable/captured state remain uncertified.
+                val staticallyStored = !resumable && !context.mayLoop && context.typedInput == null &&
+                    context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell &&
+                    local in context.arguments && staticWideLong(local.proof)
+                val info = if (staticallyStored) {
+                    e.staticLocals += local.id
+                    BytecodeStaticLocal(FrameSlotKind.Long)
+                } else if (local.primitive) "primitive" else "object"
+                e.locals[local.id] = b.createLocal(local.name, info)
             }
             val typed = context.typedInput
             if (typed != null) {
@@ -705,6 +720,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     /** Choose checked reference identities while emitting code, never by a guest-time enum switch. */
     private fun restoreArgument(e: Emission, local: Local, deferStrictDemand: Boolean = false, value: () -> Unit) {
         val b = e.builder
+        if (local.id in e.staticLocals) {
+            check(!deferStrictDemand)
+            b.beginStaticStoreLong(e.locals.getValue(local.id))
+            value()
+            b.endStaticStoreLong()
+            return
+        }
         val reference = if (local.cell || deferStrictDemand) null else local.proof.referenceCarrier()
         b.beginStoreLocal(e.locals.getValue(local.id))
         when {
@@ -5249,6 +5271,9 @@ CoreStackForeign.validateHead(fn, defined)
     }
 
 
+    private fun staticWideLong(proof: CoreRepresentation) = proof.evaluated && proof.isLong &&
+        !proof.isTypedTransport && proof.primReps?.singleOrNull() in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
+
     private fun primitive(name: String, args: List<Expression>, someException: Boolean = false): Expression {
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
@@ -5354,6 +5379,12 @@ CoreStackForeign.validateHead(fn, defined)
             args.any { it.proof.kind != CoreKind.LONG || it.proof.isTypedTransport })
             throw RuntimeFault("Primitive requires Long operands: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
+        if (operation in setOf("Add", "Subtract", "Multiply") && args.all { staticWideLong(it.proof) })
+            return evaluated(Expression { e ->
+                e.builder.beginStaticLongArithmetic(when (operation) { "Add" -> 0; "Subtract" -> 1; else -> 2 })
+                args.forEach { it.emit(e) }
+                e.builder.endStaticLongArithmetic()
+            })
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
