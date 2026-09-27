@@ -43,7 +43,7 @@ class SumJoinResultTest {
     @Test fun originalSumJoinsMatchNativeWithInlining() = checkNative(true)
     private fun checkNative(inlining: Boolean) {
         val rows = File(root, "build/sum-join/oracle.tsv").readLines().map { it.split('\t') }
-        assertEquals(30, rows.size)
+        assertEquals(42, rows.size)
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -62,6 +62,8 @@ class SumJoinResultTest {
                             "nestedCase" -> if (x <= 0) -23L else (x + 7L) * 5L
                             "stateForwardCase" -> if (x <= 0) -31L else (x + 30L) * 7L
                             "stateRecursiveCase" -> if (x == 0L) -37L else (if (x < 0) -x else 2L * x) + 41L
+                            "tupleForwardCase" -> if (x <= 0) 5L * x - 14L else 6L * x + 75L
+                            "sumForwardCase" -> if (x <= 0) -43L else (x + 20L) * 11L
                             else -> error(name)
                         }
                         assertEquals(model, expected.toLong(), "Independent native model: $name/$x")

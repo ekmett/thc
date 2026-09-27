@@ -24,3 +24,5 @@ main = do
   emit "nestedCase" S.nestedCase [-4097,-1,0,1,4097,3000000000]
   emit "stateForwardCase" S.stateForwardCase [-4097,-1,0,1,4097,3000000000]
   emit "stateRecursiveCase" S.stateRecursiveCase [-4097,-1,0,1,4097,20000]
+  emit "tupleForwardCase" S.tupleForwardCase [-4097,-1,0,1,4097,3000000000]
+  emit "sumForwardCase" S.sumForwardCase [-4097,-1,0,1,4097,3000000000]

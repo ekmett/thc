@@ -13,7 +13,7 @@
 -- Fixture acquisition support for sum join.
 module SumJoinFixtures (prepareSumJoins) where
 
-import Control.Monad (forM, unless)
+import Control.Monad (forM, forM_, unless)
 import Data.Aeson (Value(..), decodeStrict', object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
@@ -37,7 +37,8 @@ prepareSumJoins root = do
       output = root </> directory
       source = "compiler/test-fixtures/SumJoinAudit.hs"
       driver = "compiler/test-fixtures/SumJoinAuditNative.hs"
-      entries = ["forwardCase", "recursiveCase", "nestedCase", "stateForwardCase", "stateRecursiveCase"]
+      entries = ["forwardCase", "recursiveCase", "nestedCase", "stateForwardCase", "stateRecursiveCase",
+                 "tupleForwardCase", "sumForwardCase"]
       logs = directory </> "commands"
       native = directory </> "native"
   createDirectoryIfMissing True (root </> native)
@@ -48,7 +49,7 @@ prepareSumJoins root = do
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-icompiler/test-fixtures",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
-  unless (length (BSC.lines (commandStdout observations)) == 30) (die "Unexpected sum-join row count")
+  unless (length (BSC.lines (commandStdout observations)) == 42) (die "Unexpected sum-join row count")
   BS.writeFile (output </> "oracle.tsv") (commandStdout observations)
   artifacts <- fmap concat $ forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
@@ -72,6 +73,21 @@ prepareSumJoins root = do
                       [Array argument] <- [toList arguments],
                       String "void" : _ <- [toList argument]]
     unless (length states >= 2) (die "Sum-join fixture lost its genuine runRW# state lambdas")
+    forM_ [("tupleForward", "unboxed-tuple"), ("sumForward", "unboxed-sum")] $ \(name, aggregate) -> do
+      let preserved = [() | Object binding <- nodes,
+                            KeyMap.lookup "name" binding == Just (String name),
+                            Just (Array lambda) <- [KeyMap.lookup "expr" binding],
+                            String "lam" : _ : Array body : Object metadata : _ <- [toList lambda],
+                            Just (Object result) <- [KeyMap.lookup "resultRep" metadata],
+                            KeyMap.lookup "aggregate" result == Just (String aggregate),
+                            Just (Array reps) <- [KeyMap.lookup "primReps" result],
+                            length reps == 3,
+                            String "case" : Array scrutinee : _ : Array arms : _ <- [toList body],
+                            length arms == 2,
+                            Object scrutineeMetadata : _ <- [reverse (toList scrutinee)],
+                            Just (Object proof) <- [KeyMap.lookup "rep" scrutineeMetadata],
+                            KeyMap.lookup "aggregate" proof == Just (String "unboxed-sum")]
+      unless (length preserved == 1) (die "Sum-case fixture lost its genuine three-slot result boundary")
     let report = directory </> stage </> "audit.json"
     audited <- runLogged 30 root logs (stage ++ "-audit") [] "python3"
       (["scripts/audit-core.py", "--output", report] ++ concatMap (\entry -> ["--entry", entry]) entries ++ [modulePath])
@@ -86,4 +102,4 @@ prepareSumJoins root = do
   writeJson (output </> "manifest.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
      "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes]
-  putStrLn "sum-join: 30 native observations and exact pre/post-Tidy sum-join audits"
+  putStrLn "sum-join: 42 native observations and exact pre/post-Tidy sum-join audits"
