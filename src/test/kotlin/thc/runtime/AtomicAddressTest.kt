@@ -47,7 +47,7 @@ class AtomicAddressTest {
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw")
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
 
-    /** The original Core calls entry -> runRW state worker -> keepAlive action once each. */
+    /** Derive executed roots from the original Core and its checked State# redex. */
     private fun originalGuestEntries(module: Map<String, Any?>, name: String): Long {
         val evidence = ArrayCoreEvidence(module, name)
         assertEquals(1, evidence.bindings.size, "$name closed original binding")
@@ -95,7 +95,13 @@ class AtomicAddressTest {
         val lambdas = nodes.filter { it.firstOrNull() == "lam" }
         assertEquals(4, lambdas.size)
         assertTrue(lambdas[0] === outer && lambdas[1] === state && lambdas[2] === action && lambdas[3] === joinLambda)
-        return 3L
+        // The checked immediate runRW State# application lowers in-frame;
+        // the keepAlive argument remains a guest call, and the join is control flow.
+        assertSame(state, evidence.immediateStateLambda(stateCall))
+        val lowered = lambdas.filter { it !== state && it !== joinLambda }
+        assertEquals(2, lowered.size, "$name lowered guest-root inventory")
+        assertSame(outer, lowered[0]); assertSame(action, lowered[1])
+        return lowered.size.toLong()
     }
 
     private fun activeTargets(entry: RootCallTarget): List<RootCallTarget> {

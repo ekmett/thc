@@ -116,10 +116,11 @@ internal enum class AtomicAddressOp(val primitive: String, val width: Int = 8,
  * The native helper touches exactly the checked element, including end tails. */
 private object NativeNarrowAtomic {
     private val library = run {
-        val path = Files.createTempFile("thc-atomic-", ".so")
+        val extension = if (System.getProperty("os.name").startsWith("Mac")) ".dylib" else ".so"
+        val path = Files.createTempFile("thc-atomic-", extension)
         try {
-            NativeNarrowAtomic::class.java.getResourceAsStream("/thc/native/native-atomic-api.so").use { input ->
-                if (input == null) fault("Native narrow atomics require the Linux x86_64 provider")
+            NativeNarrowAtomic::class.java.getResourceAsStream("/thc/native/native-atomic-api$extension").use { input ->
+                if (input == null) fault("Native narrow atomic provider is unavailable for ${System.getProperty("os.name")}/${System.getProperty("os.arch")}")
                 Files.copy(input, path, StandardCopyOption.REPLACE_EXISTING)
             }
             SymbolLookup.libraryLookup(path, Arena.global())
