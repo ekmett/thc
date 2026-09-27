@@ -209,7 +209,11 @@ class NativeMallocTest {
                 assertEquals(0, registry.liveCount())
             }
             repeat(3) { exercise(it.toLong()) }
-            targets.values.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
+            targets.forEach { (name, target) ->
+                assertDoesNotThrow({ target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true) },
+                    "First compilation of $backend/$name")
+                valid(target)
+            }
             compiled = true
             exercise(197)
             assertEquals(23L, call("free", ManagedAddress.nullAddress(), Unit))
