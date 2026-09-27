@@ -18,6 +18,9 @@ kotlin.jvm.functions.Function0
 kotlin.jvm.internal.CollectionToArray
 thc.runtime.ApplicationKt
 thc.runtime.ArgumentLayoutKt
+# Payload-free internal self-transfer token. ControlFlowException's final
+# fillInStackTrace returns the token itself; no guest frame or thread is captured.
+thc.runtime.AstSelfCall
 thc.runtime.AtomicAddressOp
 thc.runtime.BytecodeRootGen$AbstractBytecodeNode
 thc.runtime.BytecodeRootGen$CachedBytecodeNode
@@ -25,6 +28,9 @@ thc.runtime.BytecodeRootGen$InstructionDescriptorImpl
 thc.runtime.BytecodeRootGen$InstructionDescriptorList
 thc.runtime.BytecodeRootGen$Instructions$ArgumentDescriptorImpl
 thc.runtime.CoreRepresentation
+# Only primitive tag constants and construction of the fieldless companion.
+# No instance Field, property, shape, frame, guest context or thread is created.
+thc.runtime.DataLayout$Field
 thc.runtime.GmpForeignOp
 thc.runtime.GuestThreadOps
 thc.runtime.HandoffKt
