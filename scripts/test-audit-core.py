@@ -8,6 +8,7 @@ import copy
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import unittest
 import core_original_foreign
@@ -4000,6 +4001,26 @@ class OriginalWaitStatusAuditTests(unittest.TestCase):
             self.assertTrue(report['accepted'], report['issues'])
             disabled = dict(CAP, managedForeignCalls=[name for name in CAP['managedForeignCalls'] if name != symbol])
             self.assertFalse(audit_core.Audit([('wait-status.json', module)], disabled).run(['root'])['accepted'])
+
+    def test_installed_wait_status_symbols_preserve_exact_owner_and_policy(self):
+        for canonical in audit_core.core_original_foreign.WAIT_STATUS_OPERATIONS:
+            for suffix in ('inplace', '460b', 'deadbeef'):
+                unit = 'unix-2.8.8.0-' + suffix
+                symbol = canonical.replace('zminplaceZC', 'zm' + suffix + 'ZC')
+                module = self.fixture(symbol)
+                target = module['bindings'][0]['expr'][2][1][6]['foreignCall']['target']
+                target['unit'] = unit
+                report = audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])
+                self.assertTrue(report['accepted'], report['issues'])
+                self.assertEqual(symbol, report['foreignCalls'][0]['symbol'])
+                disabled = dict(CAP, managedForeignCalls=[name for name in CAP['managedForeignCalls'] if name != canonical])
+                self.assertFalse(audit_core.Audit([('wait-status.json', module)], disabled).run(['root'])['accepted'])
+                target['unit'] = 'unix-2.8.8.0-inplace' if suffix != 'inplace' else 'unix-2.8.8.0-460b'
+                self.assertFalse(audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])['accepted'])
+            for bad in (canonical.replace('zminplaceZC', 'zmABCDZC'), canonical.replace('zminplaceZC', 'zmnothexZC'),
+                        canonical.replace('2zi8zi8zi0', '2zi8zi7zi0'), canonical.replace('ProcessziInternals', 'ProcessziByteString'),
+                        re.sub(r'ghczuwrapperZC[0-6]ZC', 'ghczuwrapperZC7ZC', canonical), canonical + 'Extra'):
+                self.assertFalse(audit_core.Audit([('wait-status.json', self.fixture(bad))], CAP).run(['root'])['accepted'])
 
     def test_wait_status_unit_width_state_and_stored_proofs_are_exact(self):
         for symbol in audit_core.core_original_foreign.WAIT_STATUS_OPERATIONS:

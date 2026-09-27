@@ -8,7 +8,7 @@ import thc.Language
 
 // Preserve the genuine installed owner; only this pinned Unix release is reviewed.
 private val unixUnit = Regex("unix-2\\.8\\.8\\.0-(?:inplace|[0-9a-f]+)")
-private val unixLstatSymbol = Regex("ghczuwrapperZC2ZCunixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZCSystemziPosixziFilesziPosixStringZClstat")
+private val unixWrapperUnit = Regex("unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC")
 internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUnit.matches(unit)
 
 /** Exact pinned GHC/unix declarations, not aliases for arbitrary POSIX imports. */
@@ -136,10 +136,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
         isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY ||
-            this == UNIX_LSTAT || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
+            this == UNIX_LSTAT || waitStatus || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
 
     fun matchesSymbol(value: Any?): Boolean = value == symbol ||
-        this == UNIX_LSTAT && value is String && unixLstatSymbol.matches(value)
+        (this == UNIX_LSTAT || waitStatus) && value is String &&
+            value.replace(unixWrapperUnit, "unixzm2zi8zi8zi0zminplaceZC") == symbol
 
     val processIdentity: Boolean get() = this == GET_PID || this == GET_EUID
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
@@ -277,7 +278,7 @@ internal object CoreOriginalStdio {
             target["kind"] == "static" && operation.acceptsUnit(target["unit"]) && target["isFunction"] == true,
             "static original installed-library function target")
         // The strict unit grammar needs only these two z-encoding substitutions.
-        requireProof(operation != OriginalStdioOp.UNIX_LSTAT || symbol == operation.symbol.replace(
+        requireProof(!(operation == OriginalStdioOp.UNIX_LSTAT || operation.waitStatus) || symbol == operation.symbol.replace(
             "unixzm2zi8zi8zi0zminplace", (target["unit"] as String).replace("-", "zm").replace(".", "zi")),
             "Unix wrapper owner")
         requireProof(descriptor["convention"] == operation.convention && descriptor["safety"] == operation.safety,

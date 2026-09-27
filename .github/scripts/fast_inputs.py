@@ -43,7 +43,7 @@ RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreByteStringSort.kt",
                   "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                   "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
-MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
+MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
@@ -64,6 +64,14 @@ BYTESTRING_DECIMAL_OUTPUTS = frozenset("build/bytestring-decimal/" + name for na
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in BYTESTRING_DECIMAL_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 UNIX_LIBC_ENTRIES = ("unixClose", "unixDup", "unixIsatty", "unixGetenv")
+UNIX_WAIT_ENTRIES = tuple("wait" + name for name in (
+    "WCOREDUMP", "WSTOPSIG", "WIFSTOPPED", "WTERMSIG", "WIFSIGNALED", "WEXITSTATUS", "WIFEXITED"))
+UNIX_WAIT_OUTPUTS = frozenset("build/unix-wait-status/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.tsv",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_WAIT_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in UNIX_WAIT_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 UNIX_LIBC_OUTPUTS = frozenset("build/unix-libc/" + name for name in (
     "manifest.json", "pre.json", "post.json", "oracle.json",
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in UNIX_LIBC_ENTRIES),
@@ -425,6 +433,7 @@ REQUIRED = tuple(sorted({
     *RUBBISH_OUTPUTS,
     *PROXY_VOID_OUTPUTS,
     *UNIX_LIBC_OUTPUTS,
+    *UNIX_WAIT_OUTPUTS,
     *(ORIGINAL_PATH_STAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_MODE_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_LINK_OUTPUTS if platform.system() == "Linux" else []),
@@ -1046,6 +1055,20 @@ def rts_diagnostic_artifact_hashes(manifest):
     return artifacts
 
 
+def unix_wait_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and
+            ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) is not None and
+            manifest.get("entries") == list(UNIX_WAIT_ENTRIES) and manifest.get("strictAccepted") is True and
+            type(manifest.get("nativeRows")) is int and manifest["nativeRows"] == 280,
+            "Invalid original Unix wait-status proof")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == UNIX_WAIT_OUTPUTS - {"build/unix-wait-status/manifest.json"},
+            "Incomplete/unreviewed Unix wait-status artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid wait-status hash")
+    return artifacts
+
+
 def rts_shutdown_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
             "Invalid RTS shutdown manifest")
@@ -1602,6 +1625,8 @@ def allowed_payload(name, pins):
         return name in BYTESTRING_DECIMAL_OUTPUTS
     if parts[1] == "unix-libc":
         return name in UNIX_LIBC_OUTPUTS
+    if parts[1] == "unix-wait-status":
+        return name in UNIX_WAIT_OUTPUTS
     if parts[1] == "original-path-stat":
         return name in ORIGINAL_PATH_STAT_OUTPUTS
     if parts[1] == "original-path-mode":
@@ -1882,6 +1907,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_path_access_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
+        if name == "build/unix-wait-status/manifest.json":
+            unix_wait_artifact_hashes(doc)
         if name == "build/rts-shutdown/manifest.json":
             rts_shutdown_artifact_hashes(doc)
         if name == "build/original-rts-locks/manifest.json":

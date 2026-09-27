@@ -8,6 +8,7 @@ import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (toUpper)
 import Data.List (nubBy)
+import Data.IORef (newIORef, writeIORef)
 import FixtureSupport
 import GHC hiding (entry, exprType)
 import GHC.Plugins
@@ -15,8 +16,13 @@ import GHC.Core.TyCo.Compare (eqType)
 import GHC.Core.SimpleOpt (simpleOptExpr)
 import GHC.Core.Opt.Arity (exprArity)
 import GHC.Driver.Config (initSimpleOpts)
+import GHC.Driver.Env.KnotVars (KnotVars(..), lookupKnotVars)
 import GHC.Driver.Main (hscSimplify, hscTidy, hscCompileCoreExpr)
 import GHC.Iface.Binary
+import GHC.IfaceToCore (typecheckIface)
+import GHC.Tc.Utils.Monad (initIfaceCheck)
+import GHC.Types.TypeEnv (emptyTypeEnv, typeEnvIds)
+import GHC.Unit.Module.ModDetails (md_types)
 import GHC.Runtime.Interpreter (wormhole)
 import GHC.Unit.Module.WholeCoreBindings (emptyIfaceForeign)
 import GHC.Types.Avail (availName)
@@ -25,24 +31,19 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
-import THC.Interface (loadInterfaceCore, interfaceBindings)
 import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
 import Unsafe.Coerce (unsafeCoerce)
 
-operations :: [(String, String)]
-operations =
-  [("waitWCOREDUMP", "ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP"),
-   ("waitWSTOPSIG", "ghczuwrapperZC1ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWSTOPSIG"),
-   ("waitWIFSTOPPED", "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSTOPPED"),
-   ("waitWTERMSIG", "ghczuwrapperZC3ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWTERMSIG"),
-   ("waitWIFSIGNALED", "ghczuwrapperZC4ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSIGNALED"),
-   ("waitWEXITSTATUS", "ghczuwrapperZC5ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWEXITSTATUS"),
-   ("waitWIFEXITED", "ghczuwrapperZC6ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFEXITED")]
+operations :: String -> [(String, String)]
+operations owner = [("wait" ++ name, "ghczuwrapperZC" ++ show index ++ "ZC" ++ encoded ++
+  "ZCSystemziPosixziProcessziInternalsZC" ++ name) | (index, name) <- zip [0 :: Int ..]
+    ["WCOREDUMP", "WSTOPSIG", "WIFSTOPPED", "WTERMSIG", "WIFSIGNALED", "WEXITSTATUS", "WIFEXITED"]]
+  where encoded = concatMap (\c -> case c of '-' -> "zm"; '.' -> "zi"; _ -> [c]) owner
 
-symbol :: Id -> Maybe String
-symbol value = case isFCallId_maybe value of
+originalSymbol :: String -> Id -> Maybe String
+originalSymbol owner value = case isFCallId_maybe value of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) F.CApiConv F.PlayRisky))
-    | unitString unit == "unix-2.8.8.0-inplace", unpackFS name `elem` map snd operations ->
+    | isOriginalUnixUnit owner, unitString unit == owner, unpackFS name `elem` map snd (operations owner) ->
         Just (unpackFS name)
   _ -> Nothing
 
@@ -81,10 +82,14 @@ prepareUnixWaitStatus root = do
   unless (oneLine version == "9.14.1") (die "Unix wait-status FFI fixture requires GHC 9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
   imports <- execute "imports" [] pkg ["field", "unix", "import-dirs", "--simple-output"]
+  owner <- execute "unit" [] pkg ["field", "unix", "id", "--simple-output"]
+  unless (isOriginalUnixUnit (oneLine owner)) (die "Wait-status proof requires the pinned installed unix owner")
   let interfaces = map (oneLine imports </>)
         ["System/Posix/Process/Internals.hi"]
-      entries = map fst operations
+      selected = operations (oneLine owner)
+      entries = map fst selected
   rows <- runGhc (Just (oneLine library)) $ do
+    let symbol = originalSymbol (oneLine owner)
     initial <- getSessionDynFlags
     env0 <- getSession
     (configured, _, _) <- parseDynamicFlags (hsc_logger env0) initial (map noLoc
@@ -95,12 +100,22 @@ prepareUnixWaitStatus root = do
     env <- getSession
     originals <- liftIO $ fmap (nubBy (\a b -> symbol a == symbol b) . concat) $ forM interfaces $ \path -> do
       raw <- readBinIface (targetProfile flags) (hsc_NC env) CheckHiWay QuietBinIFace path
-      unless (unitString (moduleUnit (mi_module raw)) == "unix-2.8.8.0-inplace")
+      unless (unitString (moduleUnit (mi_module raw)) == oneLine owner)
         (die "Wrong installed unix wait-status interface owner")
-      recovered <- loadInterfaceCore env (mi_module raw) path
-      actual <- maybe (die "Installed unix wait-status module lacks complete Core") pure recovered
-      pure [value | (_, body) <- flattenBinds (interfaceBindings actual), value <- variables body, symbol value /= Nothing]
-    liftIO $ unless (length originals == length operations) (die "Missing genuine unix wait-status FCallIds")
+      types <- newIORef emptyTypeEnv
+      let moduleOwner = mi_module raw
+          old = hsc_type_env_vars env
+          domain = case old of NoKnotVars -> []; KnotVars ms _ -> ms
+          knots = KnotVars (moduleOwner : filter (/= moduleOwner) domain) $ \other ->
+            if other == moduleOwner then Just types else lookupKnotVars old other
+          tied = env { hsc_type_env_vars = knots }
+      details <- initIfaceCheck (text "Original wait-status fixture") tied (typecheckIface raw)
+      writeIORef types (md_types details)
+      pure [value | declaration <- typeEnvIds (md_types details),
+                    nameModule_maybe (varName declaration) == Just moduleOwner,
+                    Just body <- [maybeUnfoldingTemplate (realIdUnfolding declaration)],
+                    value <- variables body, symbol value /= Nothing]
+    liftIO $ unless (length originals == length selected) (die "Missing genuine unix wait-status FCallIds")
     target <- guessTarget (root </> source) Nothing Nothing
     setTargets [target]
     graph <- depanal [] False
@@ -128,7 +143,7 @@ prepareUnixWaitStatus root = do
             let applied = simpleOptExpr (initSimpleOpts flags) (App (resolve body) (Var original))
             in (setIdArity (setIdType (setIdInfo value vanillaIdInfo) (exprType applied)) (exprArity applied), applied)
           _ -> error ("Original unix wait-status FCallId differs from typed consumer " ++ name)
-        guests = [specialize name targetName | (name, targetName) <- operations]
+        guests = [specialize name targetName | (name, targetName) <- selected]
         adapted = optimized { mg_binds = [NonRec value body | (value, body) <- guests],
           mg_exports = filter (\available -> availName available `elem` map (varName . fst) guests) (mg_exports optimized) }
     liftIO $ do
@@ -136,7 +151,7 @@ prepareUnixWaitStatus root = do
       (tidied, _) <- hscTidy current adapted
       serializePostTidyCore flags ["unit-qualified"] (cg_module tidied) (cg_tycons tidied)
         (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
-    fmap concat $ forM operations $ \(name, targetName) -> liftIO $ do
+    fmap concat $ forM selected $ \(name, targetName) -> liftIO $ do
       let nativeName = case name of
             first : rest -> "native" ++ toUpper first : rest
             [] -> error "Empty unix wait-status consumer name"
@@ -151,15 +166,17 @@ prepareUnixWaitStatus root = do
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
     execute (stage ++ "-audit-" ++ name) [] "python3" ["scripts/audit-core.py", "--entry", name,
       "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
-  let commands = [version, library, imports] ++ audits
+  let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "test/haskell-fixtures/UnixWaitStatusFixtures.hs",
-    "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
+    "compiler/THC/Plugin.hs", "test/haskell-fixtures/FixtureSupport.hs", "scripts/core_original_foreign.py",
     "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/c/wait-status-api.c", "scripts/build-cbits.py"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.tsv"]] ++
+    [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre", "post"], name <- entries] ++
     concatMap commandArtifacts commands)
   interfaceHashes <- hashes root interfaces
   writeJson manifest $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= entries,
+     "unixUnit" .= oneLine owner, "nativeRows" .= length rows, "strictAccepted" .= True,
      "consumerKind" .= ("typed CInt consumers specialized with genuine installed unix wait-status FCallIds" :: String),
      "interfaceHashes" .= interfaceHashes, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]

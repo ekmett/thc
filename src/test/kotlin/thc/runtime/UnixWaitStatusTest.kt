@@ -8,11 +8,16 @@ import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import thc.*
 import java.io.File
 import java.security.MessageDigest
 import java.util.HexFormat
 
+@EnabledOnOs(OS.LINUX)
+@EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
 class UnixWaitStatusTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/unix-wait-status")
@@ -46,6 +51,9 @@ class UnixWaitStatusTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for ((name, corpus) in rows().groupBy { it.name }) {
                     val source = CoreModules.reachable(json("$stage.json"), name) + ("instrument" to true)
+                    val bindings = source["bindings"] as List<Map<String, Any?>>
+                    assertEquals(1, bindings.size)
+                    assertEquals(1, OriginalStdioChecks.nodes(bindings.single()["expr"]).count { it.firstOrNull() == "lam" })
                     val program = program(language, source, backend)
                     val entry = program.entryValue(name)
                     val host = program.hostEntryTarget(1)
@@ -61,7 +69,7 @@ class UnixWaitStatusTest {
                     for (row in corpus.asReversed()) {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         call(row)
-                        assertTrue((program.diagnostics().getValue("compiledEntries") as Number).toLong() > before,
+                        assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                             "first and subsequent installed calls: $stage/$backend/$name")
                         targets.forEach(::compiled)
                     }
@@ -76,9 +84,12 @@ class UnixWaitStatusTest {
     @Test fun originalDeclarationsAndOracleStayExact() {
         val manifest = json("manifest.json")
         assertEquals("9.14.1", manifest["ghc"])
+        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertEquals(280L, manifest["nativeRows"]); assertEquals(true, manifest["strictAccepted"])
+        val owner = manifest["unixUnit"] as String
         assertEquals(operations.map { "wait${it.name}" }.toSet(), (manifest["entries"] as List<*>).toSet())
         assertEquals(setOf("compiler/test-fixtures/UnixWaitStatusAudit.hs", "test/haskell-fixtures/UnixWaitStatusFixtures.hs",
-            "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
+            "compiler/THC/Plugin.hs", "test/haskell-fixtures/FixtureSupport.hs", "scripts/core_original_foreign.py",
             "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/c/wait-status-api.c", "scripts/build-cbits.py"),
             (manifest["inputHashes"] as Map<*, *>).keys)
         for (key in listOf("inputHashes", "artifactHashes", "interfaceHashes")) {
@@ -90,8 +101,9 @@ class UnixWaitStatusTest {
         }
         for (stage in listOf("pre", "post")) {
             val calls = foreignApps(json("$stage.json"))
-            assertEquals(operations.map { it.symbol }.toSet(), calls.map {
+            assertEquals(operations.map { it.symbol.replace("unixzm2zi8zi8zi0zminplace", owner.replace("-", "zm").replace(".", "zi")) }.toSet(), calls.map {
                 (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["symbol"] }.toSet())
+            assertTrue(calls.all { (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"] == owner })
             for (operation in operations) {
                 val audit = json("$stage-wait${operation.name}.audit.json")
                 assertEquals(true, audit["accepted"])
@@ -138,7 +150,60 @@ class UnixWaitStatusTest {
                     assertThrows(RuntimeFault::class.java, { program(language, source, backend) }, "$backend/$variant")
                 } finally { context.leave() }
             }
-        assertTrue(OriginalStdioOp.entries.filterNot { it.waitStatus }.all { it.unit == "ghc-internal" })
+    }
+
+    @Test fun installedSymbolsKeepExactOwnerIndexModuleAndFunction() {
+        for (operation in operations) for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                fun module(owner: String, symbol: String): Map<String, Any?> {
+                    val source = CoreModules.reachable(json("post.json"), "wait${operation.name}")
+                    val target = ((foreignApps(source).single()[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>
+                    target["unit"] = owner; target["symbol"] = symbol
+                    return source
+                }
+                fun symbol(owner: String) = operation.symbol.replace("unixzm2zi8zi8zi0zminplace", owner.replace("-", "zm").replace(".", "zi"))
+                for (owner in listOf("unix-2.8.8.0-inplace", "unix-2.8.8.0-460b", "unix-2.8.8.0-deadbeef"))
+                    program(language, module(owner, symbol(owner)), backend)
+                val owner = "unix-2.8.8.0-460b"
+                for ((badOwner, badSymbol) in listOf(
+                    "unix-2.8.8.0-inplace" to symbol(owner), owner to operation.symbol,
+                    "unix-2.8.8.0-ABCD" to symbol("unix-2.8.8.0-ABCD"),
+                    "unix-2.8.8.0-nothex" to symbol("unix-2.8.8.0-nothex"),
+                    "unix-2.8.7.0-460b" to symbol("unix-2.8.7.0-460b"),
+                    owner to symbol(owner).replace("ghczuwrapperZC${operations.indexOf(operation)}ZC", "ghczuwrapperZC7ZC"),
+                    owner to symbol(owner).replace("ProcessziInternals", "ProcessziByteString"),
+                    owner to (symbol(owner) + "Extra")))
+                    assertThrows(RuntimeFault::class.java) { program(language, module(badOwner, badSymbol), backend) }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun storedOperandsAndStateCarrierRemainCheckedBeforeNativeAccess() {
+        for (backend in listOf("ast", "bytecode")) context(native = false).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (operation in operations) {
+                    val source = CoreModules.reachable(json("post.json"), "wait${operation.name}")
+                    val call = foreignApps(source).single()
+                    for (index in 0..1) assertThrows(RuntimeFault::class.java) {
+                        program(language, OriginalStdioChecks.rawModule(call, source, index), backend)
+                    }
+                    val raw = OriginalStdioChecks.rawModule(call, source)
+                    val target = program(language, raw, backend).entryTarget("entry")
+                    val failure = assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, 137L, 9L)) }
+                    assertTrue(failure.message.orEmpty().contains("zero-width scalar carrier"), failure.message)
+                    val shadowed = OriginalStdioChecks.rawModule(call, source)
+                    val app = foreignApps(shadowed).single()
+                    app[1] = listOf("var", "p0", (app[1] as List<*>)[2])
+                    assertThrows(RuntimeFault::class.java) { program(language, shadowed, backend) }
+                }
+                assertEquals(0, language.handoffState.get().arguments.depth)
+                assertEquals(0, language.handoffState.get().results.depth)
+            } finally { context.leave() }
+        }
     }
 
     @Test fun statusTransportUsesCurrentNativeCapability() {

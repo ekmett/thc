@@ -302,9 +302,11 @@ UNIX_LSTAT = 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFileszi
 def operation_symbol(target):
     """Identify the closed operation without rewriting its captured symbol."""
     symbol = target.get('symbol')
-    if isinstance(symbol, str) and re.fullmatch(
-            r'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZCSystemziPosixziFilesziPosixStringZClstat', symbol):
-        return UNIX_LSTAT
+    if isinstance(symbol, str):
+        canonical = re.sub(r'unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC',
+                           'unixzm2zi8zi8zi0zminplaceZC', symbol)
+        if canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS:
+            return canonical
     return symbol
 
 
@@ -428,7 +430,10 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol == 'mkdir':
         require(unix_libc_unit(target.get('unit')), 'supported installed unix mkdir unit')
     if symbol in WAIT_STATUS_OPERATIONS:
-        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix wait-status unit')
+        unit = target.get('unit')
+        require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
+                'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
+                'matching installed unix wait-status unit and symbol')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
@@ -439,7 +444,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
-                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'geteuid', 'mkdir', UNIX_LSTAT) and unix_libc_unit(target.get('unit')) or
+                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
             'static supported installed-library function target')
