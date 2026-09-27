@@ -116,6 +116,15 @@ int64_t thc_file_standard(int *lease, int endpoint, int64_t *error) {
   return fd < 0 ? -1 : 0;
 }
 
+int64_t thc_file_path_stat(const char *path, int follow, void *destination, int64_t *error) {
+  struct stat value;
+  memset(&value, 0, sizeof(value));
+  int result = follow ? stat(path, &value) : lstat(path, &value);
+  *error = result < 0 ? errno : 0;
+  if (result == 0) memcpy(destination, &value, sizeof(value));
+  return result;
+}
+
 int64_t thc_file_stat(const int *lease, void *destination, int64_t *error) {
   struct stat value;
   memset(&value, 0, sizeof(value));

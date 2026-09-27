@@ -133,6 +133,11 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val address = operands[2].executeRequiredAddress(frame)
             requireVoidCarrier(operands[3].execute(frame))
             CoreOriginalStdio.current(this).tcsetattr(fd, action, address)
+        } else if (operation.pathStat) {
+            val path = operands[0].executeRequiredAddress(frame)
+            val destination = operands[1].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            CoreOriginalStdio.current(this).pathStat(operation, path, destination)
         } else if (operation.readImage) {
             val fd = operands[0].executeRequiredLong(frame)
             val address = operands[1].executeRequiredAddress(frame)

@@ -217,6 +217,22 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
     }
 
+    /** Preserve the fixed filesystem's CWD and raw pathname bytes. The staging
+     * image is published only after the selected native stat call succeeds. */
+    @Synchronized fun statRaw(path: ByteArray, followLinks: Boolean): ByteArray {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val bytes = absoluteRawPath(anchor, path)
+        return NativeLimbScope().use { scope ->
+            val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+            name.copyFrom(bytes, 0, bytes.size)
+            val image = scope.allocate(statSize.toLong())
+            result("path_stat", name, if (followLinks) 1 else 0, image)
+            ByteArray(statSize).also { image.copyTo(it, 0, it.size) }
+        }
+    }
+
     /** Explicit endpoint grants duplicate process endpoints into owned resources.
      * This does not associate them with arbitrary Env.in/out/err streams. */
     fun standard(endpoint: StandardEndpoint): OpenedNativeFile {

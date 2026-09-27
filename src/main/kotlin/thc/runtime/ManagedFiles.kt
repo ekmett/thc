@@ -657,6 +657,32 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    /** Validate the complete output before observing a path. Snapshot the pathname
+     * before locking the destination, then retain its storage through native
+     * observation and successful copy-back; failures leave the image untouched. */
+    @TruffleBoundary internal fun pathStatOriginal(path: ManagedAddress, destination: ManagedAddress, followLinks: Boolean): Long {
+        val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
+        destination.requireByteRegion(size, writable = true)
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original path stat requires the explicit native filesystem")
+            }
+            destination.withNativeBorrow {
+                fun copyImage(): Long {
+                    destination.requireByteRegion(size, writable = true)
+                    val image = provider.statRaw(bytes, followLinks)
+                    if (image.size.toLong() != size) fault("Native stat image has the wrong size")
+                    ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size)
+                    return 0L
+                }
+                val allocation = destination.cbitsOwner()
+                if (allocation == null) copyImage() else synchronized(allocation) { copyImage() }
+            }
+        }
+    }
+
     /** Original open has no private admission claim or RTS lock. Reserve
      * the lowest descriptor before creation/truncation, but hold no registry
      * monitor over native acquisition. A completed result is never polled here. */

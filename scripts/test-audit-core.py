@@ -3252,6 +3252,52 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.assertFalse(self.audit(module)['accepted'])
 
 
+class OriginalPathStatDeclarationTest(unittest.TestCase):
+    """Synthetic rejection controls; Haskell fixtures retain the original FCallIds."""
+    unix_symbol = 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat'
+    symbols = ('__hscore_stat', '__hscore_lstat', unix_symbol)
+
+    def declaration(self, symbol):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
+        result = dict(kind='long', primReps=['Int32Rep'], evaluated=True)
+        return dict(schema=1, target=dict(kind='static', symbol=symbol, isFunction=True,
+            unit='unix-2.8.8.0-inplace' if symbol == self.unix_symbol else 'ghc-internal'),
+            convention='capi' if symbol == self.unix_symbol else 'ccall', safety='unsafe', arity=3, suppliedArity=3,
+            argumentReps=[dict(rep, evaluated=False) for rep in (address, address, state)],
+            resultRep=dict(tuple_rep(state, result), evaluated=False))
+
+    def test_exact_original_path_stat_declarations_require_capability(self):
+        fixture = LibdwUnavailableAuditTest()
+        for symbol in self.symbols:
+            module = fixture.fixture(self.declaration(symbol))
+            report = fixture.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
+            self.assertFalse(fixture.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
+
+    def test_path_stat_owner_abi_and_actual_stored_operands_reject_spoofs(self):
+        fixture = LibdwUnavailableAuditTest()
+        for symbol in self.symbols:
+            declaration = self.declaration(symbol)
+            for key, value in (('convention', 'ccall' if symbol == self.unix_symbol else 'capi'),
+                               ('safety', 'safe'), ('arity', 2), ('suppliedArity', 2), ('resultRep', LONG)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, key))
+            for unit in ('main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-abcd',
+                         'ghc-internal' if symbol == self.unix_symbol else 'unix-2.8.8.0-inplace'):
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, unit))
+            for index in range(3):
+                module = fixture.fixture(declaration)
+                module['bindings'][0]['expr'][1][index]['rep'] = LONG
+                self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'stored'))
+                module = fixture.fixture(declaration)
+                call = module['bindings'][0]['expr'][2][1]
+                call[2][index] = [*lit(9), call[2][index][2]]
+                self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'producer'))
+
+
 class OriginalRtsDiagnosticTest(unittest.TestCase):
     def test_exact_diagnostic_descriptors_and_malformed_contracts(self):
         state = dict(kind='void', primReps=[], evaluated=True)

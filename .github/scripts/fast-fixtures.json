@@ -392,11 +392,12 @@
       ]
     },
     "original-posix-stat": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatTest"],
+      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathStatTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
-      "outputs": ["build/original-posix-stat"],
+      "outputs": ["build/original-posix-stat", "build/original-path-stat"],
       "sources": [
         "compiler/test-fixtures/OriginalPosixStatAudit.hs", "compiler/test-fixtures/OriginalPosixStatNative.hs",
+        "compiler/test-fixtures/OriginalPathStatAudit.hs", "test/haskell-fixtures/OriginalPathStatFixtures.hs",
         "test/haskell-fixtures/OriginalPosixStatFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"
       ]

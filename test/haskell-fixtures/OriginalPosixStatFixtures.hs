@@ -7,6 +7,7 @@ import Control.Monad (forM, unless)
 import Data.Aeson (object, (.=))
 import qualified Data.ByteString.Char8 as BSC
 import FixtureSupport
+import OriginalPathStatFixtures (prepareOriginalPathStat)
 import System.Directory (createDirectoryIfMissing, doesFileExist)
 import System.Environment (lookupEnv)
 import System.Exit (die)
@@ -25,7 +26,7 @@ prepareOriginalPosixStat root
          "reason" .= ("Only original Linux stat scalar declarations have native/Core proof" :: String),
          "inputHashes" .= inputHashes, "artifactHashes" .= object []]
       putStrLn "original-posix-stat: explicitly excluded on this platform (Linux-only proof)"
-  | otherwise = prepareLinux root
+  | otherwise = prepareLinux root >> prepareOriginalPathStat root
 
 fixtureSources :: [FilePath]
 fixtureSources = ["compiler/test-fixtures/OriginalPosixStatAudit.hs", "compiler/test-fixtures/OriginalPosixStatNative.hs",
