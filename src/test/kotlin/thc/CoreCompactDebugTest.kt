@@ -63,7 +63,7 @@ class CoreCompactDebugTest {
         val path = directory.resolve("debug.cbd")
         Files.write(path, bytes)
         val identity = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
-        CoreFileMappings(0, 0).use { cache -> CoreCompactFile(path, identity, mappings = cache).use(action) }
+        CoreFileMappings(0, 0).use { cache -> CoreCompactFile(path, identity, false, cache).use(action) }
     }
 
     @Test fun selectedIntervalsRestoreSourcesAndKeepGapsExplicit() = withFile { file ->
