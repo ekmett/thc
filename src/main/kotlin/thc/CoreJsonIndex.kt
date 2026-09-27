@@ -45,7 +45,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         val structuralBytesScanned: Long, val decodedSpanCount: Long, val decodedByteCount: Long,
         val navigationByteReads: Long, val balancedParenthesisBitsExamined: Long,
         val interestDirectoryBytes: Long, val lexerCheckpointBytes: Long, val topologyBytes: Long,
-        val topologyNavigationBytes: Long, val scratchBytes: Long, val indexSourceBytesScanned: Long,
+        val topologyNavigationBytes: Long, val scratchBytes: Long, val sourceIdentityBytes: Long, val indexSourceBytesScanned: Long,
         val regeneratedSourceBytes: Long, val regeneratedBlockCount: Long)
     data class Member(val name: String, val value: Span)
 
@@ -63,7 +63,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             s.hashBytesScanned, s.scanBytes, decodeCount, decodeBytes, navigationBytes, bpExamined,
             s.interest.directoryBytes, s.interest.checkpointBytes, s.bp.bits.data.size.toLong() * 8,
             s.bp.byteSize - s.bp.bits.data.size.toLong() * 8, s.interest.scratchBytes,
-            s.interest.indexSourceBytesScanned, s.interest.regeneratedSourceBytes, s.interest.regeneratedBlockCount)
+            s.identityBytes, s.interest.indexSourceBytesScanned, s.interest.regeneratedSourceBytes, s.interest.regeneratedBlockCount)
     }
     /** Hashes the exact original bytes, never normalized or reserialized JSON. */
     fun sha256(): String = synchronized(this) { live().hash.joinToString("") { "%02x".format(it) } }
@@ -253,7 +253,8 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
                 sourceHash = it; hashBytesScanned += bytes.size
             }
         }
-        val indexBytes: Long get() = interest.byteSize + bp.byteSize
+        val identityBytes: Long get() = sourceHash?.size?.toLong() ?: 0L
+        val indexBytes: Long get() = interest.byteSize + bp.byteSize + identityBytes
     }
     companion object {
         /** Load a verified navigation cache over a defensive snapshot; the caller owns [input]. */

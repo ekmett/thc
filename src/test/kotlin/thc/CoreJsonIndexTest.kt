@@ -286,6 +286,9 @@ class CoreJsonIndexTest {
                 assertEquals(source.size.toLong(), initial.sourceSnapshotBytesCopied)
                 assertEquals(0L, initial.sourceFileBytesRead)
                 assertEquals(0L, initial.decodedSpanCount)
+                assertEquals(32L, initial.sourceIdentityBytes)
+                assertEquals(initial.interestDirectoryBytes + initial.lexerCheckpointBytes + initial.topologyBytes +
+                    initial.topologyNavigationBytes + initial.scratchBytes + initial.sourceIdentityBytes, initial.indexByteSize)
                 loaded.sha256(); loaded.sha256()
                 assertEquals(source.size.toLong(), loaded.statistics().sourceHashBytesScanned)
                 assertEquals(Json.parse(text), loaded.validateDocument())
@@ -456,6 +459,19 @@ class CoreJsonIndexTest {
             assertNotSame(failure, assertThrows(Exception::class.java) { bad.decodeUncached() })
             source.close()
             assertThrows(IllegalStateException::class.java) { string.decodeUncached() }
+        }
+    }
+
+    @Test fun referenceHashAllocationAppearsOnlyWhenRequested() {
+        index("[0]").use { source ->
+            val before = source.statistics()
+            assertEquals(0L, before.sourceIdentityBytes)
+            source.sha256()
+            assertEquals(32L, source.statistics().sourceIdentityBytes)
+            assertEquals(before.indexByteSize + 32, source.statistics().indexByteSize)
+            assertEquals(3L, source.statistics().sourceHashBytesScanned)
+            source.sha256()
+            assertEquals(3L, source.statistics().sourceHashBytesScanned)
         }
     }
 
