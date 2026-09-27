@@ -146,6 +146,7 @@ OPERATIONS = {
     'reportStackOverflow': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', None), (None,)),
     'reportHeapOverflow': ('ccall', 'unsafe', (None,), (None,)),
     'errorBelch2': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None,)),
+    'debugBelch2': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None,)),
     'shutdownHaskellAndExit': ('ccall', 'safe', ('Int32Rep', 'Int32Rep', None), (None,)),
     'shutdownHaskellAndSignal': ('ccall', 'safe', ('Int32Rep', 'Int32Rep', None), (None,)),
     **{symbol: ('ccall', 'unsafe', arguments, output)

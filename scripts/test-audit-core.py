@@ -3258,7 +3258,8 @@ class OriginalRtsDiagnosticTest(unittest.TestCase):
         address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
         for symbol, reps in (('reportStackOverflow', [thread, state]),
-                             ('reportHeapOverflow', [state]), ('errorBelch2', [address, address, state])):
+                             ('reportHeapOverflow', [state]), ('errorBelch2', [address, address, state]),
+                             ('debugBelch2', [address, address, state])):
             result = tuple_rep(state)
             descriptor = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='ghc-internal', isFunction=True),
                 convention='ccall', safety='unsafe', arity=len(reps), suppliedArity=len(reps),
@@ -3274,11 +3275,26 @@ class OriginalRtsDiagnosticTest(unittest.TestCase):
             audit = lambda value: audit_core.Audit([('diagnostics.json', value)], CAP).run(['root'])
             report = audit(module)
             self.assertTrue(report['accepted'], report)
+            self.assertEqual(1, CAP['managedForeignCalls'].count(symbol))
             self.assertEqual([symbol], [item['symbol'] for item in report['foreignCalls']])
-            for key, value in (('safety', 'safe'), ('arity', 0), ('resultRep', state)):
+            for key, value in (('safety', 'safe'), ('arity', 0), ('suppliedArity', len(reps) + 1),
+                               ('convention', 'capi'), ('schema', True), ('resultRep', state)):
                 malformed = copy.deepcopy(module)
                 malformed['bindings'][0]['expr'][2][1][6]['foreignCall'][key] = value
                 self.assertFalse(audit(malformed)['accepted'])
+            for unit in ('main', 'ghc-internal-9.1401.0-inplace'):
+                malformed = copy.deepcopy(module)
+                malformed['bindings'][0]['expr'][2][1][6]['foreignCall']['target']['unit'] = unit
+                self.assertFalse(audit(malformed)['accepted'])
+            malformed = copy.deepcopy(module)
+            malformed['bindings'][0]['expr'][1][-1]['rep'] = LONG
+            self.assertFalse(audit(malformed)['accepted'])
+            malformed = copy.deepcopy(module)
+            malformed['bindings'][0]['expr'][2][1][2][-1] = [*lit(0), dict(rep=state)]
+            self.assertFalse(audit(malformed)['accepted'])
+            malformed = copy.deepcopy(module)
+            malformed['bindings'][0]['expr'][2][1][1][1] = 'p0'
+            self.assertFalse(audit(malformed)['accepted'])
 
 
 class OriginalShutdownAuditTest(unittest.TestCase):
