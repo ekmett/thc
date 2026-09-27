@@ -48,6 +48,7 @@ jobs:
             build/windows-launcher/
             build/windows-driver/
             build/windows-bridge/
+            build/windows-codepages/
             build/windows-directory/*.json
             build/windows-directory/logs/
             build/generated/windows-directory-abi/

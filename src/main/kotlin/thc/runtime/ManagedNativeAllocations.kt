@@ -14,8 +14,9 @@ import java.lang.foreign.ValueLayout
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import thc.Language
 
-/** Malloc is explicitly owned until free or context disposal, even if guest
- * references disappear. It is not the immutable-image weak cache. */
+/** Native allocations are explicitly owned until their matching deallocator or
+ * context disposal, even if guest references disappear. Malloc and Windows local
+ * allocations share borrow lifetimes, never deallocator identities. */
 internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
     private val live = HashSet<Owner>()
     private val freeing = HashSet<Owner>()
@@ -24,7 +25,9 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
         if (Language.currentState().nativeAllocations !== this) fault("Native allocation belongs to another context")
         if (!env.isNativeAccessAllowed) fault("Native allocation requires native access")
     }
-    internal inner class Owner internal constructor(private val pointer: MemorySegment, val size: Long) {
+    internal enum class Allocator { MALLOC, WINDOWS_LOCAL }
+    internal inner class Owner internal constructor(private val pointer: MemorySegment, val size: Long,
+                                                    internal val allocator: Allocator = Allocator.MALLOC) {
         private val lifetime = ReentrantReadWriteLock(true)
         private val arena = Arena.ofShared()
         private val segment = try { pointer.reinterpret(size, arena, null) }
@@ -60,8 +63,10 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
             lifetime.writeLock().lock()
             try {
                 if (closed) return
+                // Failed LocalFree retains ownership and a usable segment.
+                if (allocator == Allocator.WINDOWS_LOCAL) WindowsCodePages.releaseLocal(pointer) else releaseNative(pointer)
                 closed = true
-                try { arena.close() } finally { releaseNative(pointer) }
+                arena.close()
             } finally { lifetime.writeLock().unlock() }
         }
         @TruffleBoundary fun requireLive() { borrow().use {} }
@@ -99,19 +104,38 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
             } catch (failure: Throwable) { owner.release(); throw failure }
         } finally { threads.leaveForeign(previous) }
     }
-    @TruffleBoundary fun free(address: ManagedAddress) {
+    @Synchronized @TruffleBoundary internal fun adoptWindowsLocal(pointer: MemorySegment, size: Long): ManagedAddress {
+        var owner: Owner? = null
+        try {
+            current()
+            if (closed) fault("Native allocation registry is closed")
+            WindowsCodePages.Abi.requireLayout()
+            if (pointer.address() == 0L || size <= 0) fault("Invalid Windows local allocation")
+            owner = Owner(pointer, size, Allocator.WINDOWS_LOCAL)
+            val address = ManagedAddress.fromNativeAllocation(owner)
+            live.add(owner)
+            return address
+        } catch (failure: Throwable) {
+            try { if (owner == null) WindowsCodePages.releaseLocal(pointer) else owner.release() }
+            catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
+    }
+    @JvmOverloads @TruffleBoundary fun free(address: ManagedAddress, allocator: Allocator = Allocator.MALLOC) {
         current()
         val owner = synchronized(this) {
-            val allocation = freeableOwner(address) ?: return
+            val allocation = freeableOwner(address, allocator) ?: return
             freeing.add(allocation)
             allocation
         }
         val threads = Language.currentState().threads
         val previous = threads.enterForeign()
+        var retired = false
         try {
             owner.release() // Wait for other threads' borrows before consuming ownership.
+            retired = true
         } finally {
-            synchronized(this) { live.remove(owner); freeing.remove(owner) }
+            synchronized(this) { if (retired) live.remove(owner); freeing.remove(owner) }
             threads.leaveForeign(previous)
         }
     }
@@ -157,10 +181,11 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
         current()
         freeableOwner(address)
     }
-    private fun freeableOwner(address: ManagedAddress): Owner? {
+    private fun freeableOwner(address: ManagedAddress, allocator: Allocator = Allocator.MALLOC): Owner? {
         if (closed) fault("Native allocation registry is closed")
         if (address === ManagedAddress.nullAddress()) return null // libc free(NULL) is valid.
         val owner = address.nativeAllocation() ?: fault("Native free requires an owned malloc base")
+        if (owner.allocator != allocator) fault("Native deallocation requires its matching allocator")
         if (owner !in live || owner in freeing) fault("Native free requires a live allocation from this context")
         if (!address.isNativeBase()) fault("Native free requires the allocation base")
         owner.requireFreeable()

@@ -23,6 +23,18 @@ WINDOWS_DIRECTORY_OPERATIONS = {
     'FindClose': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
     'GetLastError': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
 }
+WINDOWS_ENCODING_OPERATIONS = {
+    'GetACP': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
+    'GetConsoleCP': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
+    'GetCPInfo': ('ccall', 'unsafe', ('Word32Rep', 'AddrRep', None), (None, 'IntRep')),
+    'IsDBCSLeadByteEx': ('ccall', 'unsafe', ('Word32Rep', 'Word8Rep', None), (None, 'IntRep')),
+    'MultiByteToWideChar': ('ccall', 'unsafe', ('Word32Rep', 'Word32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
+    'WideCharToMultiByte': ('ccall', 'unsafe', ('Word32Rep', 'Word32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'Int32Rep', 'AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'maperrno': ('ccall', 'unsafe', (None,), (None,)),
+    'maperrno_func': ('ccall', 'unsafe', ('Word32Rep', None), (None, 'Int32Rep')),
+    'base_getErrorMessage': ('ccall', 'unsafe', ('Word32Rep', None), (None, 'AddrRep')),
+    'LocalFree': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+}
 DIRECTORY_STREAM_OPERATIONS = {
     'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziPosixPathZCopendir':
         ('capi', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
@@ -120,6 +132,7 @@ OPERATIONS = {
     **PROCESS_OPERATIONS,
     **DIRECTORY_STREAM_OPERATIONS,
     **WINDOWS_DIRECTORY_OPERATIONS,
+    **WINDOWS_ENCODING_OPERATIONS,
     **TEXT_OPERATIONS,
     **BYTESTRING_DECIMAL_OPERATIONS,
     'fps_sort': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None,)),
@@ -502,7 +515,10 @@ def validate(metadata, argument_reps, flags, result_rep):
                 'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
                 'matching installed unix directory-stream unit and symbol')
     if symbol in WINDOWS_DIRECTORY_OPERATIONS:
-        require(win32_unit(target.get('unit')), 'pinned original Win32 directory unit')
+        require(win32_unit(target.get('unit')) or symbol == 'GetLastError' and target.get('unit') == 'ghc-internal',
+                'pinned original Win32 or ghc-internal GetLastError unit')
+    if symbol in WINDOWS_ENCODING_OPERATIONS:
+        require(target.get('unit') == 'ghc-internal', 'original ghc-internal Windows encoding unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')

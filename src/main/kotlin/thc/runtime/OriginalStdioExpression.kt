@@ -20,6 +20,43 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.windowsEncoding) {
+            val windows = WindowsCodePages.current(this)
+            if (operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE || operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE) {
+                val codePage = operands[0].executeRequiredLong(frame)
+                val flags = operands[1].executeRequiredLong(frame)
+                val input = operands[2].executeRequiredAddress(frame)
+                val count = operands[3].executeRequiredLong(frame)
+                val output = operands[4].executeRequiredAddress(frame)
+                val capacity = operands[5].executeRequiredLong(frame)
+                val defaultChar = if (operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE) operands[6].executeRequiredAddress(frame) else null
+                val usedDefault = if (operation == OriginalStdioOp.WIDE_TO_MULTI_BYTE) operands[7].executeRequiredAddress(frame) else null
+                requireVoidCarrier(operands.last().execute(frame))
+                FrameAccess.writeLong(frame, slots[offset], if (operation == OriginalStdioOp.MULTI_BYTE_TO_WIDE)
+                    windows.multiByte(codePage, flags, input, count, output, capacity)
+                else windows.wideChar(codePage, flags, input, count, output, capacity, defaultChar!!, usedDefault!!))
+            } else {
+                val number = if (operation == OriginalStdioOp.CODE_PAGE_INFO || operation == OriginalStdioOp.DBCS_LEAD_BYTE ||
+                    operation == OriginalStdioOp.MAP_ERRNO_VALUE || operation == OriginalStdioOp.WINDOWS_ERROR_MESSAGE)
+                    operands[0].executeRequiredLong(frame) else 0L
+                val byte = if (operation == OriginalStdioOp.DBCS_LEAD_BYTE) operands[1].executeRequiredLong(frame) else 0L
+                val address = if (operation == OriginalStdioOp.CODE_PAGE_INFO) operands[1].executeRequiredAddress(frame)
+                    else if (operation == OriginalStdioOp.LOCAL_FREE) operands[0].executeRequiredAddress(frame) else null
+                requireVoidCarrier(operands.last().execute(frame))
+                if (operation == OriginalStdioOp.WINDOWS_ERROR_MESSAGE)
+                    FrameAccess.writeObject(frame, slots[offset], windows.message(number))
+                else if (operation == OriginalStdioOp.LOCAL_FREE)
+                    FrameAccess.writeObject(frame, slots[offset], windows.localFree(address!!))
+                else if (operation == OriginalStdioOp.MAP_ERRNO) windows.setErrno()
+                else FrameAccess.writeLong(frame, slots[offset],
+                    if (operation == OriginalStdioOp.LAST_ERROR) windows.error()
+                    else if (operation == OriginalStdioOp.CODE_PAGE_INFO) windows.info(number, address!!)
+                    else if (operation == OriginalStdioOp.DBCS_LEAD_BYTE) windows.leadByte(number, byte)
+                    else if (operation == OriginalStdioOp.MAP_ERRNO_VALUE) windows.mapErrno(number)
+                    else windows.codePage(operation == OriginalStdioOp.CONSOLE_CODE_PAGE))
+            }
+            return null
+        }
         if (operation.windowsDirectory) {
             val first = if (operation != OriginalStdioOp.LAST_ERROR) operands[0].executeRequiredAddress(frame) else null
             val output = if (operation == OriginalStdioOp.FIND_FIRST || operation == OriginalStdioOp.FIND_NEXT)

@@ -27,7 +27,7 @@ import thc.withFfiMode
  * Native filesystem authority is installed only by the fixed factory below. */
 internal class WindowsDirectoryStreams private constructor(private val context: Language.State) : java.io.Closeable {
     private val handles = IdentityHashMap<ManagedAllocation, MemorySegment>()
-    private val lastError = CarrierLocal(0L)
+    private val lastError get() = context.windowsCodePages.lastError
     private var disposed = false
 
     private fun current() {

@@ -1803,6 +1803,56 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalWindowsEncoding {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, long number, long value, ManagedAddress address, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            WindowsCodePages windows = WindowsCodePages.current(node);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation == OriginalStdioOp.WINDOWS_ERROR_MESSAGE)
+                destination.setObject(bytecode, frame, windows.message(number));
+            else if (operation == OriginalStdioOp.LOCAL_FREE)
+                destination.setObject(bytecode, frame, windows.localFree(address));
+            else if (operation == OriginalStdioOp.MAP_ERRNO) windows.setErrno();
+            else {
+                long result = operation == OriginalStdioOp.LAST_ERROR ? windows.error()
+                    : operation == OriginalStdioOp.CODE_PAGE_INFO ? windows.info(number, address)
+                    : operation == OriginalStdioOp.DBCS_LEAD_BYTE ? windows.leadByte(number, value)
+                    : operation == OriginalStdioOp.MAP_ERRNO_VALUE ? windows.mapErrno(number)
+                    : windows.codePage(operation == OriginalStdioOp.CONSOLE_CODE_PAGE);
+                destination.setLong(bytecode, frame, result);
+            }
+        }
+    }
+
+    // Java is required by the Truffle Bytecode DSL; marshalling remains Kotlin.
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalWindowsMultiByte {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long codePage, long flags, ManagedAddress input, long count, ManagedAddress output, long capacity,
+                Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = WindowsCodePages.current(node).multiByte(codePage, flags, input, count, output, capacity);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalWindowsWideChar {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                long codePage, long flags, ManagedAddress input, long count, ManagedAddress output, long capacity,
+                ManagedAddress defaultChar, ManagedAddress usedDefault, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = WindowsCodePages.current(node).wideChar(codePage, flags, input, count, output, capacity, defaultChar, usedDefault);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalWindowsDirectory {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 OriginalStdioOp operation, ManagedAddress first, ManagedAddress output, Object state, @Bind Node node) {

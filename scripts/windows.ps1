@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -15,11 +15,11 @@ New-Item -ItemType Directory -Force "$root/build" | Out-Null
 $lease = [IO.File]::Open("$root/build/.native-windows-build.lock",
     [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 try {
-    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest')) {
+    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest', 'CodePageTest')) {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -53,5 +53,12 @@ try {
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", '--continue',
             'testDefault', '--tests', 'thc.runtime.WindowsDirectoryStreamsTest',
             'testDense', '--tests', 'thc.runtime.WindowsDirectoryStreamsTest')
+    }
+    if ($Action -in @('Test', 'CodePageTest')) {
+        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+        Invoke-ThcTool $fixture @('windows-codepages')
+        Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", '--continue', 'installDist',
+            'testDefault', '--tests', 'thc.runtime.WindowsCodePagesTest',
+            'testDense', '--tests', 'thc.runtime.WindowsCodePagesTest')
     }
 } finally { $lease.Dispose(); Pop-Location }
