@@ -131,6 +131,7 @@ internal fun prepareGenericInput(frame: VirtualFrame, node: Node, function: Clos
     val overrides = if (strict.any { it < prefixCount }) arrayOfNulls<Any>(prefixWidth) else null
     for (i in strict) if (i < prefixCount) {
         val physical = input.logical.offset(i)
+        if (overrides == null) CompilerDirectives.transferToInterpreter()
         overrides!![physical] = force.execute(frame, prefixValue(function, input, physical))
     }
     forceActuals(frame, node, function, source, values, maximum, offset, count, strict, force)

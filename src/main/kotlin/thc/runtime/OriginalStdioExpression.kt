@@ -224,7 +224,10 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val address = if (operation.statField) operands[0].executeRequiredAddress(frame) else ManagedAddress.nullAddress()
             val mode = if (operation == OriginalStdioOp.SIZEOF_STAT || operation.statField) 0L
                 else operands[0].executeRequiredLong(frame)
-            requireVoidCarrier(operands[operands.lastIndex].execute(frame))
+            val statOperands = operands
+            val lastOperands = operands
+            if (lastOperands == null) CompilerDirectives.transferToInterpreter()
+            requireVoidCarrier(statOperands[lastOperands.lastIndex].execute(frame))
             PosixStat.execute(operation, address, mode)
         } else if (operation == OriginalStdioOp.CHDIR) {
             val path = operands[0].executeRequiredAddress(frame)

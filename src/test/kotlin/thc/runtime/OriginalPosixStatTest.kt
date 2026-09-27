@@ -4,8 +4,10 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
+import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
@@ -53,6 +55,39 @@ class OriginalPosixStatTest {
     private fun context() = Context.newBuilder("thc").allowIO(IOAccess.NONE).allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
         .option("engine.CompilationFailureAction", "Throw").build()
+
+    @Test fun statOperandsAndStateKeepTheirOrderBeforeNativeAccess() {
+        val events = mutableListOf<String>()
+        fun operand(name: String, value: Any?) = object : Expr() {
+            override fun execute(frame: VirtualFrame): Any? { events.add(name); return value }
+        }
+        val layout = FrameLayout()
+        val slot = layout.bind("result")
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
+        val proof = CoreRepresentation(CoreKind.UNKNOWN, true, true, emptyList())
+        for (operation in listOf(OriginalStdioOp.SIZEOF_STAT, OriginalStdioOp.IS_DIR, OriginalStdioOp.ST_MODE)) {
+            events.clear(); FrameAccess.writeLong(frame, slot, 91L)
+            val prefix: Array<Expr> = when (operation) {
+                OriginalStdioOp.SIZEOF_STAT -> emptyArray()
+                OriginalStdioOp.IS_DIR -> arrayOf(operand("mode", 16384L))
+                else -> arrayOf(operand("address", ManagedAddress.nullAddress()))
+            }
+            val expression = OriginalStdioExpression(operation, prefix + operand("state", 9L), proof)
+            val failure = assertThrows(RuntimeFault::class.java) { expression.executeTuple(frame, intArrayOf(slot), 0) }
+            assertTrue(failure.message.orEmpty().contains("zero-width scalar carrier"), failure.message)
+            assertEquals(when (operation) {
+                OriginalStdioOp.SIZEOF_STAT -> listOf("state")
+                OriginalStdioOp.IS_DIR -> listOf("mode", "state")
+                else -> listOf("address", "state")
+            }, events)
+            assertEquals(91L, FrameAccess.read(frame, slot))
+        }
+        events.clear()
+        val expression = OriginalStdioExpression(OriginalStdioOp.SIZEOF_STAT, arrayOf(operand("state", Unit)), proof)
+        OriginalStdioExpression::class.java.getDeclaredField("operands").also { it.isAccessible = true }.set(expression, null)
+        assertThrows(NullPointerException::class.java) { expression.executeTuple(frame, intArrayOf(slot), 0) }
+        assertTrue(events.isEmpty()); assertEquals(91L, FrameAccess.read(frame, slot))
+    }
 
     @Test fun realNativeImagesAndModePredicatesMatchBothBackendsOnFirstInstalledCalls() {
         val manifest = json("$prefix/manifest.json")

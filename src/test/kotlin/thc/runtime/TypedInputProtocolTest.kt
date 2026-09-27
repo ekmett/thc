@@ -5,9 +5,11 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -116,6 +118,47 @@ class TypedInputProtocolTest {
             if (fail) throw GuestException("strict prefix", this)
             return 123L
         }
+    }
+    @Test fun genericStrictPrefixForcingPrecedesLoansAndNonStrictPrefixesStayLazy() {
+        for (backend in listOf("ast", "bytecode")) for (strict in listOf(false, true))
+            for (fail in listOf(false, true)) withLanguage(false) { _, language ->
+                val worker = bind("worker", lam(listOf(arg("prefix", ref), arg("p", pair)),
+                    unpack(v("p", pair), prim("+#", v("a"), v("b"))), strict = listOf(strict, false)))
+                val p = program(language, backend, listOf(worker,
+                    bind("make", lam(listOf(arg("prefix", ref)),
+                        app(v("worker", closure), listOf(v("prefix", ref)), closure, listOf(true)), closure))))
+                val thunkRoot = PrefixThunk(language, fail)
+                val thunk = Thunk(thunkRoot.callTarget, null)
+                val pap = run(p, "make", thunk) as Closure
+                val prefix = pap.typedSupplied!!
+                val input = (pap.target.rootNode as GuestRoot).typedInput!!
+                val layout = FrameLayout()
+                val slots = intArrayOf(layout.bind("first"), layout.bind("second"))
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
+                FrameAccess.writeLong(frame, slots[0], 11L); FrameAccess.writeLong(frame, slots[1], 7L)
+                val source = AstInputSource(ArgumentLayout.fromProofs(listOf(input.logical.proof(1)))!!, slots)
+                val node = object : Node() {}
+                fun prepare() = prepareGenericInput(frame, node, pap, input, source, null, 1, 0, 1, Force(Metrics(false)))
+                assertEquals(0, thunkRoot.calls); clear(language)
+                if (strict && fail) {
+                    assertThrows(GuestException::class.java) { prepare() }
+                } else {
+                    val storage = prepare()
+                    try {
+                        assertTrue(storage.live); assertEquals(1, storage.inputMode)
+                        assertEquals(1, language.handoffState.get().arguments.depth)
+                        if (strict) assertEquals(123L, input.packet.getObject(storage, input.header))
+                        else assertSame(thunk, input.packet.getObject(storage, input.header))
+                        assertEquals(11L, input.packet.getLong(storage, input.header + 1))
+                        assertEquals(7L, input.packet.getLong(storage, input.header + 2))
+                    } finally { releaseGenericInput(input, storage, storage.generation) }
+                }
+                assertEquals(if (strict) 1 else 0, thunkRoot.calls)
+                assertSame(thunk, prefix.layout.getObject(prefix, 0))
+                assertFalse(prefix.live); assertEquals(0, prefix.inputMode)
+                assertEquals(11L, FrameAccess.read(frame, slots[0])); assertEquals(7L, FrameAccess.read(frame, slots[1]))
+                clear(language)
+            }
     }
     @Test fun cyclicIntermediateClosureIsAppliedBeforeFinalTupleConsumptionInPicAndGenericRoutes() {
         for (backend in listOf("ast", "bytecode")) for (inlining in listOf(true, false)) withLanguage(inlining) { context, language ->
