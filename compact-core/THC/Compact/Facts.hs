@@ -58,7 +58,51 @@ data ExceptionBridge = ExceptionBridge !Word64 !BS.ByteString !BS.ByteString
   !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString deriving (Eq, Show)
 
 data ModuleProvenance = ImportsRecord !ImportProof | ExportsRecord !Exports
-  | RegistrationRecord !Registration deriving (Eq, Show)
+  | RegistrationRecord !Registration | ForeignLinkRecord !ForeignLink
+  | ScalarLinkRecord !ScalarLink | NativeLinkRecord !NativeLink
+  | NativeArchiveRecord !NativeArchive deriving (Eq, Show)
+data ForeignLink = ForeignLink !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
+  !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString ![BS.ByteString]
+  ![(BS.ByteString,BS.ByteString)] !(Presence [(BS.ByteString,BS.ByteString)])
+  deriving (Eq, Show)
+data LinkPayload = LinkPayload !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
+  !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString deriving (Eq, Show)
+data ScalarABI = ScalarABI !BS.ByteString !BS.ByteString ![BS.ByteString] !BS.ByteString
+  deriving (Eq, Show)
+data ScalarLink = ScalarLink !LinkPayload ![ScalarABI] deriving (Eq, Show)
+data NativeABI = NativeABI !BS.ByteString !BS.ByteString !Convention !Safety
+  ![BS.ByteString] !BS.ByteString deriving (Eq, Show)
+data NativeLink = NativeLink !LinkPayload ![NativeABI] !(Presence NativeBuildInputs)
+  !(Presence [BS.ByteString]) deriving (Eq, Show)
+data NativeBuildInputs = NativeBuildInputs ![CompileGroup] ![NativeProvider]
+  !(Presence [NativeDependency]) ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
+  deriving (Eq, Show)
+data CompileGroup = SingleCompile !CompileInput | GroupCompile ![CompileInput] deriving (Eq, Show)
+data CompileInput = CompileInput !BS.ByteString !BS.ByteString ![BS.ByteString]
+  !(Presence BS.ByteString) !BS.ByteString !BS.ByteString ![(BS.ByteString,BS.ByteString)]
+  deriving (Eq, Show)
+data NativeProvider = NativeProvider !BS.ByteString ![BS.ByteString] !BS.ByteString
+  !BS.ByteString !BS.ByteString !CompileInput deriving (Eq, Show)
+data NativeLibrary = NativeLibrary !BS.ByteString ![BS.ByteString] !BS.ByteString
+  !BS.ByteString ![BS.ByteString] deriving (Eq, Show)
+data ArgumentBridge = ArgumentBridge !BS.ByteString !BS.ByteString !BS.ByteString
+  !BS.ByteString ![[BS.ByteString]] deriving (Eq, Show)
+data NativeDependency = NativeDependency !BS.ByteString !BS.ByteString !SourceIdentity
+  !BS.ByteString !BS.ByteString ![ArchiveProduct] ![NativeProduct] deriving (Eq, Show)
+data SourceIdentity = SourceIdentity !(Presence BS.ByteString) !(Presence [BS.ByteString])
+  !(Presence BS.ByteString) !(Presence BS.ByteString) !(Presence BS.ByteString)
+  !(Presence BS.ByteString) !(Presence [(BS.ByteString,Bool)]) !(Presence BS.ByteString)
+  !(Presence BS.ByteString) !(Presence BS.ByteString) deriving (Eq, Show)
+data ArchiveProduct = ArchiveProduct !BS.ByteString !BS.ByteString ![(BS.ByteString,BS.ByteString)] deriving (Eq, Show)
+data NativeProduct = NativeProduct !NativePiece !BS.ByteString deriving (Eq, Show)
+data NativePiece = NativePiece !BS.ByteString !BS.ByteString !BS.ByteString
+  !BS.ByteString !BS.ByteString !CompileInput deriving (Eq, Show)
+data NativeArchive = NativeArchive !Word64 !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString
+  ![EmittedCall] !(Presence BS.ByteString) ![BS.ByteString] !(Presence NativeLink)
+  !(Presence [EmittedCall]) !(Presence EntryResolution) deriving (Eq, Show)
+data EntryResolution = EntryResolution !Word64 !BS.ByteString !BS.ByteString
+  ![EntryClosure] !BS.ByteString ![BS.ByteString] deriving (Eq, Show)
+data EntryClosure = EntryClosure !BS.ByteString !BS.ByteString ![BS.ByteString] deriving (Eq, Show)
 data QualifiedName = QualifiedName !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString
   deriving (Eq, Show)
 data ForeignType = ForeignTyCon !QualifiedName ![ForeignType]

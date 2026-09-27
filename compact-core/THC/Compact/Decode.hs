@@ -84,11 +84,84 @@ inlineRepresentation decoder = do
 
 provenance :: Decoder -> Int -> Get ModuleProvenance
 provenance decoder slot = case slot of
+  0 -> ForeignLinkRecord <$> foreignLink decoder
   1 -> ImportsRecord <$> importProof decoder
   2 -> ImportsRecord <$> importProof decoder
   3 -> ExportsRecord <$> exports decoder
   4 -> RegistrationRecord <$> registration decoder
+  5 -> ScalarLinkRecord <$> scalarLink decoder
+  6 -> NativeLinkRecord <$> nativeLink decoder
+  7 -> NativeArchiveRecord <$> nativeArchive decoder
   _ -> fail "Unimplemented nonempty compact provenance record"
+
+foreignLink :: Decoder -> Get ForeignLink
+foreignLink decoder = ForeignLink <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> blob decoder <*> string decoder <*> list decoder (string decoder)
+  <*> list decoder pair <*> present (list decoder pair)
+  where pair = (,) <$> string decoder <*> string decoder
+
+linkPayload :: Decoder -> Get LinkPayload
+linkPayload decoder = LinkPayload <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> string decoder <*> blob decoder
+
+scalarLink :: Decoder -> Get ScalarLink
+scalarLink decoder = ScalarLink <$> linkPayload decoder <*> list decoder entry
+  where entry = ScalarABI <$> string decoder <*> string decoder <*> list decoder (string decoder) <*> string decoder
+
+blob :: Decoder -> Get BS.ByteString
+blob decoder = count decoder >>= getByteString
+
+nativeLink :: Decoder -> Get NativeLink
+nativeLink decoder = NativeLink <$> linkPayload decoder <*> list decoder entry
+  <*> present (nativeBuildInputs decoder) <*> present (list decoder (string decoder))
+  where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
+          <*> list decoder (string decoder) <*> string decoder
+
+nativeBuildInputs :: Decoder -> Get NativeBuildInputs
+nativeBuildInputs decoder = NativeBuildInputs <$> list decoder group <*> list decoder provider
+  <*> present (list decoder (nativeDependency decoder)) <*> list decoder library <*> strings <*> list decoder bridge
+  where
+    strings = list decoder (string decoder)
+    group = getWord8 >>= \kind -> case kind of
+      0 -> SingleCompile <$> compileInput decoder
+      1 -> GroupCompile <$> list decoder (compileInput decoder)
+      _ -> fail "Unknown native compilation group tag"
+    provider = NativeProvider <$> string decoder <*> strings <*> string decoder <*> string decoder
+      <*> string decoder <*> compileInput decoder
+    library = NativeLibrary <$> string decoder <*> strings <*> string decoder <*> string decoder <*> strings
+    bridge = ArgumentBridge <$> string decoder <*> string decoder <*> string decoder <*> string decoder
+      <*> list decoder strings
+
+compileInput :: Decoder -> Get CompileInput
+compileInput decoder = CompileInput <$> string decoder <*> string decoder <*> list decoder (string decoder)
+  <*> present (string decoder) <*> string decoder <*> string decoder
+  <*> list decoder ((,) <$> string decoder <*> string decoder)
+
+nativeDependency :: Decoder -> Get NativeDependency
+nativeDependency decoder = NativeDependency <$> string decoder <*> string decoder <*> sourceIdentity decoder
+  <*> string decoder <*> string decoder <*> list decoder archive <*> list decoder productRecord
+  where
+    archive = ArchiveProduct <$> string decoder <*> string decoder
+      <*> list decoder ((,) <$> string decoder <*> string decoder)
+    productRecord = NativeProduct <$> (NativePiece <$> string decoder <*> string decoder <*> string decoder
+      <*> string decoder <*> string decoder <*> compileInput decoder) <*> string decoder
+
+sourceIdentity :: Decoder -> Get SourceIdentity
+sourceIdentity decoder = SourceIdentity <$> optionalString <*> present (list decoder (string decoder))
+  <*> optionalString <*> optionalString <*> optionalString <*> optionalString
+  <*> present (list decoder ((,) <$> string decoder <*> boolean))
+  <*> optionalString <*> optionalString <*> optionalString
+  where optionalString = present (string decoder)
+
+nativeArchive :: Decoder -> Get NativeArchive
+nativeArchive decoder = NativeArchive <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> list decoder (emittedCall decoder) <*> present (string decoder)
+  <*> list decoder (string decoder) <*> present (nativeLink decoder)
+  <*> present (list decoder (emittedCall decoder)) <*> present entryResolution
+  where
+    entryResolution = EntryResolution <$> getUVar <*> string decoder <*> string decoder <*> list decoder entry
+      <*> string decoder <*> list decoder (string decoder)
+    entry = EntryClosure <$> string decoder <*> string decoder <*> list decoder (string decoder)
 
 qualifiedName :: Decoder -> Get QualifiedName
 qualifiedName decoder = QualifiedName <$> string decoder <*> string decoder <*> string decoder <*> string decoder

@@ -261,6 +261,99 @@ provenance :: ModuleProvenance -> Value
 provenance (ImportsRecord proof) = importProof proof
 provenance (ExportsRecord proof) = exports proof
 provenance (RegistrationRecord proof) = registration proof
+provenance (ForeignLinkRecord proof) = foreignLink proof
+provenance (ScalarLinkRecord proof) = scalarLink proof
+provenance (NativeLinkRecord proof) = nativeLink proof
+provenance (NativeArchiveRecord proof) = nativeArchive proof
+
+foreignLink :: ForeignLink -> Value
+foreignLink (ForeignLink schema format unit moduleName sourceSha bitcodeSha bytes target symbols abi headers) = object $
+  ["schema" .= schema,"format" .= str format,"unit" .= str unit,"module" .= str moduleName,
+   "sourceSha256" .= str sourceSha,"bitcodeSha256" .= str bitcodeSha,"bitcodeHex" .= hexBytes bytes,
+   "target" .= str target,"symbols" .= arr str symbols,"abi" .= arr (stringPair "symbol" "kind") abi]
+  ++ p "headerHashes" (arr (stringPair "name" "sha256")) headers
+
+linkPayload :: LinkPayload -> [Pair]
+linkPayload (LinkPayload schema format profile unit target componentSha bitcodeSha bytes) =
+  ["schema" .= schema,"format" .= str format,"profile" .= str profile,"unit" .= str unit,
+   "target" .= str target,"componentSha256" .= str componentSha,"bitcodeSha256" .= str bitcodeSha,
+   "bitcodeHex" .= hexBytes bytes]
+
+scalarLink :: ScalarLink -> Value
+scalarLink (ScalarLink payload abi) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+  where entry (ScalarABI symbol name arguments result) = object
+          ["symbol" .= str symbol,"entry" .= str name,"arguments" .= arr str arguments,"result" .= str result]
+
+stringPair :: Key.Key -> Key.Key -> (BS.ByteString,BS.ByteString) -> Value
+stringPair first second (a,b) = object [first .= str a,second .= str b]
+
+hexBytes :: BS.ByteString -> Value
+hexBytes = toJSON . concatMap (\byte -> let digits = showHex byte "" in replicate (2-length digits) '0' ++ digits) . BS.unpack
+
+nativeLink :: NativeLink -> Value
+nativeLink (NativeLink payload abi inputs entries) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+  ++ p "buildInputs" nativeBuildInputs inputs ++ p "availableEntries" (arr str) entries
+  where entry (NativeABI symbol name convention safety arguments result) = object
+          ["symbol" .= str symbol,"entry" .= str name,
+           "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
+           "safety" .= tagName ["unsafe","safe","interruptible"] safety,
+           "arguments" .= arr str arguments,"result" .= str result]
+
+nativeBuildInputs :: NativeBuildInputs -> Value
+nativeBuildInputs (NativeBuildInputs units providers dependencies libraries unresolved bridges) = object $
+  ["translationUnits" .= arr group units,"providers" .= arr provider providers,
+   "nativeLibraries" .= arr library libraries,"unresolved" .= arr str unresolved,"argumentBridges" .= arr bridge bridges]
+  ++ p "dependencies" (arr nativeDependency) dependencies
+  where
+    group (SingleCompile input) = compileInput input
+    group (GroupCompile inputs) = arr compileInput inputs
+    provider (NativeProvider name symbols path digest target input) = object
+      ["provider" .= str name,"symbols" .= arr str symbols,"bitcode" .= str path,
+       "bitcodeSha256" .= str digest,"target" .= str target,"inputs" .= compileInput input]
+    library (NativeLibrary name symbols compiler digest arguments) = object
+      ["provider" .= str name,"symbols" .= arr str symbols,"compiler" .= str compiler,
+       "compilerSha256" .= str digest,"arguments" .= arr str arguments]
+    bridge (ArgumentBridge profile source sourceSha inputSha definitions) = object
+      ["profile" .= str profile,"source" .= str source,"sourceSha256" .= str sourceSha,
+       "inputBitcodeSha256" .= str inputSha,"definitions" .= arr (arr str) definitions]
+
+compileInput :: CompileInput -> Value
+compileInput (CompileInput compiler clang arguments language nativeTarget target files) = object $
+  ["compiler" .= str compiler,"clang" .= str clang,"arguments" .= arr str arguments,
+   "nativeTarget" .= str nativeTarget,"target" .= str target,"files" .= arr (stringPair "path" "sha256") files]
+  ++ p "language" str language
+
+nativeDependency :: NativeDependency -> Value
+nativeDependency (NativeDependency profile unit source registrationText digest archives products) = object
+  ["profile" .= str profile,"unit" .= str unit,"sourceIdentity" .= sourceIdentity source,
+   "registration" .= str registrationText,"registrationSha256" .= str digest,
+   "archives" .= arr archive archives,"translationUnits" .= arr productRecord products]
+  where
+    archive (ArchiveProduct path hash members) = object
+      ["path" .= str path,"sha256" .= str hash,"members" .= arr (stringPair "name" "sha256") members]
+    productRecord (NativeProduct (NativePiece root path hash bitcode target input) bitcodeSha) = object
+      ["receipt" .= object ["root" .= str root,"object" .= str path,"objectSha256" .= str hash,
+         "bitcode" .= str bitcode,"target" .= str target,"inputs" .= compileInput input],"bitcodeSha256" .= str bitcodeSha]
+
+sourceIdentity :: SourceIdentity -> Value
+sourceIdentity (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha) = object $
+  p "id" str unit ++ p "depends" (arr str) depends ++ p "type" str kind ++ p "style" str style
+  ++ p "pkg-name" str name ++ p "pkg-version" str version
+  ++ p "flags" (object . map (\(key,value) -> Key.fromText (Text.decodeUtf8 key) .= value)) flags
+  ++ p "component-name" str component ++ p "pkg-src-sha256" str sourceSha ++ p "pkg-cabal-sha256" str cabalSha
+
+nativeArchive :: NativeArchive -> Value
+nativeArchive (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts resolution) = object $
+  ["schema" .= schema,"profile" .= str profile,"execution" .= str execution,"unit" .= str unit,
+   "module" .= str moduleName,"unsupportedImports" .= arr emittedCall unsupported,"unresolvedSymbols" .= arr str unresolved]
+  ++ p "unclassifiedReason" str reason ++ p "artifact" nativeLink artifact
+  ++ p "conflictingImports" (arr emittedCall) conflicts ++ p "entryResolution" entryResolution resolution
+  where
+    entryResolution (EntryResolution schema' profile' inputSha entries outputSha dependencies) = object
+      ["schema" .= schema',"profile" .= str profile',"inputBitcodeSha256" .= str inputSha,
+       "entries" .= arr entry entries,"outputBitcodeSha256" .= str outputSha,"unresolved" .= arr str dependencies]
+    entry (EntryClosure name digest unresolved') = object
+      ["entry" .= str name,"bitcodeSha256" .= str digest,"unresolved" .= arr str unresolved']
 
 qualifiedName :: QualifiedName -> Value
 qualifiedName (QualifiedName unit moduleName occurrence namespace) = object

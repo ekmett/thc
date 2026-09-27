@@ -220,11 +220,35 @@ semanticTests = TestList
           (parseModuleWithoutDebug (moduleJSON facts []))
         withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
           assertEqual "status/reason survive typed bytes" (Right facts) (decodeFacts bytes strings)
-  , TestLabel "unknown semantic JSON and nonempty provenance fail explicitly" $ TestCase $ do
+  , TestLabel "native link and partial archive records preserve exact typed provenance" $ TestCase $ do
+      let facts = completeFacts {factsPendingProvenance =
+            [Known (ForeignLinkRecord completeForeignLink),Missing,Missing,Missing,Missing,
+             Known (ScalarLinkRecord completeScalarLink),Known (NativeLinkRecord completeNativeLink),
+             Known (NativeArchiveRecord completeNativeArchive)]}
+      assertEqual "all original link inputs and rejected closure evidence survive JSON inspection"
+        (Right (facts,[])) (parseModuleWithoutDebug (moduleJSON facts []))
+      withEncoded (\_ encoder -> encodeFacts encoder facts) $ \payload strings bytes -> do
+        assertEqual "metadata-only link records have no executable body" BS.empty payload
+        assertEqual "native blob and every nested original recipe survive typed bytes" (Right facts) (decodeFacts bytes strings)
+        forM_ [0,BS.length bytes-1] $ \size ->
+          assertBool "truncated native record rejects" (isLeft (decodeFacts (BS.take size bytes) strings))
+  , TestLabel "native artifact conversion rejects malformed hex and unknown nested facts" $ TestCase $ do
+      let original = moduleJSON completeFacts {factsPendingProvenance =
+            [Missing,Missing,Missing,Missing,Missing,Known (ScalarLinkRecord completeScalarLink),Missing,Missing]} []
+          amend change = case original of
+            Object fields | Just (Object link) <- KM.lookup "packageScalarLink" fields ->
+              Object (KM.insert "packageScalarLink" (Object (change link)) fields)
+            _ -> original
+      forM_ ["0","gg","AF"] $ \bad ->
+        assertBool "noncanonical original bitcode hex rejected" (isLeft
+          (parseModuleWithoutDebug (amend (KM.insert "bitcodeHex" (String bad)))))
+      assertBool "unknown link fact never disappears" (isLeft
+        (parseModuleWithoutDebug (amend (KM.insert "inventedProof" (Bool True)))))
+  , TestLabel "unknown semantic JSON and malformed provenance fail explicitly" $ TestCase $ do
       let original = moduleJSON completeFacts [completeBinding]
           add key value = case original of Object fields -> Object (KM.insert key value fields); _ -> original
       assertBool "unknown operative field" (isLeft (parseModuleWithoutDebug (add "newSemanticFact" (Bool True))))
-      assertBool "not-yet-typed provenance" (isLeft (parseModuleWithoutDebug (add "packageNativeLink" (Object KM.empty))))
+      assertBool "missing required native provenance fields" (isLeft (parseModuleWithoutDebug (add "packageNativeLink" (Object KM.empty))))
       let badLiteral kind payload = case moduleJSON completeFacts [completeBinding] of
             Object fields -> case KM.lookup "bindings" fields of
               Just (Array bindings) -> Object (KM.insert "bindings" (toJSON (map (\value -> case value of
@@ -376,3 +400,39 @@ completeExports = Exports 1 "THC.Plugin/typeCheckResultAction" "static-export-as
 completeRegistration :: Registration
 completeRegistration = Registration 2 "retained-foreign-products" "not-linked"
   "ghc-9.14.1-thc-only-native-static-ccall-imports-v2" (RegistrationVerified [qualified] 64 originalProducts completeExports)
+
+completeForeignLink :: ForeignLink
+completeForeignLink = ForeignLink 3 "llvm-bitcode" "main" "Typed" "source-hash" "bitcode-hash"
+  (BS.pack [0,255,66,67,192]) "actual-target" ["clock","errno"] [("clock","time-clock-time"),("errno","errno")]
+  (Known [("HsTime.h","selected-header-hash")])
+
+completeLinkPayload :: LinkPayload
+completeLinkPayload = LinkPayload 1 "llvm-bitcode" "thc-package-c-ffi-v1" "main" "actual-target"
+  "actual-component-hash" "actual-bitcode-hash" (BS.pack [66,67,192,222,0,255])
+
+completeScalarLink :: ScalarLink
+completeScalarLink = ScalarLink completeLinkPayload [ScalarABI "original" "adapter" ["Int32Rep","DoubleRep"] "DoubleRep"]
+
+completeNativeLink :: NativeLink
+completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapter" CApi SafeCall ["AddrRep","IntRep"] "void"]
+  (Known (NativeBuildInputs [GroupCompile [input],SingleCompile input]
+    [NativeProvider "actual-provider" ["original"] "provider.bc" "provider-sha" "actual-target" input]
+    (Known [NativeDependency "resolved-c-only-archive-products-v1" "dependency"
+      (SourceIdentity (Known "dependency") (Known []) (Known "configured") (Known "global")
+        (Known "libyaml-clib") (Known "0.2.5") (Known [("external-libyaml",False)])
+        (Known "lib") (Known "source-sha") Unknown)
+      "actual registration\n" "registration-sha" [ArchiveProduct "lib.a" "archive-sha" [("api.o","object-sha")]]
+      [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]])
+    [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"]] ["unknown"]
+    [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
+  (Known ["adapter"])
+  where input = CompileInput "ghc" "clang" ["-c","api.c"] (Known "c") "native-target" "actual-target"
+          [("api.c","actual-source-sha"),("yaml.h","actual-header-sha")]
+
+completeNativeArchive :: NativeArchive
+completeNativeArchive = NativeArchive 1 "thc-package-native-archive-v1" "not-linked" "main" "Typed"
+  [call] Unknown ["unsupported"] (Known completeNativeLink) (Known [call,call])
+  (Known (EntryResolution 1 "llvm-globaldce-adapter-closures-v1" "input-hash"
+    [EntryClosure "adapter" "closure-hash" [],EntryClosure "bad_adapter" "failed-closure-hash" ["unsupported"]]
+    "output-hash" []))
+  where call = EmittedCall "original" (Known "main") CApi SafeCall ["AddrRep"] ["void"]

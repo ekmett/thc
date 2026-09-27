@@ -384,11 +384,146 @@ parseSafety = choice (zip ["unsafe","safe","interruptible"] [minBound..maxBound]
 
 provenance :: Int -> Value -> Parser ModuleProvenance
 provenance slot value = case slot of
+  0 -> ForeignLinkRecord <$> foreignLink value
   1 -> ImportsRecord <$> importProof value
   2 -> ImportsRecord <$> importProof value
   3 -> ExportsRecord <$> exports value
   4 -> RegistrationRecord <$> registration value
+  5 -> ScalarLinkRecord <$> scalarLink value
+  6 -> NativeLinkRecord <$> nativeLink value
+  7 -> NativeArchiveRecord <$> nativeArchive value
   _ -> fail "Unmapped nonempty compact provenance slot"
+
+foreignLink :: Value -> Parser ForeignLink
+foreignLink = withObject "CAPI linked artifact" $ \fields -> do
+  checked fields ["schema","format","unit","module","sourceSha256","bitcodeSha256","bitcodeHex",
+    "target","symbols","abi","headerHashes"]
+  ForeignLink <$> fields .: "schema" <*> bytesAt fields "format" <*> bytesAt fields "unit"
+    <*> bytesAt fields "module" <*> bytesAt fields "sourceSha256" <*> bytesAt fields "bitcodeSha256"
+    <*> (fields .: "bitcodeHex" >>= hexBytes) <*> bytesAt fields "target"
+    <*> (fields .: "symbols" >>= array bytes) <*> (fields .: "abi" >>= array (stringPair "symbol" "kind"))
+    <*> optional fields "headerHashes" (array (stringPair "name" "sha256"))
+
+linkPayloadKeys :: [Key.Key]
+linkPayloadKeys = ["schema","format","profile","unit","target","componentSha256","bitcodeSha256","bitcodeHex"]
+
+linkPayload :: Object -> Parser LinkPayload
+linkPayload fields = LinkPayload <$> fields .: "schema" <*> bytesAt fields "format" <*> bytesAt fields "profile"
+  <*> bytesAt fields "unit" <*> bytesAt fields "target" <*> bytesAt fields "componentSha256"
+  <*> bytesAt fields "bitcodeSha256" <*> (fields .: "bitcodeHex" >>= hexBytes)
+
+scalarLink :: Value -> Parser ScalarLink
+scalarLink = withObject "scalar linked artifact" $ \fields -> do
+  checked fields (linkPayloadKeys ++ ["abi"])
+  ScalarLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
+  where entry = withObject "scalar linked ABI" $ \fields -> do
+          checked fields ["symbol","entry","arguments","result"]
+          ScalarABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
+            <*> (fields .: "arguments" >>= array bytes) <*> bytesAt fields "result"
+
+stringPair :: Key.Key -> Key.Key -> Value -> Parser (BS.ByteString,BS.ByteString)
+stringPair first second = withObject "provenance pair" $ \fields -> do
+  checked fields [first,second]
+  (,) <$> bytesAt fields first <*> bytesAt fields second
+
+hexBytes :: Value -> Parser BS.ByteString
+hexBytes = withText "original artifact hex" $ \value -> do
+  let raw = Text.encodeUtf8 value
+  unless (even (BS.length raw) && BS.all valid raw) (fail "Malformed or noncanonical original artifact hex")
+  pure (BS.unfoldr step raw)
+  where
+    valid n = (n >= 48 && n <= 57) || (n >= 97 && n <= 102)
+    nibble n = if n <= 57 then n-48 else n-87
+    step raw | BS.null raw = Nothing
+             | otherwise = Just (16*nibble (BS.index raw 0)+nibble (BS.index raw 1),BS.drop 2 raw)
+
+nativeLink :: Value -> Parser NativeLink
+nativeLink = withObject "native linked artifact" $ \fields -> do
+  checked fields (linkPayloadKeys ++ ["abi","buildInputs","availableEntries"])
+  NativeLink <$> linkPayload fields <*> (fields .: "abi" >>= array entry)
+    <*> optional fields "buildInputs" nativeBuildInputs <*> optional fields "availableEntries" (array bytes)
+  where entry = withObject "native linked ABI" $ \fields -> do
+          checked fields ["symbol","entry","convention","safety","arguments","result"]
+          NativeABI <$> bytesAt fields "symbol" <*> bytesAt fields "entry"
+            <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
+            <*> (fields .: "arguments" >>= array bytes) <*> bytesAt fields "result"
+
+nativeBuildInputs :: Value -> Parser NativeBuildInputs
+nativeBuildInputs = withObject "native build inputs" $ \fields -> do
+  checked fields ["translationUnits","providers","dependencies","nativeLibraries","unresolved","argumentBridges"]
+  NativeBuildInputs <$> (fields .: "translationUnits" >>= array group) <*> (fields .: "providers" >>= array provider)
+    <*> optional fields "dependencies" (array nativeDependency) <*> (fields .: "nativeLibraries" >>= array library)
+    <*> (fields .: "unresolved" >>= array bytes) <*> (fields .: "argumentBridges" >>= array bridge)
+  where
+    group value@(Array _) = GroupCompile <$> array compileInput value
+    group value = SingleCompile <$> compileInput value
+    provider = withObject "native source provider" $ \fields -> do
+      checked fields ["provider","symbols","bitcode","bitcodeSha256","target","inputs"]
+      NativeProvider <$> bytesAt fields "provider" <*> (fields .: "symbols" >>= array bytes)
+        <*> bytesAt fields "bitcode" <*> bytesAt fields "bitcodeSha256" <*> bytesAt fields "target"
+        <*> (fields .: "inputs" >>= compileInput)
+    library = withObject "native library provider" $ \fields -> do
+      checked fields ["provider","symbols","compiler","compilerSha256","arguments"]
+      NativeLibrary <$> bytesAt fields "provider" <*> (fields .: "symbols" >>= array bytes)
+        <*> bytesAt fields "compiler" <*> bytesAt fields "compilerSha256" <*> (fields .: "arguments" >>= array bytes)
+    bridge = withObject "native argument bridge" $ \fields -> do
+      checked fields ["profile","source","sourceSha256","inputBitcodeSha256","definitions"]
+      ArgumentBridge <$> bytesAt fields "profile" <*> bytesAt fields "source" <*> bytesAt fields "sourceSha256"
+        <*> bytesAt fields "inputBitcodeSha256" <*> (fields .: "definitions" >>= array (array bytes))
+
+compileInput :: Value -> Parser CompileInput
+compileInput = withObject "native compilation inputs" $ \fields -> do
+  checked fields ["compiler","clang","arguments","language","nativeTarget","target","files"]
+  CompileInput <$> bytesAt fields "compiler" <*> bytesAt fields "clang" <*> (fields .: "arguments" >>= array bytes)
+    <*> optional fields "language" bytes <*> bytesAt fields "nativeTarget" <*> bytesAt fields "target"
+    <*> (fields .: "files" >>= array (stringPair "path" "sha256"))
+
+nativeDependency :: Value -> Parser NativeDependency
+nativeDependency = withObject "resolved native dependency" $ \fields -> do
+  checked fields ["profile","unit","sourceIdentity","registration","registrationSha256","archives","translationUnits"]
+  NativeDependency <$> bytesAt fields "profile" <*> bytesAt fields "unit" <*> (fields .: "sourceIdentity" >>= sourceIdentity)
+    <*> bytesAt fields "registration" <*> bytesAt fields "registrationSha256"
+    <*> (fields .: "archives" >>= array archive) <*> (fields .: "translationUnits" >>= array productRecord)
+  where
+    archive = withObject "native archive product" $ \fields -> do
+      checked fields ["path","sha256","members"]
+      ArchiveProduct <$> bytesAt fields "path" <*> bytesAt fields "sha256"
+        <*> (fields .: "members" >>= array (stringPair "name" "sha256"))
+    productRecord = withObject "native translation product" $ \fields -> do
+      checked fields ["receipt","bitcodeSha256"]
+      NativeProduct <$> (fields .: "receipt" >>= piece) <*> bytesAt fields "bitcodeSha256"
+    piece = withObject "native object receipt" $ \fields -> do
+      checked fields ["root","object","objectSha256","bitcode","target","inputs"]
+      NativePiece <$> bytesAt fields "root" <*> bytesAt fields "object" <*> bytesAt fields "objectSha256"
+        <*> bytesAt fields "bitcode" <*> bytesAt fields "target" <*> (fields .: "inputs" >>= compileInput)
+
+sourceIdentity :: Value -> Parser SourceIdentity
+sourceIdentity = withObject "resolved native source identity" $ \fields -> do
+  checked fields ["id","depends","type","style","pkg-name","pkg-version","flags","component-name","pkg-src-sha256","pkg-cabal-sha256"]
+  SourceIdentity <$> optional fields "id" bytes <*> optional fields "depends" (array bytes)
+    <*> optional fields "type" bytes <*> optional fields "style" bytes <*> optional fields "pkg-name" bytes
+    <*> optional fields "pkg-version" bytes <*> optional fields "flags" flags
+    <*> optional fields "component-name" bytes <*> optional fields "pkg-src-sha256" bytes <*> optional fields "pkg-cabal-sha256" bytes
+  where flags = withObject "Cabal configuration flags" $ \values ->
+          mapM (\(key,value) -> (,) (Text.encodeUtf8 (Key.toText key)) <$> parseJSON value) (KM.toList values)
+
+nativeArchive :: Value -> Parser NativeArchive
+nativeArchive = withObject "unlinked native archive" $ \fields -> do
+  checked fields ["schema","profile","execution","unit","module","unsupportedImports","unclassifiedReason",
+    "unresolvedSymbols","artifact","conflictingImports","entryResolution"]
+  NativeArchive <$> fields .: "schema" <*> bytesAt fields "profile" <*> bytesAt fields "execution"
+    <*> bytesAt fields "unit" <*> bytesAt fields "module" <*> (fields .: "unsupportedImports" >>= array emittedCall)
+    <*> optional fields "unclassifiedReason" bytes <*> (fields .: "unresolvedSymbols" >>= array bytes)
+    <*> optional fields "artifact" nativeLink <*> optional fields "conflictingImports" (array emittedCall)
+    <*> optional fields "entryResolution" resolution
+  where
+    resolution = withObject "native entry resolution" $ \fields -> do
+      checked fields ["schema","profile","inputBitcodeSha256","entries","outputBitcodeSha256","unresolved"]
+      EntryResolution <$> fields .: "schema" <*> bytesAt fields "profile" <*> bytesAt fields "inputBitcodeSha256"
+        <*> (fields .: "entries" >>= array entry) <*> bytesAt fields "outputBitcodeSha256" <*> (fields .: "unresolved" >>= array bytes)
+    entry = withObject "native entry closure" $ \fields -> do
+      checked fields ["entry","bitcodeSha256","unresolved"]
+      EntryClosure <$> bytesAt fields "entry" <*> bytesAt fields "bitcodeSha256" <*> (fields .: "unresolved" >>= array bytes)
 
 qualifiedName :: Value -> Parser QualifiedName
 qualifiedName = withObject "qualified foreign identity" $ \fields -> do

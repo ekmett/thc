@@ -139,11 +139,145 @@ inlineRep encoder (Rep layout state) = inlineShape layout >> evaluation encoder 
 
 provenance :: Encoder -> Int -> ModuleProvenance -> IO ()
 provenance encoder slot value = case (slot,value) of
+  (0,ForeignLinkRecord proof) -> foreignLink encoder proof
   (1,ImportsRecord proof) -> importProof encoder proof
   (2,ImportsRecord proof) -> importProof encoder proof
   (3,ExportsRecord proof) -> exports encoder proof
   (4,RegistrationRecord proof) -> registration encoder proof
+  (5,ScalarLinkRecord proof) -> scalarLink encoder proof
+  (6,NativeLinkRecord proof) -> nativeLink encoder proof
+  (7,NativeArchiveRecord proof) -> nativeArchive encoder proof
   _ -> fail "Unimplemented or mismatched compact provenance slot"
+
+foreignLink :: Encoder -> ForeignLink -> IO ()
+foreignLink encoder (ForeignLink schema format unit moduleName sourceSha bitcodeSha bytes target symbols abi headers) = do
+  number encoder schema
+  mapM_ (string encoder) [format,unit,moduleName,sourceSha,bitcodeSha]
+  blob encoder bytes
+  string encoder target
+  list encoder (string encoder) symbols
+  list encoder pair abi
+  present encoder (list encoder pair) headers
+  where pair (name,digest) = string encoder name >> string encoder digest
+
+linkPayload :: Encoder -> LinkPayload -> IO ()
+linkPayload encoder (LinkPayload schema format profile unit target componentSha bitcodeSha bytes) = do
+  number encoder schema
+  mapM_ (string encoder) [format,profile,unit,target,componentSha,bitcodeSha]
+  blob encoder bytes
+
+scalarLink :: Encoder -> ScalarLink -> IO ()
+scalarLink encoder (ScalarLink payload abi) = linkPayload encoder payload >> list encoder entry abi
+  where entry (ScalarABI symbol name arguments result) = do
+          string encoder symbol
+          string encoder name
+          list encoder (string encoder) arguments
+          string encoder result
+
+blob :: Encoder -> BS.ByteString -> IO ()
+blob encoder bytes = number encoder (fromIntegral (BS.length bytes)) >> emit encoder (putByteString bytes)
+
+nativeLink :: Encoder -> NativeLink -> IO ()
+nativeLink encoder (NativeLink payload abi inputs entries) = do
+  linkPayload encoder payload
+  list encoder entry abi
+  present encoder (nativeBuildInputs encoder) inputs
+  present encoder (list encoder (string encoder)) entries
+  where entry (NativeABI symbol name convention safety arguments result) = do
+          string encoder symbol
+          string encoder name
+          enumeration encoder convention
+          enumeration encoder safety
+          list encoder (string encoder) arguments
+          string encoder result
+
+nativeBuildInputs :: Encoder -> NativeBuildInputs -> IO ()
+nativeBuildInputs encoder (NativeBuildInputs units providers dependencies libraries unresolved bridges) = do
+  list encoder group units
+  list encoder provider providers
+  present encoder (list encoder (nativeDependency encoder)) dependencies
+  list encoder library libraries
+  strings unresolved
+  list encoder bridge bridges
+  where
+    strings = list encoder (string encoder)
+    group (SingleCompile input) = tag encoder 0 >> compileInput encoder input
+    group (GroupCompile inputs) = tag encoder 1 >> list encoder (compileInput encoder) inputs
+    provider (NativeProvider name symbols path digest target input) = do
+      string encoder name
+      strings symbols
+      mapM_ (string encoder) [path,digest,target]
+      compileInput encoder input
+    library (NativeLibrary name symbols compiler digest arguments) = do
+      string encoder name
+      strings symbols
+      string encoder compiler
+      string encoder digest
+      strings arguments
+    bridge (ArgumentBridge profile source sourceSha inputSha definitions) = do
+      mapM_ (string encoder) [profile,source,sourceSha,inputSha]
+      list encoder strings definitions
+
+compileInput :: Encoder -> CompileInput -> IO ()
+compileInput encoder (CompileInput compiler clang arguments language nativeTarget target files) = do
+  string encoder compiler
+  string encoder clang
+  list encoder (string encoder) arguments
+  present encoder (string encoder) language
+  string encoder nativeTarget
+  string encoder target
+  list encoder (\(path,digest) -> string encoder path >> string encoder digest) files
+
+nativeDependency :: Encoder -> NativeDependency -> IO ()
+nativeDependency encoder (NativeDependency profile unit source registrationText digest archives products) = do
+  string encoder profile
+  string encoder unit
+  sourceIdentity encoder source
+  string encoder registrationText
+  string encoder digest
+  list encoder archive archives
+  list encoder productRecord products
+  where
+    archive (ArchiveProduct path hash members) = do
+      string encoder path
+      string encoder hash
+      list encoder (\(name,value) -> string encoder name >> string encoder value) members
+    productRecord (NativeProduct (NativePiece root path hash bitcode target input) bitcodeSha) = do
+      mapM_ (string encoder) [root,path,hash,bitcode,target]
+      compileInput encoder input
+      string encoder bitcodeSha
+
+sourceIdentity :: Encoder -> SourceIdentity -> IO ()
+sourceIdentity encoder (SourceIdentity unit depends kind style name version flags component sourceSha cabalSha) = do
+  optionalString unit
+  present encoder (list encoder (string encoder)) depends
+  mapM_ optionalString [kind,style,name,version]
+  present encoder (list encoder (\(key,value) -> string encoder key >> boolean encoder value)) flags
+  mapM_ optionalString [component,sourceSha,cabalSha]
+  where optionalString = present encoder (string encoder)
+
+nativeArchive :: Encoder -> NativeArchive -> IO ()
+nativeArchive encoder (NativeArchive schema profile execution unit moduleName unsupported reason unresolved artifact conflicts resolution) = do
+  number encoder schema
+  mapM_ (string encoder) [profile,execution,unit,moduleName]
+  list encoder (emittedCall encoder) unsupported
+  present encoder (string encoder) reason
+  list encoder (string encoder) unresolved
+  present encoder (nativeLink encoder) artifact
+  present encoder (list encoder (emittedCall encoder)) conflicts
+  present encoder entryResolution resolution
+  where
+    entryResolution (EntryResolution schema' profile' inputSha entries outputSha dependencies) = do
+      number encoder schema'
+      string encoder profile'
+      string encoder inputSha
+      list encoder entry entries
+      string encoder outputSha
+      list encoder (string encoder) dependencies
+    entry (EntryClosure name digest unresolved') = do
+      string encoder name
+      string encoder digest
+      list encoder (string encoder) unresolved'
 
 qualifiedName :: Encoder -> QualifiedName -> IO ()
 qualifiedName encoder (QualifiedName unit moduleName occurrence namespace) =

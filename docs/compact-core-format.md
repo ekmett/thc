@@ -2,9 +2,9 @@
 
 This is the shared version 1 wire contract under implementation. Framing,
 integer primitives, scoped assembly, typed executable/header records and explicit
-flat-JSON conversion and optional name/source maps have native controls. Four
-module-level provenance families and complete runtime integration are not yet
-complete.
+flat-JSON conversion and optional name/source maps have native controls. All eight
+module-level foreign provenance families have typed codecs. Complete runtime
+integration remains in progress.
 Existing JSON and unit-directory routes remain available and unchanged.
 
 ## Assembly and addressing
@@ -253,13 +253,11 @@ list(Constructor), p(ForeignArtifacts), p(ForeignExceptionBridge),
 p(str foreignExceptionBridgeUnit)`, then eight typed optional provenance fields:
 `foreignLink`, `staticForeignImportStubs`, `staticForeignImports`,
 `staticForeignExports`, `staticForeignExportRegistration`, `packageScalarLink`,
-`packageNativeLink`, `packageNativeArchive`, in that order. The initial header
-tranche implements the import/stub, export and registration payloads below.
-Known `foreignLink`, `packageScalarLink`, `packageNativeLink` and
-`packageNativeArchive` records still reject until their typed payload schemas
-are implemented; missing/null remain distinct in every slot. The converter does
-not omit, guess or hide those records in JSON text. This is a conversion
-limitation, not permission to execute a module without its original admission facts.
+`packageNativeLink`, `packageNativeArchive`, in that order. Their typed payload
+schemas are specified below; missing/null remain distinct in every slot. The
+converter rejects unknown fields instead of omitting, guessing or hiding them
+in JSON text. These records preserve original admission facts; their presence
+does not replace existing ABI, ownership or native-access checks.
 
 `TargetLayout` carries `u documentSchema`, then four compiler strings (`id`,
 `abi`, `platform`, `way`), then `u layoutSchema, b profiled, u wordBytes,
@@ -350,6 +348,63 @@ ForeignArtifacts expectedForeign, Exports expectedExports`. Retained product
 and export-inventory equality remain the existing admission rules; encoding
 these records does not grant new foreign execution authority.
 
+### Linked and archived native products
+
+`blob` is `u byteLength` followed by those raw bytes. Original canonical
+lowercase `bitcodeHex` is decoded to this blob, not UTF-8 or optional debug;
+the inspector reconstructs its exact hex representation. Hash strings remain
+the original producer evidence, never rewritten by conversion.
+
+`foreignLink` uses `u schema, str format, str unit, str module, str sourceSha256,
+str bitcodeSha256, blob, str target, list(str) symbols, list(SymbolKind) abi,
+p(list(HeaderHash)) headerHashes`. `SymbolKind` is `str symbol, str kind`;
+`HeaderHash` is `str name, str sha256`.
+
+`LinkPayload` is `u schema, str format, str profile, str unit, str target,
+str componentSha256, str bitcodeSha256, blob`.
+`packageScalarLink` is `LinkPayload, list(ScalarABI)`; `ScalarABI` is
+`str symbol, str entry, list(str) arguments, str result`.
+`packageNativeLink` is `LinkPayload, list(NativeABI), p(NativeBuildInputs),
+p(list(str)) availableEntries`. `NativeABI` is `str symbol, str entry,
+Convention, Safety, list(str) arguments, str result`.
+
+`NativeBuildInputs` is `list(CompileGroup) translationUnits,
+list(NativeProvider), p(list(NativeDependency)), list(NativeLibrary),
+list(str) unresolved, list(ArgumentBridge)`.
+`CompileGroup` tag 0 carries one `CompileInput`; tag 1 carries
+`list(CompileInput)`, preserving original wrapper groups versus individual C
+translation units. `CompileInput` is `str compiler, str clang, list(str)
+arguments, p(str language), str nativeTarget, str target, list(FileHash)`.
+`FileHash` is `str path, str sha256`.
+`NativeProvider` is `str provider, list(str) symbols, str bitcode,
+str bitcodeSha256, str target, CompileInput`.
+`NativeLibrary` is `str provider, list(str) symbols, str compiler,
+str compilerSha256, list(str) arguments`.
+`ArgumentBridge` is `str profile, str source, str sourceSha256,
+str inputBitcodeSha256, list(list(str)) definitions`.
+
+`NativeDependency` is `str profile, str unit, SourceIdentity,
+str registration, str registrationSha256, list(ArchiveProduct),
+list(NativeProduct)`.
+`SourceIdentity` is `p(str id), p(list(str)) depends, p(str type),
+p(str style), p(str pkg-name), p(str pkg-version), p(list(Flag)) flags,
+p(str component-name), p(str pkg-src-sha256), p(str pkg-cabal-sha256)`;
+`Flag` is `str name, b enabled`, ordered by name with no duplicate names.
+`ArchiveProduct` is `str path, str sha256, list(HeaderHash) members`.
+`NativeProduct` is `NativePiece, str bitcodeSha256`; `NativePiece` is
+`str root, str object, str objectSha256, str bitcode, str target, CompileInput`.
+These preserve actual resolved C-only unit and archive membership evidence.
+
+`packageNativeArchive` is `u schema, str profile, str execution, str unit,
+str module, list(EmittedCall) unsupportedImports, p(str unclassifiedReason),
+list(str) unresolvedSymbols, p(NativeLink) artifact,
+p(list(EmittedCall)) conflictingImports, p(EntryResolution)`.
+`EntryResolution` is `u schema, str profile, str inputBitcodeSha256,
+list(EntryClosure), str outputBitcodeSha256, list(str) unresolved`;
+`EntryClosure` is `str entry, str bitcodeSha256, list(str) unresolved`.
+Failed full links and successful selected closures remain separate records;
+conversion neither promotes archives to executable products nor changes recipes.
+
 ### Optional debug tables
 
 The following table grammar is implemented by the optional-debug producer.
@@ -414,10 +469,10 @@ cabal run exe:thc-compact -- name Module.thcc 0 0
 
 Normal encoding preserves supplied original names and source notes, recording
 origins while semantic records are emitted. The explicit `--without-debug` option
-omits those maps. Unknown semantic fields and
-known values in the four remaining unmapped provenance slots fail conversion. Header
-constructors, target-layout facts, foreign artifacts and exception-bridge facts
-are typed; the original JSON remains the reference path for other modules.
+omits those maps. Unknown semantic fields and malformed provenance fail conversion.
+Header constructors, target-layout facts, foreign artifacts, native-link recipes
+and exception-bridge facts are typed. Linked bitcode is stored as raw bytes and
+reconstructed as canonical hexadecimal by the JSON inspector.
 The converter is not yet a default project-publication path.
 
 `decode` is an explicit full-module semantic inspection, separate from runtime
