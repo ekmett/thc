@@ -2161,14 +2161,16 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false) : ExecutableProgram {
+    override val asynchronousExceptions get() = enableAsync
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val demand = moduleData["demandBindings"] as? CoreDemandBindings
     private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
     private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
-    private val metrics = Metrics(moduleData["instrument"] != false)
+    private val metrics = demand?.metrics ?: Metrics(moduleData["instrument"] != false)
     private val loadingStatistics = moduleData["coreLoadingStatistics"] as? (() -> Map<String, Any>)
     private val delimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
         val body = (binding as? Map<*, *>)?.get("expr")
@@ -2212,20 +2214,22 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val deferredUnsupported = linkedSetOf<String>()
     private val bindings = moduleData["bindings"] as? List<Map<String, Any?>> ?: throw RuntimeFault("Missing bindings")
     private val constructors = (moduleData["constructors"] as? List<Map<String, Any?>> ?: emptyList()).associateBy { it["id"] as String }
-    private val dataLayouts = mutableMapOf<String, DataLayout>()
+        .let { demand?.constructors(it) ?: it }
+    private val dataLayouts = demand?.layouts ?: mutableMapOf<String, DataLayout>()
     private val globals = bindings.associate { it["id"] as String to GlobalBinding(it["name"] as String) }
+        .let { demand?.globals(it) ?: it }
     private val globalProofs = bindings.associate { binding ->
         val expression = binding["expr"] as List<Any?>
         val delayed = representation(binding) && expression[0] !in listOf("lam", "lit", "con", "void")
         (binding["id"] as String) to if (diagnosticUnsupported) CoreRepresentation.UNKNOWN
-            else CoreRepresentations.binder(binding).copy(evaluated = !delayed && expression[0] in listOf("lam", "lit", "con", "void"))
+            else CoreRepresentations.binder(binding).copy(evaluated = demand == null && !delayed && expression[0] in listOf("lam", "lit", "con", "void"))
     }
     private val indices = bindings.withIndex().associate { it.value["id"] as String to it.index }
     private val names = bindings.withIndex().groupBy({ it.value["name"] as String }, { it.index })
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
-    private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors)
+    private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors, demand)
     init {
         if (enableAsync && delimited)
             throw UnsupportedCore("Delimited continuations do not yet preserve AST async captures")
@@ -2233,7 +2237,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         for (binding in bindings) {
             // Strict global initialization retains its original scheduling.
             val source = binding["expr"] as? thc.CoreBindingBody
-            if (source == null || !representation(binding) || source.header.tag in listOf("lit", "con", "void")) {
+            if ((source == null && demand == null) || !representation(binding) ||
+                demand == null && source?.header?.tag in listOf("lit", "con", "void")) {
                 eager += binding
                 continue
             }
@@ -2295,7 +2300,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return withSource(sources.binding(binding)) {
             val expr = binding["expr"] as List<Any?>
             CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
-            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
+            if (demand != null && !representation(binding) && expr[0] !in listOf("lit", "void"))
+                throw UnsupportedCore("Demand loading does not yet support effectful strict global initialization")
+            if (representation(binding) && (expr[0] !in listOf("lam", "lit", "con", "void") || demand != null && expr[0] != "lam")) delay(expr, scope, binding["name"] as String)
             else argument(expr, scope, representation(binding), binding["name"] as String)
         }
     }
@@ -2304,7 +2311,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         ?: throw RuntimeFault("Unknown or ambiguous entry $name")
     @Synchronized override fun hostEntryTarget(arity: Int): RootCallTarget =
         hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
-    override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
+    override fun entryValue(name: String): Any? = if (name !in indices && demand?.contains(name) == true)
+        globals.getValue(name).read() else globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
     override fun constructorLayout(id: String): DataLayout = dataLayout(id)
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
@@ -2491,7 +2499,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val arityCertificate = headId?.let { id ->
             if (id in scope.locals) scope.locals.getValue(id).arityCertificate else globalArityCertificates[id]
         }
-        if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate))
+        val unopenedHead = headId != null && headId !in scope.locals && headId !in globalArityCertificates && demand?.contains(headId) == true
+        if (!unopenedHead && CoreApplicationCertificates.eagerApplication(expr, arityCertificate))
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
@@ -2552,7 +2561,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
-            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
+            val occurrence = CoreRepresentations.expression(expr)
+            val proof = scope.locals[id]?.proof ?: globalProofs[id] ?: demand?.occurrence(id, occurrence)
+            CoreVectors.requireVariableProof(proof, occurrence)
             scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
                 ?: scope.locals[id]?.let {
                     if (it.tupleSlots != null) {
@@ -2563,7 +2574,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     else if (it.slot < 0 && it.proof.kind == CoreKind.VOID) Literal(Unit).proven(it.proof)
                     else LocalRead(it.slot, it.cell).proven(it.proof)
                 }
-                ?: globals[id]?.let { GlobalRead(it).proven(globalProofs.getValue(id)) }
+                ?: globals[id]?.let { GlobalRead(it).proven(proof ?: globalProofs.getValue(id)) }
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {

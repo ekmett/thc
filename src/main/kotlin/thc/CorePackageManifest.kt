@@ -188,8 +188,9 @@ object CorePackageManifest {
         require(document["format"] == "thc-core-packages" && document["schema"] == 1L &&
             document["ghc"] == "9.14.1") { "Core package manifest requires schema 1 / GHC 9.14.1: $path" }
         val units = document["units"] as? List<*> ?: error("Missing package units: $path")
-        val indexed = units.any { unit -> ((unit as? Map<*, *>)?.get("modules") as? List<*>)
-            ?.any { (it as? Map<*, *>)?.containsKey("index") == true } == true }
+        val indexed = units.any { unit -> (unit as? Map<*, *>)?.let { record ->
+            record.containsKey("json") || record.containsKey("symbols") ||
+                (record["modules"] as? List<*>)?.any { (it as? Map<*, *>)?.containsKey("index") == true } == true } == true }
         if (!indexed && !forceDescriptor) return null
         val bridge = document["foreignExceptionBridgeUnit"]
         require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }

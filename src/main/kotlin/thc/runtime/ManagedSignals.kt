@@ -159,12 +159,7 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     @Synchronized fun bind(program: ExecutableProgram) {
         current()
         if (closed || binding != null) fault("Process signal dispatcher already bound")
-        val async = when (program) {
-            is Program -> program.enableAsync
-            is BytecodeProgram -> program.enableAsync
-            else -> false
-        }
-        if (!async) fault("Process signal delivery requires asyncExceptions=true")
+        if (!program.asynchronousExceptions) fault("Process signal delivery requires asyncExceptions=true")
         binding = SignalDispatchRoot(language, program)
     }
     private fun current() {

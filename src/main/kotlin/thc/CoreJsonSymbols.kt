@@ -57,7 +57,8 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
     private var closed = false
     private var directory: Mapping? = null
     private var source: Mapping? = null
-    private val selected = HashMap<String, Result<Map<String, Any?>?>>()
+    private data class Selected(val start: Long, val end: Long, val binding: Map<String, Any?>)
+    private val selected = HashMap<String, Result<Selected?>>()
     private val modules = HashMap<ModuleSpan, Result<Map<String, Any?>>>()
 
     fun statistics() = counters.statistics()
@@ -155,7 +156,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         return null
     }
 
-    private fun decode(id: String, start: Long): Map<String, Any?> {
+    private fun decode(id: String, start: Long): Selected {
         val mapped = source()
         require(start in 0 until mapped.size && sourceByte(mapped, start) == 123) {
             "Core symbol does not point to a binding object: $id at $start"
@@ -183,7 +184,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         counters.decodedBindings++; counters.decodedBytes += length
         val binding = parseObject(bytes)
         require(binding["id"] == id) { "Core symbol directory identity mismatch: $id" }
-        return binding
+        return Selected(start, at, binding)
     }
 
     private fun parseObject(bytes: ByteArray): Map<String, Any?> {
@@ -237,12 +238,13 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
 
     /** Cache only requested bindings/errors. No cold row is decoded to populate
      * this cache. Cancellation is a caller event, not a shared format failure. */
-    fun binding(id: String): Map<String, Any?>? = synchronized(counters) {
+    fun binding(id: String, module: ModuleSpan? = null): Map<String, Any?>? = synchronized(counters) {
         check(!closed) { "Core symbol source is closed" }
-        selected[id]?.let { return@synchronized it.getOrThrow() }
-        val result = cacheable { lookup(id)?.let { decode(id, it) } }
-        selected[id] = result
-        result.getOrThrow()
+        val result = selected.getOrPut(id) { cacheable { lookup(id)?.let { decode(id, it) } } }.getOrThrow()
+        if (module != null && result != null) require(result.start > module.bindingsStart && result.end < module.bindingsEnd) {
+            "Core symbol lies outside its declared module: $id"
+        }
+        result?.binding
     }
 
     override fun close(): Unit = synchronized(counters) {

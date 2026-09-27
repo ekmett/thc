@@ -16,7 +16,8 @@ internal object CoreInputCalls {
      * can walk one demanded body at a time. No callee body is traversed merely
      * to index its binding header; known input proofs still resolve normally. */
     fun validator(bindings: List<Map<String, Any?>>,
-                  constructors: Map<String, Map<String, Any?>> = emptyMap()): (List<Map<String, Any?>>) -> Unit {
+                  constructors: Map<String, Map<String, Any?>> = emptyMap(),
+                  demand: CoreDemandBindings? = null): (List<Map<String, Any?>>) -> Unit {
         val globals = bindings.associateBy { it["id"] as String }
         fun inputs(expr: List<Any?>, scope: Map<String, Binding>, seen: Set<String> = emptySet()): List<CoreRepresentation>? = when (expr[0]) {
             "lam" -> (expr[1] as List<Map<String, Any?>>).map(CoreRepresentations::binder)
@@ -47,21 +48,12 @@ internal object CoreInputCalls {
                 "app" -> {
                     val fn = expr[1] as List<Any?>
                     val args = expr[2] as List<List<Any?>>
-                    inputs(fn, scope)?.let { signature ->
-                        for (i in 0 until minOf(signature.size, args.size)) {
-                            val actual = proof(args[i], scope)
-                            val expected = signature[i]
-                            if (expected.isTuple || actual.isTuple) {
-                                if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
-                                    throw UnsupportedCore("Missing or conflicting exact tuple argument proof")
-                            } else if (expected.isVector || actual.isVector) {
-                                if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))
-                                    throw UnsupportedCore("Missing or conflicting exact vector argument proof")
-                            } else if (expected.isSum || actual.isSum) {
-                                if (!expected.isSum || !actual.isSum || !TupleShape.compatible(expected, actual))
-                                    throw UnsupportedCore("Missing or conflicting exact sum argument proof")
-                            }
-                        }
+                    val signature = inputs(fn, scope)
+                    val actual = args.map { proof(it, scope) }
+                    if (signature != null) requireArguments(signature, actual)
+                    else if (fn.firstOrNull() == "var") {
+                        val id = fn[1] as String
+                        if (id !in scope && id !in globals && demand?.contains(id) == true) demand.call(id, actual)
                     }
                     visit(fn, scope); args.forEach { visit(it, scope) }
                 }
@@ -110,5 +102,22 @@ internal object CoreInputCalls {
             }
         }
         return { requested -> requested.forEach { visit(it["expr"] as List<Any?>, emptyMap()) } }
+    }
+
+    internal fun requireArguments(signature: List<CoreRepresentation>, arguments: List<CoreRepresentation>) {
+        for (i in 0 until minOf(signature.size, arguments.size)) {
+            val actual = arguments[i]
+            val expected = signature[i]
+            if (expected.isTuple || actual.isTuple) {
+                if (!expected.isTuple || !actual.isTuple || !TupleShape.compatible(expected, actual))
+                    throw UnsupportedCore("Missing or conflicting exact tuple argument proof")
+            } else if (expected.isVector || actual.isVector) {
+                if (!expected.isVector || !actual.isVector || !TupleShape.compatible(expected, actual))
+                    throw UnsupportedCore("Missing or conflicting exact vector argument proof")
+            } else if (expected.isSum || actual.isSum) {
+                if (!expected.isSum || !actual.isSum || !TupleShape.compatible(expected, actual))
+                    throw UnsupportedCore("Missing or conflicting exact sum argument proof")
+            }
+        }
     }
 }
