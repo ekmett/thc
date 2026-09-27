@@ -222,28 +222,27 @@ The latter builds, updates, queries and folds a histogram using the actual
 
 ## Performance
 
-The recorded Map comparisons are encouraging: about **1.19 times native GHC's
-elapsed time** on both an ARM64 Mac and an x86-64 Linux machine. These are
-warmed-up results for one workload, not a claim about arbitrary Haskell.
-The [entry-contract report](docs/entry-contracts.md) describes the measurements;
-[retained runs and graph reports](docs/README.md#performance-and-runtime-design)
-include the inputs, variation and remaining costs.
-
-Constructor layouts belong to their generated storage classes where possible.
-With compact headers, a Map `Bin` is 32 bytes and an `I#` is 16 bytes. The
-[class-owned layout experiment](bench/results/class-owned-layouts/) records the
-allocation comparison. Compact headers are the default; the reports document
-controls for that and the opt-in storage experiments.
+Use native-GHC comparisons and compiler graphs to evaluate the workloads and
+configurations you intend to run. Typed runtime storage and successful guest
+compilation do not by themselves establish allocation removal or a speedup.
 
 ```sh
-scripts/benchmark.sh
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh
+scripts/benchmark.sh work/bench-kernels
+THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-map
 THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-ast
 ```
 
-Run the corresponding `try` script first. Benchmarks vary their inputs, consume
-the results, warm the JVM and compare against native GHC. Graph capture is a
-separate run.
+Run the corresponding `try` script first and choose an unused output directory:
+the scripts overwrite files in the supplied directory. Benchmarks vary their
+inputs, consume the results, warm the JVM and compare against native GHC. Graph capture is a
+separate run. Diagnostic Map execution does not establish strict support for
+its entire dependency closure.
+
+[Historical kernel and Map investigations](research/performance-reports.md)
+retain the recorded timings, object-size measurements, variation and compiler
+artifacts. Those results apply to their frozen builds, not every program or the
+current checkout. The [current runtime guides](docs/README.md#performance-and-runtime-design)
+describe implemented protocols and opt-in experiments.
 
 ## Finding your way around
 
@@ -257,7 +256,8 @@ separate run.
 * [`scripts/`](scripts/) contains build, audit, benchmark and graph drivers.
 * [The architecture guide](docs/architecture.md) describes the current system
   and planned work. [The documentation index](docs/README.md) groups coverage
-  and design reports; [`research/`](research/) preserves the earlier proposals.
+  and design reports; [`research/`](research/) preserves historical proposals
+  and investigations.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the mixed Java/Kotlin reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).

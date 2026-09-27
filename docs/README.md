@@ -130,27 +130,18 @@ unproved.
 
 ## Performance and runtime design
 
-The recorded Map measurements are workload-specific. The controlled ARM64 run
-reduced bytecode time from 2.36 ms to 1.52 ms against native GHC's 1.28 ms. The
-matched Linux i9-12900K run measured 1.60 ms against 1.34 ms. Both are about
-1.19 times GHC's elapsed cost. Each retained report records warmup, process
-variation and native correctness checks; these are not general Haskell timings.
+These guides describe current mechanisms and their limits. A source-level
+representation change is not evidence of a particular allocation or throughput
+result; use matched measurements and actual compiler output for that question.
 
-* [Entry contracts and type preservation](entry-contracts.md), with the
-  [controlled local runs](../bench/results/constructor-class/powered-default/),
-  [hosted runs](../bench/results/hosted-2026-09-23/) and
-  [Linux runs](../bench/results/castlemeadow-2026-09-23/).
-* [Class-owned layouts](../bench/results/class-owned-layouts/): allocation,
-  compact headers, retained graphs and comparison switches.
-* [Typed execution and tail cycles](typed-tail.md), [call boundaries](call-boundaries.md),
-  [call packets](call-packets.md), [dense handoff](handoff-slabs.md) and
-  [Map inlining](map-inlining.md).
-* [Laziness and thunk updates](thunk-updates.md), [boxed values](boxed-values.md)
-  and [demand probes](demand-probe.md).
-* [Bytecode backend](bytecode.md), [source locations](debug-locations.md),
-  [graph inspection](graph-inspection.md) and [kernel measurements](prototype-results.md).
-* [Current architecture and planned work](architecture.md), the preserved
-  [2026-09-22 proposal](../research/architecture-2026-09-22.md), and
+* [Entry contracts and type preservation](entry-contracts.md),
+  [typed execution and tail cycles](typed-tail.md) and
+  [residual call boundaries](call-boundaries.md).
+* [Dense scalar handoff](handoff-slabs.md), [laziness and thunk updates](thunk-updates.md),
+  [boxed-value controls](boxed-values.md) and [caller-demand controls](demand-probe.md).
+* [Bytecode backend](bytecode.md), [source locations](debug-locations.md) and
+  [graph inspection tooling and captures](graph-inspection.md).
+* [Current architecture and planned work](architecture.md) and
   [development checks](contributing.md).
 
 Runtime experiments are opt-in except compact headers and class-owned layouts.
@@ -158,6 +149,12 @@ Runtime experiments are opt-in except compact headers and class-owned layouts.
 `-Pthc.compactObjectHeaders=false` disables compact headers for Gradle launches.
 The controlled benchmark also accepts `-XX:-UseCompactObjectHeaders` for a
 matched header-off run. Keep graph capture separate from timed measurements.
+
+[Historical performance and compiler investigations](../research/performance-reports.md)
+retain the old kernel snapshots, Map measurements, rejected candidates and exact
+graph evidence. Their counts and ratios are not a current test inventory or a
+performance promise. The earlier [architecture proposal](../research/architecture-2026-09-22.md)
+is preserved separately from the current design.
 
 ## Project integration
 
