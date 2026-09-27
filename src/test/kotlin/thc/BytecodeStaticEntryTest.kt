@@ -57,7 +57,7 @@ class BytecodeStaticEntryTest {
     @Test fun staticLocalAndOperationsEnterColdCompiledCodeThenRetainSourceReplayAndCloneMetadata() = withLanguage { language ->
         var sourceReads = 0
         val metrics = Metrics(true)
-        val certificate = BytecodeStaticLocal(FrameSlotKind.Long)
+        val certificate = FrameSlotKind.Long
         val nodes = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
             if (b.isParsingSources()) {
                 sourceReads++
@@ -105,7 +105,7 @@ class BytecodeStaticEntryTest {
     @Test fun realIngressChecksWrongCarriersAndExistingAdaptiveWritesStillWiden() = withLanguage { language ->
         val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
             b.beginRoot()
-            val local = b.createLocal("initial long", BytecodeStaticLocal(FrameSlotKind.Long))
+            val local = b.createLocal("initial long", FrameSlotKind.Long)
             b.beginStaticStoreLong(local); b.emitLoadArgument(0); b.endStaticStoreLong()
             // Deliberately model an uncertified writer: ordinary DSL widening is retained.
             b.beginStoreLocal(local); b.emitLoadArgument(1); b.endStoreLocal()
@@ -124,6 +124,17 @@ class BytecodeStaticEntryTest {
     }
 
     @Test fun compilerCertifiesOnlyExactWideSingleWriteFormalsAndKeepsAsyncAndLazyInputsGeneric() = withLanguage { language ->
+        for (marker in listOf(FrameSlotKind.Int, FrameSlotKind.Object, "primitive", null)) {
+            val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                b.beginRoot()
+                val local = b.createLocal("unapproved marker", marker)
+                b.beginStoreLocal(local); b.emitLoadArgument(0); b.endStoreLocal()
+                b.beginReturn(); b.emitLoadLocal(local); b.endReturn(); b.endRoot()
+            }.getNode(0)
+            compile(root.callTarget)
+            assertEquals(FrameSlotKind.Illegal, root.bytecodeNode.locals.single().typeProfile,
+                "Only the explicitly approved singleton may initialize a local: $marker")
+        }
         fun program(rep: Map<String, Any?>, lifted: Boolean, async: Boolean): BytecodeProgram {
             val binder = mapOf("id" to "x", "name" to "x", "rep" to rep, "lifted" to lifted)
             val expression = listOf("lam", listOf(binder), listOf("var", "x", mapOf("rep" to rep)),
@@ -134,12 +145,12 @@ class BytecodeStaticEntryTest {
         }
         val wide = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
         val selected = program(wide, false, false).entryTarget("f").rootNode as BytecodeRoot
-        assertTrue(selected.bytecodeNode.locals.any { it.info is BytecodeStaticLocal })
+        assertTrue(selected.bytecodeNode.locals.any { it.info === FrameSlotKind.Long })
         for ((rep, lifted, async) in listOf(Triple(wide, false, true),
             Triple(mapOf("kind" to "unknown", "evaluated" to false), true, false),
             Triple(mapOf("kind" to "long", "primReps" to listOf("Int32Rep"), "evaluated" to true), false, false))) {
             val root = program(rep, lifted, async).entryTarget("f").rootNode as BytecodeRoot
-            assertTrue(root.bytecodeNode.locals.none { it.info is BytecodeStaticLocal })
+            assertTrue(root.bytecodeNode.locals.none { it.info === FrameSlotKind.Long })
         }
     }
 }

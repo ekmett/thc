@@ -498,7 +498,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     local in context.arguments && staticWideLong(local.proof)
                 val info = if (staticallyStored) {
                     e.staticLocals += local.id
-                    BytecodeStaticLocal(FrameSlotKind.Long)
+                    FrameSlotKind.Long
                 } else if (local.primitive) "primitive" else "object"
                 e.locals[local.id] = b.createLocal(local.name, info)
             }
