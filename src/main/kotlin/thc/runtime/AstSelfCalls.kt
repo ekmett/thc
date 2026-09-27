@@ -121,7 +121,8 @@ internal class AstTailApplication(function: Expr, arguments: Array<Expr>,
 
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
         val fn = function.executeRequiredClosure(frame)
-        if (fn.arity == operands.size && fn.supplied.size == suppliedCount && selfTarget.matches(fn.target)) {
+        if ((rootNode as? FunctionRoot)?.role != FunctionRootRole.PASS_THROUGH &&
+            fn.arity == operands.size && fn.supplied.size == suppliedCount && selfTarget.matches(fn.target)) {
             // Save all operands before enforcing CBV or replacing any lexical slot.
             for (operand in operands) operand.write(frame)
             for (index in 0 until suppliedCount) FrameAccess.write(frame, temporaries[index], fn.supplied[index])
