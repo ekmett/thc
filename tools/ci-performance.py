@@ -253,7 +253,8 @@ def check_configuration(out, java, name, compact_control=None):
         classpath.append(str(frozen / runtime / 'tools/thc-tools.jar'))
     command = [java, '-XX:+UseCompactObjectHeaders', '--enable-native-access=ALL-UNNAMED', '-Xss2m', *POLICY, *flags,
                '-Dthc.backend=bytecode', '-Dthc.diagnosticUnsupported=true', '-Dthc.sourceNotesEnabled=true',
-               '-Dthc.traceCompilation=true', '-cp', os.pathsep.join(classpath), 'thc.MapCheckKt',
+               '-Dthc.traceCompilation=true', '-cp', os.pathsep.join(classpath),
+               'thc.MapCheck' if runtime == 'current' else 'thc.MapCheckKt',
                frozen / 'map/modules.txt', frozen / 'map/oracle.tsv']
     log = run(out, command, 'check-' + name + suffix, 600)
     lines = log.read_text().splitlines()
@@ -303,6 +304,7 @@ def compare(out, name, java_home):
     command += ['--baseline-jvm-option=' + flag for flag in POLICY + baseline_flags]
     command += ['--candidate-jvm-option=' + flag for flag in POLICY + candidate_flags]
     for side, runtime in (('baseline', baseline), ('candidate', candidate)):
+        command += ['--' + side + '-probe-class', 'thc.Probe' if runtime == 'current' else 'thc.ProbeKt']
         if runtime == 'current':
             command += ['--' + side + '-tools-jar', frozen / runtime / 'tools/thc-tools.jar']
     run(out, command, 'compare-' + name, 3000)

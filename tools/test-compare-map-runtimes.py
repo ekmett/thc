@@ -39,6 +39,13 @@ class CompactHeaderDefaultsTest(unittest.TestCase):
             self.assertEqual(select(options), options)
 
     def test_separate_tools_jar_is_in_the_frozen_command_and_hashes(self):
+        self.check_frozen_commands([], 'thc.Probe', 'thc.Probe')
+
+    def test_historical_probe_entrypoint_is_explicit_not_inferred(self):
+        self.check_frozen_commands(['--baseline-probe-class', 'thc.ProbeKt'], 'thc.ProbeKt', 'thc.Probe')
+        self.check_frozen_commands(['--candidate-probe-class', 'thc.CustomProbe'], 'thc.Probe', 'thc.CustomProbe')
+
+    def check_frozen_commands(self, probe_options, baseline_class, candidate_class):
         class ConfigRecorded(Exception):
             pass
         with tempfile.TemporaryDirectory() as directory:
@@ -65,7 +72,7 @@ class CompactHeaderDefaultsTest(unittest.TestCase):
                     ('baseline', 'candidate', 'native', 'modules.txt', 'out')),
                     '--java-home', str(root / 'java'), '--baseline-commit', 'historical',
                     '--candidate-source-dir', str(root / 'source'),
-                    '--candidate-tools-jar', str(root / 'tools/thc-tools.jar')]
+                    '--candidate-tools-jar', str(root / 'tools/thc-tools.jar'), *probe_options]
             with patch('sys.argv', argv), patch.dict(harness['main'].__globals__, write_json=capture), \
                  self.assertRaises(ConfigRecorded):
                 harness['main']()
@@ -76,6 +83,8 @@ class CompactHeaderDefaultsTest(unittest.TestCase):
                 classpath = argv[argv.index('-cp') + 1].split(os.pathsep)
                 tools = str(root / 'tools/thc-tools.jar')
                 self.assertEqual(tools in classpath, command['engine'] == 'candidate')
+                self.assertEqual(argv[argv.index('-cp') + 2],
+                                 baseline_class if command['engine'] == 'baseline' else candidate_class)
             self.assertIn({'path': str(root / 'tools/thc-tools.jar'),
                            'sha256': harness['sha256'](root / 'tools/thc-tools.jar')},
                           recorded['provenance']['runtimeJars']['candidate'])
