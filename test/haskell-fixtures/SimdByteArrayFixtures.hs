@@ -326,6 +326,25 @@ mutationControls family root attempt audit stage core = do
 first4 :: (a,b,c,d) -> a
 first4 (value,_,_,_) = value
 
+-- Remove only the added license and module-documentation headers. Keep every
+-- other byte, including LANGUAGE pragmas, for comparison with the frozen source
+-- digest; changes to the fixture itself must still invalidate that evidence.
+retainedFixtureBody :: Family -> BS.ByteString -> Maybe BS.ByteString
+retainedFixtureBody family current = do
+  body <- BS.stripPrefix "-- SPDX-FileCopyrightText: 2026 Edward Kmett\n-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause\n\n" current
+  let name = BSC.pack (moduleName family)
+      marker = "\n-- |\n-- Module      : " <> name <> "\n"
+      (before, documentation) = BS.breakSubstring marker body
+  if BS.null documentation then pure body else do
+    let (comments, declaration) = BS.breakSubstring "\nmodule " documentation
+    if all commentLine (BSC.lines (BS.drop 1 comments)) &&
+       ("\nmodule " <> name <> " where\n") `BS.isPrefixOf` declaration
+      then pure (before <> BS.drop 1 declaration)
+      else Nothing
+  where
+    commentLine line = (line == "--" || "-- " `BS.isPrefixOf` line) &&
+      BS.all (\byte -> byte == 9 || byte >= 32) line
+
 retainedControls :: Family -> FilePath -> FilePath -> Audit -> IO (Value,[CommandResult],[FilePath],[FilePath])
 retainedControls family root attempt audit = do
   let base = "bench/experiments" </> familyName family </> "evidence-x86_64"
@@ -341,10 +360,10 @@ retainedControls family root attempt audit = do
     let fixture = "compiler/test-fixtures" </> moduleName family ++ ".hs"
         wanted = [string (get "sha256" item) | item <- items (get "sources" source),get "path" item == toJSON fixture]
     current <- BS.readFile (root </> fixture)
-    let header = "-- SPDX-FileCopyrightText: 2026 Edward Kmett\n-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause\n\n"
-        path = attempt </> "retained-original-source.hs"
-    check (header `BS.isPrefixOf` current && length wanted == 1) "Retained fixture source provenance missing"
-    BS.writeFile (root </> path) (BS.drop (BS.length header) current)
+    let path = attempt </> "retained-original-source.hs"
+    check (length wanted == 1) "Retained fixture source provenance missing"
+    original <- maybe (die "Retained fixture source headers malformed") pure (retainedFixtureBody family current)
+    BS.writeFile (root </> path) original
     digest <- hashFile (root </> path)
     check (wanted == [digest]) "Retained original fixture body changed"
   stages <- forM ["pre","post"] $ \stage -> do
