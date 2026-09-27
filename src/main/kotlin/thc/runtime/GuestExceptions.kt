@@ -164,7 +164,7 @@ internal class CatchException(private val shape: TupleShape,
     private class CatchScope(private val node: CatchException, private val handler: Any?,
                              private val steps: List<AstResumeStep>) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? =
-            node.protect(frame, handler) { resumeAstSteps(frame, steps, input) }
+            node.protect(frame, handler) { AstContinuationKt.resumeAstSteps(frame, steps, input) }
     }
 
     private fun runHandler(frame: VirtualFrame, handlerValue: Any?, payload: Any?): Any? {
@@ -191,7 +191,7 @@ internal class CatchException(private val shape: TupleShape,
 private class AstMaskScope(private val node: Node, private val prior: MaskingState,
                            private val steps: List<AstResumeStep>) : AstResumeStep {
     override fun resume(frame: VirtualFrame, input: Any?): Any? =
-        withAstMaskRestore(node, prior) { resumeAstSteps(frame, steps, input) }
+        withAstMaskRestore(node, prior) { AstContinuationKt.resumeAstSteps(frame, steps, input) }
 }
 
 private inline fun withAstMaskRestore(node: Node, prior: MaskingState, body: () -> Any?): Any? {

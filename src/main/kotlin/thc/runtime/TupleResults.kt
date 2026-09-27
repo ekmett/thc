@@ -184,7 +184,7 @@ internal abstract class TupleDestination(val shape: TupleShape) {
 internal class AstTupleDestination(shape: TupleShape,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray, private val offset: Int) : TupleDestination(shape) {
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
-        val answer = try { AstControl.complete(node, result, tupleShape = shape) }
+        val answer = try { AstControl.complete(node, result, null, shape) }
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? {
@@ -260,7 +260,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
     private val prefixCount = function.suppliedCount
     private val formalLayout = (target.rootNode as? GuestRoot)?.inputLayout
     private val hasEnvironment = function.environment != null
-    @Child private var entry = EntryArguments(target, metrics, prefixSize = prefixCount)
+    @Child private var entry = EntryArguments(target, metrics, booleanArrayOf(), prefixCount)
     @Child private var call = DirectCallNode.create(target)
     @Child private var tailCheck = TailCheck(metrics)
     @Child private var bounce = TupleBounce(destination, metrics)

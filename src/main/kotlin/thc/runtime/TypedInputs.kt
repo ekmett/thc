@@ -771,7 +771,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
                           private val steps: List<AstResumeStep>) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
             var suspended = false
-            try { return resumeAstSteps(frame, steps, input) }
+            try { return AstContinuationKt.resumeAstSteps(frame, steps, input) }
             catch (cut: AstCapture) {
                 suspended = true
                 throw cut.enclose { remaining -> Cleanup(owner, remaining) }

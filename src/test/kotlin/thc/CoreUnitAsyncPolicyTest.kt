@@ -174,7 +174,7 @@ class CoreUnitAsyncPolicyTest {
                     assertSame(closure, program.entryValue("uB:B.function"))
                     assertEquals(2L, count(program, "coreUnitDecodedBindings"))
                     assertEquals(0, output.size())
-                    val saved = savedGuestContinuation(Calls.target(closure.target, arrayOf(0L, 1L)))!!
+                    val saved = SavedGuestContinuationKt.savedGuestContinuation(Calls.target(closure.target, arrayOf(0L, 1L)))!!
                     assertSame(pending, saved.asyncRequest())
                     assertEquals(AsyncRequestState.CLAIMED, pending.state)
                     assertEquals(0, output.size(), "pending delivery precedes the function effect")
