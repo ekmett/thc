@@ -20,6 +20,9 @@
 #if !defined(THC_JSON_SCALAR_ONLY) && (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
 #include <immintrin.h>
 #define THC_AVX2 1
+#ifdef _WIN32
+#include <cpuid.h>
+#endif
 #endif
 #if !defined(THC_JSON_SCALAR_ONLY) && defined(__aarch64__) && defined(__ARM_NEON) && !defined(__AARCH64EB__)
 #include <arm_neon.h>
@@ -37,8 +40,23 @@ int thc_json_backend_available(int backend) {
     case THC_JSON_AUTO: case THC_JSON_SCALAR: return 1;
     case THC_JSON_AVX2:
 #ifdef THC_AVX2
+#ifdef _WIN32
+    {
+        /* GHC's vanilla Windows plugin loader cannot resolve compiler-rt's
+         * __cpu_indicator_init/__cpu_model helpers. Query the same CPU/OS
+         * requirements directly, without adding an AVX target to this code. */
+        unsigned a, b, c, d;
+        const unsigned required = bit_XSAVE | bit_OSXSAVE | bit_AVX;
+        if (!__get_cpuid(1, &a, &b, &c, &d) || (c & required) != required) return 0;
+        /* OSXSAVE makes XGETBV legal. XMM and YMM state must both be enabled. */
+        __asm__ volatile ("xgetbv" : "=a" (a), "=d" (d) : "c" (0));
+        if ((a & 6u) != 6u) return 0;
+        return __get_cpuid_count(7, 0, &a, &b, &c, &d) && (b & bit_AVX2) != 0;
+    }
+#else
         __builtin_cpu_init();
         return __builtin_cpu_supports("avx2") != 0;
+#endif
 #else
         return 0;
 #endif
