@@ -95,6 +95,8 @@
     "ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask",
     "__hscore_sizeof_stat",
     "__hscore_fstat",
+    "mkdir",
+    "chmod",
     "__hscore_stat",
     "__hscore_lstat",
     "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat",

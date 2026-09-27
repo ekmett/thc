@@ -354,14 +354,18 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
-    if "build/original-path-stat" in group["outputs"]:
+    for output, validator in (
+            ("build/original-path-stat", fast_inputs.original_path_stat_artifact_hashes),
+            ("build/original-path-mode", fast_inputs.original_path_mode_artifact_hashes)):
+        if output not in group["outputs"]:
+            continue
         # Native pathname scratch includes symlinks and is deliberately not a
-        # reusable fixture. Preserve the existing POSIX-stat output inventory.
-        remaining = [name for name in group["outputs"] if name != "build/original-path-stat"]
+        # reusable fixture. Preserve the other POSIX fixture output inventories.
+        remaining = [name for name in group["outputs"] if name != output]
         result = _output_hashes(root, {"outputs": remaining}) if remaining else {}
         if platform.system() == "Linux":
-            name = "build/original-path-stat/manifest.json"
-            expected = fast_inputs.original_path_stat_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+            name = output + "/manifest.json"
+            expected = validator(json.loads(fast_inputs.file_path(root, name).read_text()))
             result.update(_manifest_output_hashes(root, name, expected))
         return result
     if group["outputs"] == ["build/text-cbits"]:
@@ -620,7 +624,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat"):
+        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):

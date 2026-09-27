@@ -75,6 +75,13 @@ ORIGINAL_PATH_STAT_OUTPUTS = frozenset("build/original-path-stat/" + name for na
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_STAT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
+ORIGINAL_PATH_MODE_ENTRIES = ("pathMkdir", "pathChmod")
+ORIGINAL_PATH_MODE_OUTPUTS = frozenset("build/original-path-mode/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_PATH_MODE_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_MODE_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
@@ -403,6 +410,7 @@ REQUIRED = tuple(sorted({
     *PROXY_VOID_OUTPUTS,
     *UNIX_LIBC_OUTPUTS,
     *(ORIGINAL_PATH_STAT_OUTPUTS if platform.system() == "Linux" else []),
+    *(ORIGINAL_PATH_MODE_OUTPUTS if platform.system() == "Linux" else []),
     *BYTESTRING_SORT_OUTPUTS,
     *BYTESTRING_DECIMAL_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
@@ -424,7 +432,7 @@ REQUIRED = tuple(sorted({
     *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
@@ -1242,6 +1250,21 @@ def original_path_stat_artifact_hashes(manifest):
     return artifacts
 
 
+def original_path_mode_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and manifest.get("unixUnit") == "unix-2.8.8.0-inplace" and
+            manifest.get("entries") == list(ORIGINAL_PATH_MODE_ENTRIES) and
+            manifest.get("installedArtifactsHashed") is False,
+            "Invalid original path mode fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_PATH_MODE_OUTPUTS - {"build/original-path-mode/manifest.json"},
+            "Incomplete/unreviewed original path mode artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original path mode artifact hash")
+    return artifacts
+
+
 def command(argv, root):
     return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
 
@@ -1503,6 +1526,8 @@ def allowed_payload(name, pins):
         return name in UNIX_LIBC_OUTPUTS
     if parts[1] == "original-path-stat":
         return name in ORIGINAL_PATH_STAT_OUTPUTS
+    if parts[1] == "original-path-mode":
+        return name in ORIGINAL_PATH_MODE_OUTPUTS
     if parts[1] == "proxy-void":
         return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":
@@ -1765,6 +1790,8 @@ def inventory(root, current, read, core_files, verified=None):
             memory_search_artifact_hashes(doc)
         if name == "build/original-path-stat/manifest.json":
             original_path_stat_artifact_hashes(doc)
+        if name == "build/original-path-mode/manifest.json":
+            original_path_mode_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
         if name == "build/rts-shutdown/manifest.json":

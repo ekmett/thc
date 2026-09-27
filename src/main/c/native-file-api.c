@@ -80,6 +80,18 @@ int64_t thc_file_open_raw(int *lease, const char *path, int flags, uint32_t mode
   return fd < 0 ? -1 : 0;
 }
 
+int64_t thc_file_mkdir(const char *path, uint32_t mode, int64_t *error) {
+  int result = mkdir(path, (mode_t)mode);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_chmod(const char *path, uint32_t mode, int64_t *error) {
+  int result = chmod(path, (mode_t)mode);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
 int64_t thc_file_unlink(const char *path, int64_t *error) {
   int result = unlink(path);
   *error = result < 0 ? errno : 0;
