@@ -17,7 +17,7 @@ module THC.Driver.Installed
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
   , emptyRegistration, modulelessRegistration
-  , boundedInterfaceProcess
+  , boundedInterfaceProcess, boundedInterfaceProcessInput
   ) where
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
@@ -439,10 +439,14 @@ required value name = maybe (fail ("missing/invalid helper field " ++ name)) pur
 
 -- Full Core stdout can be tens of megabytes. Keep its UTF-8 bytes instead of
 -- building a linked-list String and encoding it back to bytes for Aeson. Drain
--- stderr concurrently even when a helper emits more than a pipe buffer, and
--- retain the existing empty-stdin, timeout, UTF-8 rejection and child cleanup.
+-- both outputs concurrently even while sending a request larger than a pipe
+-- buffer. Preserve timeout, UTF-8 rejection and child cleanup. JSON requests
+-- are bytes too: a locale-encoded String pipe cannot carry every Windows path.
 boundedInterfaceProcess :: FilePath -> [String] -> IO (ExitCode, BS.ByteString, BS.ByteString)
-boundedInterfaceProcess executable arguments = do
+boundedInterfaceProcess executable arguments = boundedInterfaceProcessInput executable arguments BS.empty
+
+boundedInterfaceProcessInput :: FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcessInput executable arguments request = do
   inherited <- getEnvironment
   let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
       commandLine = (proc executable arguments)
@@ -450,23 +454,25 @@ boundedInterfaceProcess executable arguments = do
       execute = withCreateProcess commandLine $ \input output diagnostic child ->
         case (input, output, diagnostic) of
           (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
-            hClose stdinPipe
+            hSetBinaryMode stdinPipe True
             hSetBinaryMode stdoutPipe True
             hSetBinaryMode stderrPipe True
-            let startReader = mask_ $ do
+            let startReader pipe = mask_ $ do
                   result <- newEmptyMVar :: IO (MVar (Either SomeException BS.ByteString))
                   thread <- forkIOWithUnmask $ \unmask ->
-                    try (unmask (BS.hGetContents stderrPipe)) >>= putMVar result
+                    try (unmask (BS.hGetContents pipe)) >>= putMVar result
                   pure (thread, result)
                 stopReader (thread, result) = killThread thread >> void (readMVar result)
-            bracket startReader stopReader $ \(_, result) -> do
-              out <- BS.hGetContents stdoutPipe
-              err <- readMVar result >>= either throwIO pure
-              status <- waitForProcess child
-              -- The previous text Handle rejected invalid UTF-8 even on
-              -- otherwise successful output. Do not relax that protocol.
-              forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
-              pure (status, out, err)
+            bracket (startReader stdoutPipe) stopReader $ \(_, outputResult) ->
+              bracket (startReader stderrPipe) stopReader $ \(_, diagnosticResult) -> do
+                BS.hPut stdinPipe request `finally` hClose stdinPipe
+                out <- readMVar outputResult >>= either throwIO pure
+                err <- readMVar diagnosticResult >>= either throwIO pure
+                status <- waitForProcess child
+                -- The previous text Handle rejected invalid UTF-8 even on
+                -- otherwise successful output. Do not relax that protocol.
+                forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
+                pure (status, out, err)
           _ -> fail "installed-Core helper pipes were unavailable"
   result <- timeout (180 * 1000000) execute
   maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result

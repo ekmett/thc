@@ -25,7 +25,7 @@ import System.Directory (createDirectory, doesFileExist, getTemporaryDirectory, 
 import System.Environment (getExecutablePath)
 import System.Exit (ExitCode(..), exitWith)
 import System.FilePath ((</>))
-import System.IO (hClose, openTempFile, stderr, stdout)
+import System.IO (hClose, hSetBinaryMode, openTempFile, stdin, stderr, stdout)
 import System.Timeout (timeout)
 import Test.HUnit (Test(..), assertBool, assertEqual, assertFailure)
 import THC.Driver.Installed
@@ -35,6 +35,13 @@ import THC.Driver.Installed
 -- exercise the unchanged package-cache and strict-audit contracts.
 helperMode :: [String] -> Maybe (IO ())
 helperMode arguments = case arguments of
+  ["--binary-input-fixture"] -> Just $ do
+    mapM_ (`hSetBinaryMode` True) [stdin, stdout, stderr]
+    -- Fill both output pipes before consuming a request larger than stdin's
+    -- pipe buffer. The parent must drain them while it writes the request.
+    BS.hPut stdout pipePayload
+    BS.hPut stderr pipePayload
+    BS.hGetContents stdin >>= BS.hPut stdout
   "--global" : _ -> Just $ readFile (option "--package-db" </> "registration") >>= putStr
   "--libdir" : _ -> Just $ do
     let directory = option "--libdir"
@@ -76,6 +83,9 @@ helperMode arguments = case arguments of
 identifier :: String
 identifier = "thc-hydration-fixture-0.1"
 
+pipePayload :: BS.ByteString
+pipePayload = BS.replicate (1024 * 1024) 120
+
 awaitFile :: FilePath -> IO ()
 awaitFile path = do
   found <- timeout 5000000 loop
@@ -109,7 +119,13 @@ fixture names action = do
 
 tests :: Test
 tests = TestLabel "bounded installed-interface hydration" $ TestList
-  [ TestCase $ fixture ["A", "B", "C", "D"] $ \directory context unit -> do
+  [ TestCase $ do
+      executable <- getExecutablePath
+      let request = BL.toStrict (encode (replicate (256 * 1024) '\x03bb'))
+      response <- timeout 5000000 (boundedInterfaceProcessInput executable ["--binary-input-fixture"] request)
+      assertEqual "binary Unicode input and both large outputs make progress without locale conversion"
+        (Just (ExitSuccess, pipePayload <> request, pipePayload)) response
+  , TestCase $ fixture ["A", "B", "C", "D"] $ \directory context unit -> do
       serial <- acquireInstalledWithJobs 1 context unit
       forM_ ["A", "B", "C", "D"] $ \name -> do
         removeFile (directory </> name ++ ".started")

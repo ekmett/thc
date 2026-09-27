@@ -313,6 +313,33 @@ when using the example's 24-GiB heap limit.
 All four scalar helpers match their native oracle in interpreted CLI execution
 on both AST/bytecode and default/dense handoff modes.
 
+## Native component inventory checks
+
+The driver canonicalizes all component output roots before assigning native
+objects or discovering home interfaces, including mixed separator and `.`
+aliases. A more-specific component root retains ownership of its artifacts.
+Discovered module names only become Haskell inventory after the selected GHC
+reads each real binary interface and checks its unit, module and way.
+
+With the pinned native toolchain on PATH, the focused checks are:
+
+~~~powershell
+cabal test driver-tests --disable-shared -fdevelopment -j2 --test-options=--native-recipe-only --test-show-details=direct
+cabal test driver-tests --disable-shared -fdevelopment -j2 --test-options=--installed-hydration-only --test-show-details=direct
+~~~
+
+The recipe tests use an explicit `component café λ` directory, including the
+absolute canonical interface path in both JSON request and response. Helper
+pipes carry UTF-8 bytes independently of the host code page; hydration controls
+also exercise concurrent pipe draining, cancellation and invalid UTF-8 rejection.
+These are driver and binary-interface checks, not full-Core or JVM execution.
+
+Native GHC 9.14.1 on the tested Windows host replaces `λ` in an absolute
+`-outputdir` argument with `?`. The real-interface fixture therefore compiles
+with relative `-outputdir dist` inside the Unicode working directory, then
+verifies the full absolute Unicode path through the helper. Arbitrary Unicode
+compiler command-line arguments remain a separate upstream toolchain boundary.
+
 ## Current boundaries
 
 This is a bounded native Windows gate, not full parity with Linux/macOS or the

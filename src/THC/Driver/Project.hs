@@ -1973,11 +1973,12 @@ completeHomeModules context roots unit component = do
                  | (name, path) <- selected]
       require (length names == length (nub names)) "ambiguous compiler-discovered home module interfaces"
       unless (null selected) $ do
-        (status, output, diagnostic) <- readCreateProcessWithExitCode
-          (proc (installedHelper helper) ["--home-interface-inventory", installedLibdir helper, unitId unit, way])
-          (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode rows))))
-        require (status == ExitSuccess) ("home interface identity check failed: " ++ take 4096 diagnostic)
-        response <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+        (status, output, diagnostic) <- boundedInterfaceProcessInput
+          (installedHelper helper) ["--home-interface-inventory", installedLibdir helper, unitId unit, way]
+          (BL.toStrict (encode rows))
+        require (status == ExitSuccess)
+          ("home interface identity check failed: " ++ take 4096 (Text.unpack (Text.decodeUtf8 diagnostic)))
+        response <- either fail pure (eitherDecodeStrict' output)
         require (jsonField response "schema" == Just (1 :: Int) &&
                  jsonField response "status" == Just ("home-interfaces" :: String) &&
                  jsonField response "unit" == Just (unitId unit) &&

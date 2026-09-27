@@ -15,9 +15,10 @@ module NativeRecipeTests (tests, interfaceTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_)
-import Data.Aeson (Value(..), object, (.=), encode, toJSON)
+import Data.Aeson (Value(..), object, (.=), encode, eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString as BS
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import Data.Either (isLeft)
@@ -32,6 +33,7 @@ import System.IO.Error (tryIOError)
 import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.NativeRecipe
+import THC.Driver.Installed (boundedInterfaceProcessInput)
 import THC.Driver.ScalarBitcode (withScalarBitcode)
 import THC.Driver.RuntimeShim (withRuntimeShim)
 
@@ -383,9 +385,10 @@ interfaceTests = TestLabel "compiler-discovered home interface identity" $ TestC
     libdir <- case lines libOutput of
       [path] -> pure path
       _ -> fail "selected GHC did not return one libdir"
-    let probe :: String -> String -> String -> FilePath -> IO (ExitCode, String, String)
-        probe owner name way path = call helper ["--home-interface-inventory",libdir,owner,way]
-          (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode [object ["unit" .= owner,"module" .= name,"interface" .= path]]))))
+    let rows owner name path = [object ["unit" .= (owner :: String),"module" .= (name :: String),"interface" .= path]]
+        probe :: String -> String -> String -> FilePath -> IO (ExitCode, BS.ByteString, BS.ByteString)
+        probe owner name way path = boundedInterfaceProcessInput helper ["--home-interface-inventory",libdir,owner,way]
+          (BL.toStrict (encode (rows owner name path)))
     assertEqual "unlisted Haskell object remains native until identity is checked" [output] =<<
       componentNativeObjects native dist [dist] component
     assertEqual "candidate is scoped to its actual output layout" [("vanilla","Unlisted",iface)] =<<
@@ -405,7 +408,12 @@ interfaceTests = TestLabel "compiler-discovered home interface identity" $ TestC
         assertEqual "canonical interface symlinks cannot escape the component"
           [("vanilla","Unlisted",iface)] =<< componentHomeInterfaces dist [dist] component
         removeFile (dist </> "Alias.hi")
-    probe "home-proof" "Unlisted" "vanilla" iface >>= success "actual home identity"
+    (identityStatus, inventory, identityDiagnostic) <- probe "home-proof" "Unlisted" "vanilla" iface
+    assertEqual ("actual home identity: " ++ Text.unpack (Text.decodeUtf8 identityDiagnostic)) ExitSuccess identityStatus
+    assertEqual "helper preserves the complete canonical Unicode inventory"
+      (Right (object ["schema" .= (1 :: Int), "status" .= ("home-interfaces" :: String),
+        "unit" .= ("home-proof" :: String), "way" .= ("vanilla" :: String),
+        "interfaces" .= rows "home-proof" "Unlisted" iface])) (eitherDecodeStrict' inventory)
     forM_ [("other-unit","Unlisted","vanilla"), ("home-proof","Other","vanilla"),
            ("home-proof","Unlisted","dynamic")] $ \(owner,name,way) -> do
       (status,_,_) <- probe owner name way iface
