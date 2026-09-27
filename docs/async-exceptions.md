@@ -28,10 +28,11 @@ external sends and delivery to non-resumable children before enqueueing.
 Nested entry does not upgrade a thread lifetime
 that was registered without external delivery support.
 
-Disabled-mode self-delivery also reaches a live delimited `catch#` when prompts
-are present. Crossing an already-saved multi-shot continuation is different:
-its saved catch frames do not handle the async-origin request. See
-[delimited continuations](delimited-continuations.md) for that boundary.
+Disabled-mode self-delivery also reaches live and saved delimited `catch#`
+frames. Each resumption keeps its own one-shot request; the reusable frame image
+does not clone or acknowledge it. The reached handler acknowledges the original
+request without forcing its payload. This does not enable external asynchronous
+suspension through a multi-shot image; see [delimited continuations](delimited-continuations.md).
 
 Managed foreign reverse entries create fresh bound guest identities on the same
 carrier. They start unmasked and cannot claim the suspended caller's mailbox.

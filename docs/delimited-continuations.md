@@ -36,12 +36,15 @@ nonmatching and same-tag nested prompts, captured catch/mask boundaries, an
 escaped continuation resumed twice, and ambient masking. These are synchronous
 IO examples, on both AST and bytecode backends.
 
-With `asyncExceptions: false`, direct `killThread#` self-delivery is handled by
-a live `catch#` even when the program uses prompts. The original request is
-acknowledged without forcing its payload, and handler exit restores the mask.
-This does not extend to a self-delivery crossing an already-saved multi-shot
-continuation: it propagates as async-origin delivery instead of entering that
-image's saved catch frames. External asynchronous capture remains separate.
+With `asyncExceptions: false`, direct `killThread#` self-delivery reaches both
+live and saved `catch#` frames, including delivery from a replacement action or
+a resumed suffix. The handler acknowledges the original request without forcing
+its payload; mask return frames and handler exit restore their proper scopes.
+Repeated invocations copy the frame graph, not the one-shot delivery request.
+An uncaught request propagates unchanged for an outer handler. Original-GHC
+controls resume the same image twice, preserve an unrepeated shared-state prefix,
+and distinguish saved catches inside and outside mask scopes. External
+asynchronous suspension through the multi-shot image remains unsupported.
 
 Strict scalar-returning workers preserve their pending case caller, including
 its result destination. Capturing a resumed segment again freezes the mask
