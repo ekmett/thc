@@ -19,19 +19,28 @@ BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 
 
-def capi_kind(call, unit, symbol):
+def time_clock_symbols(unit):
+    owner = unit.replace('-', 'zm').replace('.', 'zi')
+    return {f'ghczuwrapperZC{index}ZC{owner}ZCDataziTimeziClockziInternalziCTimespecZC{name}': kind
+            for index, name, kind in ((0, 'HSzuCLOCKzuREALTIME', 'time-clock-id'),
+                                     (1, 'clockzugetres', 'time-clock-resolution'),
+                                     (2, 'clockzugettime', 'time-clock-time'))}
+
+
+def capi_kind(call, unit, symbol, time=False):
     def scalar(primitive, evaluated):
         return dict(kind='void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long',
                     primReps=[] if primitive is None else [primitive], evaluated=evaluated)
 
     def expected(kind):
-        zero = kind == 'clock-id'
-        output = 'Word64Rep' if zero else 'Int32Rep'
+        zero = kind in ('clock-id', 'time-clock-id')
+        word = 'Int32Rep' if time else 'Word64Rep'
+        output = word if zero else 'Int32Rep'
         return dict(schema=1, target=dict(kind='static', symbol=symbol, unit=unit, isFunction=True),
                     convention='capi', safety='unsafe', arity=1 if zero else 3,
                     suppliedArity=1 if zero else 3,
                     argumentReps=([scalar(None, False)] if zero else
-                                  [scalar('Word64Rep', False), scalar('AddrRep', False), scalar(None, False)]),
+                                  [scalar(word, False), scalar('AddrRep', False), scalar(None, False)]),
                     resultRep=dict(kind='unknown', primReps=[output], aggregate='unboxed-tuple',
                                    components=[scalar(None, True), scalar(output, True)], evaluated=False))
 
@@ -44,22 +53,33 @@ def capi_kind(call, unit, symbol):
             return len(value) == len(wanted) and all(exact(a, b) for a, b in zip(value, wanted))
         return value == wanted
 
-    return next((kind for kind in ('clock-id', 'clock-buffer') if exact(call, expected(kind))), None)
+    kinds = (time_clock_symbols(unit).get(symbol),) if time else ('clock-id', 'clock-buffer')
+    return next((kind for kind in kinds if kind is not None and exact(call, expected(kind))), None)
 
 
 def linked_foreign(module):
-    """Verify the one fully linked, callback-free CAPI archive admitted so far."""
+    """Verify an exact fully linked, callback-free clock CAPI archive."""
     link = module.get('foreignLink')
     if link is None:
         return False
-    if (not isinstance(link, dict) or set(link) != {'schema', 'format', 'unit', 'module',
-            'target', 'symbols', 'abi', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} or
-            type(link['schema']) is not int or link['schema'] != 2 or
+    time = isinstance(link, dict) and link.get('module') == 'Data.Time.Clock.Internal.CTimespec'
+    if (not isinstance(link, dict) or set(link) != ({'schema', 'format', 'unit', 'module',
+            'target', 'symbols', 'abi', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} |
+            ({'headerHashes'} if time else set())) or
+            type(link['schema']) is not int or link['schema'] != (3 if time else 2) or
             link['format'] != 'llvm-bitcode' or link['unit'] != module.get('unit') or
             link['module'] != module.get('module') or
-            link['module'] != 'System.CPUTime.Posix.ClockGetTime' or
-            not isinstance(link['unit'], str) or not link['unit'].startswith('base-')):
+            not isinstance(link['unit'], str) or not (
+                re.fullmatch(r'time-1\.15-(?:inplace|[0-9a-f]+)', link['unit']) and platform.system() == 'Linux'
+                if time else link['module'] == 'System.CPUTime.Posix.ClockGetTime' and link['unit'].startswith('base-'))):
         raise ValueError('invalid linked foreign owner/schema')
+    if time:
+        headers = link['headerHashes']
+        if (not isinstance(headers, list) or len(headers) != 3 or
+                any(not isinstance(header, dict) or set(header) != {'name', 'sha256'} or
+                    not isinstance(header['sha256'], str) or not SHA256.fullmatch(header['sha256']) for header in headers) or
+                [header['name'] for header in headers] != ['HsFFI.h', 'HsTime.h', 'HsTimeConfig.h']):
+            raise ValueError('invalid selected time header provenance')
     target = link['target']
     machine = platform.machine().lower()
     host_arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)
@@ -101,11 +121,13 @@ def linked_foreign(module):
     if (not isinstance(entries, list) or len(entries) != 3 or
             any(not isinstance(entry, dict) or set(entry) != {'symbol', 'kind'} or
                 type(entry['symbol']) is not str or type(entry['kind']) is not str or
-                entry['kind'] not in ('clock-id', 'clock-buffer') for entry in entries)):
+                entry['kind'] not in (('time-clock-id', 'time-clock-resolution', 'time-clock-time') if time
+                                      else ('clock-id', 'clock-buffer')) for entry in entries)):
         raise ValueError('invalid linked CAPI ABI inventory')
     abi = {entry['symbol']: entry['kind'] for entry in entries}
     if (set(abi) != set(symbols) or len(abi) != 3 or
-            list(abi.values()).count('clock-id') != 1 or list(abi.values()).count('clock-buffer') != 2):
+            (abi != time_clock_symbols(link['unit']) if time else
+             list(abi.values()).count('clock-id') != 1 or list(abi.values()).count('clock-buffer') != 2)):
         raise ValueError('linked CAPI ABI differs from original symbols')
     found = set()
     def inspect(value):
@@ -114,10 +136,11 @@ def linked_foreign(module):
             if isinstance(call, dict):
                 target = call.get('target')
                 symbol = target.get('symbol') if isinstance(target, dict) else None
-                if not isinstance(symbol, str) or symbol not in abi or \
-                        capi_kind(call, link['unit'], symbol) != abi[symbol]:
-                    raise ValueError('original CAPI call disagrees with linked symbol ABI')
-                found.add(symbol)
+                if not time or isinstance(target, dict) and target.get('unit') == link['unit']:
+                    if not isinstance(symbol, str) or symbol not in abi or \
+                            capi_kind(call, link['unit'], symbol, time) != abi[symbol]:
+                        raise ValueError('original CAPI call disagrees with linked symbol ABI')
+                    found.add(symbol)
             for item in value.values():
                 inspect(item)
         elif isinstance(value, list):

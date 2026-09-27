@@ -2616,7 +2616,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 OriginalStdioExpression(originalStdio, operands.toTypedArray(), tupleProof)
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
-                CapiExpression(capi, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreCapiForeign.validateOperand(capi, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                CapiExpression(capi, operands.toTypedArray(), tupleProof)
             } else if (packageScalar != null) {
                 CoreCapiForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->

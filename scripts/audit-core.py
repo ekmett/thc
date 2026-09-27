@@ -843,9 +843,10 @@ class Audit:
                     raise ValueError('Linked CAPI call lacks its exact original FCallId')
                 declared = call['argumentReps']
                 abi = {entry['symbol']: entry['kind'] for entry in link['abi']}
-                zero = abi[symbol] == 'clock-id'
-                wanted = [None] if zero else ['Word64Rep', 'AddrRep', None]
-                output = 'Word64Rep' if zero else 'Int32Rep'
+                zero = abi[symbol] in ('clock-id', 'time-clock-id')
+                word = 'Int32Rep' if link['module'] == 'Data.Time.Clock.Internal.CTimespec' else 'Word64Rep'
+                wanted = [None] if zero else [word, 'AddrRep', None]
+                output = word if zero else 'Int32Rep'
                 def exact(rep, primitive):
                     kind = 'void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long'
                     return (isinstance(rep, dict) and set(rep) == {'kind', 'primReps', 'evaluated'} and
@@ -864,6 +865,8 @@ class Audit:
                             for proof, argument, primitive in zip(declared, arguments, wanted)) or
                         not tuple_rep(call['resultRep']) or not tuple_rep(self.expression_rep(expr))):
                     raise ValueError('Linked CAPI call has wrong actual or declared primitive ABI')
+                for index, (argument, primitive) in enumerate(zip(arguments, wanted)):
+                    self.original_stack_operand(argument, primitive, bound, index)
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path,
                                                linkedModule=link['module']))
             except (TypeError, KeyError, ValueError) as error:

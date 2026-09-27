@@ -17,6 +17,58 @@ from zipfile import ZipFile
 import core_package_manifest
 
 
+class TimeClockLinkTest(unittest.TestCase):
+    """Closed metadata controls; structural placeholder bytes are never executed."""
+    def module(self):
+        unit = 'time-1.15-01ab'
+        abi = core_package_manifest.time_clock_symbols(unit)
+        def scalar(rep):
+            return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=False)
+        calls = []
+        for symbol, kind in abi.items():
+            zero = kind == 'time-clock-id'
+            result = dict(kind='unknown', primReps=['Int32Rep'], aggregate='unboxed-tuple',
+                          components=[scalar(None) | dict(evaluated=True),
+                                      scalar('Int32Rep') | dict(evaluated=True)], evaluated=False)
+            calls.append(dict(foreignCall=dict(schema=1, target=dict(kind='static', symbol=symbol,
+                unit=unit, isFunction=True), convention='capi', safety='unsafe', arity=1 if zero else 3,
+                suppliedArity=1 if zero else 3, argumentReps=[scalar(None)] if zero else
+                [scalar('Int32Rep'), scalar('AddrRep'), scalar(None)], resultRep=result)))
+        source, bitcode = 'retained clock C source', b'BC'
+        arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine().lower(), platform.machine().lower())
+        name = 'Data.Time.Clock.Internal.CTimespec'
+        return dict(unit=unit, module=name, bindings=calls,
+            foreign=dict(stubs=dict(header='', source=source, initializers=[], finalizers=[]), files=[]),
+            foreignLink=dict(schema=3, format='llvm-bitcode', unit=unit, module=name,
+                target=arch + '-unknown-linux-gnu', symbols=list(abi),
+                abi=[dict(symbol=symbol, kind=kind) for symbol, kind in abi.items()],
+                headerHashes=[dict(name=name, sha256='a' * 64) for name in ['HsFFI.h', 'HsTime.h', 'HsTimeConfig.h']],
+                sourceSha256=hashlib.sha256(source.encode()).hexdigest(),
+                bitcodeSha256=hashlib.sha256(bitcode).hexdigest(), bitcodeHex=bitcode.hex()))
+
+    def test_exact_time_owner_wrapper_index_header_and_cint_contract(self):
+        module = self.module()
+        if platform.system() != 'Linux':
+            with self.assertRaises(ValueError):
+                core_package_manifest.linked_foreign(module)
+            return
+        self.assertTrue(core_package_manifest.linked_foreign(module))
+        link = module['foreignLink']
+        for bad in (link | dict(schema=2), link | dict(headerHashes=[]),
+                    link | dict(headerHashes=link['headerHashes'][::-1]),
+                    link | dict(abi=list(reversed(link['abi']))[:2]),
+                    link | dict(unit='time-1.16-01ab')):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                core_package_manifest.linked_foreign(module | dict(foreignLink=bad))
+        original = module['bindings'][1]['foreignCall']
+        for bad in (original | dict(safety='safe'), original | dict(convention='ccall'),
+                    original | dict(argumentReps=[original['argumentReps'][0] | dict(primReps=['Word64Rep'])] + original['argumentReps'][1:]),
+                    original | dict(target=original['target'] | dict(symbol=list(core_package_manifest.time_clock_symbols(link['unit']))[2]))):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                core_package_manifest.linked_foreign(module | dict(bindings=[module['bindings'][0], dict(foreignCall=bad)] + module['bindings'][2:]))
+
+
 class PackageNativeVariantsTest(unittest.TestCase):
     """Structural controls only; the placeholder bitcode is never executed."""
     def module(self, reps):
