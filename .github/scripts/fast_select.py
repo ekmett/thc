@@ -33,7 +33,7 @@ HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": 
                  "json-index": "test/json-index/Main.hs", "compact-core-tests": "test/compact-core/Main.hs"}
 DOCUMENTATION_PATHS = {"compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"}
 POLYGLOT_EXACT_INPUTS = {
-    "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew",
+    "build.gradle", "settings.gradle", "gradle.properties", "gradlew",
     "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
     "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "compiler/plugin.py",
     "compiler/toolchain.sh", "scripts/audit-core.py",
@@ -46,7 +46,7 @@ POLYGLOT_EXACT_INPUTS = {
     "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (
-    POLYGLOT_TEST_ROOT, "compiler/THC/", "examples/THC/Polyglot",
+    POLYGLOT_TEST_ROOT, "buildSrc/", "gradle/", "compiler/THC/", "examples/THC/Polyglot",
     "examples/THC/JavaScript", "src/main/kotlin/thc/runtime/", "src/main/java/thc/runtime/",
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
