@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
 import org.graalvm.polyglot.Context
@@ -17,8 +18,12 @@ import java.lang.foreign.Linker
 import java.lang.foreign.ValueLayout
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.LockSupport
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import org.junit.jupiter.api.Assumptions.assumeTrue
 
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
@@ -75,6 +80,7 @@ class NativeMallocTest {
         return listOf(
             binding("store", "writeWord64OffAddr#", listOf("AddrRep", "IntRep", "Word64Rep", null), null),
             binding("load", "indexWord64OffAddr#", listOf("AddrRep", "IntRep"), "Word64Rep"),
+            binding("loadByte", "indexWord8OffAddr#", listOf("AddrRep", "IntRep"), "Word8Rep"),
             binding("copy", "copyAddrToAddrNonOverlapping#", listOf("AddrRep", "AddrRep", "IntRep", null), null))
     }
     private fun load(language: Language, backend: String, module: Map<String, Any?>): ExecutableProgram =
@@ -295,6 +301,128 @@ class NativeMallocTest {
             assertThrows(RuntimeFault::class.java) { registry.malloc(1) }
         } finally {
             borrow.close(); context.leave(); executor.shutdownNow(); context.close()
+        }
+    }
+
+    @Test fun primitiveNativeCallbacksKeepSlicesAndReleaseOnFailure() = inside { _ ->
+        val registry = Language.currentState().nativeAllocations
+        val native = registry.malloc(16)
+        val pinnedOwner = ManagedAllocation.mutable(16, 8, true)
+        val pinned = ManagedAddress.fromAllocation(pinnedOwner)
+        try {
+            for (base in listOf(native, pinned)) {
+                val alias = base.plus(8)
+                assertEquals(Long.MIN_VALUE, alias.withNativeSegmentLong { segment ->
+                    if (base === pinned) assertTrue(Thread.holdsLock(pinnedOwner))
+                    assertEquals(8L, segment.byteSize())
+                    segment.set(ValueLayout.JAVA_LONG, 0, Long.MIN_VALUE)
+                    segment.get(ValueLayout.JAVA_LONG, 0)
+                })
+                assertEquals(Long.MIN_VALUE, ManagedAddressRead.WORD64.read(base, 1))
+                val failure = IllegalStateException("primitive callback failure")
+                assertSame(failure, assertThrows(IllegalStateException::class.java) {
+                    alias.withNativeSegmentLong { throw failure }
+                })
+                assertFalse(Thread.holdsLock(pinnedOwner))
+                assertEquals(Long.MIN_VALUE, alias.withNativeSegmentLong { it.get(ValueLayout.JAVA_LONG, 0) })
+            }
+            native.withNativeSegmentLong {
+                assertThrows(RuntimeFault::class.java) { registry.free(native) }
+                0L
+            }
+        } finally { registry.free(native) }
+        assertThrows(RuntimeFault::class.java) { native.withNativeSegmentLong { 0L } }
+        assertEquals(0, registry.liveCount())
+    }
+
+    @Test fun primitiveNativeCallbackHoldsBorrowUntilNormalOrExceptionalReturn() {
+        supported()
+        context(false).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val registry = Language.currentState().nativeAllocations
+                for (throws in listOf(false, true)) {
+                    val base = registry.malloc(8)
+                    val entered = CountDownLatch(1)
+                    val release = CountDownLatch(1)
+                    val freeingStarted = CountDownLatch(1)
+                    val freeingThread = AtomicReference<Thread>()
+                    val owner = base.nativeAllocation()!!
+                    val lifetimeField = owner.javaClass.getDeclaredField("lifetime").also { it.isAccessible = true }
+                    val lifetime = lifetimeField.get(owner) as ReentrantReadWriteLock
+                    val failure = IllegalStateException("borrowed callback failure")
+                    val pool = Executors.newFixedThreadPool(2)
+                    try {
+                        val reading = pool.submit<Long> {
+                            context.enter()
+                            try {
+                                base.plus(3).withNativeSegmentLong { segment ->
+                                    entered.countDown()
+                                    check(release.await(10, TimeUnit.SECONDS))
+                                    segment.set(ValueLayout.JAVA_BYTE, 0, 73.toByte())
+                                    if (throws) throw failure
+                                    segment.get(ValueLayout.JAVA_BYTE, 0).toLong()
+                                }
+                            } finally { context.leave() }
+                        }
+                        assertTrue(entered.await(5, TimeUnit.SECONDS))
+                        val freeing = pool.submit {
+                            context.enter()
+                            try {
+                                freeingThread.set(Thread.currentThread())
+                                freeingStarted.countDown()
+                                registry.free(base)
+                            }
+                            finally { context.leave() }
+                        }
+                        assertTrue(freeingStarted.await(5, TimeUnit.SECONDS))
+                        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+                        while (!lifetime.hasQueuedThread(freeingThread.get())) {
+                            check(System.nanoTime() < deadline) { "Native free did not queue behind the primitive callback" }
+                            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(1))
+                        }
+                        assertFalse(freeing.isDone)
+                        release.countDown()
+                        if (throws) assertSame(failure, assertThrows(ExecutionException::class.java) {
+                            reading.get(5, TimeUnit.SECONDS)
+                        }.cause)
+                        else assertEquals(73L, reading.get(5, TimeUnit.SECONDS))
+                        freeing.get(5, TimeUnit.SECONDS)
+                        assertThrows(RuntimeFault::class.java) { base.readWord8(0) }
+                        assertEquals(0, registry.liveCount())
+                    } finally {
+                        release.countDown(); pool.shutdownNow()
+                        assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS))
+                    }
+                }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun nativeByteReadKeepsTheFirstInstalledEntryAndLiveAliases() {
+        for (backend in listOf("ast", "bytecode")) inside { language ->
+            val registry = Language.currentState().nativeAllocations
+            val base = registry.malloc(16)
+            try {
+                val program = load(language, backend, module(emptyList()))
+                val target = program.entryTarget("loadByte")
+                val alias = base.plus(8)
+                alias.writeWord8(0, 128)
+                assertEquals(128L, Calls.target(target, arrayOf(0L, alias, 0L)))
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                valid(target)
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                for (value in listOf(255L, 0L, 129L)) {
+                    base.writeWord8(8, value)
+                    val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                    assertEquals(value, Calls.target(target, arrayOf(0L, alias, 0L)))
+                    assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                    valid(target)
+                    released(language)
+                }
+            } finally { registry.free(base) }
         }
     }
 
