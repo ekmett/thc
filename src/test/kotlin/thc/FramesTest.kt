@@ -20,6 +20,36 @@ class FramesTest {
     private fun frame(descriptor: FrameDescriptor): VirtualFrame =
         Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
 
+    @Test fun objectStoragePreservesExistingBoxesAfterAnotherActivationWidensDescriptor() {
+        for (value in listOf<Any>(3_000_000_000L, Long.MIN_VALUE, 1.25f, -0.0f,
+            Float.fromBits(0x7fa12345), 2.5, -0.0, Double.fromBits(0x7ff0123456789abc), true)) {
+            val descriptor = newDescriptor()
+            val outer = frame(descriptor)
+            FrameAccess.write(outer, 0, value)
+            assertNotEquals(FrameSlotKind.Object, descriptor.getSlotKind(0))
+
+            val inner = frame(descriptor)
+            val marker = Any()
+            FrameAccess.write(inner, 0, marker)
+            assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(0))
+
+            // The descriptor has widened, but the older activation still has
+            // its primitive tag. Its next generic store already owns a box.
+            FrameAccess.write(outer, 0, value)
+            assertTrue(outer.isObject(0))
+            assertSame(value, FrameAccess.read(outer, 0))
+            assertSame(marker, FrameAccess.read(inner, 0))
+
+            // Fresh activations and subsequent stores follow the same object
+            // profile without allocating another numeric carrier.
+            val later = frame(descriptor)
+            FrameAccess.write(later, 0, value)
+            FrameAccess.write(inner, 0, value)
+            assertSame(value, FrameAccess.read(later, 0))
+            assertSame(value, FrameAccess.read(inner, 0))
+        }
+    }
+
     @Test fun livePrimitiveFramesSurviveDescriptorWideningInAnotherActivation() {
         for (primitive in listOf<Any>(Long.MIN_VALUE, 3_000_000_000L, true, false)) {
             val descriptor = newDescriptor()

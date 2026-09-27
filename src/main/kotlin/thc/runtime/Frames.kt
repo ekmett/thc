@@ -126,6 +126,12 @@ internal object FrameAccess {
     }
 
     fun write(frame: Frame, slot: Int, value: Any?) {
+        // Object profiles never narrow. Preserve the caller's existing box
+        // instead of unboxing and reboxing it through a primitive writer.
+        if (frame.frameDescriptor.getSlotKind(slot) == FrameSlotKind.Object) {
+            frame.setObject(slot, value)
+            return
+        }
         // Keep explicit instanceof guards in JVM bytecode. The pinned Kotlin
         // subject-type switch loses numeric receiver refinement during Native
         // Image analysis and admits unrelated Number conversion implementations.
