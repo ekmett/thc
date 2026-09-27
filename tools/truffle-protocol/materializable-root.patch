@@ -1,0 +1,54 @@
+diff --git a/com/oracle/truffle/api/nodes/NodeAccessor.java b/com/oracle/truffle/api/nodes/NodeAccessor.java
+index 7dab1832..d65fd14f 100644
+--- a/com/oracle/truffle/api/nodes/NodeAccessor.java
++++ b/com/oracle/truffle/api/nodes/NodeAccessor.java
+@@ -64,6 +64,7 @@ final class NodeAccessor extends Accessor {
+     static final HostSupport HOST = ACCESSOR.hostSupport();
+     static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
+     static final RuntimeSupport RUNTIME = ACCESSOR.runtimeSupport();
++    static final FrameSupport FRAME = ACCESSOR.framesSupport();
+     static final InstrumentSupport INSTRUMENT = ACCESSOR.instrumentSupport();
+ 
+     private NodeAccessor() {
+diff --git a/com/oracle/truffle/api/nodes/RootNode.java b/com/oracle/truffle/api/nodes/RootNode.java
+index 50d7717a..e84d5db3 100644
+--- a/com/oracle/truffle/api/nodes/RootNode.java
++++ b/com/oracle/truffle/api/nodes/RootNode.java
+@@ -476,6 +476,9 @@ public abstract class RootNode extends ExecutableNode {
+             throw CompilerDirectives.shouldNotReachHere(message);
+         }
+         prepareForCall();
++        if (requiresMaterializableFrame()) {
++            NodeAccessor.FRAME.markMaterializeCalled(frameDescriptor);
++        }
+         this.callTarget = callTarget;
+ 
+         // Call notifyOnLoad() after the callTarget field is set, so the invariant that if a
+@@ -516,6 +519,27 @@ public abstract class RootNode extends ExecutableNode {
+         // no default implementation
+     }
+ 
++    /**
++     * Declares that this root's frames may materialize before any interpreted
++     * execution observes a capture. The declaration is read after prepareForCall
++     * and before initial or cloned target publication, and must then remain fixed.
++     * It does not allocate or materialize a frame. The default preserves the
++     * runtime's observed-materialization speculation.
++     *
++     * A shared descriptor is conservatively materializable for all its users.
++     * Copied descriptors are declared by their receiving roots at publication.
++     * @return true for roots requiring a materializable frame from first compilation
++     */
++    protected boolean requiresMaterializableFrame() {
++        return false;
++    }
++
++    /** Versioned linkage check for the additive materializable-root contract. */
++    public static int materializableFramePolicyVersion() {
++        return 1;
++    }
++
++
+     /**
+      * Prepares this {@link RootNode} for compilation. This method is guaranteed to be called at
+      * least once before any code paths are executed as compiled code (see

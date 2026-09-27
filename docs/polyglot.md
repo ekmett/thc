@@ -18,8 +18,8 @@ exports before and after Tidy, on both THC backends with explicit compilation.
 
 The initial declaration syntax accepts `Int` and `Double` arguments and
 `IO Int`, `IO Double`, or `IO ()` results. Both `safe` and `unsafe` synchronous
-imports are accepted. Pure imports, `interruptible`, callbacks, and the
-`dynamic`/`wrapper` forms are rejected. The quoted JavaScript must denote an
+imports are accepted. Pure imports, `interruptible`, and the
+`dynamic`/`wrapper` declaration forms are rejected. The quoted JavaScript must denote an
 unapplied function, following GHC's JavaScript backend syntax.
 
 The plugin rewrites the parsed declaration before native GHC rejects the
@@ -31,6 +31,16 @@ while evaluating the imported function expression on each invocation, so
 rebinding a JavaScript global remains observable. Operands and results use
 primitive THC slots; the argument array at the Truffle interop boundary is
 still required by that API.
+
+Safety remains attached to each call site, independently of the source/arity
+cache. A `safe` call may re-enter an exposed managed Haskell entry; an `unsafe`
+call rejects that entry before creating a guest thread or changing its mask.
+The lower-level `THC.Polyglot` operations are safe. Both backends save the exact
+typed result before polling for a queued async exception, so continuation resume
+does not repeat the foreign effect. Calls remain entered on the same carrier;
+this does not introduce raw C callback transport or interrupt arbitrary native
+blocking calls. See [async semantics](async-exceptions.md) for callback identities
+and the remaining native errno transition.
 
 These declarations run under THC. Their generated symbols have no native
 implementation for linking an ordinary GHC executable. The plugin also rejects
@@ -75,8 +85,10 @@ post-core / ast: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled
 post-core / bytecode: Haskell -> JavaScript -> Haskell = 42 (interpreted and compiled)
 ```
 
-`./gradlew polyglotTest` checks the declaration contract, context ownership,
-access permissions, numeric conversion, missing members, and foreign exceptions.
+`./gradlew polyglotTestDefault polyglotTestDense` checks the declaration contract, context ownership,
+access permissions, numeric conversion, missing members, foreign exceptions,
+callback safety and first-compiled completed-result delivery without replay.
+`polyglotTest` remains available for a single default invocation.
 The host must permit the requested language through `PolyglotAccess`; the demo
 does so explicitly. THC uses `Env.parsePublic`, so the bridge obeys that policy.
 
@@ -118,8 +130,8 @@ handling of foreign errors, callbacks, and value lifetimes. The module would
 then move from `examples/THC` into a Cabal package. Loading another language
 in one Polyglot Context also brings that language's thread-access rules:
 JavaScript may require serialized or isolated access even when Haskell code
-runs concurrently. That boundary needs a deliberate policy before exposing
-callbacks or concurrent foreign calls.
+runs concurrently. An admitted callback stays on its carrier and obeys the
+other language's access rules; safety is not permission for concurrent entry.
 
 Foreign exceptions currently escape to the polyglot host. Catching them with
 Haskell's exception machinery needs an explicit translation, including a policy

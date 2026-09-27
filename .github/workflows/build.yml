@@ -110,6 +110,8 @@ jobs:
             major=$("$tool" --version | sed -nE 's/.*version ([0-9]+).*/\1/p' | sed -n '1p')
             test "$major" = 18
           done
+      - name: Check pinned guest protocol artifacts
+        run: ./gradlew --no-daemon --max-workers=2 --continue testProtocolProcessor testMaterializableApi testReturnPolicy testReturnContinuations
       - name: Build and test both handoff modes from source
         run: scripts/try.sh --handoff-modes
       - name: Check original aggregate constructor fields against native GHC

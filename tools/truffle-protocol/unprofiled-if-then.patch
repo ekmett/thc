@@ -1,0 +1,194 @@
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java b/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java
+index ace0cc33..bf68a416 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/generator/BuilderElement.java
+@@ -397,6 +397,7 @@ final class BuilderElement extends AbstractElement {
+                     b.statement("return");
+                     b.end();
+                     break;
++                case IF_THEN_UNPROFILED:
+                 case IF_THEN:
+                     b.startCase().tree(parent.createOperationConstant(op)).end().startCaseBlock();
+                     b.startIf().string("operation.childCount == 0").end().startBlock();
+@@ -518,6 +519,7 @@ final class BuilderElement extends AbstractElement {
+                     b.startReturn().string(operationStack.read(op, operationFields.reachable)).end();
+                     b.end();
+                     break;
++                case IF_THEN_UNPROFILED:
+                 case IF_THEN:
+                     b.startCase().tree(parent.createOperationConstant(op)).end().startBlock();
+                     b.startIf().string("operation.childCount == 0").end().startBlock();
+@@ -1803,7 +1805,8 @@ final class BuilderElement extends AbstractElement {
+             case CLEAR_LOCAL:
+                 values.put(operationFields.local, "(BytecodeLocalImpl)" + operation.getOperationBeginArgumentName(0));
+                 break;
+-            case IF_THEN:
++            case IF_THEN_UNPROFILED:
++                case IF_THEN:
+                 values.put(operationFields.thenReachable, "state.reachable");
+                 break;
+             case IF_THEN_ELSE:
+@@ -2154,7 +2157,8 @@ final class BuilderElement extends AbstractElement {
+                 b.statement("markReachable(", operationStack.read(operation, operationFields.thenReachable), " || ", operationStack.read(operation, operationFields.elseReachable),
+                                 ")");
+                 break;
+-            case IF_THEN:
++            case IF_THEN_UNPROFILED:
++                case IF_THEN:
+             case WHILE:
+                 b.lineComment("Control flow merged. Set state.reachable to the enclosing operation's reachability.");
+                 b.statement("state.reachable = resolveReachable()");
+@@ -3796,7 +3800,7 @@ final class BuilderElement extends AbstractElement {
+ 
+                     b.statement("break");
+                 }
+-                case IF_THEN_ELSE, IF_THEN, CONDITIONAL -> {
++                case IF_THEN_ELSE, IF_THEN, IF_THEN_UNPROFILED, CONDITIONAL -> {
+                     b.startIf().string("childIndex >= 1").end().startBlock();
+                     b.lineComment("Entering new block. Set state.reachable to the new block's reachability.");
+                     b.statement("state.reachable = resolveReachable()");
+@@ -4049,13 +4053,16 @@ final class BuilderElement extends AbstractElement {
+                         b.tree(operationStack.write(op, operationFields.childBci, "childBci"));
+                     }
+                     break;
++                case IF_THEN_UNPROFILED:
+                 case IF_THEN:
++                    InstructionModel branchInstruction = op == model.unprofiledIfThenOperation
++                                    ? model.unprofiledBranchFalseInstruction : model.branchFalseInstruction;
+                     b.startIf().string("childIndex == 0").end().startBlock();
+ 
+-                    buildEmitInstruction(b, "branchFalseBci", model.branchFalseInstruction, emitBranchFalseArguments(model.branchFalseInstruction));
++                    buildEmitInstruction(b, "branchFalseBci", branchInstruction, emitBranchFalseArguments(branchInstruction));
+                     b.startIf().string("branchFalseBci != -1").end().startBlock();
+                     b.tree(operationStack.write(op, operationFields.falseBranchFixupBci,
+-                                    "branchFalseBci + " + model.branchFalseInstruction.findImmediate(ImmediateKind.BYTECODE_INDEX, "branch_target").offset()));
++                                    "branchFalseBci + " + branchInstruction.findImmediate(ImmediateKind.BYTECODE_INDEX, "branch_target").offset()));
+                     emitRequestLeaderBci(b, "start of then block");
+                     b.end();
+ 
+@@ -7707,6 +7714,7 @@ final class BuilderElement extends AbstractElement {
+                 case CLEAR_LOCAL:
+                     fields.add(local); // init
+                     break;
++                case IF_THEN_UNPROFILED:
+                 case IF_THEN:
+                     fields.add(thenReachable); // init
+                     fields.add(falseBranchFixupBci);
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/generator/BytecodeInstructionHandler.java b/com/oracle/truffle/dsl/processor/bytecode/generator/BytecodeInstructionHandler.java
+index 069321f8..0face3b7 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/generator/BytecodeInstructionHandler.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/generator/BytecodeInstructionHandler.java
+@@ -397,7 +397,7 @@ final class BytecodeInstructionHandler extends CodeExecutableElement implements
+ 
+     private void emitBranchFalseCondition(CodeTreeBuilder b) {
+         // custom return and stack effect
+-        if (getTier().isUncached()) {
++        if (getTier().isUncached() || instruction.kind == InstructionKind.BRANCH_FALSE_UNPROFILED) {
+             b.startIf().string("condition_").end().startBlock();
+         } else {
+             b.startIf();
+@@ -588,6 +588,7 @@ final class BytecodeInstructionHandler extends CodeExecutableElement implements
+                 b.statement("return " + BytecodeRootNodeElement.readImmediate("bc", "bci", instruction.getImmediate(ImmediateKind.BYTECODE_INDEX)));
+                 return null;
+             case BRANCH_FALSE:
++            case BRANCH_FALSE_UNPROFILED:
+                 return emitBranchFalse(b, mode);
+             case BRANCH_BACKWARD:
+                 return emitBranchBackward(b);
+@@ -2632,6 +2633,7 @@ final class BytecodeInstructionHandler extends CodeExecutableElement implements
+             case STORE_LOCAL_MATERIALIZED:
+             case POP:
+             case BRANCH_FALSE:
++            case BRANCH_FALSE_UNPROFILED:
+             case TAG_LEAVE:
+             case MERGE_CONDITIONAL:
+                 return true;
+@@ -3106,6 +3108,7 @@ final class BytecodeInstructionHandler extends CodeExecutableElement implements
+                 case BRANCH_BACKWARD:
+                     return HandlerKind.BRANCH_BACKWARD;
+                 case BRANCH_FALSE:
++                case BRANCH_FALSE_UNPROFILED:
+                     return HandlerKind.BRANCH_FALSE;
+                 case RETURN:
+                     return HandlerKind.RETURN;
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java
+index 1a674720..cb9b0296 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java
+@@ -85,6 +85,9 @@ public class BytecodeDSLBuiltins {
+         m.branchFalseInstruction = m.instruction(InstructionKind.BRANCH_FALSE, "branch.false", m.signature(void.class, "condition", Object.class, boolean.class)) //
+                         .addImmediate(ImmediateKind.BYTECODE_INDEX, "branch_target") //
+                         .addImmediate(ImmediateKind.BRANCH_PROFILE, "branch_profile");
++        m.unprofiledBranchFalseInstruction = m.instruction(InstructionKind.BRANCH_FALSE_UNPROFILED, "branch.false.unprofiled",
++                        m.signature(void.class, "condition", Object.class, boolean.class))
++                        .addImmediate(ImmediateKind.BYTECODE_INDEX, "branch_target");
+         m.throwInstruction = m.instruction(InstructionKind.THROW, "throw", m.signature(void.class, "exception", Object.class, Throwable.class));
+         m.loadConstantInstruction = m.instruction(InstructionKind.LOAD_CONSTANT, "load.constant", m.signature(Object.class)) //
+                         .addImmediate(ImmediateKind.CONSTANT, "constant");
+@@ -399,6 +402,14 @@ public class BytecodeDSLBuiltins {
+             m.traceInstruction = m.instruction(InstructionKind.TRACE_INSTRUCTION, "trace.instruction", m.signature(void.class));
+         }
+ 
++        // Append after user and compatibility operations so their serialization IDs are stable.
++        // Reuse IfThen semantics; only the selected branch instruction has a different policy.
++        m.unprofiledIfThenOperation = m.operation(OperationKind.IF_THEN_UNPROFILED, "UnprofiledIfThen", """
++                        UnprofiledIfThen has the same control-flow and stack semantics as IfThen.
++                        Its condition is not counted or specialized from observed branch directions.
++                        Use it for runtime protocol events that must remain valid on their first arrival.
++                        Ordinary guest conditionals should use IfThen to retain branch profiling.
++                        """).setVoid(true).setDynamicOperands(child("condition"), voidableChild("thens"));
+     }
+ 
+     public static void addInvalidateBuiltinsOnFinalize(BytecodeDSLModel m) {
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java
+index b64a4db6..e86b88de 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLModel.java
+@@ -226,6 +226,8 @@ public class BytecodeDSLModel extends Template implements PrettyPrintable {
+     public InstructionModel branchInstruction;
+     public InstructionModel branchBackwardInstruction;
+     public InstructionModel branchFalseInstruction;
++    public InstructionModel unprofiledBranchFalseInstruction;
++    public OperationModel unprofiledIfThenOperation;
+     public InstructionModel storeLocalInstruction;
+     public InstructionModel throwInstruction;
+     public InstructionModel loadConstantInstruction;
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/InstructionModel.java b/com/oracle/truffle/dsl/processor/bytecode/model/InstructionModel.java
+index 14d6b405..ad521490 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/InstructionModel.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/InstructionModel.java
+@@ -106,7 +106,9 @@ public final class InstructionModel implements PrettyPrintable {
+         TAG_YIELD_NULL,
+         TAG_RESUME,
+         TRACE_INSTRUCTION,
+-        INVALIDATE;
++        INVALIDATE,
++        // Appended to preserve every existing instruction kind and opcode ordering.
++        BRANCH_FALSE_UNPROFILED;
+ 
+         public boolean isLocalVariableAccess() {
+             switch (this) {
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java b/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java
+index 0b0349b0..2dc5f2fe 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/model/OperationModel.java
+@@ -89,6 +89,7 @@ public class OperationModel implements PrettyPrintable {
+         CUSTOM_YIELD,
+         CUSTOM_RETURN,
+         CUSTOM_INSTRUMENTATION,
++        IF_THEN_UNPROFILED,
+     }
+ 
+     /**
+diff --git a/com/oracle/truffle/dsl/processor/bytecode/parser/BytecodeDSLParser.java b/com/oracle/truffle/dsl/processor/bytecode/parser/BytecodeDSLParser.java
+index ff429793..f2f10e5e 100644
+--- a/com/oracle/truffle/dsl/processor/bytecode/parser/BytecodeDSLParser.java
++++ b/com/oracle/truffle/dsl/processor/bytecode/parser/BytecodeDSLParser.java
+@@ -1127,6 +1127,7 @@ public class BytecodeDSLParser extends AbstractParser<BytecodeDSLModels> {
+                         }
+                         break;
+                     case BRANCH_FALSE:
++                    case BRANCH_FALSE_UNPROFILED:
+                         if (model.isBoxingEliminated(type(boolean.class))) {
+                             instruction.addChildBciImmediate(instruction.signature.dynamicOperands().get(0));
+ 

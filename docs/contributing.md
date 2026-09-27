@@ -138,9 +138,12 @@ not one giant primop executor. The processor offers no option to split it.
 splits complete case/return groups into bounded private helpers at the end of
 `kaptKotlin`, before Gradle snapshots that task's output. Every argument
 description is retained verbatim; the interpreter and primop implementations are
-untouched. There is no processor-JAR patch, metadata removal, extra dependency,
-or GHC requirement. The normalization is idempotent and rejects unrecognized
-generator shapes or processor versions; review it when upgrading Truffle.
+untouched. This normalization removes no metadata and requires no GHC. It is
+idempotent and rejects unrecognized generator shapes or processor versions;
+review it when upgrading Truffle. Separate, hash-pinned
+[protocol artifacts](../tools/truffle-protocol/README.md) add unprofiled runtime
+branches and explicit root materialization/completion declarations. They are
+rebuilt from upstream source and never replace shared Maven cache files.
 
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add

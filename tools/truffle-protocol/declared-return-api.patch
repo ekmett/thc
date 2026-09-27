@@ -1,0 +1,39 @@
+diff --git a/com/oracle/truffle/api/bytecode/ContinuationRootNode.java b/com/oracle/truffle/api/bytecode/ContinuationRootNode.java
+index dbefcaec..7fa8c4a8 100644
+--- a/com/oracle/truffle/api/bytecode/ContinuationRootNode.java
++++ b/com/oracle/truffle/api/bytecode/ContinuationRootNode.java
+@@ -78,6 +78,12 @@ public abstract class ContinuationRootNode extends RootNode {
+      */
+     public abstract BytecodeRootNode getSourceRootNode();
+ 
++    /** Continuation targets share their source root's immutable return contract. */
++    @Override
++    public boolean requiresUnprofiledReturn() {
++        return ((RootNode) getSourceRootNode()).requiresUnprofiledReturn();
++    }
++
+     /**
+      * Returns the {@link BytecodeLocation} associated with this continuation.
+      *
+diff --git a/com/oracle/truffle/api/nodes/RootNode.java b/com/oracle/truffle/api/nodes/RootNode.java
+index e84d5db3..f9b1a374 100644
+--- a/com/oracle/truffle/api/nodes/RootNode.java
++++ b/com/oracle/truffle/api/nodes/RootNode.java
+@@ -534,6 +534,17 @@ public abstract class RootNode extends ExecutableNode {
+         return false;
+     }
+ 
++    /**
++     * Declares that valid completion may return multiple Java carrier classes.
++     * The optimized runtime samples this once before target publication, without
++     * changing argument or exception profiling. The value must be fixed before
++     * the first getCallTarget(); this hook must not request any target or execute
++     * guest code.
++     */
++    public boolean requiresUnprofiledReturn() {
++        return false;
++    }
++
+     /** Versioned linkage check for the additive materializable-root contract. */
+     public static int materializableFramePolicyVersion() {
+         return 1;
