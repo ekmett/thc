@@ -281,6 +281,7 @@ class PolyglotFFITest {
             override fun execute(frame: VirtualFrame): Any? = action(frame)
         }.callTarget
         val program = object : ExecutableProgram {
+            override val asynchronousExceptions: Boolean = true
             override fun hostEntryTarget(arity: Int): RootCallTarget = target
             override fun entryValue(name: String): Any = Unit
             override fun entryTarget(name: String): RootCallTarget = target
