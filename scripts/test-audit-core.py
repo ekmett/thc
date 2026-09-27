@@ -1447,6 +1447,35 @@ class AuditTest(unittest.TestCase):
                 with self.subTest(name=name, field=field):
                     self.assertIn('primitive-representation', {issue['code'] for issue in run(bad)['issues']})
 
+    def test_exception_scalar_results_preserve_exact_tuple_and_payload_proofs(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        scalar_results = [LONG, dict(kind='long', primReps=['WordRep'], evaluated=True),
+                          dict(kind='address', primReps=['AddrRep'], evaluated=True)]
+        for name in ('raiseIO#', 'catch#', 'maskAsyncExceptions#', 'maskUninterruptible#', 'unmaskAsyncExceptions#'):
+            arguments = ([REFERENCE, state] if name == 'raiseIO#' else
+                         [CLOSURE, CLOSURE, state] if name == 'catch#' else [CLOSURE, state])
+            for scalar in scalar_results:
+                good = ['app', ['prim', name],
+                        [[*var('operand'), dict(rep=copy.deepcopy(rep))] for rep in arguments],
+                        [rep is not state for rep in arguments], False, False,
+                        dict(rep=tuple_rep(state, scalar))]
+                with self.subTest(name=name, result=scalar):
+                    self.assertNotIn('primitive-representation', {i['code'] for i in run(good)['issues']})
+                    mutations = [
+                        tuple_rep(scalar, state),
+                        tuple_rep(state, scalar, scalar),
+                        tuple_rep(state, dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
+                        dict(tuple_rep(state, scalar), primReps=['DoubleRep']),
+                        tuple_rep(state, dict(scalar, kind='float')),
+                    ]
+                    for result in mutations:
+                        bad = copy.deepcopy(good)
+                        bad[-1]['rep'] = result
+                        self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
+                    bad = copy.deepcopy(good)
+                    bad[2][0][-1]['rep'] = scalar
+                    self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
+
     def test_public_thread_primops_require_exact_thread_id_and_lazy_payload(self):
         state = dict(kind='void', primReps=[], evaluated=True)
         thread = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)

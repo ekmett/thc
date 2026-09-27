@@ -1631,6 +1631,7 @@
         "thc.runtime.LargeLiteralCaseNativeTest",
         "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.MaskFunctionNativeTest",
+        "thc.runtime.ScalarExceptionResultsNativeTest",
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.ScalarMemoryUtilitiesTest",
@@ -1892,6 +1893,18 @@
     "test/haskell-fixtures/DeepEvaluationFixtures.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
     "compiler/test-fixtures/DeepEvaluation.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
     "compiler/test-fixtures/DeepEvaluationNative.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
+    "test/haskell-fixtures/ScalarExceptionResultsFixtures.hs": {
+      "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ScalarExceptionResultsAudit.hs": {
+      "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
+      "python": []
+    },
+    "compiler/test-fixtures/ScalarExceptionResultsNative.hs": {
+      "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
+      "python": []
+    },
     "test/haskell-fixtures/MaskFunctionFixtures.hs": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "python": []

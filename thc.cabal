@@ -903,6 +903,7 @@ executable thc-fixtures
     ForeignExceptionFixtures
     ArithmeticExceptionFixtures
     MaskFunctionFixtures
+    ScalarExceptionResultsFixtures
     DeepEvaluationFixtures
     InterfaceFixtures
     InstalledCacheFixtures
