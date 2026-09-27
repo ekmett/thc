@@ -14,7 +14,7 @@ internal enum class StringRtsOp(val symbol: String, val arguments: List<String?>
     KEEP_CAFS("keepCAFsForGHCi", listOf(null), "ghc-9.14.1-inplace");
 
     fun acceptsUnit(value: Any?): Boolean =
-        if (this == STRLEN_CSIZE) isOriginalByteStringUnit(value) else value == unit
+        if (this == STRLEN_CSIZE) CoreMemorySearchForeign.isOriginalByteStringUnit(value) else value == unit
 }
 
 internal object CoreStringRtsForeign {

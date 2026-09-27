@@ -2390,8 +2390,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreGmpForeign.validateHeads(requested)
         CoreLibdwForeign.validateHeads(requested)
         CoreNativeAllocationForeign.validateHeads(requested)
-        CoreMemmoveForeign.validateHeads(requested)
-        CoreMemcpyForeign.validateHeads(requested)
+        CoreMemoryCopyForeign.MEMMOVE.validateHeads(requested)
+        CoreMemoryCopyForeign.MEMCPY.validateHeads(requested)
         CoreSignalForeign.validateHeads(requested)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(requested, constructors)
@@ -2787,9 +2787,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val nativeAllocation = CoreNativeAllocationForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val memmove = CoreMemmoveForeign.validate(foreignMetadata,
+            val memmove = CoreMemoryCopyForeign.MEMMOVE.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val memcpy = CoreMemcpyForeign.validate(foreignMetadata,
+            val memcpy = CoreMemoryCopyForeign.MEMCPY.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val byteStringSort = CoreByteStringSort.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
@@ -3062,20 +3062,20 @@ CoreStackForeign.validateHead(fn, defined)
                 }
                 MemsetExpression(operands.toTypedArray(), tupleProof)
             } else if (memmove) {
-                CoreMemmoveForeign.validateHead(fn, defined)
+                CoreMemoryCopyForeign.MEMMOVE.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        CoreMemmoveForeign.validateOperand(index, operand.representation,
-                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                        CoreMemoryCopyForeign.MEMMOVE.validateOperand(index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null, false)
                     }
                 }
                 MemmoveExpression(operands.toTypedArray(), tupleProof)
             } else if (memcpy) {
-                CoreMemcpyForeign.validateHead(fn, defined)
-                val byteArrays = CoreMemcpyForeign.byteArrays(foreignMetadata)
+                CoreMemoryCopyForeign.MEMCPY.validateHead(fn, defined)
+                val byteArrays = CoreMemoryCopyForeign.MEMCPY.byteArrays(foreignMetadata)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        CoreMemcpyForeign.validateOperand(index, operand.representation,
+                        CoreMemoryCopyForeign.MEMCPY.validateOperand(index, operand.representation,
                             if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null, byteArrays)
                     }
                 }

@@ -99,8 +99,8 @@ class OriginalMemsetTest {
                                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                                 // Raw calls retain GHC's genuine original descriptor while bypassing
                                 // the wrapper's Word8 narrowing, covering the entire CInt corpus.
-                                val args = arrayOf<Any?>(0L, destination, row["value"], row["count"])
-                                val result = Calls.target(target, if (raw) args + Unit else args)
+                                val args = arrayOf<Any?>(0L, destination, if (raw) (row["value"] as Long).toInt() else row["value"], row["count"])
+                                val result = if (raw) callScalarTestTarget(target, args + Unit) else Calls.target(target, args)
                                 val label = "$stage/$backend/raw=$raw/storage=$kind/$index/compiled=$compiled"
                                 assertSame(destination, result, label)
                                 assertEquals(row["returned"], (result as ManagedAddress).difference(base), label)
@@ -131,8 +131,8 @@ class OriginalMemsetTest {
         val raw = OriginalStdioChecks.rawModule(OriginalStdioChecks.foreignCalls(source).single(), source)
         for (backend in listOf("ast", "bytecode")) inside { language ->
             val target = load(language, backend, raw).entryTarget("entry")
-            fun fill(address: ManagedAddress, value: Long, count: Long, state: Any = Unit): Any? =
-                Calls.target(target, arrayOf(0L, address, value, count, state))
+            fun fill(address: ManagedAddress, value: Int, count: Long, state: Any = Unit): Any? =
+                callScalarTestTarget(target, arrayOf(0L, address, value, count, state))
             for (kind in 0..if (nativeSupported) 3 else 2) {
                 val values = List(16) { it.toLong() }
                 val base = address(values, kind)
@@ -140,6 +140,9 @@ class OriginalMemsetTest {
                     for (count in listOf(-1L, 16L, Long.MAX_VALUE)) {
                         assertThrows(RuntimeFault::class.java) { fill(base.plus(1), 255, count) }
                         assertEquals(values, bytes(base, 16), "$backend/$kind rejection precedes every write")
+                    }
+                    assertThrows(RuntimeFault::class.java) {
+                        Calls.target(target, arrayOf(0L, base, 0L, 1L, 17L))
                     }
                     assertThrows(RuntimeFault::class.java) { fill(base, 0, 1, 17L) }
                     assertEquals(values, bytes(base, 16))
@@ -175,7 +178,7 @@ class OriginalMemsetTest {
                 inside { other ->
                     val foreignTarget = load(other, backend, raw).entryTarget("entry")
                     assertThrows(RuntimeFault::class.java) {
-                        Calls.target(foreignTarget, arrayOf(0L, owned, 0L, 1L, Unit))
+                        callScalarTestTarget(foreignTarget, arrayOf(0L, owned, 0, 1L, Unit))
                     }
                 }
                 Language.currentState().nativeAllocations.free(owned)
@@ -196,7 +199,7 @@ class OriginalMemsetTest {
                 (descriptor["target"] as MutableMap<String, Any?>)["unit"] = unit
                 val target = load(language, backend, candidate).entryTarget("entry")
                 val address = ManagedAddress.fromByteArray(byteArrayOf(4))
-                assertSame(address, Calls.target(target, arrayOf(0L, address, -1L, 1L, Unit)))
+                assertSame(address, callScalarTestTarget(target, arrayOf(0L, address, -1, 1L, Unit)))
                 assertEquals(255L, address.readWord8(0))
             }
             for (variant in 0..14) {
@@ -265,9 +268,9 @@ class OriginalMemsetTest {
                     // The same well-formed lexical join works without claiming
                     // the original foreign declaration's authority.
                     val bytes = ManagedAddress.fromByteArray(byteArrayOf(1, 2))
-                    val second = 9L
+                    val second = 9
                     val target = load(language, backend, shadowed(false)).entryTarget("entry")
-                    val result = Calls.target(target, arrayOf(0L, bytes, second, 1L, Unit))
+                    val result = callScalarTestTarget(target, arrayOf(0L, bytes, second, 1L, Unit))
                     assertSame(bytes, result)
                     val failure = assertThrows(RuntimeFault::class.java) {
                         load(language, backend, shadowed(true))

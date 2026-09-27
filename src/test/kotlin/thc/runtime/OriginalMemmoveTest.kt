@@ -129,7 +129,7 @@ class OriginalMemmoveTest {
 
     @Test fun malformedOriginalDescriptorAndForgedHeadRejectBeforeExecution() = inside { language ->
         assertThrows(RuntimeFault::class.java) {
-            CoreMemmoveForeign.validateHead(listOf("var", "forged-defined-head", mapOf("rep" to closure)), true)
+            CoreMemoryCopyForeign.MEMMOVE.validateHead(listOf("var", "forged-defined-head", mapOf("rep" to closure)), true)
         }
         for (backend in listOf("ast", "bytecode")) {
             fun reject(change: (MutableMap<String, Any?>) -> Unit) {

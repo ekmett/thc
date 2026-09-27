@@ -48,7 +48,7 @@ class ByteStringDecimalTest {
         val manifest = json("manifest.json") as Map<String, Any?>
         assertEquals("9.14.1", manifest["ghc"])
         assertEquals(entries, manifest["entries"])
-        assertTrue(isOriginalByteStringUnit(manifest["bytestringUnit"]))
+        assertTrue(CoreMemorySearchForeign.isOriginalByteStringUnit(manifest["bytestringUnit"]))
         assertEquals(false, manifest["installedArtifactsHashed"])
         assertTrue((manifest["interface"] as String).endsWith("/Data/ByteString/Internal/Type.hi"))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(

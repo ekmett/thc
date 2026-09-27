@@ -35,9 +35,11 @@
     "src/main/kotlin/thc/runtime/GhcBCO.kt": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreMemmoveForeign.kt": {
+    "src/main/java/thc/runtime/CoreMemoryCopyForeign.java": {
       "junit": ["thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },
@@ -2603,11 +2605,14 @@
     "test/haskell-fixtures/MemsetFixtures.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
     "compiler/test-fixtures/OriginalMemsetAudit.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
     "compiler/test-fixtures/OriginalMemsetNative.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "src/main/kotlin/thc/runtime/CoreMemsetForeign.kt": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreMemsetForeign.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemsetExpression.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/MemorySearchFixtures.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
     "compiler/test-fixtures/OriginalMemorySearchAudit.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
     "compiler/test-fixtures/OriginalMemorySearchNative.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "src/main/kotlin/thc/runtime/CoreMemorySearchForeign.kt": {"junit": ["thc.runtime.OriginalMemorySearchTest", "thc.runtime.OriginalMemsetTest", "thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreMemorySearchForeign.java": {"junit": ["thc.runtime.OriginalMemorySearchTest", "thc.runtime.OriginalMemsetTest", "thc.runtime.OriginalStringRtsTest", "thc.runtime.ByteStringDecimalTest", "thc.runtime.ByteStringSortTest", "thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemorySearchOp.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemorySearchExpression.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },

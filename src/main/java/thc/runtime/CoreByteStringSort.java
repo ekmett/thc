@@ -63,7 +63,7 @@ final class CoreByteStringSort {
         check(call.keySet().equals(DESCRIPTOR_KEYS) && exact(call.get("schema"), 1), "descriptor schema");
         check(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction")) && "static".equals(target.get("kind"))
                 && Boolean.TRUE.equals(target.get("isFunction"))
-                && CoreMemorySearchForeignKt.isOriginalByteStringUnit(target.get("unit")), "pinned original ByteString target");
+                && CoreMemorySearchForeign.isOriginalByteStringUnit(target.get("unit")), "pinned original ByteString target");
         check("ccall".equals(call.get("convention")) && "unsafe".equals(call.get("safety"))
                 && exact(call.get("arity"), 3) && exact(call.get("suppliedArity"), 3), "convention, safety or arity");
         List<?> declared = call.get("argumentReps") instanceof List<?> list ? list : null;
