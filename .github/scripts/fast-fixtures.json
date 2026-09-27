@@ -13,6 +13,7 @@
     "thc.runtime.SavedTermiosTest",
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
+    "thc.runtime.NativeDirectoryFileSystemTest",
     "thc.runtime.NativeFileBuffersTest",
     "thc.runtime.NativeFdWaitTest",
     "thc.runtime.NativeEventWaitTest",
@@ -417,7 +418,8 @@
         "thc.runtime.OriginalPathLinkTest",
         "thc.runtime.OriginalPathAccessTest",
         "thc.runtime.OriginalUnlinkAtTest",
-        "thc.runtime.OriginalFstatAtTest"
+        "thc.runtime.OriginalFstatAtTest",
+        "thc.runtime.OriginalCurrentDirectoryTest"
       ],
       "commands": [
         {
@@ -438,7 +440,8 @@
         "build/original-path-link",
         "build/original-path-access",
         "build/original-unlinkat",
-        "build/original-fstatat"
+        "build/original-fstatat",
+        "build/original-current-directory"
       ],
       "sources": [
         "compiler/test-fixtures/OriginalPosixStatAudit.hs",
@@ -458,7 +461,9 @@
         "compiler/test-fixtures/OriginalUnlinkAtAudit.hs",
         "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
         "compiler/test-fixtures/OriginalFstatAtAudit.hs",
-        "test/haskell-fixtures/OriginalFstatAtFixtures.hs"
+        "test/haskell-fixtures/OriginalFstatAtFixtures.hs",
+        "compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs",
+        "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs"
       ]
     },
     "original-fd-ready": {

@@ -21,10 +21,10 @@ import thc.NativeIO
  * The request owns its pathname and fd until transfer to the existing lease.
  * No guest exception is claimed here: GHC's wrapper delivers after failure.
  */
-internal class NativeOpenOperation(path: ByteArray, flags: Int, mode: Int) : AutoCloseable,
+internal class NativeOpenOperation(path: ByteArray, flags: Int, mode: Int, directory: Int) : AutoCloseable,
     TruffleSafepoint.Interrupter {
     private val interrupted = AtomicBoolean()
-    private var handle: MemorySegment? = NativeOpenApi.start(path, flags, mode)
+    private var handle: MemorySegment? = NativeOpenApi.start(path, flags, mode, directory)
 
     override fun interrupt(thread: Thread) {
         interrupted.set(true)
@@ -83,8 +83,8 @@ private object NativeOpenApi {
     private fun function(name: String, result: MemoryLayout?, vararg arguments: MemoryLayout): MethodHandle =
         linker.downcallHandle(library.find("thc_open_$name").orElseThrow(),
             if (result == null) FunctionDescriptor.ofVoid(*arguments) else FunctionDescriptor.of(result, *arguments))
-    private val start = function("start", ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT,
-        ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+    private val start = function("start_at", ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT,
+        ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
     private val done = function("done", ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
     private val cancel = function("cancel", ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
     private val wake = function("wake", null, ValueLayout.ADDRESS)
@@ -92,11 +92,11 @@ private object NativeOpenApi {
     private val wait = function("wait", ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
     private val finish = function("finish", ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
 
-    fun start(path: ByteArray, flags: Int, mode: Int): MemorySegment = Arena.ofConfined().use { arena ->
+    fun start(path: ByteArray, flags: Int, mode: Int, directory: Int): MemorySegment = Arena.ofConfined().use { arena ->
         check(path.isNotEmpty() && path.last() == 0.toByte()) { "Native open requires a terminated pathname snapshot" }
         val bytes = arena.allocate(path.size.toLong()).also { it.copyFrom(MemorySegment.ofArray(path)) }
         val error = arena.allocate(ValueLayout.JAVA_INT)
-        val result = start.invokeWithArguments(bytes, flags, mode, error) as MemorySegment
+        val result = start.invokeWithArguments(bytes, flags, mode, directory, error) as MemorySegment
         if (result.address() == 0L) fault("Native open request unavailable (errno ${error.get(ValueLayout.JAVA_INT, 0)})")
         result
     }

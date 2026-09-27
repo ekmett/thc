@@ -646,6 +646,42 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    @TruffleBoundary internal fun changeDirectoryOriginal(path: ManagedAddress): Long {
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original chdir requires the explicit native filesystem")
+            }
+            provider.changeDirectory(bytes)
+        }
+    }
+
+    /** The observed original Unix caller owns its buffer. GNU NULL allocation
+     * is a separate unsupported operation, never an unowned returned array. */
+    @TruffleBoundary internal fun currentDirectoryOriginal(output: ManagedAddress, capacity: Long): Long {
+        if (output.sameLocation(ManagedAddress.nullAddress()))
+            fault("Original getcwd NULL allocation is not supported")
+        if (capacity !in 0..Int.MAX_VALUE.toLong()) fault("Original getcwd exceeds managed byte capacity")
+        output.requireByteRegion(capacity, writable = true)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original getcwd requires the explicit native filesystem")
+            }
+            output.withNativeBorrow {
+                fun publish(): Long {
+                    output.requireByteRegion(capacity, writable = true)
+                    val name = provider.currentDirectory(capacity.toInt()) + byteArrayOf(0)
+                    ManagedAddress.fromByteArray(name).copyNonOverlappingTo(output, name.size.toLong())
+                    return 0L
+                }
+                val allocation = output.cbitsOwner()
+                if (allocation == null) publish() else synchronized(allocation) { publish() }
+            }
+        }
+    }
+
     @TruffleBoundary internal fun symlinkOriginal(target: ManagedAddress, path: ManagedAddress): Long {
         val targetBytes = originalPathBytes(target)
         val pathBytes = originalPathBytes(path)
@@ -744,7 +780,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * before locking the destination, then retain its storage through native
      * observation and successful copy-back; failures leave the image untouched. */
     @TruffleBoundary internal fun statAtOriginal(fd: Long, path: ManagedAddress, destination: ManagedAddress,
-                                               flags: Int, cwd: Long, emptyPath: Long): Long {
+                                               flags: Int, cwd: Long): Long {
         val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
         destination.requireByteRegion(size, writable = true)
         val bytes = originalPathBytes(path)
@@ -756,7 +792,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             destination.withNativeBorrow {
                 fun publish(): Long {
                     destination.requireByteRegion(size, writable = true)
-                    val image = if (fd == cwd || bytes[0] == '/'.code.toByte()) provider.statAtRaw(bytes, flags, emptyPath)
+                    val image = if (fd == cwd || bytes[0] == '/'.code.toByte()) provider.statAtRaw(bytes, flags)
                     else try {
                         withDescriptor(fd) { entry ->
                             val native = entry.native ?: fail(7, "Original fstatat requires an authenticated native descriptor")

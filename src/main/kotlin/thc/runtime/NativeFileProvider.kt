@@ -28,7 +28,6 @@ import java.nio.channels.ClosedChannelException
 import java.nio.channels.NonReadableChannelException
 import java.nio.channels.NonWritableChannelException
 import java.nio.channels.SeekableByteChannel
-import java.nio.file.InvalidPathException
 import java.nio.file.StandardOpenOption
 import java.nio.file.OpenOption
 import thc.Language
@@ -43,22 +42,30 @@ import thc.withFfiMode
 /** Linux provider proof only. Acquisition is reachable solely through the
  * explicitly configured NativeFileSystem request, never from a guest fd.
  * No original FCall recognition or automatic replacement of Env streams. */
-internal class NativeFileProvider private constructor(private val env: TruffleLanguage.Env, private val threads: GuestThreads) : Closeable {
+internal class NativeFileProvider private constructor(private val env: TruffleLanguage.Env, private val threads: GuestThreads, private val directory: NativeDirectoryOwner) : Closeable {
     companion object {
         /** No arbitrary Builder, FileSystem, provider attachment, or global map.
          * The factory knows the exact final provider whose channel it authenticates. */
         internal fun createContext(endpoints: Set<StandardEndpoint>,
                                    profile: ContextProfile = ContextProfile.NATIVE,
                                    ffiMode: FfiMode = FfiMode.NATIVE): Context {
-            val builder = Context.newBuilder("thc").allowNativeAccess(true)
-                .allowIO(IOAccess.newBuilder().fileSystem(NativeFileSystem(endpoints)).build())
-            val context = builder.withContextProfile(profile).withFfiMode(ffiMode).build()
+            if (!NativeIO.supportedHost())
+                throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
+            val filesystem = NativeFileSystem(endpoints)
+            val context = try {
+                Context.newBuilder("thc").allowNativeAccess(true)
+                    .allowIO(IOAccess.newBuilder().fileSystem(filesystem).build())
+                    .withContextProfile(profile).withFfiMode(ffiMode).build()
+            } catch (failure: Throwable) {
+                try { filesystem.directoryOwner.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
+                throw failure
+            }
             try {
                 context.initialize("thc"); context.enter()
                 try {
                     val state = Language.currentState()
                     check(state.nativeFiles == null)
-                    val provider = NativeFileProvider(state.env, state.threads)
+                    val provider = NativeFileProvider(state.env, state.threads, filesystem.directoryOwner)
                     state.files.installNative(provider, endpoints)
                     state.nativeFiles = provider
                     if (profile == ContextProfile.LAUNCHER) state.signals.authorizeLauncher()
@@ -66,6 +73,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 return context
             } catch (failure: Throwable) {
                 try { context.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
+                try { filesystem.directoryOwner.close() } catch (closing: Throwable) { failure.addSuppressed(closing) }
                 throw failure
             }
         }
@@ -148,7 +156,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
             3 -> setOf(StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE)
             else -> throw IllegalArgumentException("Invalid native open mode")
         }
-        return opened(path, NativeOpenRequest(null, options) { acquireFile(it!!.toString(), mode) }, options)
+        return opened(path, NativeOpenRequest(null, options) { pathValue, anchor -> acquireFile(pathValue!!, mode, anchor!!) }, options)
     }
 
     /** The public path is only the fixed provider's dispatch/CWD anchor. Guest
@@ -160,46 +168,19 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         val readable = abi.openReadable(flags.toLong())
         val writable = abi.openWritable(flags.toLong())
         val options: Set<OpenOption> = emptySet()
-        return opened(".", NativeOpenRequest(null, options) { anchor ->
-            val bytes = absoluteRawPath(anchor!!, path)
+        return opened(".", NativeOpenRequest(null, options) { _, anchor ->
+            val directoryBorrow = checkNotNull(anchor)
+            val bytes = path
             acquire(readable, writable) { lease ->
                 if (operation == OriginalStdioOp.OPEN) NativeLimbScope().use { scope ->
                     val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
                     name.copyFrom(bytes, 0, bytes.size)
-                    result("open_raw", lease, name, flags, mode.toInt())
-                } else NativeOpenOperation(bytes, flags, mode.toInt()).use { request ->
+                    result("open_raw", lease, directoryBorrow.lease, name, flags, mode.toInt())
+                } else NativeOpenOperation(bytes, flags, mode.toInt(), directoryBorrow.descriptor).use { request ->
                     request.await(node, threads, operation == OriginalStdioOp.OPEN_INTERRUPTIBLE, lease)
                 }
             }
         }, options)
-    }
-
-    private fun absoluteRawPath(anchor: java.nio.file.Path, path: ByteArray): ByteArray {
-        check(path.isNotEmpty() && path.last() == 0.toByte() && path.dropLast(1).none { it == 0.toByte() })
-        // Empty names must remain empty (native ENOENT), not become the anchor.
-        if (path.size == 1 || path[0] == '/'.code.toByte()) return path
-        val uri = anchor.toUri()
-        check(uri.scheme == "file" && uri.rawAuthority.isNullOrEmpty() && uri.rawQuery == null && uri.rawFragment == null)
-        // The Linux default Path's public URI percent-encodes its underlying
-        // bytes, including invalid UTF-8. Do not normalize guest ./.. segments.
-        val raw = uri.rawPath
-        val bytes = java.io.ByteArrayOutputStream()
-        var i = 0
-        while (i < raw.length) {
-            val c = raw[i++]
-            if (c == '%') {
-                check(i + 1 < raw.length)
-                val high = raw[i++].digitToIntOrNull(16) ?: fault("Invalid native path URI")
-                val low = raw[i++].digitToIntOrNull(16) ?: fault("Invalid native path URI")
-                bytes.write((high shl 4) or low)
-            } else {
-                check(c.code in 1..127)
-                bytes.write(c.code)
-            }
-        }
-        val base = bytes.toByteArray()
-        check(base.isNotEmpty() && base[0] == '/'.code.toByte() && base.none { it == 0.toByte() })
-        return base + (if (base.last() == '/'.code.toByte()) byteArrayOf() else byteArrayOf('/'.code.toByte())) + path
     }
 
     /** This provider exists only in the factory-owned full-host filesystem.
@@ -208,12 +189,12 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     @Synchronized fun unlinkRaw(path: ByteArray): Long {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
-            result("unlink", name)
+            result("unlink", anchor.lease, name)
+        }
         }
     }
 
@@ -222,14 +203,14 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     @Synchronized fun symlinkRaw(target: ByteArray, path: ByteArray): Long {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val targetName = scope.allocate((target.size.toLong() + 7) and -8L)
             targetName.copyFrom(target, 0, target.size)
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
-            result("symlink", targetName, name)
+            result("symlink", anchor.lease, targetName, name)
+        }
         }
     }
 
@@ -237,15 +218,15 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     @Synchronized fun readlinkRaw(path: ByteArray, capacity: Int): ByteArray {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
             val output = scope.allocate((capacity.toLong() + 7) and -8L)
-            val count = result("readlink", name, output, capacity.toLong())
+            val count = result("readlink", anchor.lease, name, output, capacity.toLong())
             if (count !in 0L..capacity.toLong()) fault("Invalid native readlink result")
             ByteArray(count.toInt()).also { output.copyTo(it, 0, it.size) }
+        }
         }
     }
 
@@ -278,28 +259,36 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         return statAtImage("fstatat_invalid", path, flags)
     }
 
-    /** Empty+AT_EMPTY_PATH names this context's directory. Anchoring "." also
-     * follows a symlink in the context anchor when NOFOLLOW is set. Plain empty
-     * names retain libc's ENOENT, and no call observes the process CWD. */
-    @Synchronized fun statAtRaw(path: ByteArray, flags: Int, emptyPath: Long): ByteArray {
+    /** Empty+AT_EMPTY_PATH names the retained context-directory identity. */
+    @Synchronized fun statAtRaw(path: ByteArray, flags: Int): ByteArray {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val name = if (path.size == 1 && path[0] == 0.toByte() && flags.toLong() and emptyPath != 0L)
-            byteArrayOf('.'.code.toByte(), 0) else path
-        return statAtImage("fstatat_cwd", absoluteRawPath(anchor, name), flags)
+        return directory.borrow().use { statAtImage("fstatat", path, flags, it.lease) }
+    }
+
+    @Synchronized fun changeDirectory(path: ByteArray): Long {
+        current()
+        if (disposed) throw ClosedChannelException()
+        directory.change(path)
+        return 0L
+    }
+
+    @Synchronized fun currentDirectory(capacity: Int): ByteArray {
+        current()
+        if (disposed) throw ClosedChannelException()
+        return directory.name(capacity)
     }
 
     /** AT_FDCWD and absolute paths use the fixed context filesystem's anchor. */
     @Synchronized fun unlinkAtRaw(path: ByteArray, flags: Int): Long {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
-            result("unlinkat_cwd", name, flags)
+            result("unlinkat", anchor.lease, name, flags)
+        }
         }
     }
 
@@ -308,12 +297,12 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     @Synchronized fun accessRaw(path: ByteArray, mode: Int): Long {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
-            result("access", name, mode)
+            result("access", anchor.lease, name, mode)
+        }
         }
     }
 
@@ -321,12 +310,12 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     @Synchronized fun pathModeRaw(path: ByteArray, mode: Long, createDirectory: Boolean): Long {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
-            result(if (createDirectory) "mkdir" else "chmod", name, mode.toInt())
+            result(if (createDirectory) "mkdir" else "chmod", anchor.lease, name, mode.toInt())
+        }
         }
     }
 
@@ -335,14 +324,14 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     @Synchronized fun statRaw(path: ByteArray, followLinks: Boolean): ByteArray {
         current()
         if (disposed) throw ClosedChannelException()
-        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
-        val bytes = absoluteRawPath(anchor, path)
-        return NativeLimbScope().use { scope ->
+        val bytes = path
+        return directory.borrow().use { anchor -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
             val image = scope.allocate(statSize.toLong())
-            result("path_stat", name, if (followLinks) 1 else 0, image)
+            result("path_stat", anchor.lease, name, if (followLinks) 1 else 0, image)
             ByteArray(statSize).also { image.copyTo(it, 0, it.size) }
+        }
         }
     }
 
@@ -351,7 +340,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     fun standard(endpoint: StandardEndpoint): OpenedNativeFile {
         val options: Set<OpenOption> = setOf(if (endpoint == StandardEndpoint.INPUT)
             StandardOpenOption.READ else StandardOpenOption.WRITE)
-        return opened(".", NativeOpenRequest(endpoint, options) { acquireStandard(endpoint.ordinal) }, options)
+        return opened(".", NativeOpenRequest(endpoint, options) { _, _ -> acquireStandard(endpoint.ordinal) }, options)
     }
 
     private fun opened(path: String, request: NativeOpenRequest, options: Set<OpenOption>): OpenedNativeFile {
@@ -369,13 +358,14 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     }
 
     // Only a consumed, configured FileSystem acquisition request calls these.
-    private fun acquireFile(path: String, mode: Int): NativeResource {
-        if ('\u0000' in path) throw InvalidPathException(path, "NUL in native path")
-        val bytes = path.toByteArray(Charsets.UTF_8) + byteArrayOf(0)
+    private fun acquireFile(path: java.nio.file.Path, mode: Int, anchor: NativeDirectoryOwner.Borrow): NativeResource {
+        // Truffle normalizes a nonempty "." path before the SPI. Literal empty
+        // TruffleFile IO is rejected by Truffle before this acquisition.
+        val bytes = NativeDirectoryOwner.pathBytes(if (path == java.nio.file.Path.of("")) java.nio.file.Path.of(".") else path)
         return acquire(mode == 0 || mode == 3, mode != 0) { lease -> NativeLimbScope().use { scope ->
             val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
             name.copyFrom(bytes, 0, bytes.size)
-            result("open", lease, name, mode)
+            result("open", lease, anchor.lease, name, mode)
         } }
     }
 
@@ -419,6 +409,9 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
         var failed: Throwable? = null
         for (lease in pending) try { retire(lease) } catch (failure: Throwable) {
+            if (failed == null) failed = failure else if (failed !== failure) failed.addSuppressed(failure)
+        }
+        try { directory.close() } catch (failure: Throwable) {
             if (failed == null) failed = failure else if (failed !== failure) failed.addSuppressed(failure)
         }
         if (failed != null) throw failed
@@ -584,7 +577,14 @@ internal class NativeFileLease : AutoCloseable, TruffleObject {
             }
         } catch (failure: Throwable) { failed("Native readiness duplication failed", failure) }
     }
-    @Synchronized override fun close() {
+    @Synchronized override fun close() = closeOwned(reportError = true)
+
+    /** O_PATH directory borrows carry no buffered writes. Linux consumes their
+     * fd even when close reports EINTR; never retry or report a successful CWD
+     * commit/native effect as failed because its private anchor was retired. */
+    @Synchronized internal fun closeDirectory() = closeOwned(reportError = false)
+
+    private fun closeOwned(reportError: Boolean) {
         synchronized(lifetime) {
             if (closed) return
             closed = true
@@ -595,7 +595,7 @@ internal class NativeFileLease : AutoCloseable, TruffleObject {
                     Arena.ofConfined().use { call ->
                         val errors = call.allocate(NativeCalls.capture)
                         val result = NativeCalls.closeFd.invokeExact(errors, fd) as Int
-                        if (result != 0) throw NativeFileException("close", errors.get(ValueLayout.JAVA_INT, NativeCalls.errno))
+                        if (result != 0 && reportError) throw NativeFileException("close", errors.get(ValueLayout.JAVA_INT, NativeCalls.errno))
                     }
                 } catch (failure: Throwable) { failed("Native close invocation failed", failure) }
             } finally { arena.close() }
