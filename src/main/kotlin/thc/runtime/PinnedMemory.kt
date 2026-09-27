@@ -193,7 +193,9 @@ internal class PinnedByteArrayContents(proof: CoreRepresentation,
 internal class PinnedScalarIndexExpression(private val operation: ManagedAddressRead, proof: CoreRepresentation, private val byteOffset: Boolean,
     @field:Child private var base: Expr, @field:Child private var index: Expr) : Expr() {
     init { representation = proof.copy(evaluated = true) }
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun execute(frame: VirtualFrame): Any = if (operation.isInt) executeInt(frame) else executeLong(frame)
+    override fun executeInt(frame: VirtualFrame): Int = operation.readInt(
+        base.executeRequiredAddress(frame), index.executeRequiredLong(frame), byteOffset)
     override fun executeLong(frame: VirtualFrame): Long = operation.read(
         base.executeRequiredAddress(frame), index.executeRequiredLong(frame), byteOffset)
 }
@@ -236,21 +238,29 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
             operation == PinnedMemoryOp.WRITE_CHAR -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
-            val value = operands[2].executeRequiredLong(frame)
+            val value = if (operation == PinnedMemoryOp.WRITE_CHAR) operands[2].executeRequiredLong(frame).toInt()
+                else operands[2].executeRequiredInt(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
-            address.writeWord8(offset, value)
+            address.writeWord8Int(offset, value)
             Unit
         }
         operation == PinnedMemoryOp.WRITE_INT16 || operation == PinnedMemoryOp.WRITE_WORD16 -> {
             val address = operands[0].executeRequiredAddress(frame)
             val offset = operands[1].executeRequiredLong(frame)
-            val value = operands[2].executeRequiredLong(frame)
+            val value = operands[2].executeRequiredInt(frame)
             ManagedByteArray.requireState(operands[3].execute(frame))
-            address.writeNativeScalar(offset, 2, value, byteOffset)
+            address.writeNativeInt(offset, 2, value, byteOffset)
             Unit
         }
-        operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 ||
-            operation == PinnedMemoryOp.WRITE_WIDE_CHAR ||
+        operation == PinnedMemoryOp.WRITE_INT32 || operation == PinnedMemoryOp.WRITE_WORD32 -> {
+            val address = operands[0].executeRequiredAddress(frame)
+            val offset = operands[1].executeRequiredLong(frame)
+            val value = operands[2].executeRequiredInt(frame)
+            ManagedByteArray.requireState(operands[3].execute(frame))
+            address.writeNativeInt(offset, 4, value, byteOffset)
+            Unit
+        }
+        operation == PinnedMemoryOp.WRITE_WIDE_CHAR ||
             operation == PinnedMemoryOp.WRITE_INT || operation == PinnedMemoryOp.WRITE_WORD ||
             operation == PinnedMemoryOp.WRITE_INT64 || operation == PinnedMemoryOp.WRITE_WORD64 -> {
             val address = operands[0].executeRequiredAddress(frame)
@@ -312,9 +322,15 @@ internal class PinnedMemoryExpression(private val operation: PinnedMemoryOp, pro
                 val address = operands[0].executeRequiredAddress(frame)
                 val index = operands[1].executeRequiredLong(frame)
                 ManagedByteArray.requireState(operands[2].execute(frame))
-                val value = operation.addressRead?.read(address, index, byteOffset)
-                    ?: address.readWord8(index).let { if (operation == PinnedMemoryOp.READ_INT8) it.toByte().toLong() else it }
-                FrameAccess.writeLong(frame, slots[offset], value)
+                val read = operation.addressRead
+                if (read?.isInt == true) FrameAccess.writeInt(frame, slots[offset], read.readInt(address, index, byteOffset))
+                else if (read != null) FrameAccess.writeLong(frame, slots[offset], read.read(address, index, byteOffset))
+                else if (operation == PinnedMemoryOp.READ_CHAR) FrameAccess.writeLong(frame, slots[offset], address.indexChar(index))
+                else {
+                    val value = address.readWord8Int(index)
+                    FrameAccess.writeInt(frame, slots[offset],
+                        if (operation == PinnedMemoryOp.READ_INT8) value.toByte().toInt() else value)
+                }
             }
             operation == PinnedMemoryOp.READ_ADDR -> {
                 val address = operands[0].executeRequiredAddress(frame)

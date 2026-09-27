@@ -51,6 +51,30 @@ internal enum class AtomicAddressOp(val primitive: String, val width: Int = 8,
         else if (this == OR) old or operand else if (this == XOR) old xor operand
         else if (this == READ) old else operand
 
+    fun numericInt(address: ManagedAddress, operand: Int, replacement: Int): Int {
+        if (!cas || width !in 1..4) fault("Expected narrow atomic CAS")
+        val mask = if (width == 4) -1 else (1 shl (width * 8)) - 1
+        val expected = operand and mask
+        val desired = replacement and mask
+        if (address.hasNativeStorage()) return address.withNativeSegmentInt { segment ->
+            address.requireByteRegion(width.toLong(), writable = true)
+            if (segment.address() % width != 0L) fault("Misaligned native atomic Addr#")
+            // The small C helper has an explicit uint64 ABI; the JVM operation
+            // and four-byte VarHandle path retain Int carriers.
+            if (width < 4) NativeNarrowAtomic.cas(segment, width.toLong(),
+                expected.toLong(), desired.toLong()).toInt()
+            else intHandle.compareAndExchange(segment, 0L, expected, desired) as Int
+        }
+        return address.withAtomicBytes(width, true) { bytes, start ->
+            var old = 0
+            for (i in 0 until width) old = old or ((bytes.get(ValueLayout.JAVA_BYTE, start.toLong() + i).toInt() and 255) shl
+                (8 * if (little) i else width - i - 1))
+            if (old == expected) for (i in 0 until width) bytes.set(ValueLayout.JAVA_BYTE, start.toLong() + i,
+                (desired ushr (8 * if (little) i else width - i - 1)).toByte())
+            old
+        }
+    }
+
     fun numeric(address: ManagedAddress, operand: Long = 0, replacement: Long = 0): Long {
         if (pointer) fault("Pointer atomic requires address operands")
         if (address.hasNativeStorage()) return address.withNativeSegmentLong { segment ->
@@ -152,6 +176,11 @@ internal class AtomicAddressExpression(private val operation: AtomicAddressOp, p
             val replacement = if (operation.cas) operands[2].executeRequiredAddress(frame) else null
             ManagedByteArray.requireState(operands.last().execute(frame))
             FrameAccess.write(frame, slots[offset], operation.address(location, operand, replacement))
+        } else if (operation.width < 8) {
+            val operand = operands[1].executeRequiredInt(frame)
+            val replacement = operands[2].executeRequiredInt(frame)
+            ManagedByteArray.requireState(operands.last().execute(frame))
+            FrameAccess.writeInt(frame, slots[offset], operation.numericInt(location, operand, replacement))
         } else {
             val operand = if (operation == AtomicAddressOp.READ) 0L else operands[1].executeRequiredLong(frame)
             val replacement = if (operation.cas) operands[2].executeRequiredLong(frame) else 0L

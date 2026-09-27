@@ -21,7 +21,7 @@ internal class RubbishLiterals(private val language: TruffleLanguage<*>?) {
     private val closure by lazy { Closure(null, arity = 1, target = RootNode.createConstantNode(boxed).callTarget) }
 
     fun decode(proof: CoreRepresentation): Any = when (proof.kind) {
-        CoreKind.LONG -> 0L
+        CoreKind.LONG -> if (proof.isInt) 0 else 0L
         CoreKind.FLOAT -> 0.0f
         CoreKind.DOUBLE -> 0.0
         CoreKind.ADDRESS -> ManagedAddress.nullAddress()

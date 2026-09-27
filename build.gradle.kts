@@ -604,6 +604,21 @@ for ((taskName, dense) in listOf("fourwayAggregateFullCoreTest" to false, "fourw
         doFirst { check(file("build/fourway-aggregate/manifest.json").isFile) { "Run thc-fixtures fourway-aggregate" } }
     }
 }
+for ((taskName, dense) in listOf("narrowIntegerTransportFullCoreTest" to false, "narrowIntegerTransportFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests exact narrow integer carriers against native GHC across calls and storage."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.NarrowIntegerTransportTest") }
+        inputs.files(fileTree("build/narrow-integer-transport") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Exact first-installed carrier checks require a fresh process") { true }
+        doFirst { check(file("build/narrow-integer-transport/manifest.json").isFile) { "Run thc-fixtures narrow-integer-transport" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {

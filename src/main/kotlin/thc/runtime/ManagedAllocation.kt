@@ -115,13 +115,17 @@ internal class ManagedAllocation private constructor(
         if (pointers?.isEmpty() == true) pointers = null
     }
 
-    @Synchronized fun readByte(offset: Long): Long {
+    /** Machine-word host byte API; guest narrow primops use readByteInt. */
+    fun readByte(offset: Long): Long = readByteInt(offset).toLong()
+    fun writeByte(offset: Long, value: Long) = writeByteInt(offset, value.toInt())
+
+    @Synchronized fun readByteInt(offset: Long): Int {
         val start = range(offset, 1)
         if (pointerCapable && intersectsPointer(start, 1)) fault("Cannot expose managed pointer bits as a byte")
-        return (BYTE_ACCESS.get(segment, start.toLong()) as Byte).toLong() and 255L
+        return (BYTE_ACCESS.get(segment, start.toLong()) as Byte).toInt() and 255
     }
 
-    @Synchronized fun writeByte(offset: Long, value: Long) {
+    @Synchronized fun writeByteInt(offset: Long, value: Int) {
         mutable()
         val start = range(offset, 1)
         if (pointerCapable) invalidate(start, 1)
@@ -130,6 +134,17 @@ internal class ManagedAllocation private constructor(
 
     /** Write one complete native-endian numeric element without exposing raw
      * backing bytes or allocating a temporary buffer. */
+    @Synchronized fun writeNativeIntByteOffset(offset: Long, width: Int, value: Int, little: Boolean) {
+        mutable()
+        if (width != 2 && width != 4) fault("Unsupported managed scalar width")
+        val start = range(offset, width.toLong())
+        if (pointerCapable) invalidate(start, width)
+        for (index in 0 until width) {
+            val shift = (if (little) index else width - 1 - index) * 8
+            BYTE_ACCESS.set(segment, start.toLong() + index, (value ushr shift).toByte())
+        }
+    }
+
     @Synchronized fun writeNativeScalarByteOffset(offset: Long, width: Int, value: Long, little: Boolean) {
         mutable()
         if (width != 2 && width != 4 && width != 8) fault("Unsupported managed scalar width")
@@ -201,6 +216,32 @@ internal class ManagedAllocation private constructor(
 
     /** The allocation monitor orders all widths, shrink, and pointer-cell
      * installation. Both successful and failed CAS have a full memory barrier. */
+    @Synchronized fun atomicNarrowInt(index: Long, operand: Int, replacement: Int, operation: AtomicIntArrayOp): Int {
+        mutable()
+        val width = operation.width
+        if (width !in 1..4 || operation.operands != 2) fault("Expected narrow array CAS")
+        if (index < 0 || index > Long.MAX_VALUE / width)
+            fault("Managed allocation element outside its backing storage")
+        val start = range(index * width, width.toLong())
+        if (intersectsPointer(start, width)) fault("Atomic Int access overlaps a managed pointer cell")
+        if (isPinned) {
+            val operationAddress = when (width) { 1 -> AtomicAddressOp.CAS8; 2 -> AtomicAddressOp.CAS16; else -> AtomicAddressOp.CAS32 }
+            val old = operationAddress.numericInt(ManagedAddress.fromGuestByteArray(this).plus(start.toLong()), operand, replacement)
+            return when (width) { 1 -> old.toByte().toInt(); 2 -> old.toShort().toInt(); else -> old }
+        }
+        val bytes = bytes!!
+        return synchronized(bytes) {
+            val old = when (width) { 1 -> bytes[start].toInt(); 2 -> ManagedByteArray.readInt16(bytes, index); else -> ManagedByteArray.readInt32(bytes, index) }
+            val expected = when (width) { 1 -> operand.toByte().toInt(); 2 -> operand.toShort().toInt(); else -> operand }
+            if (old == expected) when (width) {
+                1 -> bytes[start] = replacement.toByte()
+                2 -> ManagedByteArray.writeInt16(bytes, index, replacement)
+                else -> ManagedByteArray.writeInt32(bytes, index, replacement)
+            }
+            old
+        }
+    }
+
     @Synchronized fun atomicInt(index: Long, operand: Long, replacement: Long, operation: AtomicIntArrayOp): Long {
         mutable()
         val width = operation.width
@@ -235,8 +276,8 @@ internal class ManagedAllocation private constructor(
         return synchronized(bytes) {
             val old = when (width) {
                 1 -> bytes[start].toLong()
-                2 -> ManagedByteArray.readInt16(bytes, index)
-                4 -> ManagedByteArray.readInt32(bytes, index)
+                2 -> ManagedByteArray.readInt16(bytes, index).toLong()
+                4 -> ManagedByteArray.readInt32(bytes, index).toLong()
                 else -> ManagedByteArray.readInt(bytes, index)
             }
             val next = when (operation) {
@@ -261,8 +302,8 @@ internal class ManagedAllocation private constructor(
             }
             when (width) {
                 1 -> bytes[start] = next.toByte()
-                2 -> ManagedByteArray.writeInt16(bytes, index, next)
-                4 -> ManagedByteArray.writeInt32(bytes, index, next)
+                2 -> ManagedByteArray.writeInt16(bytes, index, next.toInt())
+                4 -> ManagedByteArray.writeInt32(bytes, index, next.toInt())
                 else -> ManagedByteArray.writeInt(bytes, index, next)
             }
             old

@@ -304,6 +304,10 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
         else if (representation.isEvaluatedReference) frame.getObject(result) else FrameAccess.read(frame, result)
     }
     override fun execute(frame: VirtualFrame): Any? { run(frame); return resultValue(frame) }
+    override fun executeInt(frame: VirtualFrame): Int {
+        run(frame)
+        return if (representation.isInt) frame.getInt(result) else RuntimeTypesGen.expectInteger(FrameAccess.read(frame, result))
+    }
     override fun executeLong(frame: VirtualFrame): Long {
         run(frame)
         return if (representation.isLong) frame.getLong(result) else RuntimeTypesGen.expectLong(FrameAccess.read(frame, result))
@@ -326,7 +330,8 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
     @ExplodeLoop private fun finishTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val shape = tuple ?: fault("Scalar join region cannot write a tuple")
         for (index in tupleSlots.indices) {
-            if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(tupleSlots[index]))
+            if (shape.layout.isInt(index)) FrameAccess.writeInt(frame, slots[offset + index], frame.getInt(tupleSlots[index]))
+            else if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(tupleSlots[index]))
             else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(tupleSlots[index]))
             else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], frame.getDouble(tupleSlots[index]))
             else FrameAccess.write(frame, slots[offset + index], frame.getObject(tupleSlots[index]))

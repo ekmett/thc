@@ -18,6 +18,11 @@ internal data class CoreRepresentation(
     val tagSlot: Int? = null,
     val alternativeSlots: List<List<Int>>? = null
 ) {
+    // Preserve the original exported kind/PrimRep proof. Exact lowered PrimRep,
+    // not the broad exported "long" category, selects the computational carrier.
+    val narrowInteger: NarrowInteger? = if (kind == CoreKind.LONG)
+        NarrowInteger.fromRep(primReps?.singleOrNull()) else null
+    val isInt: Boolean get() = narrowInteger != null
     // Compute from immutable load-time metadata, not via ArrayList.equals in
     // a frame read. The latter has a concurrent-modification exception path
     // that can force a VirtualFrame to escape during partial evaluation.
@@ -30,7 +35,7 @@ internal data class CoreRepresentation(
     /** A vector remains one logical value and one raw reference in typed transport. */
     val isTypedTransport: Boolean get() = isAggregate || isVector
     val isEmptyTuple: Boolean get() = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
-    val isLong: Boolean get() = kind == CoreKind.LONG
+    val isLong: Boolean get() = kind == CoreKind.LONG && !isInt
     val isFloat: Boolean get() = kind == CoreKind.FLOAT
     val isDouble: Boolean get() = kind == CoreKind.DOUBLE
     val isEvaluatedReference: Boolean get() = evaluated &&
@@ -43,8 +48,11 @@ internal data class CoreRepresentation(
         else -> null
     }
     fun refine(other: CoreRepresentation): CoreRepresentation {
-        // GHC checks scalar types; all integral PrimReps use the same Long carrier.
-        // The selected operation supplies signedness and narrowing semantics.
+        // GHC checks scalar types. Lowered Int and Long are different carriers;
+        // names within either carrier do not impose another runtime type check.
+        if (kind == CoreKind.LONG && other.kind == CoreKind.LONG &&
+            primReps != null && other.primReps != null && isInt != other.isInt)
+            throw RuntimeFault("Conflicting Core integral carriers")
         val boxed = exactBoxedRep()
         val otherBoxed = other.exactBoxedRep()
         if (boxed != null && otherBoxed != null && boxed != otherBoxed)

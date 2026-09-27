@@ -56,7 +56,8 @@ internal class BytecodeTypedInputSlots(
             val bytecode = root.bytecodeNode
             for (i in arguments.indices) {
                 val from = indices[i]
-                if (entry.packet.isLong(entry.header + from)) arguments[i].setLong(bytecode, frame, source.long(frame, root, null, from))
+                if (entry.packet.isInt(entry.header + from)) arguments[i].setInt(bytecode, frame, source.int(frame, root, null, from))
+                else if (entry.packet.isLong(entry.header + from)) arguments[i].setLong(bytecode, frame, source.long(frame, root, null, from))
                 else if (entry.packet.isFloat(entry.header + from)) arguments[i].setFloat(bytecode, frame, source.float(frame, root, null, from))
                 else if (entry.packet.isDouble(entry.header + from)) arguments[i].setDouble(bytecode, frame, source.double(frame, root, null, from))
                 else {
@@ -74,7 +75,8 @@ internal class BytecodeTypedInputSlots(
         val layout = captureLayout ?: fault("Missing capture layout")
         for (i in captures.indices) {
             val proof = captureProofs[i]
-            if (proof.isLong && proof.evaluated) captures[i].setLong(bytecode, frame, layout.readLong(environment, i))
+            if (proof.isInt && proof.evaluated) captures[i].setInt(bytecode, frame, layout.readInt(environment, i))
+            else if (proof.isLong && proof.evaluated) captures[i].setLong(bytecode, frame, layout.readLong(environment, i))
             else if (proof.isFloat && proof.evaluated) captures[i].setFloat(bytecode, frame, layout.readFloat(environment, i))
             else if (proof.isDouble && proof.evaluated) captures[i].setDouble(bytecode, frame, layout.readDouble(environment, i))
             else {
@@ -93,7 +95,8 @@ internal class BytecodeTypedInputSlots(
             if (initial) bloom.setLong(bytecode, frame, entry.packet.getLong(input, 0) or mask)
             for (i in arguments.indices) {
                 val from = indices[i] + entry.header
-                if (entry.packet.isLong(from)) arguments[i].setLong(bytecode, frame, entry.packet.getLong(input, from))
+                if (entry.packet.isInt(from)) arguments[i].setInt(bytecode, frame, entry.packet.getInt(input, from))
+                else if (entry.packet.isLong(from)) arguments[i].setLong(bytecode, frame, entry.packet.getLong(input, from))
                 else if (entry.packet.isFloat(from)) arguments[i].setFloat(bytecode, frame, entry.packet.getFloat(input, from))
                 else if (entry.packet.isDouble(from)) arguments[i].setDouble(bytecode, frame, entry.packet.getDouble(input, from))
                 else {

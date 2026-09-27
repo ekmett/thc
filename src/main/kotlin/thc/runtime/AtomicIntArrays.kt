@@ -7,7 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.VirtualFrame
 
 /** All offsets count elements of [width] bytes. Integral Core values have
- * already been lowered to Long; the operation supplies narrowing/signedness. */
+ * carry Int for 8/16/32-bit CAS and Long for machine/64-bit operations. */
 internal enum class AtomicIntArrayOp(val primitive: String, val width: Int = 8, val operands: Int = 1) {
     READ("atomicReadIntArray#", operands = 0),
     WRITE("atomicWriteIntArray#"),
@@ -31,6 +31,14 @@ internal enum class AtomicIntArrayOp(val primitive: String, val width: Int = 8, 
             scalar(result.components[0], CoreKind.VOID) && scalar(result.components[1], CoreKind.LONG)
         else scalar(result, CoreKind.VOID)
         if (!valid) fault("Atomic byte-array primitive result carrier mismatch: $primitive")
+    }
+
+    fun executeInt(value: Any?, index: Long, operand: Int, replacement: Int): Int {
+        if (value !is ManagedAllocation) {
+            CompilerDirectives.transferToInterpreter()
+            fault("$primitive requires an owned MutableByteArray#")
+        }
+        return value.atomicNarrowInt(index, operand, replacement, this)
     }
 
     fun execute(value: Any?, index: Long, operand: Long, replacement: Long): Long {
@@ -61,6 +69,13 @@ internal class AtomicIntArrayExpression(private val operation: AtomicIntArrayOp,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val owner = arguments[0].execute(frame)
         val index = arguments[1].executeRequiredLong(frame)
+        if (operation.width < 8) {
+            val operand = arguments[2].executeRequiredInt(frame)
+            val replacement = arguments[3].executeRequiredInt(frame)
+            ManagedByteArray.requireState(arguments.last().execute(frame))
+            FrameAccess.writeInt(frame, slots[offset], operation.executeInt(owner, index, operand, replacement))
+            return null
+        }
         val operand = if (operation.operands > 0) arguments[2].executeRequiredLong(frame) else 0L
         val replacement = if (operation.operands == 2) arguments[3].executeRequiredLong(frame) else 0L
         ManagedByteArray.requireState(arguments.last().execute(frame))

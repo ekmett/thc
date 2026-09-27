@@ -62,6 +62,11 @@ internal class ManagedAddress private constructor(
         else synchronized(owner ?: fault("Address has no owned native allocation")) {
             body((owner.nativeSegment() ?: fault("Address has no owned native allocation")).asSlice(offset))
         }
+    internal fun withNativeSegmentInt(body: java.util.function.ToIntFunction<MemorySegment>): Int =
+        if (native != null) native.accessInt { body.applyAsInt(it.asSlice(offset)) }
+        else synchronized(owner ?: fault("Address has no owned native allocation")) {
+            body.applyAsInt((owner.nativeSegment() ?: fault("Address has no owned native allocation")).asSlice(offset))
+        }
     internal fun withNativeSegmentLong(body: ToLongFunction<MemorySegment>): Long =
         if (native != null) native.accessLong { body.applyAsLong(it.asSlice(offset)) }
         else synchronized(owner ?: fault("Address has no owned native allocation")) {
@@ -324,20 +329,23 @@ internal class ManagedAddress private constructor(
     }
 
     /** Both backing variants use byte offsets and return zero-extended Word8#. */
-    fun readWord8(displacement: Long): Long {
-        native?.let { allocation -> return allocation.accessLong { segment ->
+    fun readWord8(displacement: Long): Long = readWord8Int(displacement).toLong()
+
+    /** Guest Word8# uses Int; the host byte API above has a machine-word boundary. */
+    fun readWord8Int(displacement: Long): Int {
+        native?.let { allocation -> return allocation.accessInt { segment ->
             requireRange(displacement, 1)
-            segment.get(ValueLayout.JAVA_BYTE, offset + displacement).toLong() and 255L
+            segment.get(ValueLayout.JAVA_BYTE, offset + displacement).toInt() and 255
         } }
         val index = index(displacement)
-        owner?.let { return it.readByte(index.toLong()) }
+        owner?.let { return it.readByteInt(index.toLong()) }
         // Keep the immutable and mutable loads distinct: only the former may fold.
         val literal = literalBytes
         return (if (literal != null) literal[index] else {
             val mutable = mutableBytes
             if (mutable == null) transferToInterpreter()
             mutable!![index]
-        }).toLong() and 0xffL
+        }).toInt() and 0xff
     }
 
     /** Original libc strlen over a live, bounded byte address. The native
@@ -358,7 +366,7 @@ internal class ManagedAddress private constructor(
             val limit = availableBytes()
             var length = 0L
             while (length < limit) {
-                if (readWord8(length) == 0L) return@scan length
+                if (readWord8Int(length) == 0) return@scan length
                 length++
             }
             fault("Unterminated original C string inside managed Addr#")
@@ -375,8 +383,8 @@ internal class ManagedAddress private constructor(
         if (other !== NULL || count != 0L) other.requireByteRegion(count)
         var index = 0L
         while (index < count) {
-            val difference = readWord8(index) - other.readWord8(index)
-            if (difference != 0L) return@withNativeBorrows difference
+            val difference = readWord8Int(index) - other.readWord8Int(index)
+            if (difference != 0) return@withNativeBorrows difference.toLong()
             index++
         }
         0L
@@ -387,10 +395,10 @@ internal class ManagedAddress private constructor(
     @TruffleBoundary
     fun findByte(value: Long, count: Long): ManagedAddress = withNativeBorrow {
         if (this !== NULL || count != 0L) requireByteRegion(count)
-        val needle = value and 255L
+        val needle = value.toInt() and 255
         var index = 0L
         while (index < count) {
-            if (readWord8(index) == needle) return@withNativeBorrow plus(index)
+            if (readWord8Int(index) == needle) return@withNativeBorrow plus(index)
             index++
         }
         NULL
@@ -398,12 +406,14 @@ internal class ManagedAddress private constructor(
 
     /** The caller evaluates State# before reaching storage. Invalid writes have
      * no effect; the value contributes only its low eight bits, like writeWord8Array#. */
-    fun writeWord8(displacement: Long, value: Long) {
+    fun writeWord8(displacement: Long, value: Long) = writeWord8Int(displacement, value.toInt())
+
+    fun writeWord8Int(displacement: Long, value: Int) {
         native?.let { allocation -> allocation.access { segment ->
             requireRange(displacement, 1, writable = true)
             segment.set(ValueLayout.JAVA_BYTE, offset + displacement, value.toByte())
         }; return }
-        owner?.let { it.writeByte(index(displacement).toLong(), value); return }
+        owner?.let { it.writeByteInt(index(displacement).toLong(), value); return }
         val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
         val index = index(displacement)
         bytes[index] = value.toByte()
@@ -412,6 +422,29 @@ internal class ManagedAddress private constructor(
     /** Native-endian scalar stores validate the full element before mutation.
      * Pointer-bearing allocations retain references except for a complete
      * overwrite of a pointer cell. */
+    @JvmOverloads fun writeNativeInt(elementOffset: Long, width: Int, value: Int, byteOffset: Boolean = false) {
+        if (width != 2 && width != 4) fault("Unsupported managed Addr# scalar width")
+        val stride = if (byteOffset) 1 else width
+        if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
+            fault("Managed Addr# element offset overflow")
+        val displacement = elementOffset * stride
+        requireRange(displacement, width.toLong(), writable = true)
+        val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
+        native?.let { allocation -> allocation.access { segment ->
+            for (index in 0 until width) {
+                val shift = (if (little) index else width - 1 - index) * 8
+                segment.set(ValueLayout.JAVA_BYTE, offset + displacement + index, (value ushr shift).toByte())
+            }
+        }; return }
+        owner?.let { it.writeNativeIntByteOffset(offset + displacement, width, value, little); return }
+        val bytes = mutableBytes ?: fault("Cannot write through an immutable literal Addr#")
+        val start = (offset + displacement).toInt()
+        for (index in 0 until width) {
+            val shift = (if (little) index else width - 1 - index) * 8
+            bytes[start + index] = (value ushr shift).toByte()
+        }
+    }
+
     @JvmOverloads fun writeNativeScalar(elementOffset: Long, width: Int, value: Long, byteOffset: Boolean = false) {
         if (width != 2 && width != 4 && width != 8) fault("Unsupported managed Addr# scalar width")
         val stride = if (byteOffset) 1 else width
@@ -804,17 +837,19 @@ internal class PlusManagedAddress(@field:Child private var address: Expr,
 
 internal class IndexManagedByte(private val signed: Boolean, @field:Child private var address: Expr,
                                 @field:Child private var displacement: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long {
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int {
         val value = address.executeRequiredAddress(frame)
-        val byte = value.readWord8(displacement.executeRequiredLong(frame))
-        return if (signed) byte.toByte().toLong() else byte
+        val byte = value.readWord8Int(displacement.executeRequiredLong(frame))
+        return if (signed) byte.toByte().toInt() else byte
     }
 }
 
 internal class IndexManagedScalarAddress(private val operation: ManagedAddressRead,
     @field:Child private var address: Expr, @field:Child private var element: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+    override fun execute(frame: VirtualFrame): Any = if (operation.isInt) executeInt(frame) else executeLong(frame)
+    override fun executeInt(frame: VirtualFrame): Int = operation.readInt(
+        address.executeRequiredAddress(frame), element.executeRequiredLong(frame))
     override fun executeLong(frame: VirtualFrame): Long = operation.read(
         address.executeRequiredAddress(frame), element.executeRequiredLong(frame))
 }

@@ -51,33 +51,33 @@ internal object ManagedByteArray {
     @JvmStatic fun writeInt(bytes: ByteArray, index: Long, value: Long) {
         ints.set(bytes, elementOffset(bytes, index, 8, "Int"), value)
     }
-    // Narrow reads widen with the requested signedness; writes keep the low bits.
-    @JvmStatic fun readInt16(bytes: ByteArray, index: Long): Long =
-        (int16s.get(bytes, elementOffset(bytes, index, 2, "16-bit")) as Short).toLong()
-    @JvmStatic fun readWord16(bytes: ByteArray, index: Long): Long =
-        java.lang.Short.toUnsignedLong(int16s.get(bytes, elementOffset(bytes, index, 2, "16-bit")) as Short)
-    @JvmStatic fun writeInt16(bytes: ByteArray, index: Long, value: Long) {
+    // Narrow reads extend within Int with the requested signedness; writes keep the low bits.
+    @JvmStatic fun readInt16(bytes: ByteArray, index: Long): Int =
+        (int16s.get(bytes, elementOffset(bytes, index, 2, "16-bit")) as Short).toInt()
+    @JvmStatic fun readWord16(bytes: ByteArray, index: Long): Int =
+        java.lang.Short.toUnsignedInt(int16s.get(bytes, elementOffset(bytes, index, 2, "16-bit")) as Short)
+    @JvmStatic fun writeInt16(bytes: ByteArray, index: Long, value: Int) {
         int16s.set(bytes, elementOffset(bytes, index, 2, "16-bit"), value.toShort())
     }
-    @JvmStatic fun readInt16ByteOffset(bytes: ByteArray, offset: Long): Long =
-        (int16s.get(bytes, byteOffset(bytes, offset, 2, "16-bit")) as Short).toLong()
-    @JvmStatic fun readWord16ByteOffset(bytes: ByteArray, offset: Long): Long =
-        java.lang.Short.toUnsignedLong(int16s.get(bytes, byteOffset(bytes, offset, 2, "16-bit")) as Short)
-    @JvmStatic fun writeInt16ByteOffset(bytes: ByteArray, offset: Long, value: Long) {
+    @JvmStatic fun readInt16ByteOffset(bytes: ByteArray, offset: Long): Int =
+        (int16s.get(bytes, byteOffset(bytes, offset, 2, "16-bit")) as Short).toInt()
+    @JvmStatic fun readWord16ByteOffset(bytes: ByteArray, offset: Long): Int =
+        java.lang.Short.toUnsignedInt(int16s.get(bytes, byteOffset(bytes, offset, 2, "16-bit")) as Short)
+    @JvmStatic fun writeInt16ByteOffset(bytes: ByteArray, offset: Long, value: Int) {
         int16s.set(bytes, byteOffset(bytes, offset, 2, "16-bit"), value.toShort())
     }
-    @JvmStatic fun readInt32(bytes: ByteArray, index: Long): Long =
-        (int32s.get(bytes, elementOffset(bytes, index, 4, "32-bit")) as Int).toLong()
-    @JvmStatic fun readWord32(bytes: ByteArray, index: Long): Long =
-        Integer.toUnsignedLong(int32s.get(bytes, elementOffset(bytes, index, 4, "32-bit")) as Int)
-    @JvmStatic fun writeInt32(bytes: ByteArray, index: Long, value: Long) {
+    @JvmStatic fun readInt32(bytes: ByteArray, index: Long): Int =
+        (int32s.get(bytes, elementOffset(bytes, index, 4, "32-bit")) as Int).toInt()
+    @JvmStatic fun readWord32(bytes: ByteArray, index: Long): Int =
+        (int32s.get(bytes, elementOffset(bytes, index, 4, "32-bit")) as Int)
+    @JvmStatic fun writeInt32(bytes: ByteArray, index: Long, value: Int) {
         int32s.set(bytes, elementOffset(bytes, index, 4, "32-bit"), value.toInt())
     }
-    @JvmStatic fun readInt32ByteOffset(bytes: ByteArray, offset: Long): Long =
-        (int32s.get(bytes, byteOffset(bytes, offset, 4, "32-bit")) as Int).toLong()
-    @JvmStatic fun readWord32ByteOffset(bytes: ByteArray, offset: Long): Long =
-        Integer.toUnsignedLong(int32s.get(bytes, byteOffset(bytes, offset, 4, "32-bit")) as Int)
-    @JvmStatic fun writeInt32ByteOffset(bytes: ByteArray, offset: Long, value: Long) {
+    @JvmStatic fun readInt32ByteOffset(bytes: ByteArray, offset: Long): Int =
+        (int32s.get(bytes, byteOffset(bytes, offset, 4, "32-bit")) as Int).toInt()
+    @JvmStatic fun readWord32ByteOffset(bytes: ByteArray, offset: Long): Int =
+        (int32s.get(bytes, byteOffset(bytes, offset, 4, "32-bit")) as Int)
+    @JvmStatic fun writeInt32ByteOffset(bytes: ByteArray, offset: Long, value: Int) {
         int32s.set(bytes, byteOffset(bytes, offset, 4, "32-bit"), value.toInt())
     }
     // Floating accesses preserve defined raw bits; signaling NaNs have no portable bit-copy promise.
@@ -107,9 +107,9 @@ internal object ManagedByteArray {
         if (offset < 0 || offset >= bytes.size.toLong()) fault("ByteArray# index outside its backing storage")
         return offset.toInt()
     }
-    @JvmStatic fun read(bytes: ByteArray, offset: Long): Long = bytes[index(bytes, offset)].toLong() and 255L
-    @JvmStatic fun readSigned(bytes: ByteArray, offset: Long): Long = bytes[index(bytes, offset)].toLong()
-    @JvmStatic fun write(bytes: ByteArray, offset: Long, value: Long) { bytes[index(bytes, offset)] = value.toByte() }
+    @JvmStatic fun read(bytes: ByteArray, offset: Long): Int = bytes[index(bytes, offset)].toInt() and 255
+    @JvmStatic fun readSigned(bytes: ByteArray, offset: Long): Int = bytes[index(bytes, offset)].toInt()
+    @JvmStatic fun write(bytes: ByteArray, offset: Long, value: Int) { bytes[index(bytes, offset)] = value.toByte() }
     /** GHC requires distinct immutable/mutable arrays and fully contained ranges.
      * Subtraction checks every full-width range before any narrowing or write. */
     @JvmStatic fun copy(source: ByteArray, sourceOffset: Long, destination: ByteArray, destinationOffset: Long, count: Long) {
@@ -177,14 +177,13 @@ internal object ManagedByteArray {
         is ByteArray -> size(value)
         else -> fault("Expected a managed ByteArray#")
     }
-    @JvmStatic fun writeGuest(value: Any?, offset: Long, byteValue: Long) = when (value) {
-        is ManagedAllocation -> value.writeByte(offset, byteValue)
-        else -> write(require(value), offset, byteValue)
-    }
-    @JvmStatic fun readGuest(value: Any?, offset: Long, unsigned: Boolean): Long {
-        val byte = if (value is ManagedAllocation) value.readByte(offset) else read(require(value), offset)
-        return if (unsigned) byte else byte.toByte().toLong()
-    }
+    @JvmStatic fun writeGuest(value: Any?, offset: Long, byteValue: Int) =
+        withByteRange(value, offset, 1, writable = true) { it.set(ValueLayout.JAVA_BYTE, offset, byteValue.toByte()) }
+    @JvmStatic fun readGuest(value: Any?, offset: Long, unsigned: Boolean): Int =
+        withByteRange(value, offset, 1, writable = false) {
+            val byte = it.get(ValueLayout.JAVA_BYTE, offset).toInt()
+            if (unsigned) byte and 255 else byte
+        }
     private inline fun <T> withElement(value: Any?, index: Long, width: Int,
         writable: Boolean, action: (MemorySegment) -> T): T =
         if (value is ManagedAllocation) value.accessElement(index, width, writable, action)
@@ -227,33 +226,33 @@ internal object ManagedByteArray {
         withByteRange(value, offset, 4, writable = false) { it.get(ValueLayout.JAVA_FLOAT_UNALIGNED, offset) }
     @JvmStatic fun writeFloatByteOffsetGuest(value: Any?, offset: Long, number: Float) =
         withByteRange(value, offset, 4, writable = true) { it.set(ValueLayout.JAVA_FLOAT_UNALIGNED, offset, number) }
-    @JvmStatic fun readInt16Guest(value: Any?, index: Long, unsigned: Boolean): Long =
+    @JvmStatic fun readInt16Guest(value: Any?, index: Long, unsigned: Boolean): Int =
         withElement(value, index, 2, writable = false) {
             val result = it.get(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2)
-            if (unsigned) java.lang.Short.toUnsignedLong(result) else result.toLong()
+            if (unsigned) java.lang.Short.toUnsignedInt(result) else result.toInt()
         }
-    @JvmStatic fun writeInt16Guest(value: Any?, index: Long, integer: Long) =
+    @JvmStatic fun writeInt16Guest(value: Any?, index: Long, integer: Int) =
         withElement(value, index, 2, writable = true) { it.set(ValueLayout.JAVA_SHORT_UNALIGNED, index * 2, integer.toShort()) }
-    @JvmStatic fun readInt16ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
+    @JvmStatic fun readInt16ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Int =
         withByteRange(value, offset, 2, writable = false) {
             val result = it.get(ValueLayout.JAVA_SHORT_UNALIGNED, offset)
-            if (unsigned) java.lang.Short.toUnsignedLong(result) else result.toLong()
+            if (unsigned) java.lang.Short.toUnsignedInt(result) else result.toInt()
         }
-    @JvmStatic fun writeInt16ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
+    @JvmStatic fun writeInt16ByteOffsetGuest(value: Any?, offset: Long, integer: Int) =
         withByteRange(value, offset, 2, writable = true) { it.set(ValueLayout.JAVA_SHORT_UNALIGNED, offset, integer.toShort()) }
-    @JvmStatic fun readInt32Guest(value: Any?, index: Long, unsigned: Boolean): Long =
+    @JvmStatic fun readInt32Guest(value: Any?, index: Long, unsigned: Boolean): Int =
         withElement(value, index, 4, writable = false) {
             val result = it.get(ValueLayout.JAVA_INT_UNALIGNED, index * 4)
-            if (unsigned) Integer.toUnsignedLong(result) else result.toLong()
+            result
         }
-    @JvmStatic fun writeInt32Guest(value: Any?, index: Long, integer: Long) =
+    @JvmStatic fun writeInt32Guest(value: Any?, index: Long, integer: Int) =
         withElement(value, index, 4, writable = true) { it.set(ValueLayout.JAVA_INT_UNALIGNED, index * 4, integer.toInt()) }
-    @JvmStatic fun readInt32ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Long =
+    @JvmStatic fun readInt32ByteOffsetGuest(value: Any?, offset: Long, unsigned: Boolean): Int =
         withByteRange(value, offset, 4, writable = false) {
             val result = it.get(ValueLayout.JAVA_INT_UNALIGNED, offset)
-            if (unsigned) Integer.toUnsignedLong(result) else result.toLong()
+            result
         }
-    @JvmStatic fun writeInt32ByteOffsetGuest(value: Any?, offset: Long, integer: Long) =
+    @JvmStatic fun writeInt32ByteOffsetGuest(value: Any?, offset: Long, integer: Int) =
         withByteRange(value, offset, 4, writable = true) { it.set(ValueLayout.JAVA_INT_UNALIGNED, offset, integer.toInt()) }
     @JvmStatic fun fillGuest(value: Any?, offset: Long, count: Long, byteValue: Long) = when (value) {
         is ManagedAllocation -> value.fill(offset, count, byteValue)
@@ -554,7 +553,7 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.FREEZE, ByteArrayOp.UNSAFE_THAW -> FreezeByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> PinnedByteArrayExpression(operands[0])
-        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> WriteByteArrayExpression(operands[0], operands[1], operands[2], operands[3])
+        ByteArrayOp.WRITE, ByteArrayOp.WRITE_INT8, ByteArrayOp.WRITE_CHAR -> WriteByteArrayExpression(operation == ByteArrayOp.WRITE_CHAR, operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.COPY -> CopyByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4], operands[5])
         ByteArrayOp.SET -> SetByteArrayExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
         ByteArrayOp.COPY_MUTABLE, ByteArrayOp.COPY_MUTABLE_NON_OVERLAPPING -> CopyMutableByteArrayExpression(
@@ -562,7 +561,8 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
         ByteArrayOp.COMPARE -> CompareByteArraysExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> SizeByteArrayExpression(operands[0])
         ByteArrayOp.GET_SIZE_MUTABLE -> GetSizeMutableByteArrayExpression(operands[0], operands[1])
-        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> IndexByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.INDEX -> IndexByteArrayExpression(operands[0], operands[1])
+        ByteArrayOp.INDEX_CHAR -> IndexCharArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT, ByteArrayOp.READ_WORD, ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 ->
             ReadIntArrayExpression(byteOffset, operands[0], operands[1], operands[2])
         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD, ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 ->
@@ -581,7 +581,8 @@ internal fun byteArrayExpression(operation: ByteArrayOp, proof: CoreRepresentati
             operation == ByteArrayOp.WRITE_WORD8_AS_FLOAT, operands[0], operands[1], operands[2], operands[3])
         ByteArrayOp.INDEX_FLOAT, ByteArrayOp.INDEX_WORD8_AS_FLOAT -> IndexFloatArrayExpression(
             operation == ByteArrayOp.INDEX_WORD8_AS_FLOAT, operands[0], operands[1])
-        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> ReadByteArrayExpression(
+        ByteArrayOp.READ_CHAR -> ReadCharArrayExpression(operands[0], operands[1], operands[2])
+        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> ReadByteArrayExpression(
             operation != ByteArrayOp.READ_INT8, operands[0], operands[1], operands[2])
         ByteArrayOp.INDEX_INT8 -> IndexSignedByteArrayExpression(operands[0], operands[1])
         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16, ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 ->
@@ -652,13 +653,13 @@ private class FreezeByteArrayExpression(@field:Child private var array: Expr,
         return null
     }
 }
-private class WriteByteArrayExpression(@field:Child private var array: Expr,
+private class WriteByteArrayExpression(private val char: Boolean, @field:Child private var array: Expr,
     @field:Child private var index: Expr, @field:Child private var value: Expr,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any {
         val bytes = array.execute(frame)
         val offset = index.executeRequiredLong(frame)
-        val byte = value.executeRequiredLong(frame)
+        val byte = if (char) value.executeRequiredLong(frame).toInt() else value.executeRequiredInt(frame)
         ManagedByteArray.requireState(state.execute(frame))
         ManagedByteArray.writeGuest(bytes, offset, byte)
         return Unit
@@ -681,11 +682,21 @@ private class SizeByteArrayExpression(@field:Child private var array: Expr) : Ex
 }
 private class IndexByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int {
+        val bytes = array.execute(frame)
+        val offset = index.executeRequiredLong(frame)
+        return ManagedByteArray.readGuest(bytes, offset, true)
+    }
+}
+
+private class IndexCharArrayExpression(@field:Child private var array: Expr,
+    @field:Child private var index: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
         val bytes = array.execute(frame)
         val offset = index.executeRequiredLong(frame)
-        return ManagedByteArray.readGuest(bytes, offset, true)
+        return ManagedByteArray.readGuest(bytes, offset, true).toLong()
     }
 }
 
@@ -804,7 +815,7 @@ private class ReadInt16ArrayExpression(private val unsigned: Boolean, private va
         ManagedByteArray.requireState(state.execute(frame))
         val value = if (byteOffset) ManagedByteArray.readInt16ByteOffsetGuest(bytes, element, unsigned)
             else ManagedByteArray.readInt16Guest(bytes, element, unsigned)
-        FrameAccess.writeLong(frame, slots[offset], value)
+        FrameAccess.writeInt(frame, slots[offset], value)
         return null
     }
 }
@@ -814,7 +825,7 @@ private class WriteInt16ArrayExpression(private val byteOffset: Boolean, @field:
     override fun execute(frame: VirtualFrame): Any {
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        val integer = value.executeRequiredLong(frame)
+        val integer = value.executeRequiredInt(frame)
         ManagedByteArray.requireState(state.execute(frame))
         if (byteOffset) ManagedByteArray.writeInt16ByteOffsetGuest(bytes, element, integer)
         else ManagedByteArray.writeInt16Guest(bytes, element, integer)
@@ -823,8 +834,8 @@ private class WriteInt16ArrayExpression(private val byteOffset: Boolean, @field:
 }
 private class IndexInt16ArrayExpression(private val unsigned: Boolean, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long {
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int {
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         return if (byteOffset) ManagedByteArray.readInt16ByteOffsetGuest(bytes, element, unsigned)
@@ -842,7 +853,7 @@ private class ReadInt32ArrayExpression(private val unsigned: Boolean, private va
         ManagedByteArray.requireState(state.execute(frame))
         val value = if (byteOffset) ManagedByteArray.readInt32ByteOffsetGuest(bytes, element, unsigned)
             else ManagedByteArray.readInt32Guest(bytes, element, unsigned)
-        FrameAccess.writeLong(frame, slots[offset], value)
+        FrameAccess.writeInt(frame, slots[offset], value)
         return null
     }
 }
@@ -852,7 +863,7 @@ private class WriteInt32ArrayExpression(private val byteOffset: Boolean, @field:
     override fun execute(frame: VirtualFrame): Any {
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
-        val integer = value.executeRequiredLong(frame)
+        val integer = value.executeRequiredInt(frame)
         ManagedByteArray.requireState(state.execute(frame))
         if (byteOffset) ManagedByteArray.writeInt32ByteOffsetGuest(bytes, element, integer)
         else ManagedByteArray.writeInt32Guest(bytes, element, integer)
@@ -861,8 +872,8 @@ private class WriteInt32ArrayExpression(private val byteOffset: Boolean, @field:
 }
 private class IndexInt32ArrayExpression(private val unsigned: Boolean, private val byteOffset: Boolean,
     @field:Child private var array: Expr, @field:Child private var index: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long {
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int {
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         return if (byteOffset) ManagedByteArray.readInt32ByteOffsetGuest(bytes, element, unsigned)
@@ -909,14 +920,27 @@ private class ReadByteArrayExpression(private val unsigned: Boolean,
         val element = index.executeRequiredLong(frame)
         ManagedByteArray.requireState(state.execute(frame))
         val value = ManagedByteArray.readGuest(bytes, element, unsigned)
-        FrameAccess.writeLong(frame, slots[offset], value)
+        FrameAccess.writeInt(frame, slots[offset], value)
+        return null
+    }
+}
+
+private class ReadCharArrayExpression(@field:Child private var array: Expr, @field:Child private var index: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val bytes = array.execute(frame)
+        val element = index.executeRequiredLong(frame)
+        ManagedByteArray.requireState(state.execute(frame))
+        val value = ManagedByteArray.readGuest(bytes, element, true)
+        FrameAccess.writeLong(frame, slots[offset], value.toLong())
         return null
     }
 }
 private class IndexSignedByteArrayExpression(@field:Child private var array: Expr,
     @field:Child private var index: Expr) : Expr() {
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long {
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int {
         val bytes = array.execute(frame)
         val element = index.executeRequiredLong(frame)
         return ManagedByteArray.readGuest(bytes, element, false)

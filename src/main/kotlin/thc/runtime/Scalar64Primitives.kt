@@ -61,6 +61,23 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     PLUS_WORD_2("plusWord2#"), TIMES_WORD_2("timesWord2#"),
     TIMES_INT_2("timesInt2#", resultArity = 3);
 
+    val isInt: Boolean = narrowBits < 64
+    private fun narrowInt(value: Int): Int = if (narrowBits == 32) value
+        else if (unsigned) value and ((1 shl narrowBits) - 1)
+        else (value shl (32 - narrowBits)) shr (32 - narrowBits)
+    fun firstInt(left: Int, right: Int): Int {
+        if (!isInt) fault("Expected narrow tuple arithmetic")
+        val x = narrowInt(left); val y = narrowInt(right)
+        if (y == 0) fault("Undefined input to $primitive")
+        return narrowInt(if (unsigned) Integer.divideUnsigned(x, y) else x / y)
+    }
+    fun secondInt(left: Int, right: Int): Int {
+        if (!isInt) fault("Expected narrow tuple arithmetic")
+        val x = narrowInt(left); val y = narrowInt(right)
+        if (y == 0) fault("Undefined input to $primitive")
+        return narrowInt(if (unsigned) Integer.remainderUnsigned(x, y) else x % y)
+    }
+
     private fun divisionDomain(left: Long, right: Long) {
         if (right == 0L || this == QUOT_REM_INT && left == Long.MIN_VALUE && right == -1L) {
             CompilerDirectives.transferToInterpreter()
@@ -170,6 +187,13 @@ internal class TupleArithmeticExpression(private val operation: TupleArithmeticO
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.isInt) {
+            val x = left.executeRequiredInt(frame)
+            val y = right.executeRequiredInt(frame)
+            FrameAccess.writeInt(frame, slots[offset], operation.firstInt(x, y))
+            FrameAccess.writeInt(frame, slots[offset + 1], operation.secondInt(x, y))
+            return null
+        }
         val x = left.executeRequiredLong(frame)
         val y = right.executeRequiredLong(frame)
         val first = operation.first(x, y)

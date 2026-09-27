@@ -63,7 +63,7 @@ internal class KeepAliveExpression(@field:Child private var kept: Expr,
     proof: CoreRepresentation) : Expr() {
     init { representation = proof.copy(evaluated = true) }
 
-    private enum class Route { GENERIC, LONG, FLOAT, DOUBLE, ADDRESS, DATA, CLOSURE, TUPLE }
+    private enum class Route { GENERIC, INT, LONG, FLOAT, DOUBLE, ADDRESS, DATA, CLOSURE, TUPLE }
 
     private class ResumeKept(private val node: KeepAliveExpression, private val route: Route,
                              private val slots: IntArray?, private val offset: Int) : AstResumeStep {
@@ -90,6 +90,7 @@ internal class KeepAliveExpression(@field:Child private var kept: Expr,
     /** Only suspended operand edges select a route dynamically; normal calls stay typed. */
     private fun resumeAction(frame: VirtualFrame, route: Route, slots: IntArray?, offset: Int): Any? = when (route) {
         Route.GENERIC -> action.execute(frame)
+        Route.INT -> action.executeInt(frame)
         Route.LONG -> action.executeLong(frame)
         Route.FLOAT -> action.executeFloat(frame)
         Route.DOUBLE -> action.executeDouble(frame)
@@ -110,6 +111,7 @@ internal class KeepAliveExpression(@field:Child private var kept: Expr,
         }
     }
     override fun execute(frame: VirtualFrame): Any? = retaining(frame, Route.GENERIC) { action.execute(frame) }
+    override fun executeInt(frame: VirtualFrame): Int = retaining(frame, Route.INT) { action.executeInt(frame) }
     override fun executeLong(frame: VirtualFrame): Long = retaining(frame, Route.LONG) { action.executeLong(frame) }
     override fun executeFloat(frame: VirtualFrame): Float = retaining(frame, Route.FLOAT) { action.executeFloat(frame) }
     override fun executeDouble(frame: VirtualFrame): Double = retaining(frame, Route.DOUBLE) { action.executeDouble(frame) }

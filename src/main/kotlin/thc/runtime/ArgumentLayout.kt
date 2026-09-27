@@ -16,11 +16,12 @@ internal class ArgumentLayout private constructor(
 ) {
     val logicalArity: Int get() = proofs.size
     val physicalArity: Int get() = offsets.last()
-    val requiresTyped: Boolean = proofs.any { it.isTypedTransport && !it.isEmptyTuple }
+    val requiresTyped: Boolean = proofs.any { it.isInt || it.isTypedTransport && !it.isEmptyTuple }
     val physicalStorageReps: List<String> = proofs.flatMap { proof ->
         if (proof.isSum) proof.primReps!!
         else if (proof.isTuple || proof.isVector) VectorLayout.storageReps(proof)
         else listOf(when {
+            proof.isInt -> proof.narrowInteger!!.rep
             proof.isLong -> "IntRep"
             proof.isFloat -> "FloatRep"
             proof.isDouble -> "DoubleRep"
@@ -45,7 +46,7 @@ internal class ArgumentLayout private constructor(
 
     companion object {
         fun fromProofs(proofs: List<CoreRepresentation>): ArgumentLayout? {
-            if (proofs.none { it.isTypedTransport }) return null
+            if (proofs.none { it.isTypedTransport || it.isInt }) return null
             proofs.forEach(CoreRepresentations::requireInput)
             val offsets = IntArray(proofs.size + 1)
             val physical = ArrayList<CoreRepresentation>()

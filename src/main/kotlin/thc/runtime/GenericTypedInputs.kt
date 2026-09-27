@@ -18,6 +18,13 @@ internal fun validateGenericInput(root: GuestRoot, prefix: Int, source: Argument
 }
 
 @CompilerDirectives.TruffleBoundary
+private fun putInt(storage: HandoffStorage, field: Int, value: Int) {
+    val shape = storage.layout
+    if (shape.isInt(field)) shape.setInt(storage, field, value) else {
+        check(shape.isObject(field)); shape.setObject(storage, field, value)
+    }
+}
+@CompilerDirectives.TruffleBoundary
 private fun putLong(storage: HandoffStorage, field: Int, value: Long) {
     val shape = storage.layout
     if (shape.isLong(field)) shape.setLong(storage, field, value) else {
@@ -42,6 +49,7 @@ private fun putDouble(storage: HandoffStorage, field: Int, value: Double) {
 private fun putScalar(storage: HandoffStorage, field: Int, value: Any?) {
     val shape = storage.layout
     when {
+        shape.isInt(field) -> shape.setInt(storage, field, value as? Int ?: fault("Expected primitive Int input"))
         shape.isLong(field) -> shape.setLong(storage, field, value as? Long ?: fault("Expected primitive Long input"))
         shape.isFloat(field) -> shape.setFloat(storage, field, value as? Float ?: fault("Expected primitive Float input"))
         shape.isDouble(field) -> shape.setDouble(storage, field, value as? Double ?: fault("Expected primitive Double input"))
@@ -58,6 +66,7 @@ private fun InputSource.copyGeneric(frame: VirtualFrame, node: Node, values: Arr
         val field = to + i - from
         val proof = physicalProofs?.get(i)
         when {
+            proof?.isInt == true -> putInt(storage, field, int(frame, node, values, i))
             proof?.isLong == true -> putLong(storage, field, long(frame, node, values, i))
             proof?.isFloat == true -> putFloat(storage, field, float(frame, node, values, i))
             proof?.isDouble == true -> putDouble(storage, field, double(frame, node, values, i))

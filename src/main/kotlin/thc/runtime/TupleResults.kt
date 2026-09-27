@@ -41,7 +41,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
     @ExplodeLoop fun copyFrom(frame: VirtualFrame, storage: HandoffStorage, slots: IntArray, offset: Int) {
         check(storage.layout === layout)
         for (index in leaves.indices) {
-            if (layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], layout.getLong(storage, index))
+            if (layout.isInt(index)) FrameAccess.writeInt(frame, slots[offset + index], layout.getInt(storage, index))
+            else if (layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], layout.getLong(storage, index))
             else if (layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], layout.getFloat(storage, index))
             else if (layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], layout.getDouble(storage, index))
             else FrameAccess.write(frame, slots[offset + index], checkedReference(index, layout.getObject(storage, index)))
@@ -49,7 +50,8 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
     }
     @ExplodeLoop private fun write(frame: VirtualFrame, slots: IntArray, storage: HandoffStorage) {
         for (index in leaves.indices) {
-            if (layout.isLong(index)) layout.setLong(storage, index, frame.getLong(slots[index]))
+            if (layout.isInt(index)) layout.setInt(storage, index, frame.getInt(slots[index]))
+            else if (layout.isLong(index)) layout.setLong(storage, index, frame.getLong(slots[index]))
             else if (layout.isFloat(index)) layout.setFloat(storage, index, frame.getFloat(slots[index]))
             else if (layout.isDouble(index)) layout.setDouble(storage, index, frame.getDouble(slots[index]))
             else layout.setObject(storage, index, checkedReference(index, frame.getObject(slots[index])))
@@ -502,7 +504,8 @@ internal class TupleLocalRead(private val shape: TupleShape,
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple value requires a destination")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         for (index in sources.indices) {
-            if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(sources[index]))
+            if (shape.layout.isInt(index)) FrameAccess.writeInt(frame, slots[offset + index], frame.getInt(sources[index]))
+            else if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, slots[offset + index], frame.getLong(sources[index]))
             else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, slots[offset + index], frame.getFloat(sources[index]))
             else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, slots[offset + index], frame.getDouble(sources[index]))
             else FrameAccess.write(frame, slots[offset + index], shape.checkedReference(index, frame.getObject(sources[index])))
@@ -518,6 +521,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
             val component = shape.components[index]
             val target = offset + shape.offsets[index]
             if (component.isTypedTransport) fields[index].executeTuple(frame, slots, target)
+            else if (component.isInt) FrameAccess.writeInt(frame, slots[target], fields[index].executeRequiredInt(frame))
             else if (component.isLong) FrameAccess.writeLong(frame, slots[target], fields[index].executeRequiredLong(frame))
             else if (component.isFloat) FrameAccess.writeFloat(frame, slots[target], fields[index].executeRequiredFloat(frame))
             else if (component.isDouble) FrameAccess.writeDouble(frame, slots[target], fields[index].executeRequiredDouble(frame))
@@ -640,6 +644,10 @@ internal class TupleCase(@field:Child private var scrutinee: Expr,
         }
     }
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return body.execute(frame) }
+    override fun executeInt(frame: VirtualFrame): Int {
+        prepare(frame)
+        return body.executeInt(frame)
+    }
     override fun executeLong(frame: VirtualFrame): Long {
         prepare(frame)
         return body.executeLong(frame)
@@ -658,7 +666,8 @@ internal class BytecodeTupleSlots(shape: TupleShape,
     val capturesYield: Boolean = false, private val capturesFrame: Boolean = false) : TupleDestination(shape) {
     @ExplodeLoop private fun write(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode, output: HandoffStorage) {
         for (index in slots.indices) {
-            if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))
+            if (shape.layout.isInt(index)) shape.layout.setInt(output, index, slots[index].getInt(node, frame))
+            else if (shape.layout.isLong(index)) shape.layout.setLong(output, index, slots[index].getLong(node, frame))
             else if (shape.layout.isFloat(index)) shape.layout.setFloat(output, index, slots[index].getFloat(node, frame))
             else if (shape.layout.isDouble(index)) shape.layout.setDouble(output, index, slots[index].getDouble(node, frame))
             else shape.layout.setObject(output, index, shape.checkedReference(index, slots[index].getObject(node, frame)))
@@ -681,7 +690,8 @@ internal class BytecodeTupleSlots(shape: TupleShape,
     }
     @ExplodeLoop fun copyFrom(frame: VirtualFrame, node: com.oracle.truffle.api.bytecode.BytecodeNode, receiver: HandoffStorage) {
         for (index in slots.indices) {
-            if (shape.layout.isLong(index)) slots[index].setLong(node, frame, shape.layout.getLong(receiver, index))
+            if (shape.layout.isInt(index)) slots[index].setInt(node, frame, shape.layout.getInt(receiver, index))
+            else if (shape.layout.isLong(index)) slots[index].setLong(node, frame, shape.layout.getLong(receiver, index))
             else if (shape.layout.isFloat(index)) slots[index].setFloat(node, frame, shape.layout.getFloat(receiver, index))
             else if (shape.layout.isDouble(index)) slots[index].setDouble(node, frame, shape.layout.getDouble(receiver, index))
             else slots[index].setObject(node, frame, shape.checkedReference(index, shape.layout.getObject(receiver, index)))
@@ -734,6 +744,7 @@ internal fun ownedTupleResult(result: Any?, shape: TupleShape): HandoffStorage {
         val owned = shape.layout.create()
         for (index in 0 until shape.width) {
             when {
+                shape.layout.isInt(index) -> shape.layout.setInt(owned, index, shape.layout.getInt(source, index))
                 shape.layout.isLong(index) -> shape.layout.setLong(owned, index, shape.layout.getLong(source, index))
                 shape.layout.isFloat(index) -> shape.layout.setFloat(owned, index, shape.layout.getFloat(source, index))
                 shape.layout.isDouble(index) -> shape.layout.setDouble(owned, index, shape.layout.getDouble(source, index))

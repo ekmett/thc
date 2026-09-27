@@ -80,6 +80,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                              val arityCertificate: CoreApplicationCertificates.Arity? = null) {
         // The denoted value can be primitive while a pre-publication capture
         // still holds its recursive cell. Raw captures must retain that cell.
+        val directInt: Boolean get() = !cell && proof.isInt && proof.evaluated
         val directLong: Boolean get() = !cell && proof.isLong && proof.evaluated
         val directFloat: Boolean get() = !cell && proof.isFloat && proof.evaluated
         val directDouble: Boolean get() = !cell && proof.isDouble && proof.evaluated
@@ -194,16 +195,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         override val proof get() = local.proof
         override fun emit(emission: Emission) {
             val b = emission.builder
+            val narrow = local.directInt || resolve && local.proof.isInt && local.proof.evaluated
             val integer = local.directLong || resolve && local.proof.isLong && local.proof.evaluated
             val floating = local.directFloat || resolve && local.proof.isFloat && local.proof.evaluated
             val double = local.directDouble || resolve && local.proof.isDouble && local.proof.evaluated
-            if (integer) b.beginToLong()
+            if (narrow) b.beginToInt()
+            else if (integer) b.beginToLong()
             else if (floating) b.beginToFloat()
             else if (double) b.beginToDouble()
             if (resolve && local.cell) b.beginReadCellIfNeeded()
             b.emitLoadLocal(emission.locals.getValue(local.id))
             if (resolve && local.cell) b.endReadCellIfNeeded()
-            if (integer) b.endToLong()
+            if (narrow) b.endToInt()
+            else if (integer) b.endToLong()
             else if (floating) b.endToFloat()
             else if (double) b.endToDouble()
         }
@@ -422,7 +426,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             (captureSources.map { it.directLong } + List(vectorCount) { false }).toBooleanArray(),
             (captureSources.map { if (it.cell) null else it.proof.referenceCarrier() } + List(vectorCount) { null }).toTypedArray(),
             (captureSources.map { it.directFloat } + List(vectorCount) { false }).toBooleanArray(),
-            (captureSources.map { it.directDouble } + List(vectorCount) { false }).toBooleanArray())
+            (captureSources.map { it.directDouble } + List(vectorCount) { false }).toBooleanArray(),
+            (captureSources.map { if (!it.cell && it.proof.evaluated) it.proof.narrowInteger else null } +
+                List(vectorCount) { null }).toTypedArray())
         context.typedInput = TypedInputLayout.create(language, context.inputLayout, context.captureLayout != null)
         val physicalArguments = arrayListOf<Pair<Int, Local>>()
         context.arguments = args.mapIndexed { index, arg ->
@@ -556,6 +562,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         root.configureTypedBloom(typedBloom)
         root.configureLeadingCaseReturn(context.leadingCaseReturn)
         root.configureTupleResult(context.tuple)
+        root.configureScalarResult(body.proof)
         roots += root
         return root.callTarget
     }
@@ -705,6 +712,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val reference = if (local.cell || deferStrictDemand) null else local.proof.referenceCarrier()
         b.beginStoreLocal(e.locals.getValue(local.id))
         when {
+            local.directInt -> { b.beginToInt(); value(); b.endToInt() }
             local.directLong -> { b.beginToLong(); value(); b.endToLong() }
             local.directFloat -> { b.beginToFloat(); value(); b.endToFloat() }
             local.directDouble -> { b.beginToDouble(); value(); b.endToDouble() }
@@ -902,7 +910,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
         CoreRepresentation(when (value) {
-            is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
+            is Int, is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
             is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
@@ -1968,7 +1976,9 @@ CoreStackForeign.validateHead(fn, defined)
                         val local = b.createLocal("Package C operand $index", null)
                         b.beginStoreLocal(local)
                         when (packageScalar.arguments.getOrNull(index)) {
-                            "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                            "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                                { b.beginToInt(); operand.emit(e); b.endToInt() }
+                            "IntRep", "WordRep", "Int64Rep", "Word64Rep" ->
                                 { b.beginToLong(); operand.emit(e); b.endToLong() }
                             "FloatRep" -> { b.beginToFloat(); operand.emit(e); b.endToFloat() }
                             "DoubleRep" -> { b.beginToDouble(); operand.emit(e); b.endToDouble() }
@@ -1980,7 +1990,9 @@ CoreStackForeign.validateHead(fn, defined)
                     val arguments = BytecodePackageScalarArguments(packageScalar,
                         locals.dropLast(1).toTypedArray(), locals.last())
                     when (packageScalar.result) {
-                        "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                        "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                            b.emitLinkedPackageScalarInt(arguments, destination.single())
+                        "IntRep", "WordRep", "Int64Rep", "Word64Rep" ->
                             b.emitLinkedPackageScalarLong(arguments, destination.single())
                         "FloatRep" -> b.emitLinkedPackageScalarFloat(arguments, destination.single())
                         "DoubleRep" -> b.emitLinkedPackageScalarDouble(arguments, destination.single())
@@ -3506,7 +3518,8 @@ CoreStackForeign.validateHead(fn, defined)
                     when (operation) {
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
-                        PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_CHAR -> e.builder.beginReadCharOffAddr(destination[0])
                         PinnedMemoryOp.READ_INT8 -> e.builder.beginReadInt8OffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(byteOffset, destination[0])
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(byteOffset, destination[0])
@@ -3521,7 +3534,8 @@ CoreStackForeign.validateHead(fn, defined)
                     when (operation) {
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
-                        PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_CHAR -> e.builder.endReadCharOffAddr()
                         PinnedMemoryOp.READ_INT8 -> e.builder.endReadInt8OffAddr()
                         PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
@@ -3608,7 +3622,8 @@ CoreStackForeign.validateHead(fn, defined)
                             e.builder.beginReadDoubleArray(operation == ByteArrayOp.READ_WORD8_AS_DOUBLE, destination[0])
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT ->
                             e.builder.beginReadFloatArray(operation == ByteArrayOp.READ_WORD8_AS_FLOAT, destination[0])
-                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR ->
+                        ByteArrayOp.READ_CHAR -> e.builder.beginReadCharArray(destination[0])
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 ->
                             e.builder.beginReadByteArray(operation != ByteArrayOp.READ_INT8, destination[0])
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
                         ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 ->
@@ -3634,7 +3649,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endIntArrayAccess()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
-                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
+                        ByteArrayOp.READ_CHAR -> e.builder.endReadCharArray()
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> e.builder.endReadByteArray()
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
                         ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32,
@@ -3656,7 +3672,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
                         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.beginPinnedByteArray()
-                        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexCharArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
                         ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.beginWriteIntArray(byteOffset)
@@ -3705,7 +3722,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
                         ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
                         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.endPinnedByteArray()
-                        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX_CHAR -> e.builder.endIndexCharArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
                         ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.endWriteIntArray()
@@ -5237,6 +5255,26 @@ CoreStackForeign.validateHead(fn, defined)
 
 
     private fun primitive(name: String, args: List<Expression>, someException: Boolean = false): Expression {
+        NarrowScalarOp.named(name)?.let { operation ->
+            if (args.size != if (operation.unary) 1 else 2) throw RuntimeFault("Narrow primitive arity mismatch: $name")
+            return ProvenExpression(Expression { e ->
+                val b = e.builder
+                when {
+                    operation.sourceLong -> b.beginNarrowFromLong(operation)
+                    operation.resultLong -> b.beginNarrowToLong(operation)
+                    operation.shift -> b.beginNarrowShift(operation)
+                    else -> b.beginNarrowInt(operation)
+                }
+                args.forEach { it.emit(e) }
+                if (operation.unary && !operation.sourceLong) b.emitLoadConstant(0)
+                when {
+                    operation.sourceLong -> b.endNarrowFromLong()
+                    operation.resultLong -> b.endNarrowToLong()
+                    operation.shift -> b.endNarrowShift()
+                    else -> b.endNarrowInt()
+                }
+            }, operation.result)
+        }
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
         val intShift = narrowIntPrimitiveShift(name)

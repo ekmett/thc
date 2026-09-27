@@ -14,6 +14,7 @@ import kotlin.Unit;
  * Numeric widening belongs to the particular guest operation, not a global cast.
  */
 @TypeSystem({
+        int.class,
         long.class,
         float.class,
         double.class,
