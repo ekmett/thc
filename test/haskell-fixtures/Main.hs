@@ -76,6 +76,7 @@ import OriginalCurrentDirectoryFixtures (prepareOriginalCurrentDirectory)
 import OriginalDirectoryPathsFixtures (prepareOriginalDirectoryPaths)
 import OriginalDirectoryStreamsFixtures (prepareOriginalDirectoryStreams)
 import WindowsDirectoryFixtures (prepareWindowsDirectory)
+import WindowsCodePageFixtures (prepareWindowsCodePages)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
@@ -955,6 +956,7 @@ main = do
     ["windows-smoke"] -> prepareWindowsSmoke root
     ["windows-driver"] -> prepareWindowsDriver root
     ["windows-bridge"] -> prepareWindowsBridge root
+    ["windows-codepages"] -> prepareWindowsCodePages root
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
     ["simd128-addresses"] -> prepareSimd128Addresses root

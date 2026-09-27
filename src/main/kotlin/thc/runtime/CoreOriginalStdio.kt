@@ -23,6 +23,16 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     FIND_NEXT("FindNextFileW", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "IntRep", "Win32-2.14.2.1-inplace"),
     FIND_CLOSE("FindClose", "ccall", "unsafe", listOf("AddrRep", null), "IntRep", "Win32-2.14.2.1-inplace"),
     LAST_ERROR("GetLastError", "ccall", "unsafe", listOf(null), "Word32Rep", "Win32-2.14.2.1-inplace"),
+    ANSI_CODE_PAGE("GetACP", "ccall", "unsafe", listOf(null), "Word32Rep"),
+    CONSOLE_CODE_PAGE("GetConsoleCP", "ccall", "unsafe", listOf(null), "Word32Rep"),
+    CODE_PAGE_INFO("GetCPInfo", "ccall", "unsafe", listOf("Word32Rep", "AddrRep", null), "IntRep"),
+    DBCS_LEAD_BYTE("IsDBCSLeadByteEx", "ccall", "unsafe", listOf("Word32Rep", "Word8Rep", null), "IntRep"),
+    MULTI_BYTE_TO_WIDE("MultiByteToWideChar", "ccall", "unsafe", listOf("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", null), "Int32Rep"),
+    WIDE_TO_MULTI_BYTE("WideCharToMultiByte", "ccall", "unsafe", listOf("Word32Rep", "Word32Rep", "AddrRep", "Int32Rep", "AddrRep", "Int32Rep", "AddrRep", "AddrRep", null), "Int32Rep"),
+    MAP_ERRNO("maperrno", "ccall", "unsafe", listOf(null), null),
+    MAP_ERRNO_VALUE("maperrno_func", "ccall", "unsafe", listOf("Word32Rep", null), "Int32Rep"),
+    WINDOWS_ERROR_MESSAGE("base_getErrorMessage", "ccall", "unsafe", listOf("Word32Rep", null), "AddrRep"),
+    LOCAL_FREE("LocalFree", "ccall", "unsafe", listOf("AddrRep", null), "AddrRep"),
     WCOREDUMP("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     WSTOPSIG("ghczuwrapperZC1ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWSTOPSIG", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     WIFSTOPPED("ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSTOPPED", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
@@ -157,6 +167,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
+        this == LAST_ERROR && (value == "ghc-internal" || value is String && win32Unit.matches(value)) ||
         windowsDirectory && value is String && win32Unit.matches(value) ||
         this == READLINK && value == "ghc-internal" ||
         (this == UNLINKAT || this == FSTATAT) && value is String && directoryUnit.matches(value) ||
@@ -191,7 +202,10 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
     val currentDirectory: Boolean get() = this == CHDIR || this == GETCWD
-    val windowsDirectory: Boolean get() = this == FIND_FIRST || this == FIND_NEXT || this == FIND_CLOSE || this == LAST_ERROR
+    val windowsDirectory: Boolean get() = this == FIND_FIRST || this == FIND_NEXT || this == FIND_CLOSE
+    val windowsEncoding: Boolean get() = this == LAST_ERROR || this == ANSI_CODE_PAGE || this == CONSOLE_CODE_PAGE ||
+        this == CODE_PAGE_INFO || this == DBCS_LEAD_BYTE || this == MULTI_BYTE_TO_WIDE || this == WIDE_TO_MULTI_BYTE ||
+        this == MAP_ERRNO || this == MAP_ERRNO_VALUE || this == WINDOWS_ERROR_MESSAGE || this == LOCAL_FREE
     val directoryStream: Boolean get() = windowsDirectory || this == OPENDIR || this == FDOPENDIR || this == CLOSEDIR ||
         this == READDIR || this == DIRENT_NAME || this == FREE_DIRENT
     val directoryPointer: Boolean get() = this == OPENDIR || this == DIRENT_NAME

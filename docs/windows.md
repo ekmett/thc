@@ -208,6 +208,52 @@ Extended namespace queries beginning with \\?\ are passed verbatim, including
 forward slashes. Native positive and invalid-name controls cover this distinction.
 Evidence is under build/windows-directory and the default/dense JUnit reports.
 
+## Original Windows code pages and errors
+
+The original ghc-internal declarations of GetACP, GetConsoleCP, GetCPInfo,
+IsDBCSLeadByteEx, MultiByteToWideChar, WideCharToMultiByte, GetLastError,
+maperrno, maperrno_func, base_getErrorMessage and LocalFree run on Windows x86_64
+in both backends. They require native access without granting guest filesystem
+access. Directory calls and encoding calls share the context's captured Windows
+last-error slot. The original errno slot remains separate.
+
+~~~powershell
+./scripts/windows.ps1 -Action CodePageTest -Jobs 4
+~~~
+
+The full Test action and native Windows CI include this test. The producer uses
+the hash-pinned GHC 9.14.1 source archive, rebuilding three unchanged declaration
+interfaces with full Core and Core Lint. These bounded declaration fixtures use
+`-fignore-interface-pragmas`; the complete production graph retains normal O2
+and imported pragmas. A GHC session reads the actual FCallIds; a second session
+typechecks consumers and requires exact type equality before specializing them.
+The same genuine calls execute natively for expected results. No replacement
+foreign declarations, generated Core or THC-derived expected results are used.
+
+Win32 supplies the actual ANSI/DBCS/Unicode conversion tables, flags, fallback
+characters and localized error text. The implementation does not replace ANSI
+conversion with UTF-8. Buffer transport preserves shared allocation identities,
+validates capacities and mutability before effects, and holds native borrows
+and managed owner locks through publication. The C headers report CPINFO's
+20-byte allocation while GHC's Storable representation uses its 18 field bytes;
+only those fields are copied to the guest allocation. Null sizing outputs and
+native partial failure writes retain their original meaning.
+
+FormatMessageW allocations returned by base_getErrorMessage have an explicit
+LocalFree owner in the context's native allocation registry. Interior, stale,
+cross-context and wrong-allocator free/realloc/finalizer requests reject.
+Existing aliases become invalid after release; context disposal releases any
+remaining owners, and active borrows prevent premature release. The GHC error
+mapping retains its ordered table, including the first ERROR_INVALID_HANDLE
+entry, and its fallback ranges.
+
+Native evidence under build/windows-codepages covers 263 error mappings,
+CP1252 and CP932, UTF-8 and UTF-16 supplementary characters, invalid input/flags,
+short buffers, null sizing, same-buffer rejection, custom/default characters and
+localized messages. Pre/post-Tidy Core passes 22 strict entry audits. Both
+backends run interpreted and check every first compiled call in both handoff
+forks, with provenance, authority, bounds, state, ownership and context controls.
+
 ## Current boundaries
 
 This is a bounded native Windows gate, not full parity with Linux/macOS or the
@@ -220,13 +266,10 @@ repository's entire fixture/test suite.
   recompilation does not make that compiler a full-Core installation.
   See [the compiler build requirements](ghc-core.md).
 * Acquiring the runtime library is separate from executing its complete exception
-  dictionary. The real `windows-bridge` Haskell fixture currently stops at strict
-  audit on the original Windows code-page and error APIs: GetConsoleCP, GetACP,
-  GetCPInfo, IsDBCSLeadByteEx, MultiByteToWideChar, WideCharToMultiByte,
-  maperrno_func, base_getErrorMessage and LocalFree, plus GetLastError's distinct
-  ghc-internal declaration. This checkpoint does not admit those calls or claim
-  automatic exception conversion. Failed native-oracle/export/audit evidence is
-  retained under build/windows-bridge.
+  dictionary. The code-page/error declarations above resolve the previous strict
+  audit frontier; complete dictionary execution and automatic foreign exception
+  conversion require their separate `windows-bridge` evidence. Failed earlier
+  native-oracle/export/audit evidence is retained under build/windows-bridge.
 * The Unix project-capture/shared-plugin/provider pipeline is not ported by
   this checkpoint. A single Cabal executable without internal library/build-tool
   dependencies uses the Windows exporter/launcher path after Cabal resolves the
