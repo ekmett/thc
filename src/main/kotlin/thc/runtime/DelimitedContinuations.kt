@@ -50,6 +50,7 @@ internal class DelimitedRootStep(private val root: FunctionRoot) : DelimitedTran
     override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
         val result = root.resumeDelimited(frame, transfer, site)
         DelimitedControl.captureBytecode(result, root.tupleResult)
+        DelimitedControl.asyncResult(result, site)
         return root.tupleResult?.let { ownedTupleResult(result, it) } ?: result
     }
 }
@@ -86,12 +87,14 @@ internal class DelimitedBytecodeStep(private val saved: ContinuationResult,
                         outerMask: DelimitedStep?): Any? {
         val answer = ContinuationResult.create(saved.continuationRootNode, frame, saved.result).continueWith(input)
         DelimitedControl.captureBytecode(answer, shape)
+        DelimitedControl.asyncResult(answer, saved.continuationRootNode)
         return if (shape == null) answer else ownedTupleResult(answer, shape)
     }
     override fun accepts(transfer: ControlFlowException): Boolean = transfer is TailCall
     override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
         val result = site.tail(transfer as TailCall)
         DelimitedControl.captureBytecode(result, shape)
+        DelimitedControl.asyncResult(result, site)
         return if (shape == null) result else ownedTupleResult(result, shape)
     }
 }
@@ -167,9 +170,9 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
             val input = try { DelimitedResume(site.invoke(frame, action, arrayOf(Unit), inputShape)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
             catch (failure: AsyncDelivery) {
-                if (!failure.request.forceSelf) throw failure
                 DelimitedResume(null, failure)
             }
+            catch (cut: AstCapture) { DelimitedResume(null, DelimitedControl.asyncFailure(cut, site)) }
             catch (cut: DelimitedCut) { return transfer(site, cut, active, ambient, outerMask) }
             return run(site, active, input, ambient, outerMask)
         } finally {
@@ -185,9 +188,9 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
             input = try { DelimitedResume(entry.step.resume(entry.frame, input, ambient, outerMask)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
             catch (failure: AsyncDelivery) {
-                if (!failure.request.forceSelf) throw failure
                 DelimitedResume(null, failure)
             }
+            catch (cut: AstCapture) { DelimitedResume(null, DelimitedControl.asyncFailure(cut, site)) }
             catch (cut: DelimitedCut) { return transfer(site, cut, active.drop(index + 1), ambient, outerMask) }
             catch (flow: ControlFlowException) {
                 return transferControl(site, flow, active.drop(index), ambient, outerMask)
@@ -207,9 +210,9 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
         val input = try { DelimitedResume((entry.step as DelimitedTransferStep).transfer(entry.frame, flow, site)) }
         catch (failure: GuestException) { DelimitedResume(null, failure) }
         catch (failure: AsyncDelivery) {
-            if (!failure.request.forceSelf) throw failure
             DelimitedResume(null, failure)
         }
+        catch (cut: AstCapture) { DelimitedResume(null, DelimitedControl.asyncFailure(cut, site)) }
         catch (cut: DelimitedCut) { return transfer(site, cut, after, ambient, outerMask) }
         catch (next: ControlFlowException) { return transferControl(site, next, after, ambient, outerMask) }
         return run(site, after, input, ambient, outerMask)
@@ -223,9 +226,9 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
                 val input = try { DelimitedResume(step.handle(entry.frame, cut)) }
                 catch (failure: GuestException) { DelimitedResume(null, failure) }
                 catch (failure: AsyncDelivery) {
-                    if (!failure.request.forceSelf) throw failure
                     DelimitedResume(null, failure)
                 }
+                catch (captured: AstCapture) { DelimitedResume(null, DelimitedControl.asyncFailure(captured, site)) }
                 catch (next: DelimitedCut) { return transfer(site, next, remaining.drop(index + 1), ambient, outerMask) }
                 return run(site, remaining.drop(index + 1), input, ambient, outerMask)
             }
@@ -267,10 +270,23 @@ internal class DelimitedActionSite(private val language: Language, private val m
     @Child private var trampoline = TailCallLoop(metrics)
     fun tail(transfer: TailCall): Any? = trampoline.execute(transfer)
     fun invoke(frame: VirtualFrame, action: Any?, arguments: Array<Any?>, shape: TupleShape): Any? {
-        val closure = requireClosure(force.execute(frame, action))
-        val result = (if (arguments.size == 1) one else two).execute(frame, closure, arguments)
-        DelimitedControl.captureBytecode(result, shape)
-        return ownedTupleResult(result, shape)
+        try {
+            val closure = requireClosure(force.execute(frame, action))
+            val result = (if (arguments.size == 1) one else two).execute(frame, closure, arguments)
+            DelimitedControl.captureBytecode(result, shape)
+            DelimitedControl.asyncResult(result, this)
+            return ownedTupleResult(result, shape)
+        } catch (cut: AstCapture) {
+            throw DelimitedControl.asyncFailure(cut, this)
+        } catch (cut: ThunkSuspended) {
+            cut.asyncRequest?.let { throw AsyncDelivery(it, this) }
+            throw UnsupportedCore("Delimited action encountered a non-delivery thunk scheduling cut")
+        } catch (cut: CallSegmentSuspended) {
+            cut.asyncRequest?.let { throw AsyncDelivery(it, this) }
+            throw UnsupportedCore("Delimited action encountered a non-delivery call scheduling cut")
+        } catch (blocked: AsyncBlocked) {
+            throw AsyncDelivery(blocked.request, this)
+        }
     }
     fun handle(frame: VirtualFrame, cut: DelimitedCut, shape: TupleShape): Any? {
         val continuation = snapshot(cut, shape)
@@ -292,9 +308,11 @@ internal class DelimitedActionSite(private val language: Language, private val m
         val payload = when (failure) {
             is GuestException -> failure.payload
             is AsyncDelivery -> {
-                // Direct self delivery needs no saved asynchronous continuation.
-                // External async capture remains a separate protocol.
-                if (!failure.request.forceSelf) throw failure
+                check(failure.request.target === Thread.currentThread() &&
+                    failure.request.targetId == GuestThreads.current(this).currentId() &&
+                    failure.request.state == AsyncRequestState.CLAIMED) {
+                    "Delimited catch delivery left its target or was already consumed"
+                }
                 failure.request.acknowledge()
                 failure.request.payload
             }
@@ -331,6 +349,21 @@ internal class DelimitedActionSite(private val language: Language, private val m
 }
 
 internal object DelimitedControl {
+    /** The parked child is one-shot; only its original request unwinds this
+     * invocation's fresh suffix. Neither is stored in the reusable image. */
+    fun asyncFailure(cut: AstCapture, node: Node): AsyncDelivery =
+        cut.asyncRequest()?.let { AsyncDelivery(it, node) }
+            ?: throw UnsupportedCore("Delimited continuation encountered a non-delivery asynchronous scheduling cut")
+
+    fun asyncResult(result: Any?, node: Node) {
+        val saved = when (result) {
+            is TailYield -> savedGuestContinuation(result.continuation)
+            is AstTailYield -> result.continuation
+            else -> savedGuestContinuation(result)
+        } ?: return
+        saved.asyncRequest()?.let { throw AsyncDelivery(it, node) }
+        throw UnsupportedCore("Delimited continuation encountered a non-delivery asynchronous scheduling cut")
+    }
     /** Inspect the dynamic captured-step graph outside guest partial evaluation.
      * Otherwise the temporarily sole loaded PendingApplication implementation
      * creates a CHA dependency that a later generic-call compilation invalidates. */

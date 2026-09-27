@@ -105,6 +105,8 @@ class ThreadAsyncNativeTest {
         assertEquals(listOf("5", "-1", "-1", "-1", "-1"), File(root, "build/thread-async/extra-oracle.txt").readLines())
         assertEquals(listOf("220102", "220103", "220102", "220103", "220102", "220103", "110102", "110103"),
             File(root, "build/thread-async/saved-oracle.txt").readLines())
+        assertEquals(listOf("22122122", "22122123"),
+            File(root, "build/thread-async/external-saved-oracle.txt").readLines())
         assertEquals(listOf("37", "39"), File(root, "build/thread-async/yield-oracle.txt").readLines())
         assertEquals(listOf("52", "53"), File(root, "build/thread-async/lazy-oracle.txt").readLines())
     }
@@ -171,6 +173,10 @@ class ThreadAsyncNativeTest {
         exercise("promptMaskedUnmaskSelf", listOf(-1, 0), backend = "ast", asyncExceptions = false)
     @Test fun savedSelfDeliveryAcknowledgesEachResumption() =
         exercise("savedSelfThrow", listOf(220102, 220103), asyncExceptions = false)
+    @Test fun savedExternalDeliveryOwnsEachInterruptedInvocation() =
+        exercise("externalSaved", listOf(22122122, 22122123))
+    @Test fun astSavedExternalDeliveryOwnsEachInterruptedInvocation() =
+        exercise("externalSaved", listOf(22122122, 22122123), backend = "ast")
     @Test fun astSavedSelfDeliveryAcknowledgesEachResumption() =
         exercise("savedSelfThrow", listOf(220102, 220103), backend = "ast", asyncExceptions = false)
     @Test fun savedSelfDeliveryUnwindsMasks() =

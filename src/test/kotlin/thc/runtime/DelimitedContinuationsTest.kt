@@ -394,6 +394,114 @@ class DelimitedContinuationsTest {
         }
     }
 
+    @Test fun savedExternalDeliveryKeepsTheAbandonedChildOneShotAndTheImageReusable() {
+        Context.create("thc").use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val threads = Language.currentState().threads
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val payload = Any()
+                val requests = ArrayList<AsyncRequest>()
+                val children = ArrayList<AstContinuation>()
+                var resumedChildren = 0
+                var handled = 0
+                val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                    init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        val target = threads.currentId()
+                        val submitted = AtomicReference<AsyncRequest>()
+                        val sender = Thread { submitted.set(threads.send(target, payload)) }
+                        sender.start(); sender.join(5000); assertFalse(sender.isAlive)
+                        val request = threads.poll(this, true)!!
+                        assertSame(submitted.get(), request)
+                        assertFalse(request.forceSelf)
+                        requests += request
+                        return AstCapture(request, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any {
+                                assertSame(Unit, input)
+                                resumedChildren++
+                                return Unit
+                            }
+                        }).freeze(this, frame.materialize()).also { children += it }
+                    }
+                }.callTarget)
+                val handler = Closure(null, arity = 2, target = object : GuestRoot(language, FrameLayout().build()) {
+                    init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        handled++
+                        assertSame(payload, frame.arguments[1])
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, requests.last().state)
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this))
+                        return shape.layout.create().also { shape.layout.setObject(it, 0, payload) }
+                    }
+                }.callTarget)
+                val root = object : GuestRoot(language, FrameLayout().build()) {
+                    @field:Child private var site = DelimitedActionSite(language, Metrics(false))
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Nothing = error("model root is not an action")
+                    fun image(caught: Boolean = true): DelimitedStack {
+                        val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor)
+                        val cut = DelimitedCut(PromptTag(Language.currentState(this)), null, shape,
+                            MaskingState.UNMASKED, this)
+                        if (caught) cut.frames += DelimitedFrame(frame, DelimitedCatchStep(site, handler, shape))
+                        return DelimitedStack(cut, shape)
+                    }
+                    fun resume(image: DelimitedStack): Any? = image.resume(site,
+                        Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor), action)
+                    fun deliver(request: AsyncRequest): Any? = site.handleException(
+                        Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor), handler,
+                        AsyncDelivery(request, this), shape)
+                }
+                threads.enterCurrent()
+                try {
+                    val image = root.image()
+                    repeat(2) {
+                        val result = root.resume(image) as HandoffStorage
+                        assertSame(payload, shape.layout.getObject(result, 0))
+                        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
+                    }
+                    assertEquals(2, handled)
+                    assertNotSame(requests[0], requests[1]); assertNotSame(children[0], children[1])
+                    assertEquals(0, resumedChildren, "Catch abandons each interrupted child, not the reusable image")
+                    assertThrows(IllegalStateException::class.java) { root.deliver(requests[0]) }
+                    Calls.target(action.target, arrayOf(0L, Unit))
+                    val pending = requests.last()
+                    val foreign = threads.enterForeign(ForeignSafety.SAFE)
+                    try {
+                        threads.enterCurrent()
+                        try {
+                            assertNotEquals(pending.targetId, threads.currentId())
+                            assertThrows(IllegalStateException::class.java) { root.deliver(pending) }
+                            assertEquals(AsyncRequestState.CLAIMED, pending.state)
+                        } finally { threads.leaveCurrent() }
+                    } finally { threads.leaveForeign(foreign) }
+                    root.deliver(pending)
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, pending.state)
+                    val escaped = assertThrows(AsyncDelivery::class.java) { root.resume(root.image(false)) }
+                    assertSame(requests.last(), escaped.request)
+                    assertEquals(AsyncRequestState.CLAIMED, escaped.request.state)
+                    assertEquals(3, handled, "Only a reached catch acknowledges the original delivery")
+                    escaped.request.acknowledge()
+                    for (child in children) {
+                        assertSame(Unit, child.continueWith(Unit))
+                        assertThrows(RuntimeFault::class.java) { child.continueWith(Unit) }
+                    }
+                    assertEquals(4, resumedChildren, "An independent owner may resume each child once only")
+                    assertEquals(3, handled)
+                    assertNull(threads.poll(root))
+                    val scheduling = AstCapture(AstStackSpill, MaskingState.UNMASKED)
+                    assertThrows(UnsupportedCore::class.java) { DelimitedControl.asyncFailure(scheduling, root) }
+                } finally { threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun frameImagesCopyControlLocalsButShareHeapReferences() {
         val builder = FrameDescriptor.newBuilder()
         val scalar = builder.addSlot(FrameSlotKind.Long, null, null)

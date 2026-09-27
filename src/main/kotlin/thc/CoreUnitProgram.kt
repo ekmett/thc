@@ -67,13 +67,13 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     private val demand = CoreDemandBindings({ it in consumerBindings || directory.owner(it) != null }, ::binding, ::constructor,
         ::prepare, input["instrument"] != false, { it in consumerBindings || sources.containsSymbol(it) })
     // Cold summaries choose a calling convention, not an admission verdict.
-    // AST asynchronous execution cannot capture explicit delimited control; its
-    // actual selected binding is rejected by Program, not by this directory.
-    private val captureDelimited = (backend != "ast" || !async) &&
-        (directory.modules.any { it.containsDelimitedControl } || consumerBindings.values.any { binding ->
+    // Both backends keep the same delimited return convention when async delivery
+    // is enabled. Unrelated cold summaries never force a body or debug lookup.
+    private val captureDelimited =
+        directory.modules.any { it.containsDelimitedControl } || consumerBindings.values.any { binding ->
             val body = binding["expr"]
             if (body is CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(body)
-        })
+        }
     fun contains(id: String) = id in consumerBindings || directory.owner(id) != null
 
     private fun addConstructors(data: Map<String, Any?>) {

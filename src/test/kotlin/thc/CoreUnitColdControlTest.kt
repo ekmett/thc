@@ -96,16 +96,11 @@ class CoreUnitColdControlTest {
         CoreModules.request(listOf(source), entry, backend = backend, sourceNotesEnabled = false, asyncExceptions = async)
     private fun count(entry: Value, name: String) =
         ((Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>)[name] as Number).toLong()
-    private fun assertExistingAstAsyncPolicy(failure: PolyglotException) =
-        assertTrue(failure.message.orEmpty().contains("Delimited continuations do not yet preserve AST async captures"), failure.message)
-
     @Test fun exhaustiveLoaderModelPreservesTheExistingPromptPolicy() {
         fixture()
         for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) Context.create("thc").use { context ->
             val source = request(directory.resolve("B.json").toString(), "uB:B.entry", backend, async)
-            if (backend == "ast" && async) assertExistingAstAsyncPolicy(assertThrows(PolyglotException::class.java) {
-                context.eval("thc", source)
-            }) else assertEquals(13L, context.eval("thc", source).execute(2).asLong(), "$backend/$async")
+            assertEquals(13L, context.eval("thc", source).execute(2).asLong(), "$backend/$async")
         }
     }
 
@@ -129,15 +124,11 @@ class CoreUnitColdControlTest {
             val entry = context.eval("thc", request("@$manifest", "uA:A.entry", backend, async))
             assertEquals(1L, count(entry, "coreUnitSourceOpens"))
             assertEquals(1L, count(entry, "coreUnitDecodedBindings"))
-            if (backend == "ast" && async) assertExistingAstAsyncPolicy(assertThrows(PolyglotException::class.java) {
-                entry.execute(2)
-            }) else {
-                assertEquals(18L, entry.execute(2).asLong(), "$backend/$async first demand")
-                assertEquals(2L, count(entry, "coreUnitDecodedBindings"))
-                val reads = count(entry, "coreUnitSourceByteReads")
-                assertEquals(19L, entry.execute(3).asLong())
-                assertEquals(reads, count(entry, "coreUnitSourceByteReads"))
-            }
+            assertEquals(18L, entry.execute(2).asLong(), "$backend/$async first demand")
+            assertEquals(2L, count(entry, "coreUnitDecodedBindings"))
+            val reads = count(entry, "coreUnitSourceByteReads")
+            assertEquals(19L, entry.execute(3).asLong())
+            assertEquals(reads, count(entry, "coreUnitSourceByteReads"))
         }
     }
 
