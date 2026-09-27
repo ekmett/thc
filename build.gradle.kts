@@ -1122,6 +1122,38 @@ val compileNativeProcessSignals by tasks.registering {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-process-signals")) }
 tasks.processResources { dependsOn(compileNativeProcessSignals) }
 
+// Probe the genuine Windows search-buffer ABI with the native target headers.
+val generateWindowsDirectoryAbi by tasks.registering {
+    val source = layout.projectDirectory.file("src/main/c/windows-directory-abi.c").asFile
+    val output = layout.buildDirectory.dir("generated/windows-directory-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source)
+    inputs.property("clang", clang)
+    inputs.property("host", System.getProperty("os.name") + "/" + System.getProperty("os.arch"))
+    outputs.dir(output)
+    onlyIf { windowsHost }
+    doLast {
+        fun run(command: List<String>): String = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        val target = run(listOf(clang.get(), "-dumpmachine")).trim()
+        require(System.getProperty("os.arch") in setOf("amd64", "x86_64") &&
+            target.startsWith("x86_64-") && (target.contains("windows") || target.contains("mingw"))) {
+            "Windows directory probing requires a native x86_64 Windows compiler: " + target
+        }
+        val executable = temporaryDir.resolve("windows-directory-abi.exe")
+        run(listOf(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        val document = linkedMapOf("schema" to 1, "architecture" to "x86_64", "target" to target,
+            "compilerVersion" to run(listOf(clang.get(), "--version")),
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
+                .joinToString("") { "%02x".format(it) }, "layout" to probe)
+        val destination = output.get().asFile.resolve("thc/native/windows-directory-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(document)) + "\n")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/windows-directory-abi")) }
+tasks.processResources { dependsOn(generateWindowsDirectoryAbi) }
+
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {
     val source = layout.projectDirectory.file("src/main/c/stdio-abi-probe.c").asFile
@@ -1270,8 +1302,12 @@ if (windowsHost) {
         .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.
-        exclude("thc/native/**", "thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
+        exclude { !it.isDirectory && it.path.startsWith("thc/native/") &&
+            it.path != "thc/native/windows-directory-abi.json" }
+        exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
     }
+} else {
+    tasks.processResources { exclude("thc/native/windows-directory-abi.json") }
 }
 
 // Native Windows checkpoint: the default test task keeps its complete contract.

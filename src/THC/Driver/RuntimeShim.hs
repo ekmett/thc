@@ -6,7 +6,7 @@
 -- Native products remain recorded inputs; their code is not a guest provider.
 module THC.Driver.RuntimeShim
   ( RuntimeShim, runtimeShimInputs, withRuntimeShim, validateRuntimeShimModules
-  , validateRuntimeShimModule, validateRuntimeShimInventory
+  , validateRuntimeShimModule, validateRuntimeShimInventory, foreignExceptionBridgeUnit
   ) where
 
 import Control.Monad (forM, forM_, unless)
@@ -21,6 +21,35 @@ import Numeric (showHex)
 import System.Directory (canonicalizePath)
 import System.FilePath
 import THC.Driver.NativeRecipe
+
+-- The selected dictionary belongs to the application's linked runtime unit.
+-- Merely finding a package called thc is not authority, and injecting a second
+-- copy would give ForeignException a different Typeable identity.
+foreignExceptionBridgeUnit :: [Value] -> Either String (Maybe String)
+foreignExceptionBridgeUnit modules = do
+  candidates <- mapM validateCandidate [value | value <- modules,
+    member value "module" == Just (String "THC.Internal.Exception")]
+  let publicOwners = [owner | value <- modules,
+        member value "module" == Just (String "THC.Exception"),
+        String text <- maybe [] pure (member value "unit"), let owner = Text.unpack text]
+  unless (all (`elem` candidates) publicOwners)
+    (Left "linked THC.Exception has no matching genuine exception bridge")
+  case nub candidates of
+    [] -> Right Nothing
+    [unit] -> Right (Just unit)
+    _ -> Left "multiple linked foreign exception bridge units require an explicit selection"
+  where
+    validateCandidate value = do
+      unit <- field value "unit"
+      let prefix = unit ++ ":THC.Internal.Exception."
+          expected = object ["schema" .= (1 :: Int), "unit" .= unit,
+            "module" .= ("THC.Internal.Exception" :: String),
+            "box" .= (prefix ++ "boxForeign"), "project" .= (prefix ++ "projectForeign"),
+            "payloadType" .= (prefix ++ "ForeignException"),
+            "exceptionType" .= ("ghc-internal:GHC.Internal.Exception.Type.SomeException" :: String)]
+      unless (not (null unit) && member value "foreignExceptionBridge" == Just expected)
+        (Left "linked exception bridge has missing or inconsistent typed provenance")
+      Right unit
 
 data RuntimeShim = RuntimeShim
   { runtimeShimInputs :: Value
@@ -75,7 +104,7 @@ validateRuntimeShimInventory unit values = do
   -- Inlining may move a verified call into another module of this same unit.
   require (all (`elem` names) (concat calls)) "runtime shim Core call lacks its verified import declaration"
 
--- All five names have target-defined semantics before any package C dispatch.
+-- These exact names have target-defined semantics before package C dispatch.
 -- There is no prefix match and no admission based on a package/module name.
 signatures :: [(String, ([String], String))]
 signatures =
@@ -84,6 +113,7 @@ signatures =
   , ("thc_runtime_v1_query", (["Int32Rep", "Int64Rep", "Int64Rep"], "Int64Rep"))
   , ("thc_runtime_v1_control", (["Int32Rep", "Int64Rep"], "Int64Rep"))
   , ("thc_runtime_v1_trace", (["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep"], "Int64Rep"))
+  , ("thc_exception_v1_text", (["AddrRep", "Int32Rep", "Int64Rep"], "Int64Rep"))
   ]
 
 validateRuntimeShimModule :: String -> Value -> Either String ([String], [String])

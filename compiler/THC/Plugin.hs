@@ -644,6 +644,18 @@ polyglotForeign v = case isFCallId_maybe v of
        && case javascriptSource (unpackFS symbol) of Just _ -> True; Nothing -> False)
   _ -> False
 
+-- Preserve the exact nominal payload type before erasure. Primitive raises
+-- remain lazy; only a compatible public exit may normalize a proven exception.
+someExceptionPayload :: CoreExpr -> [CoreExpr] -> [(String,J)]
+someExceptionPayload (Var callee) (payload:_)
+  | Just op <- isPrimOpId_maybe callee
+  , occNameString (primOpOcc op) `elem` ["raise#", "raiseIO#"]
+  , Just (tc,[]) <- splitTyConApp_maybe (exprType payload)
+  , nameKey (tyConName tc) == "ghc-internal:GHC.Internal.Exception.Type.SomeException"
+  = [("exceptionPayload",O [("schema",num (1::Int)),
+       ("type",S "ghc-internal:GHC.Internal.Exception.Type.SomeException")])]
+someExceptionPayload _ _ = []
+
 exprRaw :: Ctx -> CoreExpr -> J
 exprRaw d original = case original of
   Var v | Just p <- isPrimOpId_maybe v -> node [S "prim",S (occNameString (primOpOcc p))] []
@@ -668,7 +680,7 @@ exprRaw d original = case original of
                ,B (canCertify d && exprIsHNF a)
                ,B (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) a)] (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily a]]
                  ++ [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication a]]
-                 ++ foreignCallFields d f args)
+                 ++ someExceptionPayload f vals ++ foreignCallFields d f args)
   l@Lam{} -> let (bs,body) = collectBinders l
                  vals = filter (not . isTyVar) bs
              in if null vals then withRep (exprRep d l) (expr d body)
@@ -833,6 +845,32 @@ serializeOptimizedCore flags opts guts = do
   (_,result) <- optimizedModule flags opts guts
   pure (json result ++ "\n")
 
+
+-- A runtime bridge is exported only from the defining module, with the genuine
+-- helper identities and checked reciprocal Any/SomeException function types.
+foreignExceptionBridgeFields :: Ctx -> String -> String -> [(Id,CoreExpr)] -> [(String,J)]
+foreignExceptionBridgeFields d unit modName binds
+  | modName /= "THC.Internal.Exception" = []
+  | otherwise = case (named "boxForeign", named "projectForeign") of
+      ([boxer], [projector])
+        | Just (raw,exception) <- unary (varType boxer)
+        , Just (exception',raw') <- unary (varType projector)
+        , eqType raw raw', eqType exception exception'
+        , typeName exception == Just "ghc-internal:GHC.Internal.Exception.Type.SomeException"
+        , typeName raw == Just "ghc-internal:GHC.Internal.Types.Any"
+        -> [("foreignExceptionBridge",O
+           [("schema",num (1::Int)),("unit",S unit),("module",S modName)
+           ,("box",S (varKey d boxer)),("project",S (varKey d projector))
+           ,("payloadType",S (unit ++ ":" ++ modName ++ ".ForeignException"))
+           ,("exceptionType",S "ghc-internal:GHC.Internal.Exception.Type.SomeException")])]
+      _ -> error ("THC.Internal.Exception lacks the genuine boxForeign/projectForeign bridge types: " ++ show [(occNameString (nameOccName (varName v)), pretty d (varType v), fmap (\(a,b) -> (typeName a,typeName b)) (unary (varType v))) | v <- named "boxForeign" ++ named "projectForeign"])
+  where
+    named name = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) == name]
+    unary ty = case splitFunTys (expandTypeSynonyms ty) of
+      ([a],b) -> Just (scaledThing a,b)
+      _ -> Nothing
+    typeName ty = nameKey . tyConName . fst <$> splitTyConApp_maybe ty
+
 optimizedModule :: DynFlags -> [CommandLineOption] -> ModGuts -> IO (Ctx,J)
 optimizedModule flags opts guts = do
   sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
@@ -851,7 +889,7 @@ optimizedModule flags opts guts = do
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
         , ("rules",S (pretty d (mg_rules guts)))
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
-        ] ++ sourceTableFields d ++ exports
+        ] ++ sourceTableFields d ++ exports ++ foreignExceptionBridgeFields d unit modName binds
   pure (d,result)
 
 -- Package rebuilding needs identities that agree with the newly emitted
@@ -1071,7 +1109,7 @@ postTidyModule flags opts m tycons program = do
         , ("sourceCore",S (pretty d program))
         , ("bindings",A (concatMap (bindingGroup d) program)), ("constructors",A (map (constructor d) cons))
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- program])
-        ] ++ sourceTableFields d
+        ] ++ sourceTableFields d ++ foreignExceptionBridgeFields d unit modName binds
   pure (d,result)
   where binds = concatMap flattenBind program
 
