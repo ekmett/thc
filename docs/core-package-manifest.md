@@ -57,10 +57,19 @@ preservation of nested expression SourceNote ticks.
 ## Direct unit artifacts
 
 The project driver publishes a nonempty unit as two absolute artifact references:
-`json: {path, sha256}` and `symbols: {path, sha256}`. Both must be present, and
+`json: {path, sha256}` and `symbols: {path, sha256, format}`. Both must be present, and
 the unit must not also select `bundle`. `core.jsons` contains original module
-JSON bytes plus LF separators and small metadata projections. `core.symbols`
-contains one row per original top-level binding:
+JSON bytes plus LF separators and small metadata projections. With
+`symbols.format: "md5-utf8-u64le-v1"`, `core.symbols` contains one fixed 24-byte
+record per original top-level binding: the 16 canonical MD5 digest bytes of its
+exact logical qualified ID encoded as UTF-8, followed by an unsigned 64-bit
+little-endian absolute JSON byte offset. Records are sorted by unsigned digest
+bytes, with no header, name table or auxiliary search index. MD5 collisions are
+assumed absent; lookup does not compare stored names or use collision buckets.
+For example, `main:M.é😀` has digest `23415231b60de428eeaf32979e1cb8ce`.
+
+Omitting `symbols.format` selects the compatible text directory, not binary
+auto-detection. Its rows are:
 
 ```text
 exact-unit:Module.binding decimal-byte-offset
@@ -70,9 +79,11 @@ IDs are decoded raw UTF-8, sorted by unsigned UTF-8 bytes; a row ends with LF.
 The last space separates the ID from the decimal offset, so IDs can contain
 spaces. Empty, duplicate, or line-breaking IDs are rejected. The offset points
 to the original binding object's opening `{`, not an escaped ID or a display
-name. It is recorded from actual final bytes, after package-native amendments.
-Directory sort order does not change Core binding order, so a following row's
-offset is never a binding length.
+name. Both formats record offsets from actual final bytes, after package-native
+amendments. Directory sort order does not change Core binding order, so a
+following record's offset is never a binding length. The reader maps the
+directory on first lookup and decodes only the selected JSON object; neither
+format requires a whole-source structural index or eager binding enumeration.
 
 Module records retain their original name, logical path, boundary and module
 hash. They add absolute byte positions, all end-exclusive: `start`/`end` select

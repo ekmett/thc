@@ -92,20 +92,34 @@ Acquisition accepts the build/provider options shared with `run`, including
 suffix. Acquisition is not equivalent to a successful application or benchmark
 run.
 
-`run` and `acquire` publish one uncompressed `core.jsons` and one sorted text
+`run` and `acquire` publish one uncompressed `core.jsons` and one fixed-record
 `core.symbols` per nonempty GHC unit. Publication uses the final linked module
 bytes from the acquisition cache, preserving each module and its hash. The
-directory maps exact binding IDs to absolute UTF-8 byte offsets recorded while
-writing. Small metadata and optional source-table projections have separate
+directory maps MD5 digests of exact UTF-8 binding IDs to absolute byte offsets
+recorded while writing. Each 24-byte record contains the canonical 16-byte
+digest and an unsigned 64-bit little-endian offset; records sort by unsigned
+digest bytes. The manifest selects `symbols.format: "md5-utf8-u64le-v1"`.
+MD5 is assumed collision-free for these identifiers, with no stored name table.
+Small metadata and optional source-table projections have separate
 spans; they do not duplicate binding bodies or diagnostic pretty Core. See the
 [unit artifact contract](core-package-manifest.md#direct-unit-artifacts).
 
 The acquisition cache retains its original ZIPs and optional JSON navigation
 indexes as provenance, without rewriting immutable bundles. The runtime
 manifest explicitly selects the plain pair, not those ZIPs or indexes. A warm
-publication checks cache identity and file sizes; `--verify-artifacts` also
-checks cached pair hashes and regenerates corrupt publications from the checked
-original ZIP. Legacy ZIP, loose JSON and explicit structural-index inputs remain
+acquisition reuses a successful selection receipt only when the computed
+unit/build/export keys, complete expected inputs and module inventory, and
+artifact path/size/modification-time observations still match. This check runs
+before reopening the source ZIP, including exception-bridge selection and the
+Windows source projection. Missing or changed receipts take the original
+validated acquisition path. Source, native-tool and registration input checks
+remain in place; these local receipts are cache hints, not authentication.
+
+Warm publication checks the selected identity and pair file sizes.
+`--verify-artifacts` bypasses selection receipts, checks the original archives
+and cached pair hashes, and regenerates corrupt publications from the checked
+original ZIP. Older text symbol directories have no format marker and remain
+explicit legacy inputs. Legacy ZIP, loose JSON and explicit structural-index inputs remain
 separate supported formats.
 
 Simple-package runs also produce sidecars for their loose consumer modules.
@@ -556,8 +570,8 @@ Cold installed-Core acquisition hydrates at most two interfaces concurrently.
 `THC_INSTALLED_CORE_JOBS` selects a bound from 1 to 64 (1 is the serial control);
 raising it increases helper CPU and peak memory demand. Results and errors are
 consumed in registered module order, and failure cancels outstanding helpers.
-Only hydration overlaps: identity/schema checks, source/provenance checks,
-registration rechecks, bundle contents and warm-cache validation are unchanged.
+Only hydration overlaps. Source/provenance and registration input checks remain
+in place; unchanged archive selections use the receipt policy described above.
 Full-Core stdout stays in UTF-8 bytes through the subprocess boundary; stderr
 is drained concurrently and malformed UTF-8 remains a protocol failure.
 

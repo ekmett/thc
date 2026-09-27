@@ -276,8 +276,20 @@ class UnalignedScalarMemoryTest {
         val raw = ByteArray(8)
         ManagedByteArray.writeIntGuest(raw, 0, Long.MIN_VALUE, true)
         assertEquals(Long.MIN_VALUE, ManagedByteArray.readIntGuest(raw, 0, true))
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeIntGuest(raw, 1, 1, true) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readIntGuest(ByteArray(0), 0, true) }
+        for (bytes in listOf(ByteArray(0), raw, ByteArray(15) { 37 })) {
+            for (offset in listOf(Long.MIN_VALUE, -1L, bytes.size.toLong() - 7, Long.MAX_VALUE)) {
+                val before = bytes.copyOf()
+                assertEquals("ByteArray# scalar byte offset outside its backing storage",
+                    assertThrows(RuntimeFault::class.java) {
+                        ManagedByteArray.readIntGuest(bytes, offset, true)
+                    }.message)
+                assertEquals("ByteArray# scalar byte offset outside its backing storage",
+                    assertThrows(RuntimeFault::class.java) {
+                        ManagedByteArray.writeIntGuest(bytes, offset, 1, true)
+                    }.message)
+                assertArrayEquals(before, bytes)
+            }
+        }
         val literal = ManagedAddress.fromHex("0001020304050607")
         assertThrows(RuntimeFault::class.java) { literal.writeNativeScalar(1, 4, 1, true) }
         assertThrows(RuntimeFault::class.java) { ManagedAddress.nullAddress().readWord8(0) }

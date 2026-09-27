@@ -642,6 +642,11 @@ test-suite driver-tests
     THC.Driver.CoreSymbols
     CoreIndexTests
     CoreSymbolsTests
+    BundleSelectionTests
+    THC.Driver.Project
+    THC.Driver.Cache
+    THC.Driver.Wired
+    THC.Driver.ForeignBitcode
     THC.Driver.Zip
     TestSupport
     TestSupportTests
@@ -685,6 +690,7 @@ test-suite driver-tests
     deepseq >= 1.5 && < 1.6,
     directory >= 1.3.10 && < 1.4,
     filepath >= 1.5.4 && < 1.6,
+    ghc-boot == 9.14.1,
     HUnit >= 1.6 && < 1.7,
     process >= 1.6.26 && < 1.7,
     text >= 2.1 && < 2.2,

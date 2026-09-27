@@ -12,7 +12,8 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
     val foreignExceptionBridgeUnit: String?, val targetLayout: TargetLayout?) {
     data class Artifact(val path: Path, val sha256: String)
     data class UnitRecord(val id: String, val depends: List<String>, val json: Artifact?, val symbols: Artifact?,
-        val modules: List<ModuleRecord>, val legacyBundle: Artifact? = null)
+        val modules: List<ModuleRecord>, val legacyBundle: Artifact? = null,
+        val symbolsFormat: CoreJsonSymbols.Format = CoreJsonSymbols.Format.TEXT)
     data class ModuleRecord(val unit: String, val name: String, val sha256: String, val span: CoreJsonSymbols.ModuleSpan,
         val metadata: CoreJsonSymbols.ValueSpan, val sourceMetadata: CoreJsonSymbols.ValueSpan?,
         val containsDelimitedControl: Boolean, val registrationObligations: Boolean, val mainAlias: Boolean,
@@ -51,7 +52,7 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                 val json = checkNotNull(record.json) { "Moduleless unit has no JSON bindings" }
                 val symbols = checkNotNull(record.symbols) { "Moduleless unit has no symbol directory" }
                 CoreJsonSymbols(json.path, symbols.path, verifyArtifacts,
-                    json.sha256, symbols.sha256).also { admitted(it.counters) }
+                    json.sha256, symbols.sha256, format = record.symbolsFormat).also { admitted(it.counters) }
             }
         }
         @Synchronized fun metadata(module: ModuleRecord): Map<String, Any?> {
@@ -129,11 +130,13 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
             val unitIds = HashSet<String>()
             val artifactPaths = HashSet<Path>()
             var layout: TargetLayout? = null
-            fun artifact(raw: Any?): Artifact {
+            fun artifact(raw: Any?, symbols: Boolean = false): Artifact {
                 val record = raw as? Map<*, *> ?: error("Missing unit artifact")
                 val path = Path.of(record["path"] as? String ?: error("Missing unit artifact path"))
                 val hash = record["sha256"] as? String ?: error("Missing unit artifact identity")
-                require(record.keys == setOf("path", "sha256") && path.isAbsolute && hash.matches(SHA) &&
+                require((record.keys == setOf("path", "sha256") || symbols &&
+                    record.keys == setOf("path", "sha256", "format") && record["format"] == CoreJsonSymbols.MD5_FORMAT) &&
+                    path.isAbsolute && hash.matches(SHA) &&
                     artifactPaths.add(path.normalize())) { "Invalid or duplicate unit artifact reference" }
                 // No toRealPath/stat/open: a cold unit need not exist yet.
                 return Artifact(path.normalize(), hash)
@@ -189,7 +192,9 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                     require(layout == null || layout == candidate) { "Conflicting GHC target layouts" }
                     layout = candidate
                 }
-                UnitRecord(id, depends.filterIsInstance<String>(), artifact(unit["json"]), artifact(unit["symbols"]), modules)
+                UnitRecord(id, depends.filterIsInstance<String>(), artifact(unit["json"]), artifact(unit["symbols"], true), modules,
+                    symbolsFormat = if ((unit["symbols"] as Map<*, *>).containsKey("format"))
+                        CoreJsonSymbols.Format.MD5_UTF8_U64LE else CoreJsonSymbols.Format.TEXT)
             }
             val bridge = document["foreignExceptionBridgeUnit"]
             require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }
