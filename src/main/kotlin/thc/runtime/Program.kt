@@ -1881,10 +1881,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     fun entryBloom(inherited: Long): Long =
         if (stackCapture && role == FunctionRootRole.PASS_THROUGH) inherited else inherited or mask
 
-    /** First compaction tranche: no return loan, tuple copy, lazy force or external delivery. */
+    /** Identity return: no return loan, tuple copy, lazy force or external delivery. */
     fun isTailSpillIdentityRoot(): Boolean = stackCapture && !enableAsync && !enableDelimited &&
-        handoff == null && typedInput == null && tupleResult == null && scalarResultProof.evaluated &&
-        (scalarResultProof.isInt || scalarResultProof.isLong || scalarResultProof.isFloat || scalarResultProof.isDouble)
+        handoff == null && typedInput == null && tupleResult == null && AstTailResult.supports(scalarResultProof)
 
     /** Java anchor bridge; the driver runs the saved suffix, not the original body. */
     fun drainTailChild(saved: SavedGuestContinuation): Any? = entryForce.drainStack(saved, tailSpill = true)
