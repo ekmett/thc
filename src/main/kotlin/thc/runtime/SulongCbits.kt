@@ -113,8 +113,9 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         return value.toLong()
     }
     private val finalizerTask = FutureTask {
-        val original = load(env, "libdw-unavailable")
+        val original = if (windows) null else load(env, "libdw-unavailable")
         listOf("libdwPoolRelease", "backtraceFree").associateWith { symbol ->
+            if (windows) return@associateWith CFinalizerFunction(this, symbol, WindowsLibdwFinalizers.function(symbol))
             if (!interop.isMemberReadable(original, symbol)) fault("Missing original RTS finalizer: $symbol")
             val callable = interop.readMember(original, symbol)
             if (!interop.isExecutable(callable)) fault("Original RTS finalizer is not callable: $symbol")
@@ -138,8 +139,16 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
 
     internal fun invokeFinalizer(function: CFinalizerFunction, address: ManagedAddress) {
         function.requireOwner(this)
+        if (Language.currentState(null).cbits() !== this) fault("C finalizer belongs to another THC context")
         if (function.symbol == "free") {
             Language.currentState(null).nativeAllocations.free(address)
+            return
+        }
+        if (windows) {
+            val threads = Language.currentState(null).threads
+            val previous = threads.enterForeign()
+            try { WindowsLibdwFinalizers.invoke(function.callable as java.lang.invoke.MethodHandle, address) }
+            finally { threads.leaveForeign(previous); Reference.reachabilityFence(address) }
             return
         }
         val pointer = if (address === ManagedAddress.nullAddress()) 0L else {

@@ -12,9 +12,18 @@ The selected native RTS has `USE_LIBDW=0`. Its original `LibdwPool.c` and
 `Libdw.c` define `libdwPoolRelease` and `backtraceFree` as empty functions with
 the ABI `void (void *)`. Their pinned, unchanged source is compiled into
 `libdw-unavailable.bc` by the existing C pipeline, using the selected GHC
-public headers and original private declarations. The build rejects enabled
-libdw. This preserves actual function symbols and does not invent a successful
-DWARF session or backtrace.
+public headers and original private declarations. Windows also builds a native
+`libdw-unavailable.dll` from those same bodies. The build rejects enabled libdw.
+This preserves actual function symbols and does not invent a successful DWARF
+session or backtrace.
+
+Windows loads the DLL through JDK FFM with native authority and `IOAccess.NONE`.
+This avoids Sulong's PE dependency lookup requiring guest filesystem access for
+`KERNEL32.dll`. The two empty C bodies satisfy the critical downcall contract:
+they do not block, retain pointers, or call Java. Heap access supplies the actual
+managed segment only during the call; pinned and context-owned native storage
+retain their owner locks and borrows. Unowned numeric addresses, stale storage
+and labels belonging to another context reject. Other hosts retain Sulong.
 
 `addCFinalizerToWeak#` has arguments `Addr#, Addr#, Int#, Addr#, Weak#, State#`
 and returns `(# State#, Int# #)`. The addresses are the function, object, and
@@ -38,14 +47,21 @@ dead-registration failure, repeat finalization, and preservation of the separate
 Haskell finalizer action. The source fixture exports actual GHC Core and verifies
 the function/data distinction, `AddrRep` certificates, and the typed finalizer
 primop. THC resolves the two original one-argument libdw labels into
-context-owned, nonnumeric Sulong callables, and `free` into the owned allocation
+context-owned, nonnumeric native callables, and `free` into the owned allocation
 registry. Explicit weak finalization invokes
 registered callbacks outside the registry lock. The two selected original
 callback bodies are empty: unchanged bytes in the native oracle cannot prove
 invocation or callback order. Separate registry instrumentation checks order and
 the fact that invocation is outside the lock; the JVM integration check executes
-the actual Sulong members. The owned `free` test verifies release, expired aliases
-and dead registration on both compiled backends. Automatic guest GC finalization
+the actual Sulong members or Windows DLL functions. The native fixture producer
+supports static Windows GHC and uses canonical paths in its checked manifest.
+On Windows, `scripts/windows.ps1 -Action LibdwTest` runs the original eight-call
+oracle, eighteen C-finalizer checks, genuine function/data label export and both
+JVM handoff forks. Both backends retain first-compiled-call checks. Storage,
+context, native authority and expired-owner controls run with `IOAccess.NONE`.
+The Linux-only owned `free` test verifies release, expired aliases and dead
+registration on both compiled backends; it remains skipped on Windows.
+Automatic guest GC finalization
 and arbitrary C function labels remain unsupported. The separate
 `enabled_capabilities` data label exposes a read-only live Word32 cell.
 

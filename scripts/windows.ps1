@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -15,11 +15,11 @@ New-Item -ItemType Directory -Force "$root/build" | Out-Null
 $lease = [IO.File]::Open("$root/build/.native-windows-build.lock",
     [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 try {
-    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest', 'CodePageTest')) {
+    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest')) {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -47,18 +47,30 @@ try {
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs",
             'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
     }
+    $focusedTests = @()
     if ($Action -in @('Test', 'DirectoryTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-directory')
-        Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", '--continue',
-            'testDefault', '--tests', 'thc.runtime.WindowsDirectoryStreamsTest',
-            'testDense', '--tests', 'thc.runtime.WindowsDirectoryStreamsTest')
+        $focusedTests += 'thc.runtime.WindowsDirectoryStreamsTest'
     }
     if ($Action -in @('Test', 'CodePageTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-codepages')
-        Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", '--continue', 'installDist',
-            'testDefault', '--tests', 'thc.runtime.WindowsCodePagesTest',
-            'testDense', '--tests', 'thc.runtime.WindowsCodePagesTest')
+        $focusedTests += 'thc.runtime.WindowsCodePagesTest'
+    }
+    if ($Action -in @('Test', 'LibdwTest')) {
+        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+        Invoke-ThcTool $fixture @('libdw-unavailable')
+        $focusedTests += 'thc.runtime.LibdwUnavailableTest'
+    }
+    if ($focusedTests.Count) {
+        # One shared compilation and one pair of reports retain every selected
+        # suite; separate invocations of a test task overwrite earlier XML.
+        $gradleArgs = @('--no-daemon', "--max-workers=$Jobs", '--continue', 'installDist')
+        foreach ($mode in @('testDefault', 'testDense')) {
+            $gradleArgs += $mode
+            foreach ($test in $focusedTests) { $gradleArgs += @('--tests', $test) }
+        }
+        Invoke-ThcTool "$root/gradlew.bat" $gradleArgs
     }
 } finally { $lease.Dispose(); Pop-Location }

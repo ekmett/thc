@@ -8,6 +8,7 @@ import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
 import org.graalvm.polyglot.Context
+import org.graalvm.polyglot.io.IOAccess
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Json
@@ -203,7 +204,7 @@ class LibdwUnavailableTest {
             }
     }
 
-    @Test fun certifiedLabelsUseContextOwnedSulongCallablesOnlyOnExplicitFinalization() {
+    @Test fun certifiedLabelsUseContextOwnedNativeCallablesOnlyOnExplicitFinalization() {
         val proof = CoreRepresentation(CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep"))
         Context.newBuilder("thc").allowNativeAccess(true).build().use { context ->
             context.initialize("thc"); context.enter()
@@ -240,6 +241,61 @@ class LibdwUnavailableTest {
                 assertEquals(0L, state.weaks.addCFinalizer(first, pointer, 0, weak, state.cbits()))
                 assertEquals(0L, state.weaks.finalize(weak).flag)
             } finally { context.leave() }
+        }
+    }
+
+    @Test fun nativeLabelsPreserveStorageAndRejectCrossContextAndExpiredOwners() {
+        val first = Context.newBuilder("thc").allowNativeAccess(true).allowIO(IOAccess.NONE).build()
+        lateinit var label: ManagedAddress
+        try {
+            first.initialize("thc"); first.enter()
+            try {
+                val state = Language.currentState()
+                label = state.cbits().finalizerLabel("backtraceFree")
+                val buffers = listOf(false, true).map { pinned ->
+                    ManagedAddress.fromAllocation(ManagedAllocation.mutable(16, 8, pinned = pinned))
+                        .also { it.fill(16, 165) }
+                }
+                for (pointer in buffers + ManagedAddress.fromHex("001122334455")) {
+                    val before = (0L until pointer.availableBytes()).map(pointer::readWord8)
+                    for (symbol in listOf("libdwPoolRelease", "backtraceFree")) {
+                        val weak = state.weaks.make(Any(), Any(), null)
+                        assertEquals(1L, state.weaks.addCFinalizer(state.cbits().finalizerLabel(symbol),
+                            pointer.plus(2), 0, weak, state.cbits()))
+                        assertEquals(0L, state.weaks.finalize(weak).flag)
+                        assertEquals(before, (0L until pointer.availableBytes()).map(pointer::readWord8))
+                    }
+                }
+                label.finalizerFunction()!!.invoke(ManagedAddress.nullAddress())
+                assertThrows(RuntimeFault::class.java) { label.finalizerFunction()!!.invoke(ManagedAddress.unownedNumeric(1)) }
+                if (WindowsDirectoryStreams.supportedHost()) {
+                    // Also exercise an actual context-owned native allocation,
+                    // including registration before its owner is retired.
+                    val address = state.windowsCodePages.message(2)
+                    val weak = state.weaks.make(Any(), Any(), null)
+                    state.weaks.addCFinalizer(label, address, 0, weak, state.cbits())
+                    label.finalizerFunction()!!.invoke(address.plus(2))
+                    state.windowsCodePages.localFree(address)
+                    assertThrows(RuntimeFault::class.java) { state.weaks.finalize(weak) }
+                    assertEquals(0L, state.weaks.finalize(weak).flag)
+                }
+                assertEquals(0, state.weaks.retainedCount())
+            } finally { first.leave() }
+            Context.newBuilder("thc").allowNativeAccess(true).allowIO(IOAccess.NONE).build().use { second ->
+                second.initialize("thc"); second.enter()
+                try {
+                    assertThrows(RuntimeFault::class.java) { label.finalizerFunction()!!.invoke(ManagedAddress.nullAddress()) }
+                    val state = Language.currentState()
+                    val weak = state.weaks.make(Any(), Any(), null)
+                    assertThrows(RuntimeFault::class.java) { state.weaks.addCFinalizer(label, ManagedAddress.nullAddress(), 0, weak, state.cbits()) }
+                    assertEquals(0L, state.weaks.finalize(weak).flag)
+                } finally { second.leave() }
+            }
+        } finally { first.close() }
+        Context.newBuilder("thc").allowIO(IOAccess.NONE).build().use { denied ->
+            denied.initialize("thc"); denied.enter()
+            try { assertThrows(RuntimeFault::class.java) { Language.currentState().cbits().finalizerLabel("backtraceFree") } }
+            finally { denied.leave() }
         }
     }
 

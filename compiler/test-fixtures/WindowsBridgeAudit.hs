@@ -1,6 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-{-# LANGUAGE ScopedTypeVariables, Unsafe #-}
+{-# LANGUAGE MagicHash, ScopedTypeVariables, Unsafe #-}
 
 -- |
 -- Module      : WindowsBridgeAudit
@@ -17,6 +17,7 @@ module WindowsBridgeAudit where
 
 import Control.Exception (catch, displayException, fromException, throwIO, toException)
 import Data.List (intercalate)
+import GHC.Exts (Int(I#), Int#)
 import System.IO.Unsafe (unsafePerformIO)
 import THC.Exception (ForeignException)
 import THC.Internal.Exception (boxForeign, projectForeign)
@@ -44,7 +45,16 @@ caughtRoundTrip value = unsafePerformIO $
     pure (unsafeCoerce (projectForeign (toException exception)))
 {-# OPAQUE caughtRoundTrip #-}
 
+-- The scalar launcher supplies Int# carriers. Keep its ABI separate from the
+-- original boxed helpers and let GHC compile the actual boxing/unboxing.
+roundTripScalar, dictionaryRoundTripScalar, inertDisplayScalar, caughtRoundTripScalar :: Int# -> Int#
+roundTripScalar value = case roundTrip (I# value) of I# result -> result
+dictionaryRoundTripScalar value = case dictionaryRoundTrip (I# value) of I# result -> result
+inertDisplayScalar value = case inertDisplay (I# value) of I# result -> result
+caughtRoundTripScalar value = case caughtRoundTrip (I# value) of I# result -> result
+
 main :: IO ()
 main = mapM_ (putStrLn . intercalate "\t" . map show) $
-  [[value,roundTrip value,dictionaryRoundTrip value,inertDisplay value,caughtRoundTrip value] |
-    value <- [-17,0,42]]
+  [[value,I# (roundTripScalar raw),I# (dictionaryRoundTripScalar raw),
+    I# (inertDisplayScalar raw),I# (caughtRoundTripScalar raw)] |
+    value@(I# raw) <- [-17,0,42]]

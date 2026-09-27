@@ -48,7 +48,7 @@ prepareWindowsBridge root = do
       core = logs </> "core"
       source = "compiler/test-fixtures/WindowsBridgeAudit.hs"
       db = root </> "dist-newstyle/packagedb/ghc-9.14.1"
-      entries = ["roundTrip","dictionaryRoundTrip","inertDisplay","caughtRoundTrip"]
+      entries = ["roundTripScalar","dictionaryRoundTripScalar","inertDisplayScalar","caughtRoundTripScalar"]
       readValue path = either die pure . eitherDecodeStrict =<< BS.readFile path
       field name (Object fields) = case KeyMap.lookup name fields of
         Just value -> case Aeson.fromJSON value of
@@ -70,7 +70,7 @@ prepareWindowsBridge root = do
     (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-main-is","WindowsBridgeAudit",
       "-odir",root </> native,"-hidir",root </> native,source,"-o",root </> native </> "oracle.exe"] ++ package)
   observed <- runLogged 60 root logs "native-oracle" [] (root </> native </> "oracle.exe") []
-  let rows = map (splitTab . BSC.unpack) (BSC.lines (commandStdout observed))
+  let rows = map (splitTab . BSC.unpack . BSC.dropWhileEnd (== '\r')) (BSC.lines (commandStdout observed))
   unless (length rows == 3 && all ((==5) . length) rows) (die "unexpected native bridge inventory")
   driver <- reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse <$> run root [] cabal
     ["list-bin","exe:thc","--disable-shared","--with-compiler=" ++ ghc] ""
@@ -96,7 +96,7 @@ prepareWindowsBridge root = do
     (["scripts/audit-core.py","--entry",entry,"--package-manifest",supportManifest,
       "--output",root </> logs </> entry ++ ".audit.json"] ++ modules)
   rejected <- runLoggedExpect 1 60 root logs "audit-missing-support" [] python
-    (["scripts/audit-core.py","--entry","roundTrip","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
+    (["scripts/audit-core.py","--entry","roundTripScalar","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
   negative <- readValue (root </> logs </> "missing-support.audit.json")
   issues <- field "issues" negative :: IO [Value]
   unless (any (\value -> case value of
