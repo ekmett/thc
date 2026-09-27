@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.EntryValue
 import thc.Language
+import thc.Json
 import thc.executionContext
 
 /** Explicit host compilation must follow the direct call's actual split target. */
@@ -41,6 +42,9 @@ class HostEntryCompilationTest {
             val host = program.hostEntryTarget(1)
             assertFalse(host.rootNode.isCloningAllowed, "The host dispatch tree must remain stable")
             val function = context.asValue(EntryValue(program, "entry", 1))
+            fun observation(): Map<*, *>? =
+                (Json.parse(function.getMember("diagnostics").asString()) as Map<*, *>)["explicitCompilation"] as Map<*, *>?
+            assertNull(observation(), "Reading diagnostics must not create an installation")
             fun check(input: Long) = assertEquals(input + 1L, function.execute(input).asLong(), "$backend input $input")
             check(0L)
             if (backend == "bytecode") assertEquals(BytecodeTier.CACHED,
@@ -72,12 +76,31 @@ class HostEntryCompilationTest {
             assertSame(original, program.entryTarget("entry"))
 
             fun compiledEntries() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            fun installed() {
+                val before = compiledEntries()
+                repeat(2) {
+                    val state = observation()!!
+                    assertEquals(2L, state["targetCount"])
+                    assertEquals(true, state["sameTargets"])
+                    assertEquals(true, state["validLastTier"])
+                }
+                assertEquals(before, compiledEntries(), "Observation must not execute guest code")
+            }
+            installed()
             for (input in listOf(Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_001L, -3_000_000_001L, 0L, 7L)) {
                 val before = compiledEntries()
                 check(input)
                 assertTrue(compiledEntries() > before, "$backend input $input must enter installed guest code")
+                installed()
             }
             assertEquals(0L, program.diagnostics().getValue("unsupportedTraps"))
+            val before = compiledEntries()
+            optimizingTarget.getMethod("invalidate", CharSequence::class.java).invoke(active, "observation regression")
+            assertEquals(true, observation()!!["sameTargets"])
+            assertEquals(false, observation()!!["validLastTier"], "Observation must not repair invalid code")
+            call.replace(DirectCallNode.create(original))
+            assertEquals(false, observation()!!["sameTargets"], "Actual target replacement must be detected by identity")
+            assertEquals(before, compiledEntries())
         } finally {
             context.leave()
         }
