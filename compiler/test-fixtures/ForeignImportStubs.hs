@@ -29,8 +29,18 @@ foreign import ccall "wrapper" callback :: (CInt -> IO CInt) -> IO (FunPtr (CInt
 import qualified Foreign.Ptr as Pointer
 -- Deliberately unprovided: proving no generated C obligations must not grant
 -- either address runtime admission or manufacture an executable call ABI.
-foreign import ccall "&thc_provenance_unknown_data" unknownData :: Pointer.Ptr CInt
-foreign import ccall "&thc_provenance_unknown_function" unknownFunction :: Pointer.FunPtr (CInt -> IO CInt)
+#ifdef THC_CAPI_LABELS
+#define THC_LABEL_CONVENTION capi
+#else
+#define THC_LABEL_CONVENTION ccall
+#endif
+#ifdef THC_LABEL_HEADER
+foreign import THC_LABEL_CONVENTION "stdlib.h &thc_provenance_unknown_data" unknownData :: Pointer.Ptr CInt
+foreign import THC_LABEL_CONVENTION "stdlib.h &thc_provenance_unknown_function" unknownFunction :: Pointer.FunPtr (CInt -> IO CInt)
+#else
+foreign import THC_LABEL_CONVENTION "&thc_provenance_unknown_data" unknownData :: Pointer.Ptr CInt
+foreign import THC_LABEL_CONVENTION "&thc_provenance_unknown_function" unknownFunction :: Pointer.FunPtr (CInt -> IO CInt)
+#endif
 #endif
 foreign import capi unsafe "stdlib.h abs" first :: CInt -> IO CInt
 foreign import capi unsafe "stdlib.h abs" second :: CInt -> IO CInt

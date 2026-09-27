@@ -345,7 +345,12 @@ inspectInstalledBound environment charPath output = do
 -- are not. Recover the exact annotation through a fresh interface session.
 prepareImportStubs :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> String -> String -> FilePath -> String -> IO [CommandResult]
 prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb pluginUnit = do
-  let variants = [("plain", []), ("labels", ["-DTHC_LABELS"]), ("extra-file", ["-DTHC_EXTRA_FILE"]),
+  let labelVariants = [("labels", ["-DTHC_LABELS"]),
+                       ("labels-header", ["-DTHC_LABELS", "-DTHC_LABEL_HEADER"]),
+                       ("capi-labels", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS"]),
+                       ("capi-labels-header", ["-DTHC_LABELS", "-DTHC_CAPI_LABELS", "-DTHC_LABEL_HEADER"])]
+      verifiedVariants = "plain" : map fst labelVariants
+      variants = [("plain", [])] ++ labelVariants ++ [("extra-file", ["-DTHC_EXTRA_FILE"]),
                   ("wrapper", ["-DTHC_WRAPPER"]), ("instrumented", ["-finfo-table-map"])]
       source = directory </> "source/ForeignImportStubs.hs"
       output variant = directory </> "import-stubs" </> variant
@@ -394,18 +399,17 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
           field _ _ = Nothing
           proof = maybe Null id (field "staticForeignImportStubs" value)
           (status, reason) = case variant of
-            "plain" -> ("verified", "")
-            "labels" -> ("verified", "")
             "extra-file" -> ("rejected", "additional-foreign-files")
             "wrapper" -> ("unclassified", "non-static-c-import-declaration")
-            _ -> ("unclassified", "unclassified-target-or-instrumentation")
+            _ | variant `elem` verifiedVariants -> ("verified", "")
+              | otherwise -> ("unclassified", "unclassified-target-or-instrumentation")
       check (field "status" proof == Just (String status) &&
         (Text.null reason || field "reason" proof == Just (String reason)))
         ("Unexpected import provenance " ++ variant ++ ": " ++ show proof)
       check (field "schema" value == Just (Number 2) &&
         (field "execution" =<< field "foreign" value) == Just (String "not-linked"))
         "Import provenance changed native link state"
-      if variant `notElem` ["plain", "labels"] then pure () else do
+      if variant `notElem` verifiedVariants then pure () else do
         check (field "expectedForeign" proof == field "foreign" value) "Import product equality lost"
         let imports = case field "imports" proof of Just (Array values) -> toList values; _ -> []
             aliases = filter ((== Just (String "abs")) . field "symbol") imports
@@ -431,10 +435,11 @@ prepareImportStubs root directory ghc ghcPkg libdir unitName baseUnit pluginDb p
                 "Changed C stub product retained managed import admission"
           _ -> die "Original CAPI control lost its products"
       writeFile (root </> directory </> "import-stubs" </> variant ++ ".json") rendered
-  audits <- forM [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)] $ \(entryName, status) -> do
-    let report = directory </> "import-stubs" </> "labels-" ++ entryName ++ "-audit.json"
-    result <- runLoggedExpect status 60 root (directory </> "logs") ("import-labels-" ++ entryName) [] "python3"
-      ["scripts/audit-core.py", directory </> "import-stubs/labels.json", "--entry",
+  audits <- forM [(variant, entryName, status) | (variant, _) <- labelVariants,
+      (entryName, status) <- [("probe", 0), ("unknownData", 1), ("unknownFunction", 1)]] $ \(variant, entryName, status) -> do
+    let report = directory </> "import-stubs" </> variant ++ "-" ++ entryName ++ "-audit.json"
+    result <- runLoggedExpect status 60 root (directory </> "logs") ("import-" ++ variant ++ "-" ++ entryName) [] "python3"
+      ["scripts/audit-core.py", directory </> "import-stubs" </> variant ++ ".json", "--entry",
        unitName ++ ":ForeignImportStubs." ++ entryName, "--output", report]
     bytes <- BSC.readFile (root </> report)
     value <- either die pure (eitherDecodeStrict' bytes)

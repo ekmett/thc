@@ -194,26 +194,28 @@ recordImports options environment
           pure $ \_ bindings -> Just . Import identity (fmap (\(Header _ name') -> unpackFS name') header) (unpackFS name)
             (unitString <$> unit) function (convention conv) (safetyName safe) declared normalized <$> oneCall bindings
     classify (L _ ForeignImport { fd_name = L _ binder, fd_i_ext = coercion,
-        fd_fi = CImport _ (L _ CCallConv) _ Nothing (CLabel symbol) }) = do
-      unless (idType binder `eqType` coercionRKind coercion && coercionRole coercion == Representational)
-        (Left "foreign-address normalization disagrees with actual binder")
-      _ <- nameIdentity (varName binder)
-      _ <- importTypeIdentity (idType binder)
-      _ <- importTypeIdentity (coercionLKind coercion)
-      let kind = case tyConAppTyCon_maybe (dropForAlls (coercionLKind coercion)) of
-            Just constructor | tyConUnique constructor == funPtrTyConKey -> IsFunction
-            _ -> IsData
-      -- A stock static address has one typed binding and no C obligations.
-      -- It is not a function import and cannot acquire a fabricated call ABI.
-      -- Omit it only from this generated-stub inventory; the retained Core
-      -- literal still undergoes the separate strict address/runtime admission.
-      pure $ \original bindings -> do
-        unless (productOf original `elem` [Product Nothing [], Product (Just ("","",[],[])) []])
-          (Left "static address import emitted foreign products")
-        case bindings of
-          [(actual,rhs)] | actual == binder && exprType rhs `eqType` idType binder &&
-              null (callIn rhs) && addressLabels rhs == [(symbol,kind)] -> Right Nothing
-          _ -> Left "static address import did not emit its exact typed literal binding"
+        fd_fi = CImport _ (L _ conv) _ _ (CLabel symbol) })
+      | conv `elem` [CCallConv,CApiConv] = do
+          unless (idType binder `eqType` coercionRKind coercion && coercionRole coercion == Representational)
+            (Left "foreign-address normalization disagrees with actual binder")
+          _ <- nameIdentity (varName binder)
+          _ <- importTypeIdentity (idType binder)
+          _ <- importTypeIdentity (coercionLKind coercion)
+          let kind = case tyConAppTyCon_maybe (dropForAlls (coercionLKind coercion)) of
+                Just constructor | tyConUnique constructor == funPtrTyConKey -> IsFunction
+                _ -> IsData
+          -- GHC's stock CLabel desugaring ignores the ccall/capi convention
+          -- and optional header: both emit one typed address, not a C wrapper.
+          -- Still verify the actual product and binding below. Omitting an
+          -- address from this stub inventory grants neither a call ABI nor
+          -- address/runtime admission for its retained Core literal.
+          pure $ \original bindings -> do
+            unless (productOf original `elem` [Product Nothing [], Product (Just ("","",[],[])) []])
+              (Left "static address import emitted foreign products")
+            case bindings of
+              [(actual,rhs)] | actual == binder && exprType rhs `eqType` idType binder &&
+                  null (callIn rhs) && addressLabels rhs == [(symbol,kind)] -> Right Nothing
+              _ -> Left "static address import did not emit its exact typed literal binding"
     classify _ = Left "non-static-c-import-declaration"
 
 addressLabels :: CoreExpr -> [(FastString, FunctionOrData)]
