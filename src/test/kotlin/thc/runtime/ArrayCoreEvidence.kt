@@ -99,6 +99,33 @@ internal class ArrayCoreEvidence(module: Map<String, Any?>, private val name: St
         return guestLambdas(expr).filter { lambda -> inFrame.none { it === lambda } }
     }
 
+    /** Bounded two-function fixture path with one source State# redex. Keep its
+     * exported lambda inventory distinct from executable roots; never infer an
+     * expected count from observed targets or call the production rewriter. */
+    fun loweredStateFunctionPath(callee: String, stateOwner: String = root["name"] as String,
+        statePath: List<Int> = listOf(2)): List<String> {
+        val functions = listOf(root, bindings.single { it["name"] == callee })
+        val ids = functions.map { it["id"] as String }
+        require(ids.distinct().size == 2) { "$name: expected two distinct global functions" }
+        val owner = functions.single { it["name"] == stateOwner }
+        val application = statePath.fold(owner["expr"]) { node, index -> (node as List<*>)[index] }
+        val state = immediateStateLambda(application)
+        val exported = bindings.flatMap { guestLambdas(it["expr"]) }
+        require(exported.size == 3 && exported.any { it === state } &&
+            functions.all { function -> exported.any { it === function["expr"] } }) {
+            "$name: expected two global lambdas and the exact local State# lambda"
+        }
+        val retained = bindings.flatMap { loweredGuestLambdas(it["expr"]) }
+        require(retained.size == 2 && functions.all { function -> retained.any { it === function["expr"] } }) {
+            "$name: unexpected retained callback, helper or missing global root"
+        }
+        require(globalReferences(root["expr"]).filter { it in ids } == listOf(ids[1]) &&
+            globalReferences(functions[1]["expr"]).none { it in ids }) {
+            "$name: two-function call path or multiplicity changed"
+        }
+        return ids
+    }
+
     fun immediateStateCalls(): Int {
         require(bindings.size == 1 && globalReferences(root["expr"]).isEmpty()) { "$name: global closure changed" }
         stateLambda(root["expr"])
