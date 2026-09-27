@@ -304,6 +304,69 @@ class NativeMallocTest {
         }
     }
 
+    @Test fun borrowedCallbacksKeepSingleAndOrderedPairLifetimesOnReturnAndFailure() = inside { _ ->
+        val registry = Language.currentState().nativeAllocations
+        val first = registry.malloc(8)
+        val second = registry.malloc(8)
+        val managed = ManagedAddress.fromByteArray(ByteArray(8))
+        fun lock(address: ManagedAddress): ReentrantReadWriteLock {
+            val owner = address.nativeAllocation()!!
+            return owner.javaClass.getDeclaredField("lifetime").also { it.isAccessible = true }
+                .get(owner) as ReentrantReadWriteLock
+        }
+        val firstLock = lock(first)
+        val secondLock = lock(second)
+        val failure = IllegalStateException("borrowed pair callback failure")
+        try {
+            for (address in listOf(managed, first)) {
+                var calls = 0
+                assertNull(address.withNativeBorrow {
+                    calls++
+                    assertEquals(if (address === first) 1 else 0, firstLock.readHoldCount)
+                    null
+                })
+                assertEquals(1, calls)
+                assertEquals(0, firstLock.readHoldCount)
+            }
+            for ((source, destination) in listOf(managed to managed, managed to first,
+                first to managed, first to first.plus(1), first to second, second to first)) {
+                for (throws in listOf(false, true)) {
+                    var calls = 0
+                    fun checked() = source.withNativeBorrows(destination) {
+                        calls++
+                        val owners = listOf(source.nativeAllocation(), destination.nativeAllocation())
+                        assertEquals(if (first.nativeAllocation() in owners) 1 else 0, firstLock.readHoldCount)
+                        assertEquals(if (second.nativeAllocation() in owners) 1 else 0, secondLock.readHoldCount)
+                        if (firstLock.readHoldCount != 0)
+                            assertThrows(RuntimeFault::class.java) { registry.free(first) }
+                        if (secondLock.readHoldCount != 0)
+                            assertThrows(RuntimeFault::class.java) { registry.free(second) }
+                        if (throws) throw failure
+                        destination
+                    }
+                    if (throws) assertSame(failure, assertThrows(IllegalStateException::class.java) { checked() })
+                    else assertSame(destination, checked())
+                    assertEquals(1, calls)
+                    assertEquals(0, firstLock.readHoldCount)
+                    assertEquals(0, secondLock.readHoldCount)
+                }
+            }
+            // A failed second acquisition must release the first, without entering the body.
+            val ordered = listOf(first, second).sortedWith { a, b -> Integer.compareUnsigned(
+                System.identityHashCode(a.nativeAllocation()), System.identityHashCode(b.nativeAllocation())) }
+            registry.free(ordered[1])
+            for ((source, destination) in listOf(ordered[0] to ordered[1], ordered[1] to ordered[0])) {
+                var calls = 0
+                assertThrows(RuntimeFault::class.java) { source.withNativeBorrows(destination) { calls++ } }
+                assertEquals(0, calls)
+                assertEquals(0, firstLock.readHoldCount)
+                assertEquals(0, secondLock.readHoldCount)
+            }
+            registry.free(ordered[0])
+            assertEquals(0, registry.liveCount())
+        } finally { registry.close() }
+    }
+
     @Test fun primitiveNativeCallbacksKeepSlicesAndReleaseOnFailure() = inside { _ ->
         val registry = Language.currentState().nativeAllocations
         val native = registry.malloc(16)

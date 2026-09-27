@@ -95,7 +95,7 @@ internal enum class AtomicAddressOp(val primitive: String, val width: Int = 8,
         // never projected to a fake address; toNativeBits enforces that boundary.
         val expected = operand.toNativeBits()
         val desired = if (cas) replacement!!.toNativeBits() else expected
-        val old = location.withNativeSegment { segment ->
+        val old = location.withNativeSegmentLong { segment ->
             location.requireRange(0, 8, writable = true)
             if (segment.address() % 8 != 0L) fault("Misaligned native atomic pointer Addr#")
             if (cas) longHandle.compareAndExchange(segment, 0L, expected, desired) as Long
