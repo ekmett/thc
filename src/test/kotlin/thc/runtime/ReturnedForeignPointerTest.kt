@@ -106,6 +106,71 @@ class ReturnedForeignPointerTest {
         } }
     }
 
+    @Test fun managedAliasIdentityMatchesOriginalAndRepeatedReturns(): Unit = context().use { context -> entered(context) { owner ->
+        val offset = offset(owner)
+        val bytes = ByteArray(40) { it.toByte() }
+        val original = ManagedAddress.fromByteArray(bytes)
+        val alias = offset(original, 4)
+        val repeated = offset(original, 4)
+        // Exercise actual compiled C comparisons as well as the checked backing
+        // path below: each transport has a different JVM wrapper.
+        val carrier = alias.returnedAddress()!!.transport()
+        val originalCarrier = owner.packageCbits.transport(original.plus(4))
+        assertEquals(1, owner.packageCbits.memory("equal", carrier, originalCarrier))
+        assertEquals(0L, owner.packageCbits.memory("difference", carrier, originalCarrier))
+        assertEquals(1, owner.packageCbits.memory("equal", carrier, repeated.returnedAddress()!!.transport()))
+        val unrelated = ManagedAddress.fromByteArray(ByteArray(40))
+        assertNull(owner.packageCbits.managedAliasOffset(carrier, owner.packageCbits.transport(unrelated), 0, 40))
+        assertEquals(4L, owner.packageCbits.managedAliasOffset(carrier, owner.packageCbits.transport(original), 0, 40))
+        assertAll(
+            { assertTrue(alias.sameLocation(original.plus(4)), "returned alias equals original view") },
+            { assertTrue(alias.sameLocation(repeated), "separate calls retain allocation identity") },
+            { assertEquals(4L, alias.difference(original), "same allocation displacement") },
+            { assertEquals(0, alias.compareWithinAllocation(original.plus(4))) },
+            { assertEquals(-1, alias.compareWithinAllocation(original.plus(5))) },
+            { assertTrue(alias.overlaps(0, 12, original, 6, 12), "overlap with original view") },
+            { assertThrows(RuntimeFault::class.java) { alias.copyNonOverlappingTo(original.plus(6), 12) } },
+            { assertEquals(36L, alias.availableBytes(), "actual known remaining extent") },
+            { assertThrows(RuntimeFault::class.java) { alias.readWord8(36) } }
+        )
+        val expected = bytes.copyOf().also { System.arraycopy(it, 4, it, 6, 12) }
+        alias.moveTo(original.plus(6), 12)
+        assertArrayEquals(expected, bytes)
+        alias.copyNonOverlappingTo(original.plus(24), 8)
+        assertArrayEquals(bytes.copyOfRange(4, 12), bytes.copyOfRange(24, 32))
+        assertThrows(RuntimeFault::class.java) { alias.toNativeBits() }
+        val allocation = ManagedAllocation.mutable(40, 8)
+        val owned = ManagedAddress.fromAllocation(allocation)
+        val ownedAlias = offset(owned, 4)
+        assertSame(allocation, ownedAlias.cbitsOwner())
+        allocation.shrink(12)
+        assertEquals(8L, ownedAlias.availableBytes())
+        assertThrows(RuntimeFault::class.java) { ownedAlias.readWord8(8) }
+        assertTrue(ownedAlias.sameLocation(owned.plus(4)))
+        val immutable = ManagedAddress.fromStaticBytes(byteArrayOf(1, 2, 3, 4, 0))
+        val immutableAlias = offset(immutable, 1)
+        assertEquals(2L, immutableAlias.readWord8(0))
+        assertThrows(RuntimeFault::class.java) { immutableAlias.writeWord8(0, 9) }
+    } }
+
+    @Test fun returnedNativeComparisonDoesNotGrantNumericMemoryAuthority(): Unit = context().use { context -> entered(context) { owner ->
+        val original = owner.nativeAllocations.malloc(24)
+        try {
+            val alias = offset(owner)(original, 4)
+            val numeric = ManagedAddress.unownedNumeric(alias.toNativeBits())
+            assertAll(
+                { assertTrue(alias.sameLocation(numeric)) },
+                { assertTrue(numeric.sameLocation(alias)) },
+                { assertEquals(0L, alias.difference(numeric)) },
+                { assertEquals(0L, numeric.difference(alias)) },
+                { assertEquals(-1, alias.compareWithinAllocation(numeric.plus(1))) },
+                { assertEquals(1, numeric.plus(1).compareWithinAllocation(alias)) },
+                { assertThrows(RuntimeFault::class.java) { numeric.readWord8(0) } },
+                { assertThrows(RuntimeFault::class.java) { numeric.writeWord8(0, 1) } }
+            )
+        } finally { owner.nativeAllocations.free(original) }
+    } }
+
     @Test fun returnedBuffersUseDescriptorTransfersWithoutArrayExposure() {
         val output = ByteArrayOutputStream()
         Context.newBuilder("thc").allowNativeAccess(true).`in`(ByteArrayInputStream(byteArrayOf(4, 5)))

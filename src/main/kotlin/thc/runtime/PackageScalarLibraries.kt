@@ -7,6 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.interop.InteropLibrary
+import com.oracle.truffle.api.exception.AbstractTruffleException
 import com.oracle.truffle.api.source.Source
 import org.graalvm.polyglot.io.ByteSequence
 import thc.Language
@@ -104,7 +105,27 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
         if (address.hasNativeStorage() || address.nativeImageKey() != null)
             return PackageNativePointer(address.toNativeBits(), null)
         return pointer(CbitsBuffer(address.cbitsBuffer(), address.cbitsWritable(),
-            LongSupplier { address.cbitsSize() }), address.cbitsOffset())
+            LongSupplier { address.cbitsSize() }, identity = address.cbitsStorageKey()), address.cbitsOffset())
+    }
+
+    /** Numeric comparison grants no byte access. Only genuine native pointers
+     * may compare against raw native bits; managed carriers keep their identity. */
+    @TruffleBoundary fun comparisonTransport(address: ManagedAddress): Any {
+        current()
+        address.numericBits()?.let { return PackageNativePointer(it, null) }
+        return transport(address)
+    }
+
+    /** Recover only a relative, in-range alias of an actual argument carrier.
+     * The pure subtraction cannot project unrelated managed objects; that case
+     * remains unknown. Equality after displacement independently checks identity. */
+    @TruffleBoundary fun managedAliasOffset(result: Any, argument: Any, offset: Long, size: Long): Long? {
+        current()
+        val relative = try { interop.asLong(memory("difference", result, argument)) }
+        catch (_: AbstractTruffleException) { return null }
+        val absolute = try { Math.addExact(offset, relative) } catch (_: ArithmeticException) { return null }
+        if (absolute < 0 || absolute > size) return null
+        return relative.takeIf { interop.asInt(memory("equal", result, pointer(argument, relative))) != 0 }
     }
 
     /** Resolve only on a call site's first execution; no registry work spans the foreign call. */
@@ -170,7 +191,7 @@ internal class PackageReturnedAddress(val owner: Language.State, private val ali
     @TruffleBoundary fun compare(other: ManagedAddress, operation: String): Long {
         requireCurrent()
         return ManagedAddress.withNativeBorrows(listOf(ManagedAddress.fromReturnedAddress(this), other)) {
-            InteropLibrary.getUncached().asLong(owner.packageCbits.memory(operation, transport(), owner.packageCbits.transport(other)))
+            InteropLibrary.getUncached().asLong(owner.packageCbits.memory(operation, transport(), owner.packageCbits.comparisonTransport(other)))
         }
     }
     fun requireRange(offset: Long, count: Long, writable: Boolean = false) {

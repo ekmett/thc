@@ -160,7 +160,8 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                     buffer.transport = CbitsBuffer(address.cbitsBuffer(), buffer.writable,
                         LongSupplier { address.cbitsSize() }, 0, nativeImage,
                         if (address.cbitsOwner()?.isPinned == true)
-                            LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null)
+                            LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null,
+                        identity = address.cbitsStorageKey())
                 }
                 for ((index, address) in addresses) {
                     converted[index] = when {
@@ -177,7 +178,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 }
                 // Pointer results can alias call-scoped native transports. Read
                 // their bits before releasing leases and allocation borrows.
-                normalizeResult(entry, Calls.interop(calls, entry.receiver, converted), addresses)
+                normalizeResult(entry, Calls.interop(calls, entry.receiver, converted), addresses, converted)
             } finally {
                 lease.open = false
                 Reference.reachabilityFence(addresses)
@@ -241,7 +242,8 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         return invoke(entry, arguments) as ManagedAddress
     }
 
-    private fun normalizeResult(entry: PackageScalarFunction, result: Any?, arguments: List<Pair<Int,ManagedAddress>> = emptyList()): Any? {
+    private fun normalizeResult(entry: PackageScalarFunction, result: Any?, arguments: List<Pair<Int,ManagedAddress>> = emptyList(),
+        carriers: Array<Any?>? = null): Any? {
         if (!addressResult) return result
         if (numbers.isNull(result)) return ManagedAddress.nullAddress()
         if (result !is TruffleObject) fault("Package C returned a non-pointer carrier")
@@ -252,9 +254,16 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         // In particular, another thread may already be waiting to free an
         // argument; its owner must not disappear merely because it is retiring.
         var backing: ManagedAddress? = null
-        for ((_,argument) in arguments) {
-            if (bits == null) break
+        for ((index,argument) in arguments) {
             val candidate = argument.returnedAddress()?.backing ?: argument
+            if (bits == null) {
+                if (candidate.returnedAddress() != null || candidate.stableHandle() != null ||
+                    candidate === ManagedAddress.nullAddress() || candidate.hasNativeStorage()) continue
+                val relative = entry.owner.packageCbits.managedAliasOffset(result, carriers!![index]!!,
+                    candidate.cbitsOffset(), candidate.cbitsSize()) ?: continue
+                backing = candidate.plus(relative)
+                break
+            }
             if (!candidate.hasNativeStorage()) continue
             val base = candidate.toNativeBits() - candidate.cbitsOffset()
             val displacement = bits - base

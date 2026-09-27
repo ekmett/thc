@@ -51,6 +51,7 @@ internal class ManagedAddress private constructor(
     }
     internal fun nativeAllocation(): ManagedNativeAllocations.Owner? = native
     internal fun returnedAddress(): PackageReturnedAddress? = foreign
+    internal fun numericBits(): Long? = numeric
     internal fun hasNativeStorage(): Boolean = native != null || owner?.isPinned == true
     internal fun isNativeBase(): Boolean = native != null && offset == 0L
     /** Keep native storage alive across a complete operation, including calls
@@ -151,6 +152,8 @@ internal class ManagedAddress private constructor(
     fun sameLocation(other: ManagedAddress): Boolean {
         compiler?.requireCurrent(); other.compiler?.requireCurrent()
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        if (foreign?.backing != null || other.foreign?.backing != null)
+            return (foreign?.backing ?: this).sameLocation(other.foreign?.backing ?: other)
         foreign?.let { return it.compare(other, "equal") != 0L }
         other.foreign?.let { return it.compare(this, "equal") != 0L }
         if (heap != null || other.heap != null) {
@@ -227,6 +230,8 @@ internal class ManagedAddress private constructor(
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        if (foreign?.backing != null || other.foreign?.backing != null)
+            return (foreign?.backing ?: this).compareWithinAllocation(other.foreign?.backing ?: other)
         foreign?.let { return it.compare(other, "compare").toInt() }
         other.foreign?.let { return -it.compare(this, "compare").toInt() }
         if (heap != null || other.heap != null) fault("Opaque guest heap addresses have no ordering")
@@ -287,6 +292,8 @@ internal class ManagedAddress private constructor(
      * retain machine arithmetic; managed storage uses its allocation-local origin. */
     fun difference(other: ManagedAddress): Long {
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        if (foreign?.backing != null || other.foreign?.backing != null)
+            return (foreign?.backing ?: this).difference(other.foreign?.backing ?: other)
         foreign?.let { return it.compare(other, "difference") }
         other.foreign?.let { return -it.compare(this, "difference") }
         native?.requireLive(); other.native?.requireLive()

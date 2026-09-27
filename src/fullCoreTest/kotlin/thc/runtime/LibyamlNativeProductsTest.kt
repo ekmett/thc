@@ -110,7 +110,15 @@ class LibyamlNativeProductsTest {
                         assertNotNull(pointer.returnedAddress())
                         assertNull(pointer.nativeAllocation(), "C retains allocation ownership")
                         assertThrows(RuntimeFault::class.java) { pointer.availableBytes() }
-                        assertThrows(RuntimeFault::class.java) { ManagedAddress.unownedNumeric(pointer.toNativeBits()).readWord8(0) }
+                        val numeric = ManagedAddress.unownedNumeric(pointer.toNativeBits())
+                        assertTrue(pointer.sameLocation(numeric))
+                        assertTrue(numeric.sameLocation(pointer))
+                        assertEquals(0L, pointer.difference(numeric))
+                        assertEquals(0L, numeric.difference(pointer))
+                        assertEquals(-1, pointer.compareWithinAllocation(numeric.plus(1)))
+                        assertEquals(1, numeric.plus(1).compareWithinAllocation(pointer))
+                        assertThrows(RuntimeFault::class.java) { numeric.readWord8(0) }
+                        assertThrows(RuntimeFault::class.java) { numeric.writeWord8(0, 1) }
                         assertThrows(RuntimeFault::class.java) { pointer.requireRange(0, -1) }
                         assertThrows(RuntimeFault::class.java) { pointer.requireRange(Long.MAX_VALUE, 1) }
                         assertTrue(pointer.sameLocation(pointer.plus(0)))
