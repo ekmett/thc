@@ -214,8 +214,17 @@ class ThunkRetentionTest {
                 val entry = EntryValue(program, name, if (result is Closure) 1 else 0)
                 assertEquals(true, assertDoesNotThrow<Any>({ InteropLibrary.getUncached().invokeMember(entry, "compile") },
                     "$backend updated $name must install guest code"))
+                fun assertUpdatedValueInstalled() {
+                    if (name != "value") return
+                    assertSame(expectedTarget, program.entryTarget(name), "$backend updated value target identity")
+                    val targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+                    assertEquals(true, targetClass.getMethod("isValidLastTier").invoke(expectedTarget),
+                        "$backend updated value retains its installed code")
+                }
+                assertUpdatedValueInstalled()
                 if (name == "failure") assertSame(result, assertThrows(RuntimeFault::class.java) { invokeEntry() })
                 else assertSame(result, invokeEntry(), "$backend retains the already evaluated answer")
+                assertUpdatedValueInstalled()
                 if (result is Closure) assertEquals(Long.MIN_VALUE,
                     Calls.target(program.hostEntryTarget(1), arrayOf(thunk, arrayOf<Any?>(Long.MIN_VALUE))))
             }

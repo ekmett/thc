@@ -910,9 +910,12 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 is AstTailYield -> returned.continuation
                 else -> returned
             }
-            val saved = savedGuestContinuation(result)
-            if (saved != null) {
+            if (result is SavedGuestContinuation || result is ContinuationResult) {
+                // Construct the cold bytecode view only after the suspension profile.
+                // Otherwise parsing its implementation can specialize the shared
+                // interface before another continuation kind links in this graph.
                 suspensionProfile.enter()
+                val saved = savedGuestContinuation(result)!!
                 if (saved.yielded is DelimitedCut)
                     fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
