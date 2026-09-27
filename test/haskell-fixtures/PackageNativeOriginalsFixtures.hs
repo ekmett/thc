@@ -14,7 +14,7 @@
 module PackageNativeOriginalsFixtures (preparePackageNativeOriginals) where
 
 import Control.Monad (forM, forM_, unless, when)
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (eitherDecodeStrict', Value, object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (isInfixOf, sort)
@@ -40,6 +40,7 @@ preparePackageNativeOriginals root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  python <- maybe "python3" id <$> lookupEnv "THC_PYTHON"
   supplied <- maybe (output </> "digest-0.0.2.1") id <$> lookupEnv "THC_DIGEST_SOURCE"
   original <- canonicalizePath supplied
   let source = output </> "sources/digest-0.0.2.1"
@@ -87,10 +88,11 @@ preparePackageNativeOriginals root = do
   driver <- locate execute cabal "exe:thc"
   helper <- locate execute cabal "exe:thc-interface"
   driverHash <- hashFile driver
-  let pluginDb = root </> "dist-newstyle/packagedb/ghc-9.14.1"
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
-  plugin <- line . commandStdout <$> execute "plugin-unit" [] ghcPkg
-    ["--package-db",pluginDb,"field","thc","id","--simple-output"]
+  registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
+    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+  plugin <- field registry "unitId"
+  pluginDb <- field registry "packageDb"
   sourceFiles <- files source
   sourceHashes <- hashes root (map (makeRelative root) (sourceFiles ++ retainedErf ++ retainedPrimitive))
   let key = take 16 driverHash
@@ -192,7 +194,7 @@ preparePackageNativeOriginals root = do
   inputs <- hashes root ["compiler/test-fixtures/OriginalDigestNative.hs","compiler/test-fixtures/OriginalPrimitiveNative.hs",
     "compiler/test-fixtures/OriginalPrimitiveEntry.hs",
     "compiler/test-fixtures/OriginalErfNative.hs","compiler/test-fixtures/OriginalErfEntry.hs",
-    "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","src/THC/Driver/PackageNative.hs",
+    "test/haskell-fixtures/PackageNativeOriginalsFixtures.hs","compiler/plugin.py","src/THC/Driver/PackageNative.hs",
     "src/THC/Driver/NativeArgumentBridge.hs",
     "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
     "scripts/audit-core.py","scripts/core_package_manifest.py","scripts/core-capabilities.json"]

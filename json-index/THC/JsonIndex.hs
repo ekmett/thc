@@ -22,9 +22,11 @@ module THC.JsonIndex
   , sidecarChunks
   , encodeSidecar
   , writeSidecar
+  , validateSidecar
   ) where
 
 import Control.Monad (unless)
+import Data.Bits ((.|.), shiftL)
 import qualified Crypto.Hash.SHA256 as SHA
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -149,3 +151,28 @@ encodeSidecar backend source = BS.concat <$> sidecarChunks backend source
 -- whole-sidecar allocation. The caller owns the handle and immutable source.
 writeSidecar :: Handle -> Backend -> BS.ByteString -> IO ()
 writeSidecar output backend source = sidecarChunks backend source >>= mapM_ (BS.hPut output)
+
+-- | Check an optional package sidecar's envelope against its exact JSON bytes.
+-- This establishes version, length and digest binding, not JSON grammar or the
+-- correctness of navigation records. A navigation reader must validate those
+-- records before using them; the Core auditor still checks the source itself.
+validateSidecar :: BS.ByteString -> BS.ByteString -> Either String ()
+validateSidecar source index = do
+  unless (BS.length index >= 96) (Left "truncated JSON index envelope")
+  unless (BS.take 8 index == BSC.pack "THCJSIX1" && word 8 4 == 2 && word 12 4 == 0)
+    (Left "unsupported JSON index format")
+  let sourceSize = word 16 8
+      events = word 24 8
+  unless (sourceSize == fromIntegral (BS.length source)) (Left "JSON index source length mismatch")
+  layout <- sectionLayout sourceSize events
+  unless (toInteger (BS.length index) == 96 + toInteger (payloadBytes layout))
+    (Left "JSON index section length mismatch")
+  unless (BS.take 32 (BS.drop 32 index) == SHA.hash source)
+    (Left "JSON index source digest mismatch")
+  let bodySize = BS.length index - 32
+  unless (BS.drop bodySize index == SHA.hash (BS.take bodySize index))
+    (Left "JSON index trailer mismatch")
+  where
+    word :: Int -> Int -> Word64
+    word offset width = foldl' (\value i -> value .|.
+      (fromIntegral (BS.index index (offset + i)) `shiftL` (i * 8))) 0 [0 .. width - 1]

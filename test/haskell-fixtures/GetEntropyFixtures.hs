@@ -14,7 +14,7 @@
 module GetEntropyFixtures (prepareGetEntropy) where
 
 import Control.Monad (forM, forM_, unless, when)
-import Data.Aeson (Value, object, (.=))
+import Data.Aeson (eitherDecodeStrict', Value, object, (.=))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Data.List (sort)
@@ -53,15 +53,17 @@ prepareGetEntropy root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  python <- maybe "python3" id <$> lookupEnv "THC_PYTHON"
   clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
   built <- execute "driver-build" [] cabal ["build","--offline","-j2","exe:thc","lib:thc","exe:thc-interface"]
   driver <- locate execute cabal "exe:thc"
   helper <- locate execute cabal "exe:thc-interface"
   driverHash <- hashFile driver
-  let pluginDb = root </> "dist-newstyle/packagedb/ghc-9.14.1"
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
-  plugin <- line . commandStdout <$> execute "plugin-unit" [] ghcPkg
-    ["--package-db",pluginDb,"field","thc","id","--simple-output"]
+  registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
+    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+  plugin <- field registry "unitId"
+  pluginDb <- field registry "packageDb"
   let key = take 16 driverHash
       native = output </> ("native-" ++ key)
       capture = output </> ("capture-" ++ key)
@@ -128,7 +130,7 @@ prepareGetEntropy root = do
   sourceHashes <- hashes root (map (makeRelative root) retained)
   inputHashes <- hashes root ["compiler/test-fixtures/NativeGetEntropy.c","compiler/test-fixtures/OriginalSplitmixNative.hs",
     "compiler/test-fixtures/OriginalSplitmixEntry.hs",
-    "test/haskell-fixtures/GetEntropyFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
+    "test/haskell-fixtures/GetEntropyFixtures.hs","compiler/plugin.py","test/haskell-fixtures/FixtureSupport.hs",
     "src/THC/Driver/PackageNative.hs","src/THC/Driver/NativeArgumentBridge.hs",
     "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
     "compiler/THC/Plugin.hs","compiler/THC/ForeignImportProvenance.hs","compiler/THC/Interface.hs",

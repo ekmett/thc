@@ -22,6 +22,7 @@ module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serial
                    serializePostTidyCoreWithAnnotationsBytes) where
 
 import GHC.Plugins
+import Control.Monad (when)
 import GHC.Iface.Env (lookupOrig)
 import GHC.Tc.Utils.Env (lookupGlobal, TyThing(AnId))
 import GHC.Tc.Utils.Monad (initIfaceCheck)
@@ -49,6 +50,9 @@ import qualified THC.ForeignExportProvenance as ExportProvenance
 import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import THC.JSON (J(..), json, jsonBytes)
+import qualified THC.JsonIndex as JsonIndex
+import THC.JsonIndex.Scanner (Backend(Automatic))
+import System.IO (IOMode(WriteMode), withBinaryFile)
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
@@ -286,6 +290,16 @@ nameKey n = case nameModule_maybe n of
     -- discarding the namespace merges the two IDs and creates a self-loop.
     -- Use GHC's own symbol spelling, also shared by cross-module references.
     occurrence = unpackFS (occNameMangledFS (nameOccName n))
+
+-- Preserve the existing text output byte-for-byte, including host encoding and
+-- newline handling. The index binds the finished file, not a second rendering.
+writeCoreOutput :: [CommandLineOption] -> FilePath -> J -> IO ()
+writeCoreOutput opts path result = do
+  writeFile path (json result ++ "\n")
+  when ("json-index" `elem` opts) $ do
+    bytes <- BS.readFile path
+    withBinaryFile (path ++ ".idx") WriteMode $ \output ->
+      JsonIndex.writeSidecar output Automatic bytes
 
 -- Cabal can compile the same module name in several distinct units. Keep the
 -- historical flat layout for fixtures, but let package exports preserve the
@@ -849,7 +863,7 @@ exportModule opts guts = do
   liftIO $ do
     let path = coreOutputPath opts dir (unitString (moduleUnit (mg_module guts))) modName
     createDirectoryIfMissing True (takeDirectory path)
-    writeFile path (json result ++ "\n")
+    writeCoreOutput opts path result
     modifyIORef' sourceDefinitions ((d,binds):)
     let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` closureRoots]
     if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
@@ -924,7 +938,7 @@ exportLate hsc opts pair@(guts,_)
           binds = concatMap flattenBind (cg_binds guts)
       let path = coreOutputPath opts dir (unitString (moduleUnit m)) modName
       createDirectoryIfMissing True (takeDirectory path)
-      writeFile path (json result ++ "\n")
+      writeCoreOutput opts path result
       modifyIORef' sourceDefinitions ((d,binds):)
       let roots = [v | (v,_) <- binds, occNameString (nameOccName (varName v)) `elem` mapMaybe (stripPrefix "closure=") opts]
       if null roots then pure () else exportInterfaceClosure hsc opts dir d roots
@@ -1264,5 +1278,5 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         ] ++ [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
-  writeFile path (json result ++ "\n")
+  writeCoreOutput opts path result
   putStrLn ("THC interface closure: " ++ show (length imports) ++ " actual unfoldings, " ++ show (length missing) ++ " missing source definitions")

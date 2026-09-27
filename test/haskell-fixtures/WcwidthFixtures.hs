@@ -14,7 +14,7 @@
 module WcwidthFixtures (prepareWcwidth) where
 
 import Control.Monad (forM, forM_, unless)
-import Data.Aeson (Value(..), object, (.=))
+import Data.Aeson (eitherDecodeStrict', Value(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -49,19 +49,21 @@ prepareWcwidth root = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  python <- maybe "python3" id <$> lookupEnv "THC_PYTHON"
   built <- execute "driver-build" [] cabal ["build","--offline","-j2","exe:thc","lib:thc","exe:thc-interface"]
   driver <- locate execute cabal "exe:thc"
   helper <- locate execute cabal "exe:thc-interface"
   driverHash <- hashFile driver
-  let pluginDb = root </> "dist-newstyle/packagedb/ghc-9.14.1"
-      key = take 16 driverHash
+  let key = take 16 driverHash
       native = output </> ("native-" ++ key)
       capture = output </> ("capture-" ++ key)
       pieces = output </> ("pieces-" ++ key)
       wrapper = output </> ("ghc-proxy-" ++ key) <.> "sh"
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
-  plugin <- line . commandStdout <$> execute "plugin-unit" [] ghcPkg
-    ["--package-db",pluginDb,"field","thc","id","--simple-output"]
+  registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
+    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+  plugin <- field registry "unitId"
+  pluginDb <- field registry "packageDb"
   writeFile wrapper ("#!/bin/sh\n" ++ ghcProxyCommand)
   permissions <- getPermissions wrapper
   setPermissions wrapper permissions {executable=True}
@@ -92,7 +94,7 @@ prepareWcwidth root = do
     ["scripts/audit-core.py","--entry",unit ++ ":Width." ++ entry,
      "--output",output </> entry <.> "json",output </> "Width.json"]
   inputs <- hashes root ([fixture </> name | name <- ["cabal.project","wcwidth-ffi.cabal","src/Width.hs","app/Main.hs"]] ++
-    ["test/haskell-fixtures/WcwidthFixtures.hs","src/THC/Driver/PackageNative.hs",
+    ["test/haskell-fixtures/WcwidthFixtures.hs","compiler/plugin.py","src/THC/Driver/PackageNative.hs",
      "src/THC/Driver/NativeArgumentBridge.hs","src/THC/Driver/NativeLibrarySources.hs",
      "compiler/THC/ForeignImportProvenance.hs","scripts/audit-core.py","scripts/core_package_manifest.py"])
   artifacts <- hashes root ([relative </> name | name <-

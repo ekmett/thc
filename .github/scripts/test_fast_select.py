@@ -237,7 +237,7 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_json_index_inputs_select_the_cabal_suite(self):
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
-        for path in ("compiler/THC/JsonIndex/Scanner.hs", "compiler/json-index/json_index.c",
+        for path in ("json-index/THC/JsonIndex.hs", "json-index/THC/JsonIndex/Scanner.hs", "compiler/json-index/json_index.c",
                      "compiler/json-index/json_index.h", "test/json-index/Main.hs", "test/json-index/native.c"):
             with self.subTest(path=path):
                 self.policy["owners"][path] = policy["owners"][path]
@@ -249,8 +249,9 @@ class FastSelectionTest(unittest.TestCase):
                 selected = self.plan(base=before)
                 self.assertEqual("narrow", selected["mode"], selected)
                 self.assertTrue(selected["runnable"])
-                self.assertEqual(["json-index"], selected["haskell"]["suites"])
-                self.assertEqual(["json-index"], selected["affected"]["haskell"])
+                suites = ["json-index"] if path.startswith("test/") else ["driver-tests", "json-index"]
+                self.assertEqual(suites, selected["haskell"]["suites"])
+                self.assertEqual(suites, selected["affected"]["haskell"])
                 self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
 
     def test_json_index_documentation_retains_only_smoke(self):
@@ -265,7 +266,7 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
 
     def test_full_selection_includes_json_index(self):
-        self.write("compiler/THC/JsonIndex/Producer.hs", "unreviewed production dependency\n")
+        self.write("json-index/THC/JsonIndex/Producer.hs", "unreviewed production dependency\n")
         self.commit()
         selected = self.full("unmapped-source-or-configuration")
         self.assertTrue(selected["runnable"])

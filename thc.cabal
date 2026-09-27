@@ -6,7 +6,8 @@ name: thc
 version: 0.1.0.0
 synopsis: Haskell on Truffle/Graal
 license: UPL-1.0 AND BSD-3-Clause
-license-files: LICENSE, LICENSE.txt
+license-files: LICENSE, LICENSE.txt,
+  compiler/json-index/LICENSE.succinctly, compiler/json-index/LICENSE.everett-bsd
 author: Edward Kmett
 maintainer: Edward Kmett
 category: Development
@@ -485,6 +486,7 @@ library
     THC.Sources
     THC.Wired
   build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
@@ -496,14 +498,27 @@ library
   if flag(development)
     ghc-options: -Werror
 
-executable thc-json-index
-  main-is: Main.hs
-  hs-source-dirs: compiler/json-index-tool, compiler
-  other-modules: THC.JsonIndex, THC.JsonIndex.Scanner
+library core-json-index
+  hs-source-dirs: json-index
+  exposed-modules: THC.JsonIndex, THC.JsonIndex.Scanner
   c-sources: compiler/json-index/json_index.c
   include-dirs: compiler/json-index
   cc-options: -std=c11 -Wall -Wextra
   build-depends:
+    base >= 4.22 && < 4.23,
+    bytestring >= 0.12.2 && < 0.13,
+    cryptohash-sha256 >= 0.11 && < 0.12
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+    cc-options: -Werror
+
+executable thc-json-index
+  main-is: Main.hs
+  hs-source-dirs: compiler/json-index-tool
+  build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     cryptohash-sha256 >= 0.11 && < 0.12,
@@ -519,12 +534,12 @@ test-suite json-index
   type: exitcode-stdio-1.0
   build-tool-depends: thc:thc-json-index
   main-is: Main.hs
-  hs-source-dirs: test/json-index, compiler
-  other-modules: THC.JsonIndex, THC.JsonIndex.Scanner
-  c-sources: compiler/json-index/json_index.c, test/json-index/native.c
+  hs-source-dirs: test/json-index
+  c-sources: test/json-index/native.c
   include-dirs: compiler/json-index
   cc-options: -std=c11 -Wall -Wextra -DTHC_JSON_TEST_EMBEDDED
   build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     HUnit >= 1.6 && < 1.7,
@@ -574,6 +589,7 @@ executable thc
   main-is: Main.hs
   hs-source-dirs: app, src
   other-modules:
+    THC.Driver.CoreIndex
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
@@ -594,6 +610,7 @@ executable thc
     THC.Driver.Zip
     THC.Driver.Wired
   build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     aeson >= 2.3 && < 2.4,
@@ -618,6 +635,9 @@ test-suite driver-tests
   main-is: Main.hs
   hs-source-dirs: test/haskell-driver, src
   other-modules:
+    THC.Driver.CoreIndex
+    CoreIndexTests
+    THC.Driver.Zip
     TestSupport
     TestSupportTests
     PlanTests
@@ -650,6 +670,7 @@ test-suite driver-tests
     THC.Driver.RuntimeShim
   build-tool-depends: thc:thc
   build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     aeson >= 2.3 && < 2.4,
@@ -848,6 +869,7 @@ test-suite unlink-full-core
 executable thc-fixtures
   main-is: Main.hs
   other-modules:
+    THC.Driver.CoreIndex
     AggregateFixtures
     AggregateHeapFixtures
     GraphFixtures
@@ -1007,6 +1029,7 @@ executable thc-fixtures
     ManagedAddressReadFixtures
   hs-source-dirs: test/haskell-fixtures, src
   build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     Cabal == 3.16.*, Cabal-syntax == 3.16.*,
     thc,

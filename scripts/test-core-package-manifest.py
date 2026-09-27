@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import platform
 import subprocess
+import struct
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -371,6 +372,183 @@ class PackageManifestTest(unittest.TestCase):
                                     sha256=hashlib.sha256(second).hexdigest()))
         return self.bundled(unit, members={'core/Shared.json': (self.root / 'first.json').read_bytes(),
                                           'core/Other.json': second})
+
+    @staticmethod
+    def index_envelope(source, events=0):
+        # Transport-only controls. The audit never uses these placeholder
+        # navigation sections; the Kotlin reader independently checks them.
+        header = b'THCJSIX1' + struct.pack('<IIQQ', 2, 0, len(source), events) + hashlib.sha256(source).digest()
+        size = sum(((count + per - 1) // per) * 8 for count, per in
+                   ((len(source), 1 << 32), (len(source), 2048), (len(source), 16384), (events, 32)))
+        body = header + bytes(size)
+        return body + hashlib.sha256(body).digest()
+
+    def indexed_unit(self, bundled=False, transform=lambda value: value):
+        unit = self.unit('first')
+        source = (self.root / 'first.json').read_bytes()
+        index = transform(self.index_envelope(source))
+        location = 'core/Shared.json.idx' if bundled else 'first.json.idx'
+        unit['modules'][0]['index'] = dict(path=location, sha256=hashlib.sha256(index).hexdigest())
+        if bundled:
+            path = self.bundled(unit, members={'core/Shared.json': source, location: index})
+        else:
+            (self.root / location).write_bytes(index)
+            path = self.manifest([unit])
+        return unit, path
+
+    def test_optional_indexes_preserve_original_modules_for_loose_and_bundled_audits(self):
+        for bundled in (False, True):
+            with self.subTest(bundled=bundled):
+                expected = core_package_manifest.load(self.manifest([self.unit('first')]))[0][1]
+                _, path = self.indexed_unit(bundled)
+                self.assertEqual(expected, core_package_manifest.load(path)[0][1])
+                self.assertEqual(expected, core_package_manifest.load_for_audit(path)[0][1])
+
+    def test_index_envelopes_check_exact_source_and_transport(self):
+        def changed(offset, value, resign=True):
+            def mutate(original):
+                data = bytearray(original)
+                data[offset:offset + len(value)] = value
+                if resign:
+                    data[-32:] = hashlib.sha256(data[:-32]).digest()
+                return bytes(data)
+            return mutate
+
+        mutations = {
+            'magic': changed(0, b'NOTINDEX'),
+            'version': changed(8, struct.pack('<I', 1)),
+            'flags': changed(12, struct.pack('<I', 1)),
+            'source size': changed(16, struct.pack('<Q', 1)),
+            'count exceeds source': changed(24, struct.pack('<Q', (1 << 64) - 1)),
+            'missing topology section': changed(24, struct.pack('<Q', 1)),
+            'wrong source identity': changed(32, bytes(32)),
+            'wrong integrity': changed(-32, b'x', resign=False),
+            'short header': lambda value: value[:63],
+            'short trailer': lambda value: value[:-1],
+            'extra bytes': lambda value: value + b'x',
+        }
+        for bundled in (False, True):
+            for label, mutate in mutations.items():
+                with self.subTest(bundled=bundled, mutation=label), self.assertRaisesRegex(ValueError, 'JSON index'):
+                    _, path = self.indexed_unit(bundled, mutate)
+                    core_package_manifest.load(path)
+            unit, path = self.indexed_unit(bundled)
+            unit['modules'][0]['index']['sha256'] = '0' * 64
+            if bundled:
+                # Rebuild both manifests to isolate the sidecar member hash.
+                with ZipFile(self.root / 'bundle.zip') as archive:
+                    members = {name: archive.read(name) for name in archive.namelist() if name != 'manifest.json'}
+                unit['modules'][0]['path'] = 'first.json'
+                path = self.bundled(unit, members=members)
+            else:
+                path = self.manifest([unit])
+            with self.subTest(bundled=bundled, mutation='declared digest'), self.assertRaisesRegex(ValueError, 'index hash mismatch'):
+                core_package_manifest.load(path)
+
+    def test_index_derived_section_extents_and_odd_event_counts(self):
+        for size in (0, 1, 511, 512, 513, 2047, 2048, 2049, 16383, 16384, 16385):
+            source = b' ' * size
+            for events in {0, min(size, 1), min(size, 31), min(size, 32), min(size, 33)}:
+                with self.subTest(size=size, events=events):
+                    index = self.index_envelope(source, events)
+                    reference = dict(path='index.idx', sha256=hashlib.sha256(index).hexdigest())
+                    core_package_manifest._validate_index_envelope('control', reference, source, index)
+
+    def test_index_references_are_exact_safe_records(self):
+        for reference in (None, {}, {'path': 'index.idx'}, {'path': 'index.idx', 'sha256': 'bad'},
+                          {'path': 'index.idx', 'sha256': 'a' * 64, 'extra': 1},
+                          *({'path': unsafe, 'sha256': 'a' * 64} for unsafe in
+                            ('', '../index.idx', '/index.idx', 'C:/index.idx', 'a\\index.idx', 'a/./index.idx', 'a\x00idx'))):
+            with self.subTest(reference=reference):
+                unit = self.unit('first')
+                unit['modules'][0]['index'] = reference
+                with self.assertRaisesRegex(ValueError, 'invalid JSON index reference'):
+                    core_package_manifest.load(self.manifest([unit]))
+
+    def test_index_paths_cannot_collide_with_modules_indexes_or_reserved_members(self):
+        for bundled in (False, True):
+            for collision in ('same module', 'later module', 'other index', 'manifest', 'inputs'):
+                if not bundled and collision == 'inputs':
+                    continue
+                with self.subTest(bundled=bundled, collision=collision):
+                    unit, path = self.indexed_unit(bundled)
+                    first = unit['modules'][0]
+                    other = dict(first, name='Other', path='core/Other.json' if bundled else 'other.json',
+                                 index=dict(path='other.idx', sha256='a' * 64))
+                    unit['modules'].append(other)
+                    first['index']['path'] = {
+                        'same module': first['path'], 'later module': other['path'],
+                        'other index': other['index']['path'],
+                        'manifest': 'manifest.json' if bundled else 'packages.json',
+                        'inputs': 'inplace-manifest.json',
+                    }[collision]
+                    if bundled:
+                        first['path'] = 'first.json'
+                        path = self.bundled(unit)
+                    else:
+                        path = self.manifest([unit])
+                    with self.assertRaisesRegex(ValueError, 'duplicate.*(JSON/index|ZIP member)'):
+                        core_package_manifest.load(path)
+
+    def test_index_inventory_rejects_missing_undeclared_duplicate_or_disagreeing_members(self):
+        for mutation in ('missing', 'extra', 'duplicate', 'outer disagreement'):
+            with self.subTest(mutation=mutation):
+                unit, _ = self.indexed_unit(True)
+                bundle = self.root / 'bundle.zip'
+                if mutation == 'outer disagreement':
+                    unit['modules'][0]['index']['path'] = 'other.idx'
+                else:
+                    with ZipFile(bundle) as archive:
+                        members = [(entry.filename, archive.read(entry)) for entry in archive.infolist()]
+                    if mutation == 'missing':
+                        members = [(name, body) for name, body in members if not name.endswith('.idx')]
+                    elif mutation == 'extra':
+                        members.append(('extra.idx', b'extra'))
+                    else:
+                        members.append(members[-1])
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore', UserWarning)
+                        with ZipFile(bundle, 'w') as archive:
+                            for name, body in members:
+                                archive.writestr(name, body)
+                    unit['bundle']['sha256'] = hashlib.sha256(bundle.read_bytes()).hexdigest()
+                with self.assertRaisesRegex(ValueError, 'ZIP entry|bundle manifest disagrees'):
+                    core_package_manifest.load(self.manifest([unit]))
+
+    def test_loose_index_symlink_must_remain_inside_manifest_root(self):
+        unit, path = self.indexed_unit()
+        index = self.root / unit['modules'][0]['index']['path']
+        index.unlink()
+        with TemporaryDirectory() as elsewhere:
+            outside = Path(elsewhere) / 'index.idx'
+            outside.write_bytes(b'outside')
+            index.symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, 'escapes manifest root'):
+                core_package_manifest.load(path)
+
+    def test_index_transport_buffers_are_released_before_module_delivery(self):
+        _, path = self.indexed_unit(True)
+        references, reads = [], []
+        read = ZipFile.read
+
+        class WeakBytes(bytearray):
+            pass
+
+        def tracked_read(archive, name, *args, **kwargs):
+            data = read(archive, name, *args, **kwargs)
+            if name.startswith('core/'):
+                reads.append(name)
+                data = WeakBytes(data)
+                references.append(weakref.ref(data))
+            return data
+
+        with patch.object(ZipFile, 'read', tracked_read):
+            with core_package_manifest.open_modules(path) as modules:
+                next(modules)
+                self.assertEqual(['core/Shared.json', 'core/Shared.json.idx'], reads)
+                self.assertTrue(all(reference() is None for reference in references))
+                self.assertEqual([], list(modules))
+                self.assertTrue(modules.complete)
 
     def test_stream_matches_list_apis_and_completes_only_after_exhaustion(self):
         for bundled in (False, True):

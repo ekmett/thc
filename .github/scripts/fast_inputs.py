@@ -1584,7 +1584,7 @@ def toolchain(root):
 
 def identity(root):
     tracked = tracked_files(root)
-    sources = {name for name in tracked if name.startswith(("compiler/", "scripts/", "examples/", "src/main/resources/", "test/haskell-fixtures/", "src/THC/Driver/", "tools/primops/"))}
+    sources = {name for name in tracked if name.startswith(("compiler/", "json-index/", "scripts/", "examples/", "src/main/resources/", "test/haskell-fixtures/", "src/THC/Driver/", "tools/primops/"))}
     sources.update((SELF, WIRED_SOURCE, *RUNTIME_INPUTS, *COMPILER_BUILD_INPUTS, *SIMD_BYTEARRAY_RETAINED,
                     "src/test/resources/core/original-unix-libc-descriptors.json",
                     "src/test/resources/core/original-bytestring-sort-descriptor.json",

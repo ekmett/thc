@@ -16,7 +16,7 @@ import Control.Monad (forM_)
 import Data.List (isInfixOf)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
-import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments)
+import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeIndexedEntryArguments)
 
 tests :: Env -> Test
 tests env = TestLabel "run options and target selection" $ TestList
@@ -39,6 +39,16 @@ tests env = TestLabel "run options and target selection" $ TestList
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
       , guest <- [[], ["--ffi", "not-a-runtime-mode", "--", "", "two words", "lambda-λ"]]
       ]
+  , TestLabel "indexed consumers keep explicit pairs before the guest boundary" $ TestCase $ do
+      let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
+          entry = runtimeIndexedEntryArguments modules "C:/support/packages.json" "main:Main.main"
+      assertEqual "exact pair association, manifest and guest operands"
+        ["--ffi", "native",
+         "--json-sidecar", "C:/core café/Main.json", "C:/core café/Main.json.idx",
+         "--json-sidecar", "C:/core café/THC.InterfaceClosure.json", "C:/core café/THC.InterfaceClosure.json.idx",
+         "--run-io", "C:/core café/Main.json,C:/core café/THC.InterfaceClosure.json,@C:/support/packages.json", "main:Main.main",
+         "--", "program", "--json-sidecar", "guest", "", "--"]
+        (runtimeLaunchArguments (Just NativeFfi) entry "program" ["--json-sidecar", "guest", "", "--"])
   , TestLabel "CLI rejects invalid selection before building" $ TestCase $
       forM_ ["", "MANAGED", "automatic", "native,managed"] $ \invalid -> do
         result <- run env (root env) Nothing 30 ["run", "--ffi", invalid]
