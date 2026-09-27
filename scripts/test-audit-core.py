@@ -3115,7 +3115,8 @@ class OriginalDupAuditTest(unittest.TestCase):
         'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
         'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask': (('Int32Rep', 'AddrRep', 'AddrRep', None), 'Int32Rep'),
     }
-    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset, *event_descriptors)
+    open_flags = {f'__hscore_o_{name}': ((None,), 'Int32Rep') for name in ('excl', 'binary', 'trunc')}
+    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset, *event_descriptors, *open_flags)
     def fixture(self, symbol):
         arguments = (('Int32Rep', 'Int32Rep', 'AddrRep', None) if symbol == core_original_foreign.TCSETATTR_SYMBOL else
                      ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
@@ -3123,7 +3124,7 @@ class OriginalDupAuditTest(unittest.TestCase):
                      ('Int32Rep', 'AddrRep', None) if symbol in ('__hscore_fstat', core_original_foreign.TCGETATTR_SYMBOL) else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
-        arguments, output = (self.termios | self.sigset | self.event_descriptors).get(symbol, (arguments, 'Int32Rep'))
+        arguments, output = (self.termios | self.sigset | self.event_descriptors | self.open_flags).get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
@@ -3157,6 +3158,23 @@ class OriginalDupAuditTest(unittest.TestCase):
             module = self.fixture('__hscore_fstat')
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
             self.assertFalse(self.audit(module)['accepted'])
+
+    def test_original_open_flags_keep_ghc_owner_and_cint_result(self):
+        for symbol in self.open_flags:
+            for unit in ('main', 'unix-2.8.8.0-inplace', 'ghc-internal-9.1401.0-inplace'):
+                module = self.fixture(symbol)
+                self.call(module)[6]['foreignCall']['target']['unit'] = unit
+                self.assertFalse(self.audit(module)['accepted'], (symbol, unit))
+            for wrong in ('IntRep', 'Word32Rep', 'WordRep'):
+                module = self.fixture(symbol); meta = self.call(module)[6]
+                for result in (meta['rep'], meta['foreignCall']['resultRep']):
+                    result['primReps'] = [wrong]
+                    result['components'][1]['primReps'] = [wrong]
+                self.assertFalse(self.audit(module)['accepted'], (symbol, wrong))
+            module = self.fixture(symbol)
+            # The declared State proof cannot hide an integer-producing operand.
+            self.call(module)[2][0] = [*lit(9), self.call(module)[2][0][2]]
+            self.assertFalse(self.audit(module)['accepted'], symbol)
 
     def test_original_open_three_exact_safety_contracts(self):
         for safety in ('unsafe', 'safe', 'interruptible'):

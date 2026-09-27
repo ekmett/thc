@@ -277,7 +277,7 @@ prepareNativeFcntl root = do
       coreSource = "compiler/test-fixtures/OriginalFcntlAudit.hs"
       nativeSource = "compiler/test-fixtures/OriginalFcntlNative.hs"
       names = ["originalAppend", "originalCreat", "originalNoctty", "originalNonblock", "originalRdonly",
-               "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalGetFlags", "originalSetFlags"]
+               "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalExcl", "originalBinary", "originalTrunc", "originalGetFlags", "originalSetFlags"]
       execute = runLogged 180 root (output </> "logs")
       binary = output </> "native/oracle"
       oracle = output </> "oracle.json"
@@ -300,7 +300,7 @@ prepareNativeFcntl root = do
   observed <- execute "native-run" [] (root </> binary) [root </> output </> "native/private-file"]
   (constants, rows, invalid) <- maybe (die "Malformed original fcntl observations") pure
     (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe ([Integer], [[Integer]], [Integer]))
-  unless (length constants == 9 && length rows == 4 && all ((== 3) . length) rows && length invalid == 2)
+  unless (length constants == 12 && length rows == 4 && all ((== 3) . length) rows && length invalid == 2)
     (die "Incomplete original fcntl observations")
   writeJson (root </> oracle) $ object ["constants" .= constants, "rows" .= rows, "invalid" .= invalid]
   exports <- forM ["pre", "post"] $ \stage -> do
@@ -325,4 +325,4 @@ prepareNativeFcntl root = do
     "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= False,
     "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= length rows,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-fcntl: nine genuine constants, four native shared-status rows and eleven pre/post Core roots"
+  putStrLn "original-fcntl: twelve genuine constants, four native shared-status rows and fourteen pre/post Core roots"

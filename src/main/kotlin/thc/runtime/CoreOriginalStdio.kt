@@ -55,6 +55,9 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
     O_APPEND("__hscore_o_append", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_EXCL("__hscore_o_excl", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_BINARY("__hscore_o_binary", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    O_TRUNC("__hscore_o_trunc", "ccall", "unsafe", listOf(null), "Int32Rep"),
     O_CREAT("__hscore_o_creat", "ccall", "unsafe", listOf(null), "Int32Rep"),
     O_NOCTTY("__hscore_o_noctty", "ccall", "unsafe", listOf(null), "Int32Rep"),
     O_NONBLOCK("__hscore_o_nonblock", "ccall", "unsafe", listOf(null), "Int32Rep"),
@@ -129,7 +132,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val locking: Boolean get() = this == LOCK || this == UNLOCK
     // Keep the operation a PE constant: enum `when` reads Kotlin's mutable
     // synthetic switch table even when this enum receiver is constant.
-    val flagConstant: Boolean get() = this == O_APPEND || this == O_CREAT || this == O_NOCTTY ||
+    val flagConstant: Boolean get() = this == O_APPEND || this == O_CREAT || this == O_EXCL || this == O_BINARY || this == O_TRUNC || this == O_NOCTTY ||
         this == O_NONBLOCK || this == O_RDONLY || this == O_RDWR || this == O_WRONLY ||
         this == F_GETFL || this == F_SETFL || this == F_SETFD || this == FD_CLOEXEC
     val fcntl: Boolean get() = this == FCNTL_READ || this == FCNTL_WRITE

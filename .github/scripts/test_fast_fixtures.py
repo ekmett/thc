@@ -840,7 +840,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" original-fcntl', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-fcntl', fast_fixtures.FULL_OUTPUT_ROOTS)
         name = 'build/original-fcntl/manifest.json'
-        self.assertEqual(113, len(cache.ORIGINAL_FCNTL_OUTPUTS))
+        self.assertEqual(137, len(cache.ORIGINAL_FCNTL_OUTPUTS))
         for item in cache.ORIGINAL_FCNTL_OUTPUTS:
             self.assertTrue(cache.allowed_payload(item, {}), item)
         for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):

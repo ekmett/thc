@@ -54,7 +54,7 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
         private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE")
         private val seekNames = setOf("SEEK_SET", "SEEK_CUR", "SEEK_END")
         private val openNames = setOf("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND",
-            "O_CREAT", "O_NOCTTY", "O_NONBLOCK", "F_GETFL", "F_SETFL", "F_SETFD", "FD_CLOEXEC")
+            "O_CREAT", "O_EXCL", "O_BINARY", "O_TRUNC", "O_NOCTTY", "O_NONBLOCK", "F_GETFL", "F_SETFL", "F_SETFD", "FD_CLOEXEC")
         private fun exactInteger(value: Any?): Long? = if (value is Int || value is Long) (value as Number).toLong() else null
         private fun architecture(value: String): String = when (value.lowercase()) {
             "arm64" -> "aarch64"

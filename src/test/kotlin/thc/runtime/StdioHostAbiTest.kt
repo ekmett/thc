@@ -64,6 +64,7 @@ class StdioHostAbiTest {
         assertTrue(abi.openAppend(write or append)); assertFalse(abi.openAppend(write))
         for (operation in listOf(OriginalStdioOp.O_APPEND, OriginalStdioOp.O_CREAT, OriginalStdioOp.O_NOCTTY,
             OriginalStdioOp.O_NONBLOCK, OriginalStdioOp.O_RDONLY, OriginalStdioOp.O_RDWR, OriginalStdioOp.O_WRONLY,
+            OriginalStdioOp.O_EXCL, OriginalStdioOp.O_BINARY, OriginalStdioOp.O_TRUNC,
             OriginalStdioOp.F_GETFL, OriginalStdioOp.F_SETFL, OriginalStdioOp.F_SETFD, OriginalStdioOp.FD_CLOEXEC))
             assertEquals((raw[operation.name] as Number).toLong(), abi.flagConstant(operation))
         assertThrows(RuntimeFault::class.java) { abi.flagConstant(OriginalStdioOp.ERRNO) }
