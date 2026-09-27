@@ -38,10 +38,15 @@ main = do
       case (uncaught, self, masked, prompted, promptedMasked) of
         (5, -1, -1, -1, -1) -> putStr "5\n-1\n-1\n-1\n-1\n"
         other -> error ("public thread extra delivery failed: " ++ show other)
+    ["saved"] -> mapM_ print
+      [ I# (Audit.savedSelfThrow 0#), I# (Audit.savedSelfThrow 1#)
+      , I# (Audit.savedMaskedSelf 0#), I# (Audit.savedMaskedSelf 1#)
+      , I# (Audit.savedSuffixSelf 0#), I# (Audit.savedSuffixSelf 1#)
+      , I# (Audit.savedMaskCatchSelf 0#), I# (Audit.savedMaskCatchSelf 1#) ]
     ["yield"] -> do
       ordinary <- evaluate (I# (Audit.yieldProbe 0#))
       masked <- evaluate (I# (Audit.yieldMasked 0#))
       case (ordinary, masked) of
         (37, 39) -> putStr "37\n39\n"
         other -> error ("yield# State/mask oracle failed: " ++ show other)
-    _ -> error "Usage: ThreadAsyncNative [extras|yield]"
+    _ -> error "Usage: ThreadAsyncNative [extras|saved|yield]"

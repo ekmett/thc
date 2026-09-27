@@ -147,3 +147,62 @@ promptMaskedUnmaskSelf token = runRW# (\s0 ->
   case newPromptTag# s0 of { (# s1, tag #) ->
   case prompt# tag (\s -> case maskedUnmaskSelf token of value -> (# s, Box value #)) s1 of
     (# _, Box result #) -> result })
+
+{-# OPAQUE savedSelfPayload #-}
+savedSelfPayload :: Int# -> Box
+savedSelfPayload token = raise# (Box token)
+
+-- The same saved catch runs twice. The prefix adds 100 exactly once, each
+-- handler adds one, and neither handler evaluates the exception payload.
+{-# OPAQUE savedSelf #-}
+savedSelf :: Int# -> Int# -> Int#
+savedSelf mode token = runRW# $ \s0 -> case newMutVar# (Box 0#) s0 of
+  (# s1, counter #) -> case newPromptTag# s1 of
+    (# s2, tag #) ->
+      let deliver s = case myThreadId# s of
+            (# st, self #) -> case killThread# self (savedSelfPayload token) st of
+              next -> (# next, 0# #)
+          capture s = case control0# tag (\k st ->
+            case k (\sx -> case mode of
+              2# -> (# sx, 0# #)
+              _ -> deliver sx) st of
+                (# st1, Box first #) -> case getMaskingState# st1 of
+                  (# st2, outside #) -> case k (\sx -> case mode of
+                    2# -> (# sx, 0# #)
+                    _ -> deliver sx) st2 of
+                      (# st3, Box second #) -> (# st3, Box (first *# 100# +# second *# 10# +# outside) #)) s of
+                (# st, _ #) -> case deliver st of
+                  (# next, value #) -> (# next, Box (value +# 10000#) #)
+          masked s = case mode of
+            1# -> maskUninterruptible# (\st -> unmaskAsyncExceptions# capture st) s
+            _ -> capture s
+          handler _ st = case readMutVar# counter st of
+            (# st1, Box count #) -> case writeMutVar# counter (Box (count +# 1#)) st1 of
+              st2 -> case getMaskingState# st2 of
+                (# st3, mask #) -> (# st3, Box mask #)
+          caught s = case mode of
+            3# -> maskUninterruptible# (\st -> catch#
+              (\sx -> unmaskAsyncExceptions# capture sx) handler st) s
+            _ -> catch# masked handler s
+      in case prompt# tag (\s3 -> case readMutVar# counter s3 of
+        (# s4, Box before #) -> case writeMutVar# counter (Box (before +# 100#)) s4 of
+          s5 -> caught s5) s2 of
+                  (# s6, Box answer #) -> case readMutVar# counter s6 of
+                    (# s7, Box count #) -> case getMaskingState# s7 of
+                      (# _, outside #) -> answer *# 1000# +# count +# outside *# 1000000# +# token
+
+{-# OPAQUE savedSelfThrow #-}
+savedSelfThrow :: Int# -> Int#
+savedSelfThrow = savedSelf 0#
+
+{-# OPAQUE savedMaskedSelf #-}
+savedMaskedSelf :: Int# -> Int#
+savedMaskedSelf = savedSelf 1#
+
+{-# OPAQUE savedSuffixSelf #-}
+savedSuffixSelf :: Int# -> Int#
+savedSuffixSelf = savedSelf 2#
+
+{-# OPAQUE savedMaskCatchSelf #-}
+savedMaskCatchSelf :: Int# -> Int#
+savedMaskCatchSelf = savedSelf 3#
