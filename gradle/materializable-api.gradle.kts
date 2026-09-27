@@ -31,7 +31,8 @@ val prepareMaterializableApi = tasks.register<Sync>("prepareMaterializableApi") 
     include("com/oracle/truffle/api/nodes/RootNode.java", "com/oracle/truffle/api/nodes/NodeAccessor.java",
         "com/oracle/truffle/api/bytecode/ContinuationRootNode.java")
     into(layout.buildDirectory.dir("materializable-api/source"))
-    inputs.files("tools/truffle-protocol/materializable-root.patch", "tools/truffle-protocol/declared-return-api.patch")
+    inputs.files("tools/truffle-protocol/materializable-root.patch", "tools/truffle-protocol/declared-return-api.patch",
+        "tools/truffle-protocol/graph-budget-api.patch")
     doFirst {
         requireApiArchive(materializableApiSource.singleFile,
             "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064")
@@ -46,6 +47,11 @@ val prepareMaterializableApi = tasks.register<Sync>("prepareMaterializableApi") 
             workingDir(destinationDir)
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/declared-return-api.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/graph-budget-api.patch").absolutePath)
         }.result.get().assertNormalExitValue()
         check(destinationDir.resolve("com/oracle/truffle/api/nodes/RootNode.java").readText()
             .contains("materializableFramePolicyVersion")) { "Materializable-root API patch was not applied" }
@@ -63,7 +69,7 @@ val materializableApiJar = tasks.register<Jar>("materializableApiJar") {
     group = "build"
     description = "Build pinned API source classes with declared materialization and completion contracts."
     archiveBaseName.set("thc-truffle-api")
-    archiveVersion.set("$materializableApiVersion-protocol2")
+    archiveVersion.set("$materializableApiVersion-protocol3")
     destinationDirectory.set(layout.buildDirectory.dir("materializable-api"))
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
@@ -82,7 +88,7 @@ val materializableApiJar = tasks.register<Jar>("materializableApiJar") {
             manifest.attributes(jar.manifest.mainAttributes.entries.associate { it.key.toString() to it.value.toString() })
         }
         manifest.attributes("Implementation-Title" to "THC declared root protocol Truffle API",
-            "Implementation-Version" to "$materializableApiVersion-protocol2",
+            "Implementation-Version" to "$materializableApiVersion-protocol3",
             "Upstream-Source-SHA256" to "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064")
     }
 }
@@ -148,6 +154,7 @@ tasks.register("verifyMaterializableApiSelection") {
                 report.writeText(digest(overlay.readBytes()) + "  " + overlay.name + "\n" +
                     digest(file("tools/truffle-protocol/materializable-root.patch").readBytes()) + "  materializable-root.patch\n" +
                     digest(file("tools/truffle-protocol/declared-return-api.patch").readBytes()) + "  declared-return-api.patch\n" +
+                    digest(file("tools/truffle-protocol/graph-budget-api.patch").readBytes()) + "  graph-budget-api.patch\n" +
                     "Preserved upstream nonreplacement entries: " + stockEntries.count { !replaced(it.name) } + "\n")
             }
         }

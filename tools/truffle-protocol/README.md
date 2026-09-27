@@ -95,3 +95,42 @@ return-class speculation; nonresumable roots retain it. Frame virtualization may
 change for materializable roots, so these correctness checks make no throughput
 or ordinary-allocation performance claim. Native-image execution of the changed
 artifacts requires its own validation; JVM AOT preparation is not that evidence.
+
+## Graph-budget recovery lifecycle
+
+The pinned API/runtime pair also provides an opt-in recovery hook for a real
+graph-size bailout. `RootNode.getGraphBudgetGeneration()` supplies the logical
+boundary generation captured when a compilation task is submitted. After the
+existing block-compilation fallback, `prepareGraphBudgetRetry(failedGeneration)`
+may acknowledge a strictly newer generation only when a real structural
+compilation boundary has changed. The default returns the failed generation and
+preserves ordinary failure handling. This is not a profile hint or permission to
+retry an unchanged graph. A language implementation must have a finite extraction
+plan and use normal thread-safe AST replacement/invalidation protocols.
+
+The callback runs on the compiler thread. It must not access a current guest
+context, execute guest code, initialize a context-bound root, train a profile, or
+submit/wait for compilation. Explicit synchronous compilation can submit the
+changed root only after the failed task completes. Background compilation leaves
+the changed root eligible for a later request; it does not submit another task
+inside the callback. A successful recovery does not mark the caller permanently
+failed or universally uninlinable. Non-budget failures and exhausted plans retain
+the existing policy. Clones sample their current generation on each new task.
+
+`./gradlew testGraphBudgetRecovery` exercises a handwritten Java model with an
+actual oversized caller body, a structural replacement by a call to an extracted
+side root, completed-task recompilation, and immediate first compiled execution.
+It checks exact results, effects, target retention, clones, exhausted plans,
+unrelated failure handling, and background submission. The test prepares its
+candidate side root in the owning context before compilation and duplicates that
+candidate body deliberately. Only the edge introduced after the actual bailout
+has an inlining veto. The test's smaller graph budget makes the model bounded;
+production graph limits are unchanged.
+
+No THC function root currently overrides this hook. These changes establish the
+compilation lifecycle, not automatic case-arm selection, demand-only candidate
+allocation, or a complete application graph-budget policy. In particular, a
+callee inlining veto alone cannot reduce an oversized caller's own partial
+evaluation graph: its body must actually be made smaller. The model has no
+continuation or Bloom protocol of its own; existing typed side-root tests cover
+those separate runtime contracts.
