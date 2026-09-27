@@ -11,6 +11,33 @@ import org.junit.jupiter.api.Test
 import thc.Language
 
 class AstStackTest {
+    @Test fun stackSpillRecognizesOnlyThePrivateIdentityAndTypedSuspensions() {
+        fun saved(marker: Any?) = object : SavedGuestContinuation {
+            override val identity: Any get() = this
+            override val yielded: Any? = marker
+            override val sourceRoot: Any = Any()
+            override fun continueWith(input: Any?): Any? = error("Classification must not resume a continuation")
+        }
+        val spoof = object {
+            override fun equals(other: Any?): Boolean = true
+            override fun hashCode(): Int = 0
+        }
+        val hostile = object {
+            override fun equals(other: Any?): Boolean = error("Classification must not invoke guest equality")
+            override fun hashCode(): Int = 0
+        }
+        assertTrue(saved(AstStackSpill).stackSpill())
+        for (marker in listOf(null, Any(), spoof, hostile)) assertFalse(saved(marker).stackSpill())
+        val thunk = Thunk(object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any? = error("Classification must not force a thunk")
+        }.callTarget, null)
+        val segment = CallSegment(saved(null))
+        for (spill in listOf(false, true)) {
+            assertEquals(spill, saved(ThunkSuspended(thunk, stackSpill = spill)).stackSpill())
+            assertEquals(spill, saved(CallSegmentSuspended(segment, stackSpill = spill)).stackSpill())
+        }
+    }
+
     private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
     private fun variable(id: String) = listOf("var", id)

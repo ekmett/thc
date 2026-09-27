@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.VirtualFrame
 
 /** All offsets count elements of [width] bytes. Integral Core values have
@@ -32,9 +33,13 @@ internal enum class AtomicIntArrayOp(val primitive: String, val width: Int = 8, 
         if (!valid) fault("Atomic byte-array primitive result carrier mismatch: $primitive")
     }
 
-    fun execute(value: Any?, index: Long, operand: Long, replacement: Long): Long =
-        (value as? ManagedAllocation ?: fault("$primitive requires an owned MutableByteArray#"))
-            .atomicInt(index, operand, replacement, this)
+    fun execute(value: Any?, index: Long, operand: Long, replacement: Long): Long {
+        if (value !is ManagedAllocation) {
+            CompilerDirectives.transferToInterpreter()
+            fault("$primitive requires an owned MutableByteArray#")
+        }
+        return value.atomicInt(index, operand, replacement, this)
+    }
 
     companion object {
         fun named(name: String): AtomicIntArrayOp? = entries.firstOrNull { it.primitive == name }
