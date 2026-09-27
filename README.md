@@ -238,10 +238,7 @@ inputs, consume the results, warm the JVM and compare against native GHC. Graph 
 separate run. Diagnostic Map execution does not establish strict support for
 its entire dependency closure.
 
-[Historical kernel and Map investigations](research/performance-reports.md)
-retain the recorded timings, object-size measurements, variation and compiler
-artifacts. Those results apply to their frozen builds, not every program or the
-current checkout. The [current runtime guides](docs/README.md#performance-and-runtime-design)
+The [current runtime guides](docs/README.md#performance-and-runtime-design)
 describe implemented protocols and opt-in experiments.
 
 ## Finding your way around
@@ -256,8 +253,8 @@ describe implemented protocols and opt-in experiments.
 * [`scripts/`](scripts/) contains build, audit, benchmark and graph drivers.
 * [The architecture guide](docs/architecture.md) describes the current system
   and planned work. [The documentation index](docs/README.md) groups coverage
-  and design reports; [`research/`](research/) preserves historical proposals
-  and investigations.
+  and design reports; [open design questions](research/open-questions.md)
+  identify the next design decisions and relevant background.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the mixed Java/Kotlin reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).

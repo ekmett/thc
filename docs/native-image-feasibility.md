@@ -61,14 +61,12 @@ The pure classpath cannot establish Sulong, foreign callbacks, native-resource
 cleanup or complete executable startup/shutdown support. JVM tests of those
 facilities do not substitute for native-image execution checks.
 
-## Planned work and retained investigation
+## Planned work
 
 Guest runtime compilation needs compatible graph preparation and first-call
 execution checks. Foreign execution and full executable lifecycle need their
 own image configuration and resource tests. Guest-specific AOT requires a
 separate demonstrated compilation/export path.
 
-The [archived feasibility investigation](../research/native-image-2026-09-26.md)
-preserves the earlier build phases, source fixes, failures, toolchain analysis
-and original evidence links. Those checkpoints are not the current build
-instructions or an expansion of the supported recipe above.
+The [open design questions](../research/open-questions.md#native-image-beyond-pure-interpretation)
+separate compiler preparation from resource-lifecycle and guest-AOT work.

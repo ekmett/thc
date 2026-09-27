@@ -150,11 +150,8 @@ Runtime experiments are opt-in except compact headers and class-owned layouts.
 The controlled benchmark also accepts `-XX:-UseCompactObjectHeaders` for a
 matched header-off run. Keep graph capture separate from timed measurements.
 
-[Historical performance and compiler investigations](../research/performance-reports.md)
-retain the old kernel snapshots, Map measurements, rejected candidates and exact
-graph evidence. Their counts and ratios are not a current test inventory or a
-performance promise. The earlier [architecture proposal](../research/architecture-2026-09-22.md)
-is preserved separately from the current design.
+[Open design questions](../research/open-questions.md) identify concrete next
+decisions about program closures, optimization, resumable effects and packaging.
 
 ## Project integration
 

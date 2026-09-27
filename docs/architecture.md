@@ -8,9 +8,8 @@ partially evaluating the interpreter. Haskell execution uses the exported Core,
 not its native GHC objects or an STG interpreter.
 
 This guide describes the implemented system and its boundaries. The
-[2026-09-22 proposal](../research/architecture-2026-09-22.md) records the original
-design investigation; its milestones and alternatives are historical, not a
-current feature checklist. Build commands and toolchain requirements are in
+[open design questions](../research/open-questions.md) cover unresolved
+design decisions and their background. Build commands and toolchain requirements are in
 the [README](../README.md); detailed contracts are in the
 [documentation index](README.md).
 

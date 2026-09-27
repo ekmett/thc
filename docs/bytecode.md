@@ -84,8 +84,3 @@ Async exceptions default to enabled for bytecode and disabled for AST. See the
 [asynchronous-exception contract](async-exceptions.md) for explicit selection
 and continuation limits. Guest compilation on the optimizing JVM is also
 separate from the [Native Image](native-image-feasibility.md) execution model.
-
-The [initial bytecode investigation](../research/bytecode-checkpoint.md)
-preserves its frozen test counts, native comparisons, instruction dumps,
-compiler graphs and timings. It is historical evidence, not current backend
-performance or a current test-inventory count.

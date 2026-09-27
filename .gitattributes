@@ -7,7 +7,6 @@ bench/results/** -text
 docs/graphs/** -whitespace linguist-generated=true
 docs/cadenza-graphs/** -whitespace linguist-generated=true
 docs/map-graphs/** -whitespace linguist-generated=true
-docs/call-packet-graphs/** -whitespace linguist-generated=true
 docs/inlining-graphs/** -whitespace linguist-generated=true
 bench/results/** -whitespace linguist-generated=true
 *.bgv binary

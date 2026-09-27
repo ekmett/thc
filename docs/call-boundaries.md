@@ -63,6 +63,5 @@ source locations, layout rejection and cloned targets.
 This is an implemented opt-in mechanism, not a demonstrated throughput win or
 a promise that every argument packet disappears.
 
-The [original call-boundary audit](../research/call-boundaries-checkpoint.md)
-retains pinned runtime/class-file evidence and its historical partial-inlining
-proposal. The proposal's graph IDs describe that capture, not current code.
+The [performance questions](../research/open-questions.md#residual-calls-and-allocation) distinguish
+remaining ABI costs from avoidable allocations and inlining-policy decisions.

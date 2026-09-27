@@ -123,7 +123,7 @@ The diagnostic fails if a valid input invalidates the host. For a compiler trace
 through `JAVA_TOOL_OPTIONS`, then inspect the relevant host graph with
 `tools/GraphInspect.java`. No compiler optimization is disabled.
 
-The [recorded speculation investigation and earlier fixture checkpoints](../research/memory-fixture-checkpoints.md)
-retain their original counts, observations and graph evidence. They are not
-current library-admission results; consult the [library coverage guide](library-coverage.md)
-for those separate source closures.
+Compiler-created loop speculation is distinct from interpreter warmup and
+runtime correctness. This diagnostic does not establish library admission;
+consult the [library coverage guide](library-coverage.md) for those separate
+source closures.

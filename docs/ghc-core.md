@@ -250,6 +250,3 @@ packages require their own complete-Core build. `rts` C code and primop
 semantics are separate from Haskell interface payloads. GHC API changes remain
 explicit compatibility work; retaining library Core removes one source of
 version-specific scaffolding, not those obligations.
-
-The [original patch and interface-size investigation](../research/ghc-core-build-checkpoint.md)
-is retained as historical evidence, not a current compiler-installation check.

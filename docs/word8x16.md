@@ -162,9 +162,3 @@ allocation elimination, packed instructions, or performance. Those require
 separate runtime tests and retained graph/final-LIR evidence. In particular,
 unsigned low-byte multiplication may lower through wider lanes; no packed-byte
 multiply instruction is implied by the GHC primitive's name.
-
-## Research history
-
-The [foundation checkpoint](../research/word8x16-checkpoint.md) preserves the
-original representation discussion, measurements and graph evidence at their
-recorded revisions. Those results are not a validation run of the current tree.
