@@ -151,6 +151,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
                      "finishedStatus-audit.json", "diedStatus-audit.json", "blockedStatus-audit.json")],
     "build/thread-async/manifest.json", "build/thread-async/oracle.txt", "build/thread-async/extra-oracle.txt",
     "build/thread-async/lazy-oracle.txt", "build/thread-async/saved-oracle.txt",
+    "build/thread-async/external-saved-oracle.txt",
+    "build/thread-async/pre/externalSaved-audit.json", "build/thread-async/post/externalSaved-audit.json",
     "build/thread-async/pre/core/ThreadAsyncAudit.json", "build/thread-async/post/core/ThreadAsyncAudit.json",
     "build/thread-async/pre/core/LazyForkAudit.json", "build/thread-async/post/core/LazyForkAudit.json",
     "build/thread-async/pre/lazyFork-audit.json", "build/thread-async/post/lazyFork-audit.json",

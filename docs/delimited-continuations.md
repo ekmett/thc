@@ -1,4 +1,4 @@
-# Delimited continuations: initial synchronous slice
+# Delimited continuations
 
 `newPromptTag#`, `prompt#`, and `control0#` follow the pinned GHC 9.14.1
 signatures. Prompt identities are opaque and context-owned. `control0#` removes
@@ -43,8 +43,16 @@ its payload; mask return frames and handler exit restore their proper scopes.
 Repeated invocations copy the frame graph, not the one-shot delivery request.
 An uncaught request propagates unchanged for an outer handler. Original-GHC
 controls resume the same image twice, preserve an unrepeated shared-state prefix,
-and distinguish saved catches inside and outside mask scopes. External
-asynchronous suspension through the multi-shot image remains unsupported.
+and distinguish saved catches inside and outside mask scopes.
+
+With async enabled, a live or saved catch also handles an external delivery
+reported by its interrupted action. The child retains its one-shot parked
+continuation; the current invocation unwinds the original async request through
+its cloned suffix. Only the reached handler acknowledges it, after checking the
+current logical target and claimed state. The payload stays lazy. The native
+`externalSaved` control uses MVar handshakes to interrupt two invocations of the
+same image, verifies both sender acknowledgements and mask restoration, and
+counts shared prefix, replacement, handler and suffix effects without replay.
 
 Strict scalar-returning workers preserve their pending case caller, including
 its result destination. Capturing a resumed segment again freezes the mask
@@ -63,8 +71,12 @@ returned its function. Both scalar and tuple results work through direct and
 megamorphic calls. The captured tuple consumer runs once; bytecode receives an
 owned result at its saved call site. Neither path reruns the callee prefix.
 
-Applications with unboxed tuple/vector inputs and composition with one-shot asynchronous suspension remain
-unestablished and require additional runtime work. This checkpoint must not be
+Applications with unboxed tuple/vector inputs remain unestablished. A
+non-delivery scheduling cut, such as AST stack spilling, across a delimited
+action or saved suffix still rejects: it needs a one-shot owner for the
+remaining invocation, distinct from the reusable image. Caught delivery does
+not resume the abandoned action or supply this general scheduling composition.
+This must not be
 described as complete delimited-continuation support. Capturing through a thunk
 update rejects explicitly; GHC also excludes update/STM/foreign stack barriers
 from valid capture. Unmatched prompts are outside GHC's defined domain, not a
@@ -153,5 +165,5 @@ passes in default (`20260926-061038-5bfxcdgw`) and dense
 (`20260926-060726-j00g5v3k`) supplies the same 51 native observations and 34
 strict Core audits to both runs. Its closed 154-file payload, 249 fast
 fixture/cache checks, and 13 coverage checks pass. Typed tuple/vector input
-capture and mixed one-shot asynchronous suspension remain outside this tested
+capture and non-delivery asynchronous scheduling cuts remain outside this tested
 slice.

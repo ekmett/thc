@@ -37,8 +37,11 @@ that was registered without external delivery support.
 Disabled-mode self-delivery also reaches live and saved delimited `catch#`
 frames. Each resumption keeps its own one-shot request; the reusable frame image
 does not clone or acknowledge it. The reached handler acknowledges the original
-request without forcing its payload. This does not enable external asynchronous
-suspension through a multi-shot image; see [delimited continuations](delimited-continuations.md).
+request without forcing its payload. With async enabled, external delivery from
+an interrupted action likewise unwinds to its live or saved catch, preserving
+the original request and the child's separate one-shot ownership. Non-delivery
+scheduling cuts through the image still reject; see
+[delimited continuations](delimited-continuations.md).
 
 Managed foreign reverse entries create fresh bound guest identities on the same
 carrier. They start unmasked and cannot claim the suspended caller's mailbox.
@@ -190,7 +193,7 @@ cabal run thc-fixtures --offline -- uncaught-self
 [STM](stm.md) aborts its current attempt and preserves an `atomically#` restart
 at the enclosing update boundary; it does not save a live log or resume an
 abandoned transactional child. Compact traversal, GHC BCO interpreter frames,
-opaque foreign execution and mixed asynchronous/delimited capture retain their
+opaque foreign execution and non-delivery asynchronous/delimited scheduling cuts retain their
 separate continuation barriers.
 Arbitrary JVM/native frames and blocking file operations do not gain resumable
 interruption from the public option. See the

@@ -2240,8 +2240,6 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors, demand)
     init {
-        if (enableAsync && containsDelimited)
-            throw UnsupportedCore("Delimited continuations do not yet preserve AST async captures")
         val eager = ArrayList<Map<String, Any?>>()
         for (binding in bindings) {
             // Strict global initialization retains its original scheduling.

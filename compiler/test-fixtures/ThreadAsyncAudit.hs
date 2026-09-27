@@ -206,3 +206,46 @@ savedSuffixSelf = savedSelf 2#
 {-# OPAQUE savedMaskCatchSelf #-}
 savedMaskCatchSelf :: Int# -> Int#
 savedMaskCatchSelf = savedSelf 3#
+
+-- External throwTo uses MVar handshakes, not timing. The main thread remains
+-- interruptibly masked, so each delivery reaches its empty-MVar wait. The
+-- sender's acknowledgement is observed before the next use of the same image.
+{-# OPAQUE externalSaved #-}
+externalSaved :: Int# -> Int#
+externalSaved token = runRW# $ \s0 -> case newMVar# s0 of
+  (# s1, ready #) -> case newMVar# s1 of
+    (# s2, blocked #) -> case newMVar# s2 of
+      (# s3, acknowledged #) -> case newMutVar# (Box 0#) s3 of
+        (# s4, counter #) -> case myThreadId# s4 of
+          (# s5, target #) ->
+            let add amount s = case readMutVar# counter s of
+                  (# st, Box count #) -> writeMutVar# counter (Box (count +# amount)) st
+                sender ordinal s = case takeMVar# ready s of
+                  (# st, Box _ #) -> case killThread# target (savedSelfPayload token) st of
+                    st1 -> case putMVar# acknowledged (Box ordinal) st1 of
+                      st2 -> case ordinal of
+                        1# -> sender 2# st2
+                        _ -> (# st2, () #)
+                wait s = case add 1000# s of
+                  st -> case putMVar# ready (Box 1#) st of
+                    st1 -> case takeMVar# blocked st1 of
+                      (# st2, Box value #) -> (# st2, value #)
+            in case fork# (sender 1#) s5 of
+              (# s6, _ #) -> case newPromptTag# s6 of
+                (# s7, tag #) -> case maskAsyncExceptions# (\s8 -> prompt# tag
+                  (\s9 -> case add 100# s9 of
+                    s10 -> case catch# (\s11 -> control0# tag (\k s12 ->
+                      case k wait s12 of
+                        (# s13, Box first #) -> case takeMVar# acknowledged s13 of
+                          (# s14, Box firstAck #) -> case k wait s14 of
+                            (# s15, Box second #) -> case takeMVar# acknowledged s15 of
+                              (# s16, Box secondAck #) ->
+                                (# s16, Box (first *# 1000# +# second *# 100# +# firstAck *# 10# +# secondAck) #)) s11)
+                      (\_ st -> case add 10# st of
+                        st1 -> case getMaskingState# st1 of
+                          (# st2, mask #) -> (# st2, mask #)) s10 of
+                            (# s17, value #) -> case add 1# s17 of
+                              s18 -> (# s18, Box value #)) s8) s7 of
+                                (# s19, Box answer #) -> case readMutVar# counter s19 of
+                                  (# s20, Box count #) -> case getMaskingState# s20 of
+                                    (# _, outside #) -> answer *# 10000# +# count +# outside *# 100000000# +# token
