@@ -13,7 +13,7 @@
 -- Forward-only container construction. Five private auxiliary streams are
 -- appended to the executable stream, followed by an EOF directory. The data
 -- handle is never sought or patched. No construction sidecars are published.
-module THC.Compact.Writer (Streams, appendBytes, appendRecord, writeContainer) where
+module THC.Compact.Writer (Streams, streamOffset, appendBytes, appendRecord, writeContainer) where
 
 import Control.Exception (IOException, bracket, bracketOnError, catch)
 import Control.Monad (foldM, unless)
@@ -31,6 +31,10 @@ import THC.Compact.Wire
 -- | Private append-only handles and strict relative byte counters. They are
 -- valid only inside the callback passed to 'writeContainer'.
 newtype Streams = Streams [(Handle, IORef Word64)]
+
+-- | The next relative byte position, without seeking any output handle.
+streamOffset :: Streams -> Segment -> IO Word64
+streamOffset (Streams streams) segment = readIORef (snd (streams !! fromEnum segment))
 
 -- | Append bytes and return their segment-relative starting position. Text
 -- encoding, shape interning and fingerprint sorting belong to the typed encoder.

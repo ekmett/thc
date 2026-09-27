@@ -1,8 +1,9 @@
 # Compact Core container
 
-This is the shared version 1 wire contract under implementation. The framing,
-integer primitives and scoped assembly writer are the first implementation
-slice; typed semantic records and runtime integration are not yet complete.
+This is the shared version 1 wire contract under implementation. Framing,
+integer primitives, scoped assembly and typed executable-record encoding/decoding
+have native controls. Header facts, conversion, debug maps and runtime integration
+are not yet complete.
 Existing JSON and unit-directory routes remain available and unchanged.
 
 ## Assembly and addressing
@@ -87,8 +88,7 @@ the actual UTF-8 bytes (`fingerprintData`, not `fingerprintString`, in GHC).
 
 ## Typed semantic records
 
-The record-level byte grammar is the next implementation slice, not yet a
-completed reader/writer contract. It uses explicit Core tags and typed fields,
+The record-level byte grammar uses explicit Core tags and typed fields,
 not JSON-token serialization or an opaque JSON fallback. The expression families
 are `var`, `prim`, `lit`, `lam`, `con`, `app`, `let`, `case`, and `void`.
 Literal, alternative, binder, layout, constructor and foreign records have
@@ -116,6 +116,187 @@ use predecessor lookup only with explicit no-source and restoration boundaries,
 so a location cannot bleed into unrelated nodes. The immutable container identity
 and data-relative node offset survive runtime cloning and inlining. Debug maps
 can be absent without changing executable semantics.
+
+### Ordered executable grammar
+
+The following record grammar is implemented by the typed executable codec.
+`u` means ULEB64; `s` means zigzag64; `b` is one byte, exactly 0 or 1; `str` is a
+common-string `(start,length)` span. `list(T)` is `u(count)` followed by that many
+`T` records. `p(T)` is a one-byte discriminator: 0 missing, 1 null/unknown, or 2
+followed by `T`. Missing, null and an empty known list are distinct. Enum tags are
+one byte. Records concatenate fields in the exact order listed below. There are
+no JSON property names, generic object tags or opaque JSON payloads.
+Within array slots (`argumentLifted`, `fieldLifted`, `fieldReps`), discriminator
+0 is invalid: an array element can be null or known, but cannot be absent.
+
+`Identity` is tag 0 followed by a global `str`, or tag 1 followed by a local `u`
+ordinal. Local ordinals are scoped to their enclosing top-level binding, not the
+module. Every lexical declaration receives a distinct ordinal. Recursive lets
+allocate every group member before encoding any RHS; a nonrecursive binder is
+not in scope in its own RHS. Debug labels cannot change this resolution.
+
+`EntryType` is 0 OTHER, 1 IO_UNIT, or 2 STATE_REALWORLD.
+`IdInfo` is `p(u joinArity), p(b cbvEligible), p(list(b) cbvMarks)`.
+`Binder` is `u ordinal, EntryType, p(b lifted), p(b coercion), p(Rep), p(IdInfo)`.
+`Binding` is `Identity, EntryType, p(b lifted), u arity, p(Rep), p(IdInfo),
+p(list(b) entryStrict), p(str entryStrictSource), p(u joinValueArity),
+p(Rep joinResultRep), Expr`.
+Top-level bindings use global identity; let bindings use local identity. The
+fingerprint points to the first identity tag, not the first expression byte.
+
+`Expr` is a tag byte, then `Meta`, then the tag-specific payload:
+
+| Tag | Expression | Payload after Meta |
+| ---: | --- | --- |
+| 0 | var | `Identity` |
+| 1 | prim | `str exactPrimop` |
+| 2 | lit | `Literal` |
+| 3 | lam | `list(Binder), Expr body` |
+| 4 | con | `str constructorId, u retainedArity` |
+| 5 | app | `Expr function, list(Expr) arguments, list(p(b)) argumentLifted, b HNF, b speculatable` |
+| 6 | let | `b recursive, list(Binding), Expr body` |
+| 7 | case | `Expr scrutinee, u binderOrdinal, p(Binder), list(Alternative)` |
+| 8 | void | empty |
+
+`Meta` is `p(Rep), p(Rep resultRep), p(list(b) entryStrict),
+p(str entryStrictSource), p(CallDemand), p(ForeignCall), p(ExceptionPayload),
+p(EnumFamily), p(TagFamily), p(str unsafeEqualityCase)`. Case binder information
+is stored in the case payload, not redundantly in Meta.
+`CallDemand` is `u arity, list(b) strictArgs`.
+`ExceptionPayload` is `u schema, str exactNominalType`.
+`EnumFamily` is `str typeConstructor, list(str) constructors`.
+`TagFamily` is `EnumFamily, u smallFamilyLimit, b smallFamily`.
+
+`Alternative` begins with tag 0 DEFAULT (no discriminator payload), tag 1 DATA
+(constructor `str`), or tag 2 LITERAL (`Literal`), followed by `list(Binder),
+Expr body`. Its binder IDs are derived from those actual binders, not a second
+independently interpreted ID list. Conversion requires original IDs and binder
+metadata to agree; it does not fabricate missing proofs.
+
+`ForeignCall` is `u schema, Target, Convention, Safety, u declaredArity,
+u suppliedArity, list(Rep) argumentReps, Rep resultRep, p(str intrinsic),
+p(str javascriptSource)`. `Target` tag 0 STATIC carries `str symbol, p(str unit),
+b isFunction`; tag 1 DYNAMIC carries nothing. Convention tags 0..4 are ccall,
+capi, stdcall, prim, javascript. Safety tags 0..2 are unsafe, safe, interruptible.
+These fields do not confer provenance on a similarly named ordinary Haskell call.
+
+### Representation shapes and occurrences
+
+`Rep` is `ShapeUse, EvaluationTree`. `ShapeUse` tag 0 is followed by an inline
+`Shape`; tag 1 is followed by the data-relative `u` offset of an earlier tag-0
+definition. That earlier shape is read directly on demand, never discovered by
+a prefix scan. A producer interns by exact immutable `Shape` equality. A decoder
+rejects a reference cycle or a reference that does not identify a definition.
+
+`Shape` is `Kind, p(list(PrimRep)), p(Vector), p(Aggregate),
+p(list(ShapeUse) components), p(list(ShapeUse) alternatives), p(u tagSlot),
+p(list(list(u)) alternativeSlots)`.
+Kind tags 0..9 are long, float, double, address, void, data, closure, object,
+vector, unknown. Aggregate tags 0 and 1 are unboxed-tuple and unboxed-sum.
+An unknown aggregate has a known Aggregate tag but null components/alternatives;
+an empty tuple has a known empty component list. Neither is a State# token.
+
+PrimRep tags 0..16 are IntRep, WordRep, Int8Rep, Int16Rep, Int32Rep, Int64Rep,
+Word8Rep, Word16Rep, Word32Rep, Word64Rep, FloatRep, DoubleRep, AddrRep,
+BoxedRep Nothing, BoxedRep (Just Lifted), BoxedRep (Just Unlifted), and VecRep.
+VecRep carries a `Vector`; other tags have no payload. `Vector` is `u lanes,
+Element`. Element tags 0..9 are Int8ElemRep, Int16ElemRep, Int32ElemRep,
+Int64ElemRep, Word8ElemRep, Word16ElemRep, Word32ElemRep, Word64ElemRep,
+FloatElemRep, DoubleElemRep.
+
+`EvaluationTree` is `p(b evaluated)`, then the evaluation tree for every known
+component shape, then for every known alternative shape, preserving their order.
+Child counts come from the selected Shape, not another count in the occurrence.
+Thus shape sharing cannot share or overwrite a child occurrence's evaluatedness.
+
+### Literals and constructors
+
+Literal tags and payloads are:
+
+| Tag | Kind | Payload |
+| ---: | --- | --- |
+| 0 | int | `s` |
+| 1 | word | `u` |
+| 2..5 | int8, int16, int32, int64 | `s` |
+| 6..9 | word8, word16, word32, word64 | `u` |
+| 10 | bignat | `u byteLength`, unsigned little-endian magnitude bytes |
+| 11 | char | `u codePoint` |
+| 12 | string-bytes | `u byteLength`, raw bytes, including NUL/non-UTF8 |
+| 13 | float | four IEEE-754 bits-as-bytes, little-endian |
+| 14 | double | eight IEEE-754 bits-as-bytes, little-endian |
+| 15 | null-addr | empty |
+| 16 | rubbish | `PrimRep` |
+| 17 | function-addr | `str exactSymbol` |
+| 18 | data-addr | `str exactSymbol` |
+
+BigNat zero uses zero magnitude bytes; a nonempty magnitude has a nonzero final
+byte. Narrow literal payloads must fit their declared kind. Literal string bytes
+are not common UTF-8 strings and are never decoded as text.
+
+`Constructor` is `str id, u arity, u tag, ConstructorKind, list(b) strictFields,
+list(p(b)) fieldLifted, list(p(list(PrimRep))) fieldReps, list(InlineRep)
+fieldTypes, p(u sumArity), p(EnumFamily), p(TagFamily)`. ConstructorKind tags
+0..3 are boxed, unboxed-tuple, unboxed-sum, newtype. Fields describe worker slots,
+including void/coercion slots, not source-level field counts. `InlineRep` uses
+the same shape and evaluation grammar, but recursively inlines shapes with no
+ShapeUse tag or data references; header constructors therefore require no
+executable-body access. Typed header facts and the remaining module-level foreign
+provenance families are still pending this tranche; nonempty unmapped fields
+must be rejected by the converter, not discarded or embedded as generic JSON.
+
+### Header facts
+
+The agreed header record order is `u originalSchema, str ghc, str unit,
+str module, str boundary, p(list(str)) providedModules, p(TargetLayout),
+list(Constructor), p(ForeignArtifacts), p(ForeignExceptionBridge),
+p(str foreignExceptionBridgeUnit)`, then eight typed optional provenance fields:
+`foreignLink`, `staticForeignImportStubs`, `staticForeignImports`,
+`staticForeignExports`, `staticForeignExportRegistration`, `packageScalarLink`,
+`packageNativeLink`, `packageNativeArchive`, in that order. The initial header
+tranche accepts only missing/null for these last eight slots and rejects known
+records until their typed payload schemas are implemented. It does not omit,
+guess or hide those records in JSON text. This is a conversion limitation, not
+permission to execute a module without its original foreign admission facts.
+
+`TargetLayout` carries `u documentSchema`, then four compiler strings (`id`,
+`abi`, `platform`, `way`), then `u layoutSchema, b profiled, u wordBytes,
+Endianness, str targetPlatform, b tablesNextToCode`. Endianness tags 0/1 mean
+little/big. The document format is the fixed typed identity `thc-target-layout`.
+The following numeric fields then appear as ULEB64 values, in this exact order:
+
+```text
+infoTableBytes infoTablePtrsOffset infoTablePtrsBytes
+infoTableNptrsOffset infoTableNptrsBytes infoTableTypeOffset
+infoTableTypeBytes infoTableSrtOffset infoTableSrtBytes
+infoProvEntBytes infoProvBytes infoProvEntInfoOffset
+infoProvEntProvOffset infoProvNameOffset infoProvDescOffset
+infoProvDescBytes infoProvTyDescOffset infoProvLabelOffset
+infoProvUnitOffset infoProvModuleOffset infoProvFileOffset
+infoProvSpanOffset closureRetBco closureRetSmall
+closureRetBig closureRetFun closureUpdateFrame
+closureCatchFrame closureUnderflowFrame closureStopFrame
+closureStack closureAtomicallyFrame closureCatchRetryFrame
+closureCatchStmFrame closureAnnFrame stackHeaderBytes
+stackCatchHandlerBytes stackCatchFrameBytes stackCatchStmCodeBytes
+stackCatchStmHandlerBytes stackCatchStmFrameBytes stackUpdateeBytes
+stackUpdateFrameBytes stackAtomicallyCodeBytes stackAtomicallyResultBytes
+stackAtomicallyFrameBytes stackCatchRetryAltCodeBytes
+stackCatchRetryFirstCodeBytes stackCatchRetryAltBytes
+stackCatchRetryFrameBytes stackRetFunSizeBytes stackRetFunFunBytes
+stackRetFunPayloadBytes stackRetFunFrameBytes stackAnnPayloadBytes
+stackAnnFrameBytes stackClosurePayloadBytes
+```
+
+These are original target/compiler facts, never reconstructed from the producer
+or reader host. Existing ABI checks still apply when admitting the selected module.
+
+`ForeignArtifacts` is `u schema, str execution, p(Stubs), list(ForeignFile)`.
+`Stubs` is `str header, str source, list(Label) initializers, list(Label)
+finalizers`. `Label` is `b isInitializer, str unit, str module, str name`.
+`ForeignFile` is `str language, str source, str extension`. C source and labels
+remain semantic/provenance content, not optional display-name debug data.
+`ForeignExceptionBridge` is `u schema, str unit, str module, str box, str project,
+str payloadType, str exceptionType`; its unit reference remains semantic too.
 
 ## Shared controls
 
