@@ -1379,7 +1379,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation == OriginalStdioOp.READ_SAFE || operation == OriginalStdioOp.READ_UNSAFE)
                 result = stdio.read(fd, address, count);
             else result = stdio.write(fd, address, count);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            if (operation.getNarrowResult() != null)
+                destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 

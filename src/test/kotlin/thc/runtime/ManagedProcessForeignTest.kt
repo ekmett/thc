@@ -38,11 +38,12 @@ class ManagedProcessForeignTest {
     }
     private fun cell(width: Long = 4) = Language.currentState().nativeAllocations.malloc(width)
     private fun text(address: ManagedAddress) = ByteArray(address.cStringLength().toInt()) { address.readWord8(it.toLong()).toByte() }.toString(Charsets.UTF_8)
-    private fun int(address: ManagedAddress) = ManagedAddressRead.INT32.read(address, 0)
+    private fun int(address: ManagedAddress) = ManagedAddressRead.INT32.readInt(address, 0).toLong()
     private fun create(command: ManagedAddress, environment: ManagedAddress = nil, cwd: ManagedAddress = nil,
-        streams: LongArray = longArrayOf(-2, -2, -2), outputs: List<ManagedAddress> = List(3) { cell() }, failure: ManagedAddress = cell(8)): Long =
+        streams: LongArray = longArrayOf(-2, -2, -2), outputs: List<ManagedAddress> = List(3) { cell() }, failure: ManagedAddress = cell(8),
+        group: ManagedAddress = nil, user: ManagedAddress = nil): Long =
         ManagedProcessForeign.current(null).execute(ProcessOp.CREATE, arrayOf(command, cwd, environment,
-            streams[0], streams[1], streams[2], outputs[0], outputs[1], outputs[2], nil, nil, 0L, failure, Unit))
+            streams[0], streams[1], streams[2], outputs[0], outputs[1], outputs[2], group, user, 0L, failure, Unit))
     private fun status(operation: ProcessOp, pid: Long, output: ManagedAddress = cell()) =
         ManagedProcessForeign.current(null).execute(operation, if (operation == ProcessOp.TERMINATE) arrayOf(pid, Unit) else arrayOf(pid, output, Unit))
 
@@ -142,5 +143,23 @@ class ManagedProcessForeignTest {
 
     @Test fun explicitProcessGrantIsRequiredEvenWithNativeFiles() = inside(false) {
         assertThrows(SecurityException::class.java) { create(vector("/bin/true")) }
+    }
+
+    @Test fun nonNullUnsignedCredentialsRejectBeforeLaunchWithoutPublishingOutputs() = inside {
+        val state = Language.currentState()
+        for (group in listOf(false, true)) for (bits in listOf(0L, 0x80000000L, 0xffffffffL)) {
+            val credential = cell().also { it.writeNativeScalar(0, 4, bits) }
+            val outputs = List(3) { cell().also { it.writeNativeScalar(0, 4, 991) } }
+            val failure = cell(8)
+            val marker = directory.resolve("credential-$group-$bits")
+            val result = create(vector("/bin/sh", "-c", "touch '$marker'"),
+                streams = longArrayOf(-1, -1, -1), outputs = outputs, failure = failure,
+                group = if (group) credential else nil, user = if (group) nil else credential)
+            assertEquals(-1L, result)
+            assertEquals(95L, state.stdio.errno())
+            assertEquals(ProcessFailureStage.ARGUMENTS.operation, text(failure.readAddressElementIndex(0)))
+            assertTrue(outputs.all { int(it) == 991L })
+            assertFalse(Files.exists(marker))
+        }
     }
 }

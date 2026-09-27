@@ -117,7 +117,7 @@ internal class ManagedProcessForeign {
         val streams = IntArray(3) { cint(values[it + 3]) }
         val destinations = List(3) { pointer(values[it + 6]) }
         fun credential(index: Int): Long? = pointer(values[index]).takeUnless { it === ManagedAddress.nullAddress() }?.let {
-            it.withNativeBorrow { it.requireByteRegion(4); ManagedAddressRead.WORD32.read(it, 0) }
+            it.withNativeBorrow { it.requireByteRegion(4); Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(it, 0)) }
         }
         val group = credential(9)
         val user = credential(10)
