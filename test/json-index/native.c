@@ -132,6 +132,12 @@ int thc_json_test_native(void) {
 #else
 int main(void) {
 #endif
+#if defined(_WIN32) && !defined(THC_JSON_SCALAR_ONLY) && (defined(__x86_64__) || defined(__i386__)) && (defined(__GNUC__) || defined(__clang__))
+    /* A normally linked executable can use compiler-rt as an independent
+     * dispatch oracle; the vanilla plugin's scanner must not require it. */
+    __builtin_cpu_init();
+    assert(thc_json_backend_available(THC_JSON_AVX2) == (__builtin_cpu_supports("avx2") != 0));
+#endif
     uint8_t data[4099 + 32];
     static const uint8_t alphabet[] = "\\\"{},:[]abcdef012345 \n\t";
     /* Every byte at every position in a 32-byte classifier block, from each

@@ -18,6 +18,12 @@ checks; no project-wide AVX2 requirement is introduced. AArch64 little-endian
 builds use NEON, which is part of that target's baseline. Other targets use the
 scalar path. No vector load extends past the input bytes.
 
+Windows x86 dispatch checks CPUID and OS-enabled XMM/YMM state directly.
+This keeps the vanilla GHC plugin load independent of compiler-rt CPU-dispatch
+symbols while retaining the [CPU and OS requirements for AVX](https://cdrdv2-public.intel.com/821612/248966-Optimization-Reference-Manual-V1-050.pdf).
+The native executable test compares that selection with compiler-rt's detector;
+the Windows export smoke also loads the actual static plugin and encoder.
+
 `thc_json_scan_block` regenerates at most 512 bytes of Simple Cursor interest
 bits from an explicit incoming quote/escape state. It returns the outgoing
 state. Open and close masks are disjoint subsets; the remaining interest bits
