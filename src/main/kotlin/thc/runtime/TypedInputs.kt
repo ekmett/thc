@@ -142,8 +142,14 @@ internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(lay
         values!![index] as? Float ?: fault("Expected primitive Float input")
     override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Double ?: fault("Expected primitive Double input")
-    override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = values!![index]
-    override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) { values!![index] = value }
+    override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Any? {
+        if (values == null) CompilerDirectives.transferToInterpreter()
+        return values!![index]
+    }
+    override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
+        if (values == null) CompilerDirectives.transferToInterpreter()
+        values!![index] = value
+    }
 }
 
 // The legacy prefix has no tuple fields. Reuse its immutable descriptor so a
