@@ -20,7 +20,7 @@ instance Show ForeignException where
   showsPrec _ _ = showString "Foreign exception"
 instance Exception ForeignException
 
-foreign import ccall unsafe "thc_exception_v1_text"
+foreign import ccall safe "thc_exception_v1_text"
   queryText :: StablePtr Any -> CInt -> CLLong -> IO CLLong
 
 -- These helpers are compiled by GHC, including the actual existential dictionary

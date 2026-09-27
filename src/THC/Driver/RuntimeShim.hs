@@ -141,7 +141,7 @@ validateRuntimeShimModule unit value = do
       (arguments, result) <- maybe (Left ("non-runtime foreign import in runtime shim: " ++ symbol)) Right (lookup symbol signatures)
       require (member entry "isFunction" == Just (Bool True) && member entry "header" == Just Null &&
         member call "unit" == Just (String (Text.pack unit)) &&
-        member call "convention" == Just (String "ccall") && member call "safety" == Just (String "unsafe") &&
+        member call "convention" == Just (String "ccall") && member call "safety" == Just (String (if symbol == "thc_exception_v1_text" then "safe" else "unsafe")) &&
         member call "arguments" == Just (toJSON (arguments ++ ["void"])) &&
         member call "result" == Just (toJSON ["void", result]))
         ("runtime shim import has the wrong exact ABI: " ++ symbol)
@@ -156,7 +156,7 @@ validateRuntimeShimModule unit value = do
       require (member descriptor "schema" == Just (Number 1) &&
         member target "kind" == Just (String "static") && member target "isFunction" == Just (Bool True) &&
         member target "unit" == Just (String (Text.pack unit)) &&
-        member descriptor "convention" == Just (String "ccall") && member descriptor "safety" == Just (String "unsafe") &&
+        member descriptor "convention" == Just (String "ccall") && member descriptor "safety" == Just (String (if symbol == "thc_exception_v1_text" then "safe" else "unsafe")) &&
         member descriptor "arity" == Just (toJSON (length arguments + 1)) &&
         member descriptor "suppliedArity" == Just (toJSON (length arguments + 1)) &&
         map (`member` "primReps") inputs == map (Just . toJSON) (map (:[]) arguments ++ [[]]) &&

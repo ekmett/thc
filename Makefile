@@ -18,6 +18,7 @@ CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v 
 
 .PHONY: all runtime haskell run jar fixtures test test-modes jit-test probe clean distclean check-java check-ghc-core
 .PHONY: docs docs-haskell docs-jvm docs-check check-pandoc
+.PHONY: foreign-exception-fixtures foreign-exception-test-modes
 
 all: runtime haskell
 
@@ -83,6 +84,18 @@ test: fixtures
 
 test-modes: fixtures
 	./gradlew $(GRADLE_FLAGS) --continue testDefault $(if $(TESTS),--tests '$(TESTS)') testDense $(if $(TESTS),--tests '$(TESTS)')
+
+# This lane needs complete installed Core plus matching configured GHC sources.
+# Missing prerequisites are errors; run it alongside the portable test targets.
+foreign-exception-fixtures: check-java
+	@test -n "$${THC_FOREIGN_EXCEPTION_GHC_SOURCE:-}" && test -d "$$THC_FOREIGN_EXCEPTION_GHC_SOURCE" || { \
+		printf '%s\n' 'Set THC_FOREIGN_EXCEPTION_GHC_SOURCE to the matching configured GHC 9.14.1 source tree.' >&2; exit 1; \
+	}
+	GHC='$(GHC)' GHC_PKG='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' CABAL='$(CABAL)' \
+	  $(CABAL) run exe:thc-fixtures $(CABAL_FLAGS) --with-compiler='$(GHC)' --with-hc-pkg='$(if $(GHC_PKG),$(GHC_PKG),ghc-pkg)' -- foreign-exceptions
+
+foreign-exception-test-modes: foreign-exception-fixtures
+	./gradlew $(GRADLE_FLAGS) --continue foreignExceptionTest foreignExceptionDenseTest
 
 jit-test: fixtures
 	./gradlew jitStabilityTest $(GRADLE_FLAGS)

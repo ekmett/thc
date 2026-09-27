@@ -11,16 +11,16 @@ import com.oracle.truffle.api.nodes.Node
 
 /** Only the target's unwind carries this exception; the abandoned thunk keeps its continuation. */
 internal class AsyncDelivery(val request: AsyncRequest, node: Node) :
-    AbstractTruffleException("Asynchronous guest exception", null, 0, node)
+    AbstractTruffleException("Asynchronous guest exception", null, 0, node), InternalGuestControl
 
 /** A blocking operation was cancelled before commitment and can be retried after the saved cut. */
 internal class AsyncBlocked(val request: AsyncRequest, node: Node) :
-    AbstractTruffleException("Asynchronous interruption before blocking operation committed", null, 0, node)
+    AbstractTruffleException("Asynchronous interruption before blocking operation committed", null, 0, node), InternalGuestControl
 
 /** A callback's uncaught async delivery is foreign-visible, but its opaque Java caller
  * has no saved guest continuation and must not become a memoized guest failure. */
 internal class ForeignCallbackAsyncFailure(val payload: Any?, guest: GuestException, node: Node) :
-    AbstractTruffleException("Uncaught asynchronous guest callback", guest, 0, node)
+    AbstractTruffleException("Uncaught asynchronous guest callback", guest, 0, node), InternalGuestControl
 
 /** A trampoline has discarded every caller suffix and reached this exact tail target. */
 internal class TailYield(val continuation: ContinuationResult, val target: RootCallTarget) {

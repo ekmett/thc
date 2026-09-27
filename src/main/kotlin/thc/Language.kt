@@ -82,6 +82,8 @@ object CoreModules {
         private val packageScalarLinks = linkedMapOf<String, PackageScalarLink>()
         private val packageScalarProofs = linkedMapOf<String, MutableSet<String>>()
         private val archiveBindings = linkedMapOf<String, String>()
+        private val exceptionBridges = linkedMapOf<String, Map<String, Any?>>()
+        private var exceptionBridgeUnit: String? = null
         private val moduleKeys = hashSetOf<Pair<String, String>>()
         @Suppress("UNCHECKED_CAST")
         fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
@@ -89,6 +91,13 @@ object CoreModules {
                 "Managed export admission belongs to a different Core module"
             }
             count++
+            thc.runtime.CoreForeignExceptionBridge.read(module)?.let { proof ->
+                require(exceptionBridges.putIfAbsent(proof["unit"] as String, proof) == null) { "Duplicate foreign exception bridge unit" }
+            }
+            (module["foreignExceptionBridgeUnit"] as? String)?.let { unit ->
+                require(exceptionBridgeUnit == null || exceptionBridgeUnit == unit) { "Conflicting foreign exception bridge selection" }
+                exceptionBridgeUnit = unit
+            }
             if (admission != null) admissions.add(admission)
             CoreForeignArtifacts.validateArchive(module)
             val nativeArchive = PackageNativeArchives.read(module)
@@ -165,6 +174,8 @@ object CoreModules {
             return mapOf("schema" to 1L, "ghc" to "9.14.1", "module" to "THC.Bundle",
                 "bindings" to bindings.values.toList(), "constructors" to constructors.values.toList(),
                 "bindingOrigins" to bindingOrigins,
+                "foreignExceptionBridges" to exceptionBridges.values.toList(),
+                "foreignExceptionBridgeUnit" to exceptionBridgeUnit,
                 "archiveBindings" to archiveBindings,
                 "managedRegistrations" to admissions.toList(),
                 "foreignLinks" to foreignLinks.values.toList(),
@@ -191,6 +202,7 @@ object CoreModules {
         val missing = linkedMapOf<String, MutableSet<String>>()
         val missingConstructors = linkedMapOf<String, MutableSet<String>>()
         var owner = ""
+        var exceptionBridge: Map<String, Any?>? = null
         fun constructor(id: String) {
             if (strictLink && id !in constructorIds)
                 missingConstructors.getOrPut(id) { linkedSetOf() }.add(owner)
@@ -218,6 +230,14 @@ object CoreModules {
                 }
                 "app" -> {
                     val function = expr[1] as List<Any?>
+                    thc.runtime.CoreExceptionPayload.validate(expr)
+                    if (thc.runtime.CoreForeignExceptionBridge.executes(expr,
+                        function.firstOrNull() == "var" && (function.getOrNull(1) in bound || function.getOrNull(1) in byId),
+                        module["packageScalarLinks"] as? List<PackageScalarLink> ?: emptyList())) {
+                        val bridge = exceptionBridge ?: thc.runtime.CoreForeignExceptionBridge.select(module).also { exceptionBridge = it }
+                        reference(bridge["box"] as String, emptySet())
+                        reference(bridge["project"] as String, emptySet())
+                    }
                     if (thc.runtime.CoreSignalForeign.named(CoreRepresentations.metadata(expr)))
                         reference(thc.runtime.CoreSignalForeign.dispatcher, emptySet())
                     // FCallIds name foreign declarations, not Haskell globals.
@@ -274,7 +294,8 @@ object CoreModules {
             throw IllegalArgumentException("Unsupported foreign code/registration for $owner: " +
                 "Core schema 2 is archive-only; native stubs, initializers, finalizers and callbacks are not linked")
         }
-        return (module - "archiveBindings") + ("bindings" to bindings.filter { it["id"] in reachable })
+        return (module - "archiveBindings") + ("bindings" to bindings.filter { it["id"] in reachable }) +
+            ("selectedForeignExceptionBridge" to exceptionBridge)
     }
 
     /**
@@ -321,13 +342,17 @@ object CoreModules {
                 packageCapability(manifest, expected).toByteArray(Charsets.US_ASCII))) {
                 "Invalid package request capability"
             }
-            return CorePackageManifest.visitModules(manifest, expected) { module, _ -> accept(module) }.targetLayout
+            val result = CorePackageManifest.visitModules(manifest, expected) { module, _ ->
+                accept(module + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"]))
+            }
+            require(input["foreignExceptionBridgeUnit"] == result.foreignExceptionBridgeUnit) { "Package bridge selection changed after request" }
+            return result.targetLayout
         }
         require(input["packageManifestSha256"] == null && input["packageCapability"] == null) {
             "Orphan package manifest identity"
         }
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
-        modules.forEach(accept)
+        modules.forEach { accept(it + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"])) }
         return input["targetLayout"]?.let(TargetLayout::fromDocument)
     }
 
@@ -355,11 +380,13 @@ object CoreModules {
             if (inline == null) return Json.stringify(settings + mapOf(
                 "packageManifest" to result.manifestPath,
                 "packageManifestSha256" to result.manifestSha256,
-                "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256)))
+                "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256),
+                "foreignExceptionBridgeUnit" to result.foreignExceptionBridgeUnit))
             return buildString {
                 append(options, 0, options.length - 1)
                 append(",\"modules\":[").append(inline).append(']')
                 result.targetLayout?.let { append(",\"targetLayout\":").append(Json.stringify(it.document())) }
+                result.foreignExceptionBridgeUnit?.let { append(",\"foreignExceptionBridgeUnit\":").append(Json.stringify(it)) }
                 append('}')
             }
         }
@@ -419,6 +446,8 @@ class Language : TruffleLanguage<Language.State>() {
         internal val stackSnapshots = thc.runtime.ManagedStackRegistry()
         @JvmField internal val closureInfo = thc.runtime.ClosureInfoTables()
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
+        internal val foreignExceptionRegistry = thc.runtime.ForeignExceptionRegistry()
+        internal val foreignExceptionNormalization = ThreadLocal.withInitial { false }
         internal val stablePointers = thc.runtime.StablePointers()
         internal val compilerRts = thc.runtime.CompilerRts()
         internal val stableNames = thc.runtime.StableNames()
@@ -672,6 +701,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             }
         } catch (failure: Throwable) {
             outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
+            if (failure is thc.runtime.GuestException) dispatch.escaping(failure)
             throw failure
         } finally { threads.leaveCurrent(outcome) }
     }
@@ -722,6 +752,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 }
             } catch (failure: Throwable) {
                 outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
+                if (failure is thc.runtime.GuestException) dispatch.escaping(failure)
                 throw failure
             } finally {
                 try { if (processSignals) owner.signals.close() }
@@ -759,6 +790,8 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
 
 /** Direct IO dispatch and a bounded polyglot-to-guest entry boundary. */
 class HostDispatch : Node() {
+    @Child private var foreignExceptions = thc.runtime.ForeignExceptionAccess()
+    internal fun escaping(failure: thc.runtime.GuestException): Nothing = foreignExceptions.escaping(failure)
     @Child private var calls = TargetCache(Metrics(false))
     // The polyglot Value.execute root is shared across unrelated guest entries.
     // Keep its compiled graph bounded while leaving direct guest-to-guest calls

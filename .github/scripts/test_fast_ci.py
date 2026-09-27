@@ -389,6 +389,33 @@ class FastRunnerTest(unittest.TestCase):
         self.assertIn("name: Fast checks", text)
         self.assertIn("  fast-check:", text)
 
+    def test_genuine_foreign_exceptions_remain_in_required_complete_core_build(self):
+        root = Path(__file__).parents[2]
+        gradle = (root / "build.gradle.kts").read_text()
+        dedicated = gradle.split('val foreignExceptionTests =', 1)[1].split('tasks.register<Test>("jitStabilityTest")', 1)[0]
+        self.assertIn('fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs', dedicated)
+        self.assertIn('fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime', dedicated)
+        self.assertIn('includeTags("foreign-exceptions-full-core")', dedicated)
+        self.assertTrue((root / "src/fullCoreTest/kotlin/thc/runtime/ForeignExceptionTest.kt").is_file())
+        self.assertFalse((root / "src/polyglotTest/kotlin/thc/runtime/ForeignExceptionTest.kt").exists())
+        makefile = (root / "Makefile").read_text()
+        self.assertIn('foreign-exception-test-modes: foreign-exception-fixtures', makefile)
+        self.assertIn('-- foreign-exceptions', makefile)
+        self.assertIn('--continue foreignExceptionTest foreignExceptionDenseTest', makefile)
+        workflow = (root / ".github/workflows/build.yml").read_text()
+        lane = workflow.split('  foreign-exceptions:\n', 1)[1].split('  library:\n', 1)[0]
+        self.assertNotIn('continue-on-error', lane)
+        self.assertIn('runs-on: [self-hosted, Linux, X64, thc-fast]', lane)
+        self.assertIn('persist-credentials: false', lane)
+        self.assertIn('path: work/foreign-exceptions', lane)
+        self.assertIn('vars.THC_FULL_CORE_ENVIRONMENT', lane)
+        self.assertIn('test -n "$THC_FULL_CORE_ENVIRONMENT" && test -f "$THC_FULL_CORE_ENVIRONMENT"', lane)
+        self.assertIn('make foreign-exception-test-modes', lane)
+        self.assertIn('GRADLE_USER_HOME="$RUNNER_TEMP/thc-foreign-exceptions/gradle"', lane)
+        self.assertIn('THC_CACHE_HOME="$RUNNER_TEMP/thc-foreign-exceptions/core"', lane)
+        self.assertIn('build/test-results/foreignExceptionTest/*.xml', lane)
+        self.assertIn('build/test-results/foreignExceptionDenseTest/*.xml', lane)
+
     def test_previous_revision_or_driver_error_cannot_publish(self):
         with patch.object(ci, "git", return_value="a" * 40):
             recorder = ci.Recorder(self.root, self.root / "receipts")
