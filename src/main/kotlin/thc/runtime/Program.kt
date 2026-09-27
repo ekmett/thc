@@ -1823,7 +1823,18 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
                             internal val enableDelimited: Boolean = false,
                             internal val role: FunctionRootRole = FunctionRootRole.FUNCTION,
-                            internal val stackCapture: Boolean = false) : GuestRoot(language, descriptor) {
+                            internal val stackCapture: Boolean = false,
+                            private val deferredBudget: Boolean = false,
+                            private val budgetBoundary: Boolean = false) : GuestRoot(language, descriptor) {
+    @Volatile private var budgetGeneration = 0L
+    override fun getGraphBudgetGeneration(): Long = budgetGeneration
+    @Synchronized override fun prepareGraphBudgetRetry(failedGeneration: Long): Long {
+        if (deferredBudget && failedGeneration == 0L && budgetGeneration == 0L && AstDeferredArm.extract(this))
+            budgetGeneration = 1L
+        return budgetGeneration
+    }
+    override fun prepareForCompilation(rootCompilation: Boolean, compilationTier: Int, lastTier: Boolean): Boolean =
+        (!budgetBoundary || rootCompilation) && super.prepareForCompilation(rootCompilation, compilationTier, lastTier)
     internal val capturesContinuations = enableAsync || stackCapture
     init {
         configureEntry(entryStrict, captureLayout != null)
@@ -2200,7 +2211,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     fun getCoreSourceNotes(): List<CoreSourceNote> = coreSourceLocation?.notes.orEmpty()
     override fun getName() = label
     override fun toString() = label
-    override fun isCloningAllowed() = true
+    override fun isCloningAllowed() = !budgetBoundary
 }
 internal class EntryRoot(language: TruffleLanguage<*>?, private val arity: Int, metrics: Metrics) : RootNode(language, FrameLayout().build()) {
     @Child private var dispatch = Dispatch.create(arity, false, metrics)
@@ -2220,8 +2231,10 @@ private data class Local(val slot: Int, val primitive: Boolean, val proof: CoreR
                          val arityCertificate: CoreApplicationCertificates.Arity? = null)
 private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Local> = linkedMapOf(),
                     val joins: MutableMap<String, LocalJoinTarget> = linkedMapOf(),
-                    var self: AstSelfLayout? = null) {
-    fun child() = Scope(layout.scope(), LinkedHashMap(locals), LinkedHashMap(joins), self)
+                    var self: AstSelfLayout? = null,
+                    val deferredExpression: List<Any?>? = null,
+                    val deferredArms: MutableList<DeferredArm>? = if (deferredExpression == null) null else arrayListOf()) {
+    fun child() = Scope(layout.scope(), LinkedHashMap(locals), LinkedHashMap(joins), self, deferredExpression, deferredArms)
     fun bind(id: String, primitive: Boolean, proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
              entry: BooleanArray? = null, arityCertificate: CoreApplicationCertificates.Arity? = null,
              kind: FrameSlotKind = FrameSlotKind.Illegal): Local =
@@ -2240,6 +2253,7 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
     fun bindJoin(id: String, target: LocalJoinTarget) { joins[id] = target; locals.remove(id) }
 }
 private data class FunctionSpec(val target: RootCallTarget, val captureLayout: CaptureLayout?, val captures: IntArray)
+private data class DeferredArm(val node: AstDeferredArm, val captures: CaptureLayout?, val slots: IntArray)
 
 /**
  * Constructs and links the AST backend's executable roots from exported GHC Core.
@@ -2253,9 +2267,12 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false,
-              private val outlineCaseArms: Boolean = false) : ExecutableProgram {
+              private val outlineCaseArms: Boolean = false,
+              private val deferDefaultArm: Boolean = false) : ExecutableProgram {
+    constructor(language: TruffleLanguage<*>?, moduleData: Map<String, Any?>, enableAsync: Boolean, outlineCaseArms: Boolean) :
+        this(language, moduleData, enableAsync, outlineCaseArms, false)
     override val asynchronousExceptions get() = enableAsync
-    private val capturesContinuations = enableAsync || outlineCaseArms
+    private val capturesContinuations = enableAsync || outlineCaseArms || deferDefaultArm
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val demand = moduleData["demandBindings"] as? CoreDemandBindings
     private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
@@ -2450,7 +2467,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                          role: FunctionRootRole = FunctionRootRole.FUNCTION,
                          bodyTail: Boolean = true): FunctionSpec {
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
-        val scope = Scope(FrameLayout())
+        val defaultArm = if (deferDefaultArm && !outlineCaseArms && !enableAsync && !delimited &&
+            role == FunctionRootRole.FUNCTION && expression[0] == "case") {
+            (expression[3] as List<List<Any?>>).singleOrNull()?.takeIf {
+                it[0] == "default" && (it[2] as List<*>).isEmpty()
+            }?.get(3) as? List<Any?>
+        } else null
+        val scope = Scope(FrameLayout(), deferredExpression = defaultArm)
         val free = coreFreeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
@@ -2543,10 +2566,20 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val effectiveResult = body.representation.refine(resultProof)
         val tuple = if (effectiveResult.isTypedTransport) TupleShape(effectiveResult, language as thc.Language) else null
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<typed return $it>") }
-        val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
+        val descriptor = scope.layout.build()
+        val root = FunctionRoot(language, descriptor, label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited, role,
-            stackCapture = outlineCaseArms)
+            stackCapture = outlineCaseArms || deferDefaultArm, deferredBudget = !scope.deferredArms.isNullOrEmpty())
+        for (candidate in scope.deferredArms.orEmpty()) {
+            val prepared = AstDeferredArm.PreparedBody(candidate.node.representation, candidate.node.coreSourceLocation)
+            val side = FunctionRoot(language, descriptor.copy(), "$label default arm", candidate.captures, candidate.slots,
+                intArrayOf(), intArrayOf(), prepared, metrics, resultProof = candidate.node.representation,
+                role = FunctionRootRole.PASS_THROUGH, stackCapture = true, budgetBoundary = true)
+            side.configureForeignExceptionBridge(foreignExceptionBridge)
+            candidate.node.prepare(side.callTarget, prepared)
+            constructedRootCount++
+        }
         constructedRootCount++
         root.configureForeignExceptionBridge(foreignExceptionBridge)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
@@ -2556,6 +2589,29 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return FunctionSpec(root.callTarget, captures, captureSources)
     }
     private fun caseArm(expression: List<Any?>, scope: Scope, tail: Boolean): Expr {
+        if (expression === scope.deferredExpression) {
+            val proof = CoreRepresentations.expression(expression)
+            val free = coreFreeVariables(expression)
+            val locals = free.mapNotNull { scope.locals[it] }
+            fun scalar(value: CoreRepresentation) = value.evaluated &&
+                (value.isInt || value.isLong || value.isFloat || value.isDouble)
+            if (scalar(proof) && free.none { it in scope.joins } && locals.all {
+                    !it.cell && it.slot >= 0 && scalar(it.proof) }) {
+                val captures = if (locals.isEmpty()) null else CaptureLayout.withVectors(requireNotNull(language),
+                    arrayOfNulls(locals.size), locals.map { it.proof.isLong }.toBooleanArray(),
+                    locals.map { it.proof.isLong }.toBooleanArray(), arrayOfNulls(locals.size),
+                    locals.map { it.proof.isFloat }.toBooleanArray(), locals.map { it.proof.isDouble }.toBooleanArray(),
+                    locals.map { it.proof.narrowInteger }.toTypedArray())
+                val slots = locals.map { it.slot }.toIntArray()
+                val operands = operandBuilder
+                operandBuilder = null
+                val child = scope.child().also { it.self = null }
+                val body = try { compile(expression, child, tail) } finally { operandBuilder = operands }
+                val node = AstDeferredArm(body, captures, slots, tail)
+                scope.deferredArms!!.add(DeferredArm(node, captures, slots))
+                return node
+            }
+        }
         // Atomic values and lambdas already have small bodies/independent roots.
         // An outer lexical join owns this activation's slots: retain it here
         // until there is an explicit cross-root join transfer protocol.
@@ -2571,7 +2627,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     /** Selected side roots must not compile a first-store deopt for carriers
      * already fixed by their case binder or immutable capture layout. */
     private fun outlinedSlotKind(proof: CoreRepresentation, cell: Boolean = false): FrameSlotKind = when {
-        !outlineCaseArms -> FrameSlotKind.Illegal
+        !outlineCaseArms && !deferDefaultArm -> FrameSlotKind.Illegal
         cell || proof.isVector -> FrameSlotKind.Object
         !proof.evaluated -> FrameSlotKind.Illegal
         proof.isInt -> FrameSlotKind.Int

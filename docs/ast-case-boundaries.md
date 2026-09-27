@@ -41,9 +41,44 @@ not turn on polling or external async delivery. The existing opaque BCO and
 compact-traversal capture restrictions remain explicit. Mask/catch scopes,
 tuple loans and child-update ownership use the existing continuation protocols.
 
-This does not automatically select graph-budget boundaries or generate replacement
-targets after permanent compilation failure. An arm's `tailPosition` metadata
+Eager outlining alone does not select graph-budget boundaries. An arm's `tailPosition` metadata
 alone does not authorize eliding tuple completion, masks, catches or updates.
+
+## Deferred default-arm extraction
+
+The separate internal `Program` constructor option `deferDefaultArm` keeps an
+eligible arm inline until its caller actually exceeds Graal's graph budget.
+It defaults to false and is not a public loader option. The initial slice selects
+one top-level, single-default case in a synchronous, non-delimited function,
+with evaluated Int, Long, Float or Double results and live local captures.
+Multiple alternatives, nested choices, aggregate/reference captures, mutable
+cells and outer lexical joins do not acquire this deferred plan. Existing case
+profiles and selection semantics are unchanged; AST size is not used as evidence
+that a body survives partial evaluation.
+
+Lowering prepares an empty pass-through target in its language context. It
+retains exact capture metadata and the original slot numbering, but no copied
+arm body or guest invocation state. Only the real graph-budget callback clones
+the lowered body into that prepared target and replaces the caller's inline arm
+with `AstCaseArm`. This actual structural change advances a finite per-caller
+generation through the pinned [compilation lifecycle](../tools/truffle-protocol/README.md).
+The failed graph can then be discarded and the same caller target compiled from
+its smaller body, without executing the guest or seeding observed profiles.
+
+Only that failure-created edge has an inlining veto; eager side roots retain
+normal inliner discretion. Caller clones have independent generations and may
+share their context's prepared side code and immutable capture layout, never
+frames or values. The prepared side target itself is not split/cloned. Source
+metadata and exact primitive capture storage survive the extraction.
+
+This is not arbitrary recursive graph partitioning: an oversized extracted
+side body can still exceed its own compilation budget and execute interpreted.
+No graph limit is increased and no other permanent compilation failure is
+rearmed. `DeferredDefaultArmTest` covers actual Core graph-budget recovery,
+original first-installed calls, the matching unextractable failure, small arms
+remaining inline, scalar raw-bit preservation, caller clones and context-local
+side targets. Explicit callback unit controls are distinct from the test that
+provokes the compiler's actual budget failure.
 
 ## Internal tail-spill compaction
 
