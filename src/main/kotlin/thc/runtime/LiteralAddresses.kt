@@ -90,8 +90,8 @@ internal class ManagedAddress private constructor(
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
         compiler?.requireCurrent()
-        rtsFlags?.let { it.requireCurrent(); fault("RtsFlags permits only supported read-only fields") }
         foreign?.requireCurrent()
+        rtsFlags?.let { it.requireCurrent(); fault("RtsFlags permits only supported read-only fields") }
         if (heap != null) fault("Opaque guest heap address is not byte-addressable")
         if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
@@ -159,16 +159,17 @@ internal class ManagedAddress private constructor(
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
         compiler?.requireCurrent(); other.compiler?.requireCurrent()
+        foreign?.requireCurrent(); other.foreign?.requireCurrent()
         if (rtsFlags != null || other.rtsFlags != null) {
             rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
             native?.requireLive(); other.native?.requireLive()
             return rtsFlags != null && rtsFlags === other.rtsFlags && offset == other.offset
         }
-        foreign?.requireCurrent(); other.foreign?.requireCurrent()
-        if (foreign?.backing != null || other.foreign?.backing != null)
-            return (foreign?.backing ?: this).sameLocation(other.foreign?.backing ?: other)
-        foreign?.let { return it.compare(other, "equal") != 0L }
-        other.foreign?.let { return it.compare(this, "equal") != 0L }
+        // Known returned aliases already carry their backing's identity fields
+        // (fromReturnedAddress). Compare those directly, without recursive
+        // unwrapping during partial evaluation; only unknown C storage needs C.
+        externalPointer()?.let { return it.compare(other, "equal") != 0L }
+        other.externalPointer()?.let { return it.compare(this, "equal") != 0L }
         if (heap != null || other.heap != null) {
             val registry = HeapAddresses.current()
             heap?.let(registry::require); other.heap?.let(registry::require)
@@ -242,11 +243,11 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        foreign?.requireCurrent(); other.foreign?.requireCurrent()
         if (rtsFlags != null || other.rtsFlags != null) {
             rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
             fault("RtsFlags has no address ordering")
         }
-        foreign?.requireCurrent(); other.foreign?.requireCurrent()
         if (foreign?.backing != null || other.foreign?.backing != null)
             return (foreign?.backing ?: this).compareWithinAllocation(other.foreign?.backing ?: other)
         foreign?.let { return it.compare(other, "compare").toInt() }
