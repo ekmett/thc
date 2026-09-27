@@ -16,7 +16,7 @@ module THC.Driver.CoreSymbols (bindingPositions, publishCoreUnit) where
 
 import Control.DeepSeq (force)
 import Control.Exception (IOException, bracketOnError, catch, evaluate)
-import Control.Monad (foldM, unless)
+import Control.Monad (foldM, forM, unless)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), FromJSON, Result(..), eitherDecodeStrict', encode, fromJSON, object, toJSON, (.=))
 import Data.Aeson.Key (Key)
@@ -32,7 +32,7 @@ import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing, doesFileExist, getFileSize, makeAbsolute, removeFile, renameFile)
 import System.FilePath ((</>), isAbsolute, takeDirectory)
 import System.IO (Handle, IOMode(ReadMode), hClose, hTell, openBinaryTempFile, withBinaryFile)
-import THC.CoreSymbols (encodeSymbols)
+import THC.CoreSymbols (encodeMd5Symbols, symbolDigest, symbolFormat)
 import THC.Driver.Lock (withLock)
 import THC.Driver.Zip (ZipMember, decodeZipMembers, readZipMember)
 
@@ -138,7 +138,7 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
     sourceHash <- field bundle "sha256"
     unless (length sourceHash == 64 && all (`elem` ("0123456789abcdef" :: String)) sourceHash) $
       fail "Invalid source bundle digest for unit publication"
-    directory <- makeAbsolute (cache </> "unit-core/v1" </> sourceHash)
+    directory <- makeAbsolute (cache </> "unit-core/v2" </> sourceHash)
     let jsonPath = directory </> "core.jsons"
         symbolsPath = directory </> "core.symbols"
         receiptPath = directory </> "publication.json"
@@ -150,6 +150,8 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
         storedUnit <- field receipt "unit" :: IO Value
         rawSize <- field receipt "jsonSize"
         symbolsSize <- field receipt "symbolsSize"
+        unless ((member storedUnit "symbols" >>= (`member` "format")) == Just (toJSON symbolFormat)) $
+          fail "Stale unit symbol format"
         refs <- field storedUnit "modules" :: IO [Value]
         unless (all completeRecord refs) $ fail "Incomplete unit publication metadata"
         let originalRefs = map withoutPositions refs
@@ -172,10 +174,10 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
             (records, keys, hashState) <- foldM (emit output entries) ([], [], SHA.init) (toList modules)
             size <- hTell output
             pure (reverse records, concat (reverse keys), hex (SHA.finalize hashState), size)
-          symbols <- either fail pure (encodeSymbols rows)
+          symbols <- either fail pure (encodeMd5Symbols rows)
           atomicOutput symbolsPath (\output -> BS.hPut output symbols)
           let ready = set "modules" (toArray refs) $ set "json" (reference jsonPath jsonHash) $
-                set "symbols" (reference symbolsPath (digest symbols)) $ delete "bundle" unit
+                set "symbols" (set "format" (toJSON symbolFormat) (reference symbolsPath (digest symbols))) $ delete "bundle" unit
               withLayout = maybe ready (\value -> set "targetLayout" value ready) layout
               receipt = object ["source" .= bundle, "unit" .= withLayout,
                 "jsonSize" .= jsonSize, "symbolsSize" .= BS.length symbols]
@@ -229,7 +231,10 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
       -- Lazy summaries or a chain of SHA.update thunks retain every preceding
       -- decoded Core tree and byte buffer until the final receipt is encoded.
       compact <- evaluate (force sourced)
-      directoryRows <- evaluate (force [(BS.copy key, base + offset) | (key, offset) <- offsets])
+      directoryRows <- forM offsets (\(key, offset) -> do
+        unless (not (BS.null key)) $ fail "Core symbol directory requires nonempty binding IDs"
+        hashed <- symbolDigest key
+        pure (hashed, base + offset)) >>= evaluate . force
       nextHash <- evaluate (foldl' SHA.update hashState [bytes, "\n", metadata, "\n", sourceBytes])
       pure (compact:refs, directoryRows:keys, nextHash)
     integer = Number . fromInteger

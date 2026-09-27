@@ -373,7 +373,7 @@ class PackageManifestTest(unittest.TestCase):
         return self.bundled(unit, members={'core/Shared.json': (self.root / 'first.json').read_bytes(),
                                           'core/Other.json': second})
 
-    def direct_unit(self, binding_count=1):
+    def direct_unit(self, binding_count=1, fixed=False):
         unit = dict(id='first', depends=[], modules=[])
         payload, rows = bytearray(), []
         # Reverse bytewise ID/module order, raw spaces and non-ASCII text.
@@ -405,12 +405,51 @@ class PackageManifestTest(unittest.TestCase):
                 metadataStart=metadata_start, metadataEnd=metadata_end,
                 containsDelimitedControl=False, registrationObligations=False, mainAlias=False,
                 packageScalarDeclarations=False))
-        for key, filename, data in [('json', 'core.jsons', payload), ('symbols', 'core.symbols',
-                b''.join(key + b' ' + str(offset).encode() + b'\n' for key, offset in sorted(rows)))]:
+        if fixed:
+            records = sorted((hashlib.md5(key).digest(), offset) for key, offset in rows)
+            symbols = b''.join(key + offset.to_bytes(8, 'little') for key, offset in records)
+        else:
+            symbols = b''.join(key + b' ' + str(offset).encode() + b'\n' for key, offset in sorted(rows))
+        for key, filename, data in [('json', 'core.jsons', payload), ('symbols', 'core.symbols', symbols)]:
             target = self.root / filename
             target.write_bytes(data)
             unit[key] = dict(path=str(target), sha256=hashlib.sha256(data).hexdigest())
+        if fixed:
+            unit['symbols']['format'] = 'md5-utf8-u64le-v1'
         return unit
+
+    def test_direct_unit_fixed_md5_records(self):
+        self.assertEqual('201ac5924113112a846d82b090d8458a', hashlib.md5(b'main:Main.main').hexdigest())
+        self.assertEqual('23415231b60de428eeaf32979e1cb8ce', hashlib.md5('main:M.é😀'.encode()).hexdigest())
+        unit = self.direct_unit(binding_count=2048, fixed=True)
+        directory = Path(unit['symbols']['path']).read_bytes()
+        self.assertEqual(4096 * 24, len(directory))
+        modules = core_package_manifest.load(self.manifest([unit]))
+        self.assertEqual(4096, sum(len(module['bindings']) for _, module in modules))
+        empty = self.direct_unit(binding_count=0, fixed=True)
+        self.assertEqual(b'', Path(empty['symbols']['path']).read_bytes())
+        self.assertEqual(2, len(core_package_manifest.load(self.manifest([empty]))))
+
+    def test_direct_unit_fixed_records_require_exact_explicit_format_and_offsets(self):
+        import copy
+        original = self.direct_unit(fixed=True)
+        directory = Path(original['symbols']['path'])
+        data = directory.read_bytes()
+        for replacement in (data[:-1], data + b'\0', data[24:] + data[:24], data[:24],
+                            data + data[:24], data[:16] + bytes(8) + data[24:]):
+            unit = copy.deepcopy(original)
+            directory.write_bytes(replacement)
+            unit['symbols']['sha256'] = hashlib.sha256(replacement).hexdigest()
+            with self.subTest(size=len(replacement)), self.assertRaisesRegex(ValueError, 'symbol directory'):
+                core_package_manifest.load(self.manifest([unit]))
+        directory.write_bytes(data)
+        for marker in (None, 'md5', 'md5-utf8-u64be-v1'):
+            unit = copy.deepcopy(original); unit['symbols']['format'] = marker
+            with self.subTest(format=marker), self.assertRaisesRegex(ValueError, 'symbols format'):
+                core_package_manifest.load(self.manifest([unit]))
+        legacy = copy.deepcopy(original); del legacy['symbols']['format']
+        with self.assertRaisesRegex(ValueError, 'symbol directory'):
+            core_package_manifest.load(self.manifest([legacy]))
 
     def test_direct_unit_preserves_bytes_identity_and_explicit_audit(self):
         unit = self.direct_unit()

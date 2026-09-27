@@ -18,7 +18,6 @@ import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), eitherDecodeStrict', encode, object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
 import Data.List (sort)
@@ -29,12 +28,28 @@ import System.Directory (getModificationTime)
 import System.FilePath ((</>))
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.CoreSymbols (bindingPositions, publishCoreUnit)
+import THC.CoreSymbols (symbolDigest, symbolFormat, encodeMd5Symbols)
 import THC.Driver.Zip (encodeZip)
 import TestSupport
 
 tests :: Env -> Test
 tests env = TestLabel "direct unit Core publication" $ TestList
   [ TestCase $ do
+      forM_ [("main:Main.main", "201ac5924113112a846d82b090d8458a"),
+             ("main:M.é😀", "23415231b60de428eeaf32979e1cb8ce")] $ \(key, expected) ->
+        assertEqual "canonical MD5 of exact UTF-8 bytes (independent md5sum vectors)" expected . hex =<< symbolDigest (utf8 key)
+      a <- symbolDigest "main:A.a"
+      b <- symbolDigest "main:B.b"
+      let input = [(b, 0x0102030405060708), (a, 0)]
+      encodedRows <- either fail pure (encodeMd5Symbols input)
+      let rows = chunks encodedRows
+      assertEqual "fixed 24-byte rows with unsigned digest ordering" (sort [a,b]) (map (BS.take 16) rows)
+      assertEqual "little-endian full-width offset" (sort input)
+        [(BS.take 16 row, littleEndian (BS.drop 16 row)) | row <- rows]
+      assertEqual "empty symbol inventory" (Right BS.empty) (encodeMd5Symbols [])
+      assertBool "duplicate binding ID rejected" (isLeft (encodeMd5Symbols [(a,0),(a,1)]))
+      assertBool "malformed digest width rejected" (isLeft (encodeMd5Symbols [("short",0)]))
+  , TestCase $ do
       let bytes = utf8 "{\"note\":\"雪\", \"bindings\" : [ {\"expr\":[\"lit\",\"}\\\"[\"],\"id\":\"u:A.x\\u0020y\"} ],\"tail\":true}\r\n"
       (rows, (start, end)) <- either fail pure (bindingPositions bytes)
       assertEqual "decoded exact ID, not escaped source" ["u:A.x y"] (map fst rows)
@@ -97,13 +112,15 @@ tests env = TestLabel "direct unit Core publication" $ TestList
         (map (bool . (`field` "packageScalarDeclarations")) records)
       assertEqual "canonical original layout" layout (field (field published "targetLayout") "layout")
       assertEqual "canonical original compiler" compiler (field (field published "targetLayout") "compiler")
-      rows <- BSC.lines <$> BS.readFile symbolsPath
-      assertEqual "three bindings, bytewise sorted raw keys" 3 (length rows)
-      assertEqual "bytewise row order" (sort rows) rows
-      assertBool "space in key retained" (any (BS.isPrefixOf "test-unit:B.a space ") rows)
+      assertEqual "explicit unit symbol format" symbolFormat (string (field (field published "symbols") "format"))
+      rows <- chunks <$> BS.readFile symbolsPath
+      assertEqual "three fixed-width bindings" 3 (length rows)
+      assertBool "no variable-length names in directory" (all ((== 24) . BS.length) rows)
+      assertEqual "unsigned digest order" (sort (map (BS.take 16) rows)) (map (BS.take 16) rows)
+      expectedKeys <- mapM symbolDigest [utf8 "test-unit:A.雪", "test-unit:B.a space", "main::B.main"]
+      assertEqual "exact logical UTF-8 IDs hashed, including spaces" (sort expectedKeys) (map (BS.take 16) rows)
       forM_ rows $ \row -> do
-        let (_, decimal) = BSC.breakEnd (== ' ') row
-            offset = read (BSC.unpack decimal)
+        let offset = fromIntegral (littleEndian (BS.drop 16 row))
         assertEqual "absolute offset targets object" 123 (BS.index actual offset)
       time <- getModificationTime jsonPath
       warm <- publishCoreUnit cache False unit
@@ -119,4 +136,8 @@ tests env = TestLabel "direct unit Core publication" $ TestList
   where
     utf8 = Text.encodeUtf8 . Text.pack
     encoded = BL.toStrict . encode
-    digest = concatMap (\byte -> let digits = showHex byte "" in if length digits == 1 then '0':digits else digits) . BS.unpack . SHA.hash
+    hex = concatMap (\byte -> let digits = showHex byte "" in if length digits == 1 then '0':digits else digits) . BS.unpack
+    digest = hex . SHA.hash
+    chunks bytes | BS.null bytes = []
+                 | otherwise = BS.take 24 bytes : chunks (BS.drop 24 bytes)
+    littleEndian = foldr (\byte rest -> fromIntegral byte + 256 * rest) 0 . BS.unpack

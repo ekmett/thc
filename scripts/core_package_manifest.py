@@ -1074,7 +1074,12 @@ def _iter_loose_modules(path, root, records):
 
 def _unit_reference(path, unit, key):
     ref = unit.get(key)
-    if (not isinstance(ref, dict) or set(ref) != {'path', 'sha256'} or
+    fields = {'path', 'sha256'}
+    if isinstance(ref, dict) and key == 'symbols' and 'format' in ref:
+        if ref['format'] != 'md5-utf8-u64le-v1':
+            raise ValueError(f'{path}: invalid unit symbols format')
+        fields.add('format')
+    if (not isinstance(ref, dict) or set(ref) != fields or
             not isinstance(ref['path'], str) or not Path(ref['path']).is_absolute() or
             not isinstance(ref['sha256'], str) or not SHA256.fullmatch(ref['sha256'])):
         raise ValueError(f'{path}: invalid unit {key} reference')
@@ -1097,6 +1102,7 @@ def _iter_unit_modules(path, unit, records):
     inventory. It never uses the optional structural index or rewrites Core.
     """
     source, symbols = (_unit_reference(path, unit, key) for key in ('json', 'symbols'))
+    fixed = symbols.get('format') == 'md5-utf8-u64le-v1'
     expected_rows = {}
     with open(source['path'], 'rb') as stream, open(symbols['path'], 'rb') as directory:
         _verified_stream(path, stream, source)
@@ -1148,9 +1154,11 @@ def _iter_unit_modules(path, unit, records):
                     break
                 binding, end_at = decoder.raw_decode(text, at)
                 key = binding.get('id') if isinstance(binding, dict) else None
-                if not isinstance(key, str) or not key or '\n' in key or '\r' in key:
+                if not isinstance(key, str) or not key or not fixed and ('\n' in key or '\r' in key):
                     raise ValueError(f'{path}: invalid unit symbol ID')
                 encoded_key = key.encode('utf-8')
+                if fixed:
+                    encoded_key = hashlib.md5(encoded_key).digest()
                 if encoded_key in expected_rows:
                     raise ValueError(f'{path}: duplicate unit symbol ID')
                 expected_rows[encoded_key] = offset
@@ -1165,11 +1173,18 @@ def _iter_unit_modules(path, unit, records):
                     raise ValueError(f'{path}: invalid unit binding separator')
             yield item, source['path'] + '@' + str(start), data
         previous_key = None
-        for row in directory:
-            key, delimiter, _ = row.rpartition(b' ')
+        rows = iter(lambda: directory.read(24), b'') if fixed else directory
+        for row in rows:
+            if fixed:
+                if len(row) != 24:
+                    raise ValueError(f'{path}: truncated unit symbol directory record')
+                key, actual_offset = row[:16], int.from_bytes(row[16:], 'little')
+            else:
+                key, delimiter, _ = row.rpartition(b' ')
             offset = expected_rows.pop(key, None)
-            if (not delimiter or offset is None or previous_key is not None and key <= previous_key or
-                    row != key + b' ' + str(offset).encode('ascii') + b'\n'):
+            valid_row = (actual_offset == offset if fixed else
+                         delimiter and row == key + b' ' + str(offset).encode('ascii') + b'\n')
+            if (offset is None or previous_key is not None and key <= previous_key or not valid_row):
                 raise ValueError(f'{path}: unit symbol directory differs from original bindings')
             previous_key = key
         if expected_rows:
