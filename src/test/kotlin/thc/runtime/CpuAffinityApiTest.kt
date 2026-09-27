@@ -49,7 +49,7 @@ class CpuAffinityApiTest {
         val unit = listOf("con", "unit", 0, mapOf("rep" to boxed))
         val completed = application(listOf("con", "tuple2", 2, mapOf("rep" to closure)),
             listOf(variable("done", state), unit), listOf(false, true), tuple(state, boxed))
-        val write = application(listOf("prim", "writeIntArray#"), listOf(variable("buffer", reference),
+        val write = application(listOf("prim", "writeInt32Array#"), listOf(variable("buffer", reference),
             listOf("lit", "int", "0", mapOf("rep" to integer)), variable("n", cInt), variable("s1", state)),
             listOf(false, false, false, false), state)
         val afterWrite = listOf("case", write, "done", listOf(listOf("default", null, emptyList<String>(), completed)),
@@ -87,18 +87,18 @@ class CpuAffinityApiTest {
                 val guest = program(language, backend)
                 threads.enterCurrent()
                 try {
-                    for ((entry, expected) in listOf("support" to threads.cpuAffinity.mode.ordinal.toLong(), "applied" to 0L)) {
+                    for ((entry, expected) in listOf("support" to threads.cpuAffinity.mode.ordinal, "applied" to 0)) {
                         val target = guest.entryTarget(entry)
-                        assertEquals(expected, Calls.target(target, arrayOf(0L, Unit)))
+                        assertEquals(expected, callScalarTestTarget(target, arrayOf(0L, Unit)))
                         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                         val before = (guest.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        assertEquals(expected, Calls.target(target, arrayOf(0L, Unit)))
+                        assertEquals(expected, callScalarTestTarget(target, arrayOf(0L, Unit)))
                         assertEquals(before + 1, (guest.diagnostics().getValue("compiledEntries") as Number).toLong())
                         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                     }
                     if (!native) assertEquals(CpuAffinityMode.UNAVAILABLE, threads.cpuAffinity.mode)
-                    assertThrows(RuntimeFault::class.java) { Calls.target(guest.entryTarget("support"), arrayOf(0L, 1L)) }
+                    assertThrows(RuntimeFault::class.java) { callScalarTestTarget(guest.entryTarget("support"), arrayOf(0L, 1L)) }
                 } finally { threads.leaveCurrent() }
             } finally { context.leave() }
         }
@@ -114,11 +114,11 @@ class CpuAffinityApiTest {
                 threads.enterCurrent()
                 try {
                     for (capability in listOf(0L, -1L, Long.MAX_VALUE)) {
-                        val buffer = ByteArray(8) { -1 }
+                        val buffer = ByteArray(4) { -1 }
                         val child = Calls.target(guest.entryTarget("fork"), arrayOf(0L, capability, buffer, Unit)) as GuestThreadId
                         child.carrier.get()?.let { it.join(5000); assertFalse(it.isAlive) }
                         assertEquals(GuestThreadStatus.FINISHED, threads.status(child))
-                        assertEquals(if (child.affinityApplied) 1L else 0L, ManagedByteArray.readInt(buffer, 0))
+                        assertEquals(if (child.affinityApplied) 1 else 0, ManagedByteArray.readInt32(buffer, 0))
                         if (!native) assertFalse(child.affinityApplied)
                         assertFalse(threads.currentIdentity().affinityApplied, "Child acceptance does not leak to parent")
                     }

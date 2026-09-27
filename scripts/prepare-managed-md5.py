@@ -238,7 +238,7 @@ def main():
                root / "src/main/kotlin/thc/runtime/LiteralAddresses.kt",
                root / "src/main/kotlin/thc/runtime/ManagedMd5.kt",
                root / "src/main/kotlin/thc/runtime/SulongCbits.kt",
-               root / "src/main/kotlin/thc/runtime/WindowsMd5.kt",
+               root / "src/main/java/thc/runtime/WindowsMd5.java",
                root / "src/main/c/md5-api.c", root / "scripts/build-cbits.py",
                root / "src/test/kotlin/thc/runtime/ManagedMd5Test.kt"]
     artifacts = sorted(p for p in output.iterdir() if p.is_file())
