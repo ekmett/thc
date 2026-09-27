@@ -3360,26 +3360,22 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
     @Operation @ConstantOperand(type = boolean.class, name = "signed")
     public static final class AddressIndexByte {
-        @Specialization public static int index(boolean signed, ManagedAddress address, long displacement) {
-            int value = address.readWord8Int(displacement);
+        @Specialization public static int index(boolean signed, Object address, Object displacement) {
+            if (!(address instanceof ManagedAddress managed)) throw fail("Expected a managed literal Addr#");
+            if (!(displacement instanceof Long offset)) throw fail("Expected primitive Long");
+            int value = managed.readWord8Int(offset);
             return signed ? (byte) value : value;
-        }
-        @Fallback public static int invalid(boolean signed, Object address, Object displacement) {
-            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed literal Addr#");
-            throw fail("Expected primitive Long");
         }
     }
     @Operation @ConstantOperand(type = ManagedAddressRead.class, name = "operation")
     public static final class AddressIndexManagedScalar {
-        @Specialization(guards = "operation.isInt()") public static int indexInt(ManagedAddressRead operation, ManagedAddress address, long element) {
-            return operation.readInt(address, element);
-        }
-        @Specialization(guards = "!operation.isInt()") public static long index(ManagedAddressRead operation, ManagedAddress address, long element) {
-            return operation.read(address, element);
-        }
-        @Fallback public static Object invalid(ManagedAddressRead operation, Object address, Object element) {
-            if (!(address instanceof ManagedAddress)) throw fail("Expected a managed Addr#");
-            throw fail("Expected primitive Long");
+        // The constant operation selects the carrier; execution does not need
+        // a previously observed DSL specialization to establish that fact.
+        @Specialization public static Object index(ManagedAddressRead operation, Object address, Object element) {
+            if (!(address instanceof ManagedAddress managed)) throw fail("Expected a managed Addr#");
+            if (!(element instanceof Long offset)) throw fail("Expected primitive Long");
+            if (operation.isInt()) return operation.readInt(managed, offset);
+            return operation.read(managed, offset);
         }
     }
     @Operation public static final class AddressEqual {
