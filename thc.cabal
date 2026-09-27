@@ -755,7 +755,7 @@ test-suite driver-tests
     THC.Driver.NativeArgumentBridge
     THC.Driver.ScalarBitcode
     THC.Driver.RuntimeShim
-  build-tool-depends: thc:thc
+  build-tool-depends: thc:thc, thc:thc-interface
   build-depends:
     thc:core-json-index,
     base >= 4.22 && < 4.23,

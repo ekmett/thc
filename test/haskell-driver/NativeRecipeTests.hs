@@ -11,19 +11,25 @@
 -- Portability : Native GHC; host filesystem/process services
 --
 -- Tests for native recipe.
-module NativeRecipeTests (tests) where
+module NativeRecipeTests (tests, interfaceTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM_)
-import Data.Aeson (Value(..), object, (.=))
+import Data.Aeson (Value(..), object, (.=), encode, toJSON)
 import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
 import Data.Either (isLeft)
 import Data.IORef
 import GHC.ResponseFile (escapeArgs, unescapeArgs)
 import System.Directory
+import System.Environment (lookupEnv)
+import System.Exit (ExitCode(..))
 import System.FilePath
 import System.IO (hClose, openTempFile)
 import System.IO.Error (tryIOError)
+import System.Process (readProcessWithExitCode)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.NativeRecipe
 import THC.Driver.ScalarBitcode (withScalarBitcode)
@@ -285,7 +291,10 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         createDirectoryIfMissing True (takeDirectory unknown)
         writeFile (unknown <.> "o") "unknown object"
         writeFile (unknown <.> "hi") "interface"
-        assertEqual "unknown root or undeclared module still requires a receipt" [unknown <.> "o"] =<< inventory
+        assertEqual "unverified neighboring interface still requires a receipt" [unknown <.> "o"] =<< inventory
+        candidates <- componentHomeInterfaces dist [build] component
+        assertEqual "only the selected component layout supplies a discoverable module"
+          [("vanilla", "Unlisted", unknown <.> "hi") | unknown == artifacts </> "Unlisted"] candidates
         removeFile (unknown <.> "o")
         removeFile (unknown <.> "hi")
       let child = artifacts </> "child/child-tmp"
@@ -318,6 +327,73 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         "proof-0.1-inplace" component (pure . maybe True (const False))
       assertBool "no-C component needs neither setup-config nor native tools" result
   ]
+
+-- Real binary interfaces, rather than dummy neighboring files, authorize the
+-- additional inventory. The helper uses GHC's reader and rejects unit, module,
+-- way and malformed-file mismatches before the native classifier is changed.
+interfaceTests :: Test
+interfaceTests = TestLabel "compiler-discovered home interface identity" $ TestCase $
+  withScratch $ \root -> withCurrentDirectory root $ do
+    ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+    helper <- findExecutable "thc-interface" >>= maybe (fail "thc-interface build tool missing") pure
+    let dist = root </> "dist"
+        native = root </> "native"
+        component = object ["type" .= ("lib" :: String), "name" .= ("lib" :: String),
+          "modules" .= ([] :: [String]), "src-dir" .= root,
+          "compiler-args" .= ["-odir",dist,"-hidir",dist]]
+        iface = dist </> "Unlisted.hi"
+        output = dist </> "Unlisted.o"
+        call exe args input = readProcessWithExitCode exe args input
+        success label (status, _, diagnostic) = assertEqual (label ++ ": " ++ diagnostic) ExitSuccess status
+    createDirectory dist
+    writeFile "Unlisted.hs" "module Unlisted where\nvalue :: Int\nvalue = 37\n"
+    call ghc ["-c","Unlisted.hs","-this-unit-id","home-proof","-outputdir",dist] "" >>= success "native module build"
+    (libStatus, libOutput, libDiagnostic) <- call ghc ["--print-libdir"] ""
+    assertEqual libDiagnostic ExitSuccess libStatus
+    libdir <- case lines libOutput of
+      [path] -> pure path
+      _ -> fail "selected GHC did not return one libdir"
+    let probe :: String -> String -> String -> FilePath -> IO (ExitCode, String, String)
+        probe owner name way path = call helper ["--home-interface-inventory",libdir,owner,way]
+          (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode [object ["unit" .= owner,"module" .= name,"interface" .= path]]))))
+    assertEqual "unlisted Haskell object remains native until identity is checked" [output] =<<
+      componentNativeObjects native dist [dist] component
+    assertEqual "candidate is scoped to its actual output layout" [("vanilla","Unlisted",iface)] =<<
+      componentHomeInterfaces dist [dist] component
+    let sibling = dist </> "Sibling"
+    createDirectory sibling
+    copyFile iface (sibling </> "Hidden.hi")
+    assertEqual "nested sibling interfaces never enter the selected component inventory"
+      [("vanilla","Unlisted",iface)] =<< componentHomeInterfaces dist [dist,sibling] component
+    removeFile (sibling </> "Hidden.hi")
+    let outside = root </> "Outside.hi"
+    copyFile iface outside
+    linked <- tryIOError (createFileLink outside (dist </> "Alias.hi"))
+    case linked of
+      Left _ -> pure () -- Windows may deny symlink creation without elevation.
+      Right () -> do
+        assertEqual "canonical interface symlinks cannot escape the component"
+          [("vanilla","Unlisted",iface)] =<< componentHomeInterfaces dist [dist] component
+        removeFile (dist </> "Alias.hi")
+    probe "home-proof" "Unlisted" "vanilla" iface >>= success "actual home identity"
+    forM_ [("other-unit","Unlisted","vanilla"), ("home-proof","Other","vanilla"),
+           ("home-proof","Unlisted","dynamic")] $ \(owner,name,way) -> do
+      (status,_,_) <- probe owner name way iface
+      assertBool "wrong unit/module/way cannot grant module ownership" (status /= ExitSuccess)
+    writeFile (dist </> "Broken.hi") "not a GHC interface"
+    (broken,_,_) <- probe "home-proof" "Broken" "vanilla" (dist </> "Broken.hi")
+    assertBool "malformed neighboring interface is rejected" (broken /= ExitSuccess)
+    removeFile (dist </> "Broken.hi")
+    let completed = case component of
+          Object fields -> Object (KeyMap.insert "modules" (toJSON (["Unlisted"] :: [String])) fields)
+          _ -> error "test component is an object"
+    assertEqual "verified compiler-discovered identity excludes the Haskell object" [] =<<
+      componentNativeObjects native dist [dist] completed
+    writeFile "Unlisted.c" "int collision;"
+    compiler <- canonicalizePath ghc
+    captureNativeRecipe (native </> "cache/thc/native-recipes-v1") compiler ["-c","Unlisted.c","-o",output]
+    collision <- tryIOError (componentNativeObjects native dist [dist] completed)
+    assertBool "verified Haskell identity still cannot conceal a native receipt" (isLeft collision)
 
 metadata :: FilePath -> FilePath -> Value
 metadata root dist = object ["type" .= ("lib" :: String), "name" .= ("lib" :: String),

@@ -63,7 +63,7 @@ runTests arguments = do
     ["--inplace-store-only"] -> pure [StoreProjectTests.inplaceTests env]
     ["--concurrent-store-only"] -> pure [StoreProjectTests.concurrentTests env]
     ["--package-native-only"] -> pure [PackageNativeTests.tests]
-    ["--native-recipe-only"] -> pure [NativeRecipeTests.tests]
+    ["--native-recipe-only"] -> pure [NativeRecipeTests.tests, NativeRecipeTests.interfaceTests]
     [] -> pure
       [ CoreIndexTests.tests
       , CoreSymbolsTests.tests env
@@ -74,6 +74,7 @@ runTests arguments = do
       , PackageNativeTests.tests
       , NativeCacheTests.tests
       , NativeRecipeTests.tests
+      , NativeRecipeTests.interfaceTests
       , RuntimeShimTests.tests
       , InstalledForeignTests.viewTests env
       , TestSupportTests.tests

@@ -305,12 +305,11 @@ launcher authority on either backend.
 
 ### HsColour: generate HTML
 
-HsColour needs the checked metadata-only patch listing its existing home
-modules. Apply it to the freshly unpacked copy; no Haskell source is changed:
+Use the unchanged HsColour 1.25 package. GHC discovers its home imports even
+though the executable's Cabal stanza omits `other-modules`; THC verifies those
+modules against the selected compiler's actual component-owned interfaces.
 
 ```sh
-(cd "$THC_APPS/hscolour-1.25" && \
-  git apply "$THC_ROOT/examples/standard-apps/hscolour-1.25-home-modules.patch")
 THC_BACKEND=bytecode "$THC_DRIVER" run HsColour --project-dir "$THC_APPS/hscolour-1.25" \
   --thc-root "$THC_ROOT" --dist-dir "$THC_APPS/hscolour-guest" \
   --with-ghc "$GHC" --with-ghc-pkg "$GHC_PKG" \
@@ -319,8 +318,8 @@ THC_BACKEND=bytecode "$THC_DRIVER" run HsColour --project-dir "$THC_APPS/hscolou
 ```
 
 Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
-An unchanged HsColour package still has the declared-module inventory limitation;
-the patch is explicit, not an automatic source rewrite by THC.
+No package metadata overlay or source rewrite is required. The old metadata-only
+patch remains a historical reproduction aid for earlier driver versions.
 
 ### Alex: generate a lexer
 
@@ -437,6 +436,12 @@ test or benchmark in the project. An unrelated unbuildable executable therefore
 does not block the selected workload. The driver
 reads `plan.json` and Cabal's `--enable-build-info` records, retaining exact
 unit IDs and GHC arguments for a separate post-Tidy export of local dependencies.
+When GHC discovers additional home modules, THC checks their binary interfaces'
+exact unit, module and compilation way using that compiler. Discovery is confined
+to canonical component output roots, excluding nested sibling components; a
+neighboring `.hi` file alone cannot exempt a native object. Native receipt
+collisions remain errors. The checked names complete the expected export inventory,
+while the original source targets and compiler arguments remain unchanged.
 For Cabal's grouped library records, including Custom Setup packages, the
 runtime closure follows `components.lib.depends`. The separate
 `components.setup.depends` graph belongs to native Setup execution, not the

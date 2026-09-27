@@ -19,7 +19,7 @@
 -- serialization do not link native foreign products or authorize execution.
 module THC.Interface
   ( InterfaceCore, interfaceModule, interfaceDetails, interfaceBindings, interfaceForeign
-  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, interfaceCoreJSONBytes, probeInterface
+  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, interfaceCoreJSONBytes, probeInterface, checkInterfaceIdentity
   ) where
 
 import Control.Exception (Exception, throwIO)
@@ -73,6 +73,16 @@ instance Exception InterfaceError
 
 identity :: Module -> String
 identity m = unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)
+
+-- | Check a home interface without hydrating Core or resolving installed
+-- dependencies. Compiler-discovered modules need their actual binary identity,
+-- not merely a neighboring .hi filename or a source-import guess.
+checkInterfaceIdentity :: HscEnv -> Module -> FilePath -> IO ()
+checkInterfaceIdentity environment expected path = do
+  iface <- readBinIface (targetProfile (hsc_dflags environment))
+    (hsc_NC environment) CheckHiWay QuietBinIFace path
+  unless (mi_module iface == expected)
+    (throwIO (InterfaceModuleMismatch expected (mi_module iface)))
 
 -- | Fingerprint the bytes retained by GHC's interface reader, including its
 -- tables, complete Core, annotations, foreign products and extensible fields.

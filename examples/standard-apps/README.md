@@ -38,8 +38,8 @@ be checked by rerunning the actual commands, not inferred from primop counts.
 
 ### HsColour
 
-HsColour 1.25 now passes actual THC `--version`, `--help`, and HTML generation
-from `TinyMath.hs`, using the metadata-only overlay below. Its original Haskell
+Earlier HsColour 1.25 checks passed actual THC `--version`, `--help`, and HTML generation
+from `TinyMath.hs`, using the historical metadata-only overlay below. Its original Haskell
 sources are unchanged. The complete exported closure passes strict admission:
 83,786 supplied bindings, 4,037 reachable, zero missing and zero issues.
 The generated 1,167-byte HTML file is byte-for-byte identical to the independent
@@ -60,8 +60,8 @@ memory/sentinel fix `c2055888`, guest environment/realloc `bb9462e3`, Unix
 unlink/original-interface admission `ee52423b`, and linear Core JSON exporter
 `e6eddb52`. The memory fixture independently passes native comparisons in the
 same four backend/mode combinations; its AST application check used raw
-`Main.main`. The original unchanged HsColour package
-still has the declared-module limitation documented below. That checkpoint did
+`Main.main`. That historical driver had the declared-module limitation documented
+below; current acquisition verifies compiler-discovered home interfaces. That checkpoint did
 not establish Alex, Happy or doctest guest successes; their native
 baselines and genuine guest retry recipes remain below.
 
@@ -208,17 +208,19 @@ Doctest itself runs child GHC processes: a native child interpreter is expected,
 but its parent doctest main must really execute as THC Core before calling the
 workload a guest success.
 
-## HsColour metadata overlay
+## Historical HsColour metadata overlay
 
 The unchanged HsColour 1.25 executable omits its sixteen automatically discovered
 home modules from `other-modules`. GHC builds it with missing-home-module warnings,
-but THC's declared-component inventory consequently classifies the undeclared
-objects as native products and requires native compiler receipts. Keep this
-unmodified-package failure explicit.
+but older THC drivers classified the undeclared objects as native products and
+required native compiler receipts. Current acquisition reads those extra modules'
+actual GHC interface identities in their owned component output directories,
+retaining unit/way validation and Haskell/native collision checks. The unchanged
+package no longer needs an inventory overlay.
 
-For a metadata-only compatibility workaround, apply
+To reproduce the older metadata-only compatibility workaround, apply
 `hscolour-1.25-home-modules.patch` to a separate pristine package copy with
 `git apply`. It lists exactly those original modules in the executable stanza;
 no Haskell source, compiler result, interface or native receipt is changed.
-The runtime and driver ownership guards remain unchanged. General admission of
-compiler-discovered home modules is a separate driver compatibility follow-up.
+The historical workaround did not alter runtime or driver ownership guards.
+Keep those old receipts distinct from checks of the pristine package.
