@@ -378,6 +378,21 @@
     "test/primop-tools/Main.hs": {
       "junit": [], "python": [], "haskell": ["primop-tools"]
     },
+    "compiler/THC/JsonIndex/Scanner.hs": {
+      "junit": [], "python": [], "haskell": ["json-index"]
+    },
+    "compiler/json-index/json_index.c": {
+      "junit": [], "python": [], "haskell": ["json-index"]
+    },
+    "compiler/json-index/json_index.h": {
+      "junit": [], "python": [], "haskell": ["json-index"]
+    },
+    "test/json-index/Main.hs": {
+      "junit": [], "python": [], "haskell": ["json-index"]
+    },
+    "test/json-index/native.c": {
+      "junit": [], "python": [], "haskell": ["json-index"]
+    },
     "examples/GhcBCO.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
