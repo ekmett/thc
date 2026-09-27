@@ -40,9 +40,11 @@
     },
     "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt": {
+    "src/main/java/thc/runtime/CoreStringRtsForeign.java": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/GuestArguments.java": {
       "junit": ["thc.runtime.GuestArgumentsTest", "thc.runtime.GuestArgumentsEncodingTest"], "python": []
     },

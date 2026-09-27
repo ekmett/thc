@@ -1035,11 +1035,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 return if (narrow == null) result else narrow.widen(result as? Int
                     ?: throw thc.runtime.RuntimeFault("Expected narrow integer result at public boundary"))
             } catch (suspended: thc.runtime.ThunkSuspended) {
-                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                throw thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
             } catch (suspended: thc.runtime.CallSegmentSuspended) {
-                thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                throw thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
             } catch (delivered: thc.runtime.AsyncDelivery) {
-                thc.runtime.AsyncContinuations.uncaught(delivered.request, dispatch)
+                throw thc.runtime.AsyncContinuations.uncaught(delivered.request, dispatch)
             }
         } catch (failure: Throwable) {
             outcome = thc.runtime.GuestThreadStatus.uncaught(failure)
@@ -1100,11 +1100,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                     if (shutdownTarget != null) dispatch.execute(shutdownTarget, arrayOf(shutdownValue))
                 }
                 catch (suspended: thc.runtime.ThunkSuspended) {
-                    thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                    throw thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
                 } catch (suspended: thc.runtime.CallSegmentSuspended) {
-                    thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
+                    throw thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
                 } catch (delivered: thc.runtime.AsyncDelivery) {
-                    thc.runtime.AsyncContinuations.uncaught(delivered.request, dispatch)
+                    throw thc.runtime.AsyncContinuations.uncaught(delivered.request, dispatch)
                 }
             } catch (failure: Throwable) {
                 outcome = thc.runtime.GuestThreadStatus.uncaught(failure)

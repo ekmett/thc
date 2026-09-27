@@ -30,8 +30,8 @@ import thc.Language
 class BytecodeProgram internal constructor(private val language: Language, moduleData: Map<String, Any?>,
                                            private val checkpoint: BytecodeCheckpoint?,
                                            internal val enableAsync: Boolean) : ExecutableProgram {
-    override val asynchronousExceptions get() = enableAsync
-    override val hasBytecode get() = true
+    override fun getAsynchronousExceptions() = enableAsync
+    override fun getHasBytecode() = true
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val demand = moduleData["demandBindings"] as? CoreDemandBindings
     private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)

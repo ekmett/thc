@@ -48,7 +48,7 @@ internal object CoreKeepAlive {
 /** A saved reference stays live through every child step, including repeated cuts. */
 private class AstKeepAliveScope(private val value: Any?, private val steps: List<AstResumeStep>) : AstResumeStep {
     override fun resume(frame: VirtualFrame, input: Any?): Any? =
-        withKeptValue(value) { resumeAstSteps(frame, steps, input) }
+        withKeptValue(value) { AstContinuationKt.resumeAstSteps(frame, steps, input) }
 }
 
 private inline fun <T> withKeptValue(value: Any?, body: () -> T): T {

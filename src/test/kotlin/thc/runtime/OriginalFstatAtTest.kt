@@ -369,7 +369,7 @@ class OriginalFstatAtTest {
                 val ast = FunctionRoot(language, layout.build(), "fstatat completion", null,
                     intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
                     tuple = shape, tupleSlots = slots, enableAsync = true)
-                val saved = checkNotNull(savedGuestContinuation(Calls.target(ast.callTarget, arrayOf(0L))))
+                val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(ast.callTarget, arrayOf(0L))))
                 assertSame(pending, saved.asyncRequest()); assertEquals(6L, field(destination, OriginalStdioOp.ST_SIZE))
                 pending!!.acknowledge(); Files.writeString(file, "changed after native stat")
                 val completed = saved.continueWith(Unit)

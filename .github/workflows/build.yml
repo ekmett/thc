@@ -664,7 +664,7 @@ jobs:
           set -euo pipefail
           "$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders \
             "-Dthc.handoffSlabs=$HANDOFF" -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' \
-            thc.LibraryCheckKt build/libraries/cases.json "$BACKEND" \
+            thc.LibraryCheck build/libraries/cases.json "$BACKEND" \
             2>&1 | tee "build/libraries/check-$BACKEND-handoff-$HANDOFF.log"
       - name: Preserve each library mode's results
         uses: actions/upload-artifact@v7.0.1

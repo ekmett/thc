@@ -21,11 +21,13 @@ class SavedGuestContinuationTest {
     }
 
     private class Saved(
-        override val sourceRoot: Any,
-        override val yielded: Any?,
+        private val savedRoot: Any,
+        private val savedYield: Any?,
         private val resume: (Any?) -> Any?
     ) : SavedGuestContinuation {
-        override val identity: Any get() = this
+        override fun getSourceRoot(): Any = savedRoot
+        override fun getYielded(): Any? = savedYield
+        override fun getIdentity(): Any = this
         var resumes = 0
         override fun continueWith(input: Any?): Any? {
             resumes++

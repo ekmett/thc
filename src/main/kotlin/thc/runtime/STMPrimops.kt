@@ -68,7 +68,7 @@ private fun stmRequest(marker: Any?): AsyncRequest = when (marker) {
 private class STMAsyncDestination(private val destination: TupleDestination) : TupleDestination(destination.shape) {
     override fun delimitedResult(frame: VirtualFrame, node: Node): Any? = destination.delimitedResult(frame, node)
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
-        val saved = savedGuestContinuation(if (result is TailYield) result.continuation else result)
+        val saved = SavedGuestContinuationKt.savedGuestContinuation(if (result is TailYield) result.continuation else result)
         if (saved != null) throw STMActionSuspended(stmRequest(saved.yielded))
         destination.consume(frame, node, result)
     }

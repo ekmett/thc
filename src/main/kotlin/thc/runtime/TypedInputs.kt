@@ -34,10 +34,10 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     @ExplodeLoop fun validateSelfSource(source: InputSource, frame: VirtualFrame, node: Node) {
         ArgumentLayout.validate(logical, 0, source.layout, 0, logical.logicalArity)
         for (i in leaves.indices) {
-            if (packet.isInt(header + i)) source.int(frame, node, null, i)
-            else if (packet.isLong(header + i)) source.long(frame, node, null, i)
-            else if (packet.isFloat(header + i)) source.float(frame, node, null, i)
-            else if (packet.isDouble(header + i)) source.double(frame, node, null, i)
+            if (packet.isInt(header + i)) source.readInt(frame, node, null, i)
+            else if (packet.isLong(header + i)) source.readLong(frame, node, null, i)
+            else if (packet.isFloat(header + i)) source.readFloat(frame, node, null, i)
+            else if (packet.isDouble(header + i)) source.readDouble(frame, node, null, i)
             else {
                 val vector = selfVectors[i]
                 if (vector != null) source.setReference(frame, node, null, i,
@@ -111,10 +111,10 @@ internal fun discardTypedInput(language: Language, input: HandoffStorage) {
 internal abstract class InputSource(val layout: ArgumentLayout?) {
     @field:CompilationFinal(dimensions = 1)
     internal val physicalProofs = layout?.physicalProofs
-    abstract fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int
-    abstract fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long
-    abstract fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float
-    abstract fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double
+    abstract fun readInt(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int
+    abstract fun readLong(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long
+    abstract fun readFloat(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float
+    abstract fun readDouble(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double
     abstract fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Any?
     abstract fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?)
     @ExplodeLoop fun copy(frame: VirtualFrame, node: Node, values: Array<Any?>?, sourceOffset: Int,
@@ -122,10 +122,10 @@ internal abstract class InputSource(val layout: ArgumentLayout?) {
         for (i in 0 until count) {
             val source = sourceOffset + i
             val target = targetOffset + i
-            if (shape.isInt(target)) shape.setInt(destination, target, int(frame, node, values, source))
-            else if (shape.isLong(target)) shape.setLong(destination, target, long(frame, node, values, source))
-            else if (shape.isFloat(target)) shape.setFloat(destination, target, float(frame, node, values, source))
-            else if (shape.isDouble(target)) shape.setDouble(destination, target, double(frame, node, values, source))
+            if (shape.isInt(target)) shape.setInt(destination, target, readInt(frame, node, values, source))
+            else if (shape.isLong(target)) shape.setLong(destination, target, readLong(frame, node, values, source))
+            else if (shape.isFloat(target)) shape.setFloat(destination, target, readFloat(frame, node, values, source))
+            else if (shape.isDouble(target)) shape.setDouble(destination, target, readDouble(frame, node, values, source))
             else shape.setObject(destination, target, reference(frame, node, values, source))
         }
     }
@@ -134,13 +134,13 @@ internal abstract class InputSource(val layout: ArgumentLayout?) {
 /** Used only for pre-existing scalar/empty call sites; tuple payloads never enter this array. */
 internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(layout) {
     init { require(layout?.requiresTyped != true) }
-    override fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+    override fun readInt(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Int ?: fault("Expected primitive Int input")
-    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+    override fun readLong(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Long ?: fault("Expected primitive Long input")
-    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+    override fun readFloat(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Float ?: fault("Expected primitive Float input")
-    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+    override fun readDouble(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Double ?: fault("Expected primitive Double input")
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Any? {
         if (values == null) CompilerDirectives.transferToInterpreter()
@@ -158,13 +158,13 @@ private val scalarPrefixSource = ScalarArrayInputSource(null)
 
 internal class AstInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: IntArray) : InputSource(layout) {
-    override fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int =
+    override fun readInt(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int =
         if (frame.isInt(slots[index])) frame.getInt(slots[index]) else FrameAccess.read(frame, slots[index]) as? Int ?: fault("Expected primitive Int input")
-    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
+    override fun readLong(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
         if (frame.isLong(slots[index])) frame.getLong(slots[index]) else FrameAccess.read(frame, slots[index]) as? Long ?: fault("Expected primitive Long input")
-    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
+    override fun readFloat(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
         if (frame.isFloat(slots[index])) frame.getFloat(slots[index]) else FrameAccess.read(frame, slots[index]) as? Float ?: fault("Expected primitive Float input")
-    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double =
+    override fun readDouble(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double =
         if (frame.isDouble(slots[index])) frame.getDouble(slots[index]) else FrameAccess.read(frame, slots[index]) as? Double ?: fault("Expected primitive Double input")
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = FrameAccess.read(frame, slots[index])
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
@@ -176,19 +176,19 @@ internal class AstInputSource(layout: ArgumentLayout,
 internal class BytecodeInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: Array<LocalAccessor>) : InputSource(layout) {
     private fun bytecode(node: Node): BytecodeNode = (node.rootNode as BytecodeRoot).bytecodeNode
-    override fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int =
+    override fun readInt(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int =
         if (physicalProofs!![index].isInt) slots[index].getInt(bytecode(node), frame)
         else slots[index].getObject(bytecode(node), frame) as? Int ?: fault("Expected primitive Int input")
     // Exact tuple leaves retain primitive access. A legacy unknown scalar beside
     // a tuple can generalize its local to Object after another numeric target;
     // read that existing scalar carrier generically, then check the target kind.
-    override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
+    override fun readLong(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
         if (physicalProofs!![index].isLong) slots[index].getLong(bytecode(node), frame)
         else slots[index].getObject(bytecode(node), frame) as? Long ?: fault("Expected primitive Long input")
-    override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
+    override fun readFloat(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
         if (physicalProofs!![index].isFloat) slots[index].getFloat(bytecode(node), frame)
         else slots[index].getObject(bytecode(node), frame) as? Float ?: fault("Expected primitive Float input")
-    override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double =
+    override fun readDouble(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double =
         if (physicalProofs!![index].isDouble) slots[index].getDouble(bytecode(node), frame)
         else slots[index].getObject(bytecode(node), frame) as? Double ?: fault("Expected primitive Double input")
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) = slots[index].getObject(bytecode(node), frame)
@@ -569,9 +569,9 @@ private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, v
         if (proof?.isTypedTransport == true) fault("Typed input cannot enter a scalar packet")
         val from = ArgumentLayout.offset(source.layout, i)
         result[to++] = when {
-            proof?.isLong == true -> source.long(frame, node, values, from)
-            proof?.isFloat == true -> source.float(frame, node, values, from)
-            proof?.isDouble == true -> source.double(frame, node, values, from)
+            proof?.isLong == true -> source.readLong(frame, node, values, from)
+            proof?.isFloat == true -> source.readFloat(frame, node, values, from)
+            proof?.isDouble == true -> source.readDouble(frame, node, values, from)
             else -> source.reference(frame, node, values, from)
         }
     }
@@ -771,7 +771,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
                           private val steps: List<AstResumeStep>) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
             var suspended = false
-            try { return resumeAstSteps(frame, steps, input) }
+            try { return AstContinuationKt.resumeAstSteps(frame, steps, input) }
             catch (cut: AstCapture) {
                 suspended = true
                 throw cut.enclose { remaining -> Cleanup(owner, remaining) }

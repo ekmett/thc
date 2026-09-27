@@ -276,9 +276,9 @@ internal class DelimitedActionSite(private val language: Language, private val m
     fun finish(result: Any?, shape: TupleShape?, expectedTarget: RootCallTarget? = null): Any? {
         DelimitedControl.captureBytecode(result, shape)
         val saved = when (result) {
-            is TailYield -> savedGuestContinuation(result.continuation)
+            is TailYield -> SavedGuestContinuationKt.savedGuestContinuation(result.continuation)
             is AstTailYield -> result.continuation
-            else -> savedGuestContinuation(result)
+            else -> SavedGuestContinuationKt.savedGuestContinuation(result)
         }
         val answer = if (saved == null) result else {
             val target = when (result) {
@@ -404,9 +404,9 @@ internal object DelimitedControl {
 
     fun asyncResult(result: Any?, node: Node) {
         val saved = when (result) {
-            is TailYield -> savedGuestContinuation(result.continuation)
+            is TailYield -> SavedGuestContinuationKt.savedGuestContinuation(result.continuation)
             is AstTailYield -> result.continuation
-            else -> savedGuestContinuation(result)
+            else -> SavedGuestContinuationKt.savedGuestContinuation(result)
         } ?: return
         saved.asyncRequest()?.let { throw AsyncDelivery(it, node) }
         throw UnsupportedCore("Delimited continuation encountered a non-delivery asynchronous scheduling cut")

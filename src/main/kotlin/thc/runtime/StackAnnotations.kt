@@ -86,7 +86,7 @@ internal object StackAnnotations {
 private class AstAnnotationScope(private val node: Node, private val prior: StackAnnotationState,
                                   private val steps: List<AstResumeStep>) : AstResumeStep {
     override fun resume(frame: VirtualFrame, input: Any?): Any? =
-        withAstAnnotationRestore(node, prior) { resumeAstSteps(frame, steps, input) }
+        withAstAnnotationRestore(node, prior) { AstContinuationKt.resumeAstSteps(frame, steps, input) }
 }
 
 private inline fun <T> withAstAnnotationRestore(node: Node, prior: StackAnnotationState, body: () -> T): T {

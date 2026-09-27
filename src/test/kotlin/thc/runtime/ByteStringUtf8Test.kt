@@ -275,7 +275,7 @@ class ByteStringUtf8Test {
                     tuple = shape, tupleSlots = slots, enableAsync = true)
                 val result = Calls.target(root.callTarget, arrayOf(0L))
                 val completed = if (safe) {
-                    val saved = checkNotNull(savedGuestContinuation(result))
+                    val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(result))
                     assertSame(pending, saved.asyncRequest())
                     pending!!.acknowledge()
                     // A replay or a poll before native completion would now

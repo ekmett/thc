@@ -85,7 +85,7 @@ class AstStackTest {
                     intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
                     role = FunctionRootRole.PASS_THROUGH, stackCapture = true)
                 body.transfer = TailCall(root.callTarget, arrayOf(0L))
-                val stack = astStackScope(root)
+                val stack = AstStackKt.astStackScope(root)
                 stack.depth = AstStackScope.MAX_DEPTH - 1
                 stack.driving = true
                 val saved = try { Calls.target(root.callTarget, arrayOf(0L)) as AstContinuation }
@@ -101,9 +101,10 @@ class AstStackTest {
 
     @Test fun stackSpillRecognizesOnlyThePrivateIdentityAndTypedSuspensions() {
         fun saved(marker: Any?) = object : SavedGuestContinuation {
-            override val identity: Any get() = this
-            override val yielded: Any? = marker
-            override val sourceRoot: Any = Any()
+            override fun getIdentity(): Any = this
+            override fun getYielded(): Any? = marker
+            private val savedRoot = Any()
+            override fun getSourceRoot(): Any = savedRoot
             override fun continueWith(input: Any?): Any? = error("Classification must not resume a continuation")
         }
         val spoof = object {
@@ -114,7 +115,7 @@ class AstStackTest {
             override fun equals(other: Any?): Boolean = error("Classification must not invoke guest equality")
             override fun hashCode(): Int = 0
         }
-        assertTrue(saved(AstStackSpill).stackSpill())
+        assertTrue(saved(AstStackSpill.INSTANCE).stackSpill())
         for (marker in listOf(null, Any(), spoof, hostile)) assertFalse(saved(marker).stackSpill())
         val thunk = Thunk(object : RootNode(null) {
             override fun execute(frame: VirtualFrame): Any? = error("Classification must not force a thunk")
@@ -252,7 +253,7 @@ class AstStackTest {
                     }.callTarget)
                     val result = Calls.target(program.hostEntryTarget(2),
                         arrayOf(program.entryValue("loop"), arrayOf(4096L, tick)))
-                    val saved = savedGuestContinuation(result) ?: error("Expected the actual async continuation")
+                    val saved = SavedGuestContinuationKt.savedGuestContinuation(result) ?: error("Expected the actual async continuation")
                     assertSame(request, saved.asyncRequest()); assertFalse(saved.stackSpill())
                     assertEquals(AsyncRequestState.CLAIMED, request!!.state)
                     assertEquals(100, effects, "The autonomous driver must stop before delivering an async request")
@@ -359,9 +360,9 @@ class AstStackTest {
                     lateinit var request: AsyncRequest
                     var prefixes = 0
                     val childRecord = object : SavedGuestContinuation {
-                        override val identity: Any get() = this
-                        override val sourceRoot: Any get() = root
-                        override val yielded: Any get() = Unit
+                        override fun getIdentity(): Any = this
+                        override fun getSourceRoot(): Any = root
+                        override fun getYielded(): Any = Unit
                         override fun continueWith(input: Any?): Any? {
                             prefixes++
                             // Deterministically model another evaluator re-parking the
