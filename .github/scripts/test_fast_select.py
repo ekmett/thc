@@ -260,8 +260,10 @@ class FastSelectionTest(unittest.TestCase):
                    kotlin("CoreCompactGoldenTest").replace("package example", "package thc"))
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         for path in ("compact-core/THC/Compact/Wire.hs", "compact-core/THC/Compact/Writer.hs",
+                     "compact-core/THC/Compact/Compression.hs", "compact-core/THC/Compact/Zip.hs",
+                     "test/compact-core/CbdTests.hs", "test/compact-core/CompressionTests.hs",
                      "test/compact-core/Main.hs", "test/compact-core/golden/integers-v1.json",
-                     "test/compact-core/golden/header-v1.hex", "test/compact-core/golden/footer-v1.hex"):
+                     "test/compact-core/golden/cbd-header-v1.hex"):
             with self.subTest(path=path):
                 self.policy["owners"][path] = policy["owners"][path]
                 self.write(select.POLICY, json.dumps(self.policy))
