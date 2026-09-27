@@ -67,7 +67,7 @@ prepareProxyVoid root = do
         report = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) entries ++ [source])
     modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     let paths = map (core </>) modules

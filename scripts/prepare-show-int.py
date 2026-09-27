@@ -82,7 +82,7 @@ def main():
             commands.append(dict(argv=argv, environment=extra_env or {}))
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(extra_env or {})), check=True)
         run(['compiler/build.sh'])
-        run([sys.executable, 'compiler/export-boot.py', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
+        run([sys.executable, 'compiler/export-boot.py', '--pretty-diagnostics', '--frontier', 'show', '--build-dir', str(OUT/'boot')])
         for stage in STAGES:
             run(['compiler/export.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
                  *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],

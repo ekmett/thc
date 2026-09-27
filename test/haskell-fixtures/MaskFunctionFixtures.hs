@@ -48,7 +48,7 @@ prepareMaskFunctions root = do
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" (options ++ [source])
+      "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
       ["scripts/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
        core </> "MaskFunctionAudit.json"]

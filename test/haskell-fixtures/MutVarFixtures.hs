@@ -78,7 +78,7 @@ prepareMutVar root = do
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     _ <- run root [("THC_CORE_OUT", root </> core),
                    ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (postTidy ++ roots ++ [source]) ""
+      "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : postTidy ++ roots ++ [source]) ""
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine MutVar Core export: " ++ path))) modules

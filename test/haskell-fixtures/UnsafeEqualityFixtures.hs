@@ -191,7 +191,7 @@ prepareUnsafeEquality root checkOnly = do
       let core = directory </> stage ++ "-core"
           exportEnvironment = [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage ++ "-ghc"), ("THC_SOURCE_NOTES", "true")]
           auditArguments names path = ["scripts/audit-core.py", core, "--output", directory </> path] ++ concatMap (\name -> ["--entry",name]) names
-      (_, exported) <- execute exportEnvironment "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      (_, exported) <- execute exportEnvironment "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         map ("-fplugin-opt=THC.Plugin:closure=" ++) (entries ++ frontiers ++ effects) ++ [source])
       (_, audited) <- execute [] "python3" (auditArguments (entries ++ effects) (stage ++ "-audit.json"))
       negative <- forM frontiers $ \name -> do
