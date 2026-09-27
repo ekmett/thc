@@ -13,7 +13,8 @@ bytecode backend contracts and the pinned GHC/Graal toolchain requirements.
   `Safe` client of the public API and rejection of hazardous internal imports.
 - Use Java for production JVM implementation, including runtime nodes, primops,
   loaders and generated runtime code. Migrate remaining production Kotlin in
-  coherent tested groups; Kotlin fixtures, tests and build scripts may remain.
+  coherent tested groups. Migrate Kotlin fixtures, tests and build scripts
+  gradually as well; the final project must not require Kotlin.
   Keep new production Java independent of Kotlin library helpers and carriers.
 - Put simple primop behavior directly in its existing implementation or
   specialization. Remove forwarding-only helpers, redundant wrappers, and
@@ -41,11 +42,11 @@ bytecode backend contracts and the pinned GHC/Graal toolchain requirements.
 ## Fixture generation and tools
 
 - Prefer Haskell for GHC-facing exporters, fixture producers, native-oracle
-  orchestration, and provenance. Prefer Kotlin for JVM-side checks and independent
+  orchestration, and provenance. Prefer Java for JVM-side checks and independent
   runtime models. Extend existing tools instead of adding another framework.
 - Python is for a concrete Python-specific dependency or capability, not the
   default for scripting convenience. Do not add Python fixture generators,
-  validators, or private development harnesses when Haskell/Kotlin reasonably
+  validators, or private development harnesses when Haskell/Java reasonably
   fit. Existing Python tools may remain while their replacements are verified.
 - Migrate cohesive producer/model/test groups and update every active caller,
   CI recipe, dependency fingerprint, and relevant guide. Retain positive and
