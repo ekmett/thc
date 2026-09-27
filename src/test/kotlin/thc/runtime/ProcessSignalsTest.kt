@@ -175,7 +175,7 @@ class ProcessSignalsTest {
         try {
             fun reject(token: Any = Unit) {
                 val failure = assertThrows(RuntimeFault::class.java) {
-                    Calls.target(target, arrayOf(0L, 2L, -5L, ManagedAddress.nullAddress(), token))
+                    callScalarTestTarget(target, arrayOf(0L, 2, -5, ManagedAddress.nullAddress(), token))
                 }
                 assertEquals(RuntimeFault::class.java, failure.javaClass)
                 if (token === Unit) assertTrue(failure.message!!.contains("launcher authority"))
@@ -331,6 +331,70 @@ class ProcessSignalsTest {
                 target.call(address, signal)
                 assertEquals(signal, address.readWord8(0))
             }
+        } finally { owner.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
+    }
+
+    @Test fun dispatcherKeepsPointerValidationBeforeTheSignalCastAndRejectsWithoutWriting() = onBackends { language, backend ->
+        val owner = Language.currentState()
+        val target = SignalDispatchRoot(language, program(language, backend, recordSignal = true)).callTarget
+        val address = owner.nativeAllocations.malloc(128L)
+        address.writeWord8(0, 77)
+        owner.threads.enterCurrent()
+        try {
+            val pointerFailure = assertThrows(RuntimeFault::class.java) { target.call("not an address", null) }
+            assertEquals("Expected a managed literal Addr# constructor field", pointerFailure.message)
+            val nullFailure = assertThrows(NullPointerException::class.java) { target.call(address, null) }
+            assertEquals("null cannot be cast to non-null type kotlin.Long", nullFailure.message)
+            for (number in listOf(2, "signal"))
+                assertThrows(ClassCastException::class.java) { target.call(address, number) }
+            assertEquals(77L, address.readWord8(0), "invalid arguments cannot enter the writing guest dispatcher")
+            ThreadInventoryCoreEvidence.released(language)
+            target.call(address, 12L)
+            assertEquals(12L, address.readWord8(0))
+            ThreadInventoryCoreEvidence.released(language)
+        } finally { owner.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
+    }
+
+    @Test fun dispatcherPreservesTheFirstInstalledSignalDelivery() = onBackends { language, backend ->
+        val owner = Language.currentState()
+        val program = program(language, backend, recordSignal = true)
+        val target = SignalDispatchRoot(language, program).callTarget
+        val address = owner.nativeAllocations.malloc(128L)
+        owner.threads.enterCurrent()
+        try {
+            target.call(address, 2L)
+            assertEquals(2L, address.readWord8(0))
+            ThreadInventoryCoreEvidence.install(listOf(target))
+            val calls = ThreadInventoryCoreEvidence.interpretedCalls(listOf(target))
+            val compiled = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            target.call(address, 25L) // First call after installation; no settling call.
+            assertEquals(25L, address.readWord8(0))
+            assertTrue(ThreadInventoryCoreEvidence.valid(target), "$backend dispatcher remains installed")
+            assertEquals(calls, ThreadInventoryCoreEvidence.interpretedCalls(listOf(target)))
+            assertEquals(compiled + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+            ThreadInventoryCoreEvidence.released(language)
+        } finally { owner.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
+    }
+
+    @Test fun dispatcherRejectsAWrongBoxedResultAfterGuestEffects() = onBackends { language, backend ->
+        fun returnSignal(value: Any?): Any? = when (value) {
+            is List<*> -> if (value.firstOrNull() == "con" && value.getOrNull(1) == unitId)
+                variable("signal", boxed) else value.map(::returnSignal)
+            is Map<*, *> -> value.mapValues { returnSignal(it.value) }
+            else -> value
+        }
+        val source = returnSignal(module(recordSignal = true)) as Map<String, Any?>
+        val program = if (backend == "ast") Program(language, source, true) else BytecodeProgram(language, source, true)
+        val target = SignalDispatchRoot(language, program).callTarget
+        val owner = Language.currentState()
+        val address = owner.nativeAllocations.malloc(128L)
+        address.writeWord8(0, 77)
+        owner.threads.enterCurrent()
+        try {
+            val failure = assertThrows(RuntimeFault::class.java) { target.call(address, 12L) }
+            assertEquals("Signal dispatcher did not return boxed unit", failure.message)
+            assertEquals(12L, address.readWord8(0), "result validation remains after the guest action")
+            ThreadInventoryCoreEvidence.released(language)
         } finally { owner.threads.leaveCurrent(GuestThreadStatus.FINISHED) }
     }
 
