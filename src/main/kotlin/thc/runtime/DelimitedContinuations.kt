@@ -20,7 +20,7 @@ import java.util.IdentityHashMap
 internal class PromptTag(val owner: Language.State)
 
 /** A resumption can throw at the suspended call, so captured catch frames still apply. */
-internal class DelimitedResume(val value: Any?, val failure: GuestException? = null) {
+internal class DelimitedResume(val value: Any?, val failure: AbstractTruffleException? = null) {
     fun get(): Any? { failure?.let { throw it }; return value }
 }
 
@@ -166,6 +166,10 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
                 StackAnnotations.set(site, initialAnnotations.rebase(outsideAnnotations, ambientAnnotations, annotationCopies))
             val input = try { DelimitedResume(site.invoke(frame, action, arrayOf(Unit), inputShape)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
+            catch (failure: AsyncDelivery) {
+                if (!failure.request.forceSelf) throw failure
+                DelimitedResume(null, failure)
+            }
             catch (cut: DelimitedCut) { return transfer(site, cut, active, ambient, outerMask) }
             return run(site, active, input, ambient, outerMask)
         } finally {
@@ -180,6 +184,10 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
         active.forEachIndexed { index, entry ->
             input = try { DelimitedResume(entry.step.resume(entry.frame, input, ambient, outerMask)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
+            catch (failure: AsyncDelivery) {
+                if (!failure.request.forceSelf) throw failure
+                DelimitedResume(null, failure)
+            }
             catch (cut: DelimitedCut) { return transfer(site, cut, active.drop(index + 1), ambient, outerMask) }
             catch (flow: ControlFlowException) {
                 return transferControl(site, flow, active.drop(index), ambient, outerMask)
@@ -198,6 +206,10 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
         val after = remaining.drop(owner + 1)
         val input = try { DelimitedResume((entry.step as DelimitedTransferStep).transfer(entry.frame, flow, site)) }
         catch (failure: GuestException) { DelimitedResume(null, failure) }
+        catch (failure: AsyncDelivery) {
+            if (!failure.request.forceSelf) throw failure
+            DelimitedResume(null, failure)
+        }
         catch (cut: DelimitedCut) { return transfer(site, cut, after, ambient, outerMask) }
         catch (next: ControlFlowException) { return transferControl(site, next, after, ambient, outerMask) }
         return run(site, after, input, ambient, outerMask)
@@ -210,6 +222,10 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
             if (step is DelimitedPromptStep && step.tag === cut.tag) {
                 val input = try { DelimitedResume(step.handle(entry.frame, cut)) }
                 catch (failure: GuestException) { DelimitedResume(null, failure) }
+                catch (failure: AsyncDelivery) {
+                    if (!failure.request.forceSelf) throw failure
+                    DelimitedResume(null, failure)
+                }
                 catch (next: DelimitedCut) { return transfer(site, next, remaining.drop(index + 1), ambient, outerMask) }
                 return run(site, remaining.drop(index + 1), input, ambient, outerMask)
             }

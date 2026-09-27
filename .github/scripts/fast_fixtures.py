@@ -150,7 +150,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
       for suffix in ("core/ThreadStatusAudit.json", "selfStatus-audit.json", "maskedStatus-audit.json",
                      "finishedStatus-audit.json", "diedStatus-audit.json", "blockedStatus-audit.json")],
     "build/thread-async/manifest.json", "build/thread-async/oracle.txt", "build/thread-async/extra-oracle.txt",
-    "build/thread-async/lazy-oracle.txt",
+    "build/thread-async/lazy-oracle.txt", "build/thread-async/saved-oracle.txt",
     "build/thread-async/pre/core/ThreadAsyncAudit.json", "build/thread-async/post/core/ThreadAsyncAudit.json",
     "build/thread-async/pre/core/LazyForkAudit.json", "build/thread-async/post/core/LazyForkAudit.json",
     "build/thread-async/pre/lazyFork-audit.json", "build/thread-async/post/lazyFork-audit.json",
@@ -160,6 +160,8 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/thread-async/pre/maskedUnmaskSelf-audit.json", "build/thread-async/post/maskedUnmaskSelf-audit.json",
     "build/thread-async/pre/promptSelfThrow-audit.json", "build/thread-async/post/promptSelfThrow-audit.json",
     "build/thread-async/pre/promptMaskedUnmaskSelf-audit.json", "build/thread-async/post/promptMaskedUnmaskSelf-audit.json",
+    *[f"build/thread-async/{stage}/{entry}-audit.json" for stage in ("pre", "post")
+      for entry in ("savedSelfThrow", "savedMaskedSelf", "savedSuffixSelf", "savedMaskCatchSelf")],
     "build/uncaught-self/manifest.json", "build/uncaught-self/native/oracle",
     "build/uncaught-self/pre/core/UncaughtSelfAudit.json", "build/uncaught-self/post/core/UncaughtSelfAudit.json",
     "build/uncaught-self/pre/audit.json", "build/uncaught-self/post/audit.json",

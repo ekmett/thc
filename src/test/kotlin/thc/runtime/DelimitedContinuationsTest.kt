@@ -236,7 +236,7 @@ class DelimitedContinuationsTest {
         }
     }
 
-    @Test fun liveCatchAcknowledgesOnlySelfDeliveryAndKeepsItsPayloadLazy() {
+    @Test fun liveAndSavedCatchAcknowledgeEachSelfRequestAndKeepItsPayloadLazy() {
         Context.newBuilder("thc").build().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -255,6 +255,7 @@ class DelimitedContinuationsTest {
                 var calls = 0
                 var handlerMask = MaskingState.UNMASKED
                 var failHandler = false
+                var redeliver = false
                 val handlerFailure = RuntimeFault("handler failure")
                 val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
@@ -276,6 +277,14 @@ class DelimitedContinuationsTest {
                         assertEquals(AsyncRequestState.ACKNOWLEDGED, seen.get().state)
                         assertEquals(handlerMask, SynchronousMasking.current(this))
                         if (failHandler) throw handlerFailure
+                        if (redeliver) {
+                            redeliver = false
+                            try { GuestThreadOps.killSelf(this, deliveryTarget.get(), payload) }
+                            catch (delivered: AsyncDelivery) {
+                                seen.set(delivered.request)
+                                throw delivered
+                            }
+                        }
                         return shape.layout.create().also { shape.layout.setObject(it, 0, payload) }
                     }
                 }.callTarget)
@@ -283,12 +292,16 @@ class DelimitedContinuationsTest {
                     @field:Child private var site = DelimitedActionSite(language, Metrics(false))
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any? = site.caught(frame, action, handler, Unit, shape)
-                    fun resumeSaved(): Any? {
+                    fun save(catches: Int = 1): DelimitedStack {
                         val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor)
                         val cut = DelimitedCut(PromptTag(Language.currentState(this)), null, shape,
                             SynchronousMasking.current(this), this)
-                        cut.frames.add(DelimitedFrame(frame, DelimitedCatchStep(site, handler, shape)))
-                        return DelimitedStack(cut, shape).resume(site, frame, action)
+                        repeat(catches) { cut.frames.add(DelimitedFrame(frame, DelimitedCatchStep(site, handler, shape))) }
+                        return DelimitedStack(cut, shape)
+                    }
+                    fun resumeSaved(stack: DelimitedStack): Any? {
+                        val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor)
+                        return stack.resume(site, frame, action)
                     }
                 }
                 threads.enterCurrent(externalAsync = false)
@@ -316,15 +329,47 @@ class DelimitedContinuationsTest {
                     assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
                     assertEquals(4, calls)
 
-                    // Saved multi-shot catch frames do not yet route async-origin
-                    // delivery. Preserve that boundary and the original request.
+                    // Reuse the SAME immutable image, never the one-shot request.
                     failHandler = false
+                    val saved = root.save()
+                    var previous = seen.get()
+                    for (mask in MaskingState.entries) {
+                        SynchronousMasking.set(root, mask)
+                        handlerMask = if (mask == MaskingState.UNMASKED) MaskingState.MASKED_INTERRUPTIBLE else mask
+                        repeat(2) {
+                            val result = root.resumeSaved(saved) as HandoffStorage
+                            assertSame(payload, shape.layout.getObject(result, 0))
+                            assertNotSame(previous, seen.get(), "Every self send owns a fresh request")
+                            assertEquals(AsyncRequestState.ACKNOWLEDGED, previous.state)
+                            assertEquals(AsyncRequestState.ACKNOWLEDGED, seen.get().state)
+                            assertEquals(self.logicalId, seen.get().targetId)
+                            assertTrue(seen.get().forceSelf)
+                            assertEquals(mask, SynchronousMasking.current(root))
+                            assertNull(threads.poll(root))
+                            assertEquals(0, payload.state)
+                            previous = seen.get()
+                        }
+                    }
+                    assertEquals(10, calls)
+
+                    // The inner saved handler acknowledges its request before
+                    // throwing a new self request to the outer saved handler.
+                    SynchronousMasking.set(root, MaskingState.UNMASKED)
+                    handlerMask = MaskingState.MASKED_INTERRUPTIBLE
+                    redeliver = true
+                    assertSame(payload, shape.layout.getObject(root.resumeSaved(root.save(2)) as HandoffStorage, 0))
+                    assertEquals(12, calls)
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, seen.get().state)
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
+
+                    // With no saved catch, preserve the original delivery for an
+                    // outer handler; neither the image nor its runner may ACK it.
                     SynchronousMasking.set(root, MaskingState.MASKED_UNINTERRUPTIBLE)
-                    val escaped = assertThrows(AsyncDelivery::class.java) { root.resumeSaved() }
+                    val escaped = assertThrows(AsyncDelivery::class.java) { root.resumeSaved(root.save(0)) }
                     assertSame(seen.get(), escaped.request)
                     assertTrue(escaped.request.forceSelf)
                     assertEquals(AsyncRequestState.CLAIMED, escaped.request.state)
-                    assertEquals(4, calls, "Unsupported saved crossing must not become GuestException")
+                    assertEquals(12, calls, "Uncaught delivery must not become GuestException")
                     assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, SynchronousMasking.current(root))
                     escaped.request.acknowledge()
                     SynchronousMasking.set(root, MaskingState.UNMASKED)
@@ -337,7 +382,7 @@ class DelimitedContinuationsTest {
                         try {
                             assertNotSame(self, threads.currentIdentity())
                             assertThrows(UnsupportedCore::class.java) { Calls.target(root.callTarget, arrayOf(0L)) }
-                            assertEquals(4, calls)
+                            assertEquals(12, calls)
                         } finally { threads.leaveCurrent() }
                     } finally { threads.leaveForeign(foreign) }
                     assertSame(self, threads.currentIdentity())
