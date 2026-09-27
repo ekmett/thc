@@ -217,6 +217,38 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
     }
 
+    /** Only the link pathname is anchored. Relative/absolute target bytes are
+     * data for symlink itself and must remain exactly as supplied. */
+    @Synchronized fun symlinkRaw(target: ByteArray, path: ByteArray): Long {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val bytes = absoluteRawPath(anchor, path)
+        return NativeLimbScope().use { scope ->
+            val targetName = scope.allocate((target.size.toLong() + 7) and -8L)
+            targetName.copyFrom(target, 0, target.size)
+            val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+            name.copyFrom(bytes, 0, bytes.size)
+            result("symlink", targetName, name)
+        }
+    }
+
+    /** Stage output and expose exactly the returned prefix, without a terminator. */
+    @Synchronized fun readlinkRaw(path: ByteArray, capacity: Int): ByteArray {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val bytes = absoluteRawPath(anchor, path)
+        return NativeLimbScope().use { scope ->
+            val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+            name.copyFrom(bytes, 0, bytes.size)
+            val output = scope.allocate((capacity.toLong() + 7) and -8L)
+            val count = result("readlink", name, output, capacity.toLong())
+            if (count !in 0L..capacity.toLong()) fault("Invalid native readlink result")
+            ByteArray(count.toInt()).also { output.copyTo(it, 0, it.size) }
+        }
+    }
+
     /** Preserve native mode and umask semantics; never change the process umask. */
     @Synchronized fun pathModeRaw(path: ByteArray, mode: Long, createDirectory: Boolean): Long {
         current()

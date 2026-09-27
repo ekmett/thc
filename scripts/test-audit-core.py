@@ -3365,6 +3365,53 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'producer'))
 
 
+class OriginalPathLinkDeclarationTest(unittest.TestCase):
+    """Synthetic negatives; genuine unchanged Id positives are Haskell fixtures."""
+
+    def declaration(self, symbol):
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=False)
+        state = dict(kind='void', primReps=[], evaluated=False)
+        capacity = dict(kind='long', primReps=['Word64Rep'], evaluated=False)
+        args = [address, address, state] if symbol == 'symlink' else [address, address, capacity, state]
+        output = dict(kind='long', primReps=['Int32Rep'], evaluated=True)
+        return dict(schema=1, target=dict(kind='static', symbol=symbol, isFunction=True,
+            unit='unix-2.8.8.0-inplace'), convention='ccall', safety='unsafe',
+            arity=len(args), suppliedArity=len(args), argumentReps=args,
+            resultRep=dict(tuple_rep(dict(state, evaluated=True), output), evaluated=False))
+
+    def test_exact_original_path_link_signatures_and_cint_result(self):
+        fixture = LibdwUnavailableAuditTest()
+        for symbol in ('symlink', 'readlink'):
+            declaration = self.declaration(symbol)
+            report = fixture.audit(fixture.fixture(declaration))
+            self.assertTrue(report['accepted'], report)
+            for unit in ('ghc-internal', 'main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-abcd'):
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            for key, value in (('convention', 'capi'), ('safety', 'safe'), ('arity', 2), ('suppliedArity', 2)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            wrong = copy.deepcopy(declaration)
+            wrong['resultRep']['components'][1]['primReps'] = ['Int64Rep']
+            wrong['resultRep']['primReps'] = ['Int64Rep']
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
+
+    def test_stored_and_lowered_path_link_operands_cannot_be_relabelled(self):
+        fixture = LibdwUnavailableAuditTest()
+        for symbol in ('symlink', 'readlink'):
+            declaration = self.declaration(symbol)
+            for index in range(declaration['arity']):
+                module = fixture.fixture(declaration)
+                module['bindings'][0]['expr'][1][index]['rep'] = LONG
+                self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'stored'))
+                module = fixture.fixture(declaration)
+                call = module['bindings'][0]['expr'][2][1]
+                producer = ['lit', 'string-bytes', '41'] if symbol == 'readlink' and index == 2 else lit(9)
+                call[2][index] = [*producer, call[2][index][2]]
+                self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'lowered'))
+
+
 class OriginalRtsDiagnosticTest(unittest.TestCase):
     def test_exact_diagnostic_descriptors_and_malformed_contracts(self):
         state = dict(kind='void', primReps=[], evaluated=True)

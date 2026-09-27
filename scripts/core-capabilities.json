@@ -95,6 +95,8 @@
     "ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask",
     "__hscore_sizeof_stat",
     "__hscore_fstat",
+    "symlink",
+    "readlink",
     "mkdir",
     "chmod",
     "__hscore_stat",

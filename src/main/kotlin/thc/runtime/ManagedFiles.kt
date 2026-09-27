@@ -646,6 +646,43 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    @TruffleBoundary internal fun symlinkOriginal(target: ManagedAddress, path: ManagedAddress): Long {
+        val targetBytes = originalPathBytes(target)
+        val pathBytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original symlink requires the explicit native filesystem")
+            }
+            provider.symlinkRaw(targetBytes, pathBytes)
+        }
+    }
+
+    /** Check the entire output before path observation, then retain its owner
+     * through the native read and prefix publication. Path/destination aliasing
+     * is safe because the pathname snapshot is complete before the output lock. */
+    @TruffleBoundary internal fun readlinkOriginal(path: ManagedAddress, output: ManagedAddress, capacity: Long): Long {
+        if (capacity !in 0..Int.MAX_VALUE.toLong()) fault("Original readlink exceeds managed byte capacity")
+        output.requireByteRegion(capacity, writable = true)
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original readlink requires the explicit native filesystem")
+            }
+            output.withNativeBorrow {
+                fun publish(): Long {
+                    output.requireByteRegion(capacity, writable = true)
+                    val prefix = provider.readlinkRaw(bytes, capacity.toInt())
+                    ManagedAddress.fromByteArray(prefix).copyNonOverlappingTo(output, prefix.size.toLong())
+                    return prefix.size.toLong()
+                }
+                val allocation = output.cbitsOwner()
+                if (allocation == null) publish() else synchronized(allocation) { publish() }
+            }
+        }
+    }
+
     @TruffleBoundary internal fun pathModeOriginal(path: ManagedAddress, mode: Long, createDirectory: Boolean): Long {
         val bytes = originalPathBytes(path)
         return result {

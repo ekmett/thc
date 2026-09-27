@@ -71,6 +71,31 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathModeAudit.o', 'unknown.json'):
             self.assertFalse(cache.allowed_payload('build/original-path-mode/' + suffix, {}))
 
+    def test_original_path_link_closed_receipt(self):
+        name = 'build/original-path-link/manifest.json'
+        outputs = cache.ORIGINAL_PATH_LINK_OUTPUTS
+        self.assertEqual(35, len(outputs))
+        self.assertEqual(cache.platform.system() == 'Linux', name in DECLARED_REQUIRED)
+        artifacts = {path: 'a' * 64 for path in outputs - {name}}
+        good = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
+                    entries=['pathSymlink', 'pathReadlink'], installedArtifactsHashed=False,
+                    artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.original_path_link_artifact_hashes(good))
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-abc'),
+                        dict(entries=['pathSymlink']), dict(installedArtifactsHashed=True),
+                        dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
+                        dict(artifactHashes={**artifacts, 'build/original-path-link/pre.json': 'bad'})):
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_path_link_artifact_hashes(dict(good, **changes))
+        for path in artifacts:
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_path_link_artifact_hashes(dict(good,
+                    artifactHashes={key: value for key, value in artifacts.items() if key != path}))
+        for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathLinkAudit.o', 'unknown.json'):
+            self.assertFalse(cache.allowed_payload('build/original-path-link/' + suffix, {}))
+
     def test_bytestring_utf8_closed_receipt(self):
         manifest_path = 'build/bytestring-utf8/manifest.json'
         outputs = cache.BYTESTRING_UTF8_OUTPUTS
