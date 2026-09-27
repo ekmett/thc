@@ -56,3 +56,6 @@ thc.runtime.TypedInputsKt
 thc.runtime.ManagedByteArray
 # Only the fieldless companion is created; depth/driver state stays per instance.
 thc.runtime.AstStackScope
+# Fieldless companion and two empty ThreadLocal keys; no thread-local values,
+# threads, guest contexts, or foreign activations are created by initialization.
+thc.runtime.GuestThreads
