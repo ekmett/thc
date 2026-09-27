@@ -10,6 +10,7 @@ The initial contracts are the exact `ghc-internal` static function targets:
 | --- | --- | --- | --- |
 | `ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / safe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
 | `ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / unsafe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
+| `getpid` | ccall / unsafe | none | Int32Rep |
 | `__hscore_get_errno` | ccall / unsafe | none | Int32Rep |
 | `__hscore_set_errno` | ccall / unsafe | Int32Rep | none (singleton State tuple) |
 | `fdReady` | ccall / safe or unsafe | Int32Rep, Word8Rep, Int64Rep, Word8Rep | Int32Rep |
@@ -56,6 +57,21 @@ sets only `LC_MESSAGES` to C and restores the previous locale in `finally`;
 guest async delivery is deferred across that foreign extent. Forced host
 cancellation or LLVM context termination can prevent native restoration because
 the cleanup must re-enter LLVM; this path is not host-cancellation safe.
+
+## Original process identity
+
+The exact `ghc-internal` `getpid` declaration returns signed Int32. The separate
+`unix-2.8.8.0-inplace` `geteuid` declaration returns unsigned Word32; it queries the
+effective user ID, not the real user ID or a username. Both are unsafe ccalls
+with only State as input and an unboxed State/result tuple. Both backends validate
+State before a live libc query and preserve the context's sticky errno.
+
+These read-only queries use the existing FFM downcall pattern with explicit native
+access, independently of filesystem permission. The supported Linux GNU and Darwin
+x86_64/aarch64 LP64 host probe checks signed 32-bit `pid_t` and unsigned 32-bit
+`uid_t`. Handles may be cached; returned identities are queried on every call.
+The native fixture runs in a different process, so its PID is provenance rather
+than a constant expected JVM PID. Runtime checks use same-process controls.
 
 ## Original seek constants
 
