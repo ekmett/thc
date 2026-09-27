@@ -1,9 +1,9 @@
 # Compact Core container
 
 This is the shared version 1 wire contract under implementation. Framing,
-integer primitives, scoped assembly and typed executable-record encoding/decoding
-have native controls. Header facts, conversion, debug maps and runtime integration
-are not yet complete.
+integer primitives, scoped assembly, typed executable/header records and explicit
+flat-JSON conversion have native controls. Optional debug maps, eight module-level
+provenance families and complete runtime integration are not yet complete.
 Existing JSON and unit-directory routes remain available and unchanged.
 
 ## Assembly and addressing
@@ -240,9 +240,9 @@ fieldTypes, p(u sumArity), p(EnumFamily), p(TagFamily)`. ConstructorKind tags
 including void/coercion slots, not source-level field counts. `InlineRep` uses
 the same shape and evaluation grammar, but recursively inlines shapes with no
 ShapeUse tag or data references; header constructors therefore require no
-executable-body access. Typed header facts and the remaining module-level foreign
-provenance families are still pending this tranche; nonempty unmapped fields
-must be rejected by the converter, not discarded or embedded as generic JSON.
+executable-body access. Nonempty module-level foreign provenance families without
+a typed payload schema are rejected by the converter, not discarded or embedded
+as generic JSON.
 
 ### Header facts
 
@@ -297,6 +297,40 @@ finalizers`. `Label` is `b isInitializer, str unit, str module, str name`.
 remain semantic/provenance content, not optional display-name debug data.
 `ForeignExceptionBridge` is `u schema, str unit, str module, str box, str project,
 str payloadType, str exceptionType`; its unit reference remains semantic too.
+
+## Explicit conversion and inspection
+
+Build the native tool with `cabal build exe:thc-compact --offline -fdevelopment`.
+It currently accepts one flat Core JSON module at a time:
+
+```sh
+cabal run exe:thc-compact -- encode --without-debug Module.json Module.thcc
+cabal run exe:thc-compact -- decode Module.thcc inspected.json
+```
+
+The explicit `--without-debug` choice omits display names and source notes; there
+is no default conversion that silently drops them. Unknown semantic fields and
+known values in the eight unmapped provenance slots fail conversion. Header
+constructors, target-layout facts, foreign artifacts and exception-bridge facts
+are typed; the original JSON remains the reference path for other modules.
+The converter is not yet a default project-publication path.
+
+Inspection is an explicit full-module operation, separate from runtime demand
+loading. It emits flat records with deterministic `@local/N` identities and
+synthetic display names, not recovered original spellings. It preserves only the
+two operative entry-type facts, not arbitrary pretty types or printed IdInfo.
+For lossless IEEE inspection it emits `float-bits` and `double-bits` literals with
+unsigned decimal bit payloads; this converter accepts those tags in addition to
+the reference exporter's decimal `float` and `double` values. The inspection-only
+bit tags do not extend the legacy JVM JSON reader. Encoding the inspected form
+preserves signed zero and NaN payload bits.
+
+The opt-in manifest representation retains the original module `sha256`, name,
+boundary and four actual summary booleans. Its `compact` field contains `path`,
+the container `sha256`, and `format: "thc-compact-core-v1"`. Original unit identity,
+dependencies and any real canonical `targetLayout` remain in the unit descriptor.
+No JSON or symbol-pair artifact is required for an all-compact unit. Checksums
+remain explicit verification inputs, not default startup scans.
 
 ## Shared controls
 

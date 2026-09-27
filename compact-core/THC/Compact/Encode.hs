@@ -1,5 +1,6 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+{-# LANGUAGE OverloadedStrings #-}
 
 -- |
 -- Module      : THC.Compact.Encode
@@ -11,29 +12,117 @@
 --
 -- One-pass typed executable encoding. Shapes are interned independently of
 -- occurrence states; strings append directly to their private auxiliary stream.
-module THC.Compact.Encode (Encoder, newEncoder, encodeBinding, encodeExpr, encodeRep, internString) where
+module THC.Compact.Encode
+  ( Encoder, newEncoder, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl ) where
 
-import Control.Monad (unless, void)
+import Control.Monad (unless, void, when)
 import Data.Binary.Put
 import Data.Bits ((.&.), shiftR)
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Builder as Builder
+import qualified Data.ByteString.Lazy as BL
 import Data.IORef
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word8, Word64)
 import THC.Compact.Core
+import THC.Compact.Facts
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 data Encoder = Encoder !Streams !(IORef (Map.Map BS.ByteString Span)) !(IORef (Map.Map Shape Word64))
+  !(Maybe (IORef Builder.Builder)) !(IORef Bool)
 
 newEncoder :: Streams -> IO Encoder
-newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty
+newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty <*> pure Nothing <*> newIORef False
+
+-- | Derived during expression emission, without a separate Core-body walk.
+containsDelimitedControl :: Encoder -> IO Bool
+containsDelimitedControl (Encoder _ _ _ _ found) = readIORef found
+
+-- | Encode only the bounded known-start record in memory, while appending its
+-- strings to the auxiliary stream. Constructor shapes are inline: admitting
+-- header facts never requires reading an executable-body shape definition.
+encodeFacts :: Encoder -> Facts -> IO BS.ByteString
+encodeFacts (Encoder streams strings shapes _ found) facts = do
+  output <- newIORef mempty
+  let encoder = Encoder streams strings shapes (Just output) found
+  number encoder (factsSchema facts)
+  mapM_ (string encoder) [factsGhc facts, factsUnit facts, factsModule facts, factsBoundary facts]
+  present encoder (list encoder (string encoder)) (factsProvidedModules facts)
+  present encoder (targetLayout encoder) (factsTargetLayout facts)
+  list encoder (constructor encoder) (factsConstructors facts)
+  present encoder (foreignArtifacts encoder) (factsForeign facts)
+  present encoder (exceptionBridge encoder) (factsExceptionBridge facts)
+  present encoder (string encoder) (factsExceptionBridgeUnit facts)
+  unless (length (factsPendingProvenance facts) == length pendingProvenanceNames)
+    (fail "Compact header requires eight provenance-presence slots")
+  mapM_ (present encoder (const (fail "Unimplemented nonempty compact provenance record"))) (factsPendingProvenance facts)
+  BL.toStrict . Builder.toLazyByteString <$> readIORef output
+
+targetLayout :: Encoder -> TargetLayout -> IO ()
+targetLayout encoder value = do
+  number encoder (targetDocumentSchema value)
+  mapM_ (string encoder) [targetCompilerId value,targetCompilerAbi value,targetCompilerPlatform value,targetCompilerWay value]
+  number encoder (targetLayoutSchema value)
+  boolean encoder (targetProfiled value)
+  number encoder (targetWordBytes value)
+  enumeration encoder (targetEndianness value)
+  string encoder (targetPlatform value)
+  boolean encoder (targetTablesNextToCode value)
+  unless (length (targetNumbers value) == length targetNumberNames) (fail "Incomplete compact target-layout numbers")
+  mapM_ (number encoder) (targetNumbers value)
+
+foreignArtifacts :: Encoder -> ForeignArtifacts -> IO ()
+foreignArtifacts encoder (ForeignArtifacts schema execution stubs files) = do
+  number encoder schema
+  string encoder execution
+  present encoder putStubs stubs
+  list encoder putFile files
+  where
+    putStubs (Stubs header source initializers finalizers) = do
+      string encoder header
+      string encoder source
+      list encoder putLabel initializers
+      list encoder putLabel finalizers
+    putLabel (Label initializer unit moduleName name) = boolean encoder initializer >> mapM_ (string encoder) [unit,moduleName,name]
+    putFile (ForeignFile language source extension) = mapM_ (string encoder) [language,source,extension]
+
+exceptionBridge :: Encoder -> ExceptionBridge -> IO ()
+exceptionBridge encoder (ExceptionBridge schema unit moduleName box project payload exception) =
+  number encoder schema >> mapM_ (string encoder) [unit,moduleName,box,project,payload,exception]
+
+constructor :: Encoder -> Constructor -> IO ()
+constructor encoder value = do
+  string encoder (constructorId value)
+  number encoder (constructorArity value)
+  number encoder (constructorTag value)
+  enumeration encoder (constructorKind value)
+  list encoder (boolean encoder) (constructorStrictFields value)
+  unless (all (/= Missing) (constructorFieldLifted value) && all (/= Missing) (constructorFieldReps value))
+    (fail "Absent compact constructor array element")
+  list encoder (present encoder (boolean encoder)) (constructorFieldLifted value)
+  list encoder (present encoder (list encoder (primRep encoder))) (constructorFieldReps value)
+  list encoder inlineRep (constructorFieldTypes value)
+  present encoder (number encoder) (constructorSumArity value)
+  present encoder (enumFamily encoder) (constructorEnumFamily value)
+  present encoder (tagFamily encoder) (constructorTagFamily value)
+  where
+    inlineRep (Rep layout state) = inlineShape layout >> evaluation encoder layout state
+    inlineShape layout = do
+      enumeration encoder (shapeKind layout)
+      present encoder (list encoder (primRep encoder)) (shapePrimReps layout)
+      present encoder (vector encoder) (shapeVector layout)
+      present encoder (enumeration encoder) (shapeAggregate layout)
+      present encoder (list encoder inlineShape) (shapeComponents layout)
+      present encoder (list encoder inlineShape) (shapeAlternatives layout)
+      present encoder (number encoder) (shapeTagSlot layout)
+      present encoder (list encoder (list encoder (number encoder))) (shapeAlternativeSlots layout)
 
 -- | Intern semantic UTF-8, never literal raw bytes. Referenced string spans are
 -- direct byte positions, with no separate string-ID table.
 internString :: Encoder -> BS.ByteString -> IO Span
-internString (Encoder streams strings _) bytes = do
+internString (Encoder streams strings _ _ _) bytes = do
   table <- readIORef strings
   case Map.lookup bytes table of
     Just ref -> pure ref
@@ -45,7 +134,9 @@ internString (Encoder streams strings _) bytes = do
       pure ref
 
 emit :: Encoder -> Put -> IO ()
-emit (Encoder streams _ _) = void . appendRecord streams ExecutableData
+emit (Encoder streams _ _ Nothing _) = void . appendRecord streams ExecutableData
+emit (Encoder _ _ _ (Just output) _) = \record ->
+  modifyIORef' output (<> Builder.lazyByteString (runPut record))
 
 tag :: Encoder -> Word8 -> IO ()
 tag encoder = emit encoder . putWord8
@@ -76,7 +167,7 @@ identity encoder value = case value of
   Local ordinal -> tag encoder 1 >> number encoder ordinal
 
 encodeBinding :: Encoder -> Binding -> IO Word64
-encodeBinding encoder@(Encoder streams _ _) binding = do
+encodeBinding encoder@(Encoder streams _ _ _ _) binding = do
   start <- streamOffset streams ExecutableData
   identity encoder (bindingIdentity binding)
   enumeration encoder (bindingEntryType binding)
@@ -107,9 +198,12 @@ idInfo encoder (IdInfo joinArity cbvEligible marks) = do
   present encoder (list encoder (boolean encoder)) marks
 
 encodeExpr :: Encoder -> Expr -> IO ()
-encodeExpr encoder expression = case expression of
+encodeExpr encoder@(Encoder _ _ _ _ found) expression = case expression of
   Var metadata key -> prefix 0 metadata >> identity encoder key
-  Prim metadata name -> prefix 1 metadata >> string encoder name
+  Prim metadata name -> do
+    when (name == "prompt#" || name == "control0#")
+      (writeIORef found True)
+    prefix 1 metadata >> string encoder name
   Lit metadata value -> prefix 2 metadata >> literal encoder value
   Lam metadata parameters body -> prefix 3 metadata >> list encoder (binder encoder) parameters >> child body
   Con metadata key arity -> prefix 4 metadata >> string encoder key >> number encoder arity
@@ -184,7 +278,7 @@ foreignCall encoder value = do
 alternative :: Encoder -> Alternative -> IO ()
 alternative encoder value = case value of
   DefaultAlt binders body -> tag encoder 0 >> suffix binders body
-  DataAlt constructor binders body -> tag encoder 1 >> string encoder constructor >> suffix binders body
+  DataAlt constructorKey binders body -> tag encoder 1 >> string encoder constructorKey >> suffix binders body
   LiteralAlt discriminator binders body -> tag encoder 2 >> literal encoder discriminator >> suffix binders body
   where suffix binders body = list encoder (binder encoder) binders >> encodeExpr encoder body
 
@@ -192,7 +286,7 @@ encodeRep :: Encoder -> Rep -> IO ()
 encodeRep encoder (Rep layout state) = shapeUse encoder layout >> evaluation encoder layout state
 
 shapeUse :: Encoder -> Shape -> IO ()
-shapeUse encoder@(Encoder streams _ shapes) layout = do
+shapeUse encoder@(Encoder streams _ shapes _ _) layout = do
   table <- readIORef shapes
   case Map.lookup layout table of
     Just offset -> tag encoder 1 >> number encoder offset

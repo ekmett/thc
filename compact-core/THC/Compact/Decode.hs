@@ -12,7 +12,7 @@
 -- Native selected-record decoder for round-trip controls and flat inspection.
 -- Earlier shape definitions are addressed directly; no preceding Core tree is
 -- decoded to find a selected binding. Runtime mmap ownership is independent.
-module THC.Compact.Decode (decodeBindingAt, decodeExprAt, decodeRepAt) where
+module THC.Compact.Decode (decodeBindingAt, decodeExprAt, decodeRepAt, decodeFacts) where
 
 import Control.Monad (replicateM, unless)
 import Data.Binary.Get hiding (Decoder)
@@ -24,6 +24,7 @@ import qualified Data.Set as Set
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word64)
 import THC.Compact.Core
+import THC.Compact.Facts
 import THC.Compact.Wire
 
 data Decoder = Decoder
@@ -42,6 +43,51 @@ decodeExprAt bytes strings offset = runAt bytes offset (expression (Decoder byte
 
 decodeRepAt :: BS.ByteString -> BS.ByteString -> Word64 -> Either String (Rep, Word64)
 decodeRepAt bytes strings offset = runAt bytes offset (representation (Decoder bytes strings offset Set.empty))
+
+-- | Header facts decode independently of all executable and debug bytes.
+decodeFacts :: BS.ByteString -> BS.ByteString -> Either String Facts
+decodeFacts bytes strings = decodeExact (facts (Decoder bytes strings 0 Set.empty)) bytes
+
+facts :: Decoder -> Get Facts
+facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+  <*> present (list decoder (string decoder)) <*> present (targetLayout decoder)
+  <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
+  <*> present (exceptionBridge decoder) <*> present (string decoder)
+  <*> replicateM (length pendingProvenanceNames) (present (fail "Unimplemented nonempty compact provenance record"))
+
+targetLayout :: Decoder -> Get TargetLayout
+targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+  <*> getUVar <*> boolean <*> getUVar <*> enumeration <*> string decoder <*> boolean
+  <*> replicateM (length targetNumberNames) getUVar
+
+foreignArtifacts :: Decoder -> Get ForeignArtifacts
+foreignArtifacts decoder = ForeignArtifacts <$> getUVar <*> string decoder <*> present stubs <*> list decoder file
+  where
+    stubs = Stubs <$> string decoder <*> string decoder <*> list decoder labelRecord <*> list decoder labelRecord
+    labelRecord = Label <$> boolean <*> string decoder <*> string decoder <*> string decoder
+    file = ForeignFile <$> string decoder <*> string decoder <*> string decoder
+
+exceptionBridge :: Decoder -> Get ExceptionBridge
+exceptionBridge decoder = ExceptionBridge <$> getUVar <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> string decoder <*> string decoder
+
+constructor :: Decoder -> Get Constructor
+constructor decoder = Constructor <$> string decoder <*> getUVar <*> getUVar <*> enumeration
+  <*> list decoder boolean <*> list decoder (arrayElement boolean)
+  <*> list decoder (arrayElement (list decoder primRep)) <*> list decoder inlineRep
+  <*> present getUVar <*> present (enumFamily decoder) <*> present (tagFamily decoder)
+  where
+    inlineRep = do
+      layout <- inlineShape
+      Rep layout <$> evaluation layout
+    inlineShape = shapeFields decoder inlineShape
+
+arrayElement :: Get a -> Get (Presence a)
+arrayElement parser = do
+  value <- present parser
+  case value of
+    Missing -> fail "Absent compact array element"
+    _ -> pure value
 
 runAt :: BS.ByteString -> Word64 -> Get a -> Either String (a, Word64)
 runAt bytes offset parser = do
@@ -117,16 +163,12 @@ expression decoder = do
     2 -> Lit metadata <$> literal decoder
     3 -> Lam metadata <$> list decoder (binder decoder) <*> child
     4 -> Con metadata <$> string decoder <*> getUVar
-    5 -> App metadata <$> child <*> list decoder child <*> list decoder liftedElement <*> boolean <*> boolean
+    5 -> App metadata <$> child <*> list decoder child <*> list decoder (arrayElement boolean) <*> boolean <*> boolean
     6 -> Let metadata <$> boolean <*> list decoder (binding decoder) <*> child
     7 -> Case metadata <$> child <*> getUVar <*> present (binder decoder) <*> list decoder (alternative decoder)
     _ -> pure (Void metadata)
   where
     child = expression decoder
-    liftedElement = do
-      value <- present boolean
-      unless (value /= Missing) (fail "Absent compact argument-lifted array element")
-      pure value
 
 meta :: Decoder -> Get Meta
 meta decoder = Meta <$> present (representation decoder) <*> present (representation decoder)
@@ -190,9 +232,12 @@ shapeUse decoder = do
     _ -> fail "Unknown compact shape-use tag"
 
 shapeDefinition :: Decoder -> Get Shape
-shapeDefinition decoder = Shape <$> enumeration <*> present (list decoder primRep)
+shapeDefinition decoder = shapeFields decoder (shapeUse decoder)
+
+shapeFields :: Decoder -> Get Shape -> Get Shape
+shapeFields decoder child = Shape <$> enumeration <*> present (list decoder primRep)
   <*> present vector <*> present enumeration
-  <*> present (list decoder (shapeUse decoder)) <*> present (list decoder (shapeUse decoder))
+  <*> present (list decoder child) <*> present (list decoder child)
   <*> present getUVar <*> present (list decoder (list decoder getUVar))
 
 evaluation :: Shape -> Get Evaluation

@@ -18,16 +18,26 @@ import Control.Exception (IOException, try)
 import Control.Monad (forM, forM_)
 import qualified Data.ByteString as BS
 import Data.Either (isLeft)
+import Data.Foldable (toList)
+import Data.Aeson (Value(..), toJSON)
+import qualified Data.Aeson.KeyMap as KM
+import Data.Binary.Get (getByteString, getWord64le)
 import Data.IORef
+import Data.List (sort)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text as Text
 import Data.Word (Word64)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
-import Test.HUnit
+import Test.HUnit hiding (Label)
 import THC.Compact.Core
 import THC.Compact.Decode
 import THC.Compact.Encode
+import THC.Compact.Facts
+import THC.Compact.Module (writeModule)
+import THC.Compact.JSON (parseModuleWithoutDebug)
+import THC.Compact.Inspect (moduleJSON, inspectContainer)
+import THC.CoreSymbols (symbolDigest)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
@@ -89,6 +99,89 @@ semanticTests = TestList
           assertBool ("truncated at " ++ show size) (isLeft (decodeExprAt (BS.take size bytes) strings 0))
         assertBool "no full-string fallback" (isLeft (decodeExprAt bytes BS.empty 0))
         assertBool "invalid selected UTF8" (isLeft (decodeExprAt bytes (BS.replicate 7 255) 0))
+  , TestLabel "known-start facts need no executable bytes and share raw strings" $ TestCase $
+      withSystemTempDirectory "compact-header" $ \directory -> do
+        encoderSlot <- newIORef Nothing
+        let destination = directory </> "header.thcc"
+            prepare streams = do
+              encoder <- newEncoder streams
+              writeIORef encoderSlot (Just encoder)
+              encodeFacts encoder completeFacts
+            produce _ = do
+              encoder <- readIORef encoderSlot >>= maybe (fail "Missing encoder") pure
+              _ <- encodeBinding encoder completeBinding
+              pure 0
+        footer <- writeContainerPrepared destination prepare 0 produce
+        file <- BS.readFile destination
+        header <- either fail pure (decodeExact getHeader (BS.take 24 file))
+        let factBytes = BS.take (fromIntegral (headerFactsLength header)) (BS.drop 24 file)
+        case footerSegments footer of
+          _ : Span stringStart stringLength : _ -> do
+            let strings = BS.take (fromIntegral stringLength) (BS.drop (fromIntegral stringStart) file)
+            assertEqual "header-only decode" (Right completeFacts) (decodeFacts factBytes strings)
+            assertBool "header includes inline constructor shape" (not (BS.null factBytes))
+          _ -> assertFailure "Missing strings"
+  , TestLabel "unmapped present provenance cannot disappear during preparation" $ TestCase $
+      withSystemTempDirectory "compact-header-rejection" $ \directory -> do
+        failure <- try (writeContainerPrepared (directory </> "bad.thcc")
+          (\streams -> newEncoder streams >>= \encoder -> encodeFacts encoder
+            completeFacts {factsPendingProvenance=Known () : replicate 7 Missing}) 0 (const (pure 0)))
+          :: IO (Either IOException Footer)
+        assertBool "unmapped known record rejected" (isLeft failure)
+  , TestLabel "module directory captures actual data-relative binding positions" $ TestCase $
+      withSystemTempDirectory "compact-module" $ \directory -> do
+        let values = [completeBinding, completeBinding {bindingIdentity=Global "main::Typed.main"},
+              completeBinding {bindingIdentity=Global "main:Typed.control", bindingExpr=Prim emptyMeta "prompt#"}]
+            destination = directory </> "module.thcc"
+        footer <- writeModule destination completeFacts values
+        assertEqual "all bindings indexed" 3 (footerBindingCount footer)
+        assertEqual "actual control/registration/alias, no scalar declarations" 7 (footerSummaries footer)
+        assertEqual "debug-free producer" 0 (footerDebugFlags footer)
+        file <- BS.readFile destination
+        case footerSegments footer of
+          [dataSpan,stringSpan,_,_,_,indexSpan] -> do
+            let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) file)
+                bytes = slice dataSpan
+                strings = slice stringSpan
+                rows = slice indexSpan
+            assertEqual "fixed24 per binding" 72 (BS.length rows)
+            decoded <- forM [0,24,48] $ \start ->
+              either fail pure (decodeExact ((,) <$> getByteString 16 <*> getWord64le) (BS.take 24 (BS.drop start rows)))
+            assertEqual "unsigned digest ordering" (sort (map fst decoded)) (map fst decoded)
+            forM_ decoded $ \(digest,offset) -> do
+              (value,_) <- either fail pure (decodeBindingAt bytes strings offset)
+              assertBool "exact selected original binding" (value `elem` values)
+              case bindingIdentity value of
+                Global key -> assertEqual "canonical logical UTF8 MD5" digest =<< symbolDigest key
+                Local _ -> assertFailure "Published local identity"
+          _ -> assertFailure "Missing six segments"
+        failure <- try (writeModule destination completeFacts [completeBinding,completeBinding]) :: IO (Either IOException Footer)
+        assertBool "duplicate digest rejects publication" (isLeft failure)
+        assertEqual "valid original container preserved" file =<< BS.readFile destination
+        inspected <- either fail pure (inspectContainer file)
+        assertEqual "explicit flat inspection preserves typed semantics" (Right (completeFacts,values))
+          (parseModuleWithoutDebug inspected)
+  , TestLabel "flat semantic JSON normalizes locals without losing fields or IEEE bits" $ TestCase $ do
+      assertEqual "all typed record fields" (Right (completeFacts,[completeBinding]))
+        (parseModuleWithoutDebug (moduleJSON completeFacts [completeBinding]))
+      forM_ literals $ \lit -> do
+        let value = completeBinding {bindingExpr=Lit emptyMeta lit}
+        assertEqual (show lit) (Right (completeFacts,[value]))
+          (parseModuleWithoutDebug (moduleJSON completeFacts [value]))
+  , TestLabel "unknown semantic JSON and nonempty provenance fail explicitly" $ TestCase $ do
+      let original = moduleJSON completeFacts [completeBinding]
+          add key value = case original of Object fields -> Object (KM.insert key value fields); _ -> original
+      assertBool "unknown operative field" (isLeft (parseModuleWithoutDebug (add "newSemanticFact" (Bool True))))
+      assertBool "not-yet-typed provenance" (isLeft (parseModuleWithoutDebug (add "packageNativeLink" (Object KM.empty))))
+      let badLiteral kind payload = case moduleJSON completeFacts [completeBinding] of
+            Object fields -> case KM.lookup "bindings" fields of
+              Just (Array bindings) -> Object (KM.insert "bindings" (toJSON (map (\value -> case value of
+                Object b -> Object (KM.insert "expr" (toJSON [String "lit",String kind,String payload,Object KM.empty]) b)
+                other -> other) (toList bindings))) fields)
+              _ -> original
+            _ -> original
+      assertBool "negative Word does not wrap" (isLeft (parseModuleWithoutDebug (badLiteral "word" "-1")))
+      assertBool "overflowing Int does not wrap" (isLeft (parseModuleWithoutDebug (badLiteral "int" "9223372036854775808")))
   ]
 
 withEncoded :: (Streams -> Encoder -> IO a) -> (BS.ByteString -> BS.ByteString -> a -> Assertion) -> Assertion
@@ -187,3 +280,17 @@ invalidValues =
   , Void emptyMeta {metaRep=Known (Rep tupleShape (Evaluation (Known True) []))}
   , App emptyMeta (Prim emptyMeta "id") [] [Missing] False False
   ]
+
+completeFacts :: Facts
+completeFacts = Facts 2 "9.14.1" "main" "Typed" "optimized-Core-before-Tidy" (Known ["Typed"])
+  (Known (TargetLayout 1 "ghc-9.14.1" "actual-abi" "actual-target" "vanilla"
+    1 False 8 LittleEndian "actual-target" True [1..fromIntegral (length targetNumberNames)]))
+  [Constructor "main:Typed.Box" 2 1 BoxedConstructor [True,False]
+    [Known False,Known True] [Known [IntRep],Known [BoxedLifted]] [longRep,tupleCold]
+    Missing (Known (EnumFamily "main:Typed.Box" ["main:Typed.Box"])) Unknown]
+  (Known (ForeignArtifacts 1 "not-linked" (Known (Stubs "header" "source"
+    [Label True "main" "Typed" "init"] [Label False "main" "Typed" "done"]))
+    [ForeignFile "C" "foreign source" ".c"]))
+  (Known (ExceptionBridge 1 "main" "Typed" "main:Typed.box" "main:Typed.project"
+    "main:Typed.Payload" "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
+  (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing]
