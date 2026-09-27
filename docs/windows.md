@@ -366,6 +366,22 @@ exporter parity.
 
 ## Current boundaries
 
+Native allocation uses a small Windows DLL compiled by the selected native
+Clang. Its `malloc` and `free` bind to one CRT, and it copies C `errno` into a
+call-local output before returning to the JVM. The producer runs a real native
+probe for pointer/size_t (64-bit), int/long (32-bit), CRT module identity, and
+allocation failure; the runtime checks the packaged DLL hash and exported ABI.
+This does not use `GetLastError` for C allocation failures. The existing context
+ownership, ordered borrows, bounds, allocate/copy/retire realloc and disposal
+rules are shared with Linux; LocalFree allocations keep their own deallocator.
+
+Regenerate the native GHC oracle with `cabal run thc-fixtures -- native-addresses`
+(use `--disable-shared` for the Windows bindist), then run `testDefault` and
+`testDense` together with `--tests thc.runtime.NativeMallocTest` on each task.
+Both runtime backends and first-installed-entry checks are exercised by that
+class. Its two termios tests still require the POSIX provider. These allocation
+checks do not establish Windows POSIX stdio or complete installed-library Core.
+
 This is a bounded native Windows gate, not full parity with Linux/macOS or the
 repository's entire fixture/test suite.
 

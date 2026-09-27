@@ -16,7 +16,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     /** Native adapters capture errno in C immediately, before any other call.
      * Zero means success and must preserve the guest's sticky error slot. */
     internal fun nativeError(error: Long) {
-        hostAbi
+        if (WindowsDirectoryStreams.supportedHost()) WindowsCodePages.Abi.requireLayout() else hostAbi
         if (error < 0 || error > Int.MAX_VALUE) fault("Invalid native errno")
         if (error != 0L) lastError.set(error)
     }

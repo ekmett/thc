@@ -97,7 +97,7 @@ class NativeMallocTest {
         assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
     }
 
-    private fun supported() = assumeTrue(System.getProperty("os.name") == "Linux" &&
+    private fun supported() = assumeTrue((System.getProperty("os.name") == "Linux" || WindowsDirectoryStreams.supportedHost()) &&
         System.getProperty("os.arch") in setOf("amd64", "x86_64"))
     private fun <T> inside(body: (Language) -> T): T {
         supported()
@@ -270,6 +270,38 @@ class NativeMallocTest {
         assertSame(ManagedAddress.nullAddress(), registry.malloc(Long.MAX_VALUE))
         assertTrue(Language.currentState().stdio.errno() > 0, "Actual libc allocation failure must preserve errno")
         assertEquals(0, registry.liveCount())
+    }
+
+    @Test fun windowsCrtErrnoIsCapturedOnTheCallingThreadWithoutChangingLastError() {
+        assumeTrue(WindowsDirectoryStreams.supportedHost())
+        inside { _ ->
+            val state = Language.currentState()
+            state.stdio.setErrno(73)
+            state.windowsCodePages.lastError.set(0x12345678L)
+            val allocation = state.nativeAllocations.malloc(16)
+            state.nativeAllocations.free(allocation)
+            assertEquals(73L, state.stdio.errno(), "Successful allocation preserves sticky errno")
+            assertSame(ManagedAddress.nullAddress(), state.nativeAllocations.malloc(Long.MAX_VALUE))
+            assertEquals(WindowsCodePages.Abi.errno.getValue("ENOMEM"), state.stdio.errno())
+            assertEquals(0x12345678L, state.windowsCodePages.lastError.get())
+            // The second guest carrier has its own errno slot, even though the
+            // process-wide bridge pairs allocations with the same native CRT.
+            val executor = Executors.newSingleThreadExecutor()
+            try {
+                executor.submit {
+                    inside { _ ->
+                        val other = Language.currentState()
+                        assertEquals(0L, other.stdio.errno())
+                        other.stdio.setErrno(91)
+                        val owned = other.nativeAllocations.malloc(32)
+                        other.nativeAllocations.free(owned)
+                        assertEquals(91L, other.stdio.errno())
+                    }
+                }.get(10, TimeUnit.SECONDS)
+            } finally { executor.shutdownNow() }
+            assertEquals(WindowsCodePages.Abi.errno.getValue("ENOMEM"), state.stdio.errno())
+            assertEquals(0, state.nativeAllocations.liveCount())
+        }
     }
 
     @Test fun freeWaitsForBorrowAndDisposalInvalidatesSavedAliases() {
@@ -490,6 +522,7 @@ class NativeMallocTest {
     }
 
     @Test fun termiosTransferCopiesBackWholeImagesOnSuccessAndNativeError(): Unit = inside { _ ->
+        assumeTrue(System.getProperty("os.name") == "Linux", "termios requires the native POSIX provider")
         val registry = Language.currentState().nativeAllocations
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0).toInt()
         val base = registry.malloc(size.toLong() + 16)
@@ -520,6 +553,7 @@ class NativeMallocTest {
 
     @Test fun tcgetattrTransferHoldsNativeOwnerUntilErrorOrSuccessCopybackCompletes() {
         supported()
+        assumeTrue(System.getProperty("os.name") == "Linux", "termios requires the native POSIX provider")
         context(false).use { context ->
             val executor = Executors.newSingleThreadExecutor()
             context.initialize("thc"); context.enter()

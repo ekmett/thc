@@ -1164,7 +1164,7 @@ val compileCbits by tasks.registering(Exec::class) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
         "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
-        "src/main/c/gmp-api.c",
+        "src/main/c/gmp-api.c", "src/main/c/windows-malloc.c",
         "bench/experiments/pinned-addresses/reference/md5.c",
         "bench/experiments/pinned-addresses/reference/md5.h")
     inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
@@ -1545,6 +1545,7 @@ if (windowsHost) {
         exclude { !it.isDirectory && it.path.startsWith("thc/native/") &&
             it.path != "thc/native/windows-directory-abi.json" }
         exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
+        exclude("thc/cbits/windows-malloc-probe.exe")
     }
 } else {
     tasks.processResources { exclude("thc/native/windows-directory-abi.json") }
