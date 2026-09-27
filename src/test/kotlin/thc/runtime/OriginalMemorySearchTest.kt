@@ -76,7 +76,7 @@ class OriginalMemorySearchTest {
         for (stage in listOf("pre", "post")) {
             val source = module(stage)
             val calls = OriginalStdioChecks.foreignCalls(source)
-            assertEquals(MemorySearchOp.entries.toSet(), calls.map { call ->
+            assertEquals(MemorySearchOp.values().toSet(), calls.map { call ->
                 val metadata = call[6] as Map<*, *>
                 CoreMemorySearchForeign.validate(metadata, (call[2] as List<List<Any?>>).map {
                     CoreRepresentations.metadata(it)?.get("rep") }, call[3] as List<*>, metadata["rep"])
@@ -183,9 +183,9 @@ class OriginalMemorySearchTest {
                     if (unit in installed || unit == "ghc-internal" && target["symbol"] == "memcmp") {
                         val program = load(language, backend, candidate)
                         val bytes = ManagedAddress.fromByteArray(byteArrayOf(1, 2))
-                        val second: Any = if (target["symbol"] == "memcmp") bytes else 1L
-                        val result = Calls.target(program.entryTarget("entry"), arrayOf(0L, bytes, second, 2L, Unit))
-                        if (target["symbol"] == "memcmp") assertEquals(0L, result, "$backend/$unit")
+                        val second: Any = if (target["symbol"] == "memcmp") bytes else 1
+                        val result = callScalarTestTarget(program.entryTarget("entry"), arrayOf(0L, bytes, second, 2L, Unit))
+                        if (target["symbol"] == "memcmp") assertEquals(0, result, "$backend/$unit")
                         else assertTrue((result as ManagedAddress).sameLocation(bytes), "$backend/$unit")
                     } else {
                         assertThrows(RuntimeFault::class.java, { load(language, backend, candidate) }, "$backend/$unit")
@@ -221,6 +221,9 @@ class OriginalMemorySearchTest {
                 val bytes = ManagedAddress.fromByteArray(byteArrayOf(1,2))
                 val second: Any = if (symbol == "memcmp") bytes else 1L
                 assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, bytes, second, 2L, 17L)) }
+                assertThrows(RuntimeFault::class.java) {
+                    callScalarTestTarget(target, arrayOf(0L, bytes, if (symbol == "memcmp") bytes else 1, 2L, 17L))
+                }
             }
         }
     }
@@ -267,10 +270,10 @@ class OriginalMemorySearchTest {
                     // The same well-formed lexical join works without claiming
                     // the original foreign declaration's authority.
                     val bytes = ManagedAddress.fromByteArray(byteArrayOf(1, 2))
-                    val second: Any = if (compare) ManagedAddress.fromByteArray(byteArrayOf(9, 8)) else 9L
+                    val second: Any = if (compare) ManagedAddress.fromByteArray(byteArrayOf(9, 8)) else 9
                     val target = load(language, backend, shadowed(false)).entryTarget("entry")
-                    val result = Calls.target(target, arrayOf(0L, bytes, second, 1L, Unit))
-                    if (compare) assertEquals(37L, result)
+                    val result = callScalarTestTarget(target, arrayOf(0L, bytes, second, 1L, Unit))
+                    if (compare) assertEquals(37, result)
                     else assertSame(bytes, result)
                     val failure = assertThrows(RuntimeFault::class.java) {
                         load(language, backend, shadowed(true))

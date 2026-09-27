@@ -64,7 +64,7 @@ final class CoreByteStringUtf8Foreign {
         requireProof(call.keySet().equals(DESCRIPTOR_KEYS) && exact(call.get("schema"), 1), "descriptor schema");
         requireProof(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction"))
                 && "static".equals(target.get("kind")) && Boolean.TRUE.equals(target.get("isFunction"))
-                && CoreMemorySearchForeignKt.isOriginalByteStringUnit(unit), "supported installed target");
+                && CoreMemorySearchForeign.isOriginalByteStringUnit(unit), "supported installed target");
         requireProof("ccall".equals(call.get("convention"))
                 && ("safe".equals(call.get("safety")) || "unsafe".equals(call.get("safety")))
                 && exact(call.get("arity"), 3) && exact(call.get("suppliedArity"), 3), "convention, safety or arity");
