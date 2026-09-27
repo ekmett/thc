@@ -82,6 +82,45 @@ class CoreUnitLoadTest {
             asyncExceptions = async, verifyArtifacts = verify)
     private fun count(value: Value, field: String) = ((Json.parse(value.getMember("diagnostics").asString()) as Map<*, *>)[field] as Number).toLong()
 
+    @Test fun explicitFixedDigestDirectoryKeepsTheSameColdBindingPath() {
+        val text = fixture()
+        @Suppress("UNCHECKED_CAST")
+        val document = Json.parse(Files.readString(text)) as Map<String, Any?>
+        val units = (document["units"] as List<Map<String, Any?>>).map { unit ->
+            val original = unit["symbols"] as Map<String, String>
+            val path = Path.of(original.getValue("path"))
+            val records = Files.readAllLines(path).map { line ->
+                val separator = line.lastIndexOf(' ')
+                val digest = MessageDigest.getInstance("MD5").digest(line.substring(0, separator).toByteArray(Charsets.UTF_8))
+                java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                    .put(digest).putLong(line.substring(separator + 1).toLong()).array()
+            }.sortedWith { a, b -> java.util.Arrays.compareUnsigned(a, 0, 16, b, 0, 16) }
+            val bytes = java.io.ByteArrayOutputStream().also { output -> records.forEach(output::write) }.toByteArray()
+            val binary = path.resolveSibling(path.fileName.toString() + ".md5")
+            Files.write(binary, bytes)
+            unit + ("symbols" to mapOf("path" to binary.toString(), "sha256" to hash(bytes), "format" to CoreJsonSymbols.MD5_FORMAT))
+        }
+        val binaryManifest = directory.resolve("md5-packages.json")
+        Files.writeString(binaryManifest, Json.stringify(document + ("units" to units)))
+        Files.delete(directory.resolve("C.jsons"))
+        Files.delete(directory.resolve("C.symbols.md5"))
+        for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) executionContext().use { context ->
+            val entry = context.eval("thc", request(binaryManifest, backend, async))
+            assertEquals(1L, count(entry, "coreUnitSourceOpens"))
+            assertEquals(7L, entry.execute(0).asLong())
+            assertEquals(1L, count(entry, "coreUnitSourceOpens"))
+            assertEquals(2L, entry.execute(1).asLong())
+            assertEquals(2L, count(entry, "coreUnitSourceOpens"))
+            val reads = count(entry, "coreUnitSourceByteReads")
+            assertEquals(3L, entry.execute(2).asLong())
+            assertEquals(reads, count(entry, "coreUnitSourceByteReads"))
+            assertEquals(2L, count(entry, "coreUnitDirectoryOpens"))
+            assertEquals(0L, count(entry, "coreUnitHashBytesScanned"))
+        }
+        val unknown = units.map { it + ("symbols" to ((it["symbols"] as Map<*, *>) + ("format" to "unknown"))) }
+        assertThrows(IllegalArgumentException::class.java) { CoreUnitDirectory.read(document + ("units" to unknown)) }
+    }
+
     @Test fun explicitLooseConsumersKeepPairedDependenciesCold() {
         val manifest = fixture()
         val plain = directory.resolve("Main.json")
