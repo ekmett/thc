@@ -1084,7 +1084,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                        for name in select.junit_info(path.read_text(), java=path.suffix == ".java")[0]}
 
     def family(self, name):
-        return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
+        matches = [group for path, group in self.families.items() if Path(path).stem == name]
+        self.assertEqual(1, len(matches), name)
+        return matches[0]
 
     def test_converted_java_model_keeps_junit_and_shared_oracle_inventory(self):
         self.assertIn("thc.ScalarPrimopModelTest", self.classes)
@@ -1096,7 +1098,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemmoveForeign", "CoreStringRtsForeign", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStack"},
+                         "VectorAddresses", "VectorIntegerDivision", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStack"},
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -1458,8 +1460,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         # the shared state/vector memory node and durable layouts are not leaves.
         names = ("Scalar64Primitives", "VectorMemoryPrimitives", "DataTagPrimitives", "CoreVectors",
                  "Program", "BytecodeProgram", "CoreRepresentations", "ArgumentLayout", "TupleResults", "Handoff")
-        self.assertFalse({"src/main/kotlin/thc/runtime/" + name + ".kt" for name in names} & self.families.keys())
-        self.assertFalse(any(path.startswith(("compiler/", "src/main/java/")) for path in self.families))
+        self.assertFalse(set(names) & {Path(path).stem for path in self.families})
+        self.assertFalse(any(path.startswith("compiler/") for path in self.families))
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
         owners = self.policy["owners"]

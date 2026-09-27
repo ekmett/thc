@@ -2212,7 +2212,7 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertIn("build/" + name + "/manifest.json", fast_fixtures.FULL_REQUIRED)
                 self.assertIn("build/" + name + "/", (project / ".github/workflows/build.yml").read_text())
                 self.assertIn(name + "/**/*.json", (project / "build.gradle.kts").read_text())
-                self.assertIn(junit, policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"])
+                self.assertIn(junit, policy["leafSources"]["src/main/java/thc/runtime/FloatingPrimitives.java"]["junit"])
 
     def test_explicit64_array_fixture_is_selected_and_receipted(self):
         project = Path(__file__).resolve().parents[2]
@@ -2389,7 +2389,7 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        classes = policy["leafSources"]["src/main/kotlin/thc/runtime/FloatingPrimitives.kt"]["junit"]
+        classes = policy["leafSources"]["src/main/java/thc/runtime/FloatingPrimitives.java"]["junit"]
         expected = sorted({owners[name] for name in classes if owners[name] is not None})
         self.assertEqual(28, len(classes))
         self.manifest = {"schema": 1, "fixtureFreeJunit": manifest["fixtureFreeJunit"],
@@ -2554,7 +2554,7 @@ class FixturePreparationTest(unittest.TestCase):
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         for path in ("examples/THC/InverseHyperbolic.hs", "test/haskell-fixtures/FloatingRemainderFixtures.hs"):
             self.assertEqual(["thc.runtime.FloatingRemainderTest"], policy["owners"][path]["junit"])
-        for path in ("src/main/kotlin/thc/runtime/FloatingPrimitives.kt", "src/main/kotlin/thc/runtime/FloatDecodePrimitives.kt"):
+        for path in ("src/main/java/thc/runtime/FloatingPrimitives.java", "src/main/java/thc/runtime/FloatDecodeExpression.java"):
             self.assertIn("thc.runtime.FloatingRemainderTest", policy["leafSources"][path]["junit"])
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 

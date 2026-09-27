@@ -78,7 +78,7 @@
       "junit": ["thc.runtime.AddressArrayCopyTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/FloatDecodePrimitives.kt": {
+    "src/main/java/thc/runtime/FloatDecodeExpression.java": {
       "junit": ["thc.runtime.FloatDecodeTest", "thc.runtime.FloatingRemainderTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -147,13 +147,13 @@
       "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
+    "src/main/java/thc/runtime/BitPrimitives.java": {
       "junit": [
         "thc.runtime.BitPrimopsTest"
       ],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
+    "src/main/java/thc/runtime/RawBitCasts.java": {
       "junit": [
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FloatingAddressTest",
@@ -196,7 +196,7 @@
         "scripts/test-tuple-inputs.py"
       ]
     },
-    "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
+    "src/main/java/thc/runtime/FloatingPrimitives.java": {
       "junit": [
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FusedFloatingTest",
