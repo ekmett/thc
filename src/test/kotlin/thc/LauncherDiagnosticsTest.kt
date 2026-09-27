@@ -115,10 +115,10 @@ class LauncherDiagnosticsTest {
     }
 
     private fun launch(mode: String, backend: String, diagnostics: String?, ffi: List<String> = emptyList(),
-                       guest: List<String> = emptyList()): String {
+                       guest: List<String> = emptyList(), async: String? = null): String {
         val source = directory.resolve("io.json").toFile()
         source.writeText(Json.stringify(module()))
-        val old = listOf("thc.backend", "thc.diagnostics").associateWith(System::getProperty)
+        val old = listOf("thc.backend", "thc.diagnostics", "thc.asyncExceptions").associateWith(System::getProperty)
         val stderr = System.err
         val bytes = ByteArrayOutputStream()
         PrintStream(bytes, true, Charsets.UTF_8).use { stream ->
@@ -126,6 +126,8 @@ class LauncherDiagnosticsTest {
                 System.setProperty("thc.backend", backend)
                 if (diagnostics == null) System.clearProperty("thc.diagnostics")
                 else System.setProperty("thc.diagnostics", diagnostics)
+                if (async == null) System.clearProperty("thc.asyncExceptions")
+                else System.setProperty("thc.asyncExceptions", async)
                 System.setErr(stream)
                 val args = (ffi + listOf(mode, source.path, "main") +
                     (if (mode == "--run-executable") listOf("shutdown") else emptyList()) +
@@ -154,6 +156,22 @@ class LauncherDiagnosticsTest {
             val metrics = Json.parse(output.trim()) as Map<*, *>
             assertEquals(backend, metrics["backend"])
             assertEquals(0L, (metrics["unsupportedTraps"] as Number).toLong())
+        }
+    }
+
+    @Test fun executableAsyncDefaultAndOverridesReachTheRunningProgram() {
+        for (backend in listOf("ast", "bytecode")) {
+            for ((setting, expected) in listOf(null to true, "true" to true, "false" to false)) {
+                val metrics = Json.parse(launch("--run-executable", backend, "true", async = setting).trim()) as Map<*, *>
+                assertEquals(expected, metrics["asyncExceptions"], "$backend/$setting")
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                launch("--run-executable", backend, "true", async = "enabled")
+            }
+        }
+        for ((backend, expected) in listOf("ast" to false, "bytecode" to true)) {
+            val metrics = Json.parse(launch("--run-io", backend, "true").trim()) as Map<*, *>
+            assertEquals(expected, metrics["asyncExceptions"], "raw IO/$backend")
         }
     }
 
