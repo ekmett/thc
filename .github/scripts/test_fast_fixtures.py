@@ -19,6 +19,31 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_pretty_metadata_export_keeps_required_outputs_and_changes_receipt_plan(self):
+        project = Path(__file__).resolve().parents[2]
+        source = (project / "scripts/prepare-tests.sh").read_text()
+        option = "-fplugin-opt=THC.Plugin:pretty-diagnostics"
+        commands = [line.split() for line in source.splitlines() if option in line]
+        inputs = ["examples/THC/Fixtures.hs"] + [
+            "compiler/test-fixtures/" + name + ".hs" for name in (
+                "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
+                "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
+        self.assertEqual([["compiler/export.sh", option, *inputs]], commands)
+        self.assertIn("build/core", fast_fixtures.FULL_OUTPUT_ROOTS)
+        for path in inputs:
+            self.assertTrue((project / path).is_file(), path)
+            module = "THC.Fixtures" if path == inputs[0] else Path(path).stem
+            self.assertIn("build/core/" + module + ".json", fast_fixtures.FULL_REQUIRED)
+        # The option changes existing JSON bytes, not the output inventory.
+        # Removing it still invalidates the reviewed plan before any cache hit.
+        script = self.root / "scripts/prepare-tests.sh"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_text(source)
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(self.root))
+        script.write_text(source.replace(option + " ", "", 1))
+        with self.assertRaisesRegex(RuntimeError, "not been reviewed"):
+            fast_fixtures._full_key(self.root)
+
     def test_integer_simd_has_focused_preparation_and_closed_receipts(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
@@ -2220,12 +2245,13 @@ class FixturePreparationTest(unittest.TestCase):
     def test_floating_native_consumers_use_existing_complete_preparation_groups(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
-        # Reviewed generated inputs of the ten previously unowned consumers.
+        # Reviewed generated inputs of these native consumers.
         consumed = {
             "thc.SumLayoutMetadataTest": ("sum-results", ["sum-layout"]),
             "thc.runtime.SumProtocolTest": ("sum-results", ["sum-layout", "sum-result"]),
             "thc.runtime.SumResultTest": ("sum-results", ["sum-layout", "sum-result", "aggregate-core",
                                                        "aggregate-post-core", "aggregate-native"]),
+            "thc.runtime.TupleInputNativeTest": ("tuple-input", ["tuple-input"]),
             "thc.runtime.FloatingTupleTest": ("floating-tuples", ["floating-tuple"]),
             "thc.runtime.SqrtPrimitiveTest": ("sqrt", ["sqrt"]),
             "thc.runtime.ScalarBitCastTest": ("scalar-bitcasts", ["scalar-bitcasts"]),
