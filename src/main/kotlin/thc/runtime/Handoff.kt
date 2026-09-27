@@ -256,7 +256,9 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
             if (tail) packet[0] = 0L
             entry.arguments.copyIn(input, packet)
             if (tail) {
-                val source = rootNode as GuestRoot
+                val sourceValue = rootNode
+                if (sourceValue == null) CompilerDirectives.transferToInterpreter()
+                val source = sourceValue as GuestRoot
                 val mask = source.bloom(frame)
                 val destination = target.rootNode as GuestRoot
                 if (mask and destination.mask == destination.mask) {

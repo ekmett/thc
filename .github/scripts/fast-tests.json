@@ -256,6 +256,7 @@
         "thc.runtime.SimdInt8VectorTest",
         "thc.runtime.SimdVectorTest",
         "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
         "thc.runtime.SimdWord32ByteArrayTest",
         "thc.runtime.SimdWord32VectorTest",
         "thc.runtime.SimdWord8VectorTest",
@@ -266,11 +267,7 @@
         "scripts/test-core-vector-memory.py",
         "scripts/test-core-vectors.py",
         "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int16x8-model.py",
         "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-int8x16-model.py",
-        "scripts/test-word16x8-model.py",
-        "scripts/test-word32x4-model.py",
         "scripts/test-word8x16-model.py"
       ]
     },
@@ -1535,12 +1532,24 @@
       ],
       "python": []
     },
+    "test/haskell-fixtures/IntegerSimdFixtures.hs": {
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "python": ["scripts/test-core-vectors.py"]
+    },
+    "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt": {
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "python": ["scripts/test-core-vectors.py"]
+    },
     "test/haskell-fixtures/SimdAddressFixtures.hs": {
       "junit": ["thc.runtime.SimdAddressFamiliesTest"],
       "python": []
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest",
+        "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest",
+        "thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest",
         "thc.runtime.UnixWaitStatusTest",
         "thc.runtime.ByteStringSortTest",
         "thc.runtime.ByteStringDecimalTest",

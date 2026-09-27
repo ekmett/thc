@@ -504,18 +504,18 @@ class VectorAuditTest(unittest.TestCase):
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_real_int16_core_local_entries_and_formal_frontier(self):
-        from int16x8_model import entries
         path=ROOT.parent/'build/simd-int16x8/pre-core/SimdInt16X8.json'
         if not path.exists(): self.skipTest('Int16 SIMD Core export not generated')
         m=json.loads(path.read_text())
-        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
+            self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_real_int8_core_local_entries_and_formal_frontier(self):
-        from int8x16_model import entries
         path=ROOT.parent/'build/simd-int8x16/pre-core/SimdInt8X16.json'
         if not path.exists(): self.skipTest('Int8 SIMD Core export not generated')
         m=json.loads(path.read_text())
-        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
+            self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_real_word8_core_local_entries_and_formal_frontier(self):
         from word8x16_model import entries
@@ -525,18 +525,18 @@ class VectorAuditTest(unittest.TestCase):
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_real_word16_core_local_entries_and_formal_frontier(self):
-        from word16x8_model import entries
         path=ROOT.parent/'build/simd-word16x8/pre-core/SimdWord16X8.json'
         if not path.exists(): self.skipTest('Word16 SIMD Core export not generated')
         m=json.loads(path.read_text())
-        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
+            self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_real_word32_core_local_entries_and_formal_frontier(self):
-        from word32x4_model import entries
         path=ROOT.parent/'build/simd-word32x4/pre-core/SimdWord32X4.json'
         if not path.exists(): self.skipTest('Word32 SIMD Core export not generated')
         m=json.loads(path.read_text())
-        for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
+        for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
+            self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
         self.assertFalse(run(m,'vectorArgument')['accepted'])
     def test_real_int32_multiply_core_entries_and_formal_frontier(self):
         from int32x4_multiply_model import entries

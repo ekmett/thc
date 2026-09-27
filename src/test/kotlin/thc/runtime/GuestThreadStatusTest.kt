@@ -21,7 +21,7 @@ class GuestThreadStatusTest {
             assertEquals(Thread.currentThread().threadId(), id.javaId)
             assertEquals(0L, id.capability)
             assertEquals(GuestThreadStatus.RUNNING, threads.status(id))
-            val foreign = threads.enterForeign()
+            val foreign = threads.enterForeign(ForeignSafety.SAFE)
             try {
                 assertEquals(GuestThreadStatus.FOREIGN, threads.status(id))
                 threads.enterCurrent()

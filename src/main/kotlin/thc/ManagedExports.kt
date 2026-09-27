@@ -136,6 +136,7 @@ internal class ManagedExportValue(private val registry: ManagedExportRegistry, p
             }
         } catch (failure: Throwable) {
             outcome = GuestThreadStatus.uncaught(failure)
+            if (failure is GuestException) dispatch.escaping(failure)
             throw failure
         } finally { threads.leaveCurrent(outcome) }
     }

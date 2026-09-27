@@ -43,7 +43,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
                        readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
-import THC.Driver.ForeignBitcode (linkClockGetTime)
+import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
   readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules)
@@ -670,6 +670,13 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
         sources <- field record "sources"
         validateSourceObservations sources
         inputs <- field record "inputs"
+        nativeArtifacts <- field inputs "nativeArtifacts" :: IO [Value]
+        let validateNativeArtifacts = forM_ nativeArtifacts $ \artifact -> do
+              path <- field artifact "path"
+              expected <- field artifact "sha256"
+              actual <- digestFile path
+              require (actual == expected) "installed native header changed"
+        validateNativeArtifacts
         owner <- field inputs "unit"
         buildKey <- field inputs "buildKey"
         exportKey <- field inputs "exportKey"
@@ -683,6 +690,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
         after <- probeCurrent
         require (after == probe) "installed payload changed while validating cached bundle"
         validateSourceObservations sources
+        validateNativeArtifacts
         pure (InstalledBundle owner bundle)
       case hit of
         Just bundle -> pure (Right bundle)
@@ -762,6 +770,9 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
       compilerId <- field (installedCompiler context) "id" :: IO String
       compilerAbi <- field (installedCompiler context) "abi" :: IO String
       compilerPlatform <- field (installedCompiler context) "platform" :: IO String
+      clockHeaders <- if "-linux" `isSuffixOf` compilerPlatform &&
+        any ((== "Data.Time.Clock.Internal.CTimespec") . fst) (coreModules core)
+        then timeClockHeaders (installedLibdir context) includes else pure []
       let cacheName value = not (null value) &&
             all (\c -> isAlphaNum c || c `elem` ("-._" :: String)) value
           registered = registeredId registrationUnit
@@ -776,14 +787,14 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
             "rtsRegistration" .= rtsRegistration,
             "recipeArtifacts" .= [object ["path" .= ("compiler/target-layout.c" :: String),
                                            "sha256" .= recipeHash]],
-            "nativeArtifacts" .= ([] :: [Value]),
+            "nativeArtifacts" .= [object ["path" .= path, "sha256" .= digest] | (path, digest) <- clockHeaders],
             "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
             "dependencies" .= installedDepends registrationUnit]
           buildKey = shaHex (BL.toStrict (encode (object inputFields)))
           exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
-                             ["foreignLinkRecipe" .= ("original-capi-llvm-v4" :: String)
-                             | any ((== "System.CPUTime.Posix.ClockGetTime") . fst) modules])
+                             ["foreignLinkRecipe" .= ("original-capi-llvm-v5" :: String)
+                             | any ((`elem` ["System.CPUTime.Posix.ClockGetTime", "Data.Time.Clock.Internal.CTimespec"]) . fst) modules])
           exportKey = shaHex (BL.toStrict (encode ("thc-installed-interface-v2" :: String, buildKey, exporter)))
           inputs = object (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey, "exporter" .= exporter])
           directory = cache </> "core-bundles/v1" </>
@@ -808,9 +819,11 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
                        jsonField layout "targetPlatform" == Just compilerPlatform)
                 "installed GHC target layout differs from selected compiler"
               linked <- forM modules $ \(name, bytes) -> do
-                result <- linkClockGetTime (installedLibdir context) staging
+                result <- linkClockGetTime (installedLibdir context) includes staging
                   compilerPlatform unit name bytes
                 pure (name, result)
+              currentClockHeaders <- if null clockHeaders then pure [] else timeClockHeaders (installedLibdir context) includes
+              require (currentClockHeaders == clockHeaders) "Selected time headers changed during installed acquisition"
               let members = [("core/" ++ show index ++ ".json", bytes)
                             | (index, (_, bytes)) <- zip [0 :: Int ..] linked]
                   refs = [object ["name" .= name, "boundary" .= boundary,

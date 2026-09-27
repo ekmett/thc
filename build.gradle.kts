@@ -227,6 +227,9 @@ tasks.withType<Test>().configureEach {
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
+            "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/core/logs/*.stdout", "process-lifecycle/core/logs/*.stderr",
+            "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
             "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",
@@ -341,6 +344,8 @@ tasks.withType<Test>().configureEach {
             "simd-word8x16/**/*.json", "simd-word8x16/*.tsv", "simd-word8x16/native/word8x16-oracle",
             "simd-word16x8/**/*.json", "simd-word16x8/*.tsv", "simd-word16x8/native/word16x8-oracle",
             "simd-word32x4/**/*.json", "simd-word32x4/*.tsv", "simd-word32x4/native/word32x4-oracle",
+            "simd-int8x16/commands/*", "simd-int16x8/commands/*",
+            "simd-word16x8/commands/*", "simd-word32x4/commands/*",
             "simd-int32x4-multiply/**/*.json", "simd-int32x4-multiply/*.tsv", "simd-int32x4-multiply/native/int32x4-multiply-oracle",
             "simd-int32x4-bytearray/**/*.json", "simd-int32x4-bytearray/*.tsv", "simd-int32x4-bytearray/native/int32x4-bytearray-oracle",
             "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
@@ -382,14 +387,10 @@ tasks.withType<Test>().configureEach {
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
             "prepare-managed-md5.py",
-            "prepare-int16x8-audit.py", "int16x8_model.py", "test-int16x8-model.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
             "prepare-managed-address-reads.py",
             "prepare-data-to-tag.py", "test-core-data-tags.py",
-            "prepare-int8x16-audit.py", "int8x16_model.py", "test-int8x16-model.py",
             "prepare-word8x16-audit.py", "word8x16_model.py", "test-word8x16-model.py",
-            "prepare-word16x8-audit.py", "word16x8_model.py", "test-word16x8-model.py",
-            "prepare-word32x4-audit.py", "word32x4_model.py", "test-word32x4-model.py",
             "prepare-int32x4-multiply-audit.py", "int32x4_multiply_model.py", "test-int32x4-multiply-model.py",
             "test-core-vector-memory.py",
             "test-core-word32-vector-memory.py",
@@ -405,7 +406,7 @@ tasks.withType<Test>().configureEach {
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.test {
-    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
 }
 // Both forks consume the same testClasses/runtimeClasspath task graph. Native
 // compilation and ABI probes remain fresh, but execute only once per invocation.
@@ -416,7 +417,7 @@ val handoffModeTests = listOf("testDefault" to false, "testDense" to true).map {
         description = "Runs the ordinary test inventory with ${if (dense) "dense" else "default"} handoffs."
         testClassesDirs = sourceSets.test.get().output.classesDirs
         classpath = sourceSets.test.get().runtimeClasspath
-        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
         maxParallelForks = 1
@@ -438,6 +439,23 @@ configurations[fullCoreTests.implementationConfigurationName].extendsFrom(config
 configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+
+for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalTimeClockDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests the original time CAPI clock module with native and first-compiled controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
+        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/original-time-clock/manifest.json").isFile) {
+            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
+    }
+}
 
 for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
@@ -869,13 +887,56 @@ tasks.register<Test>("simdFamiliesExperimentTest") {
 val polyglotTests = sourceSets.create("polyglotTest")
 configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
 configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+polyglotTests.compileClasspath += sourceSets.test.get().output
+polyglotTests.runtimeClasspath += sourceSets.test.get().output
 kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
 tasks.register<Test>("polyglotTest") {
     group = "verification"
     description = "Tests THC's optional interop boundary against GraalJS."
+    maxHeapSize = "4g"
     testClassesDirs = polyglotTests.output.classesDirs
     classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+    useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
 }
+// Optional languages retain their separate classpath in both handoff forks.
+val polyglotModeTests = listOf("polyglotTestDefault" to false, "polyglotTestDense" to true).map { (taskName, dense) ->
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests optional interop with ${if (dense) "dense" else "default"} handoffs."
+        maxHeapSize = "4g"
+        testClassesDirs = polyglotTests.output.classesDirs
+        classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Interop evidence requires a fresh test process") { true }
+    }
+}
+polyglotModeTests[1].configure { mustRunAfter(polyglotModeTests[0]) }
+// Genuine automatic exception boxing uses the selected full-Core support unit.
+val foreignExceptionTests = listOf("foreignExceptionTest" to false, "foreignExceptionDenseTest" to true).map { (taskName, dense) ->
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine automatic foreign exceptions with ${if (dense) "dense" else "default"} handoffs."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Foreign exception evidence requires a fresh test process") { true }
+        doFirst {
+            check(file("build/foreign-exceptions/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1/configured source and run cabal run exe:thc-fixtures -- foreign-exceptions"
+            }
+        }
+    }
+}
+foreignExceptionTests[1].configure { mustRunAfter(foreignExceptionTests[0]) }
 tasks.register<Test>("jitStabilityTest") {
     group = "verification"
     description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."
@@ -1018,6 +1079,53 @@ val compileNativeDirectories by tasks.registering {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-directories")) }
 tasks.processResources { dependsOn(compileNativeDirectories) }
 
+// Context-owned process transport needs libc posix_spawn and Linux pidfds.
+val compileNativeProcesses by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-processes")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-process-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-processes")) }
+tasks.processResources { dependsOn(compileNativeProcesses) }
+
+val prepareProcessLifecycleOracle by tasks.registering {
+    val source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
+    val policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
+    val transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    val output = layout.buildDirectory.dir("process-lifecycle/native")
+    val ghc = providers.environmentVariable("GHC").orElse("ghc")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.property("ghc", ghc)
+    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang)
+    outputs.dir(output)
+    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in listOf("amd64", "x86_64") }
+    doLast {
+        val version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
+        check(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
+        val destination = output.get().asFile
+        destination.mkdirs()
+        providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
+            "-outputdir", destination.path, source.asFile.path, "-o", destination.resolve("process-oracle").path) }.result.get()
+        // Signal dispositions belong to this standalone control, never the test JVM.
+        providers.exec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
+            "-o", destination.resolve("sigchld-policy").path) }.result.get()
+    }
+}
+tasks.withType<Test>().configureEach { dependsOn(prepareProcessLifecycleOracle) }
 
 // Owned native workers and asynchronous syscall guard must run as machine code.
 val compileNativeOpenRequests by tasks.registering {
@@ -1261,7 +1369,7 @@ tasks.processResources { dependsOn(generateSigsetAbi) }
 // original C resources are independent of these optional providers.
 if (windowsHost) {
     listOf("generateStdioAbi", "generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
-        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
         .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.

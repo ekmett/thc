@@ -61,6 +61,27 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "process-lifecycle": {
+      "junit": ["thc.runtime.ManagedProcessesTest", "thc.runtime.ManagedProcessForeignTest", "thc.runtime.CoreProcessForeignTest", "thc.runtime.ProcessLifecycleCoreTest"],
+      "commands": [{"argv": ["sh", "-c", "case \"$(uname -s)-$(uname -m)\" in Linux-x86_64) cabal run exe:thc-fixtures --offline -- process-lifecycle ;; esac"]}],
+      "outputs": ["build/process-lifecycle/core"],
+      "sources": ["compiler/test-fixtures/ProcessLifecycleAudit.hs", "test/haskell-fixtures/ProcessLifecycleFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+        "test/fixtures/process-lifecycle/Main.hs", "test/fixtures/process-lifecycle/sigchld-policy.c",
+        "src/main/c/native-process-api.c", "src/main/kotlin/thc/runtime/CoreProcessForeign.kt",
+        "src/main/kotlin/thc/runtime/ManagedProcessForeign.kt", "src/main/kotlin/thc/runtime/ManagedProcesses.kt"]
+    },
+    "integer-simd": {
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; cabal build exe:thc-fixtures --offline; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
+      "outputs": ["build/simd-int8x16", "build/simd-int16x8", "build/simd-word16x8", "build/simd-word32x4"],
+      "sources": ["compiler/test-fixtures/SimdInt8X16.hs", "compiler/test-fixtures/SimdInt8X16Native.hs",
+        "compiler/test-fixtures/SimdInt16X8.hs", "compiler/test-fixtures/SimdInt16X8Native.hs",
+        "compiler/test-fixtures/SimdWord16X8.hs", "compiler/test-fixtures/SimdWord16X8Native.hs",
+        "compiler/test-fixtures/SimdWord32X4.hs", "compiler/test-fixtures/SimdWord32X4Native.hs",
+        "test/haskell-fixtures/IntegerSimdFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"]
+    },
     "text-cbits": {
       "junit": ["thc.runtime.TextCbitsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "text-cbits"]}],

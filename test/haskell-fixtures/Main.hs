@@ -18,6 +18,7 @@ import Simd128ArrayFixtures (prepareSimd128Arrays)
 import SimdWideArrayFixtures (prepareSimdWideArrays)
 import SimdAddressFixtures (prepareSimdAddresses)
 import SimdArithmeticFixtures (prepareSimdArithmetic)
+import IntegerSimdFixtures (prepareIntegerSimd)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
@@ -42,6 +43,7 @@ import UnsafeEqualityFixtures (prepareUnsafeEquality)
 import ContinuationFixtures (prepareCoreContinuation)
 import DelimitedContinuationsFixtures (prepareDelimitedContinuations)
 import GhcBCOFixtures (prepareGhcBCO)
+import ForeignExceptionFixtures (prepareForeignExceptions)
 import ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmeticCore)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
@@ -69,6 +71,7 @@ import WindowsDirectoryFixtures (prepareWindowsDirectory)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
+import ProcessLifecycleFixtures (prepareProcessLifecycle)
 import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
@@ -80,6 +83,7 @@ import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import CompilerRtsFixtures (prepareCompilerRts)
 import GcStatsFixtures (prepareGcStats)
+import OriginalTimeClockFixtures (prepareOriginalTimeClock)
 import RtsEventFixtures (prepareRtsEvent)
 import FloatForeignFixtures (prepareFloatForeign)
 import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
@@ -950,6 +954,7 @@ main = do
     ["simd-wide-arrays"] -> prepareSimdWideArrays root
     ["simd-address-families"] -> prepareSimdAddresses root
     ["simd-arithmetic"] -> prepareSimdArithmetic root
+    family:options | family `elem` ["int8x16", "int16x8", "word16x8", "word32x4"] -> prepareIntegerSimd root family options
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["rubbish-literals"] -> prepareRubbishLiterals root
     ["bignat-literals", "--check-only"] -> prepareBigNatLiterals root True
@@ -1010,6 +1015,7 @@ main = do
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
     ["process-signals"] -> prepareProcessSignals root
+    ["process-lifecycle"] -> prepareProcessLifecycle root
     ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
@@ -1030,6 +1036,7 @@ main = do
     ["stable-pointers"] -> prepareStablePointers root
     ["compiler-rts"] -> prepareCompilerRts root
     ["gc-stats"] -> prepareGcStats root
+    ["original-time-clock"] -> prepareOriginalTimeClock root
     ["rts-event"] -> prepareRtsEvent root
     ["float-foreign"] -> prepareFloatForeign root
     "ghc-api" : probes -> prepareGhcApi root probes
@@ -1068,6 +1075,7 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["delimited-continuations"] -> prepareDelimitedContinuations root
     ["ghc-bco"] -> prepareGhcBCO root
+    ["foreign-exceptions"] -> prepareForeignExceptions root
     ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["arithmetic-exceptions", "--core-only"] -> refreshArithmeticCore root
     ["live-async"] -> prepareLiveAsync root

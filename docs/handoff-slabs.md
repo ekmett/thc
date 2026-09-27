@@ -1,24 +1,32 @@
 # Opt-in dense handoff
 
-`-Dthc.handoffSlabs=true` enables dense argument transport for eligible direct
-AST calls. It is disabled by default and independent of the default-off
-`thc.callDemands` option. The actual Truffle call ABI remains
+`-Dthc.handoffSlabs=true` enables dense scalar argument transport for eligible
+AST direct-call-cache paths. It is disabled by default and independent of the
+default-off `thc.callDemands` option. The actual Truffle call ABI remains
 `Object[] -> Object`; this is a language-level storage protocol, not a native
 multiple-register ABI.
 
-Eligible arguments have one supported Long or boxed-reference representation.
-Captured environments occupy another reference field. Results use either a
-private completion token with an immediately consumed Long register, or the
-ordinary reference return. Bytecode, indirect calls, unsupported signatures,
-and tail chains without a handoff receiver retain ordinary dispatch. Exact unboxed
-tuple results use a separate [mandatory result protocol](tuple-results.md) on
-both backends; singleton-reference tuples never select this scalar handoff path.
+Eligible scalar arguments have one supported Long or boxed-reference
+representation; exact [empty tuple parameters](empty-tuple-inputs.md) contribute
+no physical fields. Captured environments occupy another reference field.
+Results use either a private completion token with an immediately consumed
+Long register, or the ordinary boxed-reference return. Float, Double, address,
+vector and aggregate results do not select this optional scalar protocol.
+
+Async-enabled AST roots, bytecode roots, generic indirect scalar calls,
+unsupported signatures and tail chains without a handoff receiver retain their
+other dispatch paths. Sharing `HandoffStorage` or `HandoffLayout` does not make a
+path conditional on this flag: [typed tuple inputs](tuple-inputs.md),
+[binary sum transport](sum-inputs.md), [vector transport](simd-families.md) and
+the [typed result protocol](tuple-results.md) have separate contracts on both
+backends. In particular, a singleton-reference tuple is not a scalar reference.
 
 ## Ownership and reentrancy
 
-The language owns interned layouts keyed by physical Long/reference fields.
-Each context thread owns a pool with at most one active incoming loan and one
-reusable storage object per layout. There are no global payload roots.
+Each context owns interned layouts keyed by physical Long/reference fields.
+Its context-thread-local pool has at most one active incoming loan and one
+reusable storage object per layout. Separate contexts share no payload roots or
+mutable layout registry.
 
 All operands, PAP prefixes and required entry forcing are evaluated or staged
 before acquiring a loan. Entry copies the original packet into durable frame
@@ -35,39 +43,31 @@ after entry has already released them. Long results have a separate lifetime:
 the caller decodes only the private completion token immediately after return.
 An ordinary boxed Long or reference never reads that register.
 
-## Integration coverage
+The interpreter still stages an argument packet before copying it into the
+handoff fields. This protocol does not by itself prove allocation elimination
+or a performance gain when a call inlines.
 
-This integrates the reference-return v3 implementation from experiment commit
-`80ba011b1bd954fc75f5bb090730c61f8e94e0e2` onto main `7dc2281`. The archived
-186-test suites on `experiments/handoff-slabs` belong to the earlier frozen
-caller-demand baseline; they are not current-main validation.
+## Check the current implementation
 
-The current tests cover deep non-tail calls, ancestor tail cycles, mixed Long
-and reference returns, lazy PAP prefixes, escaping captures, retained frames,
-deoptimization, exceptional cleanup, physical-representation aliases, and
-lexical scope forks across non-inlined calls. The full suite also compares
-20 real-GHC corpus entries and 318 native-oracle input/result pairs on both
-backends, with cold paths and explicit guest recompilation, and checks the
-aggregate rejection frontier and caller-demand gate.
-
-Fresh integration runs passed **236/236 tests with handoff disabled and
-236/236 with handoff enabled**, with no failures, errors or skips. These runs
-used the current generated GHC fixtures, independently of the archived
-experiment's test outputs.
-
-After selecting the pinned GHC 9.14.1 and GraalVM 25.3.4.1 toolchains, regenerate
-fixtures and run both configurations. The handoff command uses task-specific
-`test --rerun`: changing an external JVM property must rerun the tests, while
-unchanged compilation tasks can remain up to date. `JAVA_TOOL_OPTIONS` is
-inherited by the forked test JVM.
+With the pinned toolchain, run the focused protocol checks in separate mode
+forks sharing one compilation:
 
 ```sh
-scripts/prepare-tests.sh
-./gradlew --no-daemon test --rerun-tasks
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun
+./gradlew --max-workers=2 --continue \
+  testDefault --tests 'thc.runtime.HandoffTest' \
+  testDense --tests 'thc.runtime.HandoffTest'
 ```
 
-No new benchmarks or rollout decision accompany this integration. The frozen
-v3 reference measurements are smoke checks only. The interpreter still stages
-an argument packet, and handoff storage can inhibit allocation elimination
-when a call inlines.
+These tests construct their Core inputs directly. They cover layout/pool
+ownership, nested calls, tail cycles, lazy prefixes, captures, retained frames
+and exceptional cleanup. The dedicated
+`requestedModeReachesTestProcessAndContext` test observes each fork's mode
+without changing it; other protocol tests deliberately enable handoff locally
+and restore the previous setting. Running those controls in a default fork is
+therefore not evidence that every test body leaves handoff disabled.
+
+`testDefault` and `testDense` always execute fresh tests and keep separate
+reports. Do not use `--rerun-tasks` to select the mode or force unrelated
+compilation. For the full suite with fresh native/Core fixtures, use the
+[development workflow](contributing.md#build-and-test); selected synthetic
+protocol checks are not a replacement for original-GHC coverage.

@@ -95,7 +95,7 @@ class GuestThreadInventoryTest {
                 assertArrayEquals(arrayOf(self), first.snapshot())
                 assertFalse(second.isCurrentBound())
             } finally { second.leaveCurrent(); second.close() }
-            val foreign = first.enterForeign()
+            val foreign = first.enterForeign(ForeignSafety.SAFE)
             try {
                 first.enterCurrent()
                 try { assertTrue(first.isCurrentBound(), "A callback is bound for this reverse-entry lifetime") }

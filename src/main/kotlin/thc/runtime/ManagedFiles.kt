@@ -77,12 +77,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     private val owners = descriptors.values.mapTo(linkedSetOf()) { it.owner }
     private val opening = mutableListOf<OpenClaim>()
     private var nextDescriptor = 3L // Preserve the private open API's non-reuse guarantee.
-    private var disposed = false
+    @Volatile private var disposed = false
     private var nativeProvider: NativeFileProvider? = null
     // -1 is the eventfd wake slot, -2 the timer pipe, nonnegative keys are
     // capability control pipes. Values retain logical identity, never fd numbers.
     private val eventControls = linkedMapOf<Long, Descriptor>()
     private val nativeAbi by lazy { StdioHostAbi.load() }
+    internal val processForeign by lazy { ManagedProcessForeign() }
 
     init { require(descriptorLimit in 3L..(Int.MAX_VALUE.toLong() + 1)) }
 
@@ -251,10 +252,17 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
-    private inline fun result(action: () -> Long): Long {
+    private inline fun result(safety: ForeignSafety = ForeignSafety.UNSAFE, action: () -> Long): Long {
+        // Retained service handles keep their closed-descriptor error contract
+        // without beginning a foreign operation on the closed guest registry.
+        if (disposed) {
+            failure.set(Failure(4, "THC file context is closed"))
+            return -1L
+        }
         // Embedding streams and TruffleFile providers are opaque Java calls.
-        // A reentrant guest entry opens its own cut; completion never polls here.
-        val previous = threads.enterForeign()
+        // Only an explicit safe declaration admits a reverse guest entry.
+        // Completion never polls here: the caller must first save its typed result.
+        val previous = threads.enterForeign(safety)
         return try {
             action()
         } catch (error: FileFailure) {
@@ -290,9 +298,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * Legacy pre/post-open checks detect simple replacement but cannot provide atomic
      * opened-channel identity against concurrent host mutation (including ABA).
      * This does not coordinate external processes or replace native file locks. */
-    @TruffleBoundary fun open(path: ManagedAddress, mode: Long): Long {
+    @TruffleBoundary fun open(path: ManagedAddress, mode: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long {
         val name = path.utf8() // Bad managed memory is a runtime fault, not IOException.
-        return result {
+        return result(safety) {
             if (mode !in 0L..3L) fail(5, "Unknown THC open mode: $mode")
             if (name.isEmpty()) fail(1, "Empty file path")
             synchronized(this) {
@@ -521,6 +529,114 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     @TruffleBoundary internal fun eventfd(initial: Int, flags: Int): Long = result {
         anonymousDescriptors(AnonymousKind.EVENT, initial, flags) {}.single()
+    }
+
+    /** Original process creation's descriptor transaction. The caller has
+     * already borrowed and validated every output cell; publication is inside
+     * this registry's commit. Foreign activation/completion belongs to the caller. */
+    @TruffleBoundary internal fun launchProcess(arguments: List<ByteArray>, environment: List<ByteArray>,
+        cwd: ByteArray?, streams: IntArray, flags: Int, childGroup: Long?, childUser: Long?, searchPath: ByteArray?,
+        publish: (Int, IntArray) -> Unit): Int {
+        require(streams.size == 3)
+        val claims = arrayOfNulls<OpenClaim>(3)
+        val pins = mutableListOf<OpenDescription>()
+        val endpoints = Array<ManagedProcesses.Stream>(3) { ManagedProcesses.Stream.Closed }
+        val acquired = mutableListOf<NativeFileResource>()
+        var launch: ManagedProcesses.Launch? = null
+        var processes: ManagedProcesses? = null
+        var committed = false
+        var primary: Throwable? = null
+        fun releasePins() {
+            val retired = synchronized(this) { pins.filter { --it.references == 0L }.also { pins.clear() } }
+            var failure: Throwable? = null
+            for (owner in retired) try { retire(owner) } catch (closing: Throwable) {
+                if (failure == null) failure = closing else failure.addSuppressed(closing)
+            }
+            failure?.let { throw it }
+        }
+        try {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                val provider = nativeProvider ?: fail(7, "Process descriptors require the explicit NativeIO context")
+                for (index in streams.indices) {
+                    val fd = streams[index]
+                    when {
+                        fd == -1 -> {
+                            val claim = OpenClaim(null, index == 0, unusedDescriptor(0))
+                            claims[index] = claim; opening.add(claim)
+                            endpoints[index] = ManagedProcesses.Stream.Pipe
+                        }
+                        fd == -2 -> Unit
+                        fd >= 0 -> {
+                            val owner = descriptor(fd.toLong()).owner
+                            val resource = owner.native ?: fail(7, "Inherited process descriptor has no native capability")
+                            if (owner.references == Long.MAX_VALUE) fail(10, "Native descriptor reference limit")
+                            pins.add(owner); owner.references++
+                            endpoints[index] = ManagedProcesses.Stream.Descriptor(resource)
+                        }
+                        else -> fail(4, "Invalid inherited process descriptor")
+                    }
+                }
+                provider
+            }
+            processes = provider.processes
+            launch = processes.spawn(arguments, environment, cwd, endpoints[0], endpoints[1], endpoints[2],
+                flags, childGroup, childUser, searchPath)
+            val pipes = listOf(launch.input, launch.output, launch.error)
+            val opened = arrayOfNulls<OpenDescription>(3)
+            val returned = IntArray(3) { -1 }
+            for (index in pipes.indices) pipes[index]?.let { pipe ->
+                val resource = provider.adoptProcessPipe(pipe, index != 0, index == 0)
+                acquired.add(resource)
+                opened[index] = OpenDescription(channel = resource, native = resource, anonymousKind = AnonymousKind.PIPE,
+                    readable = index != 0, writable = index == 0, canExtend = false, readiness = Readiness.NATIVE_UNCLASSIFIED)
+                returned[index] = claims[index]!!.reserved!!.toInt()
+            }
+            // The child now owns its native duplicates. Release temporary
+            // inherited-owner pins before publishing any result to the guest.
+            releasePins()
+            return synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                val pid = processes.publishProcessId(launch.handle)
+                publish(pid, returned)
+                for (index in opened.indices) opened[index]?.let { owner ->
+                    owners.add(owner); descriptors[returned[index].toLong()] = Descriptor(owner)
+                }
+                committed = true
+                pid
+            }
+        } catch (failure: Throwable) {
+            val reported = if (failure is FileFailure)
+                NativeFileException("process descriptors", nativeAbi.error(failure.kind).toInt()) else failure
+            primary = reported
+            throw reported
+        } finally {
+            var cleanupFailure: Throwable? = null
+            fun cleanup(action: () -> Unit) { try { action() } catch (failure: Throwable) {
+                if (cleanupFailure == null) cleanupFailure = failure else cleanupFailure.addSuppressed(failure)
+            } }
+            if (!committed) {
+                launch?.let { cleanup { processes!!.abortUnpublished(it.handle) } }
+                acquired.forEach { cleanup { it.close() } }
+            }
+            synchronized(this) {
+                claims.filterNotNull().forEach { opening.remove(it); it.finished.countDown() }
+            }
+            cleanup { releasePins() }
+            cleanupFailure?.let { if (primary == null) throw it else primary.addSuppressed(it) }
+        }
+    }
+
+    @TruffleBoundary internal fun processOperation(operation: ProcessOp, pid: Int, node: Node? = null,
+        beforeBlock: (() -> Unit)? = null): ProcessResult {
+        val service = NativeFileProvider.current().processes
+        val handle = service.fromProcessId(pid)
+        return when (operation) {
+            ProcessOp.POLL -> service.poll(handle)
+            ProcessOp.WAIT -> service.waitFor(handle, node, beforeBlock)
+            ProcessOp.TERMINATE -> service.terminate(handle)
+            ProcessOp.CREATE -> fault("Creation requires a descriptor transaction")
+        }
     }
 
     @TruffleBoundary internal fun epollCreate(size: Int): Long = result {
@@ -1007,9 +1123,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         } }
     }
 
-    @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long): Long {
+    @TruffleBoundary fun read(fd: Long, address: ManagedAddress, count: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long {
         address.requireRange(0, count, true) // Validate the whole destination before consuming input.
-        return result { withDescriptor(fd) { entry ->
+        return result(safety) { withDescriptor(fd) { entry ->
             if (!entry.readable) fail(4, "THC file descriptor is not readable: $fd")
             if (count == 0L) 0L else {
                 val n = if (address.hasNativeStorage()) address.withNativeSegment { segment ->
@@ -1137,9 +1253,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
-    @TruffleBoundary fun write(fd: Long, address: ManagedAddress, count: Long): Long {
+    @TruffleBoundary fun write(fd: Long, address: ManagedAddress, count: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long {
         address.requireRange(0, count)
-        return result { withDescriptor(fd) { entry ->
+        return result(safety) { withDescriptor(fd) { entry ->
             if (!entry.writable) fail(4, "THC file descriptor is not writable: $fd")
             if (count == 0L) 0L else {
                 if (address.hasNativeStorage()) address.withNativeSegment { segment ->
@@ -1166,7 +1282,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     /** Logical close consumes the descriptor even if an underlying close fails;
      * callers must not retry it. Embedding streams are flushed, never closed. */
-    @TruffleBoundary fun close(fd: Long): Long = result {
+    @TruffleBoundary fun close(fd: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = result(safety) {
         val entry = descriptor(fd)
         var failure: Throwable? = null
         val last = synchronized(this) {
@@ -1233,7 +1349,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     }
 
     /** Absolute0/Relative1/End2, with checked signed offsets. */
-    @TruffleBoundary fun seek(fd: Long, offset: Long, mode: Long): Long = result { withDescriptor(fd) { entry ->
+    @TruffleBoundary fun seek(fd: Long, offset: Long, mode: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = result(safety) { withDescriptor(fd) { entry ->
         val channel = entry.channel ?: fail(7, "THC stream is not seekable: $fd")
         val base = when (mode) {
             0L -> 0L
@@ -1248,19 +1364,19 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         position
     } }
 
-    @TruffleBoundary fun size(fd: Long): Long = result { withDescriptor(fd) { entry ->
+    @TruffleBoundary fun size(fd: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = result(safety) { withDescriptor(fd) { entry ->
         if (!regular(entry)) fail(7, "THC stream has no file size: $fd")
         (entry.channel ?: fail(7, "THC stream has no file size: $fd")).size()
     } }
 
-    @TruffleBoundary fun setSize(fd: Long, length: Long): Long = resize(fd, length, false)
+    @TruffleBoundary fun setSize(fd: Long, length: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = resize(fd, length, false, safety)
 
     /** Original ftruncate reports EINVAL for a known read-only or stream fd.
      * Classify it while holding that descriptor's lock, without probing the
      * provider or racing a concurrent close. The managed API retains EBADF. */
     @TruffleBoundary fun truncateOriginal(fd: Long, length: Long): Long = resize(fd, length, true)
 
-    private fun resize(fd: Long, length: Long, original: Boolean): Long = result { withDescriptor(fd) { entry ->
+    private fun resize(fd: Long, length: Long, original: Boolean, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = result(safety) { withDescriptor(fd) { entry ->
         if (!regular(entry))
             fail(if (original) 5 else 7, "Cannot resize a THC stream: $fd")
         val channel = entry.channel ?: fail(if (original) 5 else 7, "Cannot resize a THC stream: $fd")
@@ -1282,10 +1398,10 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     // Env exposes byte streams, not terminal handles. A native descriptor is
     // queried only through its owned opened-resource lease, never System.console().
-    @TruffleBoundary fun isTerminal(fd: Long): Long = result { withDescriptor(fd) { entry ->
+    @TruffleBoundary fun isTerminal(fd: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = result(safety) { withDescriptor(fd) { entry ->
         entry.native?.terminalStatus() ?: 0L
     } }
-    @TruffleBoundary fun deviceType(fd: Long): Long = result { withDescriptor(fd) { entry ->
+    @TruffleBoundary fun deviceType(fd: Long, safety: ForeignSafety = ForeignSafety.UNSAFE): Long = result(safety) { withDescriptor(fd) { entry ->
         if (regular(entry)) 0L else 1L
     } }
 
@@ -1305,9 +1421,9 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             entries to pending
         }
         // Context teardown may invoke an embedding stream after this context's
-        // guest registry has closed. A callback into another context remains
-        // under an opaque Java frame and must retain that async origin.
-        val previous = threads.enterForeign()
+        // guest registry has closed. Cleanup remains opaque/unsafe and cannot
+        // admit a new callback into this or another context.
+        val previous = threads.enterForeignForDisposal()
         try {
             for (entry in entries) try {
                 retire(entry)

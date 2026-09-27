@@ -157,7 +157,7 @@ object CorePackageManifest {
     }
 
     internal data class VisitResult(val targetLayout: TargetLayout?, val manifestSha256: String,
-                                    val manifestPath: String)
+                                    val manifestPath: String, val foreignExceptionBridgeUnit: String?)
 
     @Suppress("UNCHECKED_CAST")
     internal fun visitModules(manifestPath: String, expectedSha256: String? = null,
@@ -175,6 +175,8 @@ object CorePackageManifest {
             document["schema"] == 1L && document["ghc"] == "9.14.1") {
             "Core package manifest requires schema 1 / GHC 9.14.1: $manifest"
         }
+        val bridgeUnit = document["foreignExceptionBridgeUnit"]
+        require(bridgeUnit == null || bridgeUnit is String && bridgeUnit.isNotBlank()) { "Invalid foreign exception bridge unit" }
         val units = document["units"] as? List<*> ?: error("Missing package units: $manifest")
         val seenUnits = hashSetOf<String>()
         val seenModules = hashSetOf<Pair<String, String>>()
@@ -251,7 +253,7 @@ object CorePackageManifest {
             }
         }
         require(count != 0) { "Core package manifest has no executable modules: $manifest" }
-        return VisitResult(targetLayout, manifestSha256, manifest.toString())
+        return VisitResult(targetLayout, manifestSha256, manifest.toString(), bridgeUnit as String?)
     }
 
     internal fun appendModules(destination: StringBuilder, manifestPath: String): TargetLayout? {

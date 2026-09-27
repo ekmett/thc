@@ -23,12 +23,12 @@ are different claims; each report identifies which it establishes.
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
 | Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md), including [bounded C finalizers](c-finalizers.md); no automatic GC/ephemerons |
 | Managed exports | [Declared scalar and IO actions](site/embedding.md) through polyglot bindings; not native C callback addresses |
-| Native executable investigation | [Native Image feasibility](native-image-feasibility.md); pinned-toolchain build blockers and runtime packaging versus guest AOT, not a working native executable |
+| Native executable probe | [Native Image feasibility](native-image-feasibility.md); pure-Core interpretation in a native executable, not guest JIT/AOT or a complete native FFI lifecycle |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Byte comparison and search | [Original libc `memcmp`/`memchr`](original-memory-search.md), unsigned byte semantics and allocation-preserving interior pointers |
 | Byte sorting | [Original ByteString `fps_sort`](original-bytestring-sort.md), unsigned ordering in checked writable slices |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
-| Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); Java thread identities, masking and interruptible MVar waits |
+| Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); context-owned logical guest identities, masking and interruptible MVar waits |
 | Delimited continuations | [Initial synchronous multi-shot slice](delimited-continuations.md); prompt identity, saved suffixes, shared effects, and catch/mask restoration |
 | GHC bytecode objects | [Executable scalar BCOs and updating wrappers](ghc-bco.md); real instruction decoding and guest application, with explicit opcode/ABI limits |
 | Compiler-library RTS hooks | [FastString shared CAF, CAF retention and unique-supply cells](compiler-rts.md); not the native GHC object loader |
@@ -92,7 +92,7 @@ These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 [Packed and scalar-offset SIMD address memory](simd-address-families.md) covers
 18 existing 128-/256-/512-bit shapes with original-Core and native scalar models.
 
-The current [guest transport contract](simd-families.md) carries 24 exact `VecRep`
+The current [guest transport contract](simd-families.md) carries 30 exact `VecRep`
 shapes through calls, results, PAPs, joins, tuple fields, owned closure/thunk
 captures and boxed constructor fields. Public host vector arguments/results,
 other shapes and unimplemented operations remain outside that contract. The
@@ -130,32 +130,28 @@ unproved.
 
 ## Performance and runtime design
 
-The recorded Map measurements are workload-specific. The controlled ARM64 run
-reduced bytecode time from 2.36 ms to 1.52 ms against native GHC's 1.28 ms. The
-matched Linux i9-12900K run measured 1.60 ms against 1.34 ms. Both are about
-1.19 times GHC's elapsed cost. Each retained report records warmup, process
-variation and native correctness checks; these are not general Haskell timings.
+These guides describe current mechanisms and their limits. A source-level
+representation change is not evidence of a particular allocation or throughput
+result; use matched measurements and actual compiler output for that question.
 
-* [Entry contracts and type preservation](entry-contracts.md), with the
-  [controlled local runs](../bench/results/constructor-class/powered-default/),
-  [hosted runs](../bench/results/hosted-2026-09-23/) and
-  [Linux runs](../bench/results/castlemeadow-2026-09-23/).
-* [Class-owned layouts](../bench/results/class-owned-layouts/): allocation,
-  compact headers, retained graphs and comparison switches.
-* [Typed execution and tail cycles](typed-tail.md), [call boundaries](call-boundaries.md),
-  [call packets](call-packets.md), [dense handoff](handoff-slabs.md) and
-  [Map inlining](map-inlining.md).
-* [Laziness and thunk updates](thunk-updates.md), [boxed values](boxed-values.md)
-  and [demand probes](demand-probe.md).
-* [Bytecode backend](bytecode.md), [source locations](debug-locations.md),
-  [graph inspection](graph-inspection.md) and [kernel measurements](prototype-results.md).
-* [Architecture](architecture.md) and [development checks](contributing.md).
+* [Entry contracts and type preservation](entry-contracts.md),
+  [typed execution and tail cycles](typed-tail.md) and
+  [residual call boundaries](call-boundaries.md).
+* [Dense scalar handoff](handoff-slabs.md), [laziness and thunk updates](thunk-updates.md),
+  [boxed-value controls](boxed-values.md) and [caller-demand controls](demand-probe.md).
+* [Bytecode backend](bytecode.md), [source locations](debug-locations.md) and
+  [graph inspection tooling and captures](graph-inspection.md).
+* [Current architecture and planned work](architecture.md) and
+  [development checks](contributing.md).
 
 Runtime experiments are opt-in except compact headers and class-owned layouts.
 `-Dthc.classOwnedLayouts=false` selects field-bearing layouts;
 `-Pthc.compactObjectHeaders=false` disables compact headers for Gradle launches.
 The controlled benchmark also accepts `-XX:-UseCompactObjectHeaders` for a
 matched header-off run. Keep graph capture separate from timed measurements.
+
+[Open design questions](../research/open-questions.md) identify concrete next
+decisions about program closures, optimization, resumable effects and packaging.
 
 ## Project integration
 

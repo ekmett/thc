@@ -25,32 +25,53 @@ internal object CoreForeignArtifacts {
     private fun tuple(primitive: String) = mapOf("kind" to "unknown", "primReps" to listOf(primitive),
         "aggregate" to "unboxed-tuple", "components" to listOf(scalar(null, true), scalar(primitive, true)),
         "evaluated" to false)
-    private fun callKind(call: Map<*, *>, unit: String, symbol: String): String? {
+    private fun callKind(call: Map<*, *>, unit: String, symbol: String, time: Boolean): String? {
         fun expected(kind: String): Map<String, Any> {
-            val zero = kind == "clock-id"
+            val zero = kind == "clock-id" || kind == "time-clock-id"
+            val word = if (time) "Int32Rep" else "Word64Rep"
             return mapOf("schema" to 1L, "target" to mapOf("kind" to "static", "symbol" to symbol,
                 "unit" to unit, "isFunction" to true), "convention" to "capi", "safety" to "unsafe",
                 "arity" to (if (zero) 1L else 3L), "suppliedArity" to (if (zero) 1L else 3L),
                 "argumentReps" to (if (zero) listOf(scalar(null, false)) else
-                    listOf(scalar("Word64Rep", false), scalar("AddrRep", false), scalar(null, false))),
-                "resultRep" to tuple(if (zero) "Word64Rep" else "Int32Rep"))
+                    listOf(scalar(word, false), scalar("AddrRep", false), scalar(null, false))),
+                "resultRep" to tuple(if (zero) word else "Int32Rep"))
         }
+        if (time) return timeSymbols(unit)[symbol]?.takeIf { call == expected(it) }
         return when (call) { expected("clock-id") -> "clock-id";
             expected("clock-buffer") -> "clock-buffer"; else -> null }
+    }
+
+    private fun timeSymbols(unit: String): Map<String, String> {
+        val owner = unit.replace("-", "zm").replace(".", "zi")
+        fun symbol(index: Int, name: String) = "ghczuwrapperZC${index}ZC${owner}ZCDataziTimeziClockziInternalziCTimespecZC$name"
+        return mapOf(symbol(0, "HSzuCLOCKzuREALTIME") to "time-clock-id",
+            symbol(1, "clockzugetres") to "time-clock-resolution", symbol(2, "clockzugettime") to "time-clock-time")
     }
 
     /** Bytecode is a separate product of the original C stubs, never an alias for an unlinked archive. */
     fun linked(module: Map<*, *>): ForeignBitcode? {
         val raw = module["foreignLink"] ?: return null
         val link = raw as? Map<*, *> ?: throw IllegalArgumentException("Invalid foreign bitcode link")
+        val time = link["module"] == "Data.Time.Clock.Internal.CTimespec"
         require(link.keys == setOf("schema", "format", "unit", "module", "target", "symbols", "abi",
-            "sourceSha256", "bitcodeSha256", "bitcodeHex") && version(link["schema"], 2) &&
+            "sourceSha256", "bitcodeSha256", "bitcodeHex") + (if (time) setOf("headerHashes") else emptySet()) &&
+            version(link["schema"], if (time) 3 else 2) &&
             link["format"] == "llvm-bitcode" && link["unit"] == module["unit"] &&
             link["module"] == module["module"]) { "Invalid foreign bitcode owner/schema" }
         val unit = link["unit"] as? String ?: throw IllegalArgumentException("Invalid foreign bitcode unit")
         val name = link["module"] as? String ?: throw IllegalArgumentException("Invalid foreign bitcode module")
-        require(name == "System.CPUTime.Posix.ClockGetTime" && unit.startsWith("base-")) {
+        require(if (time) Regex("time-1\\.15-(?:inplace|[0-9a-f]+)").matches(unit) &&
+            System.getProperty("os.name") == "Linux"
+        else name == "System.CPUTime.Posix.ClockGetTime" && unit.startsWith("base-")) {
             "Foreign module has no complete execution ABI: $unit:$name"
+        }
+        if (time) {
+            val headers = link["headerHashes"] as? List<*> ?: throw IllegalArgumentException("Missing selected time headers")
+            require(headers.size == 3 && headers.map { (it as? Map<*, *>)?.get("name") } ==
+                listOf("HsFFI.h", "HsTime.h", "HsTimeConfig.h") && headers.all {
+                    it is Map<*, *> && it.keys == setOf("name", "sha256") &&
+                        it["sha256"] is String && sha.matches(it["sha256"] as String)
+                }) { "Invalid selected time header provenance" }
         }
         val foreign = module["foreign"] as? Map<*, *> ?: throw IllegalArgumentException("Missing original foreign archive")
         val stubs = foreign["stubs"] as? Map<*, *> ?: throw IllegalArgumentException("Missing original C stubs")
@@ -93,17 +114,20 @@ internal object CoreForeignArtifacts {
             require(fields.keys == setOf("symbol", "kind")) { "Invalid CAPI ABI fields" }
             val symbol = fields["symbol"] as? String ?: throw IllegalArgumentException("Invalid CAPI ABI symbol")
             val kind = fields["kind"] as? String ?: throw IllegalArgumentException("Invalid CAPI ABI kind")
-            require(kind == "clock-id" || kind == "clock-buffer") { "Invalid CAPI ABI kind" }
+            require(if (time) kind == timeSymbols(unit)[symbol]
+                else kind == "clock-id" || kind == "clock-buffer") { "Invalid CAPI ABI kind" }
             symbol to kind
         }
         require(abiEntries.size == 3 && abi.keys == symbols.toSet() &&
-            abi.values.count { it == "clock-id" } == 1 && abi.values.count { it == "clock-buffer" } == 2) {
+            (if (time) abi == timeSymbols(unit)
+             else abi.values.count { it == "clock-id" } == 1 && abi.values.count { it == "clock-buffer" } == 2)) {
             "CAPI ABI inventory differs from original symbols"
         }
-        val actual = calls(module["bindings"]).map { descriptor ->
+        val actual = calls(module["bindings"]).filter { !time ||
+            (it["target"] as? Map<*, *>)?.get("unit") == unit }.map { descriptor ->
             val callTarget = descriptor["target"] as? Map<*, *> ?: throw IllegalArgumentException("Invalid foreign call target")
             val symbol = callTarget["symbol"] as? String ?: throw IllegalArgumentException("Invalid foreign call symbol")
-            require(callKind(descriptor, unit, symbol) == abi[symbol]) {
+            require(callKind(descriptor, unit, symbol, time) == abi[symbol]) {
                 "CAPI original call disagrees with linked symbol ABI: $symbol"
             }
             symbol

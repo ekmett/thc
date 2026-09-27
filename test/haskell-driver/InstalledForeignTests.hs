@@ -4,12 +4,13 @@
 module InstalledForeignTests (tests, viewTests, sourceTests) where
 
 import Control.Exception (bracket)
-import Control.Monad (forM, forM_)
+import Control.Monad (foldM, forM, forM_)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.ByteString as BS
+import Data.List (isPrefixOf, sort)
 import Distribution.InstalledPackageInfo (parseInstalledPackageInfo, showInstalledPackageInfo)
 import qualified Distribution.Types.InstalledPackageInfo as Package
 import GHC.Fingerprint (getFileHash)
@@ -25,10 +26,14 @@ import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign (missingForeignProof, createView, viewContext, observeProbeInterfaces,
   retainedUsageFiles, verifyUsageFiles, matchUsageFiles, ForeignCompiler(..), prepareForeignInterfaces)
-import TestSupport (Env(..), runExe, assertSuccess, out, field, string, json, readJson)
+import TestSupport (Env(..), runExe, assertSuccess, out, field, string, array, json, readJson)
 
 unixModules :: [String]
-unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals"]
+unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
+  "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString"]
+
+directoryModule :: String
+directoryModule = "System.Directory.Internal.Posix"
 
 -- These controls test orchestration decisions only. A verified marker here is
 -- not executable evidence: production obtains it from the real interface helper
@@ -40,14 +45,14 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
         (missingForeignProof bound (object []))
       assertEqual "old Posix interface needs the typed producer" (Right True)
         (missingForeignProof posix (object []))
-      forM_ unixModules $ \name ->
+      forM_ (directoryModule : unixModules) $ \name ->
         assertEqual (name ++ " needs the typed producer") (Right True)
           (missingForeignProof name (object []))
   , TestCase $ do
       assertEqual "complete verified export evidence is not regenerated" (Right False)
         (missingForeignProof bound (object ["staticForeignExports" .= object [],
           "staticForeignExportRegistration" .= verified]))
-      forM_ (posix : unixModules) $ \name ->
+      forM_ (posix : directoryModule : unixModules) $ \name ->
         assertEqual (name ++ " verified import evidence is not regenerated") (Right False)
           (missingForeignProof name (object ["staticForeignImportStubs" .= verified]))
   , TestCase $ mapM_ (\core -> rejected "partial export evidence must not be replaced"
@@ -55,7 +60,7 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
       [object ["staticForeignExports" .= object []],
        object ["staticForeignExportRegistration" .= verified]]
   , TestCase $ mapM_ (\proof -> do
-      forM_ (posix : unixModules) $ \name ->
+      forM_ (posix : directoryModule : unixModules) $ \name ->
         rejected (name ++ " unclassified/rejected/malformed imports stay rejected")
           (missingForeignProof name (object ["staticForeignImportStubs" .= proof]))
       rejected "unclassified/rejected/malformed exports stay rejected"
@@ -96,9 +101,10 @@ tests = TestLabel "installed foreign regeneration decisions" $ TestList
 
 -- Explicit opt-in: this needs an intact matching configured GHC tree and the
 -- real published plugin/helper, not the synthetic decision controls above.
--- Only Unix is requested: no compiler-library or whole-project capture occurs.
+-- Only Unix and directory are requested: no compiler-library or whole-project
+-- capture occurs. Directory must preserve the preceding Unix acquisition view.
 sourceTests :: Env -> Test
-sourceTests env = TestLabel "original Unix configured-source provenance" $ TestCase $ do
+sourceTests env = TestLabel "original Unix/directory configured-source provenance" $ TestCase $ do
   source <- getEnv "THC_TEST_GHC_SOURCE"
   helper <- getEnv "THC_TEST_INTERFACE_HELPER"
   ghc <- getEnv "GHC"
@@ -111,31 +117,79 @@ sourceTests env = TestLabel "original Unix configured-source provenance" $ TestC
         (string (field plugin "unitId")) (string (field plugin "sharedLibrary"))
         (string (field plugin "cabalSharedLibrary")) digest
   context <- installedContext ghc pkg helper [] (object ["platform" .= (Host.arch ++ "-" ++ Host.os)])
-  result <- runExe env (root env) Nothing 30 pkg
-    ["--global", "--no-user-package-db", "field", "unix", "id", "--simple-output"]
-  assertSuccess result
-  identifier <- case words (out result) of [value] -> pure value; _ -> fail "ambiguous Unix installation"
-  original <- discoverInstalled context identifier
-  originalHashes <- mapM (\(_, path) -> (,) path <$> getFileHash path) (installedInterfaces original)
-  before <- forM unixModules $ \name -> do
-    core <- readOriginal context original name
-    assertEqual (name ++ " original stock interface lacks typed import provenance") (Right True)
-      (missingForeignProof name core)
-    pure (name, core)
-  selected <- prepareForeignInterfaces producer (scratch env </> "original-unix-cache") source context [original]
-  regenerated <- discoverInstalled selected identifier
-  forM_ before $ \(name, previous) -> do
-    core <- readOriginal selected regenerated name
-    assertEqual (name ++ " has genuine verified typed import provenance") (Right False)
-      (missingForeignProof name core)
-    forM_ ["foreign", "unit", "module"] $ \key ->
-      assertEqual (name ++ " retains " ++ key) (field previous key) (field core key)
-  warm <- prepareForeignInterfaces producer (scratch env </> "original-unix-cache") source context [original]
-  assertEqual "unchanged inputs reuse the exact acquisition view" selected warm
-  assertEqual "native installed registration and interfaces are untouched" original =<< discoverInstalled context identifier
-  forM_ originalHashes $ \(path, expected) ->
-    assertEqual "native interface bytes are untouched" expected =<< getFileHash path
+  originals <- forM [("unix", unixModules), ("directory", [directoryModule])] $ \(package, names) -> do
+    result <- runExe env (root env) Nothing 30 pkg
+      ["--global", "--no-user-package-db", "field", package, "id", "--simple-output"]
+    assertSuccess result
+    identifier <- case words (out result) of [value] -> pure value; _ -> fail ("ambiguous " ++ package ++ " installation")
+    original <- discoverInstalled context identifier
+    hashes <- forM [(replaceExtension path suffix) | (_, path) <- installedInterfaces original,
+                    suffix <- ["hi", "dyn_hi"]] $ \path -> (,) path <$> getFileHash path
+    before <- forM names $ \name -> do
+      core <- readOriginal context original name
+      assertEqual (name ++ " original stock interface lacks typed import provenance") (Right True)
+        (missingForeignProof name core)
+      pure (name, core)
+    pure (original, hashes, before)
+  let cache = scratch env </> "original-foreign-cache"
+  selected <- foldM (\previousContext (original, _, before) -> do
+    let identifier = registeredId original
+        acquire = prepareForeignInterfaces producer cache source previousContext [original]
+    cold <- acquire
+    verifyGenerated cold original before
+    warm <- acquire
+    assertEqual "unchanged inputs reuse the exact acquisition view" cold warm
+    regenerated <- discoverInstalled cold identifier
+    -- Corrupt only this test's produced artifacts. Unix exercises a replaced
+    -- interface; directory exercises an object not read by the Core helper.
+    -- Both must invalidate the receipt and produce a fresh verified generation.
+    let (name, suffix) = if directoryModule `elem` map fst before
+          then (directoryModule, "dyn_o") else ("System.Posix.Directory.PosixPath", "dyn_hi")
+    path <- maybe (fail "missing generated corruption target") pure (lookup name (installedInterfaces regenerated))
+    cacheRoot <- canonicalizePath cache
+    assertBool "corruption target belongs to this test's acquisition cache" ((cacheRoot ++ "/") `isPrefixOf` path)
+    BS.appendFile (replaceExtension path suffix) "corrupted-test-output"
+    repaired <- acquire
+    assertBool "corrupt outputs cannot reuse the same acquisition view" (repaired /= cold)
+    verifyGenerated repaired original before
+    assertEqual "repaired generation is reusable" repaired =<< acquire
+    pure repaired) context originals
+  forM_ originals $ \(original, hashes, before) -> do
+    verifyGenerated selected original before
+    assertEqual "native installed registration and interfaces are untouched" original =<<
+      discoverInstalled context (registeredId original)
+    forM_ hashes $ \(path, expected) ->
+      assertEqual "native interface bytes are untouched" expected =<< getFileHash path
   where
+    verifyGenerated context original before = do
+      regenerated <- discoverInstalled context (registeredId original)
+      forM_ before $ \(name, previous) -> do
+        core <- readOriginal context regenerated name
+        assertEqual (name ++ " has genuine verified typed import provenance") (Right False)
+          (missingForeignProof name core)
+        forM_ ["foreign", "unit", "module"] $ \key ->
+          assertEqual (name ++ " retains " ++ key) (field previous key) (field core key)
+        let proof = field core "staticForeignImportStubs"
+        assertEqual (name ++ " proof retains the actual native stubs") (field core "foreign") (field proof "expectedForeign")
+        assertEqual (name ++ " provenance does not claim native linking") (String "not-linked") (field proof "execution")
+        forM_ (lookup name expectedCapi) $ \expected -> do
+          let declarations = [entry | entry <- array (field proof "imports"), field entry "convention" == String "capi"]
+          assertEqual (name ++ " has the original CAPI declarations") (sort expected)
+            (sort [(string (field entry "symbol"), string (field entry "header"), string (field entry "safety"))
+                   | entry <- declarations])
+          forM_ declarations $ \entry -> do
+            assertBool "producer retained the declared and normalized types"
+              (all ((/= Null) . field entry) ["declaredType", "normalizedType"])
+            assertBool "producer retained the actual emitted wrapper"
+              ("ghczuwrapper" `isPrefixOf` string (field (field entry "emitted") "symbol"))
+        path <- maybe (fail "missing regenerated interface") pure (lookup name (installedInterfaces regenerated))
+        forM_ ["o", "dyn_o"] $ \suffix -> do
+          bytes <- BS.readFile (replaceExtension path suffix)
+          assertBool (name ++ " compiled original native object: " ++ suffix) (not (BS.null bytes))
+    expectedCapi =
+      [("System.Posix.Directory.PosixPath", [("opendir", "HsUnix.h", "unsafe")]),
+       ("System.Posix.Env.PosixString", [("unsetenv", "HsUnix.h", "unsafe")]),
+       (directoryModule, [("fchmodat", "sys/stat.h", "safe"), ("fstatat", "sys/stat.h", "safe")])]
     readOriginal context unit name = do
       path <- maybe (fail ("missing original interface: " ++ name)) pure (lookup name (installedInterfaces unit))
       result <- runExe env (root env) Nothing 120 (installedHelper context)

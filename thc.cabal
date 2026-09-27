@@ -54,6 +54,7 @@ extra-source-files:
   test/fixtures/run-wcwidth/src/Width.hs
   test/fixtures/run-wcwidth/app/Main.hs
   compiler/test-fixtures/GcStatsAudit.hs
+  compiler/test-fixtures/OriginalTimeClockAudit.hs
   compiler/test-fixtures/RtsEventAudit.hs
   docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
@@ -171,6 +172,9 @@ extra-source-files:
   compiler/test-fixtures/OriginalErrnoAudit.hs
   compiler/test-fixtures/OriginalErrnoNative.hs
   compiler/test-fixtures/OriginalProcessIdentityAudit.hs
+  compiler/test-fixtures/ProcessLifecycleAudit.hs
+  test/fixtures/process-lifecycle/Main.hs
+  test/fixtures/process-lifecycle/sigchld-policy.c
   compiler/test-fixtures/OriginalProcessIdentityNative.hs
   compiler/test-fixtures/OriginalOpenAudit.hs
   compiler/test-fixtures/OriginalOpenNative.hs
@@ -549,6 +553,7 @@ executable thc
     cryptohash-sha256 >= 0.11 && < 0.12,
     directory >= 1.3.10 && < 1.4,
     filepath >= 1.5.4 && < 1.6,
+    ghc-boot == 9.14.1,
     process >= 1.6.26 && < 1.7,
     text >= 2.1 && < 2.2,
     zip-archive >= 0.4.3.2 && < 0.5
@@ -810,6 +815,7 @@ executable thc-fixtures
     ScalarMemoryUtilitiesFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
+    ForeignExceptionFixtures
     ArithmeticExceptionFixtures
     MaskFunctionFixtures
     DeepEvaluationFixtures
@@ -837,6 +843,7 @@ executable thc-fixtures
     SimdWideArrayFixtures
     SimdAddressFixtures
     SimdArithmeticFixtures
+    IntegerSimdFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures
@@ -869,6 +876,7 @@ executable thc-fixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
+    ProcessLifecycleFixtures
     SignalDispatchFixtures
     RtsShutdownFixtures
     FileWaitFixtures
@@ -876,6 +884,7 @@ executable thc-fixtures
     OriginalRtsLocksFixtures
     CompilerRtsFixtures
     GcStatsFixtures
+    OriginalTimeClockFixtures
     RtsEventFixtures
     FloatForeignFixtures
     GhcApiFixtures

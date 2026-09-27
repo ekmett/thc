@@ -115,6 +115,9 @@ esac
 "$fixture_bin" original-fcntl
 "$fixture_bin" original-errno
 "$fixture_bin" original-process-identity
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) "$fixture_bin" process-lifecycle ;;
+esac
 "$fixture_bin" original-tcsetattr
 "$fixture_bin" original-tcgetattr
 "$fixture_bin" original-sigprocmask
@@ -162,25 +165,25 @@ python3 scripts/prepare-simd-capability-smoke.py
 "$fixture_bin" simd-address-families
 "$fixture_bin" simd-arithmetic
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-int16x8-audit.py --export-only ;;
-  *) python3 scripts/prepare-int16x8-audit.py ;;
+  arm64|aarch64) "$fixture_bin" int16x8 --export-only ;;
+  *) "$fixture_bin" int16x8 ;;
 esac
 "$fixture_bin" signed-narrow
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-int8x16-audit.py --export-only ;;
-  *) python3 scripts/prepare-int8x16-audit.py ;;
+  arm64|aarch64) "$fixture_bin" int8x16 --export-only ;;
+  *) "$fixture_bin" int8x16 ;;
 esac
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-word8x16-audit.py --export-only ;;
   *) python3 scripts/prepare-word8x16-audit.py ;;
 esac
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-word16x8-audit.py --export-only ;;
-  *) python3 scripts/prepare-word16x8-audit.py ;;
+  arm64|aarch64) "$fixture_bin" word16x8 --export-only ;;
+  *) "$fixture_bin" word16x8 ;;
 esac
 case "$(uname -m)" in
-  arm64|aarch64) python3 scripts/prepare-word32x4-audit.py --export-only ;;
-  *) python3 scripts/prepare-word32x4-audit.py ;;
+  arm64|aarch64) "$fixture_bin" word32x4 --export-only ;;
+  *) "$fixture_bin" word32x4 ;;
 esac
 case "$(uname -m)" in
   arm64|aarch64) python3 scripts/prepare-int32x4-multiply-audit.py --export-only ;;

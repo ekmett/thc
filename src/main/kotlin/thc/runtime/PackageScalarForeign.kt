@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
-import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
@@ -14,6 +13,7 @@ import thc.PackageScalarSignature
 internal class PackageScalarCall(val link: PackageScalarLink, val signature: PackageScalarSignature) {
     @field:CompilationFinal(dimensions = 1) val arguments = signature.arguments.toTypedArray()
     val result = signature.result
+    val safety = ForeignSafety.synchronous(signature.safety)
 }
 
 internal object CorePackageScalarForeign {
@@ -89,13 +89,6 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
     @field:Children private var operands: Array<Expr>, proof: CoreRepresentation) : Expr() {
     @Child private var access = PackageScalarAccess(call)
     init { representation = proof.copy(evaluated = true) }
-    private object ResumeCompleted : AstResumeStep {
-        override fun resume(frame: VirtualFrame, input: Any?): Any? {
-            if (input !== Unit) fault("Invalid package safe-call continuation")
-            // The result is already in its destination slot. Never call C again.
-            return null
-        }
-    }
     override fun execute(frame: VirtualFrame): Nothing = fault("Package C call requires its State/result tuple")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val values = arrayOfNulls<Any>(call.arguments.size)
@@ -118,13 +111,7 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
             "void" -> access.executeVoid(values, state)
             else -> fault("Invalid package C result")
         }
-        if (call.signature.safety == "safe" && AstControl.enabled(this)) {
-            val compiled = CompilerDirectives.inCompiledCode()
-            GuestThreads.pollCurrent(this, false)?.let { request ->
-                request.compiledCapture = compiled
-                throw AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted)
-            }
-        }
+        if (call.safety == ForeignSafety.SAFE) AstForeignCompleted.poll(this)
         return null
     }
 }

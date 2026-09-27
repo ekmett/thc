@@ -3,7 +3,7 @@
 {-# LANGUAGE ForeignFunctionInterface, MagicHash #-}
 module Main where
 
-import Control.Concurrent (forkIO, isCurrentThreadBound, myThreadId, newEmptyMVar, putMVar, takeMVar, throwTo, yield)
+import Control.Concurrent (forkIO, isCurrentThreadBound, myThreadId, newEmptyMVar, putMVar, readMVar, throwTo, yield)
 import Control.Exception (Exception, bracket, evaluate, getMaskingState, mask_, try, uninterruptibleMask_)
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Foreign (FunPtr, WordPtr(..), freeHaskellFunPtr)
@@ -56,24 +56,29 @@ pendingIsolation = do
   acknowledged <- newEmptyMVar
   callback <- newIORef False
   returned <- newIORef False
-  outcome <- try (uninterruptibleMask_ $ do
-    sender <- forkIO (throwTo caller Probe >> putMVar acknowledged ())
-    let awaitPending :: Int -> IO ()
-        awaitPending 0 = error "throwTo sender never blocked"
-        awaitPending fuel = do
-          status <- threadStatus sender
-          if status == ThreadBlocked BlockedOnException then pure ()
-          else yield >> awaitPending (fuel - 1)
-    awaitPending 1000000
-    bracket (wrap $ do
-      self <- myThreadId
-      yield
+  outcome <- try (do
+    uninterruptibleMask_ $ do
+      sender <- forkIO (throwTo caller Probe >> putMVar acknowledged ())
+      let awaitPending :: Int -> IO ()
+          awaitPending 0 = error "throwTo sender never blocked"
+          awaitPending fuel = do
+            status <- threadStatus sender
+            if status == ThreadBlocked BlockedOnException then pure ()
+            else yield >> awaitPending (fuel - 1)
+      awaitPending 1000000
+      bracket (wrap $ do
+        self <- myThreadId
+        yield
+        status <- threadStatus sender
+        writeIORef callback (self /= caller && status == ThreadBlocked BlockedOnException))
+        freeHaskellFunPtr invoke
       status <- threadStatus sender
-      writeIORef callback (self /= caller && status == ThreadBlocked BlockedOnException))
-      freeHaskellFunPtr invoke
-    status <- threadStatus sender
-    writeIORef returned (status == ThreadBlocked BlockedOnException)) :: IO (Either Probe ())
-  takeMVar acknowledged
+      writeIORef returned (status == ThreadBlocked BlockedOnException)
+    -- Restoring the mask need not deliver before this protected action returns.
+    -- The sender acknowledges only after delivery: keep that wait inside try.
+    readMVar acknowledged) :: IO (Either Probe ())
+  -- Delivery can precede the sender's acknowledgement. Join without consuming it.
+  readMVar acknowledged
   observedCallback <- readIORef callback
   observedReturn <- readIORef returned
   print (case outcome of Left Probe -> True; Right () -> False,

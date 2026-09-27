@@ -98,7 +98,7 @@ class SimdInt16VectorTest {
                 "expr" to listOf("lam", listOf(mapOf("id" to "unused", "name" to "unused", "lifted" to false, "rep" to long)),
                     body, mapOf("rep" to closure, "resultRep" to long)))))
     }
-    @Test fun literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() = withLanguage { language ->
+    @Test fun literalCarriersAndUnliftedFlagsAreCheckedBeforeExecution() = withLanguage { language ->
         val lane = mapOf("kind" to "long", "primReps" to listOf("Int16Rep"), "evaluated" to true)
         val exact = listOf("lit", "int16", "-32768", mapOf("rep" to lane))
         val unconstrained = mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)
@@ -110,7 +110,15 @@ class SimdInt16VectorTest {
             for (flag in listOf(true, null, 0L, "false")) assertThrows(RuntimeFault::class.java) {
                 program(language, backend, broadcastModule(exact, flag), "root", diagnostic)
             }
-            for (wrong in listOf(lane + ("kind" to "unknown"), lane + ("primReps" to listOf("Word16Rep")), lane + ("primReps" to listOf("Int32Rep")))) {
+            // Lowering shares Long across integral reps; the literal tag supplies narrowing.
+            for (shared in listOf("Word16Rep", "Int32Rep")) {
+                val operand = listOf("lit", "int16", "1", mapOf("rep" to (lane + ("primReps" to listOf(shared)))))
+                val p = program(language, backend, broadcastModule(operand), "root", diagnostic)
+                assertEquals(1L, Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("root"), arrayOf(0L))))
+            }
+            for (wrong in listOf(lane + ("kind" to "unknown"),
+                lane + mapOf("kind" to "float", "primReps" to listOf("FloatRep")),
+                lane + mapOf("kind" to "double", "primReps" to listOf("DoubleRep")))) {
                 assertThrows(RuntimeFault::class.java) { program(language, backend,
                     broadcastModule(listOf("lit", "int16", "1", mapOf("rep" to wrong))), "root", diagnostic) }
             }
@@ -166,7 +174,7 @@ class SimdInt16VectorTest {
         fun rows(filename: String) = File(directory, filename).readLines().associate { row ->
             val parts = row.split('\t'); (parts.first() to parts.drop(1).dropLast(1).map(String::toLong)) to parts.last().toLong()
         }
-        val expected = rows("expected.tsv")
+        val expected = IntegerSimdModel("int16x8").checkedRows(File(directory, "expected.tsv").readText())
         if (provenance["nativeRows"] != null) {
             assertEquals(expected, rows("oracle.tsv")); assertEquals(expected.size.toLong(), (provenance["nativeRows"] as Number).toLong())
         }

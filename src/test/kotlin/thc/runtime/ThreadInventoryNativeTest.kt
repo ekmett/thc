@@ -223,7 +223,7 @@ class ThreadInventoryNativeTest {
                 // These are existing managed reverse entries. The native C trampoline
                 // above is an independent oracle, not a THC transport under test.
                 repeat(3) {
-                    val foreign = owner.threads.enterForeign()
+                    val foreign = owner.threads.enterForeign(ForeignSafety.SAFE)
                     try { assertEquals(1L, function.execute(0L).asLong()) }
                     finally { owner.threads.leaveForeign(foreign) }
                 }
@@ -242,7 +242,7 @@ class ThreadInventoryNativeTest {
                         val sender = Thread { queued.set(registry.send(caller, "suspended caller")) }
                         sender.start(); sender.join(5000); assertFalse(sender.isAlive)
                         val request = queued.get()
-                        val foreign = registry.enterForeign()
+                        val foreign = registry.enterForeign(ForeignSafety.SAFE)
                         try {
                             val before = count()
                             assertEquals(8L, function.execute(7L).asLong(), "$stage/$backend/$mask native callback result")
@@ -255,7 +255,7 @@ class ThreadInventoryNativeTest {
                             val callback = registry.currentIdentity()
                             try {
                                 owner.maskingState.set(MaskingState.MASKED_UNINTERRUPTIBLE)
-                                val nestedForeign = registry.enterForeign()
+                                val nestedForeign = registry.enterForeign(ForeignSafety.SAFE)
                                 try {
                                     val nestedBefore = count()
                                     assertEquals(8L, function.execute(7L).asLong())

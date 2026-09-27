@@ -343,6 +343,22 @@ class CoreZipBundleTest {
             assertThrows(IllegalArgumentException::class.java) {
                 CoreModules.request(listOf("@$path", "@$path"), "dependency:Shared.entry")
             }
+            // Transport the parent's exact bridge selection to loose consumers
+            // in both request shapes. This metadata control does not execute a
+            // fabricated bridge or replace the genuine native dictionary test.
+            @Suppress("UNCHECKED_CAST")
+            val manifestDocument = Json.parse(Files.readString(path)) as Map<String, Any?>
+            Files.writeString(path, Json.stringify(manifestDocument + ("foreignExceptionBridgeUnit" to "selected-runtime")))
+            @Suppress("UNCHECKED_CAST")
+            val selected = Json.parse(CoreModules.request(listOf(consumer.toString(), "@$path"),
+                "consumer:Shared.entry")) as Map<String, Any?>
+            val visited = mutableListOf<Map<String, Any?>>()
+            CoreModules.visitRequestModules(selected, visited::add)
+            assertEquals(listOf("dependency", "consumer"), visited.map { it["unit"] })
+            assertTrue(visited.all { it["foreignExceptionBridgeUnit"] == "selected-runtime" })
+            if (large) assertTrue(assertThrows(IllegalArgumentException::class.java) {
+                CoreModules.visitRequestModules(selected + ("foreignExceptionBridgeUnit" to "another-runtime")) {}
+            }.message!!.contains("bridge selection changed"))
         }
     }
 
