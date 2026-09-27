@@ -9,12 +9,14 @@ import org.junit.jupiter.api.Test
 import java.math.BigInteger
 import java.io.File
 
-/** Narrow unsigned words use zero-extended Long carriers, never signed Byte/Short/Int values. */
+/** Narrow unsigned words compute in Int carriers and expose unsigned public Long values. */
 class NarrowWordPrimitiveTest {
+    private fun integer(rep: String) = mapOf("kind" to "long", "primReps" to listOf(rep), "evaluated" to true)
     private fun request(backend: String, body: List<Any?>, arity: Int,
-                        diagnostic: Boolean = false): String {
+                        diagnostic: Boolean = false, inputRep: String = "WordRep"): String {
         val parameters = List(arity) { index -> mapOf("id" to "x$index", "name" to "x$index",
-            "type" to "Word#", "lifted" to false, "coercion" to false) }
+            "type" to "${inputRep.removeSuffix("Rep")}#", "lifted" to false, "coercion" to false,
+            "rep" to integer(inputRep)) }
         val entry = mapOf("id" to "entry", "name" to "entry", "lifted" to true,
             "arity" to arity, "expr" to listOf("lam", parameters, body))
         return Json.stringify(mapOf("entry" to "entry", "backend" to backend, "instrument" to true,
@@ -22,8 +24,8 @@ class NarrowWordPrimitiveTest {
                 "ghc" to "9.14.1", "module" to "Synthetic.NarrowWord", "constructors" to emptyList<Any?>(),
                 "bindings" to listOf(entry)))))
     }
-    private fun primitive(name: String, supplied: Int): List<Any?> = listOf("app", listOf("prim", name),
-        List(supplied) { index -> listOf("var", "x$index") }, List(supplied) { false })
+    private fun primitive(name: String, supplied: Int, inputRep: String): List<Any?> = listOf("app", listOf("prim", name),
+        List(supplied) { index -> listOf("var", "x$index", mapOf("rep" to integer(inputRep))) }, List(supplied) { false })
     private fun mask(width: Int) = BigInteger.ONE.shiftLeft(width).subtract(BigInteger.ONE)
     private fun inputs(width: Int): List<Long> {
         val maximum = mask(width).toLong()
@@ -82,7 +84,8 @@ class NarrowWordPrimitiveTest {
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for (width in listOf(8, 16, 32)) for (name in listOf("wordToWord$width#", "word${width}ToWord#")) {
                 val values = if (name.startsWith("wordTo")) raw else inputs(width)
-                val fn = context.eval("thc", request(backend, primitive(name, 1), 1))
+                val inputRep = if (name.startsWith("wordTo")) "WordRep" else "Word${width}Rep"
+                val fn = context.eval("thc", request(backend, primitive(name, 1, inputRep), 1, inputRep = inputRep))
                 repeat(2) { pass ->
                     if (pass == 1) assertTrue(fn.invokeMember("compile").asBoolean())
                     for (value in values) assertEquals(BigInteger.valueOf(value).and(mask(width)).toLong(),
@@ -96,7 +99,8 @@ class NarrowWordPrimitiveTest {
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for (width in listOf(8, 16, 32)) for (operation in listOf("plus", "sub", "times")) {
                 val name = "${operation}Word$width#"
-                val fn = context.eval("thc", request(backend, primitive(name, 2), 2))
+                val inputRep = "Word${width}Rep"
+                val fn = context.eval("thc", request(backend, primitive(name, 2, inputRep), 2, inputRep = inputRep))
                 repeat(2) { pass ->
                     if (pass == 1) assertTrue(fn.invokeMember("compile").asBoolean())
                     for (left in inputs(width)) for (right in inputs(width)) {
@@ -114,7 +118,8 @@ class NarrowWordPrimitiveTest {
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
             for (width in listOf(8, 16, 32)) for (operation in listOf("lt", "le")) {
                 val name = "${operation}Word$width#"
-                val fn = context.eval("thc", request(backend, primitive(name, 2), 2))
+                val inputRep = "Word${width}Rep"
+                val fn = context.eval("thc", request(backend, primitive(name, 2, inputRep), 2, inputRep = inputRep))
                 repeat(2) { pass ->
                     if (pass == 1) assertTrue(fn.invokeMember("compile").asBoolean())
                     for ((i, left) in inputs(width).withIndex()) for ((j, right) in inputs(width).withIndex()) {
@@ -131,21 +136,22 @@ class NarrowWordPrimitiveTest {
             executionContext().use { context ->
                 for (width in listOf(8, 16, 32)) {
                     val maximum = mask(width).toLong()
+                    val inputRep = "Word${width}Rep"
                     fun body(text: String, alternative: Boolean): List<Any?> = if (!alternative)
                         listOf("lit", "word$width", text)
-                    else listOf("case", listOf("var", "x0"), "scrutinee", listOf(
+                    else listOf("case", listOf("var", "x0", mapOf("rep" to integer(inputRep))), "scrutinee", listOf(
                         listOf("lit", listOf("word$width", text), emptyList<String>(), listOf("lit", "int", "99")),
                         listOf("default", null, emptyList<String>(), listOf("lit", "int", "17"))))
                     for (alternative in listOf(false, true)) {
                         for (text in listOf("0", maximum.toString())) {
-                            val fn = context.eval("thc", request(backend, body(text, alternative), 1, diagnostic))
+                            val fn = context.eval("thc", request(backend, body(text, alternative), 1, diagnostic, inputRep))
                             assertEquals(if (alternative) 99L else text.toLong(), fn.execute(text.toLong()).asLong())
                             if (alternative) assertEquals(17L, fn.execute(text.toLong() xor 1L).asLong())
                         }
                         for (text in listOf("-1", (maximum + 1).toString(), "+1", "01", "-0", "1.0", " 1", "",
                             "18446744073709551616")) {
                             val error = assertThrows(PolyglotException::class.java) {
-                                context.eval("thc", request(backend, body(text, alternative), 1, diagnostic))
+                                context.eval("thc", request(backend, body(text, alternative), 1, diagnostic, inputRep))
                             }
                             assertTrue(error.message.orEmpty().contains("Invalid word$width literal"), error.message)
                         }
@@ -162,8 +168,9 @@ class NarrowWordPrimitiveTest {
                     val names = listOf("wordToWord$width#" to 1, "word${width}ToWord#" to 1) +
                         listOf("plus", "sub", "times", "lt", "le").map { "${it}Word$width#" to 2 }
                     for ((name, arity) in names) for (supplied in listOf(arity - 1, arity + 1)) {
+                        val inputRep = if (name.startsWith("wordTo")) "WordRep" else "Word${width}Rep"
                         val error = assertThrows(PolyglotException::class.java) {
-                            context.eval("thc", request(backend, primitive(name, supplied), supplied, diagnostic))
+                            context.eval("thc", request(backend, primitive(name, supplied, inputRep), supplied, diagnostic, inputRep))
                         }
                         assertTrue(error.message.orEmpty().contains("Primitive arity mismatch: $name"), error.message)
                     }
