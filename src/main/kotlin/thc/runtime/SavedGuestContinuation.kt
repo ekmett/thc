@@ -14,17 +14,9 @@ internal interface SavedGuestContinuation {
     fun continueWith(input: Any?): Any?
 }
 
-/** Keep existing bytecode state-5 values raw for exact private request checks. */
-private class BytecodeSavedContinuation(private val saved: ContinuationResult) : SavedGuestContinuation {
-    override val identity: Any get() = saved
-    override val yielded: Any? get() = saved.result
-    override val sourceRoot: Any get() = saved.continuationRootNode.sourceRootNode
-    override fun continueWith(input: Any?): Any? = saved.continueWith(input)
-}
-
 internal fun savedGuestContinuation(value: Any?): SavedGuestContinuation? = when (value) {
     is SavedGuestContinuation -> value
-    is ContinuationResult -> BytecodeSavedContinuation(value)
+    is ContinuationResult -> BytecodeContinuations.view(value)
     else -> null
 }
 
