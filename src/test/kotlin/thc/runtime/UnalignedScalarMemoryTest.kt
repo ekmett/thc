@@ -252,7 +252,10 @@ class UnalignedScalarMemoryTest {
                         else -> expected.putLong(offset.toInt(), bits) }
                     assertArrayEquals(bytes, owner.copyBytesOut(0, 16))
                     val mask = when (width) { 1 -> 255L; 2 -> 65535L; 4 -> 0xffffffffL; else -> -1L }
-                    assertEquals(bits and mask, operation.read(address.plus(16), offset - 16, true))
+                    val addressValue = if (operation.isInt)
+                        Integer.toUnsignedLong(operation.readInt(address.plus(16), offset - 16, true))
+                    else operation.read(address.plus(16), offset - 16, true)
+                    assertEquals(bits and mask, addressValue)
                     val arrayValue = when (width) {
                         1 -> ManagedByteArray.readGuest(owner, offset, true).toLong()
                         2 -> ManagedByteArray.readInt16ByteOffsetGuest(owner, offset, true).toLong()
@@ -265,7 +268,10 @@ class UnalignedScalarMemoryTest {
             val address = ManagedAddress.fromAllocation(owner)
             for (offset in listOf(-1L, 17L - width, Long.MIN_VALUE, Long.MAX_VALUE)) {
                 val before = owner.copyBytesOut(0, 16)
-                assertThrows(RuntimeFault::class.java) { operation.read(address, offset, true) }
+                assertThrows(RuntimeFault::class.java) {
+                    if (operation.isInt) operation.readInt(address, offset, true)
+                    else operation.read(address, offset, true)
+                }
                 assertThrows(RuntimeFault::class.java) {
                     if (width == 1) address.writeWord8(offset, 1)
                     else address.writeNativeScalar(offset, width, 1, true)

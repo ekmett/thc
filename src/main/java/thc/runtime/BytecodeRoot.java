@@ -4467,6 +4467,36 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return ManagedByteArray.readGuest(value, offset, true);
         }
     }
+    /** Char# keeps its machine-word carrier independently of four-byte storage. */
+    @Operation
+    @ConstantOperand(type = boolean.class, name = "byteOffset")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ReadWideCharArray {
+        @Specialization public static void read(VirtualFrame frame, boolean byteOffset, LocalAccessor destination,
+                Object value, long index, Object state, @Bind("$node") Node node) {
+            ManagedByteArray.requireState(state);
+            int bits = byteOffset ? ManagedByteArray.readInt32ByteOffsetGuest(value, index, true)
+                : ManagedByteArray.readInt32Guest(value, index, true);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, Integer.toUnsignedLong(bits));
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class WriteWideCharArray {
+        @Specialization public static Object write(boolean byteOffset, Object value, long index, long character, Object state) {
+            ManagedByteArray.requireState(state);
+            if (byteOffset) ManagedByteArray.writeInt32ByteOffsetGuest(value, index, (int) character);
+            else ManagedByteArray.writeInt32Guest(value, index, (int) character);
+            return kotlin.Unit.INSTANCE;
+        }
+    }
+    @Operation @ConstantOperand(type = boolean.class, name = "byteOffset")
+    public static final class IndexWideCharArray {
+        @Specialization public static long index(boolean byteOffset, Object value, long index) {
+            int bits = byteOffset ? ManagedByteArray.readInt32ByteOffsetGuest(value, index, true)
+                : ManagedByteArray.readInt32Guest(value, index, true);
+            return Integer.toUnsignedLong(bits);
+        }
+    }
     /** Typed machine-Int array read. Java is required by the Bytecode DSL. */
     @Operation
     @ConstantOperand(type = boolean.class, name = "byteOffset")

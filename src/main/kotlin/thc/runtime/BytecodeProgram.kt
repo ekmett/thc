@@ -3656,6 +3656,7 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT ->
                             e.builder.beginReadFloatArray(operation == ByteArrayOp.READ_WORD8_AS_FLOAT, destination[0])
                         ByteArrayOp.READ_CHAR -> e.builder.beginReadCharArray(destination[0])
+                        ByteArrayOp.READ_WIDE_CHAR -> e.builder.beginReadWideCharArray(byteOffset, destination[0])
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 ->
                             e.builder.beginReadByteArray(operation != ByteArrayOp.READ_INT8, destination[0])
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
@@ -3683,6 +3684,7 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
                         ByteArrayOp.READ_CHAR -> e.builder.endReadCharArray()
+                        ByteArrayOp.READ_WIDE_CHAR -> e.builder.endReadWideCharArray()
                         ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> e.builder.endReadByteArray()
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
                         ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 -> e.builder.endReadInt16Array()
@@ -3707,6 +3709,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.beginPinnedByteArray()
                         ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
                         ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexCharArray()
+                        ByteArrayOp.INDEX_WIDE_CHAR -> e.builder.beginIndexWideCharArray(byteOffset)
+                        ByteArrayOp.WRITE_WIDE_CHAR -> e.builder.beginWriteWideCharArray(byteOffset)
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
                         ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.beginWriteIntArray(byteOffset)
@@ -3757,6 +3761,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.endPinnedByteArray()
                         ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
                         ByteArrayOp.INDEX_CHAR -> e.builder.endIndexCharArray()
+                        ByteArrayOp.INDEX_WIDE_CHAR -> e.builder.endIndexWideCharArray()
+                        ByteArrayOp.WRITE_WIDE_CHAR -> e.builder.endWriteWideCharArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
                         ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.endWriteIntArray()
@@ -5415,8 +5421,8 @@ CoreStackForeign.validateHead(fn, defined)
             "eqAddr#" -> "AddressEqual"
             "neAddr#" -> "AddressNotEqual"
             "ltAddr#", "leAddr#", "gtAddr#", "geAddr#" -> "AddressOrder"
-            "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> "AddressIndexByte"
-            "indexWord16OffAddr#", "indexInt16OffAddr#" -> "AddressIndexManagedScalar"
+            "indexWord8OffAddr#", "indexInt8OffAddr#" -> "AddressIndexByte"
+            "indexCharOffAddr#", "indexWord16OffAddr#", "indexInt16OffAddr#" -> "AddressIndexManagedScalar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
@@ -5465,7 +5471,11 @@ CoreStackForeign.validateHead(fn, defined)
                 "AddressMinus" -> b.beginAddressMinus(); "AddressRemainder" -> b.beginAddressRemainder()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(
-                    if (name == "indexInt16OffAddr#") ManagedAddressRead.INT16 else ManagedAddressRead.WORD16)
+                    when (name) {
+                        "indexCharOffAddr#" -> ManagedAddressRead.CHAR
+                        "indexInt16OffAddr#" -> ManagedAddressRead.INT16
+                        else -> ManagedAddressRead.WORD16
+                    })
                 "AddressEqual" -> b.beginAddressEqual(); "AddressNotEqual" -> b.beginAddressNotEqual()
                 "AddressOrder" -> b.beginAddressOrder(when (name) {
                     "ltAddr#" -> ManagedAddressOrder.LT

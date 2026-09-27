@@ -7,11 +7,68 @@ import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.TruffleLanguage
+import thc.runtime.BytecodeProgram
+import thc.runtime.Calls
+import thc.runtime.ExecutableProgram
+import thc.runtime.Program
 import thc.runtime.ManagedAddress
 import thc.runtime.RuntimeFault
 import java.io.File
 
 class CStringTest {
+    @ParameterizedTest
+    @CsvSource("ast,false", "ast,true", "bytecode,false", "bytecode,true")
+    fun characterAddressReadsKeepMachineCarriersDistinctFromNarrowBytes(backend: String, async: Boolean) {
+        fun proof(rep: String) = mapOf("kind" to "long", "evaluated" to true, "primReps" to listOf(rep))
+        for ((operation, rep) in listOf("indexCharOffAddr#" to "WordRep",
+            "indexWord8OffAddr#" to "Word8Rep", "indexInt8OffAddr#" to "Int8Rep")) {
+            for (byte in listOf(0, 127, 128, 255)) for (compiled in listOf(false, true)) {
+                // Char# has GHC's WordRep, despite its one-byte memory access.
+                // The result proof is also the typed function-return sink, without
+                // unrelated first-write specialization of a synthetic case slot.
+                val resultProof = proof(rep)
+                val read = primitive(operation, listOf("lit", "string-bytes", "%02x".format(byte)), integer(0)) +
+                    listOf(false, false, mapOf("rep" to resultProof))
+                val binding = mapOf("id" to "entry", "name" to "entry", "arity" to 1, "lifted" to true,
+                    "expr" to listOf("lam", listOf(mapOf("id" to "unused", "name" to "unused", "lifted" to false,
+                        "rep" to proof("IntRep"))), read, mapOf("resultRep" to resultProof)))
+                val raw = module(listOf(binding)) + ("instrument" to true)
+                executionContext().use { context ->
+                    context.initialize("thc"); context.enter()
+                    try {
+                        val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                        val program: ExecutableProgram = if (backend == "ast") Program(language, raw, async)
+                            else BytecodeProgram(language, raw, async)
+                        val target = program.entryTarget("entry")
+                        val targetClass = target.javaClass
+                        if (compiled) {
+                            targetClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            assertEquals(true, targetClass.getMethod("isValidLastTier").invoke(target))
+                            val runtime = Truffle.getRuntime()
+                            runtime.javaClass.getMethod("bypassedInstalledCode",
+                                Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                        }
+                        val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        val expected: Any = if (rep == "WordRep") byte.toLong()
+                            else if (rep == "Int8Rep") byte.toByte().toInt() else byte
+                        assertEquals(expected, Calls.target(target, arrayOf(0L, 0L)),
+                            "$backend/async=$async/$operation/$byte/compiled=$compiled")
+                        if (compiled) {
+                            assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                            assertSame(target, program.entryTarget("entry"))
+                            assertEquals(true, targetClass.getMethod("isValidLastTier").invoke(target),
+                                "The original target must remain installed after its first call")
+                        }
+                    } finally { context.leave() }
+                }
+            }
+        }
+    }
+
     @Test fun literalStoragePreservesUnsignedBytesEmbeddedNulsAndImplicitTerminator() {
         val address = ManagedAddress.fromHex("ff800041")
         assertEquals(255L, address.indexChar(0))
