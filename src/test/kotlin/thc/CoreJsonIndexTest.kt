@@ -296,6 +296,62 @@ class CoreJsonIndexTest {
         }
     }
 
+    @Test fun trackedHaskellModelGoldensLoadWithoutRegeneratingTheSidecar() {
+        val directory = Path.of("test", "json-index", "golden")
+        fun verify(span: CoreJsonIndex.Span, expected: Any?, name: String) {
+            assertEquals(expected, Json.parse(span.bytes().toString(Charsets.UTF_8)), name)
+            when (expected) {
+                is List<*> -> {
+                    val children = span.elements()
+                    assertEquals(expected.size, children.size, name)
+                    children.zip(expected).forEach { (child, value) -> verify(child, value, name) }
+                }
+                is Map<*, *> -> {
+                    val members = span.members()
+                    assertEquals(expected.keys.toList(), members.map { it.name }, name)
+                    members.forEach { verify(it.value, expected[it.name], name) }
+                }
+                else -> {
+                    if (expected is String) assertTrue(span.stringEquals(expected), name)
+                    assertEquals(expected, span.decode(), name)
+                }
+            }
+        }
+        // These are tracked independent Haskell-model outputs, also checked against
+        // the native producer by its own suite. Never regenerate them in this test.
+        for (name in listOf("empty-input", "scalar", "empty-object", "odd-events", "mixed", "escaped", "quarter-carry")) {
+            val bytes = Files.readAllBytes(directory.resolve("$name.json"))
+            val binary = Files.readAllBytes(directory.resolve("$name.idx"))
+            if (name == "empty-input") {
+                assertEquals(0, bytes.size)
+                assertEquals(96, binary.size)
+                val stream = ByteArrayInputStream(binary)
+                val missing = assertThrows(IllegalArgumentException::class.java) {
+                    CoreJsonIndex.loadSidecar(bytes, stream).close()
+                }
+                assertEquals("Missing JSON value", missing.message)
+                assertEquals(0, stream.available(), "empty envelope is consumed before root admission")
+                val corrupt = binary.copyOf()
+                corrupt[corrupt.lastIndex] = (corrupt.last().toInt() xor 1).toByte()
+                val integrity = assertThrows(IllegalArgumentException::class.java) {
+                    CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(corrupt)).close()
+                }
+                assertEquals("JSON index integrity mismatch", integrity.message,
+                    "empty input must not bypass sidecar verification")
+                continue
+            }
+            CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(binary)).use { source ->
+                val initial = source.statistics()
+                assertEquals(0L, initial.decodedSpanCount, name)
+                assertEquals(binary.size.toLong(), initial.serializedByteSize, name)
+                assertEquals(bytes.size.toLong(), initial.indexSourceBytesScanned, name)
+                val expected = Json.parse(bytes.toString(Charsets.UTF_8))
+                verify(source.root, expected, name)
+                assertEquals(expected, source.validateDocument(), name)
+            }
+        }
+    }
+
     @Test fun matchingSelfHashesDoNotAuthorizeWrongTopologyOrCounts() {
         fun rejected(text: String, binary: ByteArray = sidecar(text)) {
             assertThrows(Exception::class.java) { CoreJsonIndex.loadSidecar(text.toByteArray(), ByteArrayInputStream(binary)).close() }
