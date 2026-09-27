@@ -682,6 +682,172 @@ class DelimitedContinuationsTest {
         }
     }
 
+    @Test fun savedScalarJoinTransferRetainsCompletionAfterScheduling() = scheduledJoinTransfer(false, false)
+    @Test fun savedTupleJoinTransferRetainsCompletionAfterScheduling() = scheduledJoinTransfer(true, false)
+    @Test fun savedScalarJoinTransferRetainsItsNextLexicalJump() = scheduledJoinTransfer(false, true)
+    @Test fun savedTupleJoinTransferRetainsItsNextLexicalJump() = scheduledJoinTransfer(true, true)
+
+    private fun scheduledJoinTransfer(tupleResult: Boolean, nextJump: Boolean) {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.Compilation", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val long = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
+                val tupleProof = CoreRepresentation(CoreKind.UNKNOWN, true, true, long.primReps, listOf(long))
+                val shape = TupleShape(tupleProof, language)
+                val layout = FrameLayout()
+                val selector = layout.bind("join selector")
+                val result = layout.bind("join scalar result")
+                val source = layout.bind("join private tuple")
+                val destination = layout.bind("join caller tuple")
+                val group = Any()
+                val targets = (1..2).map { LocalJoinTarget(group, it, intArrayOf(), emptyArray()) }
+                val events = ArrayList<String>()
+                val initial = object : Expr() {
+                    override fun execute(frame: VirtualFrame): Nothing {
+                        events += "capture"
+                        throw DelimitedCut(PromptTag(Language.currentState()), null, shape,
+                            SynchronousMasking.current(this), this).append(frame, object : DelimitedStep {
+                            override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame,
+                                                input: DelimitedResume, ambient: MaskingState,
+                                                outerMask: DelimitedStep?): Nothing {
+                                input.get()
+                                throw targets[0].jump
+                            }
+                        })
+                    }
+                    override fun executeLong(frame: VirtualFrame): Long = execute(frame)
+                    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? = execute(frame)
+                }
+                val scheduled = object : Expr() {
+                    private fun cut(slots: IntArray? = null, offset: Int = 0): Nothing {
+                        events += "join prefix"
+                        throw AstCapture(AstStackSpill, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                assertSame(Unit, input)
+                                events += "join suffix"
+                                if (nextJump) throw targets[1].jump
+                                if (slots == null) return 42L
+                                FrameAccess.writeLong(frame, slots[offset], 42L)
+                                return null
+                            }
+                        })
+                    }
+                    override fun execute(frame: VirtualFrame): Any = cut()
+                    override fun executeLong(frame: VirtualFrame): Long = cut()
+                    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? = cut(slots, offset)
+                }
+                val after = object : Expr() {
+                    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+                    override fun executeLong(frame: VirtualFrame): Long { events += "second join"; return 43L }
+                    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+                        FrameAccess.writeLong(frame, slots[offset], executeLong(frame)); return null
+                    }
+                }
+                val owner = object : GuestRoot(language, layout.build()) {
+                    @field:Child private var region = LocalJoinRegion(group, selector, result,
+                        arrayOf(initial, scheduled, after), if (tupleResult) tupleProof else long,
+                        nextJump, if (tupleResult) shape else null, if (tupleResult) intArrayOf(source) else intArrayOf(), true)
+                    @field:Child private var site = DelimitedActionSite(language, Metrics(false))
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any? {
+                        FrameAccess.writeLong(frame, destination, -99L)
+                        return if (tupleResult) region.executeTuple(frame, intArrayOf(destination), 0) else region.execute(frame)
+                    }
+                    fun resume(image: DelimitedStack, action: Closure): Any? = image.resume(site,
+                        Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor), action)
+                }
+                val cut = assertThrows(DelimitedCut::class.java) { Calls.target(owner.callTarget, arrayOf(0L)) }
+                if (tupleResult) cut.frames += DelimitedFrame(cut.frames.last().frame, object : DelimitedStep {
+                    override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame,
+                                        input: DelimitedResume, ambient: MaskingState,
+                                        outerMask: DelimitedStep?): Any {
+                        input.get()
+                        return frame.getLong(destination)
+                    }
+                })
+                val image = DelimitedStack(cut, shape)
+                val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                    init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any = shape.layout.create().also { shape.layout.setLong(it, 0, 7L) }
+                }.callTarget)
+                repeat(2) { assertEquals(if (nextJump) 43L else 42L, owner.resume(image, action)) }
+                val one = listOf("join prefix", "join suffix") + if (nextJump) listOf("second join") else emptyList()
+                assertEquals(listOf("capture") + one + one, events)
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner))
+                assertEquals(0, language.handoffState.get().results.depth)
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun savedRootTransferDetachesItsTupleBeforeTheNextSavedStep() {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.Compilation", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val long = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
+                val proof = CoreRepresentation(CoreKind.UNKNOWN, true, true, long.primReps, listOf(long))
+                val shape = TupleShape(proof, language)
+                val layout = FrameLayout(); val slot = layout.bind("root tuple result")
+                var effects = 0
+                val body = object : Expr() {
+                    init { representation = proof }
+                    override fun execute(frame: VirtualFrame): Nothing = error("tuple-only model")
+                    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+                        effects++
+                        throw AstCapture(AstStackSpill, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                assertSame(Unit, input)
+                                FrameAccess.writeLong(frame, slots[offset], 42L)
+                                return null
+                            }
+                        })
+                    }
+                }
+                val function = FunctionRoot(language, layout.build(), "saved tuple root", null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false), resultProof = proof,
+                    tuple = shape, tupleSlots = intArrayOf(slot), enableAsync = true, enableDelimited = true)
+                function.callTarget // Adopt the real FunctionBody and its completion step.
+                val owner = object : GuestRoot(language, FrameLayout().build()) {
+                    @field:Child private var site = DelimitedActionSite(language, Metrics(false))
+                    init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any = shape.layout.create().also { shape.layout.setLong(it, 0, 7L) }
+                    fun resume(image: DelimitedStack): Any? = image.resume(site,
+                        Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor),
+                        Closure(null, arity = 1, target = callTarget))
+                }
+                val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), function.frameDescriptor)
+                val cut = DelimitedCut(PromptTag(Language.currentState()), null, shape, MaskingState.UNMASKED, owner)
+                cut.frames += DelimitedFrame(frame, object : DelimitedStep {
+                    override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame,
+                                        input: DelimitedResume, ambient: MaskingState,
+                                        outerMask: DelimitedStep?): Nothing { input.get(); throw AstSelfCall }
+                })
+                cut.frames += DelimitedFrame(frame, DelimitedRootStep(function))
+                cut.frames += DelimitedFrame(frame, object : DelimitedStep {
+                    override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame,
+                                        input: DelimitedResume, ambient: MaskingState,
+                                        outerMask: DelimitedStep?): Any {
+                        val answer = input.get()
+                        assertEquals(0, language.handoffState.get().results.depth,
+                            "The transferred root must detach its tuple before another saved step runs")
+                        FrameAccess.writeLong(frame, slot, 99L)
+                        ownedTupleResult(shape.finish(frame, intArrayOf(slot)), shape)
+                        return shape.layout.getLong(answer as HandoffStorage, 0)
+                    }
+                })
+                val image = DelimitedStack(cut, shape)
+                repeat(2) { assertEquals(42L, owner.resume(image)) }
+                assertEquals(2, effects)
+                assertEquals(0, language.handoffState.get().results.depth)
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun frameImagesCopyControlLocalsButShareHeapReferences() {
         val builder = FrameDescriptor.newBuilder()
         val scalar = builder.addSlot(FrameSlotKind.Long, null, null)

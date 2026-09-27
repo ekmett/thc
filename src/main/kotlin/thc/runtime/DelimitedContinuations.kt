@@ -49,10 +49,9 @@ internal class DelimitedRootStep(private val root: FunctionRoot) : DelimitedTran
                         outerMask: DelimitedStep?): Any? = input.get()
     override fun accepts(transfer: ControlFlowException): Boolean =
         transfer === AstSelfCall || transfer is TailCall || transfer is HandoffTailCall
-    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
-        val result = root.resumeDelimited(frame, transfer, site)
-        return site.finish(result, root.tupleResult)
-    }
+    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? =
+        root.resumeDelimited(frame, transfer, site)
+    override fun finish(result: Any?, site: DelimitedActionSite): Any? = site.finish(result, root.tupleResult)
 }
 
 internal class DelimitedFrame(val frame: MaterializedFrame, val step: DelimitedStep)
@@ -91,10 +90,8 @@ internal class DelimitedBytecodeStep(private val saved: ContinuationResult,
     }
     override fun finish(result: Any?, site: DelimitedActionSite): Any? = site.finish(result, shape)
     override fun accepts(transfer: ControlFlowException): Boolean = transfer is TailCall
-    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
-        val result = site.tail(transfer as TailCall)
-        return site.finish(result, shape)
-    }
+    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? =
+        site.tail(transfer as TailCall)
 }
 
 internal class DelimitedTupleStep(private val destination: TupleDestination, private val node: Node) : DelimitedStep {
@@ -205,11 +202,14 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
         val owner = remaining.indexOfFirst { it.step is DelimitedTransferStep && it.step.accepts(flow) }
         if (owner < 0) throw flow
         val entry = remaining[owner]
+        val step = entry.step as DelimitedTransferStep
         remaining.take(owner).forEach { if (it.step is DelimitedAnnotationStep) it.step.unwind() }
         val after = remaining.drop(owner + 1)
-        val input = try { DelimitedResume(site.captured(entry.frame, null) {
-            (entry.step as DelimitedTransferStep).transfer(entry.frame, flow, site)
-        }) }
+        // Completion belongs after a suspended transfer too. In particular, a
+        // root's tuple loan must be detached before any outer saved step runs.
+        val input = try { DelimitedResume(step.finish(site.captured(entry.frame, null) {
+            step.transfer(entry.frame, flow, site)
+        }, site)) }
         catch (failure: GuestException) { DelimitedResume(null, failure) }
         catch (failure: AsyncDelivery) {
             DelimitedResume(null, failure)

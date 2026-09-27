@@ -61,6 +61,10 @@ the owner nor its mutable completion state is copied into the reusable image.
 An async delivery reached while draining still unwinds the original request to
 its handler. The native `scheduledSaved` control runs a deep, non-tail action
 twice through the same image, checking each prefix/suffix effect and mask return.
+Saved local-join transfers retain their region around an interrupted body, so
+later lexical jumps and scalar/tuple result completion remain owned by that
+region. Transferred roots detach their tuple results after scheduling completes,
+before another saved step can execute guest code or acquire a result loan.
 
 Strict scalar-returning workers preserve their pending case caller, including
 its result destination. Capturing a resumed segment again freezes the mask
