@@ -1554,12 +1554,7 @@ sourceNativeInputs context unit = do
 componentNativeInputs :: ExportContext -> Unit -> Component -> IO [(FilePath, String)]
 componentNativeInputs context unit component = do
   dist <- field (unitValue unit) "dist-dir"
-  let productFlags = ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]
-      productRoots = nub [path | (flag, path) <- zip (componentArguments component)
-                                                   (drop 1 (componentArguments component)),
-                                 flag `elem` productFlags]
-  require (not (null productRoots) && all (within dist) productRoots)
-    ("Cabal build-info lacks component-scoped native output roots for " ++ unitId unit)
+  productRoots <- componentRoots dist (componentValue component)
   products <- sort . nub . filter nativeProduct . concat <$> mapM recursiveFiles productRoots
   require (not (null products)) ("native Cabal build has no Haskell artifacts for " ++ unitId unit)
   forM products $ \path -> do

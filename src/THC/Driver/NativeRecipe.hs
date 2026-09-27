@@ -98,13 +98,21 @@ readNativeRecipe directory compiler output = do
       recipeObject recipe == output && recipeObjectHash recipe == hash then Just recipe else Nothing
   pure (either (const Nothing) id result)
 
+-- | Resolve Cabal's output options relative to the component source directory,
+-- not the driver's current directory. Check canonical containment so a relative
+-- path or symlink cannot grant access outside the selected component build.
 componentRoots :: FilePath -> Value -> IO [FilePath]
 componentRoots dist component = do
   arguments <- field component "compiler-args"
-  roots <- mapM canonicalizePath (nub [path | (flag,path) <- zip arguments (drop 1 arguments),
+  source <- field component "src-dir" >>= canonicalizePath
+  owned <- canonicalizePath (resolveComponentPath source dist)
+  roots <- mapM (canonicalizePath . resolveComponentPath source) (nub [path | (flag,path) <- zip arguments (drop 1 arguments),
     flag `elem` ["-odir", "-hidir", "-hiedir", "-stubdir", "-outputdir"]])
-  unless (not (null roots) && all (within dist) roots) (fail "Cabal build-info has no owned component output roots")
-  pure roots
+  unless (not (null roots) && all (within owned) roots) (fail "Cabal build-info has no owned component output roots")
+  pure (nub roots)
+
+resolveComponentPath :: FilePath -> FilePath -> FilePath
+resolveComponentPath source path = if isAbsolute path then path else source </> path
 
 -- A successful Cabal command is insufficient: it may have reused an archive
 -- after an intermediate object or receipt disappeared. Force the caller's
@@ -246,7 +254,8 @@ componentNativeObjects native dist allRoots component = do
         _ -> fail "Cabal library build-info has an invalid component name"
     _ -> pure []
   arguments <- field component "compiler-args"
-  artifacts <- mapM canonicalizePath
+  source <- field component "src-dir" >>= canonicalizePath
+  artifacts <- mapM (canonicalizePath . resolveComponentPath source)
     [directory </> suffix | suffix <- suffixes,
       (flag,directory) <- zip arguments (drop 1 arguments), flag `elem` ["-odir", "-outputdir"]]
   let haskellRoots = nub (roots ++ artifacts)

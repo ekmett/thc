@@ -60,6 +60,7 @@ runTests arguments = do
     ["--inplace-store-only"] -> pure [StoreProjectTests.inplaceTests env]
     ["--concurrent-store-only"] -> pure [StoreProjectTests.concurrentTests env]
     ["--package-native-only"] -> pure [PackageNativeTests.tests]
+    ["--native-recipe-only"] -> pure [NativeRecipeTests.tests]
     [] -> pure
       [ CoreIndexTests.tests
       , InstalledForeignTests.tests
@@ -79,6 +80,6 @@ runTests arguments = do
       , StoreProjectTests.tests env
       , EmptyStoreProjectTests.tests env
       ]
-    _ -> die "Usage: driver-tests [--core-index-only|--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only]"
+    _ -> die "Usage: driver-tests [--core-index-only|--runnable-targets-only|--acquire-project-only|--run-options-only|--run-ffi-only|--store-inventory-only|--store-projects-only|--export-safety-only|--inplace-store-only|--concurrent-store-only|--installed-hydration-only|--installed-foreign-source-only|--package-native-only|--native-recipe-only]"
   counts <- runTestTT $ TestList selected
   if errors counts + failures counts == 0 then pure () else exitFailure

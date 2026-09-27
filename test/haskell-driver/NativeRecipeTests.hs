@@ -34,6 +34,32 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   [ TestCase $ do
       let args = ["-c", "cbits/a café.c", "-I/a \"quoted\" path", "-DVALUE=\\x"]
       assertEqual "GHC response quoting preserves complete arguments" args (unescapeArgs (escapeArgs args))
+  , TestCase $ withScratch $ \root -> do
+      let source = root </> "source"
+          dist = source </> "dist"
+          output = dist </> "build"
+          caller = root </> "caller"
+          outside = root </> "outside"
+          component arguments = object ["src-dir" .= source, "compiler-args" .= (arguments :: [String])]
+      forM_ [output, caller, outside] (createDirectoryIfMissing True)
+      withCurrentDirectory caller $ do
+        assertEqual "relative outputs use actual component src-dir, not driver cwd" [output] =<<
+          componentRoots dist (component ["-odir", "dist/build", "-hidir", "dist/build"])
+        assertEqual "absolute output roots remain supported" [output] =<<
+          componentRoots dist (component ["-odir", output])
+        assertEqual "aliases of one canonical output directory are deduplicated" [output] =<<
+          componentRoots dist (component ["-odir", "dist/build", "-hidir", output])
+        forM_ [[], ["-odir", outside], ["-hidir", "../outside"], ["-outputdir", "dist/../../outside"]] $ \arguments -> do
+          result <- tryIOError (componentRoots dist (component arguments))
+          assertBool "missing or outside-root output inventory is rejected" (isLeft result)
+        -- Native Windows can restrict symlink creation. Ordinary containment
+        -- controls above remain mandatory; run this control when supported.
+        linked <- tryIOError (createDirectoryLink outside (dist </> "escape"))
+        case linked of
+          Left _ -> pure ()
+          Right () -> do
+            result <- tryIOError (componentRoots dist (component ["-stubdir", "dist/escape"]))
+            assertBool "canonical containment rejects a symlink escaping the build root" (isLeft result)
   , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
       let native = root </> "native"
           dist = native </> "build"
@@ -173,19 +199,29 @@ tests = TestLabel "actual native compiler receipts" $ TestList
           receipts = native </> "cache/thc/native-recipes-v1"
           -- Cabal 3.16.1's actual Linux scalar fixture build-info: modules is
           -- empty and every output flag reports the base, not oracle-tmp.
-          component = object
+          componentFor outputRoot = object
             ["type" .= ("exe" :: String), "name" .= ("exe:oracle" :: String),
              "modules" .= ([] :: [String]), "src-files" .= (["Main.hs"] :: [String]),
              "hs-src-dirs" .= (["app"] :: [String]), "src-dir" .= root,
              "cabal-file" .= ("scalar-first.cabal" :: String),
-             "compiler-args" .= ["-outputdir",build,"-odir",build,"-hidir",build,
-               "-hiedir",build </> "extra-compilation-artifacts/hie","-stubdir",build]]
+             "compiler-args" .= ["-outputdir",outputRoot,"-odir",outputRoot,"-hidir",outputRoot,
+               "-hiedir",outputRoot </> "extra-compilation-artifacts/hie","-stubdir",outputRoot]]
+          component = componentFor build
           inventory = componentNativeObjects native dist [build] component
       createDirectoryIfMissing True artifacts
       writeFile (root </> "scalar-first.cabal") $ unlines
         ["cabal-version: 3.0","name: scalar-first","version: 0.1.0.0","build-type: Simple",
          "executable oracle","  main-is: Main.hs","  hs-source-dirs: app","  build-depends: base"]
       mapM_ (\suffix -> writeFile (artifacts </> "Main" <.> suffix) suffix) ["o","hi","dyn_o","dyn_hi"]
+      let caller = root </> "unrelated-caller"
+          relativeComponent = componentFor (makeRelative root build)
+      createDirectory caller
+      withCurrentDirectory caller $ do
+        assertEqual "relative nested output paths retain paired Haskell classification away from src-dir" [] =<<
+          componentNativeObjects native dist [build] relativeComponent
+        ensureNativeRecipes native dist [build] "/unused" relativeComponent
+          (fail "relative no-C executable must not remove objects or rebuild")
+        assertBool "relative nested Haskell object survives inventory" =<< doesFileExist output
       assertEqual "Cabal executable temporary layout contains Haskell objects" [] =<< inventory
       ensureNativeRecipes native dist [build] "/unused" component (fail "no-C executable must not rebuild")
       noC <- withScalarBitcode native dist [build] "/unused" "/unused" "scalar-first-inplace-oracle"
