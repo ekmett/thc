@@ -1,6 +1,7 @@
 # Mutable byte-array fills and copies
 
-The managed `byte[]` carrier supports three additional GHC 9.14.1 operations.
+THC-owned heap/pinned allocations and host-supplied `byte[]` values support these
+three GHC 9.14.1 operations on both backends.
 All return scalar `State# s`; no result tuple or result-storage loan is involved.
 Offsets/counts measure bytes, remain primitive `long` values, and must describe
 contained ranges. THC validates full-width ranges by subtraction before narrowing
@@ -15,18 +16,25 @@ or mutation, including empty ranges at either array end.
 These are the pinned [primitive declarations](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/Builtin/primops.txt.pp)
 and [GHC lowering](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/Prim.hs).
 GHC lowers the fill to `memset`, the overlapping same-array move to `memmove`, and
-the disjoint copy to `memcpy`. THC uses JVM primitive-array fill/copy operations
-and rejects violations of the defined range/overlap domain before writing.
+the disjoint copy to `memcpy`. THC retains JVM primitive-array fill/copy fast
+paths for raw arrays. Owned allocations use their existing memory segments,
+validate logical bounds and preserve complete pointer cells when copying between
+owners. Copy and comparison use the same ordered owner locks. Invalid ranges,
+forbidden overlap and partial pointer-cell overwrites are rejected before writing.
+A fill or replacement copy covering a whole pointer cell releases that cell's
+managed reference; raw byte transfer cannot expose a live managed pointer as bytes.
 Undefined native inputs are excluded from the GHC oracle.
 
 The existing `copyByteArray#` contract is unchanged: an immutable source and a
 mutable destination must have different backing identities, even for disjoint
-or empty ranges. The new operations preserve their destination's backing identity
-and length. All operands, including the canonical zero-width State carrier, are
+or empty ranges. These operations preserve their destination's backing identity
+and logical length. All operands, including the canonical zero-width State carrier, are
 evaluated before the first mutation. AST nodes have fixed child operands;
 bytecode operations have typed `long` positions, counts and fill values, with the
-copy policy fixed at node construction. Exact unlifted boxed-reference, `IntRep`
-and scalar `VOID` proofs are required; a `Word8#` value is not an `Int#` fill proof.
+copy policy fixed at node construction. Lowering checks unlifted boxed references,
+scalar State, arity and physical carriers. Integral annotations share `Long`;
+the fill operation stores its low eight bits. Strict exporter auditing checks the
+original `Int#` source signature separately.
 
 `MutableByteArrayAudit` contains five primitive workloads and one genuine public
 `ShortByteString.replicate`/`foldl'` consumer, including the empty-string branch.
@@ -47,13 +55,16 @@ storage unchanged. Result pools must remain empty and reference-clean.
 ```sh
 cabal run exe:thc-fixtures --offline -- mutable-bytearrays
 python3 scripts/test-core-bytearrays.py
-./gradlew test --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest
+./gradlew --max-workers=2 --continue \
+  testDefault --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest \
+  testDense --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest
 ```
 
-This adds no resizing, pinned allocation, `Addr#`, foreign-memory, concurrent or
-atomic operations. Native undefined ranges and overlapping calls to the disjoint
-primitive are not counted as execution coverage.
+[Resize/shrink](resize-bytearrays.md), [pinned/address operations](pinned-memory.md)
+and [atomic integer access](atomic-int-arrays.md) have separate contracts and
+fixtures. Owner locking protects the storage invariants; this ordinary fill/copy
+fixture is not a general concurrent or atomic-access test. Undefined native ranges
+and overlapping calls to the disjoint primitive are excluded from its native oracle.
 
 The five related byte-array fixture producers share the Haskell
 `ByteArrayFixtures` module. `MutableByteArrayTest` independently checks the
@@ -61,4 +72,5 @@ complete ordered native corpus, all contained ranges, overlap snapshots and
 distinct-storage copy equivalence. Missing, duplicate, reordered and wrong rows,
 missing source/artifact hashes and corrupt receipts are rejected. The existing
 Python Core auditor, original-source exporter and primop inventory remain shared
-dependencies; there is no Python fixture-model entry point for this family.
+dependencies. The [storage checkpoint archive](../research/bytearray-storage-checkpoint.md)
+preserves the earlier carrier description and commands.

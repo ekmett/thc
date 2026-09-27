@@ -1,7 +1,7 @@
 # Mutable byte-array size
 
 Pinned GHC 9.14.1 defines two distinct primitives. `getSizeofMutableByteArray#`
-accepts one unlifted managed byte array and scalar `State#`, returning the logical
+accepts one unlifted managed byte-array reference and scalar `State#`, returning the logical
 unboxed pair `(# State#, Int# #)`. Both backends evaluate/check State before reading
 length and publish the size through one primitive Long destination. State consumes
 no tuple storage. The result does not use a boxed pair or generic aggregate carrier.
@@ -10,10 +10,13 @@ no tuple storage. The result does not use a boxed pair or generic aggregate carr
 `Int#` result. It uses the existing typed array-length path. Its GHC warning matters:
 it is unsafe around shrinking/resizing of the same reference. Native controls query
 only live, stable references. After resize, all accesses use the returned array;
-there is no promise about retired aliases. `shrinkMutableByteArray#` now changes
+there is no promise about retired aliases. `shrinkMutableByteArray#` changes
 an owned allocation's logical size in place; both queries observe that size,
 not retained backing capacity. Pointer-cell truncation and host-array limits
-are listed in the [behavior reference](primop-behavior.md#addresses-pinning-and-pointer-containing-storage).
+are described in the [resize/shrink guide](resize-bytearrays.md).
+Host-supplied raw `byte[]` values report their physical array length; guest-owned
+heap and pinned allocations report their logical size, independent of retained
+capacity. The unsafe pure query is not a synchronization mechanism.
 
 The fresh preparer retains original OPAQUE `getSizeWorker`/`pureSizeWorker` calls in
 both pre/post Core and checks exact pinned signatures and ten strict audits.
@@ -29,14 +32,23 @@ active target identities, valid original/host/active targets and clear input/res
 pools. Fixture-free Kotlin tests check the full input inventory and reject malformed,
 missing, duplicate, reordered and incorrect oracle rows. Independent direct primitive entries require exactly one compiled entry for
 each measured call. State-failure controls require no destination publication;
-malformed saturation, State/empty-tuple confusion, signedness, levity, missing proofs
-and wrong runtime carriers reject. Ordinary default and dense-handoff modes use the
+malformed saturation, State/empty-tuple confusion, levity, missing aggregate proofs
+and wrong physical carriers reject. Integral annotations share `Long` after
+lowering; the selected operation supplies scalar interpretation and the strict
+Core auditor independently checks source-level signatures. Ordinary default and dense-handoff modes use the
 same gates and normal compilation thresholds.
 
-Reproduce preparation with `cabal run exe:thc-fixtures --offline -- mutable-bytearray-size`, the
-auditor proof checks with `python3 scripts/test-core-bytearrays.py`, and the model,
-native-comparison and compiled-path tests together with
-`./gradlew --no-daemon test --tests thc.runtime.MutableByteArraySizeTest`.
-For dense handoff use `JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true` and selected-task
-`test --rerun` with the same test filter. This original size-query fixture is not
-the separate shrink implementation's evidence, nor a public Text closure claim.
+Run the producer, auditor controls and both runtime modes with the pinned toolchain:
+
+```sh
+cabal run exe:thc-fixtures --offline -- mutable-bytearray-size
+python3 scripts/test-core-bytearrays.py
+./gradlew --max-workers=2 --continue \
+  testDefault --tests thc.runtime.MutableByteArraySizeTest \
+  testDense --tests thc.runtime.MutableByteArraySizeTest
+```
+
+This size-query fixture does not replace the dedicated
+[shrink checks](resize-bytearrays.md#fixture-and-runtime-checks) or establish
+public Text closure. The [storage checkpoint archive](../research/bytearray-storage-checkpoint.md)
+preserves the earlier guide and command sequence.
