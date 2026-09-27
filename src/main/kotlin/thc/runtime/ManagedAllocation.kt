@@ -167,7 +167,7 @@ internal class ManagedAllocation private constructor(
         synchronized(bytes ?: this) { action(segment, offset.toInt()) }
     }
 
-    @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
+    @TruffleBoundary @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
         val start = range(offset, pointerBytes.toLong())
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")
     }

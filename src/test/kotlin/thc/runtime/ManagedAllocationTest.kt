@@ -15,7 +15,7 @@ import thc.Language
 import thc.primopTestContext
 
 class ManagedAllocationTest {
-    @Test fun pointerWritesKeepTheFirstInstalledCallAndReferenceIdentity() {
+    @Test fun pointerWritesAndReadsKeepTheFirstInstalledCallAndReferenceIdentity() {
         primopTestContext().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -26,8 +26,9 @@ class ManagedAllocationTest {
                         if (CompilerDirectives.inCompiledCode()) compiledEntries++
                         val storage = frame.arguments[0] as ManagedAllocation
                         val address = frame.arguments[2] as ManagedAddress
-                        storage.writeAddressByteOffset(frame.arguments[1] as Long, address)
-                        return address
+                        val offset = frame.arguments[1] as Long
+                        storage.writeAddressByteOffset(offset, address)
+                        return storage.readAddressByteOffset(offset)
                     }
                 }
                 val target = root.callTarget
@@ -43,7 +44,7 @@ class ManagedAllocationTest {
                 for ((owner, address) in storage.zip(addresses)) {
                     val before = root.compiledEntries
                     assertSame(address, target.call(owner, 8L, address))
-                    assertEquals(before + 1, root.compiledEntries, "first installed pointer write")
+                    assertEquals(before + 1, root.compiledEntries, "first installed pointer write/read")
                     assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                     assertSame(address, owner.readAddressByteOffset(0))
                     assertSame(address, owner.readAddressByteOffset(8))
