@@ -1535,7 +1535,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             // Join heads are lexically owned too: foreign metadata cannot turn
             // a local jump into an unresolved external declaration.
             val defined = fn[0] == "var" &&
-                (fn[1] in globals || fn[1] in scope.locals || fn[1] in scope.joins)
+                (fn[1] in scope.locals || fn[1] in scope.joins ||
+                    if (demand != null && CoreRepresentations.metadata(expr)?.containsKey("foreignCall") == true)
+                        demand.isDefined(fn[1] as String) else fn[1] in globals)
             val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val runtimeService = CoreRuntimeServices.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val packageScalar = if (cpuAffinity == null && runtimeService == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
@@ -1647,7 +1649,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endCpuAffinityQuery()
                 }
             } else if (stackClone) {
-                CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+CoreStackForeign.validateHead(fn, defined)
                 val state = args.single()
                 CoreStackForeign.validateBinding(if (state[0] == "var")
                     scope.locals[state[1]]?.proof ?: globalProofs[state[1]] else null)
@@ -1660,7 +1662,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (stackInfo != null) {
                 val layout = CoreStackInfoForeign.requireLayout(stackTargetLayout)
-                CoreStackInfoForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreStackInfoForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreStackInfoForeign.validateOperand(stackInfo, index, operand.proof,
@@ -1728,7 +1730,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                 }
             } else if (originalStdio != null) {
-                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreOriginalStdio.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio.directoryStream || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
@@ -1993,7 +1995,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (enableAsync && packageScalar.safety == ForeignSafety.SAFE) emitAsyncPoll(e)
                 }
             } else if (stableFree) {
-                CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreStablePointers.validateHead(fn, defined)
                 val operands = args.map { compile(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
                     if (destination.isNotEmpty()) throw RuntimeFault("StablePtr free has no result field")
@@ -2031,7 +2033,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else e.builder.endSetProgramArguments()
                 }
             } else if (rtsDiagnostic != null) {
-                CoreRtsDiagnosticForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreRtsDiagnosticForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreRtsDiagnosticForeign.validateOperand(rtsDiagnostic, index, operand.proof,
@@ -2198,7 +2200,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endRegisterMainThread()
                 }
             } else if (managedFile != null) {
-                CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreManagedFiles.validateHead(fn, defined)
                 val operands = args.map { compile(it, scope, false) }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
@@ -2233,7 +2235,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     if (enableAsync) emitAsyncPoll(e)
                 }
             } else if (processSignal != null) {
-                CoreSignalForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreSignalForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreSignalForeign.validateOperand(processSignal, index, operand.proof,
@@ -2246,7 +2248,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endInstallProcessSignal()
                 }
             } else if (nativeAllocation != null) {
-                CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreNativeAllocationForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreNativeAllocationForeign.validateOperand(nativeAllocation, index, operand.proof,
@@ -2340,7 +2342,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endOriginalMemset()
                 }
             } else if (memmove) {
-                CoreMemmoveForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMemmoveForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreMemmoveForeign.validateOperand(index, operand.proof,
@@ -2353,7 +2355,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endOriginalMemmove()
                 }
             } else if (memcpy) {
-                CoreMemcpyForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMemcpyForeign.validateHead(fn, defined)
                 val byteArrays = CoreMemcpyForeign.byteArrays(foreignMetadata)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
@@ -2371,7 +2373,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     e.builder.endOriginalMemcpy()
                 }
             } else if (libdw != null) {
-                CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreLibdwForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreLibdwForeign.validateOperand(libdw, index, operand.proof,
@@ -2394,7 +2396,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.endBlock()
                 }
             } else if (gmp != null) {
-                CoreGmpForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreGmpForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreGmpForeign.validateOperand(gmp, index, operand.proof,
@@ -2427,7 +2429,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.endBlock()
                 }
             } else if (md5 != null) {
-                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMd5Foreign.validateHead(fn, defined)
                 val operands = args.map { compile(it, scope, false) }
                 tupleExpression(tupleProof) { e, _ ->
                     when (md5) {

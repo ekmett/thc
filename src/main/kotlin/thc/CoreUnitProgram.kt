@@ -63,7 +63,7 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         } catch (failure: Throwable) { consumerSources.forEach(CoreJsonIndex::close); sources.close(); throw failure }
     }
     private val demand = CoreDemandBindings({ it in consumerBindings || directory.owner(it) != null }, ::binding, ::constructor,
-        ::prepare, input["instrument"] != false)
+        ::prepare, input["instrument"] != false, { it in consumerBindings || sources.containsSymbol(it) })
     // Cold summaries choose a calling convention, not an admission verdict.
     // AST asynchronous execution cannot capture explicit delimited control; its
     // actual selected binding is rejected by Program, not by this directory.

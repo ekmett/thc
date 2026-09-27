@@ -310,9 +310,12 @@ object CoreModules {
                 "app" -> {
                     val function = expr[1] as List<Any?>
                     thc.runtime.CoreExceptionPayload.validate(expr)
-                    if (thc.runtime.CoreForeignExceptionBridge.executes(expr,
-                        function.firstOrNull() == "var" && (function.getOrNull(1) in bound || function.getOrNull(1) in byId ||
-                            (function.getOrNull(1) as? String)?.let { demand?.contains(it) } == true),
+                    val foreignDescriptor = CoreRepresentations.metadata(expr)?.get("foreignCall") is Map<*, *>
+                    val defined = function.firstOrNull() == "var" && (function.getOrNull(1) in bound ||
+                        function.getOrNull(1) in byId || (function.getOrNull(1) as? String)?.let {
+                            if (foreignDescriptor) demand?.isDefined(it) else demand?.contains(it)
+                        } == true)
+                    if (thc.runtime.CoreForeignExceptionBridge.executes(expr, defined,
                         module["packageScalarLinks"] as? List<PackageScalarLink> ?: emptyList())) {
                         val selectedBridge = exceptionBridge ?: (bridge?.invoke() ?: thc.runtime.CoreForeignExceptionBridge.select(module))
                             .also { exceptionBridge = it }
@@ -325,9 +328,9 @@ object CoreModules {
                     // Lowering validates the complete ABI and rejects unsupported
                     // targets. Defined heads and all operands still participate
                     // in linking; metadata cannot hide their dependencies.
-                    val foreignHead = CoreRepresentations.metadata(expr)?.get("foreignCall") is Map<*, *> &&
+                    val foreignHead = foreignDescriptor &&
                         function.firstOrNull() == "var" && function.getOrNull(1) is String &&
-                        function[1] !in bound && function[1] !in byId && demand?.contains(function[1] as String) != true
+                        !defined
                     if (!foreignHead) visit(function, bound)
                     (expr[2] as List<List<Any?>>).forEach { visit(it, bound) }
                 }

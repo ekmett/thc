@@ -135,6 +135,57 @@ class CoreUnitLoadTest {
         }
     }
 
+    @Test fun foreignHeadsUseExactSymbolMembershipWithoutDecodingShadowBodies() {
+        val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
+        val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
+        val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
+        val result = mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to true,
+            "aggregate" to "unboxed-tuple", "components" to listOf(state))
+        val descriptor = mapOf("schema" to 1, "target" to mapOf("kind" to "static", "symbol" to "getProgArgv",
+            "unit" to "ghc-internal", "isFunction" to true), "convention" to "ccall", "safety" to "unsafe",
+            "arity" to 3, "suppliedArity" to 3, "argumentReps" to listOf(address, address, state).map { it + ("evaluated" to false) },
+            "resultRep" to (result + ("evaluated" to false)))
+        val nil = listOf("lit", "null-addr", "0", mapOf("rep" to address))
+        for (affinity in listOf(false, true)) for (shadow in listOf(false, true)) {
+            // Both heads have a known module owner. Only 'unused' has a row;
+            // its unsupported body must not be parsed just to reject shadowing.
+            val head = if (shadow) "uB:B.unused" else "uB:B.originalFCall"
+            val selectedResult = if (affinity) result + mapOf("primReps" to listOf("Int32Rep"), "components" to listOf(
+                state, mapOf("kind" to "long", "primReps" to listOf("Int32Rep"), "evaluated" to true))) else result
+            val selectedDescriptor = if (affinity) descriptor + mapOf("target" to mapOf("kind" to "static",
+                "symbol" to "thc_cpu_affinity_v1_support", "unit" to "ghc-internal", "isFunction" to true),
+                "arity" to 1, "suppliedArity" to 1, "argumentReps" to listOf(state + ("evaluated" to false)),
+                "resultRep" to (selectedResult + ("evaluated" to false))) else descriptor
+            val args = (if (affinity) emptyList() else listOf(nil, nil)) + listOf(listOf("void", mapOf("rep" to state)))
+            val foreign = listOf("app", listOf("var", head, mapOf("rep" to closure)),
+                args, List(args.size) { false }, false, false,
+                mapOf("rep" to selectedResult, "foreignCall" to selectedDescriptor))
+            val body = listOf("case", foreign, "state-tuple", listOf(listOf("default", null, emptyList<String>(), literal(7))),
+                mapOf("rep" to mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true),
+                    "binder" to mapOf("id" to "state-tuple", "name" to "state-tuple", "lifted" to false, "rep" to selectedResult)))
+            val units = listOf(unit("A", body), unit("B", literal(0)))
+            val manifest = directory.resolve("foreign-$shadow.json")
+            Files.writeString(manifest, Json.stringify(mapOf("format" to "thc-core-packages", "schema" to 1,
+                "ghc" to "9.14.1", "units" to units)))
+            // A membership probe needs only B's symbol directory.
+            Files.delete(directory.resolve("B.jsons"))
+            for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+                if (shadow) {
+                    val failure = assertThrows(org.graalvm.polyglot.PolyglotException::class.java) {
+                        context.eval("thc", request(manifest, backend))
+                    }
+                    assertTrue(failure.message.orEmpty().contains("unresolved"), failure.message)
+                } else {
+                    val entry = context.eval("thc", request(manifest, backend))
+                    assertEquals(1L, count(entry, "coreUnitSourceOpens"))
+                    assertEquals(2L, count(entry, "coreUnitDirectoryOpens"))
+                    assertEquals(1L, count(entry, "coreUnitDecodedBindings"))
+                    if (affinity) assertEquals(7L, entry.execute(0).asLong())
+                }
+            }
+        }
+    }
+
     @Test fun projectedMetadataSkipsOriginalPrettyCoreGroupsAndDisabledSourceTables() {
         val unit = unit("A", literal(7), diagnostics = true)
         val document = Json.parse(Json.stringify(mapOf("format" to "thc-core-packages", "schema" to 1,

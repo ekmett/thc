@@ -79,6 +79,11 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
             val module = directory.owner(id) ?: return null
             return reader(module.unit).binding(id, module.span)
         }
+        @Synchronized fun containsSymbol(id: String): Boolean {
+            check(!closed) { "Core unit sources are closed" }
+            val module = directory.owner(id) ?: return false
+            return reader(module.unit).containsSymbol(id)
+        }
         @Synchronized fun verifyModule(module: ModuleRecord) {
             check(!closed) { "Core unit sources are closed" }
             if (!verifyArtifacts || module in verified) return

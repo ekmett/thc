@@ -10,7 +10,7 @@ internal class CoreDemandBindings(private val owns: (String) -> Boolean,
     private val readBinding: (String) -> Map<String, Any?>,
     private val readConstructor: (String) -> Map<String, Any?>?,
     private val prepare: (String, Map<String, Any?>) -> ExecutableProgram,
-    instrument: Boolean) {
+    instrument: Boolean, private val defined: (String) -> Boolean) {
     private val lock = Any()
     val metrics = Metrics(instrument)
     val layouts = mutableMapOf<String, DataLayout>()
@@ -21,6 +21,9 @@ internal class CoreDemandBindings(private val owns: (String) -> Boolean,
     private val calls = HashMap<String, MutableList<List<CoreRepresentation>>>()
 
     fun contains(id: String) = owns(id)
+    /** A module owner is only a possible ordinary callee. Foreign lowering
+     * additionally needs exact definition membership, without decoding its RHS. */
+    fun isDefined(id: String) = synchronized(lock) { defined(id) }
     fun definition(id: String): Map<String, Any?> = synchronized(lock) {
         definitions.getOrPut(id) { readBinding(id).also { require(it["id"] == id) { "Core binding identity mismatch: $id" } } }
     }

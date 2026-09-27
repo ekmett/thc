@@ -118,6 +118,13 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         return mapping.bytes.get(ValueLayout.JAVA_BYTE, at).toInt() and 255
     }
 
+    /** Exact declaration membership, without opening or parsing the JSON body.
+     * Used for an already demanded foreign-call head, not cold call discovery. */
+    fun containsSymbol(id: String): Boolean = synchronized(counters) {
+        check(!closed) { "Core unit sources are closed" }
+        lookup(id) != null
+    }
+
     /** Returns the selected row's original JSON position, never its successor's
      * position: directory order is unrelated to the module's binding order. */
     private fun lookup(id: String): Long? {

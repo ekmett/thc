@@ -2601,7 +2601,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             // Join heads are lexically owned too: foreign metadata cannot turn
             // a local jump into an unresolved external declaration.
             val defined = fn[0] == "var" &&
-                (fn[1] in globals || fn[1] in scope.locals || fn[1] in scope.joins)
+                (fn[1] in scope.locals || fn[1] in scope.joins ||
+                    if (demand != null && CoreRepresentations.metadata(expr)?.containsKey("foreignCall") == true)
+                        demand.isDefined(fn[1] as String) else fn[1] in globals)
             val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val runtimeService = CoreRuntimeServices.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val packageScalar = if (cpuAffinity == null && runtimeService == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
@@ -2699,7 +2701,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     if (args.single()[0] == "var") scope.locals[args.single()[1]]?.proof ?: globalProofs[args.single()[1]] else null)
                 CpuAffinityQuery(cpuAffinity, state).proven(tupleProof.copy(evaluated = true))
             } else if (stackClone) {
-                CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+CoreStackForeign.validateHead(fn, defined)
                 val state = args.single()
                 CoreStackForeign.validateBinding(if (state[0] == "var")
                     scope.locals[state[1]]?.proof ?: globalProofs[state[1]] else null)
@@ -2708,7 +2710,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CloneStackExpression(operand, tupleProof)
             } else if (stackInfo != null) {
                 val layout = CoreStackInfoForeign.requireLayout(stackTargetLayout)
-                CoreStackInfoForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreStackInfoForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreStackInfoForeign.validateOperand(stackInfo, index, operand.representation,
@@ -2726,7 +2728,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 ProcessForeignExpression(originalProcess, operands.toTypedArray(), tupleProof)
             } else if (originalStdio != null) {
-                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreOriginalStdio.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio.directoryStream || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
@@ -2756,7 +2758,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 PackageScalarExpression(packageScalar, operands.toTypedArray(), tupleProof)
             } else if (stableFree) {
-                CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreStablePointers.validateHead(fn, defined)
                 FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))
                     .proven(tupleProof.copy(evaluated = true))
             } else if (sharedCAF != null) {
@@ -2779,7 +2781,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 RtsArgumentsExpression(rtsArguments, operands.toTypedArray(), tupleProof)
             } else if (rtsDiagnostic != null) {
-                CoreRtsDiagnosticForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreRtsDiagnosticForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreRtsDiagnosticForeign.validateOperand(rtsDiagnostic, index, operand.representation,
@@ -2868,7 +2870,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 RegisterMainThread(operands[0], operands[1]).proven(tupleProof.copy(evaluated = true))
             } else if (managedFile != null) {
-                CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreManagedFiles.validateHead(fn, defined)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (processSignal != null) {
                 CoreSignalForeign.validateHead(fn, defined)
@@ -2880,7 +2882,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 InstallProcessSignal(operands.toTypedArray(), tupleProof)
             } else if (nativeAllocation != null) {
-                CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreNativeAllocationForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreNativeAllocationForeign.validateOperand(nativeAllocation, index, operand.representation,
@@ -2943,7 +2945,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 MemmoveExpression(operands.toTypedArray(), tupleProof)
             } else if (memcpy) {
-                CoreMemcpyForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMemcpyForeign.validateHead(fn, defined)
                 val byteArrays = CoreMemcpyForeign.byteArrays(foreignMetadata)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
@@ -2953,7 +2955,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 MemcpyExpression(operands.toTypedArray(), tupleProof, byteArrays)
             } else if (libdw != null) {
-                CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreLibdwForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreLibdwForeign.validateOperand(libdw, index, operand.representation,
@@ -2962,7 +2964,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 OriginalLibdwExpression(libdw, operands.toTypedArray(), tupleProof)
             } else if (gmp != null) {
-                CoreGmpForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreGmpForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreGmpForeign.validateOperand(gmp, index, operand.representation,
@@ -2971,7 +2973,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 GmpForeignExpression(gmp, operands.toTypedArray(), tupleProof)
             } else if (md5 != null) {
-                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMd5Foreign.validateHead(fn, defined)
                 Md5ForeignExpression(md5, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (javascript != null) {
                 JavaScriptExpression(javascript, args.map { argument(it, scope, false) }.toTypedArray())
