@@ -297,7 +297,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val expr = binding["expr"] as List<Any?>
         CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
         if (demand != null && !representation(binding)) return when (expr[0]) {
-            "lit" -> literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))
+            "lit" -> literal(expr[1] as String, expr[2], CoreRepresentations.expression(expr))
             "void" -> Unit
             else -> throw UnsupportedCore("Demand loading does not yet support effectful strict global initialization")
         }
@@ -881,7 +881,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (!unopenedHead && CoreApplicationCertificates.eagerApplication(expr, arityCertificate)) return lowered()
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> lowered(); else -> delay(expr, scope, label) }
     }
-    private fun literal(kind: String, value: String, proof: CoreRepresentation? = null): Any = when (kind) {
+    private fun literal(kind: String, encoded: Any?, proof: CoreRepresentation? = null): Any {
+        if (encoded is CoreFloatingLiteral) return encoded.decode(kind)
+        val value = encoded as? String ?: throw UnsupportedCore("Malformed Core literal payload")
+        return when (kind) {
         "rubbish" -> rubbishLiterals.decode(requireNotNull(proof))
         "int8" -> int8Literal(value)
         "int16" -> int16Literal(value)
@@ -899,6 +902,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "data-addr" -> CoreDataLabels.fromCore(value, proof)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
+        }
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
         CoreRepresentation(when (value) {
@@ -1515,7 +1519,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else Expression { it.builder.emitReadGlobal(binding) }, stored)
                 } ?: throw UnsupportedCore("Unresolved external binding $id")
         }
-        "lit" -> constant(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
+        "lit" -> constant(literal(expr[1] as String, expr[2], CoreRepresentations.expression(expr))).let {
             if (expr[1] in listOf("int8", "word8", "int16", "word16", "int32", "word32")) ProvenExpression(it, CoreRepresentations.narrowLiteralProof(expr))
             else if (expr[1] == "bignat") ProvenExpression(it, BigNatLiterals.proof(expr))
             else if (expr[1] == "rubbish") ProvenExpression(it, RubbishLiterals.proof(expr)) else it
