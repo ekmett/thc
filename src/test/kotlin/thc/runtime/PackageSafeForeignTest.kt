@@ -148,7 +148,7 @@ class PackageSafeForeignTest {
                             val address = shape.layout.getObject(tuple, 0) as ManagedAddress
                             assertEquals(originalBits!! + 3, address.toNativeBits())
                             assertEquals(originalBits, storage!!.nativeSegment()!!.address(), "no copied or relocated buffer")
-                            assertThrows(RuntimeFault::class.java) { address.readWord8(0) }
+                            assertEquals(storage.readByte(3), address.readWord8(0), "returned alias retains checked backing")
                             for (index in listOf(0L, 1L, 2L, 4L, 5L, 6L, 7L)) assertEquals(0L, storage.readByte(index))
                         } else assertEquals(0.5, shape.layout.getDouble(tuple, 0))
                     }

@@ -164,6 +164,16 @@ support for every dependency of the original package closure.
 The following names spell out the pointer-cell boundary; they are not missing
 implementations of numeric reads/writes or atomics.
 
+Package C pointer results preserve their Sulong carrier. Known aliases retain
+their backing's bounds, mutability and borrowing checks. External C buffers
+support scalar/vector reads and writes, pointer-cell access, copies, fills,
+NUL-string reads and descriptor transfers using the requested width/count;
+they do not acquire a fabricated extent or a managed `free` capability.
+Native access and the original context/library must remain available. The C
+program and Haskell `withForeignPtr`/`keepAlive#` usage retain responsibility for
+external buffer lifetime. Converting arbitrary integer bits to `Addr#` does not
+grant this access. External-buffer atomic operations are not yet supported.
+
 | Primops | Pointer-storage restriction |
 | --- | --- |
 | `indexAddrArray#`, `readAddrArray#`, `writeAddrArray#`, `indexWord8ArrayAsAddr#`, `readWord8ArrayAsAddr#`, `writeWord8ArrayAsAddr#` | Managed pointer cells require allocation-owned storage, not a raw host `byte[]`. Whole-cell copies preserve references; numeric reads/partial overwrites of those cells reject. A raw/Sulong buffer exposure prevents later managed pointer-cell writes. Disjoint numeric fields remain usable. |

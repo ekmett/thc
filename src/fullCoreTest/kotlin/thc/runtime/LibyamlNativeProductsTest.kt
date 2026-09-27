@@ -9,6 +9,7 @@ import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
 import thc.*
 import java.io.File
 import java.lang.foreign.FunctionDescriptor
@@ -16,14 +17,16 @@ import java.lang.foreign.Linker
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.lang.ref.Reference
+import java.nio.file.Files
+import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.HexFormat
 import java.util.zip.ZipFile
 
-/** Real package products and native Haskell observations, not replacement
- * metadata. Native heap inspection below belongs to this test only: the guest
- * deliberately retains its existing rejection of unowned byte accesses. */
+/** Real package products and native Haskell observations. C-owned output uses
+ * the original returned pointer; only the C caller performs its destruction. */
 class LibyamlNativeProductsTest {
+    @TempDir lateinit var temporary: Path
     private class Entry(language: Language, private val call: PackageScalarCall) : RootNode(language) {
         @Child private var access = PackageScalarAccess(call)
         override fun execute(frame: VirtualFrame): Any = when (call.result) {
@@ -33,7 +36,7 @@ class LibyamlNativeProductsTest {
         }
     }
 
-    @Test fun originalNativeParserEventsAndEncoderMatchWithGuestHeapBoundaryExplicit() {
+    @Test fun originalNativeParserEventsAndEncoderMatchThroughReturnedPointers() {
         val root = File(System.getProperty("thc.projectRoot"))
         val directory = File(System.getProperty("thc.libyamlFixture", File(root, "build/libyaml-native").path))
         val zip = File(System.getProperty("thc.libyamlBundle"))
@@ -57,9 +60,8 @@ class LibyamlNativeProductsTest {
         val expected = File(directory, "native.tsv").readLines()
         val input = File(directory, "input.yaml").readBytes()
         val observed = mutableListOf<String>()
-        var rejectedGuestReads = 0
-        Context.newBuilder("thc").allowNativeAccess(true)
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+        var returnedReads = 0
+        NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
@@ -103,14 +105,21 @@ class LibyamlNativeProductsTest {
                             } finally { call("yaml_parser_delete", parser) }
                         } finally { owner.nativeAllocations.free(event); owner.nativeAllocations.free(parser) }
                     }
-                    // Diagnostic-only read under the C owner's live lifetime.
-                    // It does not confer guest Addr# authority or extend a lease.
                     fun inspect(pointer: ManagedAddress, count: Long): ByteArray {
                         assertTrue(count in 1..100_000)
-                        val failure = assertThrows(RuntimeFault::class.java) { pointer.readWord8(0) }
-                        assertTrue(failure.message!!.contains("Unowned numeric Addr#"))
-                        rejectedGuestReads++
-                        return MemorySegment.ofAddress(pointer.toNativeBits()).reinterpret(count).toArray(ValueLayout.JAVA_BYTE)
+                        assertNotNull(pointer.returnedAddress())
+                        assertNull(pointer.nativeAllocation(), "C retains allocation ownership")
+                        assertThrows(RuntimeFault::class.java) { pointer.availableBytes() }
+                        assertThrows(RuntimeFault::class.java) { ManagedAddress.unownedNumeric(pointer.toNativeBits()).readWord8(0) }
+                        assertThrows(RuntimeFault::class.java) { pointer.requireRange(0, -1) }
+                        assertThrows(RuntimeFault::class.java) { pointer.requireRange(Long.MAX_VALUE, 1) }
+                        assertTrue(pointer.sameLocation(pointer.plus(0)))
+                        assertEquals(1L, pointer.plus(1).difference(pointer))
+                        val bytes = ByteArray(count.toInt())
+                        pointer.copyToByteArray(bytes, 0, count)
+                        assertEquals(bytes[0].toLong() and 255, pointer.readWord8(0))
+                        returnedReads++
+                        return bytes
                     }
                     repeat(3) { iteration -> withParser { parser, event ->
                         observed += "parse\t${iteration + 1}"
@@ -118,11 +127,20 @@ class LibyamlNativeProductsTest {
                             success("yaml_parser_parse", parser, event)
                             val kind = call("get_event_type", event) as Long
                             try {
+                                val start = call("get_start_mark", event) as ManagedAddress
+                                assertTrue(start.sameLocation(event.plus(56)))
+                                assertEquals(48L, start.availableBytes(), "known interior alias keeps its actual event allocation bound")
+                                assertThrows(RuntimeFault::class.java) { start.readWord8(48) }
+                                assertEquals(call("get_mark_index", start), ManagedAddressRead.WORD64.read(start, 0))
                                 observed += "marks\t${marks(call("get_start_mark", event) as ManagedAddress)}\t" +
                                     marks(call("get_end_mark", event) as ManagedAddress)
                                 val bytes = if (kind != 6L) byteArrayOf() else inspect(
                                     call("get_scalar_value", event) as ManagedAddress, call("get_scalar_length", event) as Long)
                                 observed += "$kind\t${bytes.size}\t${HexFormat.of().formatHex(bytes)}"
+                                if (kind == 6L) {
+                                    val tag = call("get_scalar_tag", event) as ManagedAddress
+                                    assertEquals(0L, tag.cStringLength(), "implicit input tag is the helper's static empty C string")
+                                }
                             } finally { call("yaml_event_delete", event) }
                         } while (kind != 2L)
                     } }
@@ -132,8 +150,8 @@ class LibyamlNativeProductsTest {
                         val buffer = owner.nativeAllocations.malloc(16)
                         try {
                             success("yaml_emitter_initialize", emitter)
+                            call("buffer_init", buffer)
                             try {
-                                call("buffer_init", buffer)
                                 try {
                                     call("my_emitter_set_output", emitter, buffer)
                                     do {
@@ -141,25 +159,50 @@ class LibyamlNativeProductsTest {
                                         val kind = call("get_event_type", event) as Long
                                         success("yaml_emitter_emit", emitter, event) // consumes event
                                     } while (kind != 2L)
-                                    val size = call("get_buffer_used", buffer) as Long
-                                    assertTrue(size > 4096, "exercise the original growing encoder buffer")
-                                    val bytes = inspect(call("get_buffer_buff", buffer) as ManagedAddress, size)
-                                    observed += "encoded\t${bytes.size}\t${HexFormat.of().formatHex(bytes)}"
-                                } finally {
-                                    // Only this native test owns this original helper allocation.
-                                    val pointer = call("get_buffer_buff", buffer) as ManagedAddress
-                                    val linker = Linker.nativeLinker()
-                                    linker.downcallHandle(linker.defaultLookup().find("free").orElseThrow(),
-                                        FunctionDescriptor.ofVoid(ValueLayout.ADDRESS))
-                                        .invokeWithArguments(MemorySegment.ofAddress(pointer.toNativeBits()))
+                                } finally { call("yaml_emitter_delete", emitter) }
+                                // The output belongs to the caller, not the emitter.
+                                // Its actual C destruction occurs below, after reads.
+                                val size = call("get_buffer_used", buffer) as Long
+                                assertTrue(size > 4096, "exercise the original growing encoder buffer")
+                                val pointer = call("get_buffer_buff", buffer) as ManagedAddress
+                                val bytes = inspect(pointer, size)
+                                pointer.withNativeIOWindow(size, false) {
+                                    assertEquals(pointer.toNativeBits(), it.address())
+                                    assertEquals(size, it.byteSize(), "window is the IO request, not an allocation extent")
+                                    assertArrayEquals(bytes, it.toArray(ValueLayout.JAVA_BYTE))
                                 }
-                            } finally { call("yaml_emitter_delete", emitter) }
+                                val path = temporary.resolve("encoded.yaml")
+                                val filename = ManagedAddress.fromByteArray(path.toString().toByteArray() + byteArrayOf(0))
+                                val descriptor = owner.files.open(filename, 3)
+                                assertTrue(descriptor >= 3)
+                                try {
+                                    assertTrue(pointer.hasNativeIOStorage())
+                                    assertEquals(size, owner.files.write(descriptor, pointer, size))
+                                    assertArrayEquals(bytes, Files.readAllBytes(path))
+                                    assertEquals(0L, owner.files.seek(descriptor, 0, 0))
+                                    pointer.writeWord8(0, 0)
+                                    assertEquals(size, owner.files.read(descriptor, pointer, size))
+                                    assertEquals(bytes[0].toLong() and 255, pointer.readWord8(0))
+                                } finally { assertEquals(0L, owner.files.close(descriptor)) }
+                                val managed = ManagedAllocation.mutable(size, 8)
+                                pointer.copyToByteArray(managed, 0, size)
+                                assertArrayEquals(bytes, managed.copyBytesOut(0, size))
+                                pointer.copyFromByteArray(managed, 0, size)
+                                observed += "encoded\t${bytes.size}\t${HexFormat.of().formatHex(bytes)}"
+                            } finally {
+                                // Only this native test owns this original helper allocation.
+                                val pointer = call("get_buffer_buff", buffer) as ManagedAddress
+                                val linker = Linker.nativeLinker()
+                                linker.downcallHandle(linker.defaultLookup().find("free").orElseThrow(),
+                                    FunctionDescriptor.ofVoid(ValueLayout.ADDRESS))
+                                    .invokeWithArguments(MemorySegment.ofAddress(pointer.toNativeBits()))
+                            }
                         } finally { owner.nativeAllocations.free(buffer); owner.nativeAllocations.free(emitter) }
                     }
                     Reference.reachabilityFence(storage)
                 } finally { context.leave() }
             }
         assertEquals(expected, observed)
-        assertTrue(rejectedGuestReads > 3, "native checks must not hide the remaining guest heap-read boundary")
+        assertTrue(returnedReads > 3, "exercise returned C storage across parser calls and encoder growth")
     }
 }

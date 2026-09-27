@@ -1128,7 +1128,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return result(safety) { withDescriptor(fd) { entry ->
             if (!entry.readable) fail(4, "THC file descriptor is not readable: $fd")
             if (count == 0L) 0L else {
-                val n = if (address.hasNativeStorage()) address.withNativeSegment { segment ->
+                val n = if (address.hasNativeIOStorage()) address.withNativeIOWindow(count, true) { segment ->
                     // Descriptor before allocation, as for terminal-image IO.
                     // Recheck after borrowing: free may win after the preflight.
                     address.requireByteRegion(count, true)
@@ -1150,6 +1150,20 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                         if (received > 0) window.put(bytes, 0, received)
                         received
                     }
+                } else if (address.hasExternalStorage()) {
+                    // A managed Sulong carrier cannot be a Java channel buffer.
+                    // Copy this request window without native allocation adoption.
+                    val bytes = ByteArray(minOf(count, 1024 * 1024L).toInt())
+                    address.copyToByteArray(bytes, 0, bytes.size.toLong())
+                    val received = try {
+                        entry.input?.read(bytes, 0, bytes.size) ?: entry.channel!!.read(ByteBuffer.wrap(bytes))
+                    } catch (failure: Throwable) {
+                        try { address.copyFromByteArray(bytes, 0, bytes.size.toLong()) }
+                        catch (copyback: Throwable) { if (copyback !== failure) failure.addSuppressed(copyback) }
+                        throw failure
+                    }
+                    if (received > 0) address.copyFromByteArray(bytes, 0, received.toLong())
+                    received
                 } else {
                     val bytes = address.rawBacking()
                     val offset = address.cbitsOffset().toInt()
@@ -1258,7 +1272,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         return result(safety) { withDescriptor(fd) { entry ->
             if (!entry.writable) fail(4, "THC file descriptor is not writable: $fd")
             if (count == 0L) 0L else {
-                if (address.hasNativeStorage()) address.withNativeSegment { segment ->
+                if (address.hasNativeIOStorage()) address.withNativeIOWindow(count, false) { segment ->
                     address.requireByteRegion(count)
                     val window = segment.asSlice(0, minOf(count, Int.MAX_VALUE.toLong())).asByteBuffer().asReadOnlyBuffer()
                     if (entry.output == null) entry.channel!!.write(window).toLong()
@@ -1268,6 +1282,13 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
                         entry.output.write(bytes, 0, bytes.size)
                         bytes.size.toLong()
                     }
+                } else if (address.hasExternalStorage()) {
+                    val bytes = ByteArray(minOf(count, 1024 * 1024L).toInt())
+                    address.copyToByteArray(bytes, 0, bytes.size.toLong())
+                    if (entry.output != null) {
+                        entry.output.write(bytes, 0, bytes.size)
+                        bytes.size.toLong()
+                    } else entry.channel!!.write(ByteBuffer.wrap(bytes)).toLong()
                 } else {
                     val bytes = address.rawBacking()
                     val offset = address.cbitsOffset().toInt()

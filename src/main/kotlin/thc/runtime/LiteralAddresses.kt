@@ -83,6 +83,7 @@ internal class ManagedAddress private constructor(
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
         compiler?.requireCurrent()
+        foreign?.requireCurrent()
         if (heap != null) fault("Opaque guest heap address is not byte-addressable")
         if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
@@ -96,7 +97,7 @@ internal class ManagedAddress private constructor(
         ?: fault("Native image requires static literal or runtime metadata storage")
     fun toNativeBits(): Long {
         compiler?.requireCurrent()
-        foreign?.requireCurrent()
+        foreign?.let { return it.bits() }
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
@@ -124,7 +125,16 @@ internal class ManagedAddress private constructor(
     internal fun cbitsOffset(): Long { size(); return offset }
     internal fun cbitsOwner(): ManagedAllocation? = owner
     internal fun cbitsSize(): Long = size()
-    fun availableBytes(): Long { requireRange(0, 0); return size() - offset }
+    fun availableBytes(): Long {
+        if (externalPointer() != null) fault("External C pointer has no known allocation extent")
+        requireRange(0, 0); return size() - offset
+    }
+
+    private fun externalPointer(): PackageReturnedAddress? = foreign?.takeIf { it.backing == null }
+    internal fun hasExternalStorage(): Boolean = externalPointer() != null
+    internal fun hasNativeIOStorage(): Boolean = hasNativeStorage() || externalPointer()?.isNative() == true
+    internal fun <T> withNativeIOWindow(count: Long, writable: Boolean, body: (MemorySegment) -> T): T =
+        externalPointer()?.withNativeWindow(count, writable, body) ?: withNativeSegment(body)
 
     /** Validate byte-only transport without exposing allocation storage. */
     internal fun requireByteRegion(count: Long, writable: Boolean = false) {
@@ -140,6 +150,9 @@ internal class ManagedAddress private constructor(
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
         compiler?.requireCurrent(); other.compiler?.requireCurrent()
+        foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        foreign?.let { return it.compare(other, "equal") != 0L }
+        other.foreign?.let { return it.compare(this, "equal") != 0L }
         if (heap != null || other.heap != null) {
             val registry = HeapAddresses.current()
             heap?.let(registry::require); other.heap?.let(registry::require)
@@ -213,6 +226,9 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        foreign?.let { return it.compare(other, "compare").toInt() }
+        other.foreign?.let { return -it.compare(this, "compare").toInt() }
         if (heap != null || other.heap != null) fault("Opaque guest heap addresses have no ordering")
         if (capabilities != null || other.capabilities != null)
             fault("RTS data label has no address ordering")
@@ -270,6 +286,9 @@ internal class ManagedAddress private constructor(
     /** Relative pointers need no JVM address projection. Native/numeric pointers
      * retain machine arithmetic; managed storage uses its allocation-local origin. */
     fun difference(other: ManagedAddress): Long {
+        foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        foreign?.let { return it.compare(other, "difference") }
+        other.foreign?.let { return -it.compare(this, "difference") }
         native?.requireLive(); other.native?.requireLive()
         if (numeric != null || other.numeric != null || native != null && other.native != null)
             return toNativeBits() - other.toNativeBits()
@@ -289,7 +308,7 @@ internal class ManagedAddress private constructor(
     fun remainder(divisor: Long): Long {
         if (divisor == 0L) fault("remAddr# divisor is zero")
         // GHC 9.14.1 lowers AddrRemOp to unsigned machine-word remainder.
-        val bits = if (this === NULL || numeric != null || hasNativeStorage()) toNativeBits()
+        val bits = if (this === NULL || numeric != null || foreign != null || hasNativeStorage()) toNativeBits()
             else { requireBytes(); size(); offset }
         return java.lang.Long.remainderUnsigned(bits, divisor)
     }
@@ -305,6 +324,14 @@ internal class ManagedAddress private constructor(
     /** The polyglot text ABI reads a checked NUL-terminated UTF-8 region. */
     @TruffleBoundary
     fun utf8(): String {
+        externalPointer()?.let { pointer ->
+            val bytes = pointer.copyOut(pointer.cStringLength())
+            return try { Charsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes)).toString()
+            } catch (_: java.nio.charset.CharacterCodingException) { fault("Invalid UTF-8 at the polyglot boundary") }
+        }
         requireRange(0, 1)
         val bytes = cbitsBuffer()
         val start = offset.toInt()
@@ -325,6 +352,7 @@ internal class ManagedAddress private constructor(
 
     /** Both backing variants use byte offsets and return zero-extended Word8#. */
     fun readWord8(displacement: Long): Long {
+        externalPointer()?.let { return it.read(displacement, 1) }
         native?.let { allocation -> return allocation.accessLong { segment ->
             requireRange(displacement, 1)
             segment.get(ValueLayout.JAVA_BYTE, offset + displacement).toLong() and 255L
@@ -344,6 +372,7 @@ internal class ManagedAddress private constructor(
      * allocation cannot be freed and an owner cannot shrink while scanning. */
     @TruffleBoundary
     fun cStringLength(): Long {
+        foreign?.let { return it.cStringLength() }
         native?.let { allocation -> return allocation.accessLong { segment ->
             requireRange(0, 0)
             val limit = segment.byteSize() - offset
@@ -399,6 +428,7 @@ internal class ManagedAddress private constructor(
     /** The caller evaluates State# before reaching storage. Invalid writes have
      * no effect; the value contributes only its low eight bits, like writeWord8Array#. */
     fun writeWord8(displacement: Long, value: Long) {
+        externalPointer()?.let { it.write(displacement, 1, value); return }
         native?.let { allocation -> allocation.access { segment ->
             requireRange(displacement, 1, writable = true)
             segment.set(ValueLayout.JAVA_BYTE, offset + displacement, value.toByte())
@@ -418,6 +448,7 @@ internal class ManagedAddress private constructor(
         if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
             fault("Managed Addr# element offset overflow")
         val displacement = elementOffset * stride
+        externalPointer()?.let { it.write(displacement, width, value); return }
         requireRange(displacement, width.toLong(), writable = true)
         val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
         native?.let { allocation -> allocation.access { segment ->
@@ -441,6 +472,7 @@ internal class ManagedAddress private constructor(
         if (vectorBytes != 16 && vectorBytes != 32 && vectorBytes != 64) fault("Unsupported Addr# vector width")
         val species = ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8))
         val displacement = vectorDisplacement(elementOffset, stride)
+        externalPointer()?.let { return ByteVector.fromArray(species, it.plus(displacement).copyOut(vectorBytes.toLong()), 0) }
         native?.let { allocation -> return allocation.access { segment ->
             requireRange(displacement, vectorBytes.toLong())
             ByteVector.fromMemorySegment(species, segment, offset + displacement, ByteOrder.nativeOrder())
@@ -458,6 +490,7 @@ internal class ManagedAddress private constructor(
         if (vectorBytes != 16 && vectorBytes != 32 && vectorBytes != 64) fault("Unsupported Addr# vector width")
         val vector = CoreVectors.requireByte(value, ByteVector.SPECIES_128.withShape(VectorShape.forBitSize(vectorBytes * 8)))
         val displacement = vectorDisplacement(elementOffset, stride)
+        externalPointer()?.let { it.plus(displacement).copyIn(vector.toArray()); return }
         native?.let { allocation -> allocation.access { segment ->
             requireRange(displacement, vectorBytes.toLong(), writable = true)
             vector.intoMemorySegment(segment, offset + displacement, ByteOrder.nativeOrder())
@@ -524,6 +557,7 @@ internal class ManagedAddress private constructor(
     /** Validate a complete byte region before any effect. An empty region may
      * start one past the allocation; an immutable destination is never writable. */
     fun requireRange(displacement: Long, count: Long, writable: Boolean = false) {
+        externalPointer()?.let { it.requireRange(displacement, count, writable); return }
         if (writable && owner == null && mutableBytes == null && native == null)
             fault("Cannot write through an immutable literal Addr#")
         if (writable && owner != null && !owner.isWritable)
@@ -541,6 +575,10 @@ internal class ManagedAddress private constructor(
         requireRange(displacement, count)
         other.requireRange(otherDisplacement, otherCount)
         if (count == 0L || otherCount == 0L) return false
+        if (externalPointer() != null || other.externalPointer() != null) {
+            externalPointer()?.let { return it.plus(displacement).overlaps(count, other.plus(otherDisplacement), otherCount) }
+            return other.externalPointer()!!.plus(otherDisplacement).overlaps(otherCount, plus(displacement), count)
+        }
         val shared = when {
             native != null || other.native != null -> native != null && native === other.native
             owner != null && other.owner != null -> owner === other.owner
@@ -594,6 +632,15 @@ internal class ManagedAddress private constructor(
         // An empty range may lie inside a pointer cell: it transports no bits
         // and must not ask the pointer-copy boundary to interpret that cell.
         if (count == 0L) return@withNativeBorrow
+        externalPointer()?.let { pointer ->
+            if (destination is ByteArray) pointer.copyOutTo(destination, destinationOffset, count)
+            else if (destination is ManagedAllocation) {
+                if (pointer.isNative()) pointer.withNativeWindow(count, false) {
+                    destination.copyBytesIn(it, 0, destinationOffset, count)
+                } else destination.copyBytesIn(pointer.copyOut(count), 0, destinationOffset, count)
+            }
+            return@withNativeBorrow
+        }
         if (native != null) native.access { source ->
             if (destination is ManagedAllocation)
                 destination.copyBytesIn(source, offset, destinationOffset, count)
@@ -609,6 +656,17 @@ internal class ManagedAddress private constructor(
         if (sourceOffset < 0 || sourceOffset > sourceSize || count > sourceSize - sourceOffset)
             fault("ByteArray# copy range outside its backing storage")
         if (count == 0L) return@withNativeBorrow
+        externalPointer()?.let { pointer ->
+            if (source is ByteArray) pointer.copyInFrom(source, sourceOffset, count)
+            else if (source is ManagedAllocation && pointer.isNative()) pointer.withNativeWindow(count, true) {
+                source.copyBytesTo(sourceOffset, it, 0, count)
+            } else {
+                val bytes = ByteArray(count.toInt())
+                ManagedByteArray.copyGuest(source, sourceOffset, bytes, 0, count, mutable = false)
+                pointer.copyIn(bytes)
+            }
+            return@withNativeBorrow
+        }
         if (native != null) native.access { target ->
             // Managed pointer references cannot become fabricated native bits.
             if (source is ManagedAllocation) source.copyBytesTo(sourceOffset, target, offset, count)
@@ -620,6 +678,7 @@ internal class ManagedAddress private constructor(
     fun fill(count: Long, value: Long) = withNativeBorrow {
         requireRange(0, count, writable = true)
         when {
+            externalPointer() != null -> externalPointer()!!.fill(count, value)
             native != null -> native.access { it.asSlice(offset, count).fill(value.toByte()); Unit }
             owner != null -> owner.fill(offset, count, value)
             else -> java.util.Arrays.fill(mutableBytes!!, offset.toInt(), (offset + count).toInt(), value.toByte())
@@ -632,6 +691,19 @@ internal class ManagedAddress private constructor(
         if (!allowOverlap && overlaps(0, count, destination, 0, count))
             fault("copyAddrToAddrNonOverlapping# requires disjoint regions")
         if (count == 0L) return@copy
+        if (externalPointer() != null || destination.externalPointer() != null) {
+            if ((externalPointer() != null || hasNativeStorage()) &&
+                (destination.externalPointer() != null || destination.hasNativeStorage())) {
+                val library = (externalPointer() ?: destination.externalPointer())!!.owner.packageCbits
+                library.memory("copy", library.transport(destination), library.transport(this), count)
+            } else {
+                if (externalPointer() != null) copyToByteArray(
+                    destination.owner ?: destination.mutableBytes ?: fault("Missing copy destination storage"), destination.offset, count)
+                else destination.copyFromByteArray(owner ?: literalBytes ?: mutableBytes
+                    ?: fault("Missing copy source storage"), offset, count)
+            }
+            return@copy
+        }
         val sourceOwner = owner
         val destinationOwner = destination.owner
         when {
@@ -666,12 +738,19 @@ internal class ManagedAddress private constructor(
     override fun toString(): String = if (heap != null) "Addr#(opaque guest heap)"
         else if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
         else if (capabilities != null) "Addr#(enabled_capabilities)"
+        else if (foreign != null) "Addr#(returned C pointer)"
         else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
     /** Managed cells retain references; owned native cells contain actual
      * pointer bits. Unknown recovered bits remain opaque and non-dereferenceable. */
     @JvmOverloads fun readAddressElementIndex(elementOffset: Long, byteOffset: Boolean = false): ManagedAddress {
+        externalPointer()?.let { pointer ->
+            val stride = if (byteOffset) 1L else 8L
+            val displacement = try { Math.multiplyExact(elementOffset, stride) }
+                catch (_: ArithmeticException) { fault("Native Addr# element offset overflow") }
+            return pointer.readAddress(displacement)
+        }
         if (native != null) {
             val stride = if (byteOffset) 1L else 8L
             if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
@@ -696,6 +775,13 @@ internal class ManagedAddress private constructor(
     }
 
     @JvmOverloads fun writeAddressElementIndex(elementOffset: Long, value: ManagedAddress, byteOffset: Boolean = false) {
+        externalPointer()?.let { pointer ->
+            val stride = if (byteOffset) 1L else 8L
+            val displacement = try { Math.multiplyExact(elementOffset, stride) }
+                catch (_: ArithmeticException) { fault("Native Addr# element offset overflow") }
+            pointer.writeAddress(displacement, value)
+            return
+        }
         if (native != null) {
             // A real native pointer cell cannot retain an arbitrary JVM object.
             // Projection requires a native/immutable owner or opaque StablePtr identity.
@@ -738,8 +824,13 @@ internal class ManagedAddress private constructor(
             ManagedAddress(null, null, 0L, native = owner)
         internal fun unownedNumeric(bits: Long): ManagedAddress = if (bits == 0L) NULL
             else ManagedAddress(null, null, 0L, numeric = bits)
-        internal fun fromReturnedAddress(address: PackageReturnedAddress): ManagedAddress =
-            if (address.bits == 0L) NULL else ManagedAddress(null, null, 0L, numeric = address.bits, foreign = address)
+        internal fun fromReturnedAddress(address: PackageReturnedAddress): ManagedAddress {
+            val backing = address.backing
+            return if (backing == null) ManagedAddress(null, null, 0L, foreign = address)
+            else ManagedAddress(backing.literalBytes, backing.mutableBytes, backing.offset, backing.owner,
+                backing.stable, backing.numeric, backing.finalizer, backing.native, backing.capabilities,
+                backing.heap, backing.compiler, address)
+        }
         internal fun fromNativeImageSource(source: Any, offset: Long): ManagedAddress = when (source) {
             is ManagedAllocation -> fromAllocation(source).plus(offset)
             is ByteArray -> ManagedAddress(source, null, offset)
