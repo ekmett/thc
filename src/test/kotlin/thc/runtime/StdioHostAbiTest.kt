@@ -97,6 +97,24 @@ class StdioHostAbiTest {
         assertThrows(RuntimeFault::class.java) { parse(original - "seek") }
     }
 
+    @Test fun atConstantsComeFromTheHostAndRejectMalformedOrGuestDescriptorValues() {
+        val original = document()
+        val at = original["at"] as Map<*, *>
+        val abi = parse(original)
+        assertEquals(at["AT_FDCWD"], abi.atFdcwd)
+        assertEquals(at["AT_REMOVEDIR"], abi.atRemoveDir)
+        assertEquals(-71L, parse(original + ("at" to (at + ("AT_FDCWD" to -71L)))).atFdcwd)
+        for (field in at.keys) {
+            for (wrong in listOf(null, true, 1.0, "0", Int.MIN_VALUE.toLong() - 1, Int.MAX_VALUE.toLong() + 1))
+                assertThrows(RuntimeFault::class.java) { parse(original + ("at" to (at + (field to wrong)))) }
+            assertThrows(RuntimeFault::class.java) { parse(original + ("at" to (at - field))) }
+        }
+        for ((field, wrong) in listOf("AT_FDCWD" to 0, "AT_FDCWD" to 3, "AT_REMOVEDIR" to 0, "AT_REMOVEDIR" to -1))
+            assertThrows(RuntimeFault::class.java) { parse(original + ("at" to (at + (field to wrong)))) }
+        assertThrows(RuntimeFault::class.java) { parse(original - "at") }
+        assertThrows(RuntimeFault::class.java) { parse(original + ("at" to (at + ("extra" to 0)))) }
+    }
+
     @Test fun signalRecordSizeRequiresPositiveExactNativeSize() {
         val original = document()
         assertEquals((original["siginfoBytes"] as Number).toLong(), parse(original).siginfoBytes)

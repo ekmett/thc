@@ -683,6 +683,30 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    @TruffleBoundary internal fun unlinkAtOriginal(fd: Long, path: ManagedAddress, flags: Int, cwd: Long, removeDir: Long): Long {
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original unlinkat requires the explicit native filesystem")
+            }
+            // Linux rejects unknown flags before descriptor lookup. Preserve that
+            // order without ever passing an unauthenticated integer to libc.
+            if (flags.toLong() and removeDir.inv() != 0L) fail(5, "Invalid original unlinkat flags")
+            // POSIX ignores dirfd for absolute paths, even when it is invalid.
+            if (fd == cwd || bytes[0] == '/'.code.toByte()) provider.unlinkAtRaw(bytes, flags)
+            else try {
+                withDescriptor(fd) { entry ->
+                    val native = entry.native ?: fail(7, "Original unlinkat requires an authenticated native descriptor")
+                    native.unlinkAt(bytes, flags)
+                }
+            } catch (missing: FileFailure) {
+                if (missing.kind != 4L) throw missing
+                provider.unlinkAtInvalidRaw(bytes, flags)
+            }
+        }
+    }
+
     @TruffleBoundary internal fun accessOriginal(path: ManagedAddress, mode: Int): Long {
         val bytes = originalPathBytes(path)
         return result {

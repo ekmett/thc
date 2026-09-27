@@ -159,6 +159,7 @@ OPERATIONS = {
     'symlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     'readlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'mkdir': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
+    'unlinkat': ('ccall', 'safe', ('Int32Rep', 'AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
     'access': ('ccall', 'unsafe', ('AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
     'chmod': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
     '__hscore_stat': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
@@ -292,6 +293,10 @@ LIBRARY_OPERATIONS = {
 }
 
 
+def directory_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'directory-1\.3\.10\.0-(?:inplace|[0-9a-f]+)', unit) is not None
+
+
 def unix_libc_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)', unit) is not None
 
@@ -423,6 +428,8 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(unix_libc_unit(unit) and target['symbol'] ==
                 'ghczuwrapperZC2ZC' + unit.replace('-', 'zm').replace('.', 'zi') +
                 'ZCSystemziPosixziFilesziPosixStringZClstat', 'matching installed unix path-stat unit and symbol')
+    if symbol == 'unlinkat':
+        require(directory_unit(target.get('unit')), 'supported installed directory unlinkat unit')
     if symbol in ('symlink', 'readlink'):
         require(unix_libc_unit(target.get('unit')), 'supported installed unix pathname link unit')
     if symbol == 'geteuid':
@@ -446,6 +453,7 @@ def validate(metadata, argument_reps, flags, result_rep):
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
+                 symbol == 'unlinkat' and directory_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
             'static supported installed-library function target')
     allowed_safety = safety if isinstance(safety, tuple) else (safety,)

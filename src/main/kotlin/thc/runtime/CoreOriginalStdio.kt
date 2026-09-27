@@ -8,10 +8,11 @@ import thc.Language
 
 // Preserve the genuine installed owner; only this pinned Unix release is reviewed.
 private val unixUnit = Regex("unix-2\\.8\\.8\\.0-(?:inplace|[0-9a-f]+)")
+private val directoryUnit = Regex("directory-1\\.3\\.10\\.0-(?:inplace|[0-9a-f]+)")
 private val unixWrapperUnit = Regex("unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC")
 internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUnit.matches(unit)
 
-/** Exact pinned GHC/unix declarations, not aliases for arbitrary POSIX imports. */
+/** Exact pinned GHC/library declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String?, val unit: String = "ghc-internal") {
     WCOREDUMP("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
@@ -95,6 +96,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     SYMLINK("symlink", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     READLINK("readlink", "ccall", "unsafe", listOf("AddrRep", "AddrRep", "Word64Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     MKDIR("mkdir", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    UNLINKAT("unlinkat", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Int32Rep", null), "Int32Rep", "directory-1.3.10.0-inplace"),
     ACCESS("access", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", null), "Int32Rep"),
     CHMOD("chmod", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), "Int32Rep"),
     UNLINK("unlink", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
@@ -135,6 +137,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
+        this == UNLINKAT && value is String && directoryUnit.matches(value) ||
         isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY ||
             this == UNIX_LSTAT || waitStatus || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
 
@@ -206,7 +209,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.ACCESS || operation.pathLink || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation.pathLink || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

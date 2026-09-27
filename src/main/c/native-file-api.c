@@ -93,6 +93,27 @@ int64_t thc_file_readlink(const char *path, void *output, uint64_t capacity, int
   return (int32_t)result;
 }
 
+// The authenticated lease owns the host descriptor; no guest integer reaches libc.
+int64_t thc_file_unlinkat(const int *lease, const char *path, int flags, int64_t *error) {
+  int result = unlinkat(*lease, path, flags);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+// Preserve filename/flag error ordering for a missing guest descriptor. The
+// constant -1 cannot name a host file; the caller guarantees a relative path.
+int64_t thc_file_unlinkat_invalid(const char *path, int flags, int64_t *error) {
+  int result = unlinkat(-1, path, flags);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_unlinkat_cwd(const char *path, int flags, int64_t *error) {
+  int result = unlinkat(AT_FDCWD, path, flags);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
 int64_t thc_file_access(const char *path, int mode, int64_t *error) {
   int result = access(path, mode);
   *error = result < 0 ? errno : 0;

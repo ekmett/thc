@@ -189,6 +189,15 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun unlinkAt(fd: Long, path: ManagedAddress, flags: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || flags != flags.toInt().toLong())
+            fault("Original unlinkat requires canonical signed CInt descriptor and flags")
+        val result = files.unlinkAtOriginal(fd, path, flags.toInt(), abi.atFdcwd, abi.atRemoveDir)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun access(path: ManagedAddress, mode: Long): Long {
         if (mode != mode.toInt().toLong()) fault("Original access requires a canonical signed CInt mode")
         val result = files.accessOriginal(path, mode.toInt())

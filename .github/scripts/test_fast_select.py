@@ -1032,6 +1032,23 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalTcgetattrTest", self.policy["owners"][path]["junit"], path)
 
+    def test_unlinkat_sources_select_the_genuine_safe_call_comparison(self):
+        for path in ("compiler/test-fixtures/OriginalUnlinkAtAudit.hs",
+                     "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
+                     "src/test/kotlin/thc/runtime/OriginalUnlinkAtTest.kt",
+                     "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
+                     "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
+                     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/ManagedStdio.kt",
+                     "src/main/kotlin/thc/runtime/ManagedFiles.kt",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.OriginalUnlinkAtTest", self.policy["owners"][path]["junit"], path)
+        self.assertIn("thc.runtime.StdioHostAbiTest",
+                      self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
+
     def test_array_core_helper_selects_all_consuming_suites(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt"]
         consumers = set()
@@ -1039,11 +1056,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(33, len(consumers))
+        self.assertEqual(34, len(consumers))
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)
         self.assertIn("thc.runtime.OriginalPathModeTest", consumers)
         self.assertIn("thc.runtime.OriginalPathLinkTest", consumers)
         self.assertIn("thc.runtime.OriginalPathAccessTest", consumers)
+        self.assertIn("thc.runtime.OriginalUnlinkAtTest", consumers)
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
