@@ -10,10 +10,12 @@ import java.security.MessageDigest
 import java.util.concurrent.Executors
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 
 class CoreJsonSymbolsTest {
     @TempDir lateinit var directory: Path
+    @AfterEach fun releaseIdleMappings() { CoreFileMappings.shared.evictIdleBelow(directory) }
     private val source get() = directory.resolve("module.json")
     private val symbols get() = directory.resolve("module.json.symbols")
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes)
@@ -82,6 +84,17 @@ class CoreJsonSymbolsTest {
         }
     }
 
+    @Test fun foreignDeclarationNamesOutsideTheRowAlphabetAreAbsentWithoutOpeningFiles() {
+        CoreJsonSymbols(source, symbols).use { reader ->
+            for (id in listOf("", "unit:M.{foreign :: Addr#\n -> State# RealWorld}", "unit:M.f\r")) {
+                assertFalse(reader.containsSymbol(id))
+                assertThrows(IllegalArgumentException::class.java) { reader.binding(id) }
+            }
+            assertEquals(0L, reader.statistics().directoryOpens)
+            assertEquals(0L, reader.statistics().sourceOpens)
+        }
+    }
+
     @Test fun exactIdentityBoundsUtf8AndFailuresAreCheckedOnlyAtDemand() {
         fixture(listOf(binding("actual")))
         val offset = Files.readString(symbols).substringAfterLast(' ').trim()
@@ -126,7 +139,7 @@ class CoreJsonSymbolsTest {
         }
     }
 
-    @Test fun concurrentDemandSharesOneDecodeAndMappingsSurvivePathReplacementUntilClose() {
+    @Test fun concurrentDemandSharesOneDecodeAndCloseReleasesTheFileBeforeReplacement() {
         fixture(listOf(binding("first"), binding("second")))
         val reader = CoreJsonSymbols(source, symbols)
         val pool = Executors.newFixedThreadPool(2)
@@ -134,11 +147,11 @@ class CoreJsonSymbolsTest {
             val results = pool.invokeAll(List(8) { java.util.concurrent.Callable { reader.binding("first") } }).map { it.get() }
             assertTrue(results.all { it === results.first() })
             assertEquals(1L, reader.statistics().decodedBindings)
+            assertEquals("second", reader.binding("second")!!["id"])
+            reader.close()
             val replacement = directory.resolve("replacement.json")
             Files.writeString(replacement, "null")
             Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING)
-            assertEquals("second", reader.binding("second")!!["id"])
-            reader.close()
             assertEquals("first", results.first()!!["id"])
             assertThrows(IllegalStateException::class.java) { reader.binding("first") }
         } finally { reader.close(); pool.shutdownNow() }
@@ -156,6 +169,9 @@ class CoreJsonSymbolsTest {
                 assertEquals(2L, it.statistics().mappingCacheHits)
             }
             // Replacement, not in-place mutation of an immutable mapping.
+            // Release the idle mapping first so replacement is portable to
+            // Windows. Verification still checks the newly opened path twice.
+            assertEquals(1, cache.evictIdleBelow(source))
             val replacement = directory.resolve("changed.json")
             Files.writeString(replacement, "{}")
             Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING)
@@ -165,7 +181,7 @@ class CoreJsonSymbolsTest {
                 assertEquals(0L, it.statistics().mappingCacheHits)
                 assertEquals(Files.size(symbols) + Files.size(source), it.statistics().hashBytesScanned)
             } }
-            reader(false).use { assertNotNull(it.binding("f"), "trusted identity still names the pinned old immutable bytes") }
+            assertEquals(1, cache.evictIdleBelow(symbols))
         }
     }
 

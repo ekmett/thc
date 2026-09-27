@@ -15,12 +15,14 @@ import java.util.concurrent.TimeUnit
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import thc.runtime.*
 
 /** Synthetic protocol controls, not native-GHC fixture or performance evidence. */
 class CoreUnitAsyncPolicyTest {
     @TempDir lateinit var directory: Path
+    @AfterEach fun releaseIdleMappings() { CoreFileMappings.shared.evictIdleBelow(directory) }
     private val boundary = "optimized-Core-after-Tidy-before-CorePrep"
     private val stateRep = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
     private val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)

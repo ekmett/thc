@@ -122,7 +122,10 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
      * Used for an already demanded foreign-call head, not cold call discovery. */
     fun containsSymbol(id: String): Boolean = synchronized(counters) {
         check(!closed) { "Core unit sources are closed" }
-        lookup(id) != null
+        // GHC foreign declaration expression IDs may contain pretty-printed
+        // multiline types. Such an ID cannot be a row in this text directory;
+        // absence is distinct from asking to decode an invalid binding ID.
+        id.isNotEmpty() && '\n' !in id && '\r' !in id && lookup(id) != null
     }
 
     /** Returns the selected row's original JSON position, never its successor's

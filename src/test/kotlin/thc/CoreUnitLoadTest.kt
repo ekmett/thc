@@ -12,10 +12,12 @@ import org.graalvm.polyglot.Source
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 
 class CoreUnitLoadTest {
     @TempDir lateinit var directory: Path
+    @AfterEach fun releaseIdleMappings() { CoreFileMappings.shared.evictIdleBelow(directory) }
     private val boundary = "optimized-Core-after-Tidy-before-CorePrep"
     private fun hash(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun literal(value: Int) = listOf("lit", "int", value.toString())
@@ -28,6 +30,9 @@ class CoreUnitLoadTest {
 
     /** Model writer for focused runtime tests, not the production publisher. */
     private fun unit(name: String, body: Any?, padding: String = "", diagnostics: Boolean = false): Map<String, Any?> {
+        // Windows cannot replace a mapped file. Only idle test-fixture leases
+        // are evicted before this model writer republishes the same pathname.
+        CoreFileMappings.shared.evictIdleBelow(directory)
         val id = "u$name:$name.entry"
         val ignored = if (diagnostics) "\"sourceCore\":${Json.stringify("x".repeat(1024 * 1024))}," else ""
         val prefix = "{${ignored}\"schema\":1,\"ghc\":\"9.14.1\",\"unit\":\"u$name\",\"module\":\"$name\",\"boundary\":\"$boundary\",\"bindings\":"
@@ -146,10 +151,12 @@ class CoreUnitLoadTest {
             "arity" to 3, "suppliedArity" to 3, "argumentReps" to listOf(address, address, state).map { it + ("evaluated" to false) },
             "resultRep" to (result + ("evaluated" to false)))
         val nil = listOf("lit", "null-addr", "0", mapOf("rep" to address))
-        for (affinity in listOf(false, true)) for (shadow in listOf(false, true)) {
+        for (affinity in listOf(false, true)) for (head in listOf("uB:B.originalFCall",
+                "uB:B.{__ffi_static_ccall_unsafe ghc-internal:getProgArgv :: Addr#\n -> Addr#\n -> State# RealWorld}",
+                "uB:B.unused")) {
             // Both heads have a known module owner. Only 'unused' has a row;
             // its unsupported body must not be parsed just to reject shadowing.
-            val head = if (shadow) "uB:B.unused" else "uB:B.originalFCall"
+            val shadow = head == "uB:B.unused"
             val selectedResult = if (affinity) result + mapOf("primReps" to listOf("Int32Rep"), "components" to listOf(
                 state, mapOf("kind" to "long", "primReps" to listOf("Int32Rep"), "evaluated" to true))) else result
             val selectedDescriptor = if (affinity) descriptor + mapOf("target" to mapOf("kind" to "static",
@@ -178,7 +185,8 @@ class CoreUnitLoadTest {
                 } else {
                     val entry = context.eval("thc", request(manifest, backend))
                     assertEquals(1L, count(entry, "coreUnitSourceOpens"))
-                    assertEquals(2L, count(entry, "coreUnitDirectoryOpens"))
+                    assertEquals(if ('\n' in head) 1L else 2L, count(entry, "coreUnitDirectoryOpens"),
+                        "An unrepresentable foreign declaration cannot require a directory probe")
                     assertEquals(1L, count(entry, "coreUnitDecodedBindings"))
                     if (affinity) assertEquals(7L, entry.execute(0).asLong())
                 }

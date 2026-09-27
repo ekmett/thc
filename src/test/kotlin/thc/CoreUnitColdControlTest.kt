@@ -11,11 +11,13 @@ import org.graalvm.polyglot.PolyglotException
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 
 /** Small independent protocol model, not native-export or compilation evidence. */
 class CoreUnitColdControlTest {
     @TempDir lateinit var directory: Path
+    @AfterEach fun releaseIdleMappings() { CoreFileMappings.shared.evictIdleBelow(directory) }
     private val boundary = "optimized-Core-after-Tidy-before-CorePrep"
     private val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
     private val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
