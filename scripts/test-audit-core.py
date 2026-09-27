@@ -12,6 +12,17 @@ import re
 from pathlib import Path
 import unittest
 import core_original_foreign
+import core_package_manifest
+from collections import deque
+import gc
+import os
+import sqlite3
+import stat
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
+from unittest.mock import Mock, patch
+import weakref
 
 ROOT = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('audit_core', ROOT / 'audit-core.py')
@@ -4249,6 +4260,726 @@ class OriginalWaitStatusAuditTests(unittest.TestCase):
                 elif mutation == 'flags': call[3][0] = True
                 report = audit_core.Audit([('wait-status.json', module)], CAP).run(['root'])
                 self.assertFalse(report['accepted'], (symbol, mutation))
+
+
+AuditStore = audit_core.AuditStore
+
+
+class AuditStoreTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.path = Path(self.temporary.name) / 'catalogue.sqlite'
+
+    def store(self, **options):
+        store = AuditStore(self.path, {'manifestSha256': 'a' * 64, 'tools': ['original']}, **options)
+        self.addCleanup(store.close)
+        return store
+
+    def binding(self, key, **fields):
+        return dict(id=key, name='shared', lifted=True, expr=['var', key], **fields)
+
+    def test_exact_binding_roundtrip_and_header_lookup_never_decode_expression(self):
+        store = self.store()
+        original = self.binding('unit:Module.f', future={'nested': [None, False, 2**100]}, rep={'kind': 'object'})
+        self.assertIsNone(store.put_binding('original.zip!core/0.json', original))
+        binding = store.bindings[original['id']]
+        self.assertEqual(list(original), list(binding))
+        self.assertEqual('shared', binding.get('name'))
+        self.assertEqual(original['rep'], binding.get('rep'))
+        self.assertEqual(0, store.expression_loads)
+        self.assertEqual(original, dict(binding))
+        self.assertEqual(1, store.expression_loads)
+        self.assertEqual(original, dict(store.bindings[original['id']]))
+        self.assertEqual(1, store.expression_loads)
+        self.assertEqual({original['id']: 'original.zip!core/0.json'}, dict(store.sources))
+        self.assertNotIn(None, store.bindings)
+        self.assertNotIn('absent', store.bindings)
+        self.assertEqual(None, store.bindings.get('absent'))
+        with self.assertRaises(KeyError): store.sources['absent']
+
+    def test_input_objects_are_not_retained_and_mutation_does_not_change_rows(self):
+        class Binding(dict): pass
+        store = self.store()
+        original = Binding(self.binding('one'))
+        reference = weakref.ref(original)
+        store.put_binding('source', original)
+        original['expr'][1] = 'changed after staging'
+        del original
+        gc.collect()
+        self.assertIsNone(reference())
+        self.assertEqual(['var', 'one'], store.bindings['one']['expr'])
+
+    def test_duplicates_keep_first_binding_source_name_and_insertion_order(self):
+        store = self.store()
+        first = self.binding('z')
+        store.put_binding('', first)
+        store.put_binding('second', self.binding('a'))
+        replacement = dict(first, name='replacement', expr=['var', 'changed'])
+        self.assertEqual('', store.put_binding('duplicate', replacement))
+        self.assertEqual(first, dict(store.bindings['z']))
+        self.assertEqual(['z', 'a'], list(store.bindings))
+        self.assertEqual(['z', 'a'], list(store.named('shared')))
+        self.assertEqual([], list(store.named('replacement')))
+        self.assertEqual(2, len(store.bindings))
+
+    def test_missing_expression_is_distinct_from_explicit_null(self):
+        store = self.store()
+        for key, binding in [('absent', {'id': 'absent'}), ('null', {'id': 'null', 'expr': None})]:
+            store.put_binding('source', binding)
+            self.assertEqual(binding, dict(store.bindings[key]))
+        with self.assertRaises(KeyError): store.bindings['absent']['expr']
+        self.assertIsNone(store.bindings['null']['expr'])
+        self.assertEqual(1, store.expression_loads)
+
+    def test_all_json_string_keys_and_unknown_values_roundtrip(self):
+        store = self.store()
+        keys = ['\x00', '\ud800', '\udfff', '\uffff', '\U00010000', 'λ', 'plain']
+        for key in keys:
+            store.put_binding(key, dict(id=key, name=key, expr=['lit', key], diagnostic={'text': key}))
+            store.put_record('constructors', key, {'id': key})
+            store.append_event('uses', key, group=key, owner=key)
+        store.seal(validation_complete=True)
+        self.assertEqual(keys, list(store.bindings))
+        self.assertEqual(keys, list(store.records('constructors')))
+        self.assertEqual(sorted(keys), list(store.event_groups('uses')))
+        for key in keys:
+            self.assertEqual(key, store.sources[key])
+            self.assertEqual([key], list(store.named(key)))
+            self.assertEqual(['lit', key], store.bindings[key]['expr'])
+            self.assertEqual([key], list(store.events('uses', group=key, owner=key)))
+
+    def test_record_namespaces_update_without_changing_original_order(self):
+        store = self.store()
+        store.put_record('constructors', 'z', {'type': 'alpha', 'future': [1]})
+        store.put_record('constructors', 'a', {'type': 'other'})
+        store.put_record('native', 'z', {'proof': 'retained'})
+        store.put_record('constructors', 'z', {'type': 'beta', 'future': [1]})
+        records = store.records('constructors')
+        self.assertEqual(['z', 'a'], list(records))
+        self.assertEqual(2, len(records))
+        self.assertEqual({'type': 'beta', 'future': [1]}, records['z'])
+        self.assertEqual({'proof': 'retained'}, store.records('native')['z'])
+        with self.assertRaises(KeyError): records['absent']
+
+    def test_catalogue_lookup_matches_dict_for_malformed_key_types(self):
+        store = self.store()
+        maps = [store.bindings, store.sources, store.records('constructors'),
+                audit_core._InputRecords(store, 'package-links'),
+                audit_core._InputRecords(store, 'linked', compound=True)]
+        for mapping in maps:
+            for key in [None, False, 1, 1.5, ('unit', 7)]:
+                with self.subTest(mapping=type(mapping).__name__, key=key):
+                    self.assertIsNone(mapping.get(key))
+                    self.assertNotIn(key, mapping)
+            for key in [[], {}, ('unit', [])]:
+                with self.subTest(mapping=type(mapping).__name__, key=key):
+                    with self.assertRaisesRegex(TypeError, 'unhashable type'): mapping.get(key)
+
+    def test_cache_lru_entry_and_byte_bounds_and_oversized_bypass(self):
+        store = self.store(cache_entries=2, cache_bytes=24)
+        for key in ['a', 'b', 'c']:
+            store.put_binding('source', self.binding(key))  # 11 encoded bytes each.
+        store.put_binding('source', dict(id='large', expr='x' * 40))
+        for key in ['a', 'b', 'a', 'c']:
+            store.bindings[key]['expr']
+        self.assertEqual(3, store.expression_loads)
+        self.assertEqual(2, store.cached_expression_count)
+        self.assertEqual(22, store.cached_expression_bytes)
+        store.bindings['b']['expr']  # b, not recently-used a, was evicted.
+        self.assertEqual(4, store.expression_loads)
+        for _ in range(2): store.bindings['large']['expr']
+        self.assertEqual(6, store.expression_loads)
+        self.assertEqual(22, store.cached_expression_bytes)
+        store.close()
+        self.assertEqual(0, store.cached_expression_count)
+        self.assertEqual(0, store.cached_expression_bytes)
+
+    def test_cache_byte_limit_can_evict_before_entry_limit(self):
+        store = self.store(cache_entries=20, cache_bytes=15)
+        for key in ['a', 'b']:
+            store.put_binding('source', self.binding(key))
+            store.bindings[key]['expr']
+        self.assertEqual(1, store.cached_expression_count)
+        self.assertLessEqual(store.cached_expression_bytes, 15)
+
+    def test_disabled_cache_never_retains_an_expression(self):
+        for option in [{'cache_entries': 0}, {'cache_bytes': 0}]:
+            with self.subTest(option=option):
+                path = Path(self.temporary.name) / ('disabled-' + next(iter(option)))
+                with AuditStore(path, {}, **option) as store:
+                    store.put_binding('source', self.binding('a'))
+                    for _ in range(2): store.bindings['a']['expr']
+                    self.assertEqual(2, store.expression_loads)
+                    self.assertEqual(0, store.cached_expression_count)
+                    store.seal(validation_complete=True)
+
+    def test_incomplete_context_and_closed_store_are_not_ready(self):
+        store = self.store()
+        with self.assertRaisesRegex(RuntimeError, 'not sealed'):
+            with store: store.put_binding('source', self.binding('a'))
+        self.assertFalse(store.complete)
+        for action in [lambda: len(store.bindings), lambda: store.provenance(), lambda: store.pop_pending()]:
+            with self.assertRaisesRegex(RuntimeError, 'closed'): action()
+        store.close()  # Idempotent, and the partial private DB remains evidence.
+        self.assertTrue(self.path.is_file())
+        with sqlite3.connect(self.path) as connection:
+            self.assertEqual(b'"ingesting"', connection.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
+
+    def test_seal_requires_exact_completion_and_freezes_input_not_acceptance(self):
+        store = self.store()
+        for incomplete in [False, None, 1, 'true']:
+            with self.assertRaisesRegex(ValueError, 'incomplete'): store.seal(validation_complete=incomplete)
+        for action in [lambda: list(store.events('issue')), lambda: store.discover('a'),
+                       lambda: store.pop_pending(), lambda: list(store.reachable())]:
+            with self.assertRaisesRegex(RuntimeError, 'not sealed'): action()
+        store.append_event('issue', {'code': 'deliberate-rejection'})
+        store.seal(validation_complete=True)
+        self.assertTrue(store.complete)
+        self.assertEqual(1, store.event_count('issue'))
+        self.assertEqual([{'code': 'deliberate-rejection'}], list(store.events('issue')))
+        for action in [lambda: store.put_binding('source', self.binding('a')),
+                       lambda: store.put_record('constructor', 'a', {}),
+                       lambda: store.seal(validation_complete=True)]:
+            with self.assertRaisesRegex(RuntimeError, 'already sealed'): action()
+        store.append_event('issue', {'code': 'later-rejection'})
+        self.assertEqual(2, store.event_count('issue'))
+
+    def test_body_exception_preserves_failure_and_rolls_back_pending_rows(self):
+        store = self.store(batch_rows=1)
+        class Interrupted(Exception): pass
+        with self.assertRaises(Interrupted):
+            with store:
+                store.put_binding('source', self.binding('committed'))
+                store._batch_rows = 100
+                store.put_binding('source', self.binding('pending'))
+                raise Interrupted('original interruption')
+        self.assertFalse(store.complete)
+        with sqlite3.connect(self.path) as connection:
+            self.assertEqual([(b'committed',)], connection.execute('SELECT key FROM bindings').fetchall())
+
+    def test_exclusive_creation_never_overwrites_or_reopens(self):
+        store = self.store()
+        before = self.path.read_bytes()
+        with self.assertRaises(FileExistsError): AuditStore(self.path, {'different': True})
+        self.assertEqual(before, self.path.read_bytes())
+        if os.name != 'nt':  # Windows symlink privileges/ACLs are not POSIX mode bits.
+            link = self.path.with_name('link.sqlite')
+            link.symlink_to(self.path)
+            with self.assertRaises(FileExistsError): AuditStore(link, {})
+            self.assertEqual(0o600, stat.S_IMODE(self.path.stat().st_mode))
+        self.assertEqual({'manifestSha256': 'a' * 64, 'tools': ['original']}, store.provenance())
+
+    def test_invalid_bounds_fail_before_creating_a_file(self):
+        for key in ['cache_bytes', 'cache_entries', 'page_cache_kib', 'batch_rows']:
+            for value in [-1, True, 1.2]:
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    AuditStore(self.path, {}, **{key: value})
+                self.assertFalse(self.path.exists())
+        for key in ['page_cache_kib', 'batch_rows']:
+            with self.assertRaises(ValueError): AuditStore(self.path, {}, **{key: 0})
+
+    def test_events_keep_exact_order_groups_owners_and_nested_payload(self):
+        store = self.store()
+        rows = [('use', {'row': 0}, 'z', 'owner1'), ('issue', {'row': 1}, None, None),
+                ('use', {'row': 2, 'nested': [False, None]}, 'a', 'owner2'),
+                ('use', {'row': 3}, 'z', 'owner2'), ('use', {'row': 4}, None, None)]
+        for index, (kind, payload, group, owner) in enumerate(rows):
+            self.assertEqual(index + 1, store.append_event(kind, payload, group=group, owner=owner))
+        store.seal(validation_complete=True)
+        self.assertEqual([row[1] for row in rows if row[0] == 'use'], list(store.events('use')))
+        self.assertEqual([rows[0][1], rows[3][1]], list(store.events('use', group='z')))
+        self.assertEqual([rows[3][1]], list(store.events('use', group='z', owner='owner2')))
+        self.assertEqual([rows[4][1]], list(store.events('use', group=None, owner=None)))
+        self.assertEqual([None, 'a', 'z'], list(store.event_groups('use')))
+        self.assertEqual(2, store.event_count('use', group='z'))
+        self.assertEqual(2, store.event_count('use', owner='owner2'))
+        self.assertEqual(0, store.event_count('absent'))
+
+    def test_large_group_decodes_only_requested_rows_and_can_be_repeated(self):
+        store = self.store()
+        for index in range(12000): store.append_event('missing', {'index': index}, group='missing-id')
+        store.seal(validation_complete=True)
+        with patch.object(audit_core, '_unpack', wraps=audit_core._unpack) as unpack:
+            rows = store.events('missing', group='missing-id')
+            self.assertEqual(0, unpack.call_count)
+            self.assertEqual({'index': 0}, next(rows))
+            self.assertEqual(1, unpack.call_count)
+            rows.close()
+        for _ in range(2):
+            self.assertEqual(sum(range(12000)), sum(row['index'] for row in store.events('missing', group='missing-id')))
+        self.assertEqual(12000, store.event_count('missing'))
+        self.assertEqual(0, store.cached_expression_count)
+
+    def test_fifo_multiroot_cycles_and_first_predecessor_match_reference(self):
+        graph = {'r2': ['a', 'r1'], 'r1': ['a', 'b'], 'a': ['a', 'c'], 'b': ['c'], 'c': ['r2']}
+        roots = ['r2', 'r1', 'r2']
+        expected, predecessors, queue = [], {}, deque()
+        for key in roots:
+            if key not in predecessors: predecessors[key] = None; queue.append(key)
+        while queue:
+            key = queue.popleft()
+            expected.append((key, predecessors[key]))
+            for child in graph[key]:
+                if child not in predecessors: predecessors[child] = key; queue.append(child)
+        store = self.store(batch_rows=2)
+        store.seal(validation_complete=True)
+        for key in roots: store.discover(key)
+        self.assertEqual(2, store.pending_count())
+        self.assertEqual([], list(store.reachable()))
+        while (key := store.pop_pending()) is not None:
+            for child in graph[key]: store.discover(child, key)
+        self.assertEqual(expected, list(store.reachable()))
+        self.assertEqual(len(expected), store.reachable_count())
+        self.assertEqual(0, store.pending_count())
+        self.assertEqual(['r2', 'a', 'c'], store.reachable_via('c'))
+        self.assertEqual(['r1'], store.reachable_via('r1'))
+        self.assertFalse(store.discover('r1', 'c'))
+        self.assertIsNone(store.predecessor('r1'))
+        self.assertFalse(store.is_discovered('absent'))
+        with self.assertRaises(KeyError): store.reachable_via('absent')
+        with self.assertRaisesRegex(ValueError, 'discovered'): store.discover('new', 'absent')
+        self.assertFalse(store.is_discovered('new'))
+
+    def test_long_chain_keeps_only_disk_forest_not_all_witnesses(self):
+        store = self.store()
+        store.seal(validation_complete=True)
+        for index in range(4000): store.discover(str(index), str(index - 1) if index else None)
+        self.assertEqual([str(index) for index in range(4000)], store.reachable_via('3999'))
+        self.assertEqual(0, store.reachable_count())
+        self.assertEqual(4000, store.pending_count())
+        self.assertEqual('0', store.pop_pending())
+        self.assertEqual([('0', None)], list(store.reachable()))
+
+    def test_corrupt_payloads_fail_closed_at_every_decoding_seam(self):
+        store = self.store(cache_entries=0)
+        store.put_binding('source', self.binding('a'))
+        store.put_record('constructors', 'a', {})
+        store.append_event('issue', {})
+        store.seal(validation_complete=True)
+        tests = [('bindings', 'header', lambda: store.bindings['a']),
+                 ('bindings', 'expression', lambda: store._expression(b'a')),
+                 ('records', 'payload', lambda: store.records('constructors')['a']),
+                 ('events', 'payload', lambda: list(store.events('issue'))),
+                 ('metadata', 'payload', store.provenance)]
+        for table, column, read in tests:
+            with self.subTest(table=table, column=column):
+                store._connection.execute('SAVEPOINT corrupt')
+                store._connection.execute(f'UPDATE {table} SET {column}=?', (b'{}corrupt',))
+                with self.assertRaisesRegex(audit_core.AuditStoreError, 'checksum'): read()
+                store._connection.execute('ROLLBACK TO corrupt')
+                store._connection.execute('RELEASE corrupt')
+
+    def test_commit_failure_never_sets_completion_and_close_releases_connection(self):
+        store = self.store()
+        connection = store._connection
+        wrapped = Mock(wraps=connection)
+        wrapped.commit.side_effect = sqlite3.OperationalError('disk full')
+        store._connection = wrapped
+        with self.assertRaisesRegex(sqlite3.OperationalError, 'disk full'): store.seal(validation_complete=True)
+        self.assertFalse(store.complete)
+        with self.assertRaisesRegex(sqlite3.OperationalError, 'disk full'): store.close()
+        self.assertTrue(store._closed)
+        with self.assertRaises(sqlite3.ProgrammingError): connection.execute('SELECT 1')
+
+    def test_failed_seal_does_not_leave_a_ready_marker_for_later_close(self):
+        store = self.store()
+        connection = store._connection
+        wrapped = Mock(wraps=connection)
+        wrapped.commit.side_effect = sqlite3.OperationalError('disk full')
+        store._connection = wrapped
+        with self.assertRaises(sqlite3.OperationalError): store.seal(validation_complete=True)
+        store._connection = connection
+        store.close()
+        with sqlite3.connect(self.path) as saved:
+            self.assertEqual(b'"ingesting"', saved.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
+
+    def test_sqlite_record_limit_failure_does_not_truncate_or_complete(self):
+        store = self.store()
+        store._connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, 512)
+        with self.assertRaises(sqlite3.DataError):
+            store.put_binding('source', dict(id='oversized', expr='x' * 1024))
+        self.assertNotIn('oversized', store.bindings)
+        self.assertFalse(store.complete)
+
+    def test_schema_initialization_failure_rolls_back_and_closes(self):
+        real_connect = sqlite3.connect
+        opened = []
+        def failing_connect(path, **options):
+            connection = real_connect(path, **options)
+            opened.append(connection)
+            wrapped = Mock(wraps=connection)
+            wrapped.executescript.side_effect = lambda script: connection.executescript(script + '\nINVALID SQL;')
+            return wrapped
+        with patch.object(audit_core.sqlite3, 'connect', side_effect=failing_connect), self.assertRaises(sqlite3.OperationalError):
+            AuditStore(self.path, {})
+        with self.assertRaises(sqlite3.ProgrammingError): opened[0].execute('SELECT 1')
+        with real_connect(self.path) as saved:
+            self.assertEqual([], saved.execute('SELECT name FROM sqlite_master').fetchall())
+
+    def test_validated_stream_exhaustion_is_required_before_store_seal(self):
+        root = Path(self.temporary.name)
+        records = []
+        for name in ['First', 'Last']:
+            module = dict(schema=1, ghc='9.14.1', unit='unit', module=name,
+                boundary=core_package_manifest.BOUNDARY, bindings=[self.binding('unit:' + name + '.f')], constructors=[])
+            data = json.dumps(module).encode()
+            (root / (name + '.json')).write_bytes(data)
+            records.append(dict(name=name, boundary=module['boundary'], path=name + '.json',
+                                sha256=hashlib.sha256(data).hexdigest()))
+        manifest = root / 'packages.json'
+        manifest.write_text(json.dumps(dict(format='thc-core-packages', schema=1, ghc='9.14.1',
+            units=[dict(id='unit', depends=[], modules=records)])))
+        for mode in ['complete', 'early-close', 'late-corrupt']:
+            with self.subTest(mode=mode):
+                store = AuditStore(root / (mode + '.sqlite'), {'manifestSha256': hashlib.sha256(manifest.read_bytes()).hexdigest()})
+                self.addCleanup(store.close)
+                if mode == 'late-corrupt': (root / 'Last.json').write_bytes(b'corrupt')
+                def ingest():
+                    with store:
+                        with core_package_manifest.open_modules(manifest, audit_archives=True) as modules:
+                            for source, module in modules:
+                                for binding in module['bindings']: store.put_binding(source, binding)
+                                del module
+                                if mode == 'early-close': break
+                        store.seal(validation_complete=modules.complete)
+                if mode == 'complete':
+                    ingest()
+                    self.assertTrue(store.complete)
+                else:
+                    with self.assertRaises(ValueError): ingest()
+                    self.assertFalse(store.complete)
+
+    def test_lazy_catalogue_matches_entire_existing_auditor_report(self):
+        # Exercise existing semantics unchanged. These structural controls test
+        # storage equivalence, not a claim of genuine GHC/runtime acceptance.
+        root = Path(__file__).resolve().parent
+        cap = json.loads((root / 'core-capabilities.json').read_text())
+        def binding(key, expression):
+            return dict(id=key, name=key, lifted=True, arity=0, expr=expression)
+        bindings = [
+            binding('root', ['app', ['var', 'left'], [['var', 'right']], [True]]),
+            binding('second', ['var', 'shared']),
+            binding('retained', ['var', 'retainedMissing']),
+            binding('left', ['var', 'shared']),
+            binding('right', ['var', 'root']),
+            binding('shared', ['let', False, [binding('bad', ['lit', 'unknown-kind', 'x'])], ['var', 'missing']]),
+        ]
+        modules = [('original.json', dict(schema=1, ghc='9.14.1', bindings=bindings, constructors=[])),
+                   ('duplicate.json', dict(schema=1, ghc='9.14.1', bindings=[bindings[0]], constructors=[]))]
+        entries = ['root', 'second', 'root', 'absent']
+        eager = audit_core.Audit(modules, cap)
+        eager.retained_exports = ['retained']
+        expected = eager.run(entries)
+        for cache_entries in [0, 1, 32]:
+            with self.subTest(cache_entries=cache_entries):
+                with AuditStore(Path(self.temporary.name) / ('parity-' + str(cache_entries)), {}, cache_entries=cache_entries) as store:
+                    lazy = audit_core.Audit(iter(modules), cap, store=store)
+                    lazy.retained_exports = ['retained']
+                    report = lazy.run(entries)
+                    for _ in range(2):
+                        output = io.StringIO()
+                        audit_core.write_report(report, output)
+                        self.assertEqual(json.dumps(expected, indent=2) + '\n', output.getvalue())
+                    self.assertLessEqual(store.cached_expression_count, cache_entries)
+
+
+class BoundedAuditIntegrationTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+
+
+    def bridge_manifest(self, selected='runtime-b'):
+        # Structural exporter-proof controls. Genuine native-produced closure
+        # equivalence is checked separately from these small schema fixtures.
+        boundary = core_package_manifest.BOUNDARY
+        units = []
+        for unit in ('runtime-a', 'runtime-b'):
+            prefix = unit + ':THC.Internal.Exception.'
+            bridge = dict(schema=1, unit=unit, module='THC.Internal.Exception',
+                box=prefix + 'boxForeign', project=prefix + 'projectForeign',
+                payloadType=prefix + 'ForeignException',
+                exceptionType='ghc-internal:GHC.Internal.Exception.Type.SomeException')
+            module = dict(schema=1, ghc='9.14.1', unit=unit, module=bridge['module'], boundary=boundary,
+                foreignExceptionBridge=bridge, constructors=[],
+                bindings=[bind(bridge['box'], lit(1)), bind(bridge['project'], lit(2))])
+            source = self.root / (unit + '.json')
+            source.write_text(json.dumps(module))
+            units.append(dict(id=unit, depends=[], modules=[dict(name=module['module'],
+                boundary=boundary, path=source.name, sha256=hashlib.sha256(source.read_bytes()).hexdigest())]))
+        declaration = json.loads((ROOT.parent / 'src/test/resources/core/foreign-exception-descriptor.json').read_text())
+        parameters = [dict(id='argument' + str(i), lifted=False, rep=dict(rep, evaluated=True))
+                      for i, rep in enumerate(declaration['argumentReps'])]
+        call = ['app', ['var', 'service', dict(rep=CLOSURE)],
+                [['var', p['id'], dict(rep=p['rep'])] for p in parameters],
+                [False] * len(parameters), False, False,
+                dict(rep=dict(declaration['resultRep'], evaluated=True), foreignCall=declaration)]
+        helper = bind('query', ['lam', parameters, call,
+            dict(rep=CLOSURE, resultRep=declaration['resultRep'])])
+        module = dict(schema=1, ghc='9.14.1', unit='app', module='Main', boundary=boundary,
+            constructors=[], bindings=[bind('app:Main.entry', ['let', False, [helper], lit(0)])])
+        source = self.root / 'app.json'
+        source.write_text(json.dumps(module))
+        units.append(dict(id='app', depends=['runtime-a', 'runtime-b'], modules=[dict(name='Main',
+            boundary=boundary, path=source.name, sha256=hashlib.sha256(source.read_bytes()).hexdigest())]))
+        manifest = dict(format=core_package_manifest.FORMAT, schema=1, ghc='9.14.1', units=units)
+        if selected is not None:
+            manifest['foreignExceptionBridgeUnit'] = selected
+        path = self.root / 'packages.json'
+        path.write_text(json.dumps(manifest))
+        return path
+
+    def assert_bridge_report(self, report, selected):
+        if selected in ('runtime-a', 'runtime-b'):
+            self.assertTrue(report['accepted'], report['issues'])
+            self.assertEqual(['app:Main.entry', selected + ':THC.Internal.Exception.boxForeign',
+                              selected + ':THC.Internal.Exception.projectForeign'],
+                             [b['id'] for b in report['reachableBindings']])
+        else:
+            self.assertFalse(report['accepted'])
+            self.assertEqual(['foreign-exception-bridge'], [i['code'] for i in report['issues']])
+            self.assertEqual(['app:Main.entry'], [b['id'] for b in report['reachableBindings']])
+
+    def test_bridge_selection_and_ambiguity_match_in_both_cli_modes(self):
+        for index, selected in enumerate(('runtime-a', 'runtime-b', None, 'absent-runtime')):
+            with self.subTest(selected=selected):
+                manifest = self.bridge_manifest(selected)
+                reports = []
+                for mode in ('eager', 'indexed'):
+                    output = self.root / ('bridge-' + str(index) + '-' + mode + '.json')
+                    options = ['--eager'] if mode == 'eager' else [
+                        '--store', str(self.root / ('bridge-' + str(index) + '.sqlite'))]
+                    result = subprocess.run([sys.executable, str(ROOT / 'audit-core.py'),
+                        '--package-manifest', str(manifest), '--entry', 'app:Main.entry',
+                        '--output', str(output), *options], capture_output=True, text=True)
+                    self.assertEqual(0 if selected in ('runtime-a', 'runtime-b') else 1,
+                                     result.returncode, result.stderr)
+                    reports.append(output.read_bytes())
+                    self.assert_bridge_report(json.loads(reports[-1]), selected)
+                self.assertEqual(*reports)
+
+
+    def test_indexed_bridge_registration_keeps_exact_identity_and_helpers(self):
+        for index, mutate in enumerate((
+                lambda module: module['foreignExceptionBridge'].update(schema=True),
+                lambda module: module['foreignExceptionBridge'].update(unit='runtime-a'),
+                lambda module: module['foreignExceptionBridge'].update(exceptionType='shadow:SomeException'),
+                lambda module: module['bindings'].pop())):
+            manifest = self.bridge_manifest('runtime-b')
+            modules = list(core_package_manifest.load_for_audit(manifest))
+            selected = next(module for _, module in modules if module['unit'] == 'runtime-b')
+            mutate(selected)
+            expected = audit_core.Audit(modules, CAP, 'runtime-b').run(['app:Main.entry'])
+            self.assertFalse(expected['accepted'])
+            self.assertEqual(['foreign-exception-bridge', 'foreign-exception-bridge'],
+                             [issue['code'] for issue in expected['issues']])
+            self.assertIn('Invalid genuine bridge', expected['issues'][0]['detail'])
+            self.assertEqual(['app:Main.entry'], [item['id'] for item in expected['reachableBindings']])
+            with AuditStore(self.root / ('invalid-bridge-' + str(index) + '.sqlite'), {}) as store:
+                actual = audit_core.Audit(iter(modules), CAP, 'runtime-b', store=store).run(['app:Main.entry'])
+                output = io.StringIO()
+                audit_core.write_report(actual, output)
+                self.assertEqual(json.dumps(expected, indent=2) + '\n', output.getvalue())
+
+    def test_bridge_selection_uses_the_validated_manifest_snapshot(self):
+        for mode in ('eager', 'indexed'):
+            with self.subTest(mode=mode):
+                manifest = self.bridge_manifest('runtime-b')
+                original = manifest.read_bytes()
+                observed = core_package_manifest._ModuleStream._manifest_read
+                reads = []
+                def replace_after_read(stream, identity):
+                    observed(stream, identity)
+                    reads.append(identity)
+                    changed = dict(identity['manifest'], foreignExceptionBridgeUnit='runtime-a')
+                    manifest.write_text(json.dumps(changed))
+                def check(store=None):
+                    with patch.object(core_package_manifest._ModuleStream, '_manifest_read', replace_after_read):
+                        auditor = audit_core._audit_inputs(manifest, [], CAP, store)
+                    self.assertEqual('runtime-b', auditor.exception_bridge_unit)
+                    output = io.StringIO()
+                    audit_core.write_report(auditor.run(['app:Main.entry']), output)
+                    self.assert_bridge_report(json.loads(output.getvalue()), 'runtime-b')
+                    self.assertEqual(1, len(reads))
+                    self.assertEqual(hashlib.sha256(original).hexdigest(), reads[0]['sha256'])
+                    self.assertEqual('runtime-a', json.loads(manifest.read_bytes())['foreignExceptionBridgeUnit'])
+                    if store is not None:
+                        self.assertEqual(reads[0], store.records('input-provenance')['package-manifest'])
+                if mode == 'eager':
+                    check()
+                else:
+                    with AuditStore(self.root / 'snapshot.sqlite', {}) as store:
+                        check(store)
+
+    def test_existing_semantic_report_cases_match_indexed_bytes(self):
+        # Reuse existing tests/fixtures, not a new semantic oracle. Methods that
+        # inspect walk() directly keep the eager path; every run() also executes
+        # the full indexed path and compares its complete, ordered report bytes.
+        original = audit_core.Audit
+        connect = sqlite3.connect
+        outer = self
+        runs = 0
+        class ComparingAudit(original):
+            def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None):
+                self.test_modules = list(modules)
+                super().__init__(self.test_modules, capabilities, foreign_exception_bridge_unit)
+            def run(self, entries, io_main=False):
+                nonlocal runs
+                expected = super().run(entries, io_main=io_main)
+                runs += 1
+                # Semantic equivalence does not need ten thousand filesystem
+                # durability barriers. Use a fresh real SQLite database per
+                # case, with the identical production SQL/store implementation.
+                # On-disk lifecycle/failure/CLI tests below remain unpatched.
+                with patch.object(audit_core.sqlite3, 'connect',
+                                  side_effect=lambda path, **options: connect(':memory:', **options)), \
+                        AuditStore(outer.root / ('case-' + str(runs) + '.sqlite'), {}, cache_entries=runs % 3) as store:
+                    indexed = original(iter(self.test_modules), self.cap, self.exception_bridge_unit, store=store)
+                    indexed.retained_exports = self.retained_exports
+                    report = indexed.run(entries, io_main=io_main)
+                    output = io.StringIO()
+                    audit_core.write_report(report, output)
+                    outer.assertEqual(json.dumps(expected, indent=2) + '\n', output.getvalue())
+                return expected
+        suite = unittest.TestSuite()
+        for candidate in list(globals().values()):
+            if (isinstance(candidate, type) and issubclass(candidate, unittest.TestCase)
+                    and candidate not in (unittest.TestCase, AuditStoreTest, BoundedAuditIntegrationTest, RetainedAuditStoreTest)):
+                suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(candidate))
+        result = unittest.TestResult()
+        with patch.object(audit_core, 'Audit', ComparingAudit): suite.run(result)
+        self.assertEqual([], result.errors, str(result.errors))
+        self.assertEqual([], result.failures, str(result.failures))
+        self.assertGreater(runs, 100)
+        print(f'Indexed report parity: {runs} existing semantic cases, fresh in-memory SQLite per case')
+
+    def test_many_missing_uses_stream_one_row_at_a_time_with_complete_evidence(self):
+        count = 12000
+        expression = ['let', False, [bind('local' + str(i), var('missing')) for i in range(count)], lit(0)]
+        module = dict(schema=1, ghc='9.14.1', bindings=[bind('root', expression)], constructors=[])
+        expected = audit_core.Audit([('fan-in.json', module)], CAP).run(['root'])
+        class Sink(io.StringIO):
+            largest = 0
+            def write(self, value):
+                self.largest = max(self.largest, len(value))
+                return super().write(value)
+        with AuditStore(self.root / 'fan-in.sqlite', {}, cache_bytes=0) as store:
+            report = audit_core.Audit(iter([('fan-in.json', module)]), CAP, store=store).run(['root'])
+            self.assertIsInstance(report['missingGlobals'], audit_core._StreamArray)
+            output = Sink()
+            audit_core.write_report(report, output)
+            self.assertEqual(json.dumps(expected, indent=2) + '\n', output.getvalue())
+            self.assertLess(output.largest, 512)
+            self.assertEqual(count, store.event_count('missing'))
+            self.assertEqual(0, store.cached_expression_count)
+
+    def test_module_and_binding_objects_are_released_before_next_module(self):
+        class Module(dict): pass
+        class Binding(dict): pass
+        references = []
+        def modules():
+            for index in range(4):
+                gc.collect()
+                self.assertTrue(all(item() is None for item in references), 'old module/binding survived')
+                binding = Binding(bind('id' + str(index), lit(index)))
+                module = Module(schema=1, ghc='9.14.1', bindings=[binding], constructors=[])
+                references.extend([weakref.ref(module), weakref.ref(binding)])
+                yield str(index), module
+                del module, binding
+        with AuditStore(self.root / 'retention.sqlite', {}) as store:
+            auditor = audit_core.Audit(modules(), CAP, store=store)
+            gc.collect()
+            self.assertTrue(all(item() is None for item in references))
+            self.assertEqual(4, len(auditor.bindings))
+
+    def test_report_emission_failure_preserves_previous_output_and_partial(self):
+        output = self.root / 'report.json'
+        output.write_text('previous verified output')
+        def broken(report, stream):
+            stream.write('{"schema":2,')
+            raise OSError('deliberate disk failure')
+        with patch.object(audit_core, 'write_report', broken), self.assertRaises(OSError):
+            audit_core._emit_report({}, output)
+        self.assertEqual('previous verified output', output.read_text())
+        self.assertEqual(1, len(list(self.root.glob('.report.json.*.partial'))))
+
+    def test_late_cli_parse_failure_never_replaces_report_or_seals_catalogue(self):
+        first, last = self.root / 'first.json', self.root / 'last.json'
+        first.write_text(json.dumps(dict(schema=1, ghc='9.14.1', bindings=[bind('root', lit(0))], constructors=[])))
+        last.write_text('{"incomplete":')
+        output, store = self.root / 'report.json', self.root / 'failed.sqlite'
+        output.write_text('previous verified output')
+        result = subprocess.run([sys.executable, str(ROOT / 'audit-core.py'), str(first), str(last),
+            '--entry', 'root', '--store', str(store), '--output', str(output)], capture_output=True, text=True)
+        self.assertEqual(2, result.returncode, result.stderr)
+        self.assertEqual('', result.stdout)
+        self.assertEqual('previous verified output', output.read_text())
+        with sqlite3.connect(store) as connection:
+            self.assertEqual(b'"ingesting"', connection.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
+
+    def test_loose_cli_json_retains_previous_duplicate_key_behavior(self):
+        module = dict(schema=1, ghc='9.14.1', bindings=[bind('root', lit(0))], constructors=[], future=0)
+        source = self.root / 'loose.json'
+        source.write_text(json.dumps(module)[:-1] + ', "future":1}')
+        reports = []
+        for mode in ['eager', 'indexed']:
+            output = self.root / (mode + '.json')
+            options = ['--eager'] if mode == 'eager' else ['--store', str(self.root / 'loose.sqlite')]
+            result = subprocess.run([sys.executable, str(ROOT / 'audit-core.py'), str(source), '--entry', 'root',
+                '--output', str(output), *options], capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stderr)
+            reports.append(output.read_bytes())
+        self.assertEqual(*reports)
+
+
+class RetainedAuditStoreTest(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('THC_AUDIT_GENUINE_MANIFEST'), 'retained genuine equivalence not requested')
+    def test_exact_retained_fourway_pre_post_cli_reports(self):
+        """Reuse original native-produced inputs, not a new capture or oracle."""
+        manifest_path = Path(os.environ['THC_AUDIT_GENUINE_MANIFEST'])
+        source_root = Path(os.environ['THC_AUDIT_GENUINE_ROOT'])
+        output = Path(os.environ['THC_AUDIT_GENUINE_OUTPUT'])
+        self.assertFalse(output.exists(), 'preserve previous equivalence evidence')
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = core_package_manifest.strict_json(manifest_bytes.decode('utf-8'))
+        checked = 0
+        for group in ['inputHashes', 'artifactHashes']:
+            for path, expected in manifest[group].items():
+                candidate = (source_root / path).resolve()
+                self.assertTrue(candidate.is_relative_to(source_root.resolve()))
+                with candidate.open('rb') as stream:
+                    self.assertEqual(expected, hashlib.file_digest(stream, 'sha256').hexdigest(), path)
+                checked += 1
+        output.mkdir(parents=True)
+        receipt = dict(manifest=dict(path=str(manifest_path), sha256=hashlib.sha256(manifest_bytes).hexdigest()),
+            checkedOriginalHashes=checked, auditorSha256=hashlib.sha256((ROOT / 'audit-core.py').read_bytes()).hexdigest(),
+            nativeRows=manifest['nativeRows'], phases={})
+        for phase in ['pre', 'post']:
+            command_path = manifest_path.parent / 'commands' / (phase + '-audit.command.json')
+            command = json.loads(command_path.read_text())['argv']
+            entries = [command[index + 1] for index, value in enumerate(command) if value == '--entry']
+            modules = [source_root / path for path in command[-2:]]
+            self.assertTrue(all(path.name in ['FourWayAggregateFields.json', 'THC.InterfaceClosure.json'] for path in modules))
+            common = [sys.executable, str(ROOT / 'audit-core.py'), *map(str, modules)]
+            for entry in entries: common.extend(['--entry', entry])
+            reports = []
+            for mode in ['eager', 'indexed']:
+                report_path = output / (phase + '-' + mode + '.json')
+                options = ['--eager'] if mode == 'eager' else ['--store', str(output / (phase + '.sqlite'))]
+                result = subprocess.run([*common, *options, '--output', str(report_path)], text=True, capture_output=True)
+                (output / (phase + '-' + mode + '.stderr')).write_text(result.stderr)
+                self.assertEqual(1, result.returncode, result.stderr)  # Existing known boundary rejection.
+                reports.append(report_path.read_bytes())
+            self.assertEqual(*reports)
+            report = json.loads(reports[0])
+            self.assertFalse(report['accepted'])
+            self.assertEqual(manifest['auditSummaries'][phase], report['summary'])
+            receipt['phases'][phase] = dict(completeReportsEqual=True, accepted=False,
+                summary=report['summary'], bytes=len(reports[0]), sha256=hashlib.sha256(reports[0]).hexdigest())
+        (output / 'equivalence.json').write_text(json.dumps(receipt, indent=2) + '\n')
+        print(json.dumps(receipt))
 
 
 if __name__ == '__main__':
