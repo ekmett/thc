@@ -4,6 +4,8 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
 
@@ -57,6 +59,17 @@ internal object AstControl {
     fun complete(node: Node, result: Any?, expectedTarget: RootCallTarget? = null,
                  tupleShape: TupleShape? = null): Any? {
         if (!enabled(node)) return result
+        if (result !is TailYield && result !is AstTailYield &&
+            result !is SavedGuestContinuation && result !is ContinuationResult) return result
+        return completeSuspended(node, result, expectedTarget, tupleShape)
+    }
+
+    // The ordinary result path must not inline continuation adapters, ownership
+    // records and capture diagnostics at every call site. No guest frame crosses
+    // this cold boundary; the caller appends its own suffix after the capture.
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private fun completeSuspended(node: Node, result: Any?, expectedTarget: RootCallTarget?,
+                                  tupleShape: TupleShape?): Any? {
         val tailTarget = when (result) {
             is TailYield -> result.target
             is AstTailYield -> result.target
