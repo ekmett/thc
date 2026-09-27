@@ -14,7 +14,8 @@
 -- ZIPs remain acquisition/provenance caches; guest requests use the plain pair.
 module THC.Driver.CoreSymbols (bindingPositions, publishCoreUnit) where
 
-import Control.Exception (IOException, bracketOnError, catch)
+import Control.DeepSeq (force)
+import Control.Exception (IOException, bracketOnError, catch, evaluate)
 import Control.Monad (foldM, unless)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), FromJSON, Result(..), eitherDecodeStrict', encode, fromJSON, object, toJSON, (.=))
@@ -33,7 +34,7 @@ import System.FilePath ((</>), isAbsolute, takeDirectory)
 import System.IO (Handle, IOMode(ReadMode), hClose, hTell, openBinaryTempFile, withBinaryFile)
 import THC.CoreSymbols (encodeSymbols)
 import THC.Driver.Lock (withLock)
-import THC.Driver.Zip (decodeZip)
+import THC.Driver.Zip (ZipMember, decodeZipMembers, readZipMember)
 
 -- | Locate bindings in final producer bytes, including amended package-native
 -- JSON whose field order may differ from the plugin's. This is publication work,
@@ -42,6 +43,12 @@ import THC.Driver.Zip (decodeZip)
 bindingPositions :: BS.ByteString -> Either String ([(BS.ByteString, Word64)], (Word64, Word64))
 bindingPositions bytes = do
   _ <- eitherDecodeStrict' bytes :: Either String Value
+  bindingPositionsValidated bytes
+
+-- The publication caller has already parsed and checked this exact document.
+-- Avoid allocating a second complete Aeson tree merely to locate its bytes.
+bindingPositionsValidated :: BS.ByteString -> Either String ([(BS.ByteString, Word64)], (Word64, Word64))
+bindingPositionsValidated bytes = do
   members <- fields (white 0)
   (start, end) <- case [span' | ("bindings", span') <- members] of
     [span'] -> Right span'
@@ -156,7 +163,7 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
         Nothing -> do
           archive <- BS.readFile source
           unless (digest archive == sourceHash) $ fail "Source bundle changed during unit publication"
-          entries <- either fail pure =<< decodeZip archive
+          entries <- either fail pure =<< decodeZipMembers archive
           inner <- decodeMember entries "manifest.json"
           unless (member inner "modules" == Just (Array modules) && member inner "unit" == member unit "id") $
             fail "Source bundle manifest disagrees with unit publication"
@@ -181,12 +188,12 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
     emit output entries (refs, keys, hashState) ref = do
       path <- field ref "path"
       expected <- field ref "sha256"
-      bytes <- maybe (fail "Missing Core module during unit publication") pure (lookup path entries)
+      bytes <- maybe (fail "Missing Core module during unit publication") readZipMember (lookup path entries)
       unless (digest bytes == expected) $ fail "Core module changed during unit publication"
       value <- either fail pure (eitherDecodeStrict' bytes)
       unless (member value "unit" == member unit "id" && member value "module" == member ref "name" &&
               member value "boundary" == member ref "boundary") $ fail "Core module identity changed during publication"
-      (offsets, (arrayStart, arrayEnd)) <- either fail pure (bindingPositions bytes)
+      (offsets, (arrayStart, arrayEnd)) <- either fail pure (bindingPositionsValidated bytes)
       bindings <- field value "bindings" :: IO [Value]
       name <- field value "module" :: IO String
       needsRegistration <- either fail pure (registration value)
@@ -218,8 +225,13 @@ publishCoreUnit cache verify unit = case (member unit "bundle", member unit "mod
           aliased = set "mainAlias" (Bool (any ((== Text.encodeUtf8 (Text.pack ("main::" ++ name ++ ".main"))) . fst) offsets)) record
           sourced = maybe aliased (\(a,b) -> set "sourceMetadataStart" (integer a) $
             set "sourceMetadataEnd" (integer b) aliased) sourceSpan
-      pure (sourced:refs, [(key, base + offset) | (key, offset) <- offsets]:keys,
-            foldl SHA.update hashState [bytes, "\n", metadata, "\n", sourceBytes])
+      -- Only compact records/keys and the updated digest survive this module.
+      -- Lazy summaries or a chain of SHA.update thunks retain every preceding
+      -- decoded Core tree and byte buffer until the final receipt is encoded.
+      compact <- evaluate (force sourced)
+      directoryRows <- evaluate (force [(BS.copy key, base + offset) | (key, offset) <- offsets])
+      nextHash <- evaluate (foldl' SHA.update hashState [bytes, "\n", metadata, "\n", sourceBytes])
+      pure (compact:refs, directoryRows:keys, nextHash)
     integer = Number . fromInteger
     reference path hash = object ["path" .= path, "sha256" .= hash]
     toArray = toJSON
@@ -273,14 +285,14 @@ registration value = case member value "foreign" of
   where nonempty (Just (Array values)) = Right (not (null values))
         nonempty _ = Left "Invalid foreign registration metadata during unit publication"
 
-targetLayout :: [(FilePath, BS.ByteString)] -> Value -> IO (Maybe Value)
+targetLayout :: [(FilePath, ZipMember)] -> Value -> IO (Maybe Value)
 targetLayout entries inner = case member inner "targetLayout" of
   Nothing -> pure Nothing
   Just layout -> do
     inputs <- field inner "buildInputs"
     path <- field inputs "path"
     expected <- field inputs "sha256"
-    bytes <- maybe (fail "Missing target-layout build receipt") pure (lookup path entries)
+    bytes <- maybe (fail "Missing target-layout build receipt") readZipMember (lookup path entries)
     unless (digest bytes == expected) $ fail "Target-layout build receipt changed"
     receipt <- either fail pure (eitherDecodeStrict' bytes)
     unless (member receipt "targetLayout" == Just layout) $ fail "Target-layout receipts disagree"
@@ -304,7 +316,9 @@ checkFile verify expectedPath size ref = do
   where
     hashHandle input state = do
       bytes <- BS.hGetSome input (1024 * 1024)
-      if BS.null bytes then pure (SHA.finalize state) else hashHandle input (SHA.update state bytes)
+      if BS.null bytes then pure (SHA.finalize state) else do
+        next <- evaluate (SHA.update state bytes)
+        hashHandle input next
 
 atomicOutput :: FilePath -> (Handle -> IO a) -> IO a
 atomicOutput destination action = bracketOnError
@@ -320,8 +334,10 @@ atomicOutput destination action = bracketOnError
 readJson :: FilePath -> IO Value
 readJson path = BS.readFile path >>= either fail pure . eitherDecodeStrict'
 
-decodeMember :: [(FilePath, BS.ByteString)] -> FilePath -> IO Value
-decodeMember entries path = maybe (fail ("Missing bundle member " ++ path)) (either fail pure . eitherDecodeStrict') (lookup path entries)
+decodeMember :: [(FilePath, ZipMember)] -> FilePath -> IO Value
+decodeMember entries path = do
+  bytes <- maybe (fail ("Missing bundle member " ++ path)) readZipMember (lookup path entries)
+  either fail pure (eitherDecodeStrict' bytes)
 
 member :: Value -> Key -> Maybe Value
 member (Object fields) key = KM.lookup key fields
