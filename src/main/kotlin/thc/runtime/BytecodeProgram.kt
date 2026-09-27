@@ -1631,6 +1631,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = if (originalStdio.result != null) destination.single()
                         else b.createLocal("unused original State destination", "primitive")
+                    if (originalStdio.windowsDirectory) {
+                        b.beginOriginalWindowsDirectory(result, originalStdio)
+                        if (originalStdio != OriginalStdioOp.LAST_ERROR) operands[0].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        if (originalStdio == OriginalStdioOp.FIND_FIRST || originalStdio == OriginalStdioOp.FIND_NEXT)
+                            operands[1].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                        b.endOriginalWindowsDirectory()
+                        return@tupleExpression
+                    }
                     if (originalStdio.eventManager) {
                         // Retain source operand order before selecting typed lanes.
                         val values = operands.dropLast(1).mapIndexed { index, operand ->

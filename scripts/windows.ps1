@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -11,12 +11,15 @@ $root = Split-Path $PSScriptRoot
 if ($env:OS -ne 'Windows_NT') { throw 'Use the native Windows host for this script' }
 if (!$env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME = Join-Path $root '.gradle-user-home' }
 Push-Location $root
+New-Item -ItemType Directory -Force "$root/build" | Out-Null
+$lease = [IO.File]::Open("$root/build/.native-windows-build.lock",
+    [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
 try {
-    if ($Action -in @('Build', 'Runtime', 'Test')) {
+    if ($Action -in @('Build', 'Runtime', 'Test', 'DirectoryTest')) {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -44,4 +47,11 @@ try {
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs",
             'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
     }
-} finally { Pop-Location }
+    if ($Action -in @('Test', 'DirectoryTest')) {
+        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+        Invoke-ThcTool $fixture @('windows-directory')
+        Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", '--continue',
+            'testDefault', '--tests', 'thc.runtime.WindowsDirectoryStreamsTest',
+            'testDense', '--tests', 'thc.runtime.WindowsDirectoryStreamsTest')
+    }
+} finally { $lease.Dispose(); Pop-Location }

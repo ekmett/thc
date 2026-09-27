@@ -20,6 +20,20 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.windowsDirectory) {
+            val first = if (operation != OriginalStdioOp.LAST_ERROR) operands[0].executeRequiredAddress(frame) else null
+            val output = if (operation == OriginalStdioOp.FIND_FIRST || operation == OriginalStdioOp.FIND_NEXT)
+                operands[1].executeRequiredAddress(frame) else null
+            requireVoidCarrier(operands.last().execute(frame))
+            val streams = WindowsDirectoryStreams.current(this)
+            if (operation == OriginalStdioOp.FIND_FIRST)
+                FrameAccess.writeObject(frame, slots[offset], streams.first(first!!, output!!))
+            else FrameAccess.writeLong(frame, slots[offset],
+                if (operation == OriginalStdioOp.FIND_NEXT) streams.next(first!!, output!!)
+                else if (operation == OriginalStdioOp.FIND_CLOSE) streams.closeSearch(first!!)
+                else streams.error())
+            return null
+        }
         if (operation.directoryStream) {
             if (operation == OriginalStdioOp.FDOPENDIR) {
                 val fd = operands[0].executeRequiredLong(frame)

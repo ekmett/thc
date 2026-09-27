@@ -1724,6 +1724,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalWindowsDirectory {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, ManagedAddress first, ManagedAddress output, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            WindowsDirectoryStreams streams = WindowsDirectoryStreams.current(node);
+            if (operation == OriginalStdioOp.FIND_FIRST) {
+                ManagedAddress result = streams.first(first, output);
+                destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            } else {
+                long result = operation == OriginalStdioOp.FIND_NEXT ? streams.next(first, output)
+                    : operation == OriginalStdioOp.FIND_CLOSE ? streams.closeSearch(first) : streams.error();
+                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            }
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalDirectoryPointer {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 OriginalStdioOp operation, ManagedAddress address, Object state, @Bind("$node") Node node) {

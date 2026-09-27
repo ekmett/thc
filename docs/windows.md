@@ -110,6 +110,55 @@ Windows runner service or secrets are required on a development PC. An active
 run finishes while newer commits wait, avoiding cancellation starvation during
 frequent integrations. The CI result is informative, not a manual-merge gate.
 
+## Original Win32 directory scans
+
+The native Windows slice recognizes the original Win32 **2.14.2.1** declarations
+of FindFirstFileW, FindNextFileW, FindClose and GetLastError used by directory
+**1.3.10.0**. It runs on Windows x86_64 through the explicit NativeIO context
+factory, also selected by the file-enabled command-line launcher.
+An arbitrary embedding context, including one with file/native access enabled,
+does not acquire this fixed host-filesystem authority.
+
+~~~powershell
+./scripts/windows.ps1 -Action DirectoryTest -Jobs 4
+~~~
+
+This action builds the runtime and native Haskell tools, prepares the real
+Windows fixtures, then runs testDefault and testDense from one compilation.
+The full Test action and Windows CI include it. The script holds an exclusive
+lease on this checkout's build directory; independent checkouts remain independent.
+
+The producer verifies the upstream Win32 archive SHA256 and builds its unchanged
+sources with complete Core using Cabal's standard Setup driver. This avoids the
+Win32 → hsc2hs → process → Win32 solver cycle while retaining the installed native
+hsc2hs and pinned GHC. Typed Haskell consumers are specialized with FCallIds read
+from those genuine interfaces; no foreign declaration or Core is synthesized.
+Both pre-Tidy and post-Tidy exports pass strict audits. The same specialized
+calls execute natively for the oracle; System.Directory.listDirectory supplies
+an additional independent public-library comparison.
+
+The Windows headers are authoritative for WIN32_FIND_DATAW size, alignment,
+filename offset and UTF-16 capacity. A native C build probe and the Haskell
+hsc2hs oracle independently derive the layout. GHC's Bool FFI result uses Int#;
+the native transport preserves the actual 32-bit BOOL ABI. FFM captures
+GetLastError immediately after each call, before Java can overwrite it.
+
+Search handles are opaque identities owned by one context. Buffer validation
+and native borrows precede acquisition or advancement. Search operations,
+FindClose and context disposal are serialized. Unlike a Unix dirent view,
+WIN32_FIND_DATAW belongs to its caller and remains readable after FindClose.
+Ordinary names, BMP and supplementary Unicode, empty directories, missing and
+non-directory paths, wildcards, EOF/repeated EOF, invalid storage/state, stale
+handles and cross-context misuse have focused tests on both backends.
+
+The supported native declarations are a bounded library boundary. Full
+System.Directory closure export still requires complete Core for its installed
+dependencies. This slice does not implement the remaining Windows filesystem
+API. Absolute paths (including extended paths furnished by directory) and
+context-relative queries are supported; drive-relative C:foo queries require
+directory's absolute furnishPath. No scan changes the process working directory.
+Evidence is under build/windows-directory and the default/dense JUnit reports.
+
 ## Current boundaries
 
 This is a bounded native Windows gate, not full parity with Linux/macOS or the

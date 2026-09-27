@@ -49,7 +49,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         internal fun createContext(endpoints: Set<StandardEndpoint>,
                                    profile: ContextProfile = ContextProfile.NATIVE,
                                    ffiMode: FfiMode = FfiMode.NATIVE): Context {
-            if (!NativeIO.supportedHost())
+            if (!NativeIO.supportedPosixHost())
                 throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
             val filesystem = NativeFileSystem(endpoints)
             val context = try {
@@ -93,7 +93,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     init {
         if (!env.isNativeAccessAllowed || !env.isFileIOAllowed)
             throw SecurityException("Native files require explicit file IO and native access")
-        if (!NativeIO.supportedHost())
+        if (!NativeIO.supportedPosixHost())
             throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
         val bytes = javaClass.getResourceAsStream("/thc/native/native-file-api.so")?.use { it.readBytes() }
             ?: fault("Missing native file provider bridge")

@@ -9,6 +9,7 @@ import thc.Language
 // Preserve the genuine installed owner; only this pinned Unix release is reviewed.
 private val unixUnit = Regex("unix-2\\.8\\.8\\.0-(?:inplace|[0-9a-f]+)")
 private val directoryUnit = Regex("directory-1\\.3\\.10\\.0-(?:inplace|[0-9a-f]+)")
+private val win32Unit = Regex("Win32-2\\.14\\.2\\.1-(?:inplace|[0-9a-f]+)")
 private val directoryWrapperUnit = Regex("directoryzm1zi3zi10zi0zm(?:inplace|[0-9a-f]+)ZC")
 private val unixWrapperUnit = Regex("unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC")
 internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUnit.matches(unit)
@@ -16,6 +17,12 @@ internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUni
 /** Exact pinned GHC/library declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String?, val unit: String = "ghc-internal") {
+    // GHC marshals source BOOL through Int#, while the native Windows ABI uses
+    // a 32-bit BOOL. GetLastError's DWORD retains its Word32# declaration.
+    FIND_FIRST("FindFirstFileW", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "AddrRep", "Win32-2.14.2.1-inplace"),
+    FIND_NEXT("FindNextFileW", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "IntRep", "Win32-2.14.2.1-inplace"),
+    FIND_CLOSE("FindClose", "ccall", "unsafe", listOf("AddrRep", null), "IntRep", "Win32-2.14.2.1-inplace"),
+    LAST_ERROR("GetLastError", "ccall", "unsafe", listOf(null), "Word32Rep", "Win32-2.14.2.1-inplace"),
     WCOREDUMP("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     WSTOPSIG("ghczuwrapperZC1ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWSTOPSIG", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     WIFSTOPPED("ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSTOPPED", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
@@ -149,6 +156,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
+        windowsDirectory && value is String && win32Unit.matches(value) ||
         (this == UNLINKAT || this == FSTATAT) && value is String && directoryUnit.matches(value) ||
         isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY ||
             this == UNIX_LSTAT || currentDirectory || directoryStream || waitStatus || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
@@ -181,7 +189,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
     val currentDirectory: Boolean get() = this == CHDIR || this == GETCWD
-    val directoryStream: Boolean get() = this == OPENDIR || this == FDOPENDIR || this == CLOSEDIR ||
+    val windowsDirectory: Boolean get() = this == FIND_FIRST || this == FIND_NEXT || this == FIND_CLOSE || this == LAST_ERROR
+    val directoryStream: Boolean get() = windowsDirectory || this == OPENDIR || this == FDOPENDIR || this == CLOSEDIR ||
         this == READDIR || this == DIRENT_NAME || this == FREE_DIRENT
     val directoryPointer: Boolean get() = this == OPENDIR || this == DIRENT_NAME
     val pathLink: Boolean get() = this == SYMLINK || this == READLINK

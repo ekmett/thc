@@ -26,6 +26,7 @@ test commands.
 | --- | --- |
 | Unix 2.8.8.0 `chdir` / `getcwd` | Both backends use the explicit Linux x86_64 NativeIO context's directory descriptor; process CWD stays unchanged. `getcwd` supports non-null caller-owned buffers and rejects GNU NULL allocation. Verified physical naming can return EACCES for inaccessible ancestors where native process `getcwd` succeeds; relative IO remains descriptor-based. See [native files](native-file-provider.md#context-working-directory) for lifetime and platform requirements. |
 | Unix 2.8.8.0 directory streams | Exact unsafe opendir/fdopendir/closedir/readdir/d_name/free_dirent calls use context-owned handles on Linux x86_64 glibc 2.23+. Readdir preserves raw names and EOF errno; views expire at the next read or close. Successful fdopendir consumes only its input guest descriptor. See [native files](native-file-provider.md#original-directory-streams) for ownership and validation. |
+| Win32 2.14.2.1 directory scans | Exact unsafe FindFirstFileW/FindNextFileW/FindClose/GetLastError calls use context-owned search handles on Windows x86_64. Caller-owned UTF-16 find-data survives close, errors are captured at the native call, and context disposal closes remaining searches. Both backends require the fixed NativeIO factory; full installed-library closure export and other Windows file APIs remain separate. See [Windows scans](windows.md#original-win32-directory-scans). |
 
 ## Sparks and thread scheduling
 
