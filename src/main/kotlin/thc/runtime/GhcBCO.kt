@@ -145,7 +145,7 @@ internal class GhcBCORoot(language: Language, val owner: Language.State, metrics
                     val arguments = Array(apply.count) { pop() }
                     val function = force.execute(frame, answer) as? Closure ?: fault("BCO application requires a function")
                     answer = calls[apply.count - 1].execute(frame, function, arguments)
-                    if (answer is TailYield || savedGuestContinuation(answer) != null)
+                    if (answer is TailYield || SavedGuestContinuationKt.savedGuestContinuation(answer) != null)
                         fault("GHC BCO asynchronous continuation is not supported")
                     answer = force.execute(frame, answer)
                 }

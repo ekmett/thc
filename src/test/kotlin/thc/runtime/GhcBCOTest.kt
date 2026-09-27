@@ -198,9 +198,12 @@ class GhcBCOTest {
                             if (capture) throw DelimitedCut(PromptTag(Language.currentState(null)), null, shape,
                                 MaskingState.UNMASKED, this)
                             return object : SavedGuestContinuation {
-                                override val identity = Any()
-                                override val yielded = Any()
-                                override val sourceRoot = Any()
+                                private val savedIdentity = Any()
+                                private val savedYield = Any()
+                                private val savedRoot = Any()
+                                override fun getIdentity(): Any = savedIdentity
+                                override fun getYielded(): Any = savedYield
+                                override fun getSourceRoot(): Any = savedRoot
                                 override fun continueWith(input: Any?): Any { resumed++; return Any() }
                             }
                         }

@@ -14,8 +14,8 @@ import thc.runtime.*
 internal class CoreUnitProgram(private val language: Language, private val directory: CoreUnitDirectory,
     private val input: Map<String, Any?>, private val entry: String?, private val backend: String,
     private val async: Boolean, private val owner: Language.State) : ExecutableProgram, AutoCloseable {
-    override val asynchronousExceptions get() = async
-    override val hasBytecode get() = backend == "bytecode"
+    override fun getAsynchronousExceptions() = async
+    override fun getHasBytecode() = backend == "bytecode"
     override fun bytecodeDump(): String = demand.preparedPrograms().joinToString("\n\n") { it.bytecodeDump() }
     private val totals = ArrayList<CoreJsonSymbols.Counters>()
     private val compactTotals = ArrayList<CoreCompactFile.Counters>()
