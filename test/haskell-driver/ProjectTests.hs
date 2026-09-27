@@ -46,7 +46,7 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
     before <- readText (project </> "run-pure.cabal")
     first <- acquire sidecarOutput
     assertSuccess first
-    manifest <- readJson (sidecarOutput </> "packages.json")
+    manifest <- readSourceManifest (sidecarOutput </> "packages.json")
     let bridge = selected manifest
         record = runtimeRecord manifest
         bundle = string (field (field record "bundle") "path")
@@ -74,7 +74,7 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
     assertBool "private sidecar never writes user project configuration" (not inventedProject)
     repeated <- acquire sidecarOutput
     assertSuccess repeated
-    warm <- readJson (sidecarOutput </> "packages.json")
+    warm <- readSourceManifest (sidecarOutput </> "packages.json")
     assertEqual "warm acquisition retains exact bridge unit" bridge (selected warm)
     assertEqual "warm acquisition reuses the content-keyed runtime bundle"
       (field record "bundle") (field (runtimeRecord warm) "bundle")
@@ -97,7 +97,7 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
       ("packages: run-pure.cabal " ++ show (thcRoot env </> "thc.cabal") ++ "\n")
     linked <- acquire linkedOutput
     assertSuccess linked
-    linkedManifest <- readJson (linkedOutput </> "packages.json")
+    linkedManifest <- readSourceManifest (linkedOutput </> "packages.json")
     linkedPlan <- readJson (linkedOutput </> "native/cache/plan.json")
     let runtimeUnit = one ((== "lib:runtime") . string . (`field` "component-name"))
           (objects linkedPlan "install-plan")
@@ -133,7 +133,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
     acquired <- run env base Nothing 240 arguments
     assertSuccess acquired
     assertNoStdout acquired
-    manifest <- readJson (output </> "packages.json")
+    manifest <- readSourceManifest (output </> "packages.json")
     assertEqual "manifest format" "thc-core-packages" (string $ field manifest "format")
     assertEqual "manifest schema" 1 (number $ field manifest "schema")
     let units = objects manifest "units"
@@ -160,7 +160,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
     repeated <- run env base Nothing 240 arguments
     assertSuccess repeated
     assertNoStdout repeated
-    warm <- readJson (output </> "packages.json")
+    warm <- readSourceManifest (output </> "packages.json")
     assertEqual "warm acquisition preserves module/index records" (field manifest "units") (field warm "units")
     assertEqual "warm acquisition never rewrites immutable bundles" identities
       =<< mapM (getModificationTime . string . (`field` "path") . (`field` "bundle")) supplied
@@ -245,7 +245,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     assertNoStdout changed
     audit <- readJson (output </> "audit.json")
     assertBool "failed action has accepted Core" (bool $ field audit "accepted")
-    manifest <- readJson (output </> "packages.json")
+    manifest <- readSourceManifest (output </> "packages.json")
     plan <- readJson (output </> "native/cache/plan.json")
     let dependency = one ((== "dep-data") . string . (`field` "pkg-name"))
                          (objects plan "install-plan")
@@ -284,7 +284,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
       assertBool "original CString binding reached" $ any
         ((== "ghc-internal:GHC.Internal.CString.unpackCString#") . string . (`field` "id"))
         (objects audit "reachableBindings")
-      manifest <- readJson (output </> "packages.json")
+      manifest <- readSourceManifest (output </> "packages.json")
       let sourceModules = moduleNames $ wired manifest
       assertBool "original CString source included" ("GHC.Internal.CString" `elem` sourceModules)
       assertBool "original MonadFail source included"
@@ -462,7 +462,7 @@ forBackends env invoke output project entryOf unit bundleRef modulePath = go Not
       copyFile (string $ field bridge "build-info")
         (scratch env </> ("project-bridge-" ++ backend ++ "-build-info.json"))
 
-      manifest <- readJson (output </> "packages.json")
+      manifest <- readSourceManifest (output </> "packages.json")
       assertBool "unbuilt optional benchmark is outside the executable Core closure" $
         all ((/= optionalId) . string . (`field` "id")) (objects manifest "units")
       assertEqual "manifest format" "thc-core-packages" (string $ field manifest "format")

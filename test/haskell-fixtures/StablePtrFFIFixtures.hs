@@ -65,7 +65,7 @@ prepareStablePtrFFI root = do
      "executable oracle","  main-is: Main.hs","  hs-source-dirs: app","  ghc-options: -O2",
      "  build-depends: base, stableptr-ffi","  default-language: Haskell2010"]
   managed <- execute "thc-run" [("THC_BACKEND","bytecode")] driver
-    (["run", "--project-dir", root </> project,"oracle","--thc-root",root,"--runtime",runtime,
+    (["run", "--verify-artifacts", "--project-dir", root </> project,"oracle","--thc-root",root,"--runtime",runtime,
       "--dist-dir",root </> directory,"--installed-core","required","--with-ghc",ghc,"--with-ghc-pkg",ghcPkg] ++
       maybe [] (\path -> ["--ghc-source",path]) sourceRoot)
   plan <- readJson (root </> directory </> "native/cache/plan.json")
@@ -83,12 +83,12 @@ prepareStablePtrFFI root = do
   unless accepted (die "stableptr-ffi: production audit did not accept original executable")
   packages <- readJson (root </> directory </> "packages.json")
   records <- field packages "units" :: IO [Value]
-  -- Compatibility/reexport units may legitimately have no owned bundle.
-  forM_ [bundle | Object fields <- records, Just bundle <- [KM.lookup "bundle" fields]] $ \bundle -> do
-    path <- field bundle "path"
-    expected <- field bundle "sha256"
+  -- Compatibility/reexport units may legitimately have no owned artifact.
+  forM_ (concatMap unitArtifactReferences records) $ \artifact -> do
+    path <- field artifact "path"
+    expected <- field artifact "sha256"
     actual <- hashFile path
-    unless (actual == expected) (die "stableptr-ffi: acquired bundle hash differs")
+    unless (actual == expected) (die "stableptr-ffi: acquired artifact hash differs")
   inputs <- hashes root $ [fixture </> source | source <- sources] ++
     ["test/haskell-fixtures/StablePtrFFIFixtures.hs","src/THC/Driver/PackageNative.hs",
      "src/THC/Driver/NativeArgumentBridge.hs",

@@ -17,6 +17,7 @@ import System.Exit (die, exitFailure)
 import Test.HUnit (Test(..), Counts(..), runTestTT)
 import qualified PlanTests
 import qualified CoreIndexTests
+import qualified CoreSymbolsTests
 import qualified RunTests
 import qualified RunOptionsTests
 import qualified BenchmarkTests
@@ -47,7 +48,7 @@ runTests arguments = do
     ["--installed-foreign-source-only"] -> pure
       [InstalledForeignTests.tests, InstalledForeignTests.viewTests env, InstalledForeignTests.sourceTests env]
     ["--installed-hydration-only"] -> pure [InstalledHydrationTests.tests]
-    ["--core-index-only"] -> pure [CoreIndexTests.tests]
+    ["--core-index-only"] -> pure [CoreIndexTests.tests, CoreSymbolsTests.tests env]
     ["--runnable-targets-only"] -> pure [RunOptionsTests.tests env, BenchmarkTests.tests env]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
     ["--exception-bridge-only"] -> pure [RuntimeShimTests.tests, ProjectTests.exceptionBridgeTests env]
@@ -63,6 +64,7 @@ runTests arguments = do
     ["--native-recipe-only"] -> pure [NativeRecipeTests.tests]
     [] -> pure
       [ CoreIndexTests.tests
+      , CoreSymbolsTests.tests env
       , InstalledForeignTests.tests
       , InstalledHydrationTests.tests
       , ScalarBitcodeTests.tests

@@ -60,7 +60,7 @@ exportSafetyTests env = TestLabel "local export preserves inferred safety and re
     native <- runExe env project Nothing 60 (string $ field entry "bin-file") []
     assertSuccess native
     assertNoStdout native
-    manifest <- readJson (output </> "packages.json")
+    manifest <- readSourceManifest (output </> "packages.json")
     let path = bundle manifest
     receipt <- readCore path "inplace-manifest.json"
     assertEqual "known plugin trust participates in exporter identity" 1
@@ -73,7 +73,7 @@ exportSafetyTests env = TestLabel "local export preserves inferred safety and re
     warm <- acquire
     assertSuccess warm
     assertNoStdout warm
-    repeated <- readJson (output </> "packages.json")
+    repeated <- readSourceManifest (output </> "packages.json")
     assertEqual "warm export preserves immutable bundle identity" path (bundle repeated)
     assertEqual "warm export does not rewrite bundle" stamp =<< getModificationTime path
     -- Trusting the exporter must not make an explicitly Unsafe source module
@@ -137,8 +137,8 @@ concurrentTests env = TestLabel "overlapping project captures share immutable ca
             assertSuccess result
             assertNoStdout result
             assertBackend backend result
-    leftManifest <- readJson (output first </> "packages.json")
-    rightManifest <- readJson (output second </> "packages.json")
+    leftManifest <- readSourceManifest (output first </> "packages.json")
+    rightManifest <- readSourceManifest (output second </> "packages.json")
     let dependency manifest = one (isPrefixOf "dep-data-" . string . (`field` "id")) (objects manifest "units")
         leftUnit = dependency leftManifest
         rightUnit = dependency rightManifest
@@ -223,7 +223,7 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
     native <- runExe env project Nothing 60 executable []
     assertSuccess native
     assertEqual "unchanged native oracle" (out native) (out first)
-    manifest <- readJson (output </> "packages.json")
+    manifest <- readSourceManifest (output </> "packages.json")
     let path = bundlePath manifest identifier
     facadeInner <- readCore (bundlePath manifest facadeId) "manifest.json"
     assertEqual "reexport-only inplace archive owns no synthetic Core" []
@@ -236,7 +236,7 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
     assertSuccess second
     assertNoStdout second
     assertBackend "bytecode" second
-    secondManifest <- readJson (output </> "packages.json")
+    secondManifest <- readSourceManifest (output </> "packages.json")
     assertEqual "warm inplace Core bundle reused" path (bundlePath secondManifest identifier)
     assertEqual "warm bundle not rewritten" stamp =<< getModificationTime path
     originalLeafArtifacts <- mapM BS.readFile leafArtifacts
@@ -251,7 +251,7 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
       (field dependencyUnit "pkg-src-sha256") (field (planned configuredPlan "dep-data") "pkg-src-sha256")
     assertEqual "package-specific options leave local dependency artifacts unchanged"
       originalLeafArtifacts =<< mapM BS.readFile leafArtifacts
-    configuredManifest <- readJson (output </> "packages.json")
+    configuredManifest <- readSourceManifest (output </> "packages.json")
     assertBool "inplace package configuration invalidates Core independently of local contents"
       (bundlePath configuredManifest identifier /= path)
     assertReachable output identifier
@@ -267,7 +267,7 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
       (string $ field (planned changedPlan "dep-data") "id")
     assertEqual "archive contents deliberately stay unchanged"
       (field dependencyUnit "pkg-src-sha256") (field (planned changedPlan "dep-data") "pkg-src-sha256")
-    changedManifest <- readJson (output </> "packages.json")
+    changedManifest <- readSourceManifest (output </> "packages.json")
     assertBool "local dependency content invalidates inplace Core"
       (bundlePath changedManifest identifier /= path)
     assertReachable output identifier
@@ -377,7 +377,7 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     native <- runExe env project Nothing 60 executable []
     assertSuccess native
     assertEqual "native and THC output" (out native) (out first)
-    firstManifest <- readJson (output </> "packages.json")
+    firstManifest <- readSourceManifest (output </> "packages.json")
     let firstPath = string (field (bundle firstManifest firstId) "path")
     firstInner <- readCore firstPath "manifest.json"
     let exportKey = string (field firstInner "exportKey")
@@ -398,7 +398,7 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     assertSuccess second
     assertNoStdout second
     assertBackend "bytecode" second
-    secondManifest <- readJson (output </> "packages.json")
+    secondManifest <- readSourceManifest (output </> "packages.json")
     assertEqual "store ZIP reused" firstPath (string $ field (bundle secondManifest firstId) "path")
     secondTime <- getModificationTime firstPath
     assertEqual "store ZIP not rewritten" firstTime secondTime
@@ -412,7 +412,7 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
     changedPlan <- readJson (output </> "native/cache/plan.json")
     let changedId = string (field (global changedPlan) "id")
     assertBool "changed source has a new Cabal store ID" (changedId /= firstId)
-    changedManifest <- readJson (output </> "packages.json")
+    changedManifest <- readSourceManifest (output </> "packages.json")
     assertBool "changed source has a new ZIP"
       (string (field (bundle changedManifest changedId) "path") /= firstPath)
     assertReachable output changedId
@@ -484,7 +484,7 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
     assertBool "real Cabal grouped library dependencies include transitive leaf"
       (leafId `elem` map string runtimeDeps)
     assertBool "real Custom Setup uses its host-only package" (setupId `elem` map string setupDeps)
-    manifest <- readJson (output </> "packages.json")
+    manifest <- readSourceManifest (output </> "packages.json")
     assertEqual "guest dependencies are exactly the library component's"
       runtimeDeps (array (field (described manifest identifier) "depends"))
     assertBool "Setup-only library is absent from guest closure"
@@ -542,7 +542,7 @@ nativeVariantsTest env cxx = TestLabel
     native <- runExe env project Nothing 60 (string $ field component "bin-file") []
     assertSuccess native
     assertNoStdout native
-    manifest <- readJson (output </> "packages.json")
+    manifest <- readSourceManifest (output </> "packages.json")
     let unit = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
         bundle = string (field (field unit "bundle") "path")
         modulePath = string (field (one ((== "Main") . string . (`field` "name")) (objects unit "modules")) "path")
