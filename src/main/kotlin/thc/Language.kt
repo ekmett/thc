@@ -842,6 +842,14 @@ class Language : TruffleLanguage<Language.State>() {
     override fun parse(request: ParsingRequest): CallTarget {
         val input = Json.parse(request.source.characters.toString()) as Map<String, Any?>
         if (input["mode"] == "managed-exports") {
+            val backend = ManagedExportPlan.backend(input)
+            CoreModules.unitDirectory(input)?.let { directory ->
+                return object : RootNode(this) {
+                    override fun execute(frame: VirtualFrame): Any =
+                        currentState(this).managedExports.load(input, directory, backend)
+                    override fun getName() = "THC load managed exports from unit directory"
+                }.callTarget
+            }
             val plan = ManagedExportPlan.read(input)
             return object : RootNode(this) {
                 override fun execute(frame: VirtualFrame): Any = currentState(this).managedExports.load(plan)
