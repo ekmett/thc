@@ -184,23 +184,49 @@ class SimdFamiliesTest(unittest.TestCase):
                 self.assertNotIn(forbidden, bytecode)
 
     def test_narrow_lanes_extend_with_exact_signedness_in_both_backends(self):
-        for name, width, mask in [('Word16X16', 16, '0xffffL'), ('Word32X8', 32, '0xffff_ffffL')]:
+        for name, width, mask in [('Word16X16', 16, '0xffff'), ('Word32X8', 32, None)]:
             family = next(f for f in GEN.families() if f['name'] == name)
             self.assertEqual((1 << width) - 1 + 17, result(family, 'broadcast', 0, -1, 0))
             self.assertEqual((1 << width) - 2 + 17, result(family, 'plus', 0, -1, -1))
             self.assertEqual(17, result(family, 'times', 0, 1 << (width - 1), 2))
             ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
             for i in range(family['lanes']):
-                self.assertIn(f'value.lane({i}).toLong() and {mask}', ast)
-                self.assertIn(f'value.lane({i}) & {mask}', bytecode)
+                lane = f'value.lane({i})' + (f' & {mask}' if mask else '')
+                self.assertIn(f'FrameAccess.INSTANCE.writeInt(frame, slots[offset + {i}], {lane});', ast)
+                self.assertIn(f'setInt(bytecode, frame, {lane});', bytecode)
         family = next(f for f in GEN.families() if f['name'] == 'Int16X16')
         self.assertEqual(-1 + 17, result(family, 'broadcast', 0, 65535, 0))
         self.assertEqual(-32768 + 17, result(family, 'plus', 0, 32767, 1))
         self.assertEqual(-32768 + 17, result(family, 'negate', 0, -32768, 0))
         ast, bytecode = GEN.ast_code([family]), GEN.bytecode_nodes([family])
         for i in range(family['lanes']):
-            self.assertIn(f'frame, slots[offset + {i}], value.lane({i}).toLong())', ast)
-            self.assertIn(f'frame, value.lane({i}));', bytecode)
+            self.assertIn(f'FrameAccess.INSTANCE.writeInt(frame, slots[offset + {i}], value.lane({i}));', ast)
+            self.assertIn(f'setInt(bytecode, frame, value.lane({i}));', bytecode)
+
+    def test_generated_runtime_is_java_with_fixed_metadata_and_child_layout(self):
+        families = GEN.families()
+        proof, ast = GEN.proof_code(families), GEN.ast_code(families)
+        for source in (proof, ast):
+            self.assertIn('package thc.runtime;', source)
+            for forbidden in ('kotlin.', 'Pair(', 'internal class ', 'fun ', '@field:'):
+                self.assertNotIn(forbidden, source)
+        self.assertIn('IntFunction<int[]> allocate', proof)
+        self.assertIn('CoreVectors.INSTANCE.validateSignature', proof)
+        self.assertIn('@Children private Expr[] arguments;', ast)
+        self.assertIn('@CompilationFinal(dimensions = 1) private final int[] slots;', ast)
+        for family in families:
+            name = family['name']
+            self.assertIn(f'public static final CoreRepresentation proof{name}', proof)
+            self.assertIn(f'final class Generated{name}Operation extends Expr', ast)
+            for operation in family['operations']:
+                self.assertEqual(2, proof.count(f'case "{operation}{name}#" ->'))
+            if 'insert' in family['operations']:
+                body = ast.split(f'final class Generated{name}Operation', 1)[1].split('\n}\n', 1)[0]
+                vector_read = body.index('value = vector(frame, 0);')
+                lane_read = body.index('lane = ', vector_read)
+                index_read = body.index('long index = arguments[2].executeRequiredLong(frame);')
+                self.assertLess(vector_read, lane_read)
+                self.assertLess(lane_read, index_read)
 
     def test_signed_min_max_select_high_bit_lanes(self):
         for name in ('Int8X16', 'Int16X8', 'Int16X16', 'Int32X4', 'Int32X8', 'Int32X16', 'Int64X2', 'Int64X4', 'Int64X8'):

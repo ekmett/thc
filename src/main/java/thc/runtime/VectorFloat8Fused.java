@@ -15,7 +15,7 @@ public final class VectorFloat8Fused extends Expr {
     public VectorFloat8Fused(String name, Expr[] arguments) {
         this.operation = CoreVectors.INSTANCE.getFusedFloat8().indexOf(name);
         this.arguments = arguments;
-        setRepresentation(GeneratedVectors.INSTANCE.getProofFloatX8());
+        setRepresentation(GeneratedVectors.proofFloatX8);
     }
 
     @Override public FloatVector execute(VirtualFrame frame) {
