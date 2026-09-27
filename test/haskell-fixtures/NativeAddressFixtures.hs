@@ -30,7 +30,7 @@ prepareNativeAddress root = do
       native = directory </> "native"
       binary = native </> ("oracle" ++ if os == "mingw32" then ".exe" else "")
       source = "compiler/test-fixtures/NativeAddressNative.hs"
-      oracle = directory </> "oracle.json"
+      oracle = "build/native-addresses/oracle.json"
       manifest = directory </> "manifest.json"
       execute = runLogged 120 root (directory </> "logs")
   createDirectoryIfMissing True (root </> native)
@@ -61,7 +61,7 @@ prepareNativeAddress root = do
       mallocNative = mallocDirectory </> "native"
       mallocSource = "compiler/test-fixtures/NativeMallocNative.hs"
       mallocBinary = mallocNative </> ("oracle" ++ if os == "mingw32" then ".exe" else "")
-      mallocOracle = mallocDirectory </> "oracle.txt"
+      mallocOracle = "build/native-malloc/oracle.txt"
       mallocManifest = mallocDirectory </> "manifest.json"
       mallocExecute = runLogged 120 root (mallocDirectory </> "logs")
   createDirectoryIfMissing True (root </> mallocNative)
