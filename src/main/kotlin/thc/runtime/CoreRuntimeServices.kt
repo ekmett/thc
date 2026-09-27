@@ -9,7 +9,8 @@ import com.oracle.truffle.api.frame.VirtualFrame
 internal enum class RuntimeServiceCall(val symbol: String, val arguments: List<String?>) {
     QUERY("thc_runtime_v1_query", listOf("Int32Rep", "Int64Rep", "Int64Rep", null)),
     CONTROL("thc_runtime_v1_control", listOf("Int32Rep", "Int64Rep", null)),
-    TRACE("thc_runtime_v1_trace", listOf("Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null));
+    TRACE("thc_runtime_v1_trace", listOf("Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null)),
+    EXCEPTION_TEXT("thc_exception_v1_text", listOf("AddrRep", "Int32Rep", "Int64Rep", null));
 }
 
 internal object CoreRuntimeServices {
@@ -42,7 +43,7 @@ internal object CoreRuntimeServices {
         fun number(value: Any?, expected: Int) = value == expected || value == expected.toLong()
         val arity = operation.arguments.size
         require(call.keys == setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep") &&
-            number(call["schema"], 1) && call["convention"] == "ccall" && call["safety"] == "unsafe" &&
+            number(call["schema"], 1) && call["convention"] == "ccall" && call["safety"] == (if (operation == RuntimeServiceCall.EXCEPTION_TEXT) "safe" else "unsafe") &&
             number(call["arity"], arity) && number(call["suppliedArity"], arity), "exact v1 C ABI")
         val arguments = expr.getOrNull(2) as? List<*>
         val declared = call["argumentReps"] as? List<*>
@@ -104,6 +105,18 @@ internal class RuntimeTraceExpression(@field:Child private var operation: Expr,
         val count = length.executeLong(frame)
         requireVoidCarrier(state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], RuntimeServices.trace(this, op, id, bytes, count))
+        return null
+    }
+}
+
+internal class ExceptionTextExpression(@field:Child private var handle: Expr,
+    @field:Child private var selector: Expr, @field:Child private var index: Expr,
+    @field:Child private var state: Expr) : Expr() {
+    @Child private var access = ForeignExceptionAccess()
+    override fun execute(frame: VirtualFrame): Nothing = fault("Exception metadata requires a tuple destination")
+    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val value = access.text(handle.executeAddress(frame), selector.executeLong(frame), index.executeLong(frame), state.execute(frame))
+        FrameAccess.writeLong(frame, slots[offset], value)
         return null
     }
 }

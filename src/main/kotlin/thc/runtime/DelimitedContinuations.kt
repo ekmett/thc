@@ -59,7 +59,7 @@ internal class DelimitedFrame(val frame: MaterializedFrame, val step: DelimitedS
 /** The exception only transports saved suffixes. It is never the continuation itself. */
 internal class DelimitedCut(val tag: PromptTag, val handler: Any?, val inputShape: TupleShape,
                            val capturedMask: MaskingState, node: Node) :
-    AbstractTruffleException("Internal delimited continuation capture", null, 0, node) {
+    AbstractTruffleException("Internal delimited continuation capture", null, 0, node), InternalGuestControl {
     val capturedAnnotations = StackAnnotations.current(node)
     val frames = ArrayList<DelimitedFrame>()
     fun append(frame: VirtualFrame, step: DelimitedStep): DelimitedCut {
