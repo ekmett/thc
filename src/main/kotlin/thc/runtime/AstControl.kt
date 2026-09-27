@@ -11,7 +11,9 @@ import com.oracle.truffle.api.nodes.Node
 
 /** Cold capture at an AST edge whose callee has already saved its own body. */
 internal object AstControl {
+    /** External delivery remains separate from internal scheduling captures. */
     fun enabled(node: Node): Boolean = (node.rootNode as? FunctionRoot)?.enableAsync == true
+    fun captures(node: Node): Boolean = (node.rootNode as? FunctionRoot)?.capturesContinuations == true
 
     private class ResumeChild(private val child: Any, private val node: Node) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
@@ -45,7 +47,7 @@ internal object AstControl {
     }
 
     fun force(frame: VirtualFrame, node: Node, force: Force, value: Any?): Any? {
-        if (!enabled(node)) return force.execute(frame, value)
+        if (!captures(node)) return force.execute(frame, value)
         return try { force.execute(frame, value) }
         catch (suspended: ThunkSuspended) {
             throw AstCapture(suspended, SynchronousMasking.current(node)).append(ResumeChild(suspended.thunk, node))
@@ -58,7 +60,7 @@ internal object AstControl {
 
     fun complete(node: Node, result: Any?, expectedTarget: RootCallTarget? = null,
                  tupleShape: TupleShape? = null): Any? {
-        if (!enabled(node)) return result
+        if (!captures(node)) return result
         if (result !is TailYield && result !is AstTailYield &&
             result !is SavedGuestContinuation && result !is ContinuationResult) return result
         return completeSuspended(node, result, expectedTarget, tupleShape)

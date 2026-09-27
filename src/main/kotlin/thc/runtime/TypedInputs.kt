@@ -394,7 +394,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
                     Calls.direct(direct, packet)
                 } } catch (transfer: TailCall) {
                     if (isTail) throw transfer
-                    if (arity == count && tupleBounce != null && !AstControl.enabled(this)) {
+                    if (arity == count && tupleBounce != null && !AstControl.captures(this)) {
                         val bounce = tupleBounce
                         if (bounce == null) CompilerDirectives.transferToInterpreter()
                         bounce!!.execute(frame, transfer); return null
@@ -402,7 +402,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
                     loop.execute(transfer)
                 }
             }
-            if (AstControl.enabled(this)) AstControl.complete(this, answer, target,
+            if (AstControl.captures(this)) AstControl.complete(this, answer, target,
                 if (arity == count) destination?.shape else null) else answer
         } catch (cut: AstCapture) {
             // Input-loan cleanup has completed before this cold snapshot.
@@ -479,7 +479,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                         } finally { if (!transferred) releaseGenericInput(input, storage, generation) }
                     } catch (transfer: TailCall) {
                         if (isTail) throw transfer
-                        if (exact && tupleBounce != null && !AstControl.enabled(this)) {
+                        if (exact && tupleBounce != null && !AstControl.captures(this)) {
                             val bounce = tupleBounce
                             if (bounce == null) CompilerDirectives.transferToInterpreter()
                             bounce!!.execute(frame, transfer); return null
@@ -487,7 +487,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                         loop.execute(transfer)
                     }
                 }
-                if (AstControl.enabled(this)) AstControl.complete(this, answer, target,
+                if (AstControl.captures(this)) AstControl.complete(this, answer, target,
                     if (exact) destination?.shape else null) else answer
             } catch (cut: AstCapture) {
                 CompilerDirectives.transferToInterpreter()
@@ -531,7 +531,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
 
 @CompilerDirectives.TruffleBoundary
 internal fun strictInputPositions(root: GuestRoot, input: TypedInputLayout): IntArray {
-    if (root is BytecodeRoot && root.isAsyncEnabled || root is FunctionRoot && root.enableAsync) return intArrayOf()
+    if (root is BytecodeRoot && root.isAsyncEnabled || root is FunctionRoot && root.capturesContinuations) return intArrayOf()
     return root.entryStrict.indices.filter { root.entryStrict[it] && !input.logical.isTyped(it) &&
         input.packet.isObject(input.header + input.logical.offset(it)) }.toIntArray()
 }
@@ -666,7 +666,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
             return vector.read(frame, vectorSlots, 0)
         }
         if (shape != null) fault("Aggregate value requires a typed destination")
-        if (AstControl.enabled(this)) return executeAsync(frame, null, 0)
+        if (AstControl.captures(this)) return executeAsync(frame, null, 0)
         val closure = function.executeRequiredClosure(frame)
         try {
             operands.evaluate(frame)
@@ -692,7 +692,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
     }
     private fun executeInto(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val tuple = shape ?: fault("Scalar application has no aggregate destination")
-        if (AstControl.enabled(this)) return executeAsync(frame, slots, offset)
+        if (AstControl.captures(this)) return executeAsync(frame, slots, offset)
         val closure = function.executeRequiredClosure(frame)
         try {
             operands.evaluate(frame)
@@ -780,7 +780,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
     }
 
     private fun transferSelf(frame: VirtualFrame, function: Closure) {
-        if (!AstControl.enabled(this) && selfTransfer &&
+        if (!AstControl.captures(this) && selfTransfer &&
             (rootNode as FunctionRoot).role != FunctionRootRole.PASS_THROUGH &&
             function.arity == operands.layout.logicalArity && function.suppliedCount == 0 &&
             function.supplied.isEmpty() && function.typedSupplied == null && selfTarget!!.matches(function.target)) {

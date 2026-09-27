@@ -1052,7 +1052,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         if (original is Thunk && value is LocalRead) (value as LocalRead).writeForced(frame, original, result)
         return result
     }
-    override fun execute(frame: VirtualFrame): Any? = if (AstControl.enabled(this)) executeAsync(frame) else when {
+    override fun execute(frame: VirtualFrame): Any? = if (AstControl.captures(this)) executeAsync(frame) else when {
         value.representation.isInt -> value.executeRequiredInt(frame)
         value.representation.isLong -> value.executeRequiredLong(frame)
         value.representation.isFloat -> value.executeRequiredFloat(frame)
@@ -1082,19 +1082,19 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericLong = false
     override fun executeInt(frame: VirtualFrame): Int =
-        if (AstControl.enabled(this)) RuntimeTypesGen.expectInteger(executeAsync(frame))
+        if (AstControl.captures(this)) RuntimeTypesGen.expectInteger(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isInt) value.executeInt(frame)
         else RuntimeTypesGen.expectInteger(forceResult(frame, value.execute(frame)))
     override fun executeFloat(frame: VirtualFrame): Float =
-        if (AstControl.enabled(this)) RuntimeTypesGen.expectFloat(executeAsync(frame))
+        if (AstControl.captures(this)) RuntimeTypesGen.expectFloat(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isFloat) value.executeFloat(frame)
         else RuntimeTypesGen.expectFloat(forceResult(frame, value.execute(frame)))
     override fun executeDouble(frame: VirtualFrame): Double =
-        if (AstControl.enabled(this)) RuntimeTypesGen.expectDouble(executeAsync(frame))
+        if (AstControl.captures(this)) RuntimeTypesGen.expectDouble(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isDouble) value.executeDouble(frame)
         else RuntimeTypesGen.expectDouble(forceResult(frame, value.execute(frame)))
     override fun executeLong(frame: VirtualFrame): Long {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectLong(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectLong(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeLong(frame)
         if (genericLong) return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)))
         return try { value.executeLong(frame) }
@@ -1107,7 +1107,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericClosure = false
     override fun executeClosure(frame: VirtualFrame): Closure {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectClosure(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectClosure(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeClosure(frame)
         if (value.representation.kind == CoreKind.CLOSURE || genericClosure) return RuntimeTypesGen.expectClosure(forceResult(frame, value.execute(frame)))
         return try { value.executeClosure(frame) }
@@ -1120,7 +1120,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericDataValue = false
     override fun executeDataValue(frame: VirtualFrame): DataValue {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeDataValue(frame)
         if (value.representation.kind == CoreKind.DATA || genericDataValue) return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)))
         return try { value.executeDataValue(frame) }
@@ -1133,7 +1133,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericAddress = false
     override fun executeAddress(frame: VirtualFrame): ManagedAddress {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectManagedAddress(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectManagedAddress(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeAddress(frame)
         if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectManagedAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
@@ -1725,7 +1725,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
             }
             // Both continuation protocols can retain a carrier in an owned frame.
             return shape.finish(frame, tupleSlots,
-                AstControl.enabled(this) || DelimitedControl.enabled(this))
+                AstControl.captures(this) || DelimitedControl.enabled(this))
         }
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.
@@ -1797,7 +1797,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
                             internal val enableDelimited: Boolean = false,
-                            internal val role: FunctionRootRole = FunctionRootRole.FUNCTION) : GuestRoot(language, descriptor) {
+                            internal val role: FunctionRootRole = FunctionRootRole.FUNCTION,
+                            internal val stackCapture: Boolean = false) : GuestRoot(language, descriptor) {
+    internal val capturesContinuations = enableAsync || stackCapture
     init {
         configureEntry(entryStrict, captureLayout != null)
         configureInput(inputLayout)
@@ -1810,7 +1812,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         // slot kinds before publishing the root, not on its first compiled call.
         // An asynchronously forced argument may still contain a thunk here.
         for (i in argumentSlots.indices) {
-            if (enableAsync && argumentIndices[i] + entryArgumentOffset in strictArgumentPositions) continue
+            if (capturesContinuations && argumentIndices[i] + entryArgumentOffset in strictArgumentPositions) continue
             val proof = argumentProofs.getOrNull(i) ?: continue
             val kind = when {
                 proof.referenceCarrier() != null -> FrameSlotKind.Object
@@ -1837,7 +1839,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
     @field:CompilationFinal(dimensions = 1)
     private val strictArguments = BooleanArray(argumentSlots.size) {
-        enableAsync && argumentIndices[it] + entryArgumentOffset in strictArgumentPositions
+        capturesContinuations && argumentIndices[it] + entryArgumentOffset in strictArgumentPositions
     }
     @field:CompilationFinal(dimensions = 1)
     private val strictSlots = argumentSlots.indices.filter { strictArguments[it] }.toIntArray()
@@ -1846,8 +1848,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private val tailCallProfile = BranchProfile.create()
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics))
     @Child private var delimitedHandoff: HandoffCaller? = null
-    override fun requiresUnprofiledReturn(): Boolean = enableAsync || enableDelimited
-    override fun requiresMaterializableFrame(): Boolean = enableAsync || enableDelimited
+    override fun requiresUnprofiledReturn(): Boolean = capturesContinuations || enableDelimited
+    override fun requiresMaterializableFrame(): Boolean = capturesContinuations || enableDelimited
 
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
@@ -2002,7 +2004,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
 
     override fun execute(frame: VirtualFrame): Any? {
-        if (!enableAsync) return executeInitial(frame, false)
+        if (!capturesContinuations) return executeInitial(frame, false)
         val stack = astStackScope(this)
         val driver = !stack.driving
         if (driver) stack.driving = true
@@ -2040,9 +2042,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         if (spill) {
             return captureStack(frame.materialize())
         }
-        // Synchronous roots cannot capture an AST continuation. Keeping that
-        // return arm would merge an inlined virtual tuple with a saved frame.
-        if (!enableAsync) return executeCapturableBody(frame)
+        // Roots without either capture capability retain their virtual result path.
+        if (!capturesContinuations) return executeCapturableBody(frame)
         return try { executeCapturableBody(frame) }
         catch (cut: AstCapture) {
             // Continuations own a real frame only on the interrupted slow path.
@@ -2163,8 +2164,9 @@ private class Scope(val layout: FrameLayout, val locals: MutableMap<String, Loca
                     var self: AstSelfLayout? = null) {
     fun child() = Scope(layout.scope(), LinkedHashMap(locals), LinkedHashMap(joins), self)
     fun bind(id: String, primitive: Boolean, proof: CoreRepresentation = CoreRepresentation.UNKNOWN, cell: Boolean = false,
-             entry: BooleanArray? = null, arityCertificate: CoreApplicationCertificates.Arity? = null): Local =
-        Local(layout.bind(id), if (proof.present) proof.isLong else primitive, proof, cell, entry,
+             entry: BooleanArray? = null, arityCertificate: CoreApplicationCertificates.Arity? = null,
+             kind: FrameSlotKind = FrameSlotKind.Illegal): Local =
+        Local(layout.bind(id, kind), if (proof.present) proof.isLong else primitive, proof, cell, entry,
             arityCertificate = arityCertificate).also { locals[id] = it; joins.remove(id) }
     fun bindTuple(id: String, proof: CoreRepresentation, slots: IntArray): Local =
         Local(-1, false, proof, false, tupleSlots = slots).also { locals[id] = it; joins.remove(id) }
@@ -2191,8 +2193,10 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  * mode remains synchronous for subsystems with explicit continuation barriers.
  */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
-              internal val enableAsync: Boolean = false) : ExecutableProgram {
+              internal val enableAsync: Boolean = false,
+              private val outlineCaseArms: Boolean = false) : ExecutableProgram {
     override val asynchronousExceptions get() = enableAsync
+    private val capturesContinuations = enableAsync || outlineCaseArms
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val demand = moduleData["demandBindings"] as? CoreDemandBindings
     private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
@@ -2308,7 +2312,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
 
     private fun validateBindings(requested: List<Map<String, Any?>>) {
         if (requested.isEmpty()) return
-        if (enableAsync) AstAsyncAdmission.validate(requested)
+        if (capturesContinuations) AstAsyncAdmission.validate(requested)
         ArrayOp.validateApplications(requested)
         CoreStackForeign.validateHeads(requested)
         CoreStackInfoForeign.validateHeads(requested)
@@ -2375,7 +2379,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             else if (bindings.any { it["expr"] is thc.CoreBindingBody }) "reject-at-binding-admission" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "indexed primitive slots; selective StaticShape captures",
-        "stackPolicy" to (if (enableAsync) "tail-safe; bounded AST activation chains; active STM spilling unsupported"
+        "stackPolicy" to (if (capturesContinuations) "tail-safe; bounded AST activation chains; active STM spilling unsupported"
             else "tail-safe; non-tail calls and nested thunk forcing use host stack"), "threadPolicy" to
             if (enableAsync) "context-owned Java threads; captured asynchronous delivery"
             else "context-owned Java threads; external asynchronous delivery disabled") + (loadingStatistics?.invoke() ?: emptyMap())
@@ -2383,7 +2387,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
-                         entryStrict: BooleanArray = BooleanArray(args.size)): FunctionSpec {
+                         entryStrict: BooleanArray = BooleanArray(args.size),
+                         role: FunctionRootRole = FunctionRootRole.FUNCTION,
+                         bodyTail: Boolean = true): FunctionSpec {
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val scope = Scope(FrameLayout())
         val free = coreFreeVariables(expression)
@@ -2409,7 +2415,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 // Void leaves have no fields; vector leaves keep their raw species.
                 val destinations = IntArray(fields.size) { index ->
                     val field = fields[index]
-                    val destination = scope.layout.bind("$id captured field $index")
+                    val destination = scope.layout.bind("$id captured field $index", outlinedSlotKind(field))
                     captureFields += Local(sources[index], field.isLong, field, false,
                         tupleSlots = if (field.isVector) intArrayOf(sources[index]) else null)
                     vectorDestinations += if (field.isVector) intArrayOf(destination) else null
@@ -2421,7 +2427,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreRepresentations.requireScalar(local.proof, "capture")
                 captureFields += local
                 vectorDestinations += null
-                captureDestinations += scope.bind(id, local.primitive, local.proof, local.cell, local.entry, local.arityCertificate).slot
+                captureDestinations += scope.bind(id, local.primitive, local.proof, local.cell, local.entry,
+                    local.arityCertificate, outlinedSlotKind(local.proof, local.cell)).slot
             }
         }
         val captureSources = captureFields.map { if (it.proof.isVector) it.tupleSlots!![0] else it.slot }.toIntArray()
@@ -2442,7 +2449,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     argumentProofs += field
                     argumentSlots += slots[leaf]
                 }
-            } else if (arg["id"] in free || enableAsync && entryStrict[index]) {
+            } else if (arg["id"] in free || capturesContinuations && entryStrict[index]) {
                 argumentIndices += ArgumentLayout.offset(inputLayout, index); argumentProofs += proof
                 argumentSlots += scope.bind(arg["id"] as String, !lifted && arg["coercion"] != true, proof).slot
             }
@@ -2463,14 +2470,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 allArgumentProofs[index] = local.proof
             }
         }
-        scope.self = AstSelfLayout(captures, environmentSlots, allArgumentSlots, allArgumentProofs,
-            entryStrict.copyOf(), inputLayout, environmentVectorSlots)
-        val body = compile(expression, scope, true)
+        if (role == FunctionRootRole.FUNCTION) scope.self = AstSelfLayout(captures, environmentSlots,
+            allArgumentSlots, allArgumentProofs, entryStrict.copyOf(), inputLayout, environmentVectorSlots)
+        val body = compile(expression, scope, bodyTail)
         // Async AST has no caller capture around a typed handoff loan yet.
         // Keep admitted roots on the ordinary scalar call ABI.
         // Mandatory typed ingress (including narrow scalars) owns its own packet.
         // It must not also advertise the empty-argument scalar handoff protocol.
-        val handoff = if (enableAsync || inputLayout?.requiresTyped == true) null else HandoffEntry.create(language, scope.layout,
+        val handoff = if (capturesContinuations || inputLayout?.requiresTyped == true) null else HandoffEntry.create(language, scope.layout,
             args.map(CoreRepresentations::binder), resultProof, captures != null)
         if ((body.representation.isSum || resultProof.isSum) && (!body.representation.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
@@ -2479,14 +2486,41 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val tupleSlots = IntArray(tuple?.width ?: 0) { scope.layout.bind("<typed return $it>") }
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
-            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited)
+            rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited, role,
+            stackCapture = outlineCaseArms)
         constructedRootCount++
         root.configureForeignExceptionBridge(foreignExceptionBridge)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
-        if (!enableAsync && body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
+        if (role == FunctionRootRole.FUNCTION && !capturesContinuations && body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
             ::dataLayout, sources, body.coreSourceLocation))
         return FunctionSpec(root.callTarget, captures, captureSources)
+    }
+    private fun caseArm(expression: List<Any?>, scope: Scope, tail: Boolean): Expr {
+        // Atomic values and lambdas already have small bodies/independent roots.
+        // An outer lexical join owns this activation's slots: retain it here
+        // until there is an explicit cross-root join transfer protocol.
+        if (!outlineCaseArms || expression[0] !in listOf("app", "case", "let") ||
+            coreFreeVariables(expression).any { it in scope.joins }) return compile(expression, scope, tail)
+        val operands = operandBuilder
+        operandBuilder = null
+        val fn = try { function("case arm", emptyList(), expression, scope,
+            role = FunctionRootRole.PASS_THROUGH, bodyTail = tail) }
+        finally { operandBuilder = operands }
+        return AstCaseArm(fn.target, fn.captureLayout, fn.captures, tail).located(currentSource)
+    }
+    /** Selected side roots must not compile a first-store deopt for carriers
+     * already fixed by their case binder or immutable capture layout. */
+    private fun outlinedSlotKind(proof: CoreRepresentation, cell: Boolean = false): FrameSlotKind = when {
+        !outlineCaseArms -> FrameSlotKind.Illegal
+        cell || proof.isVector -> FrameSlotKind.Object
+        !proof.evaluated -> FrameSlotKind.Illegal
+        proof.isInt -> FrameSlotKind.Int
+        proof.isLong -> FrameSlotKind.Long
+        proof.isFloat -> FrameSlotKind.Float
+        proof.isDouble -> FrameSlotKind.Double
+        proof.isEvaluatedReference -> FrameSlotKind.Object
+        else -> FrameSlotKind.Illegal
     }
     private fun delay(expr: List<Any?>, scope: Scope, label: String): Expr {
         val fn = function(label, emptyList(), expr, scope)
@@ -2560,7 +2594,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreStateApplications.inline(expr)?.let { return compile(it, scope, tail) }
         val outer = operandBuilder
         val head = (expr.getOrNull(1) as? List<*>)?.firstOrNull()
-        val operands = if (enableAsync && expr.firstOrNull() == "app" && head in setOf("prim", "con"))
+        val operands = if (capturesContinuations && expr.firstOrNull() == "app" && head in setOf("prim", "con"))
             OperandBuilder(scope.layout) else null
         operandBuilder = operands
         val result = try {
@@ -2587,7 +2621,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         // removing branches. The default mode still rejects the same Core.
         val body = UnsupportedExpression(message, metrics).located(currentSource)
         val target = FunctionRoot(language, FrameLayout().build(), "unsupported: $message", null,
-            intArrayOf(), intArrayOf(), intArrayOf(), body, metrics, coreSourceLocation = rootSource(body)).callTarget
+            intArrayOf(), intArrayOf(), intArrayOf(), body, metrics, coreSourceLocation = rootSource(body),
+            stackCapture = outlineCaseArms).callTarget
         constructedRootCount++
         DiagnosticUnavailable(target, message, metrics)
     }
@@ -3016,8 +3051,8 @@ CoreStackForeign.validateHead(fn, defined)
                 }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] in setOf("newBCO#", "mkApUpd0#")) {
                 val name = fn[1] as String
-                if (enableAsync)
-                    throw UnsupportedCore("GHC BCO frames do not yet preserve AST async captures")
+                if (capturesContinuations)
+                    throw UnsupportedCore("GHC BCO frames do not yet preserve AST captures")
                 GhcBCO.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 GhcBCOExpression(name, args.mapIndexed { index, value ->
                     argument(value, scope, flags[index] as Boolean)
@@ -3157,7 +3192,7 @@ CoreStackForeign.validateHead(fn, defined)
                 }
             } else if (fn[0] == "prim" && fn[1] == "annotateStack#") {
                 StackAnnotations.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
-                if (enableAsync) AnnotatedAction(TupleShape(tupleProof, language as thc.Language),
+                if (capturesContinuations) AnnotatedAction(TupleShape(tupleProof, language as thc.Language),
                     argument(args[0], scope, true), argument(args[1], scope, true),
                     argument(args[2], scope, false), metrics, enableAsync)
                 else AnnotatedTuple(argument(args[0], scope, true), argument(args[2], scope, false),
@@ -3206,7 +3241,7 @@ CoreStackForeign.validateHead(fn, defined)
                 }.toTypedArray()).proven(tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && CompactOp.named(fn[1] as String) != null) {
                 val operation = CompactOp.named(fn[1] as String)!!
-                if (enableAsync && operation.adds)
+                if (capturesContinuations && operation.adds)
                     throw UnsupportedCore("Compact graph traversal does not yet support resumable asynchronous forcing")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val failures = if (operation.adds) CompactOp.failures.map { globals[it]
@@ -3412,7 +3447,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (input?.requiresTyped == true)
                         AstTypedApplication(function, nodes, scope.layout, tail, metrics,
                             if (tupleProof.isTypedTransport) TupleShape(tupleProof, language as thc.Language) else null,
-                            tail && !enableAsync && scope.self?.let { supportsTypedSelf(it.inputLayout, it.entryStrict, input) } == true)
+                            tail && !capturesContinuations && scope.self?.let { supportsTypedSelf(it.inputLayout, it.entryStrict, input) } == true)
                     else if (tupleProof.isTypedTransport) {
                         val shape = TupleShape(tupleProof, language as thc.Language)
                         val vectorSlots = if (tupleProof.isVector) IntArray(shape.width) { scope.layout.bind("<vector call result $it>") } else null
@@ -3420,7 +3455,7 @@ CoreStackForeign.validateHead(fn, defined)
                     }
                     else {
                     val self = scope.self
-                    if (tail && !enableAsync && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
+                    if (tail && !capturesContinuations && self != null && self.inputLayout == null && nodes.none { it.representation.isEmptyTuple } && self.arity > 0 && nodes.size <= self.arity) {
                         val temporaries = IntArray(self.arity) { scope.layout.bind("<self argument $it>") }
                         AstTailApplication(function, nodes, self, temporaries, metrics)
                     } else Application(function, nodes, tail, metrics)
@@ -3483,7 +3518,8 @@ CoreStackForeign.validateHead(fn, defined)
             else if (binderProof.isTuple) compileTupleCase(expr, scrutinee, binderProof, local, tail)
             else if (binderProof.isVector) compileVectorCase(expr, scrutinee, binderProof, local, tail)
             else {
-            val binder = local.bind(expr[2] as String, !binderProof.present || binderProof.isLong, binderProof).slot
+            val binder = local.bind(expr[2] as String, !binderProof.present || binderProof.isLong, binderProof,
+                kind = outlinedSlotKind(binderProof)).slot
             val alternatives = (expr[3] as List<List<Any?>>).map { alt ->
                 val child = local.child(); val kind = alt[0] as String
                 val value = when (kind) {
@@ -3537,7 +3573,7 @@ CoreStackForeign.validateHead(fn, defined)
                     "lit" -> LITERAL_ALTERNATIVE
                     else -> throw RuntimeFault("Invalid Core alternative kind $kind")
                 }
-                Alternative(tag, value, slots, compile(alt[3] as List<Any?>, child, tail), vectorFields)
+                Alternative(tag, value, slots, caseArm(alt[3] as List<Any?>, child, tail), vectorFields)
             }.toTypedArray()
             if (!CoreRepresentations.expression(expr).isAggregate && alternatives.any { it.body.representation.isAggregate } &&
                 alternatives.any { !it.body.representation.isAggregate })
@@ -3600,7 +3636,8 @@ CoreStackForeign.validateHead(fn, defined)
                 val root = FunctionRoot(language, layout.build(), "constructor $id", null, intArrayOf(),
                     argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics,
                     argumentProofs.toTypedArray(), coreSourceLocation = rootSource(body),
-                    entryStrict = strictConstructorFields(id, arity), inputLayout = inputLayout)
+                    entryStrict = strictConstructorFields(id, arity), inputLayout = inputLayout,
+                    stackCapture = outlineCaseArms)
                 constructedRootCount++
                 root.configureForeignExceptionBridge(foreignExceptionBridge)
                 if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, false))
@@ -3647,7 +3684,7 @@ CoreStackForeign.validateHead(fn, defined)
                 else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], field)
                 else child.bindSlot(ids[0], Local(projection[0], component.isLong, field, false))
             }
-            val body = compile(alt[3] as List<Any?>, child, tail)
+            val body = caseArm(alt[3] as List<Any?>, child, tail)
             if (conversions.isEmpty()) body else Let(conversions.map { it.first }.toIntArray(),
                 conversions.map { it.second }.toTypedArray(), BooleanArray(conversions.size), body, false)
         }.toTypedArray()
@@ -3714,7 +3751,7 @@ CoreStackForeign.validateHead(fn, defined)
                 else local.bindSlot(id, Local(slots[offset], component.isLong, field.copy(evaluated = component.isLong || component.evaluated), false))
             }
         } else if (alt[0] != "default" || ids.isNotEmpty()) throw RuntimeFault("Invalid tuple alternative")
-        return TupleCase(scrutinee, slots, compile(alt[3] as List<Any?>, local, tail))
+        return TupleCase(scrutinee, slots, caseArm(alt[3] as List<Any?>, local, tail))
     }
     private fun joinJump(target: LocalJoinTarget, args: List<List<Any?>>, flags: List<*>, scope: Scope,
                          callStrict: BooleanArray = BooleanArray(args.size)): Expr {
