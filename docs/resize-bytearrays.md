@@ -91,6 +91,5 @@ python3 scripts/test-core-bytearrays.py
   testDense --tests thc.runtime.ResizeByteArrayTest --tests thc.runtime.ShrinkByteArrayTest
 ```
 
-These fixtures do not establish a complete public Text dependency closure.
 See [mutable size queries](mutable-bytearray-size.md) and
 [pinned/address ownership](pinned-memory.md) for related contracts.

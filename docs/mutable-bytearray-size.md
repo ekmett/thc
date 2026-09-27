@@ -48,6 +48,4 @@ python3 scripts/test-core-bytearrays.py
   testDense --tests thc.runtime.MutableByteArraySizeTest
 ```
 
-This size-query fixture does not replace the dedicated
-[shrink checks](resize-bytearrays.md#fixture-and-runtime-checks) or establish
-public Text closure.
+See the dedicated [shrink checks](resize-bytearrays.md#fixture-and-runtime-checks).

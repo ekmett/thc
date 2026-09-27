@@ -129,5 +129,4 @@ active targets, and empty input/result loans. Synthetic controls cover every
 unsigned byte pair, contained small ranges, endpoint empties, operand failure,
 full-width invalid ranges, wrong storage carriers, and exact proof/saturation
 rejection. Invalid domains are tested only against THC, never by invoking native
-undefined behavior. This adds comparison coverage; it does not change the
-existing exception-library frontiers or permit mutable alias misuse.
+undefined behavior.
