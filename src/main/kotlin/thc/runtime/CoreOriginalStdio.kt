@@ -53,6 +53,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
     WRITE_UNSAFE("ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite", "capi", "unsafe",
         listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int64Rep"),
+    GET_PID("getpid", "ccall", "unsafe", listOf(null), "Int32Rep"),
+    GET_EUID("geteuid", "ccall", "unsafe", listOf(null), "Word32Rep", "unix-2.8.8.0-inplace"),
     ERRNO("__hscore_get_errno", "ccall", "unsafe", listOf(null), "Int32Rep"),
     SET_ERRNO("__hscore_set_errno", "ccall", "unsafe", listOf("Int32Rep", null), null),
     O_APPEND("__hscore_o_append", "ccall", "unsafe", listOf(null), "Int32Rep"),
@@ -134,6 +136,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
         isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY)
 
+    val processIdentity: Boolean get() = this == GET_PID || this == GET_EUID
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
     val waitStatus: Boolean get() = this == WCOREDUMP || this == WSTOPSIG || this == WIFSTOPPED ||
         this == WTERMSIG || this == WIFSIGNALED || this == WEXITSTATUS || this == WIFEXITED
@@ -197,7 +200,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation.pathLink || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation.pathLink || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }

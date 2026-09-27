@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "672bf7c0d6c9d90a3352c957c2c14fd76e05681e19ede34f97d8c297789623ea"
+FULL_PREPARATION_PLAN = "4e0ca78493e16b94ffefc06a9217a38c7337f1dc5f43e42e8aa1b5d8cbad7ded"
 TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
     "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",
@@ -231,6 +231,7 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     *(fast_inputs.ORIGINAL_OPEN_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-open/manifest.json"}),
     *(fast_inputs.ORIGINAL_FCNTL_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-fcntl/manifest.json"}),
     *(fast_inputs.ORIGINAL_ERRNO_OUTPUTS if fast_inputs.ERRNO_NATIVE_HOST else {"build/original-errno/manifest.json"}),
+    *(fast_inputs.ORIGINAL_PROCESS_IDENTITY_OUTPUTS if fast_inputs.ERRNO_NATIVE_HOST else {"build/original-process-identity/manifest.json"}),
     *(fast_inputs.ORIGINAL_TERMIOS_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-termios/manifest.json"}),
     *(fast_inputs.ORIGINAL_TCSETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcsetattr/manifest.json"}),
     *(fast_inputs.ORIGINAL_TCGETATTR_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else {"build/original-tcgetattr/manifest.json"}),
@@ -480,6 +481,10 @@ def _output_hashes(root, group):
         name = "build/original-errno/manifest.json"
         expected = fast_inputs.errno_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
         return _manifest_output_hashes(root, name, expected)
+    if group["outputs"] == ["build/original-process-identity"]:
+        name = "build/original-process-identity/manifest.json"
+        expected = fast_inputs.process_identity_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
+        return _manifest_output_hashes(root, name, expected)
     if group["outputs"] == ["build/original-termios"]:
         name = "build/original-termios/manifest.json"
         expected = fast_inputs.termios_artifact_hashes(json.loads(fast_inputs.file_path(root, name).read_text()))
@@ -628,7 +633,7 @@ def _full_output_hashes(root):
         if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
-        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
+        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

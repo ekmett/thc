@@ -73,6 +73,8 @@
     "ghczuwrapperZC23ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCread",
     "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
+    "getpid",
+    "geteuid",
     "__hscore_get_errno",
     "__hscore_set_errno",
     "__hscore_sizeof_termios",

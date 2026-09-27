@@ -1718,6 +1718,7 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertEqual(("src/main/kotlin/thc/runtime/CoreByteStringSort.kt",
                           "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
                           "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                          "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
                           "src/main/c/bytestring-utf8-api.c",
                           "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                           "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",

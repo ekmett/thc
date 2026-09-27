@@ -19,6 +19,9 @@ _Static_assert(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(int) == 4 && sizeo
                sizeof(size_t) == 8 && sizeof(ssize_t) == 8 && (ssize_t)-1 < 0,
                "Original stdio calls require the supported LP64 host ABI");
 
+_Static_assert(sizeof(pid_t) == 4 && (pid_t)-1 < 0 && sizeof(uid_t) == 4 && (uid_t)-1 > 0,
+               "Original process identity requires signed pid_t and unsigned uid_t with 32 bits");
+
 int main(void) {
     printf("{\"widths\":{\"charBits\":%d,\"pointer\":%zu,\"int\":%zu,"
            "\"bool\":%zu,\"size\":%zu,\"ssize\":%zu},\"errno\":{\"ENOENT\":%d,"

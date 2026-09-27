@@ -189,6 +189,9 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val length = operands[2].executeRequiredLong(frame)
             requireVoidCarrier(operands[3].execute(frame))
             CoreOriginalStdio.strerror(this).call(error, output, length)
+        } else if (operation.processIdentity) {
+            requireVoidCarrier(operands[0].execute(frame))
+            ProcessIdentity.query(this, operation)
         } else if (operation == OriginalStdioOp.ERRNO) {
             requireVoidCarrier(operands[0].execute(frame))
             CoreOriginalStdio.current(this).errno()

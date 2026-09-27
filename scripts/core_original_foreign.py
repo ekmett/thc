@@ -192,6 +192,8 @@ OPERATIONS = {
         ('capi', 'safe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     'ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
+    'getpid': ('ccall', 'unsafe', (None,), (None, 'Int32Rep')),
+    'geteuid': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
     '__hscore_get_errno': ('ccall', 'unsafe', (None,), (None, 'Int32Rep')),
     '__hscore_set_errno': ('ccall', 'unsafe', ('Int32Rep', None), (None,)),
     **{symbol: ('ccall', 'unsafe', (None,), (None, 'Int32Rep')) for symbol in (
@@ -266,6 +268,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink')},
+    ('unix-2.8.8.0-inplace', 'geteuid'): OPERATIONS['geteuid'],
     ('unix-2.8.8.0-inplace', 'mkdir'): OPERATIONS['mkdir'],
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol]
        for symbol in ('close', 'dup', 'isatty', 'getenv')},
@@ -404,6 +407,8 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix path-stat unit')
     if symbol in ('symlink', 'readlink'):
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix pathname link unit')
+    if symbol == 'geteuid':
+        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix effective UID unit')
     if symbol == 'mkdir':
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix mkdir unit')
     if symbol in WAIT_STATUS_OPERATIONS:

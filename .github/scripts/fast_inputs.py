@@ -37,6 +37,7 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreByteStringSort.kt",
                   "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
                   "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                  "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
                   "src/main/c/bytestring-utf8-api.c",
                   "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                   "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
@@ -45,7 +46,7 @@ MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc proxy-void rubbi
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-process-identity original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 BYTESTRING_SORT_ENTRIES = ("sortBytes",)
 BYTESTRING_SORT_OUTPUTS = frozenset("build/bytestring-sort/" + name for name in (
@@ -489,6 +490,7 @@ NATIVE_EXECUTABLES = frozenset({"build/proxy-void/native/oracle", "build/proxy-v
     "build/original-open/native/oracle",
     "build/original-fcntl/native/oracle",
     "build/original-errno/native/oracle",
+    "build/original-process-identity/native/oracle",
     "build/original-termios/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
@@ -681,6 +683,18 @@ ORIGINAL_ERRNO_OUTPUTS = frozenset("build/original-errno/" + name for name in (
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalErrnoAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_ERRNO_ENTRIES))),
+))
+
+ORIGINAL_PROCESS_IDENTITY_ENTRIES = ("originalGetPid", "originalGetEuid")
+ORIGINAL_PROCESS_IDENTITY_OUTPUTS = frozenset("build/original-process-identity/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt",
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "unix-unit", "native-build", "native-run", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalProcessIdentityAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_PROCESS_IDENTITY_ENTRIES))),
 ))
 
 ORIGINAL_TCSETATTR_ENTRIES = ("originalTcsetattr",)
@@ -1118,6 +1132,23 @@ def errno_artifact_hashes(manifest):
     require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_ERRNO_OUTPUTS - {"build/original-errno/manifest.json"},
             "Incomplete/unreviewed original errno artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid errno hash")
+    return artifacts
+
+def process_identity_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
+            "Invalid original process identity manifest")
+    if not ERRNO_NATIVE_HOST:
+        require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported process identity host")
+        return {}
+    require(manifest.get("ghc") == "9.14.1" and manifest.get("unixUnit") == "unix-2.8.8.0-inplace" and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_PROCESS_IDENTITY_ENTRIES) and
+            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
+            manifest.get("installedArtifactsHashed") is False and
+            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 1,
+            "Invalid original process identity proof")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {"build/original-process-identity/manifest.json"},
+            "Incomplete/unreviewed original process identity artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid process identity hash")
     return artifacts
 
 def tcsetattr_artifact_hashes(manifest):
@@ -1653,6 +1684,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_FCNTL_OUTPUTS
     if parts[1] == "original-errno":
         return name in ORIGINAL_ERRNO_OUTPUTS
+    if parts[1] == "original-process-identity":
+        return name in ORIGINAL_PROCESS_IDENTITY_OUTPUTS
     if parts[1] == "original-termios":
         return name in ORIGINAL_TERMIOS_OUTPUTS
     if parts[1] == "original-tcsetattr":
@@ -1831,6 +1864,8 @@ def inventory(root, current, read, core_files, verified=None):
             fcntl_artifact_hashes(doc)
         if name == "build/original-errno/manifest.json":
             errno_artifact_hashes(doc)
+        if name == "build/original-process-identity/manifest.json":
+            process_identity_artifact_hashes(doc)
         if name == "build/original-termios/manifest.json":
             termios_artifact_hashes(doc)
         if name == "build/original-tcsetattr/manifest.json":

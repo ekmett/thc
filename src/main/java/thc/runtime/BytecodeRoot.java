@@ -1497,6 +1497,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation == OriginalStdioOp.TCGETATTR) result = CoreOriginalStdio.current(node).tcgetattr(fd, address);
             else if (operation == OriginalStdioOp.FSTAT) result = CoreOriginalStdio.current(node).fstat(fd, address);
             else if (operation == OriginalStdioOp.UNLOCK) result = CoreOriginalStdio.locks(node).unlock(fd);
+            else if (operation.getProcessIdentity()) result = ProcessIdentity.query(node, operation);
             else if (operation == OriginalStdioOp.ERRNO) result = CoreOriginalStdio.current(node).errno();
             else if (operation.getFlagConstant()) result = CoreOriginalStdio.current(node).flagConstant(operation);
             else if (operation.getSeekConstant()) result = CoreOriginalStdio.current(node).seekConstant(operation);
