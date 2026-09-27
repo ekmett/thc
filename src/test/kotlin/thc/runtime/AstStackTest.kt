@@ -193,7 +193,7 @@ class AstStackTest {
                     val program = Program(language, module(), true)
                     var effects = 0
                     var failAt = -1
-                    val tick = Closure(environment = null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any {
                             assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.maskingState.get())
                             effects++
@@ -244,7 +244,7 @@ class AstStackTest {
                     val program = Program(language, module(), true)
                     var effects = 0
                     var request: AsyncRequest? = null
-                    val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any {
                             if (++effects == 100)
                                 request = state.threads.send(state.threads.currentIdentity(), "interrupt after spill")
@@ -287,7 +287,7 @@ class AstStackTest {
                     val payload = program.constructorLayout("Unit").create(emptyArray())
                     var effects = 0
                     var request: AsyncRequest? = null
-                    val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any {
                             if (++effects == 100) request = state.threads.send(state.threads.currentIdentity(), payload)
                             return 1L
@@ -315,7 +315,7 @@ class AstStackTest {
                 state.threads.enterCurrent()
                 try {
                     val program = Program(language, module(), true)
-                    val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                    val tick = Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Any = 1L
                     }.callTarget)
                     val cell = state.stm.newTVar(17L)
@@ -404,7 +404,7 @@ class AstStackTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val program = Program(language, module(), true)
-                val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+                val tick = Closure(null, 1, object : RootNode(language) {
                     override fun execute(frame: VirtualFrame): Any = 1L
                 }.callTarget)
                 val state = Language.currentState()

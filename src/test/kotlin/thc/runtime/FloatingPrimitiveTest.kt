@@ -232,7 +232,7 @@ class FloatingPrimitiveTest {
 
     @Test fun floatingSelfTransfersRejectWrongPrimitiveCarriers() {
         val target = object : RootNode(null) { override fun execute(frame: VirtualFrame): Any = 0L }.callTarget
-        val closure = Closure(null, arity = 1, target = target)
+        val closure = Closure(null, 1, target)
         for (kind in listOf(CoreKind.FLOAT, CoreKind.DOUBLE)) {
             val layout = FrameLayout()
             val destination = layout.bind("formal")

@@ -128,7 +128,7 @@ class GhcBCOTest {
                     override fun execute(frame: VirtualFrame): Any { effects++; return answer }
                 }
                 val bco = create(language, code(11, 1, 31, 11, 0, 58),
-                    refs = arrayOf(Closure(null, arity = 1, target = worker.callTarget), Any()))
+                    refs = arrayOf(Closure(null, 1, worker.callTarget), Any()))
                 val thunk = GhcBCO.updating(object : Node() {}, bco)
                 assertEquals(0, effects)
                 val probe = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
@@ -167,7 +167,7 @@ class GhcBCOTest {
                     override fun execute(frame: VirtualFrame): Nothing { effects++; throw GuestException(payload, this) }
                 }
                 val bco = create(language, code(11, 1, 31, 11, 0, 58),
-                    refs = arrayOf(Closure(null, arity = 1, target = throwing.callTarget), first))
+                    refs = arrayOf(Closure(null, 1, throwing.callTarget), first))
                 val thunk = GhcBCO.updating(object : Node() {}, bco)
                 val force = object : GuestRoot(language, FrameDescriptor.newBuilder().build()) {
                     @Child private var force = Force(Metrics(false))
@@ -209,7 +209,7 @@ class GhcBCOTest {
                         }
                     }
                     val bco = create(language, code(11, 1, 31, 11, 0, 58),
-                        refs = arrayOf(Closure(null, arity = 1, target = worker.callTarget), Any()))
+                        refs = arrayOf(Closure(null, 1, worker.callTarget), Any()))
                     val failure = assertThrows(RuntimeFault::class.java) { bco.target.call(0L) }
                     assertTrue(failure.message!!.contains(if (capture) "Delimited capture" else "asynchronous continuation"))
                 }

@@ -174,7 +174,7 @@ class PassThroughRootTest {
         val root = FunctionRoot(language, layout.build(), "scalar self side", null, intArrayOf(),
             intArrayOf(slot), intArrayOf(0), body, Metrics(false), arrayOf(long), long,
             role = FunctionRootRole.PASS_THROUGH)
-        function.value = Closure(null, arity = 1, target = root.callTarget)
+        function.value = Closure(null, 1, root.callTarget)
         val transfer = assertThrows(TailCall::class.java) { Calls.target(root.callTarget, arrayOf(0L, 11L)) }
         assertSame(root.callTarget, transfer.target); assertEquals(22L, transfer.args[1])
         assertEquals(11L, originalArgument)
@@ -196,7 +196,7 @@ class PassThroughRootTest {
             role = FunctionRootRole.PASS_THROUGH)
         val typed = TypedInputLayout.create(language, input, false)!!
         root.configureTypedInput(typed)
-        function.value = Closure(null, arity = 1, target = root.callTarget)
+        function.value = Closure(null, 1, root.callTarget)
         val incoming = typed.packet.create().also {
             it.inputMode = 2; typed.packet.setLong(it, 0, 0); typed.packet.setInt(it, 1, 11)
         }

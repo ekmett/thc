@@ -89,17 +89,17 @@ internal class STMCall @JvmOverloads constructor(private val operation: STMOp, d
             when (operation) {
                 STMOp.ATOMICALLY ->
                     stm.atomically(this, { throw GuestException(nested, this) }, async) {
-                        actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                        actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), arrayOf(Unit))
                     }
                 STMOp.OR_ELSE -> stm.orElse({
-                    actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                    actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), arrayOf(Unit))
                 }, {
-                    otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(Unit))
+                    otherCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, alternative)), arrayOf(Unit))
                 })
                 STMOp.CATCH -> stm.catchSTM({
-                    actionCall.execute(frame, requireClosure(force.execute(frame, action)), arrayOf(Unit))
+                    actionCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, action)), arrayOf(Unit))
                 }, { payload ->
-                    otherCall.execute(frame, requireClosure(force.execute(frame, alternative)), arrayOf(payload, Unit))
+                    otherCall.execute(frame, ApplicationKt.requireClosure(force.execute(frame, alternative)), arrayOf(payload, Unit))
                 })
                 else -> error("Not an STM callback: $operation")
             }

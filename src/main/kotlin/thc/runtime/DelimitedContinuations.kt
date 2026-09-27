@@ -249,7 +249,7 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
     }
 
     @TruffleBoundary fun closure(language: Language, metrics: Metrics): Closure =
-        Closure(null, arity = 2, target = DelimitedContinuationRoot(language, this, outputShape, metrics).callTarget)
+        Closure(null, 2, DelimitedContinuationRoot(language, this, outputShape, metrics).callTarget)
 }
 
 private class DelimitedContinuationRoot(language: Language, private val stack: DelimitedStack,
@@ -321,7 +321,7 @@ internal class DelimitedActionSite(private val language: Language, private val m
 
     fun invoke(frame: VirtualFrame, action: Any?, arguments: Array<Any?>, shape: TupleShape): Any? {
         try {
-            val closure = requireClosure(forceAction(frame, action))
+            val closure = ApplicationKt.requireClosure(forceAction(frame, action))
             return captured(frame, shape) {
                 finish((if (arguments.size == 1) one else two).execute(frame, closure, arguments), shape, closure.target)
             }

@@ -389,9 +389,8 @@ private class MakeClosure(private val target: RootCallTarget, private val arity:
                           @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
     init { representation = CoreRepresentation(CoreKind.CLOSURE, evaluated = true) }
     // Cadenza's closed-lambda optimization: immutable code needs no allocation.
-    private val constantClosure = if (captureLayout == null) Closure(environment = null, arity = arity, target = target) else null
-    override fun execute(frame: VirtualFrame): Closure = constantClosure ?: Closure(
-        environment = captureLayout!!.capture(frame, captures), arity = arity, target = target)
+    private val constantClosure = if (captureLayout == null) Closure(null, arity, target) else null
+    override fun execute(frame: VirtualFrame): Closure = constantClosure ?: Closure(captureLayout!!.capture(frame, captures), arity, target)
     override fun executeClosure(frame: VirtualFrame): Closure = execute(frame)
 }
 private class Delay(private val target: RootCallTarget, private val captureLayout: CaptureLayout?,
@@ -1182,7 +1181,7 @@ private class Application(function: Expr,
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                    applyArguments(frame, requireClosure(input), arrayOfNulls(ArgumentLayout.width(inputLayout, arguments.size)), 0)
+                    applyArguments(frame, ApplicationKt.requireClosure(input), arrayOfNulls(ArgumentLayout.width(inputLayout, arguments.size)), 0)
             })
         }
         val values = arrayOfNulls<Any>(ArgumentLayout.width(inputLayout, arguments.size))

@@ -182,8 +182,8 @@ class BytecodeTypedTupleInputTest {
             bind("entry", lam(listOf(arg("effect", closure), arg("later", closure), arg("x")), call("worker", listOf(
                 call("effect", listOf(v("x")), zero), call("later", listOf(v("x")))))))))
         val events = arrayListOf<Long>()
-        val effect = Closure(null, arity = 1, target = OperandEffect(language, events, TupleShape(CoreRepresentations.parse(zero), language)).callTarget)
-        val later = Closure(null, arity = 1, target = OperandEffect(language, events, null).callTarget)
+        val effect = Closure(null, 1, OperandEffect(language, events, TupleShape(CoreRepresentations.parse(zero), language)).callTarget)
+        val later = Closure(null, 1, OperandEffect(language, events, null).callTarget)
         assertEquals(107L, run(p, "entry", effect, later, 7L)); assertEquals(listOf(7L, 107L), events); released(language)
         val entry = (p.entryTarget("worker").rootNode as GuestRoot).typedInput!!
         assertEquals(2, entry.logical.logicalArity); assertEquals(1, entry.logical.physicalArity)

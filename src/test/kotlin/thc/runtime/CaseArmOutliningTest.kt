@@ -89,7 +89,7 @@ class CaseArmOutliningTest {
     @Test fun scrutineeIsEvaluatedOnceAndReturningArmKeepsItsNontailSuffix() = withLanguage { language ->
         for (async in listOf(false, true)) {
             var effects = 0
-            val tick = Closure(null, arity = 1, target = object : RootNode(language) {
+            val tick = Closure(null, 1, object : RootNode(language) {
                 override fun execute(frame: VirtualFrame): Any { effects++; return frame.arguments[1]!! }
             }.callTarget)
             val selected = case(app(variable("tick", closure), variable("x")), "seen",
@@ -148,7 +148,7 @@ class CaseArmOutliningTest {
             "arity" to 3, "tag" to 1, "kind" to "unboxed-tuple")),
             "bindings" to listOf(binding("entry", lambda(listOf(parameter("narrow", narrow),
                 parameter("floating", float), parameter("marker", closure)), body, tuple))))
-        val marker = Closure(null, arity = 0, target = object : RootNode(language) {
+        val marker = Closure(null, 0, object : RootNode(language) {
             override fun execute(frame: VirtualFrame): Any = error("Captured reference must not be forced")
         }.callTarget)
         for (async in listOf(false, true)) {

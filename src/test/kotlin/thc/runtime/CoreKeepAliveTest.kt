@@ -175,7 +175,7 @@ class CoreKeepAliveTest {
         val p = program(language, backend, listOf(main))
         val exceptionPayload = Any()
         var forces = 0; var calls = 0; var throwing = true
-        val callback = Closure(null, arity = 1, target = object : RootNode(null) {
+        val callback = Closure(null, 1, object : RootNode(null) {
             override fun execute(frame: VirtualFrame): Any {
                 assertSame(Unit, frame.arguments[1]); calls++
                 if (throwing) throw GuestException(exceptionPayload, this)

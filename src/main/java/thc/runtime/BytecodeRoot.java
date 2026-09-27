@@ -2367,7 +2367,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             try { return dispatch.execute(frame, RequireClosure.require(force.execute(frame, function)), new Object[]{kotlin.Unit.INSTANCE}); }
             finally { java.lang.ref.Reference.reachabilityFence(kept); }
         }
-        public static Dispatch create(Metrics metrics) { return Dispatch.Companion.create(1, false, metrics); }
+        public static Dispatch create(Metrics metrics) { return Dispatch.create(1, false, metrics); }
         public static Force createForce(Metrics metrics) { return new Force(metrics); }
     }
 
@@ -2632,7 +2632,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
         }
         public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
-            return Dispatch.Companion.create(arity, tail, metrics, evaluatedArguments);
+            return Dispatch.create(arity, tail, metrics, evaluatedArguments);
         }
     }
 
@@ -2659,7 +2659,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             }
         }
         public static Dispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
-            return Dispatch.Companion.create(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
+            return Dispatch.create(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
         }
     }
 
