@@ -4,7 +4,16 @@
 /* Let Sulong retain its allocation identity and byte offset together. This is
  * an interop boundary, not a native copy or a numerical JVM address. */
 #include <stdint.h>
+#if defined(_WIN32) && defined(__clang__)
+/* This bridge is compiled by Clang for Sulong's MSVC LLVM target. Keep the
+ * memory operations as compiler intrinsics without requiring host CRT headers;
+ * stdint.h supplies the selected target's actual integer representations. */
+#define memcpy __builtin_memcpy
+#define memmove __builtin_memmove
+#define memset __builtin_memset
+#else
 #include <string.h>
+#endif
 
 void *thc_package_pointer_offset(void *base, long long offset) {
     return (unsigned char *) base + offset;

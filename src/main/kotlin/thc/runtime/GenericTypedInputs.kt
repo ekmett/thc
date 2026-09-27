@@ -106,6 +106,10 @@ internal fun genericTypedPap(function: Closure, input: TypedInputLayout, source:
     return Closure(function.environment, NO_PAP_ARGUMENTS, function.arity - count, function.target, oldCount + count, storage)
 }
 
+// Keep this variable-length loop outside forceActuals' loop-explosion scope.
+// A private primitive loop also avoids the library's null-parameter diagnostics.
+private fun containsStrictPosition(strict: IntArray, position: Int): Boolean = strict.any { it == position }
+
 @ExplodeLoop
 private fun forceActuals(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
     values: Array<Any?>?, maximum: Int, offset: Int, count: Int, strict: IntArray, force: Force) {
@@ -114,7 +118,8 @@ private fun forceActuals(frame: VirtualFrame, node: Node, function: Closure, sou
         // Tuple WHNF says nothing about its lifted leaves; primitive scalars
         // also need no force even if a less precise formal uses a reference slot.
         if (proof?.isTypedTransport == true || proof?.isInt == true || proof?.isLong == true || proof?.isFloat == true || proof?.isDouble == true) continue
-        if (strict.contains(function.suppliedCount + i - offset)) {
+        val logicalPosition = function.suppliedCount + i - offset
+        if (containsStrictPosition(strict, logicalPosition)) {
             val physical = ArgumentLayout.offset(source.layout, i)
             source.setReference(frame, node, values, physical, force.execute(frame, source.reference(frame, node, values, physical)))
         }

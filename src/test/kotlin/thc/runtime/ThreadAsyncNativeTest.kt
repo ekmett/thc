@@ -107,6 +107,8 @@ class ThreadAsyncNativeTest {
             File(root, "build/thread-async/saved-oracle.txt").readLines())
         assertEquals(listOf("22122122", "22122123"),
             File(root, "build/thread-async/external-saved-oracle.txt").readLines())
+        assertEquals(listOf("96202106490", "97204107494"),
+            File(root, "build/thread-async/scheduled-saved-oracle.txt").readLines())
         assertEquals(listOf("37", "39"), File(root, "build/thread-async/yield-oracle.txt").readLines())
         assertEquals(listOf("52", "53"), File(root, "build/thread-async/lazy-oracle.txt").readLines())
     }
@@ -175,6 +177,10 @@ class ThreadAsyncNativeTest {
         exercise("savedSelfThrow", listOf(220102, 220103), asyncExceptions = false)
     @Test fun savedExternalDeliveryOwnsEachInterruptedInvocation() =
         exercise("externalSaved", listOf(22122122, 22122123))
+    @Test fun savedSchedulingOwnsEachInvocation() =
+        exercise("scheduledSaved", listOf(96202106490, 97204107494))
+    @Test fun astSavedSchedulingOwnsEachInvocation() =
+        exercise("scheduledSaved", listOf(96202106490, 97204107494), backend = "ast")
     @Test fun astSavedExternalDeliveryOwnsEachInterruptedInvocation() =
         exercise("externalSaved", listOf(22122122, 22122123), backend = "ast")
     @Test fun astSavedSelfDeliveryAcknowledgesEachResumption() =

@@ -100,6 +100,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }
+if (windowsHost) apply(from = "gradle/windows-sulong.gradle.kts")
 apply(from = "gradle/bytecode-metadata.gradle.kts")
 kotlin {
     jvmToolchain(25)
@@ -1561,7 +1562,9 @@ for ((name, dense) in listOf("windowsSmokeTest" to false, "windowsDenseSmokeTest
         filter {
             listOf("thc.FastSmokeTest", "thc.RuntimeTest", "thc.BytecodeBackendTest",
                 "thc.CoreRequestTest", "thc.FramesTest", "thc.CStringTest",
-                "thc.runtime.ManagedMd5Test", "thc.WindowsDistributionTest").forEach(::includeTestsMatching)
+                "thc.runtime.ManagedMd5Test", "thc.WindowsDistributionTest",
+                "thc.runtime.WindowsSulongLibraryLookupTest",
+                "thc.runtime.NarrowReturnedPointerTest").forEach(::includeTestsMatching)
         }
         inputs.files("build/windows-smoke/provenance.json", "build/windows-driver/provenance.json")
         dependsOn(tasks.installDist)
