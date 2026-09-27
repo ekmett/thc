@@ -3,9 +3,11 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
+import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -21,6 +23,13 @@ class AstTailSpillTest {
     @Test fun savedMaskCleanupUnwindsBeforeTheMatchingTailAnchor() = chain(cleanup = 256)
 
     @Test fun maskAlreadyLiveAtFirstSpillRetainsTheExactOuterCatcher() = chain(cleanup = 16)
+
+    @Test fun firstInstalledEntrySpillsWithoutASettlingCall() = chain(compiled = true)
+
+    @Test fun sharedUpdatePublishesOnlyTheCompletedCompactedResult() = chain(shared = true)
+
+    @Test fun failedSharedUpdateKeepsItsFailureWithoutReplayingTheCompactedPrefix() =
+        chain(shared = true, failure = true, cleanup = 16)
 
     @Test fun nestedAnchorDoesNotCaptureTailTransfersAcrossItsNonTailCaller() {
         Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build().use { context ->
@@ -94,13 +103,19 @@ class AstTailSpillTest {
         }
     }
 
-    private fun chain(nonTail: Boolean = false, cleanup: Int = -1) {
-        Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build().use { context ->
+    private fun chain(nonTail: Boolean = false, cleanup: Int = -1, compiled: Boolean = false,
+                      shared: Boolean = false, failure: Boolean = false) {
+        val builder = Context.newBuilder("thc").allowExperimentalOptions(true)
+        if (compiled) builder.option("engine.BackgroundCompilation", "false")
+            .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", "false")
+        else builder.option("engine.Compilation", "false")
+        builder.build().use { context ->
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val metrics = Metrics(true)
                 val count = 1024
+                val laps = if (compiled) 1 else 20
                 val prefixes = IntArray(count)
                 var iterations = 0
                 var finished = 0
@@ -123,7 +138,10 @@ class AstTailSpillTest {
                             assertEquals(if (cleanup >= 0 && index > cleanup) MaskingState.MASKED_INTERRUPTIBLE
                                 else MaskingState.UNMASKED, ambient)
                             if (following == null) {
-                                if (++finished == 20) return 73L
+                                if (++finished == laps) {
+                                    if (failure) throw GuestException("compacted failure", this)
+                                    return 73L
+                                }
                                 tail.check(frame, owner.callTarget, arrayOf(bloom))
                                 fail<Any>("The exact retained owner must catch the next transfer")
                             }
@@ -184,17 +202,41 @@ class AstTailSpillTest {
                     FunctionRoot(language, FrameLayout().build(), "non-tail outer", null, intArrayOf(),
                         intArrayOf(), intArrayOf(), outer, metrics, resultProof = proof, stackCapture = true).callTarget
                 }
-                assertEquals(if (nonTail) 77L else 73L, Calls.target(target, arrayOf(0L)))
-                assertEquals(20, iterations)
-                assertTrue(prefixes.all { it == 20 }, "Every side prefix executes exactly once per real loop iteration")
-                assertTrue(scope.compactedFrames > 19000)
+                if (compiled) {
+                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    val runtime = Truffle.getRuntime()
+                    runtime.javaClass.getMethod("bypassedInstalledCode", Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                        .invoke(runtime, target)
+                }
+                val beforeCompiled = metrics.compiledEntries
+                if (shared) {
+                    val thunk = Thunk(target, null)
+                    val force = object : RootNode(language) {
+                        @Child private var force = Force(metrics)
+                        override fun execute(frame: VirtualFrame): Any? = force.execute(frame, thunk)
+                    }.callTarget
+                    repeat(2) {
+                        if (failure) assertThrows(GuestException::class.java) { Calls.target(force, emptyArray()) }
+                        else assertEquals(73L, Calls.target(force, emptyArray()))
+                    }
+                    assertEquals(if (failure) 3 else 2, thunk.state); assertNull(thunk.owner)
+                } else assertEquals(if (nonTail) 77L else 73L, Calls.target(target, arrayOf(0L)))
+                if (compiled) {
+                    assertEquals(beforeCompiled + 1, metrics.compiledEntries, "The first invocation entered the installed root")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target),
+                        "No settling invocation or compilation retry is allowed")
+                }
+                assertEquals(laps, iterations)
+                assertTrue(prefixes.all { it == laps }, "Every side prefix executes exactly once per real loop iteration")
+                assertTrue(scope.compactedFrames > count * laps - 128 * laps)
                 assertEquals(1L, scope.tailAnchors, "One saved-suffix catcher, not one wrapper per spill/lap")
                 assertTrue(scope.maxParkedSpillParents <= 2,
                     "Identity sides are omitted before publication; only the real cleanup/non-tail parent may park")
                 assertEquals(0L, metrics.trampolineIterations)
                 assertEquals(if (nonTail) 1 else 0, outerPrefixes)
                 assertEquals(if (nonTail) 1 else 0, outerSuffixes)
-                assertEquals(if (cleanup >= 0) 20 else 0, cleanups)
+                assertEquals(if (cleanup >= 0) laps else 0, cleanups)
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner))
                 assertNull(scope.tailAnchor)
                 assertEquals(0, scope.depth); assertFalse(scope.driving)
