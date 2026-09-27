@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0
 import java.security.MessageDigest
+import java.lang.module.Configuration
+import java.lang.module.FindException
+import java.lang.module.ModuleFinder
 import java.util.jar.JarFile
 
 val materializableApiVersion = "25.3.4.1"
@@ -90,14 +93,32 @@ configurations.configureEach {
         exclude(group = "org.graalvm.truffle", module = "truffle-api")
     }
 }
-dependencies { add("implementation", files(materializableApiJar.flatMap { it.archiveFile })) }
+dependencies {
+    add("implementation", files(materializableApiJar.flatMap { it.archiveFile }))
+    // File artifacts do not retain the replaced API POM's required JNI module.
+    add("implementation", "org.graalvm.sdk:jniutils:$materializableApiVersion")
+}
 tasks.register("verifyMaterializableApiSelection") {
     group = "verification"
-    dependsOn(materializableApiJar)
+    dependsOn(materializableApiJar, configurations.named("runtimeClasspath"))
     doLast {
         val runtime = configurations.getByName("runtimeClasspath").files
         check(runtime.none { it.name == "truffle-api-$materializableApiVersion.jar" }) { "Stock Truffle API remains on runtime classpath" }
         check(runtime.count { it.name == materializableApiJar.get().archiveFileName.get() } == 1) { "Expected exactly one declared API artifact" }
+        // Classpath execution alone does not check the preserved JPMS descriptors.
+        val runtimeJars = runtime.filter { it.extension == "jar" }
+        fun resolveTruffleModules(jars: List<File>): Configuration = Configuration.empty().resolve(
+            ModuleFinder.of(*jars.map { it.toPath() }.toTypedArray()), ModuleFinder.ofSystem(),
+            setOf("org.graalvm.truffle", "org.graalvm.truffle.runtime"))
+        check(resolveTruffleModules(runtimeJars).findModule("org.graalvm.jniutils").isPresent) {
+            "Declared Truffle modules must resolve the required JNI utility module"
+        }
+        val withoutJni = runtimeJars.filterNot { it.name == "jniutils-$materializableApiVersion.jar" }
+        check(withoutJni.size == runtimeJars.size - 1) { "Expected exactly one pinned JNI utility artifact" }
+        val missingJni = runCatching { resolveTruffleModules(withoutJni) }.exceptionOrNull()
+        check(missingJni is FindException && missingJni.message.orEmpty().contains("org.graalvm.jniutils")) {
+            "Removing JNI utilities must reject the preserved Truffle module graph"
+        }
         val overlay = materializableApiJar.get().archiveFile.get().asFile
         fun replaced(name: String) = name == "META-INF/MANIFEST.MF" ||
             name == "com/oracle/truffle/api/nodes/RootNode.class" ||
