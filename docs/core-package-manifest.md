@@ -52,6 +52,57 @@ bytecode execution, and checks that removing the library fails before execution.
 This focused proof uses binder/file provenance from `-g0`; it does not claim
 preservation of nested expression SourceNote ticks.
 
+## Optional JSON indexes and lazy loading
+
+A module record may include an `index` object with exactly `path` and `sha256`:
+
+```json
+{
+  "index": {
+    "path": "core/units/u-example-0.1-inplace/Example.json.idx",
+    "sha256": "<lowercase SHA-256 of the complete sidecar file>"
+  }
+}
+```
+
+The original JSON and the module record's existing fields remain unchanged. An
+index describes navigation through those exact bytes; it is not another Core format.
+The [sidecar producer](../compiler/json-index/README.md#sidecar-v2-producer)
+documents generation and the version 2 wire layout. Records without `index`
+remain valid and use the existing JSON loading path. A nearby `.idx` file is
+not selected unless the manifest declares it.
+
+For loose artifacts, the declared paths remain inside the manifest directory.
+For a ZIP bundle, they name members of that bundle. JSON and index member paths
+must be distinct, and the inner `manifest.json` must contain the same module
+records as the outer package manifest. The ZIP inventory includes every declared
+JSON and index, plus its required manifests; missing, duplicate and undeclared
+members are rejected. The loader checks both artifact hashes and verifies the
+sidecar's source identity, layout, integrity and navigation metadata against the
+JSON. A stale or invalid declared sidecar fails loading rather than silently
+falling back to the unindexed path.
+
+Indexed loading retains an owned immutable JSON snapshot. Authentication and
+structural validation still scan source bytes, binding headers are indexed,
+and strict dependency discovery still visits reachable expressions. Foreign
+admission may inspect additional fields. This work is not eliminated by leaving
+unused function bodies unprepared.
+
+For both backends, eligible lifted top-level functions and thunks decode body
+fields and lower executable roots on demand. Entry selection prepares the entry;
+a later first global read prepares its callee. Strict globals and top-level
+literals, constructors and void values retain eager initialization. Preparing a
+thunk does not evaluate its Haskell computation. Immutable source projections
+may be shared by an Engine, while executable roots, CAFs and guest failures stay
+with each Context. Runtime admission and lowering still reject unsupported code
+when preparing a binding (`reject-at-binding-admission`); the separate
+whole-program audit is unchanged.
+
+Sidecars add storage alongside the unchanged JSON. Cache accounting must include
+both artifacts and the ZIP's framing and compression. Index array byte counts
+are not JVM heap measurements, and lazy preparation alone establishes no heap
+or startup performance result.
+
 ## Partially resolved package-native components
 
 An unresolved package-native artifact remains in `packageNativeArchive`, with

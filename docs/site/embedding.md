@@ -93,6 +93,30 @@ hashes, boundaries, and reachable references. See the [manifest guide](../core-p
 Individual JSON paths are a lower-level development input; assembling a list
 does not establish package support.
 
+Package records with a declared `index` select
+[indexed JSON loading](../core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+through the same `loadEntry` call. Existing records without an index remain
+supported. For an explicit loose JSON/sidecar pair, use the request builder:
+
+```kotlin
+import thc.CoreModules
+import thc.executionContext
+
+executionContext().use { context ->
+    val json = "/absolute/path/to/Module.json"
+    val request = CoreModules.request(listOf(json), "sumLoop",
+        backend = "bytecode", jsonSidecars = mapOf(json to "$json.idx"))
+    val function = context.eval("thc", request)
+    println(function.execute(100_000L).asLong())
+}
+```
+
+The sidecar must already exist and match the exact JSON bytes. Loading still
+authenticates and structurally scans the source and discovers dependencies;
+eligible body fields and executable roots are prepared on demand. Loading an
+entry does not establish support for every cold binding. Keep the separate
+execution audit for that claim.
+
 ## Execute `IO ()`
 
 The [Cabal driver](../driver.md) prepares and audits the executable closure,
