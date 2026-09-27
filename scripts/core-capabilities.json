@@ -74,6 +74,7 @@
     "ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite",
     "__hscore_get_errno",
+    "__hscore_set_errno",
     "__hscore_sizeof_termios",
     "__hscore_get_saved_termios",
     "__hscore_set_saved_termios",

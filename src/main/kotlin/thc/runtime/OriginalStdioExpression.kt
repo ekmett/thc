@@ -12,6 +12,12 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation == OriginalStdioOp.SET_ERRNO) {
+            val value = operands[0].executeRequiredLong(frame)
+            requireVoidCarrier(operands[1].execute(frame))
+            CoreOriginalStdio.current(this).setErrno(value)
+            return null
+        }
         if (operation.eventManager) {
             val stdio = CoreOriginalStdio.current(this)
             val result = if (operation.poll) {

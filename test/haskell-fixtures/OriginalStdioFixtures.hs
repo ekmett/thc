@@ -5,7 +5,7 @@
 
 -- Production of native observations only. Independent semantics, host ABI and
 -- exact original FCall proofs are checked by the Kotlin fixture consumers.
-module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl) where
+module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl, prepareOriginalErrno) where
 
 import Control.Monad (forM, unless, when)
 import Data.Aeson (object, (.=), toJSON)
@@ -326,3 +326,92 @@ prepareNativeFcntl root = do
     "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= length rows,
     "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
   putStrLn "original-fcntl: twelve genuine constants, four native shared-status rows and fourteen pre/post Core roots"
+
+-- Genuine resetErrno/getErrno Core plus an independent native header oracle
+-- for all signed CInt boundaries. The Kotlin consumer checks the observations.
+prepareOriginalErrno :: FilePath -> IO ()
+prepareOriginalErrno root = do
+  let output = "build/original-errno"
+      coreSource = "compiler/test-fixtures/OriginalErrnoAudit.hs"
+      nativeSource = "compiler/test-fixtures/OriginalErrnoNative.hs"
+      names = ["originalResetErrno" :: String]
+      execute = runLogged 180 root (output </> "logs")
+      binary = output </> "native/oracle"
+      observedPath = output </> "native/observations.txt"
+      oracle = output </> "oracle.json"
+      manifest = root </> output </> "manifest.json"
+  createDirectoryIfMissing True (root </> output </> "native")
+  stale <- doesFileExist manifest
+  when stale $ do
+    digest <- hashFile manifest
+    let previous = root </> output </> "previous-manifests"
+    createDirectoryIfMissing True previous
+    renameFile manifest (previous </> digest ++ ".json")
+  plugin <- listDirectory (root </> "compiler/THC")
+  scripts <- listDirectory (root </> "scripts")
+  let sources = sort $ [coreSource, nativeSource, "thc.cabal", "test/haskell-fixtures/Main.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs",
+        "scripts/audit-core.py", "scripts/core-capabilities.json",
+        "src/main/resources/thc/scalar-primop-signatures.json",
+        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
+        ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+  inputHashes <- hashes root sources
+  if not (Host.os `elem` ["linux", "darwin"] && sizeOf (0 :: CInt) == 4 &&
+          sizeOf (0 :: CLong) == 8 && sizeOf (nullPtr :: Ptr ()) == 8)
+    then do
+      writeJson manifest $ object ["schema" .= (1 :: Int), "platform" .= Host.os,
+        "supported" .= False, "reason" .= ("Original Linux/macOS LP64 errno declarations only" :: String),
+        "inputHashes" .= inputHashes, "artifactHashes" .= object []]
+      putStrLn "original-errno: explicitly excluded on this platform"
+    else do
+      ghc <- maybe "ghc" id <$> lookupEnv "GHC"
+      version <- execute "ghc-version" [] ghc ["--numeric-version"]
+      unless (commandStdout version == "9.14.1\n") (die "Original errno requires GHC 9.14.1")
+      info <- execute "ghc-info" [] ghc ["--info"]
+      case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
+        Just target | Just host <- lookup "Host platform" target,
+                      not (null host), lookup "Target platform" target == Just host,
+                      lookup "target word size" target == Just "8" -> pure ()
+        _ -> die "Original errno requires a native 64-bit GHC"
+      compiled <- execute "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
+        "-package", "ghc-internal", "-icompiler/test-fixtures", "-odir", root </> output </> "native",
+        "-hidir", root </> output </> "native", nativeSource, "-o", root </> binary]
+      old <- doesFileExist (root </> observedPath)
+      when old (removeFile (root </> observedPath))
+      observed <- execute "native-run" [] (root </> binary) [root </> observedPath]
+      unless (BS.null (commandStdout observed) && BS.null (commandStderr observed))
+        (die "Original errno native oracle unexpectedly wrote stdout/stderr")
+      text <- BSC.unpack <$> BS.readFile (root </> observedPath)
+      rows <- maybe (die "Malformed original errno observations") pure (readMaybe text :: Maybe [[Integer]])
+      unless (length rows == 5 && all ((== 7) . length) rows)
+        (die "Incomplete original errno observations")
+      let fields = ["value", "roundTrip", "successResult", "successErrno", "failureResult", "failureErrno", "resetErrno"]
+      writeJson (root </> oracle) (toJSON [object (zipWith (.=) fields row) | row <- rows])
+      exports <- forM ["pre", "post"] $ \stage -> do
+        let core = output </> stage </> "core"
+            modules = [core </> "OriginalErrnoAudit.json", core </> "THC.InterfaceClosure.json"]
+            options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+              ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names]
+        exported <- execute (stage ++ "-export")
+          [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> output </> stage </> "ghc"),
+           ("THC_SOURCE_NOTES", "true")]
+          "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [coreSource])
+        audits <- forM names $ \name -> do
+          let path = output </> stage </> name ++ ".audit.json"
+          audited <- execute (stage ++ "-audit-" ++ name) [] "python3"
+            (["scripts/audit-core.py", "--entry", name, "--output", path] ++ modules)
+          pure (name, path, audited)
+        pure (stage, modules, Map.fromList [(name, path) | (name, path, _) <- audits],
+              exported : [command | (_, _, command) <- audits], modules ++ [path | (_, path, _) <- audits])
+      let commands = [version, info, compiled, observed] ++ concat [cs | (_, _, _, cs, _) <- exports]
+          artifacts = [binary, observedPath, oracle] ++ concat [paths | (_, _, _, _, paths) <- exports] ++
+            concatMap commandArtifacts commands
+      artifactHashes <- hashes root artifacts
+      writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= names,
+        "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= False,
+        "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= length rows,
+        "stages" .= Map.fromList [(stage, modules) | (stage, modules, _, _, _) <- exports],
+        "audits" .= Map.fromList [(stage, reports) | (stage, _, reports, _, _) <- exports],
+        "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
+      putStrLn "original-errno: five native signed CInt observations, genuine pre/post resetErrno Core"

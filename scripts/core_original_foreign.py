@@ -185,6 +185,7 @@ OPERATIONS = {
     'ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite':
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     '__hscore_get_errno': ('ccall', 'unsafe', (None,), (None, 'Int32Rep')),
+    '__hscore_set_errno': ('ccall', 'unsafe', ('Int32Rep', None), (None,)),
     **{symbol: ('ccall', 'unsafe', (None,), (None, 'Int32Rep')) for symbol in (
         '__hscore_o_append', '__hscore_o_creat', '__hscore_o_excl', '__hscore_o_binary', '__hscore_o_trunc',
         '__hscore_o_noctty', '__hscore_o_nonblock',

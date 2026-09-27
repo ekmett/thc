@@ -27,6 +27,7 @@ import zlib
 
 SCHEMA = 1
 GMP_NATIVE_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
+ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
 HEX = re.compile(r"[0-9a-f]{64}\Z")
 SELF = ".github/scripts/fast_inputs.py"
 COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
@@ -44,7 +45,7 @@ MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc proxy-void rubbi
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
-narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
+narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-errno original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
 show-int show-word-list signed-narrow-primops simd-capability-smoke simd-calls simd-floatx4-fma simd-wide-floating-fma synchronous-exceptions tuple-arithmetic word-floating""".split()
 BYTESTRING_SORT_ENTRIES = ("sortBytes",)
 BYTESTRING_SORT_OUTPUTS = frozenset("build/bytestring-sort/" + name for name in (
@@ -463,6 +464,7 @@ NATIVE_EXECUTABLES = frozenset({"build/proxy-void/native/oracle", "build/proxy-v
     "build/original-stdio-seek/native/oracle",
     "build/original-open/native/oracle",
     "build/original-fcntl/native/oracle",
+    "build/original-errno/native/oracle",
     "build/original-termios/native/oracle",
     "build/original-tcsetattr/native/oracle",
     "build/original-tcgetattr/native/oracle",
@@ -643,6 +645,18 @@ ORIGINAL_FCNTL_OUTPUTS = frozenset("build/original-fcntl/" + name for name in (
     *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
         "core/OriginalFcntlAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_FCNTL_ENTRIES))),
+))
+
+ORIGINAL_ERRNO_ENTRIES = ("originalResetErrno",)
+ORIGINAL_ERRNO_OUTPUTS = frozenset("build/original-errno/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle", "native/observations.txt",
+    *(f"logs/{label}.{suffix}" for label in (
+        "ghc-version", "ghc-info", "native-build", "native-run", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_ERRNO_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json")),
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalErrnoAudit.json", "core/THC.InterfaceClosure.json",
+        *(f"{entry}.audit.json" for entry in ORIGINAL_ERRNO_ENTRIES))),
 ))
 
 ORIGINAL_TCSETATTR_ENTRIES = ("originalTcsetattr",)
@@ -1063,6 +1077,23 @@ def fcntl_artifact_hashes(manifest):
     require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_FCNTL_OUTPUTS - {"build/original-fcntl/manifest.json"},
             "Incomplete/unreviewed original fcntl artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid fcntl hash")
+    return artifacts
+
+def errno_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest.get("schema") == 1,
+            "Invalid original errno manifest")
+    if not ERRNO_NATIVE_HOST:
+        require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported errno host")
+        return {}
+    require(manifest.get("ghc") == "9.14.1" and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_ERRNO_ENTRIES) and
+            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
+            manifest.get("installedArtifactsHashed") is False and
+            type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 5,
+            "Invalid original errno proof")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) == ORIGINAL_ERRNO_OUTPUTS - {"build/original-errno/manifest.json"},
+            "Incomplete/unreviewed original errno artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()), "Invalid errno hash")
     return artifacts
 
 def tcsetattr_artifact_hashes(manifest):
@@ -1545,6 +1576,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_OPEN_OUTPUTS
     if parts[1] == "original-fcntl":
         return name in ORIGINAL_FCNTL_OUTPUTS
+    if parts[1] == "original-errno":
+        return name in ORIGINAL_ERRNO_OUTPUTS
     if parts[1] == "original-termios":
         return name in ORIGINAL_TERMIOS_OUTPUTS
     if parts[1] == "original-tcsetattr":
@@ -1715,6 +1748,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_open_artifact_hashes(doc)
         if name == "build/original-fcntl/manifest.json":
             fcntl_artifact_hashes(doc)
+        if name == "build/original-errno/manifest.json":
+            errno_artifact_hashes(doc)
         if name == "build/original-termios/manifest.json":
             termios_artifact_hashes(doc)
         if name == "build/original-tcsetattr/manifest.json":

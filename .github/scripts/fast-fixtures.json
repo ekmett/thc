@@ -292,6 +292,14 @@
         "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "original-errno": {
+      "junit": ["thc.runtime.OriginalErrnoTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-errno"]}],
+      "outputs": ["build/original-errno"],
+      "sources": ["compiler/test-fixtures/OriginalErrnoAudit.hs", "compiler/test-fixtures/OriginalErrnoNative.hs",
+        "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-termios": {
       "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-termios"]}],

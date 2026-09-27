@@ -84,7 +84,7 @@ class OriginalStdioCallTest {
                         (call[1] as MutableList<Any?>)[1] = "unrelated-package:InlineCaller.arbitrary"
                     }
                     val program: ExecutableProgram = if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
-                    val targets = (OriginalStdioFixtures.signatures.keys - setOf("strerror", "unlink"))
+                    val targets = (OriginalStdioFixtures.signatures.keys - setOf("strerror", "unlink", "set_errno"))
                         .associateWith(program::entryTarget)
                     val ebadf = StdioHostAbi.load().error(4L)
                     var compiled = false
@@ -163,7 +163,7 @@ class OriginalStdioCallTest {
                     return if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
                 }
                 fun descriptor(call: MutableList<Any?>) = (call[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>
-                for (name in OriginalStdioFixtures.signatures.keys) {
+                for (name in OriginalStdioFixtures.signatures.keys - "set_errno") {
                     for (id in listOf(null, "", 3L, "p0", name)) assertThrows(RuntimeFault::class.java) {
                         load(name) { (it[1] as MutableList<Any?>)[1] = id }
                     }
@@ -186,7 +186,7 @@ class OriginalStdioCallTest {
                 assertThrows(RuntimeFault::class.java) { load {
                     (it[2] as List<MutableList<Any?>>)[1][1] = "p0" // address occurrence cannot disguise a scalar binder
                 } }
-                for (symbol in listOf("write", "__hscore_set_errno", OriginalStdioFixtures.symbols.getValue("safe_write").replace("ZC20ZC", "ZC22ZC")))
+                for (symbol in listOf("write", "__hscore_set_errno64", OriginalStdioFixtures.symbols.getValue("safe_write").replace("ZC20ZC", "ZC22ZC")))
                     assertThrows(UnsupportedCore::class.java) { load { (descriptor(it)["target"] as MutableMap<String, Any?>)["symbol"] = symbol } }
                 for (name in listOf("dup", "dup2")) {
                     assertThrows(RuntimeFault::class.java) { load(name) {
