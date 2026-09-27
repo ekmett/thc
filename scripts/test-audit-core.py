@@ -2069,7 +2069,7 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
         def scalar(rep, evaluated=False):
             kind = 'void' if rep is None else 'address' if rep == 'AddrRep' else 'long'
             return dict(kind=kind, primReps=[] if rep is None else [rep], evaluated=evaluated)
-        for symbol, second, result in [('memcmp', 'AddrRep', 'Int32Rep'), ('memchr', 'Int32Rep', 'AddrRep')]:
+        for symbol, second, result in [('memcmp', 'AddrRep', 'Int32Rep'), ('memchr', 'Int32Rep', 'AddrRep'), ('memset', 'Int32Rep', 'AddrRep')]:
             output = dict(kind='unknown', primReps=[result], evaluated=False, aggregate='unboxed-tuple',
                           components=[scalar(None, True), scalar(result, True)])
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='bytestring-0.12.2.0-inplace', isFunction=True),
@@ -2093,6 +2093,37 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
                 self.assertEqual(unit == 'ghc-internal' and symbol == 'memcmp', fixture.audit(fixture.fixture(bad))['accepted'])
             bad = copy.deepcopy(declaration); bad['argumentReps'][2] = scalar('WordRep')
             self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
+
+
+    def test_memset_state_occurrence_cannot_hide_stored_or_lowered_long(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        # Same original CInt/CSize/State# declaration as the GHC native fixture.
+        declaration = dict(schema=1, target=dict(kind='static', symbol='memset',
+            unit='bytestring-0.12.2.0-inplace', isFunction=True), convention='ccall', safety='unsafe',
+            arity=4, suppliedArity=4,
+            argumentReps=list(map(scalar, ['AddrRep', 'Int32Rep', 'Word64Rep', None])),
+            resultRep=dict(kind='unknown', primReps=['AddrRep'], evaluated=False, aggregate='unboxed-tuple',
+                           components=[scalar(None, True), scalar('AddrRep', True)]))
+        self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+        for source in ('stored', 'lowered'):
+            with self.subTest(source=source):
+                module = fixture.fixture(declaration)
+                wrapper = module['bindings'][0]['expr']
+                call = wrapper[2][1]
+                if source == 'stored':
+                    wrapper[1][3]['rep'] = copy.deepcopy(LONG)
+                else:
+                    call[2][3] = ['lit', 'int', '1', dict(rep=scalar(None, True))]
+                # The use site still claims void; the producer is really Long.
+                self.assertEqual(scalar(None, True), call[2][3][-1]['rep'])
+                report = fixture.audit(module)
+                self.assertFalse(report['accepted'], report)
+                self.assertEqual([], report['foreignCalls'])
+                self.assertTrue(any(issue['code'] == 'foreign-call' and
+                    source + ' operand 3' in issue['detail'] for issue in report['issues']), report)
 
 
 class OriginalByteStringUtf8DeclarationTest(unittest.TestCase):

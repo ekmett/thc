@@ -365,6 +365,14 @@
         "compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c", "src/main/c/bytestring-utf8-api.c", "scripts/build-cbits.py",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
+    "original-memset": {
+      "junit": ["thc.runtime.OriginalMemsetTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memset"]}],
+      "outputs": ["build/original-memset"],
+      "sources": ["compiler/test-fixtures/OriginalMemsetAudit.hs", "compiler/test-fixtures/OriginalMemsetNative.hs",
+        "test/haskell-fixtures/MemsetFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-memory-search": {
       "junit": ["thc.runtime.OriginalMemorySearchTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memory-search"]}],

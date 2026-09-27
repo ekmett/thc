@@ -69,6 +69,7 @@ import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
 import ByteStringUtf8Fixtures (prepareByteStringUtf8)
+import MemsetFixtures (prepareMemset)
 import MemorySearchFixtures (prepareMemorySearch)
 import OriginalFdReadyFixtures (prepareOriginalFdReady)
 import FileWaitFixtures (prepareFileWait)
@@ -1000,6 +1001,7 @@ main = do
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
     ["bytestring-utf8"] -> prepareByteStringUtf8 root
+    ["original-memset"] -> prepareMemset root
     ["original-memory-search"] -> prepareMemorySearch root
     ["original-gmp", "--require-supported"] -> prepareOriginalGmp root True
     ["original-fd-ready"] -> prepareOriginalFdReady root
