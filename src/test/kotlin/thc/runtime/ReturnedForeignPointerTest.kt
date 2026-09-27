@@ -57,6 +57,32 @@ class ReturnedForeignPointerTest {
         assertThrows(RuntimeFault::class.java) { alias.readWord8(0) }
     } }
 
+    @Test fun rtsComparisonRejectsFreedReturnedAllocationInEitherOrder() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            System.getProperty("os.name").startsWith("Linux") &&
+                System.getProperty("os.arch") in setOf("amd64", "x86_64"))
+        val document = StackInfoTestLayout.document()
+        val layout = TargetLayout.fromDocument(document + ("compiler" to
+            ((document.getValue("compiler") as Map<*, *>) + ("abi" to "inplace"))))
+        val proof = CoreRepresentations.parse(mapOf(
+            "kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true))
+        context().use { context -> entered(context) { owner ->
+            val flags = CoreDataLabels.fromCore("RtsFlags", proof, layout)
+            val allocation = owner.nativeAllocations.malloc(32)
+            val alias = try {
+                offset(owner)(allocation, 8).also {
+                    assertSame(allocation.nativeAllocation(), it.nativeAllocation())
+                    assertNotNull(it.returnedAddress()?.carrier)
+                    assertFalse(flags.sameLocation(it))
+                    assertFalse(it.sameLocation(flags))
+                }
+            } finally { owner.nativeAllocations.free(allocation) }
+            assertAll("RTS equality must retain the returned allocation lifetime check",
+                { assertThrows(RuntimeFault::class.java) { flags.sameLocation(alias) } },
+                { assertThrows(RuntimeFault::class.java) { alias.sameLocation(flags) } })
+        } }
+    }
+
     @Test fun managedSulongReturnRetainsCarrierForReadsWritesCopiesAndStrings(): Unit = context().use { context -> entered(context) { owner ->
         val offset = offset(owner)
         val bytes = ByteArray(80)

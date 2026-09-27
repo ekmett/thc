@@ -194,7 +194,11 @@ internal class PackageReturnedAddress(val owner: Language.State, private val ali
             InteropLibrary.getUncached().asLong(owner.packageCbits.memory(operation, transport(), owner.packageCbits.comparisonTransport(other)))
         }
     }
-    fun requireRange(offset: Long, count: Long, writable: Boolean = false) {
+    // ManagedAddress reaches this path only for external storage (no backing).
+    // Keep its defensive backing delegation out of partial evaluation: otherwise
+    // dynamic Addr# reads recursively inline both range methods before that
+    // impossible reverse branch is eliminated. Ordinary managed bounds stay inline.
+    @TruffleBoundary fun requireRange(offset: Long, count: Long, writable: Boolean = false) {
         requireCurrent()
         if (count < 0) fault("Negative returned C pointer access count")
         val relative = try { Math.addExact(displacement, offset).also { Math.addExact(it, count) } }

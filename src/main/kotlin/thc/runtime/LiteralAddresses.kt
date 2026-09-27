@@ -157,6 +157,7 @@ internal class ManagedAddress private constructor(
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
         if (rtsFlags != null || other.rtsFlags != null) {
             rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
+            native?.requireLive(); other.native?.requireLive()
             return rtsFlags != null && rtsFlags === other.rtsFlags && offset == other.offset
         }
         if (foreign?.backing != null || other.foreign?.backing != null)
