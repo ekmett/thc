@@ -62,6 +62,11 @@ by Cabal, just as on other hosts. On Windows, an accepted simple executable
 then uses the existing native Windows exporter pipeline internally; there is
 no separate selector syntax.
 
+The public Haskell driver locates the selected GHC's native ghc-pkg.exe companion.
+For PowerShell export it prefers pwsh when available, otherwise powershell.exe.
+The selected shell's existing execution policy applies; THC never overrides it.
+The Windows CLI fixture exercises companion discovery with GHC_PKG unset.
+
 The driver sends GHC options through GHC's own response-file format. This
 preserves lone dashes and drive-letter colons that Windows PowerShell's external
 -File argument binder would otherwise reinterpret. External automation calling
@@ -157,6 +162,8 @@ dependencies. This slice does not implement the remaining Windows filesystem
 API. Absolute paths (including extended paths furnished by directory) and
 context-relative queries are supported; drive-relative C:foo queries require
 directory's absolute furnishPath. No scan changes the process working directory.
+Extended namespace queries beginning with \\?\ are passed verbatim, including
+forward slashes. Native positive and invalid-name controls cover this distinction.
 Evidence is under build/windows-directory and the default/dense JUnit reports.
 
 ## Current boundaries

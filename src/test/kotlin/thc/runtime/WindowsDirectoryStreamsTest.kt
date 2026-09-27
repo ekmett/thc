@@ -75,7 +75,9 @@ class WindowsDirectoryStreamsTest {
         assertEquals(listOf(WindowsDirectoryStreams.Abi.size, WindowsDirectoryStreams.Abi.nameOffset,
             WindowsDirectoryStreams.Abi.nameUnits, WindowsDirectoryStreams.Abi.noMoreFiles), oracle["layout"])
         val rows = oracle["rows"] as List<Map<String, Any?>>
-        assertEquals(8, rows.size)
+        assertEquals(10, rows.size)
+        assertEquals(false, rows.single { it["case"] == "extended" }["invalid"])
+        assertEquals(true, rows.single { it["case"] == "extended-forward-slash" }["invalid"])
         val nativeCwd = Path.of("").toAbsolutePath()
         for (stage in listOf("pre", "post")) {
             for ((name, op) in operations) {
@@ -121,7 +123,11 @@ class WindowsDirectoryStreamsTest {
                             "no-match" -> "absent-*"
                             else -> ""
                         }
-                        val query = if (relative || suffix.isEmpty()) suffix else base.toString() + "\\" + suffix
+                        val query = when (row["case"]) {
+                            "extended" -> "\\\\?\\" + base.toString() + "\\*"
+                            "extended-forward-slash" -> "\\\\?\\" + base.toString() + "/*"
+                            else -> if (relative || suffix.isEmpty()) suffix else base.toString() + "\\" + suffix
+                        }
                         val size = WindowsDirectoryStreams.Abi.size
                         val storage = ManagedAddress.fromAllocation(ManagedAllocation.mutable(size + 16, 8))
                         storage.fill(size + 16, 165)

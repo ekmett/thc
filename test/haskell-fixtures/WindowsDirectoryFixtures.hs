@@ -244,10 +244,16 @@ observe base (size,nameOffset,nameUnits,noMore) first next close lastError = do
                ("filter","*.txt"),("no-match","absent-*")]
   rows <- forM cases $ \(label,suffix) -> scan label (base </> suffix)
   emptyQuery <- scan "empty-query" ""
+  -- Construct the namespace prefix separately: (</>) would normalize the
+  -- intentional forward slash and erase the native negative control.
+  let extended = "\\\\?\\" ++ map (\c -> if c == '/' then '\\' else c) base
+  extendedQuery <- scan "extended" (extended ++ "\\*")
+  extendedSlash <- scan "extended-forward-slash" (extended ++ "/*")
   finalCwd <- getCurrentDirectory
   unless (cwd == finalCwd) (die "Windows scan oracle changed process CWD")
   pure $ object ["layout" .= [size,nameOffset,nameUnits,noMore],"names" .= names,
-    "unicodeDirectory" .= unicodeDirectory,"listDirectory" .= highLevel,"rows" .= (rows ++ [emptyQuery]),
+    "unicodeDirectory" .= unicodeDirectory,"listDirectory" .= highLevel,
+    "rows" .= (rows ++ [emptyQuery,extendedQuery,extendedSlash]),
     "processCwdUnchanged" .= True]
   where
     scan :: String -> FilePath -> IO Value

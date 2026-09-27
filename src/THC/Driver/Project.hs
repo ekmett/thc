@@ -229,7 +229,8 @@ selectedPackageTool ghc requested = do
     Just value -> if isAbsolute value then pure value else findExecutable value >>=
       maybe (fail "selected ghc-pkg executable not found") pure
     Nothing -> do
-      let candidates = [takeDirectory ghc </> "ghc-pkg-9.14.1", takeDirectory ghc </> "ghc-pkg"]
+      let suffix = if Host.os == "mingw32" then ".exe" else ""
+          candidates = [takeDirectory ghc </> name ++ suffix | name <- ["ghc-pkg-9.14.1", "ghc-pkg"]]
       available <- filterM doesFileExist candidates
       case available of value:_ -> pure value; [] -> fail "no ghc-pkg beside selected GHC"
   packageTool <- canonicalizePath path

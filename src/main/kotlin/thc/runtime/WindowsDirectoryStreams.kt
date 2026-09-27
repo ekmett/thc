@@ -70,7 +70,10 @@ internal class WindowsDirectoryStreams private constructor(private val context: 
                 index += 2
             }
             if (!terminated) fault("Unterminated UTF-16 Windows directory query")
-            result.toString().replace('/', '\\')
+            val supplied = result.toString()
+            // Extended namespace paths disable Win32 normalization. A slash
+            // here must reach the original API unchanged, including errors.
+            if (supplied.startsWith("\\\\?\\")) supplied else supplied.replace('/', '\\')
         }
         val value = path.cbitsOwner()?.let { synchronized(it) { read() } } ?: read()
         // directory's furnishPath normally supplies an absolute extended path.
