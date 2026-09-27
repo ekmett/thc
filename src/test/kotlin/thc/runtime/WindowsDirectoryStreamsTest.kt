@@ -250,7 +250,8 @@ class WindowsDirectoryStreamsTest {
                 "Win32-2.14.2.2-inplace", "Win32-2.14.2.1-ABCD")) {
                 val bad = Json.parse(Json.stringify(call)) as MutableList<Any?>
                 (((bad[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>)["unit"] = unit
-                assertThrows(RuntimeFault::class.java) { validate(bad) }
+                if (op == OriginalStdioOp.LAST_ERROR && unit == "ghc-internal") assertEquals(op, validate(bad))
+                else assertThrows(RuntimeFault::class.java) { validate(bad) }
             }
             for ((field, value) in listOf("safety" to "safe", "convention" to "stdcall", "arity" to 19L)) {
                 val bad = Json.parse(Json.stringify(call)) as MutableList<Any?>

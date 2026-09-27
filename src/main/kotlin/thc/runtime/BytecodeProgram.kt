@@ -1669,6 +1669,36 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = if (originalStdio.result != null) destination.single()
                         else b.createLocal("unused original State destination", "primitive")
+                    if (originalStdio.windowsEncoding) {
+                        if (originalStdio == OriginalStdioOp.MULTI_BYTE_TO_WIDE) {
+                            b.beginOriginalWindowsMultiByte(result)
+                            operands.forEach { it.emit(e) }
+                            b.endOriginalWindowsMultiByte()
+                        } else if (originalStdio == OriginalStdioOp.WIDE_TO_MULTI_BYTE) {
+                            b.beginOriginalWindowsWideChar(result)
+                            operands.forEach { it.emit(e) }
+                            b.endOriginalWindowsWideChar()
+                        } else {
+                            // Preserve source evaluation order before selecting
+                            // the scalar/address lanes of the shared operation.
+                            val values = operands.dropLast(1).mapIndexed { index, operand ->
+                                b.createLocal("Windows operand $index", if (originalStdio.arguments[index] == "AddrRep") "object" else "primitive").also {
+                                    b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+                                }
+                            }
+                            b.beginOriginalWindowsEncoding(result, originalStdio)
+                            if (originalStdio == OriginalStdioOp.CODE_PAGE_INFO || originalStdio == OriginalStdioOp.DBCS_LEAD_BYTE ||
+                                originalStdio == OriginalStdioOp.MAP_ERRNO_VALUE || originalStdio == OriginalStdioOp.WINDOWS_ERROR_MESSAGE)
+                                b.emitLoadLocal(values[0]) else b.emitLoadConstant(0L)
+                            if (originalStdio == OriginalStdioOp.DBCS_LEAD_BYTE) b.emitLoadLocal(values[1]) else b.emitLoadConstant(0L)
+                            if (originalStdio == OriginalStdioOp.CODE_PAGE_INFO) b.emitLoadLocal(values[1])
+                            else if (originalStdio == OriginalStdioOp.LOCAL_FREE) b.emitLoadLocal(values[0])
+                            else b.emitLoadConstant(ManagedAddress.nullAddress())
+                            operands.last().emit(e)
+                            b.endOriginalWindowsEncoding()
+                        }
+                        return@tupleExpression
+                    }
                     if (originalStdio.windowsDirectory) {
                         b.beginOriginalWindowsDirectory(result, originalStdio)
                         if (originalStdio != OriginalStdioOp.LAST_ERROR) operands[0].emit(e)

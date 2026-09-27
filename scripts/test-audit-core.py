@@ -2260,6 +2260,8 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
             'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr', '__hscore_set_errno', 'getpid')]
         targets += [('unix-2.8.8.0-inplace', 'geteuid')]
         targets += [('process-1.6.26.1-inplace', symbol) for symbol in core_original_foreign.PROCESS_OPERATIONS]
+        targets += [('ghc-internal', symbol) for symbol in core_original_foreign.WINDOWS_ENCODING_OPERATIONS]
+        targets += [('ghc-internal', 'GetLastError'), ('Win32-2.14.2.1-inplace', 'GetLastError')]
         for unit, symbol in targets:
             target = dict(kind='static', symbol=symbol, unit=unit, isFunction=True)
             convention, safety, arguments, output = core_original_foreign.operation(target)
@@ -2287,6 +2289,19 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
         target = dict(symbol='memcpy', unit='array-0.5.8.0-inplace')
         self.assertEqual(('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', 'Word64Rep', None),
                          core_original_foreign.operation(target)[2])
+
+    def test_windows_encoding_declarations_keep_exact_owners_and_unsafe_abi(self):
+        fixture = LibdwUnavailableAuditTest()
+        for declaration in self.declarations():
+            symbol = declaration['target']['symbol']
+            if symbol not in core_original_foreign.WINDOWS_ENCODING_OPERATIONS and symbol != 'GetLastError':
+                continue
+            for changes in (dict(target=dict(declaration['target'], unit='main')),
+                            dict(safety='safe'), dict(convention='stdcall'), dict(arity=99)):
+                with self.subTest(symbol=symbol, changes=changes):
+                    report = fixture.audit(fixture.fixture(dict(declaration, **changes)))
+                    self.assertFalse(report['accepted'])
+                    self.assertEqual([], report['foreignCalls'])
 
     def test_genuine_shaped_occurrences_and_refinable_stored_proofs_remain_valid(self):
         fixture = LibdwUnavailableAuditTest()

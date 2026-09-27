@@ -79,7 +79,10 @@ prepareWindowsBridge root = do
   unless (selected == owner) (die "native oracle and acquired runtime dictionary have different owners")
   -- Retain even a failed audit's exact acquisition and native-oracle inputs.
   writeJson (root </> directory </> "linked.json") (object ["modules" .= linked,"owner" .= owner,"logs" .= logs])
-  audits <- forM entries $ \entry -> runLogged 60 root logs ("audit-" ++ entry) [] python
+  -- The checked Windows package graph contains about 3 GiB of full Core. Allow
+  -- its indexed catalogue to finish and close; scalar fixtures remain bounded
+  -- separately. This is acquisition/audit time, not a compiled guest-call retry.
+  audits <- forM entries $ \entry -> runLogged 300 root logs ("audit-" ++ entry) [] python
     (["scripts/audit-core.py","--entry",entry,"--package-manifest",supportManifest,
       "--output",root </> logs </> entry ++ ".audit.json"] ++ modules)
   rejected <- runLoggedExpect 1 60 root logs "audit-missing-support" [] python

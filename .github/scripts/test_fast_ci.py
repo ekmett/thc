@@ -125,19 +125,21 @@ class FastRunnerTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Unsuccessful"):
                 ci.validate_xml(self.root, [windows])
 
-    def test_native_windows_directory_suite_is_a_platform_skip_only_on_linux(self):
+    def test_native_windows_suites_are_platform_skips_only_on_linux(self):
         self.suite()
-        windows = "thc.runtime.WindowsDirectoryStreamsTest"
-        self.suite(windows, body=f'<testcase name="scan" classname="{windows}"><skipped/></testcase>')
-        path = self.root / f"TEST-{windows}.xml"
-        path.write_text(path.read_text().replace('skipped="0"', 'skipped="1"'))
-        with patch.object(ci.sys, "platform", "linux"):
-            result = ci.validate_xml(self.root, ["example.Test", windows])
-        self.assertEqual(result["cases"], [["example.Test", "works"]])
-        self.assertEqual(result["platformSkippedCases"], [[windows, "scan"]])
-        with patch.object(ci.sys, "platform", "win32"):
-            with self.assertRaisesRegex(RuntimeError, "Unsuccessful"):
-                ci.validate_xml(self.root, ["example.Test", windows])
+        for windows in ("thc.runtime.WindowsDirectoryStreamsTest", "thc.runtime.WindowsCodePagesTest"):
+            with self.subTest(suite=windows):
+                self.suite(windows, body=f'<testcase name="native" classname="{windows}"><skipped/></testcase>')
+                path = self.root / f"TEST-{windows}.xml"
+                path.write_text(path.read_text().replace('skipped="0"', 'skipped="1"'))
+                with patch.object(ci.sys, "platform", "linux"):
+                    result = ci.validate_xml(self.root, ["example.Test", windows])
+                self.assertEqual(result["cases"], [["example.Test", "works"]])
+                self.assertEqual(result["platformSkippedCases"], [[windows, "native"]])
+                with patch.object(ci.sys, "platform", "win32"):
+                    with self.assertRaisesRegex(RuntimeError, "Unsuccessful"):
+                        ci.validate_xml(self.root, ["example.Test", windows])
+                path.unlink()
 
     def test_wrong_testcase_class_rejected(self):
         self.suite(body='<testcase name="works" classname="other.Test"/>')

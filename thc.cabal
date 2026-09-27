@@ -867,6 +867,7 @@ executable thc-fixtures
     OriginalCurrentDirectoryFixtures
     OriginalDirectoryStreamsFixtures
     WindowsDirectoryFixtures
+    WindowsCodePageFixtures
     OriginalPathStatFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
