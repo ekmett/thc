@@ -10,7 +10,7 @@ public final class BytecodeDump {
         if (args.length != 4) throw new IllegalArgumentException("MODULES_FILE ENTRY INPUT OUTPUT_FILE");
         var modules = Files.readAllLines(Path.of(args[0])).stream().filter(s -> !s.isBlank()).toList();
         long input = Long.parseLong(args[2]);
-        try (var context = thc.MainKt.executionContext()) {
+        try (var context = thc.MainKt.executionContext(false)) {
             var entry = thc.MainKt.loadEntry(context, modules, args[1], false, "bytecode");
             for (int i = 0; i < 40; i++) entry.execute(input + (i & 3)).asLong();
             entry.invokeMember("compile");
