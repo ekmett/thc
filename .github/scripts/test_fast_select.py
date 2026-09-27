@@ -1136,7 +1136,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStack"} |
+                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
                          set(self.integer_vector_nodes + self.floating_vector_nodes),
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -1511,7 +1511,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                            "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression",
                            "GuestArguments", "GuestEnvironment", "CoreEnvironmentForeign", "CoreRtsArgumentsForeign",
-                           "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression")},
+                           "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression",
+                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
