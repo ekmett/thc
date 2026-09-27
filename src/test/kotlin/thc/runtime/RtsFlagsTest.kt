@@ -4,6 +4,11 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.CompilerDirectives
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -32,6 +37,17 @@ class RtsFlagsTest {
     private fun context(output: ByteArrayOutputStream = ByteArrayOutputStream()) =
         Context.newBuilder("thc").withContextProfile(ContextProfile.SYNCHRONOUS_TEST).err(output).build()
 
+    private fun valid(target: RootCallTarget) = assertEquals(true,
+        target.javaClass.getMethod("isValidLastTier").invoke(target))
+    private fun compile(target: RootCallTarget) {
+        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+        valid(target)
+        val runtime = Truffle.getRuntime()
+        runtime.javaClass.getMethod("bypassedInstalledCode",
+            Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+        valid(target)
+    }
+
     @Test fun composedFieldViewsAreReadOnlyAndContextBound() {
         val layout = layout()
         val first = context(); val second = context()
@@ -47,8 +63,12 @@ class RtsFlagsTest {
             assertEquals(1L, base.plus(404).readWord8(-1))
             assertTrue(field.sameLocation(base.plus(403)))
             assertFalse(field.sameLocation(base))
-            for (offset in listOf(0L, 392L, 402L, 404L, -1L, Long.MAX_VALUE))
-                assertThrows(RuntimeFault::class.java) { base.readWord8(offset) }
+            for (offset in listOf(0L, 392L, 402L, 404L, -1L, Long.MAX_VALUE)) {
+                assertEquals("Unsupported RtsFlags byte field at offset $offset",
+                    assertThrows(RuntimeFault::class.java) { base.readWord8(offset) }.message)
+                assertEquals("Unsupported RtsFlags byte field at offset $offset",
+                    assertThrows(RuntimeFault::class.java) { base.readWord8Int(offset) }.message)
+            }
             assertThrows(RuntimeFault::class.java) { base.plus(Long.MAX_VALUE).plus(1) }
             assertThrows(RuntimeFault::class.java) { field.readWord8(Long.MAX_VALUE) }
             for (operation in ManagedAddressRead.entries)
@@ -65,10 +85,14 @@ class RtsFlagsTest {
         try {
             assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof, layout).readWord8(403))
             assertThrows(RuntimeFault::class.java) { field.readWord8(0) }
+            assertEquals("Compiler RTS cell belongs to another or closed THC context",
+                assertThrows(RuntimeFault::class.java) { base.readWord8Int(402) }.message)
             assertThrows(RuntimeFault::class.java) { base.plus(0) }
             assertThrows(RuntimeFault::class.java) { field.sameLocation(field) }
         } finally { second.leave(); second.close(); first.close() }
         assertThrows(RuntimeFault::class.java) { field.readWord8(0) }
+        assertEquals("Compiler RTS cell belongs to another or closed THC context",
+            assertThrows(RuntimeFault::class.java) { base.readWord8Int(402) }.message)
         assertThrows(RuntimeFault::class.java) { field.plus(0) }
     }
 
@@ -128,7 +152,44 @@ class RtsFlagsTest {
                 val target = program.entryTarget("read")
                 assertTrue((target.rootNode as GuestRoot).scalarResultProof.isInt)
                 repeat(3) { assertEquals(1, Calls.target(target, arrayOf(0L, Unit))) }
+                val before = (program.diagnostics()["compiledEntries"] as Number).toLong()
+                compile(target)
+                assertEquals(before, (program.diagnostics()["compiledEntries"] as Number).toLong())
+                assertEquals(1, Calls.target(target, arrayOf(0L, Unit)))
+                assertEquals(before + 1, (program.diagnostics()["compiledEntries"] as Number).toLong(),
+                    "$backend immediate installed getter")
+                valid(target)
             } finally { threads.leaveCurrent(); context.leave() }
+        }
+    }
+
+    @Test fun unsupportedOffsetFirstInstalledCallKeepsTheTargetAndValidRead() {
+        val layout = layout()
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val address = CoreDataLabels.fromCore("RtsFlags", proof, layout)
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        return address.readWord8Int(frame.arguments[0] as Long)
+                    }
+                }
+                val target = root.callTarget
+                assertEquals(1, target.call(403L))
+                val before = root.compiledEntries
+                compile(target)
+                assertEquals(before, root.compiledEntries)
+                val failure = assertThrows(RuntimeFault::class.java) { target.call(402L) }
+                assertEquals("Unsupported RtsFlags byte field at offset 402", failure.message)
+                assertEquals(before + 1, root.compiledEntries, "First installed call is the invalid offset")
+                valid(target)
+                assertEquals(1, target.call(403L))
+                assertEquals(before + 2, root.compiledEntries)
+                valid(target)
+            } finally { context.leave() }
         }
     }
 
