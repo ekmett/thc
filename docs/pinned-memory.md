@@ -87,13 +87,27 @@ the runtime's Long carrier. Reads use native byte order and observe intervening
 writes through aliases, including after unsafe freeze. The exact State/payload
 tuple keeps Word32, Word, Int32 and Int representation proofs distinct.
 
-`scripts/prepare-managed-address-reads.py` prepares 1,800 native/model cases,
-eight accepted pre/post-Tidy closure audits and 48 rejected genuine-Core proof
-mutations. `ManagedAddressReadTest` checks those exports on AST and bytecode,
-then checks compiled mutable reads, bounds/overflow, State-before-read order,
-failure-before-publication and malformed loader proofs. Native inputs are
+`cabal run exe:thc-fixtures --offline -- managed-address-reads` prepares
+1,800 native observations, eight strict pre/post-Tidy closure audits, and source
+and artifact hashes. `ManagedAddressReadTest` verifies those manifests and the
+ordered input corpus against an independent Kotlin byte-buffer model, then
+checks the exports on AST and bytecode. Its runtime controls cover compiled
+mutable reads, bounds/overflow, State-before-read order and failure-before-publication.
+Malformed loader-proof controls use explicitly synthetic modules; they are
+separate from the genuine-Core acceptance audits. Native inputs are
 aligned live allocations; adversarial out-of-bounds inputs are managed-only
 tests. These reads do not enable arbitrary native pointer dereferences.
+
+After preparation, run both handoff modes with:
+
+```sh
+./gradlew --max-workers=2 --continue \
+  testDefault --tests thc.runtime.ManagedAddressReadTest \
+  testDense --tests thc.runtime.ManagedAddressReadTest
+```
+
+The [earlier producer checkpoint](../research/memory-fixture-checkpoints.md#managed-address-read-producer)
+is retained separately from these current instructions.
 
 `cabal run exe:thc-fixtures -- pinned-pointer-cells` exports the genuine
 `newPinnedByteArray#`/freeze/contents/`keepAlive#` sequence at both Core stages,
