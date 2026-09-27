@@ -106,7 +106,7 @@ class SimdWord8VectorTest {
                 "expr" to listOf("lam", listOf(mapOf("id" to "unused", "name" to "unused", "lifted" to false, "rep" to long)),
                     body, mapOf("rep" to closure, "resultRep" to long)))))
     }
-    @Test fun literalRefinementAndUnliftedFlagsAreCheckedBeforeExecution() = withLanguage { language ->
+    @Test fun literalCarriersAndUnliftedFlagsAreCheckedBeforeExecution() = withLanguage { language ->
         val lane = mapOf("kind" to "long", "primReps" to listOf("Word8Rep"), "evaluated" to true)
         val exact = listOf("lit", "word8", "255", mapOf("rep" to lane))
         val unconstrained = mapOf("kind" to "unknown", "primReps" to null, "evaluated" to false)
@@ -118,7 +118,16 @@ class SimdWord8VectorTest {
             for (flag in listOf(true, null, 0L, "false")) assertThrows(RuntimeFault::class.java) {
                 program(language, backend, broadcastModule(exact, flag), "root", diagnostic)
             }
-            for (wrong in listOf(lane + ("kind" to "unknown"), lane + ("primReps" to listOf("Int8Rep")), lane + ("primReps" to listOf("Int32Rep")))) {
+            // Duplicate integral annotations share Long; the literal tag supplies narrowing.
+            for (shared in listOf("Int8Rep", "Int32Rep")) {
+                val operand = listOf("lit", "word8", "1", mapOf("rep" to (lane + ("primReps" to listOf(shared)))))
+                val p = program(language, backend, broadcastModule(operand), "root", diagnostic)
+                assertEquals(1L, Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("root"), arrayOf(0L))))
+            }
+            for (wrong in listOf(lane + ("kind" to "unknown"),
+                lane + mapOf("kind" to "float", "primReps" to listOf("FloatRep")),
+                lane + mapOf("kind" to "double", "primReps" to listOf("DoubleRep")),
+                lane + mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)")), metadata())) {
                 assertThrows(RuntimeFault::class.java) { program(language, backend,
                     broadcastModule(listOf("lit", "word8", "1", mapOf("rep" to wrong))), "root", diagnostic) }
             }
