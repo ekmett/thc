@@ -248,6 +248,8 @@ tasks.withType<Test>().configureEach {
             "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
             "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
             "original-fcntl/**/*.json", "original-fcntl/logs/*.stdout", "original-fcntl/logs/*.stderr", "original-fcntl/native/oracle",
+            "original-errno/**/*.json", "original-errno/logs/*.stdout", "original-errno/logs/*.stderr",
+            "original-errno/native/oracle", "original-errno/native/observations.txt",
             "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
             "original-tcsetattr/**/*.json", "original-tcsetattr/logs/*.stdout", "original-tcsetattr/logs/*.stderr", "original-tcsetattr/native/oracle",
             "original-sigprocmask/**/*.json", "original-sigprocmask/logs/*.stdout", "original-sigprocmask/logs/*.stderr", "original-sigprocmask/native/oracle",

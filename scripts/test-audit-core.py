@@ -2137,7 +2137,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
             'memcmp', 'memchr', 'memset', 'bytestring_is_valid_utf8',
             '_hs_bytestring_long_long_int_dec', '_hs_bytestring_long_long_int_dec_padded18')]
         targets += [('ghc-internal', symbol) for symbol in (
-            'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr')]
+            'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr', '__hscore_set_errno')]
         for unit, symbol in targets:
             target = dict(kind='static', symbol=symbol, unit=unit, isFunction=True)
             convention, safety, arguments, output = core_original_foreign.operation(target)
@@ -3115,8 +3115,9 @@ class OriginalDupAuditTest(unittest.TestCase):
         'ghczuwrapperZC12ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigaddset': (('AddrRep', 'Int32Rep', None), 'Int32Rep'),
         'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask': (('Int32Rep', 'AddrRep', 'AddrRep', None), 'Int32Rep'),
     }
+    errno = {'__hscore_set_errno': (('Int32Rep', None), None)}
     open_flags = {f'__hscore_o_{name}': ((None,), 'Int32Rep') for name in ('excl', 'binary', 'trunc')}
-    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset, *event_descriptors, *open_flags)
+    symbols = (core_original_foreign.TCSETATTR_SYMBOL, core_original_foreign.TCGETATTR_SYMBOL, 'dup', 'dup2', '__hscore_fstat', '__hscore_open', 'lockFile', 'unlockFile', *termios, *sigset, *event_descriptors, *open_flags, *errno)
     def fixture(self, symbol):
         arguments = (('Int32Rep', 'Int32Rep', 'AddrRep', None) if symbol == core_original_foreign.TCSETATTR_SYMBOL else
                      ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None) if symbol == 'lockFile' else
@@ -3124,7 +3125,7 @@ class OriginalDupAuditTest(unittest.TestCase):
                      ('Int32Rep', 'AddrRep', None) if symbol in ('__hscore_fstat', core_original_foreign.TCGETATTR_SYMBOL) else
                      ('AddrRep', 'Int32Rep', 'Word32Rep', None) if symbol == '__hscore_open' else
                      ('Int32Rep', None) if symbol == 'dup' else ('Int32Rep', 'Int32Rep', None))
-        arguments, output = (self.termios | self.sigset | self.event_descriptors | self.open_flags).get(symbol, (arguments, 'Int32Rep'))
+        arguments, output = (self.termios | self.sigset | self.event_descriptors | self.open_flags | self.errno).get(symbol, (arguments, 'Int32Rep'))
         scalar = lambda rep, evaluated: dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
             primReps=[] if rep is None else [rep], evaluated=evaluated)
         parameters = [dict(id=f'a{i}', lifted=False, rep=scalar(p, True)) for i, p in enumerate(arguments)]
@@ -3159,7 +3160,25 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.call(module)[6]['foreignCall']['target']['symbol'] = alias
             self.assertFalse(self.audit(module)['accepted'])
 
+    def test_errno_setter_keeps_owner_and_singleton_state_result(self):
+        symbol = '__hscore_set_errno'
+        for unit in ('main', 'unix-2.8.8.0-inplace', 'ghc-internal-9.1401.0-inplace'):
+            module = self.fixture(symbol)
+            self.call(module)[6]['foreignCall']['target']['unit'] = unit
+            self.assertFalse(self.audit(module)['accepted'])
+        for declared in (False, True):
+            for mutation in ('bare', 'empty', 'extra', 'sum'):
+                module = self.fixture(symbol); meta = self.call(module)[6]
+                owner, key = (meta['foreignCall'], 'resultRep') if declared else (meta, 'rep')
+                result = owner[key]
+                if mutation == 'bare': owner[key] = result['components'][0]
+                if mutation == 'empty': result['components'] = []
+                if mutation == 'extra': result['components'].append(copy.deepcopy(result['components'][0]))
+                if mutation == 'sum': result['aggregate'] = 'unboxed-sum'
+                self.assertFalse(self.audit(module)['accepted'])
+
     def test_original_open_flags_keep_ghc_owner_and_cint_result(self):
+
         for symbol in self.open_flags:
             for unit in ('main', 'unix-2.8.8.0-inplace', 'ghc-internal-9.1401.0-inplace'):
                 module = self.fixture(symbol)

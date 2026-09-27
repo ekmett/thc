@@ -23,8 +23,8 @@ class CoreOriginalStdioTest {
         assertTrue(error.message.orEmpty().startsWith("Invalid original stdio call: "), error.message)
     }
 
-    @Test fun allTenExactContracts() {
-        assertEquals(setOf("safe_write", "unsafe_write", "errno", "dup", "dup2", "unlink",
+    @Test fun allElevenExactContracts() {
+        assertEquals(setOf("safe_write", "unsafe_write", "errno", "set_errno", "dup", "dup2", "unlink",
             "seek_set", "seek_cur", "seek_end", "strerror"), OriginalStdioFixtures.signatures.keys)
         for (name in OriginalStdioFixtures.signatures.keys) {
             val input = Input(name)
@@ -35,9 +35,9 @@ class CoreOriginalStdioTest {
         }
     }
 
-    @Test fun noSymbolAliasesOrSetterAreAdmitted() {
+    @Test fun noSymbolAliasesAreAdmitted() {
         val symbol = OriginalStdioFixtures.symbols.getValue("safe_write")
-        for (unknown in listOf("write", "read", "__hscore_set_errno", "thc_io_v1_write",
+        for (unknown in listOf("write", "read", "__hscore_set_errno64", "thc_io_v1_write",
             symbol.replace("ZC20ZC", "ZC22ZC"), symbol + "64", "prefix" + symbol))
             Input("safe_write").also { it.target["symbol"] = unknown; assertNull(it.validate()) }
         for (metadata in listOf(null, emptyMap<String, Any?>(), mapOf("foreignCall" to null)))
@@ -120,6 +120,24 @@ class CoreOriginalStdioTest {
             }
         }
         Input("safe_write").also { (it.descriptor["resultRep"] as MutableMap<String, Any?>)["evaluated"] = true; reject(it) }
+    }
+
+    @Test fun setterRequiresSingletonStateAtAllResultProofSites() {
+        for (site in 0..2) for (mutation in listOf("bare", "empty", "extra", "sum")) {
+            val input = Input("set_errno")
+            val proof = when (site) {
+                0 -> input.descriptor["resultRep"] as MutableMap<String, Any?>
+                1 -> input.metadata["rep"]!!
+                else -> input.result
+            }
+            when (mutation) {
+                "bare" -> { proof.clear(); proof.putAll(OriginalStdioFixtures.scalar(null, site != 0)) }
+                "empty" -> proof["components"] = emptyList<Any?>()
+                "extra" -> proof["components"] = listOf(OriginalStdioFixtures.scalar(null), OriginalStdioFixtures.scalar(null))
+                "sum" -> proof["aggregate"] = "unboxed-sum"
+            }
+            reject(input)
+        }
     }
 
     @Test fun foreignHeadsAreUnboundDeclarationsNotCallerNameAliases() {

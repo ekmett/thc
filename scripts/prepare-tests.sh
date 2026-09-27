@@ -112,6 +112,7 @@ esac
 "$fixture_bin" original-open
 "$fixture_bin" original-termios
 "$fixture_bin" original-fcntl
+"$fixture_bin" original-errno
 "$fixture_bin" original-tcsetattr
 "$fixture_bin" original-tcgetattr
 "$fixture_bin" original-sigprocmask

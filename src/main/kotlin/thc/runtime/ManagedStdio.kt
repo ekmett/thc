@@ -58,6 +58,13 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return lastError.get()
     }
 
+    /** Zero explicitly clears the slot; every signed CInt is otherwise preserved. */
+    @TruffleBoundary fun setErrno(value: Long) {
+        hostAbi
+        if (value != value.toInt().toLong()) fault("Original set_errno requires a canonical signed CInt")
+        lastError.set(value)
+    }
+
     @TruffleBoundary fun seekConstant(operation: OriginalStdioOp): Long = hostAbi.seekConstant(operation)
 
     @TruffleBoundary fun flagConstant(operation: OriginalStdioOp): Long = hostAbi.flagConstant(operation)

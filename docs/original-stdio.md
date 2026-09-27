@@ -11,6 +11,7 @@ The initial contracts are the exact `ghc-internal` static function targets:
 | `ghczuwrapperZC20ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / safe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
 | `ghczuwrapperZC21ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCwrite` | capi / unsafe | Int32Rep, AddrRep, Word64Rep | Int64Rep |
 | `__hscore_get_errno` | ccall / unsafe | none | Int32Rep |
+| `__hscore_set_errno` | ccall / unsafe | Int32Rep | none (singleton State tuple) |
 | `fdReady` | ccall / safe or unsafe | Int32Rep, Word8Rep, Int64Rep, Word8Rep | Int32Rep |
 | `ghczuwrapperZC1ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuSET` | capi / unsafe | none | Int32Rep |
 | `ghczuwrapperZC2ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCSEEKzuCUR` | capi / unsafe | none | Int32Rep |
@@ -40,6 +41,13 @@ and Darwin x86_64/aarch64 host targets; cross-target resources are rejected.
 The errno slot belongs to a context and Java thread, preserving the existing guest
 thread identity. Supporting safe/unsafe descriptors does not make these foreign
 operations asynchronously interruptible or establish migratable IO scheduling.
+The exact `__hscore_set_errno` declaration overwrites that same slot with any
+canonical signed CInt, including negative values and zero. Zero explicitly
+clears errno; successful IO still preserves it, while failed IO replaces it with
+the captured host error. Invalid carriers and State proofs reject before mutation.
+The slot survives context reentry and remains isolated across contexts and Java
+carriers. Future carrier migration must move the shared getter/setter slot with
+guest-thread state.
 
 The separate exact `base_strerror_r` safe ccall runs the unchanged GHC C wrapper
 against a checked native copy of the caller's whole buffer. It copies every byte

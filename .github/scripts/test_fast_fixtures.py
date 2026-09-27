@@ -871,6 +871,52 @@ class FixturePreparationTest(unittest.TestCase):
             path.write_text(json.dumps(receipt))
             self.assertEqual({name}, set(fast_fixtures._output_hashes(self.root, group)))
 
+    def test_original_errno_registered_cache_checks_all_artifacts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['original-errno']
+        cache = fast_fixtures.fast_inputs
+        self.assertEqual('original-errno', owners['thc.runtime.OriginalErrnoTest'])
+        self.assertIn('"$fixture_bin" original-errno', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('build/original-errno', fast_fixtures.FULL_OUTPUT_ROOTS)
+        name = 'build/original-errno/manifest.json'
+        self.assertEqual(34, len(cache.ORIGINAL_ERRNO_OUTPUTS))
+        for item in cache.ORIGINAL_ERRNO_OUTPUTS:
+            self.assertTrue(cache.allowed_payload(item, {}), item)
+        for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
+            self.assertFalse(cache.allowed_payload('build/original-errno/' + item, {}), item)
+        with mock.patch.object(cache, 'ERRNO_NATIVE_HOST', True):
+            artifacts = {}
+            for item in cache.ORIGINAL_ERRNO_OUTPUTS - {name}:
+                path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+            receipt = dict(schema=1, supported=True, strictAccepted=True, runtimeVerified=False,
+                           installedArtifactsHashed=False, ghc="9.14.1", nativeRows=5,
+                           entries=list(cache.ORIGINAL_ERRNO_ENTRIES), artifactHashes=artifacts)
+            path = self.root / name; path.write_text(json.dumps(receipt))
+            self.assertEqual(cache.ORIGINAL_ERRNO_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+            for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(nativeRows=4),
+                            dict(entries=[]), dict(strictAccepted=False), dict(runtimeVerified=True),
+                            dict(installedArtifactsHashed=True),
+                            dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
+                with self.assertRaises(cache.CacheMiss):
+                    cache.errno_artifact_hashes(dict(receipt, **changes))
+            for missing in ('native/observations.txt', 'native/oracle', 'pre/core/OriginalErrnoAudit.json',
+                            'post/originalResetErrno.audit.json', 'logs/native-run.stdout'):
+                item = 'build/original-errno/' + missing
+                incomplete = dict(artifacts); del incomplete[item]
+                with self.assertRaises(cache.CacheMiss):
+                    cache.errno_artifact_hashes(dict(receipt, artifactHashes=incomplete))
+                artifact = self.root / item; artifact.write_text('changed')
+                with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+                artifact.unlink(); artifact.symlink_to(self.root / 'build/original-errno/oracle.json')
+                with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+                artifact.unlink(); artifact.write_text('fixture\n')
+        with mock.patch.object(cache, 'ERRNO_NATIVE_HOST', False):
+            receipt = dict(schema=1, supported=False, artifactHashes={})
+            path.write_text(json.dumps(receipt))
+            self.assertEqual({name}, set(fast_fixtures._output_hashes(self.root, group)))
+
     def test_original_termios_registration_receipt_and_stale_artifact(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
