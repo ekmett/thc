@@ -216,6 +216,8 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         result["coreUnitDecodedBytes"] = counters.sumOf { it.decodedBytes }
         result["coreUnitMetadataBytes"] = counters.sumOf { it.metadataBytes }
         result["coreUnitVerifiedModuleBytes"] = counters.sumOf { it.verifiedModuleBytes }
+        result["coreUnitPhysicalMappingOpens"] = counters.sumOf { it.physicalMappingOpens }
+        result["coreUnitMappingCacheHits"] = counters.sumOf { it.mappingCacheHits }
         result["looseConsumerBindingHeaders"] = consumerBindings.size
         result.putAll(consumerStatistics())
         return result

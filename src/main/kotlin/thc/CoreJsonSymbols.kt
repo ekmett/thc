@@ -3,14 +3,11 @@
 
 package thc
 
-import java.lang.foreign.Arena
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import java.security.MessageDigest
 import java.util.concurrent.CancellationException
 
@@ -24,13 +21,15 @@ import java.util.concurrent.CancellationException
 internal class CoreJsonSymbols(private val sourcePath: Path, private val directoryPath: Path,
                               private val verifyArtifacts: Boolean = false,
                               private val sourceSha256: String? = null,
-                              private val directorySha256: String? = null) : AutoCloseable {
+                              private val directorySha256: String? = null,
+                              private val mappings: CoreFileMappings = CoreFileMappings.shared) : AutoCloseable {
     data class Statistics(val directoryOpens: Long, val sourceOpens: Long,
         val directoryMappedBytes: Long, val sourceMappedBytes: Long,
         val directoryByteReads: Long, val sourceByteReads: Long,
         val hashBytesScanned: Long, val lookupComparisons: Long,
         val decodedBindings: Long, val decodedBytes: Long,
-        val decodedModules: Long, val metadataBytes: Long, val verifiedModuleBytes: Long)
+        val decodedModules: Long, val metadataBytes: Long, val verifiedModuleBytes: Long,
+        val physicalMappingOpens: Long, val mappingCacheHits: Long)
 
     /** Detached scalar totals: retaining diagnostics never retains a mapping. */
     class Counters {
@@ -47,9 +46,12 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         var decodedModules = 0L
         var metadataBytes = 0L
         var verifiedModuleBytes = 0L
+        var physicalMappingOpens = 0L
+        var mappingCacheHits = 0L
         @Synchronized fun statistics() = Statistics(directoryOpens, sourceOpens,
             directoryMappedBytes, sourceMappedBytes, directoryByteReads, sourceByteReads,
-            hashBytesScanned, lookupComparisons, decodedBindings, decodedBytes, decodedModules, metadataBytes, verifiedModuleBytes)
+            hashBytesScanned, lookupComparisons, decodedBindings, decodedBytes, decodedModules, metadataBytes, verifiedModuleBytes,
+            physicalMappingOpens, mappingCacheHits)
     }
 
     data class ModuleSpan(val start: Long, val end: Long, val bindingsStart: Long, val bindingsEnd: Long)
@@ -66,20 +68,23 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
 
     fun statistics() = counters.statistics()
 
-    private class Mapping(path: Path) : AutoCloseable {
-        private val arena = Arena.ofShared()
-        val bytes: MemorySegment = try {
-            FileChannel.open(path, StandardOpenOption.READ).use { channel ->
-                channel.map(FileChannel.MapMode.READ_ONLY, 0, channel.size(), arena)
-            }
-        } catch (failure: Throwable) { arena.close(); throw failure }
+    private class Mapping(private val lease: CoreFileMappings.Lease) : AutoCloseable {
+        // Borrow once while our operation monitor owns this lease: byte access
+        // does not lock the process cache or lease for every character.
+        val bytes: MemorySegment = lease.bytes
         val size: Long get() = bytes.byteSize()
-        override fun close() = arena.close()
+        override fun close() = lease.close()
     }
 
     private fun open(path: Path, expected: String?, sourceFile: Boolean): Mapping {
         if (sourceFile) counters.sourceOpens++ else counters.directoryOpens++
-        val mapping = Mapping(path)
+        // Explicit verification observes the currently named file, not a prior
+        // inode cached under the producer's identity assertion. Keep that exact
+        // fresh lease after hashing it. Normal trusted loads share mappings.
+        val lease = if (verifyArtifacts || expected == null) mappings.acquireUncached(path)
+            else mappings.acquire(path, expected)
+        if (lease.opened) counters.physicalMappingOpens++ else counters.mappingCacheHits++
+        val mapping = Mapping(lease)
         if (sourceFile) counters.sourceMappedBytes += mapping.size else counters.directoryMappedBytes += mapping.size
         try {
             if (verifyArtifacts) {

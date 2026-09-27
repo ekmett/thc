@@ -144,6 +144,31 @@ class CoreJsonSymbolsTest {
         } finally { reader.close(); pool.shutdownNow() }
     }
 
+    @Test fun explicitVerificationObservesReplacementEvenWithAnIdleTrustedMapping() {
+        fixture(listOf(binding("f")))
+        val jsonHash = hash(Files.readAllBytes(source))
+        val directoryHash = hash(Files.readAllBytes(symbols))
+        CoreFileMappings(1024 * 1024, 4).use { cache ->
+            fun reader(verify: Boolean) = CoreJsonSymbols(source, symbols, verify, jsonHash, directoryHash, cache)
+            reader(false).use { assertNotNull(it.binding("f")) }
+            reader(false).use {
+                assertNotNull(it.binding("f"))
+                assertEquals(2L, it.statistics().mappingCacheHits)
+            }
+            // Replacement, not in-place mutation of an immutable mapping.
+            val replacement = directory.resolve("changed.json")
+            Files.writeString(replacement, "{}")
+            Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING)
+            repeat(2) { reader(true).use {
+                val failure = assertThrows(IllegalArgumentException::class.java) { it.binding("f") }
+                assertTrue(failure.message.orEmpty().contains("hash mismatch"))
+                assertEquals(0L, it.statistics().mappingCacheHits)
+                assertEquals(Files.size(symbols) + Files.size(source), it.statistics().hashBytesScanned)
+            } }
+            reader(false).use { assertNotNull(it.binding("f"), "trusted identity still names the pinned old immutable bytes") }
+        }
+    }
+
     @Test fun oneLookupDoesNotCreateAHeapRowIndexForNOrTwiceN() {
         for (size in listOf(512, 1024)) {
             fixture((0 until size).reversed().map { binding("unit:M.f${it.toString().padStart(5, '0')}") })

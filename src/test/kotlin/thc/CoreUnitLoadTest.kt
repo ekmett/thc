@@ -227,7 +227,7 @@ class CoreUnitLoadTest {
             assertEquals(2L, count(entry, "coreUnitDecodedBindings"))
         }
     }
-    @Test fun sharedEngineContextsOwnSeparateMappingsAndClosingOneDoesNotPoisonTheOther() {
+    @Test fun sharedMappingsKeepDecodedContextStateSeparateAndSurviveClosingEitherContext() {
         val manifest = fixture()
         Engine.create().use { engine ->
             val source = Source.newBuilder("thc", request(manifest, "bytecode"), "unit-model").cached(true).build()
@@ -236,12 +236,23 @@ class CoreUnitLoadTest {
             try {
                 val a = first.eval(source)
                 val b = second.eval(source)
+                assertEquals(2L, count(a, "coreUnitPhysicalMappingOpens"))
+                assertEquals(0L, count(a, "coreUnitMappingCacheHits"))
+                assertEquals(0L, count(b, "coreUnitPhysicalMappingOpens"))
+                assertEquals(2L, count(b, "coreUnitMappingCacheHits"))
                 assertEquals(2L, a.execute(1).asLong())
                 assertEquals(1L, count(b, "coreUnitDecodedBindings"))
                 first.close()
                 assertEquals(3L, b.execute(2).asLong())
                 assertEquals(2L, count(b, "coreUnitDecodedBindings"))
             } finally { first.close(); second.close() }
+        }
+        executionContext().use { context ->
+            val entry = context.eval("thc", request(manifest, "bytecode"))
+            assertEquals(0L, count(entry, "coreUnitPhysicalMappingOpens"), "closed contexts release leases into bounded idle reuse")
+            assertEquals(2L, count(entry, "coreUnitMappingCacheHits"))
+            assertEquals(1L, count(entry, "coreUnitDecodedBindings"), "decoded state is not process-shared")
+            assertEquals(7L, entry.execute(0).asLong())
         }
     }
 }
