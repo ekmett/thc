@@ -6,6 +6,7 @@
 
 import hashlib
 import json
+from contextlib import closing
 from pathlib import Path
 import platform
 import re
@@ -834,6 +835,12 @@ def zip_member(name):
 
 
 def bundle_modules(path, unit, records):
+    """Compatibility list API; streaming consumers use open_modules instead."""
+    with closing(_iter_bundle_modules(path, unit, records)) as modules:
+        return [(artifact, data) for _, artifact, data in modules]
+
+
+def _iter_bundle_modules(path, unit, records):
     bundle = unit['bundle']
     if (not isinstance(bundle, dict) or set(bundle) != {'path', 'sha256'} or
             not isinstance(bundle['path'], str) or not Path(bundle['path']).is_absolute() or
@@ -886,22 +893,93 @@ def bundle_modules(path, unit, records):
                             record.get('buildKey') != inner['buildKey'] or
                             record.get('exportKey') != inner['exportKey']):
                         raise ValueError(f'{path}: build-inputs record disagrees with unit {unit["id"]}')
-                return [(str(archive_path) + '!/' + item['path'], archive.read(item['path']))
-                        for item in records]
+                    del inputs, record
+                del inner
+                # Keep the verified archive open, but never retain all its
+                # decompressed members beside the caller's parsed Core.
+                for item in records:
+                    yield item, str(archive_path) + '!/' + item['path'], archive.read(item['path'])
     except (BadZipFile, RuntimeError, EOFError, zlib.error) as error:
         raise ValueError(f'{path}: invalid ZIP bundle {archive_path}: {error}') from error
 
 
 def load(path):
-    return _load(path, audit_archives=False)
+    with open_modules(path) as modules:
+        return list(modules)
 
 
 def load_for_audit(path):
     """Read verified archive-only foreign Core for diagnostics, never execution."""
-    return _load(path, audit_archives=True)
+    with open_modules(path, audit_archives=True) as modules:
+        return list(modules)
 
 
-def _load(path, audit_archives):
+def open_modules(path, *, audit_archives=False):
+    """Open a one-shot stream of (source, validated module) pairs.
+
+    Use as a context manager and exhaust it before publishing any result:
+    later modules can still reject the manifest. Normal context exit before
+    exhaustion raises ValueError. complete becomes true only after successful
+    exhaustion; cancellation, close and validation failure never set it.
+
+    audit_archives permits verified archive-only foreign Core for diagnostics,
+    not execution. Completion establishes the same manifest/module checks as
+    load_for_audit, not whole-program admission or cross-module audit proofs.
+    Consumers own any modules they retain; this reader retains no past ASTs.
+    """
+    return _ModuleStream(path, audit_archives)
+
+
+class _ModuleStream:
+    def __init__(self, path, audit_archives):
+        self._path = path
+        self._iterator = _iter_load(path, audit_archives)
+        self._complete = False
+        self._closed = False
+
+    @property
+    def complete(self):
+        return self._complete
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._closed:
+            raise StopIteration
+        try:
+            return next(self._iterator)
+        except StopIteration:
+            self._complete = True
+            self.close()
+            raise
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        if not self._closed:
+            self._closed = True
+            self._iterator.close()
+
+    def __enter__(self):
+        if self._closed:
+            raise ValueError(f'{self._path}: Core module stream is closed')
+        return self
+
+    def __exit__(self, exception_type, exception, traceback):
+        self.close()
+        if exception_type is None and not self._complete:
+            raise ValueError(f'{self._path}: Core module stream was not fully consumed')
+
+
+def _iter_loose_modules(root, records):
+    for item in records:
+        artifact = (root / item['path']).resolve()
+        yield item, str(artifact), artifact.read_bytes()
+
+
+def _iter_load(path, audit_archives):
     path = Path(path)
     root = path.resolve().parent
     manifest = strict_json(path.read_text())
@@ -912,7 +990,7 @@ def _load(path, audit_archives):
         raise ValueError(f'{path}: requires {FORMAT} schema 1 / GHC 9.14.1')
     units = set()
     module_keys = set()
-    documents = []
+    found = False
     for unit in manifest['units']:
         if not isinstance(unit, dict):
             raise ValueError(f'{path}: invalid unit record')
@@ -949,52 +1027,60 @@ def _load(path, audit_archives):
                 if not artifact.is_relative_to(root):
                     raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
             records.append(item)
-        artifacts = (bundle_modules(path, unit, records) if 'bundle' in unit else
-                     [(str((root / item['path']).resolve()),
-                       (root / item['path']).resolve().read_bytes()) for item in records])
-        for item, (artifact, data) in zip(records, artifacts):
-            name, boundary = item['name'], item['boundary']
-            relative, expected = item['path'], item['sha256']
-            if hashlib.sha256(data).hexdigest() != expected:
-                raise ValueError(f'{path}: content hash mismatch: {relative!r}')
-            module = strict_json(data.decode('utf-8'))
-            if (not isinstance(module, dict) or module.get('unit') != unit_id or
-                    module.get('module') != name or module.get('boundary') != boundary):
-                raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')
-            if module.get('ghc') != '9.14.1':
-                raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
-            executable = (type(module.get('schema')) is int and module['schema'] == 1 and
-                          'foreign' not in module)
-            if (type(module.get('schema')) is int and module['schema'] == 2 and
-                    'foreignLink' in module):
-                validate_archive_only_foreign(module)
-                executable = linked_foreign(module)
-            if 'packageScalarLink' in module or 'packageNativeLink' in module:
-                executable = bool(package_scalar_link(module)) or executable
-            elif 'staticForeignImportStubs' in module:
-                executable = managed_import_stubs(module) or executable
-            if 'packageNativeArchive' in module:
-                package_native_archive(module)
-                executable = False
-            if not executable:
-                detail = foreign_execution_issue(module)
-                if audit_archives and detail:
-                    try:
-                        validate_archive_only_foreign(module)
-                    except ValueError as error:
-                        raise ValueError(f'{path}: malformed foreign archive in {unit_id}:{name}: {error}') from error
-                else:
-                    raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
-            bindings = module.get('bindings')
-            if not isinstance(bindings, list):
-                raise ValueError(f'{path}: missing bindings: {relative!r}')
-            prefix = unit_id + ':' + name + '.'
-            alias = 'main::' + name + '.main'
-            for binding in bindings:
-                key = binding.get('id') if isinstance(binding, dict) else None
-                if not isinstance(key, str) or not (key.startswith(prefix) or key == alias):
-                    raise ValueError(f'{path}: foreign binding owner in {relative!r}: {key!r}')
-            documents.append((str(artifact), module))
-    if not documents:
+        artifacts = (_iter_bundle_modules(path, unit, records) if 'bundle' in unit else
+                     _iter_loose_modules(root, records))
+        with closing(artifacts):
+            for item, artifact, data in artifacts:
+                module = _validated_module(path, unit_id, item, data, audit_archives)
+                del data
+                found = True
+                yield artifact, module
+                # Release this AST before reading/parsing the next member.
+                del module
+    if not found:
         raise ValueError(f'{path}: no Core modules')
-    return documents
+
+
+def _validated_module(path, unit_id, item, data, audit_archives):
+    name, boundary = item['name'], item['boundary']
+    relative, expected = item['path'], item['sha256']
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise ValueError(f'{path}: content hash mismatch: {relative!r}')
+    module = strict_json(data.decode('utf-8'))
+    if (not isinstance(module, dict) or module.get('unit') != unit_id or
+            module.get('module') != name or module.get('boundary') != boundary):
+        raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')
+    if module.get('ghc') != '9.14.1':
+        raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
+    executable = (type(module.get('schema')) is int and module['schema'] == 1 and
+                  'foreign' not in module)
+    if (type(module.get('schema')) is int and module['schema'] == 2 and
+            'foreignLink' in module):
+        validate_archive_only_foreign(module)
+        executable = linked_foreign(module)
+    if 'packageScalarLink' in module or 'packageNativeLink' in module:
+        executable = bool(package_scalar_link(module)) or executable
+    elif 'staticForeignImportStubs' in module:
+        executable = managed_import_stubs(module) or executable
+    if 'packageNativeArchive' in module:
+        package_native_archive(module)
+        executable = False
+    if not executable:
+        detail = foreign_execution_issue(module)
+        if audit_archives and detail:
+            try:
+                validate_archive_only_foreign(module)
+            except ValueError as error:
+                raise ValueError(f'{path}: malformed foreign archive in {unit_id}:{name}: {error}') from error
+        else:
+            raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
+    bindings = module.get('bindings')
+    if not isinstance(bindings, list):
+        raise ValueError(f'{path}: missing bindings: {relative!r}')
+    prefix = unit_id + ':' + name + '.'
+    alias = 'main::' + name + '.main'
+    for binding in bindings:
+        key = binding.get('id') if isinstance(binding, dict) else None
+        if not isinstance(key, str) or not (key.startswith(prefix) or key == alias):
+            raise ValueError(f'{path}: foreign binding owner in {relative!r}: {key!r}')
+    return module
