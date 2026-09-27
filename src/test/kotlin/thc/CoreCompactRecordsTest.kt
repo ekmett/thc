@@ -27,7 +27,7 @@ class CoreCompactRecordsTest {
         Files.write(path, encoded)
         val sha = MessageDigest.getInstance("SHA-256").digest(encoded).joinToString("") { "%02x".format(it) }
         CoreFileMappings(1024 * 1024, 1).use { cache ->
-            CoreCompactFile(path, sha, mappings = cache).use { file -> action(CoreCompactRecords(file, sha), file) }
+            CoreCompactFile(path, sha, false, cache).use { file -> action(CoreCompactRecords(file, sha), file) }
         }
     }
     private fun literal(kind: Int, payload: ByteArray) = bytes(2) + ByteArray(10) + bytes(kind) + payload

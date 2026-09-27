@@ -100,7 +100,7 @@ class CoreCbdArchiveTest {
             setOf("data", "names", "filenames", "line-columns"))
         val path = write(bytes)
         CoreFileMappings(100000, 1).use { maps -> CoreCbdSlabs(100000, 7).use { slabs ->
-            repeat(2) { iteration -> CoreCompactFile(path, sha(bytes), mappings = maps, slabs = slabs).use { file ->
+            repeat(2) { iteration -> CoreCompactFile(path, sha(bytes), false, maps, slabs).use { file ->
                 file.header()
                 assertEquals(0L, file.counters.statistics().memberInflations)
                 assertEquals(42, file.data(0) { it.readByte() })
@@ -197,7 +197,7 @@ class CoreCbdArchiveTest {
         view.putInt(data + 16, 0); view.putInt(local + 14, 0)
         val path = write(bytes)
         CoreFileMappings(10000, 2).use { maps ->
-            CoreCompactFile(path, sha(bytes), mappings = maps).use { file ->
+            CoreCompactFile(path, sha(bytes), false, maps).use { file ->
                 assertEquals(42, file.data(0) { it.readByte() })
                 assertEquals(0L, file.counters.statistics().verifiedStoredBytes)
                 assertEquals(0L, file.counters.statistics().hashBytesRead)
@@ -215,7 +215,7 @@ class CoreCbdArchiveTest {
         val bytes = source(compressed = CoreCbdArchive.NAMES)
         val path = write(bytes)
         CoreFileMappings(100000, 4).use { maps -> CoreCbdSlabs(100000, 32).use { slabs ->
-            CoreCompactFile(path, sha(bytes), mappings = maps, slabs = slabs).use { it.header() }
+            CoreCompactFile(path, sha(bytes), false, maps, slabs).use { it.header() }
             repeat(2) { CoreCompactFile(path, sha(bytes), true, maps, slabs).use { file ->
                 file.header()
                 val counters = file.counters.statistics()

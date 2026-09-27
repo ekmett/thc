@@ -56,7 +56,7 @@ class CoreCompactGoldenTest {
             val identity = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))
                 .joinToString("") { "%02x".format(it) }
             CoreFileMappings(0, 0).use { mappings -> CoreCbdSlabs(0, 0).use { slabs ->
-                CoreCompactFile(path, identity, mappings = mappings, slabs = slabs).use { file ->
+                CoreCompactFile(path, identity, false, mappings, slabs).use { file ->
                     val records = CoreCompactRecords(file, identity)
                     val facts = records.header()
                     for (key in listOf("schema", "ghc", "unit", "module", "boundary", "constructors"))
