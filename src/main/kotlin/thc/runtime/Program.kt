@@ -1979,10 +1979,10 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         for (i in argumentSlots.indices) {
             val from = argumentIndices[i]
             val to = argumentSlots[i]
-            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.int(frame, node, null, from))
-            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.long(frame, node, null, from))
-            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.float(frame, node, null, from))
-            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.double(frame, node, null, from))
+            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.readInt(frame, node, null, from))
+            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.readLong(frame, node, null, from))
+            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.readFloat(frame, node, null, from))
+            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.readDouble(frame, node, null, from))
             else {
                 val value = source.reference(frame, node, null, from)
                 val expected = argumentReferences.getOrNull(i)
