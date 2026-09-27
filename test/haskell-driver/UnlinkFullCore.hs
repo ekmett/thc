@@ -34,7 +34,7 @@ fixture environment = TestLabel "original directory.removeFile native comparison
     ghcSource <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
     let output = scratch environment </> "unlink-full-core"
         ownedFile = output </> "fixture-owned-file.tmp"
-        command = ["run", "--project-dir", project, "run-unlink:exe:unlink", "--installed-core", "required",
+        command = ["run", "--verify-artifacts", "--project-dir", project, "run-unlink:exe:unlink", "--installed-core", "required",
           "--thc-root", thcRoot environment, "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\path -> ["--with-ghc", path]) installedGhc ++
           maybe [] (\path -> ["--with-ghc-pkg", path]) installedPkg ++

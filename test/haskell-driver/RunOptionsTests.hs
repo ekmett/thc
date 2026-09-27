@@ -14,6 +14,8 @@ module RunOptionsTests (tests) where
 
 import Control.Monad (forM_)
 import Data.List (isInfixOf)
+import System.FilePath ((</>))
+import System.Info (os)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
 import THC.Driver.Run (FfiMode(..), parseFfiMode, runtimeLaunchArguments, runtimeIndexedEntryArguments)
@@ -28,27 +30,55 @@ tests env = TestLabel "run options and target selection" $ TestList
           Left problem -> assertContains "--ffi must be native or managed" problem
           Right mode -> assertBool ("unexpected accepted mode " ++ show mode) False
   , TestLabel "launcher prefix and guest suffix" $ TestList
-      [ TestLabel (show mode ++ " " ++ show entry ++ " " ++ show guest) $ TestCase $
+      [ TestLabel (show verify ++ " " ++ show mode ++ " " ++ show entry ++ " " ++ show guest) $ TestCase $
           assertEqual "exact separate arguments"
-            (prefix ++ entry ++ ["--", "program"] ++ guest)
-            (runtimeLaunchArguments mode entry "program" guest)
+            (["--verify-artifacts" | verify] ++ prefix ++ entry ++ ["--", "program"] ++ guest)
+            (runtimeLaunchArguments verify mode entry "program" guest)
       | (mode, prefix) <- [(Nothing, []), (Just NativeFfi, ["--ffi", "native"]),
                           (Just ManagedFfi, ["--ffi", "managed"])]
+      , verify <- [False, True]
       , entry <- [["--run-io", "core one.json,core-two.json", "main:Main.main"],
                   ["--run-io", "@packages.json", "selected:Main.main"],
                   ["--run-executable", "@packages.json", "main::Main.main", "flushStdHandles"]]
-      , guest <- [[], ["--ffi", "not-a-runtime-mode", "--", "", "two words", "lambda-λ"]]
+      , guest <- [[], ["--ffi", "not-a-runtime-mode", "--verify-artifacts", "--", "", "two words", "lambda-λ"]]
       ]
   , TestLabel "indexed consumers keep explicit pairs before the guest boundary" $ TestCase $ do
       let modules = ["C:/core café/Main.json", "C:/core café/THC.InterfaceClosure.json"]
           entry = runtimeIndexedEntryArguments modules "C:/support/packages.json" "main:Main.main"
       assertEqual "exact pair association, manifest and guest operands"
-        ["--ffi", "native",
+        ["--verify-artifacts", "--ffi", "native",
          "--json-sidecar", "C:/core café/Main.json", "C:/core café/Main.json.idx",
          "--json-sidecar", "C:/core café/THC.InterfaceClosure.json", "C:/core café/THC.InterfaceClosure.json.idx",
          "--run-io", "C:/core café/Main.json,C:/core café/THC.InterfaceClosure.json,@C:/support/packages.json", "main:Main.main",
          "--", "program", "--json-sidecar", "guest", "", "--"]
-        (runtimeLaunchArguments (Just NativeFfi) entry "program" ["--json-sidecar", "guest", "", "--"])
+        (runtimeLaunchArguments True (Just NativeFfi) entry "program" ["--json-sidecar", "guest", "", "--"])
+  , TestLabel "verification is an explicit run-only switch" $ TestCase $ do
+      accepted <- run env (root env) Nothing 30 ["run", "--verify-artifacts"]
+      assertFailure accepted
+      assertContains "run requires --thc-root DIR" (err accepted)
+      forM_ [["acquire", "--verify-artifacts"], ["run", "--verify-artifacts=true"]] $ \arguments -> do
+        rejected <- run env (root env) Nothing 30 arguments
+        assertFailure rejected
+        assertNoStdout rejected
+        assertBool "verification option rejected" (not ("requires --thc-root DIR" `isInfixOf` err rejected))
+      guest <- run env (root env) Nothing 30 ["run", "--", "--verify-artifacts=true"]
+      assertFailure guest
+      assertContains "run requires --thc-root DIR" (err guest)
+  , TestLabel "ordinary project runs do not require the auditor" $ TestCase $
+      -- Windows uses the simple-package backend, which configures Cabal before
+      -- checking tools. This prerequisite-only control must not start a build.
+      if os == "mingw32" then pure () else
+      withFixtureNamed env "test/fixtures/run-pure" "missing auditor" $ \package -> do
+        let launcher = package </> "launcher"
+            arguments = ["run", "--thc-root", package, "--runtime", launcher]
+        writeText launcher "not executed\n"
+        ordinary <- run env package Nothing 30 arguments
+        assertFailure ordinary
+        assertContains "compiler/build.sh" (err ordinary)
+        assertBool "default skips the missing auditor" (not ("audit-core.py" `isInfixOf` err ordinary))
+        verified <- run env package Nothing 30 (arguments ++ ["--verify-artifacts"])
+        assertFailure verified
+        assertContains "scripts/audit-core.py" (err verified)
   , TestLabel "CLI rejects invalid selection before building" $ TestCase $
       forM_ ["", "MANAGED", "automatic", "native,managed"] $ \invalid -> do
         result <- run env (root env) Nothing 30 ["run", "--ffi", invalid]
@@ -89,6 +119,8 @@ tests env = TestLabel "run options and target selection" $ TestList
       assertContains "--ffi" (out result)
       assertContains "native|managed" (out result)
       assertContains "unavailable managed execution fails explicitly" (out result)
+      assertContains "--verify-artifacts" (out result)
+      assertContains "verify runtime artifacts (default: off)" (out result)
       assertBool "old spelling is absent from help" (not ("--sulong-mode" `isInfixOf` out result))
   , TestLabel "positional Cabal targets and omitted default" $ TestCase $
       forM_ ["run", "acquire"] $ \command ->

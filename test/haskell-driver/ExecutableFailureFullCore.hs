@@ -37,7 +37,7 @@ fixture environment = TestLabel "original executable uncaught IO exception" $ Te
     let output = takeDirectory project </> "output"
         path = project </> "failure.txt"
         invoke = run environment project (Just "bytecode") 900 $
-          ["run", "--project-dir", project, "failure", "--installed-core", "required",
+          ["run", "--verify-artifacts", "--project-dir", project, "failure", "--installed-core", "required",
            "--thc-root", thcRoot environment,
            "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\compilerPath -> ["--with-ghc", compilerPath]) installedGhc ++

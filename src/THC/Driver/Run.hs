@@ -49,6 +49,7 @@ data RunOptions = RunOptions
   , runInstalledCore :: String
   , runGhcSource :: Maybe FilePath
   , runFfiMode :: Maybe FfiMode
+  , runVerifyArtifacts :: Bool
   , runArguments :: [String]
   }
 
@@ -70,14 +71,16 @@ parseFfiMode value = Left ("--ffi must be native or managed; got " ++ show value
 
 -- | Runtime selection belongs before the entry command, never in GHC flags or
 -- after the guest delimiter. No explicit choice leaves launcher defaults and
--- its environment/property configuration intact.
+-- its environment/property configuration intact. Artifact verification is
+-- independent of FFI selection and disabled unless explicitly requested.
 --
--- >>> runtimeLaunchArguments (Just ManagedFfi) ["--run-io", "bundle.json", "main:Main.main"] "demo" ["hello"]
--- ["--ffi","managed","--run-io","bundle.json","main:Main.main","--","demo","hello"]
--- >>> runtimeLaunchArguments Nothing ["--run-io", "bundle.json", "main:Main.main"] "demo" []
+-- >>> runtimeLaunchArguments True (Just ManagedFfi) ["--run-io", "bundle.json", "main:Main.main"] "demo" ["hello"]
+-- ["--verify-artifacts","--ffi","managed","--run-io","bundle.json","main:Main.main","--","demo","hello"]
+-- >>> runtimeLaunchArguments False Nothing ["--run-io", "bundle.json", "main:Main.main"] "demo" []
 -- ["--run-io","bundle.json","main:Main.main","--","demo"]
-runtimeLaunchArguments :: Maybe FfiMode -> [String] -> String -> [String] -> [String]
-runtimeLaunchArguments mode entry program arguments =
+runtimeLaunchArguments :: Bool -> Maybe FfiMode -> [String] -> String -> [String] -> [String]
+runtimeLaunchArguments verify mode entry program arguments =
+  ["--verify-artifacts" | verify] ++
   maybe [] (\selected -> ["--ffi", case selected of
     NativeFfi -> "native"
     ManagedFfi -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
@@ -145,7 +148,7 @@ runResolvedPackage opts working target prepareRuntime = do
       objects = output </> "ghc"
   ensureFile exporter
   when windows (ensureFile hostEntrySource)
-  ensureFile (thcRoot </> "scripts/audit-core.py")
+  when (runVerifyArtifacts opts) $ ensureFile (thcRoot </> "scripts/audit-core.py")
   ensureFile runtime
   createDirectoryIfMissing True core
   createDirectoryIfMissing True objects
@@ -189,10 +192,11 @@ runResolvedPackage opts working target prepareRuntime = do
   let modules = [core </> file | file <- files, file /= "audit.json"]
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
   mapM_ (ensureFile . (++ ".idx")) modules
-  checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", entry, "--io-main",
+  when (runVerifyArtifacts opts) $
+    checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", entry, "--io-main",
                       "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
-  checked False runtime (runtimeLaunchArguments (runFfiMode opts)
+  checked False runtime (runtimeLaunchArguments (runVerifyArtifacts opts) (runFfiMode opts)
     (runtimeIndexedEntryArguments modules supportManifest entry) selectedName (runArguments opts)) working inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]

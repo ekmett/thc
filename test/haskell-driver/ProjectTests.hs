@@ -80,7 +80,7 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
       (field record "bundle") (field (runtimeRecord warm) "bundle")
     forM_ ["ast", "bytecode"] $ \backend -> do
       executed <- run env base (Just backend) 300
-        ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+        ["run", "--verify-artifacts", "--project-dir", project, "completed", "--thc-root", thcRoot env,
          "--runtime", runtime env, "--dist-dir", sidecarOutput]
       assertSuccess executed
       assertNoStdout executed
@@ -120,7 +120,7 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
         output = base </> "acquired"
         arguments = ["acquire", "--project-dir", project, "fail-frontier", "--thc-root", thcRoot env,
                      "--dist-dir", output]
-    forM_ [["--", "guest"], ["--"], ["--runtime", "/missing/thc"], ["--ffi", "native"]] $ \extra -> do
+    forM_ [["--", "guest"], ["--"], ["--runtime", "/missing/thc"], ["--ffi", "native"], ["--verify-artifacts"]] $ \extra -> do
       rejected <- run env base Nothing 30 (arguments ++ extra)
       assertFailure rejected
       assertNoStdout rejected
@@ -180,7 +180,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
         source = project </> "dep-data/src/Answer.hs"
         sourceOnlyRoot = base </> "THC source only"
         invoke backend target = run env base (Just backend) 240
-          ["run", "--project-dir", project, target, "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "--project-dir", project, target, "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         entryOf plan = one (\value -> string (field value "pkg-name") == "app-run" &&
                                       string (field value "component-name") == "exe:completed")
@@ -203,7 +203,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     initiallyBuilt <- doesFileExist (sourceOnlyRoot </> "build/compiler/plugin.json")
     assertBool "source-only checkout has no plugin manifest" (not initiallyBuilt)
     bootstrap <- run env base Nothing 120
-      ["run", "--project-dir", project, "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
+      ["run", "--verify-artifacts", "--project-dir", project, "app-run:exe:missing-bootstrap-probe", "--thc-root", sourceOnlyRoot,
        "--runtime", runtime env, "--dist-dir", output]
     assertFailure bootstrap
     assertNoStdout bootstrap
@@ -267,7 +267,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
   withCache (scratch env </> "core-cache") $ do
     let output = takeDirectory project </> "output"
         invoke backend = run env (takeDirectory project) (Just backend) 240
-          ["run", "--project-dir", project, "cstring", "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "--project-dir", project, "cstring", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         wired manifest = one ((== "ghc-internal") . string . (`field` "id"))
                             (objects manifest "units")
@@ -336,7 +336,7 @@ cstringTests env = TestLabel "pinned ghc-internal CString in package bundle" $ T
         frontierOutput = base </> "fail-output"
     copyTree (root env </> "test/fixtures/run-fail-frontier") frontier
     frontierResult <- run env base Nothing 240
-      ["run", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
+      ["run", "--verify-artifacts", "--project-dir", frontier, "fail-frontier", "--thc-root", thcRoot env,
        "--runtime", runtime env, "--dist-dir", frontierOutput]
     assertFailure frontierResult
     assertNoStdout frontierResult
