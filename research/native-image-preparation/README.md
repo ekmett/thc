@@ -77,17 +77,22 @@ static-initializer safety verifier. Re-audit those assumptions when either the
 toolchain or the matched source shapes change. The extra inventory is individually
 reviewed metadata, not permission to initialize a package or new native owners.
 
-The manual Windows addition is exactly:
+The manual Windows additions are:
 
 ```diff
 +thc.runtime.WindowsCodePages
++thc.runtime.WindowsLibdwFinalizers
 ```
 
-Its declaring-class initializer creates a fieldless companion and a private
+The `WindowsCodePages` declaring-class initializer creates a fieldless companion and a private
 `Object` ordering lock. `WindowsCodePages$Abi` and `$Api` contain native resources
 and are not added. Context instances and their carrier-local error state remain
 runtime-owned. Preparing the companion's class alone does not execute the
 declaring holder's initializer; the holder is the relevant constant provenance.
+
+`WindowsLibdwFinalizers` initializes its singleton and an unforced lazy lookup.
+Preparing that metadata does not extract or load a DLL or acquire native handles;
+those operations remain deferred until runtime.
 
 ## Limits and interpretation
 
