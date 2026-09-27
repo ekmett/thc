@@ -40,3 +40,17 @@ thc.runtime.TermiosImage
 # Only a fieldless companion and a private Object lock are initialized here.
 # WindowsCodePages$Abi/$Api native resources and context instances stay runtime.
 thc.runtime.WindowsCodePages
+# Runtime/deoptimization graph validation requires initialized declaring types.
+# These exception classes and FunctionRoot have no own class initializer.
+kotlin.NoWhenBranchMatchedException
+thc.runtime.RuntimeFault
+thc.runtime.UnsupportedCore
+thc.runtime.FunctionRoot
+# Literal representation sets, an empty persistent annotation sentinel, and a
+# scalar input descriptor with a null layout; no guest context or frame captured.
+thc.runtime.HandoffLayout
+thc.runtime.StackAnnotationState
+thc.runtime.TypedInputsKt
+# Fieldless singleton plus byte-array VarHandles in the build target's native
+# byte order. This recipe remains tied to its build platform, not cross-target.
+thc.runtime.ManagedByteArray
