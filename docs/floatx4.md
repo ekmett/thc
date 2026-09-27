@@ -20,7 +20,7 @@ min/max and shuffle operations, plus the four fused multiply/add variants.
 See [generated arithmetic](simd-wide-arithmetic.md),
 [floating extrema](floating-vector-minmax.md),
 [shuffle](simd-quot-rem-shuffle.md) and the [capability checklist](primops.md).
-[ByteArray](floatx4-bytearray.md) and [address](simd-address-families.md)
+[ByteArray](simd128-array-memory.md) and [address](simd-address-families.md)
 operations have separate memory contracts. Separate multiply/add retains two
 roundings; fused operations have a single rounding after the declared operand
 negations. Floating min/max follows Java's NaN and signed-zero rules.

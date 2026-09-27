@@ -1,92 +1,23 @@
 # Signed Int32X4 multiplication
 
 Both backends implement `timesInt32X4# :: Int32X4# -> Int32X4# -> Int32X4#`
-using raw `IntVector.SPECIES_128` values. Genuine fixtures also use
-`packInt32X4#` and `unpackInt32X4#`: packing consumes one logical
-four-`Int32#` tuple, and unpacking returns the corresponding scalar tuple.
+with `IntVector.mul`, retaining a raw `IntVector.SPECIES_128` result.
+The exact vector proof is `VecRep 4 Int32ElemRep`; pack/unpack uses one
+logical four-`Int32#` tuple with `Int32Rep` leaves, not `Word32Rep`.
 
-The vector proof remains `VecRep 4 Int32ElemRep`; each scalar lane is exactly
-`Int32Rep`, not `Word32Rep`. Products retain the low 32 bits and interpret them
-as signed two's-complement values before widening to the required 64-bit host
-`Int#`. In particular, MIN * -1 yields MIN, MAX * MAX yields 1, and MIN * MIN
-yields 0. The [SIMD transport contract](simd.md) covers guest arguments/results,
-tuple leaves, joins, PAP prefixes, captures and owned heap fields. Public host
-vector arguments/results remain unsupported.
+Each product retains its low 32 bits. Explicit unpack sign-extends those bits
+to the scalar carrier: MIN × −1 yields MIN, MAX × MAX yields 1, and MIN × MIN
+yields 0. Scalar extraction belongs to unpack or durable heap storage, not
+each arithmetic operation. Wrong signedness, width, arity or liftedness is
+rejected at lowering.
 
-Multiplication uses `IntVector.mul` and retains the raw vector result; scalar
-extraction belongs to explicit unpack or durable heap storage. Both the AST
-loader and a dedicated bytecode operation enforce two exact, unlifted signed
-vector operands. Loader tests reject
-wrong signedness, width, arity, liftedness and malformed signed literals;
-direct arithmetic tests compare independent lane products with a masked
-arbitrary-precision oracle, including MIN * -1 and MAX * 2.
+The [SIMD transport contract](simd.md) covers guest arguments/results, tuple
+leaves, joins, PAP prefixes and owned captures/heap fields. Public host vector
+arguments/results remain unsupported.
 
-## Genuine arithmetic and independent observations
+## Reproducible checks
 
-`compiler/test-fixtures/SimdInt32X4Multiply.hs` is separate from existing signed
-and unsigned vector fixtures. The only graph root, `timesCase`, has two machine
-`Int#` seeds and one machine `Int#` checksum result.
-
-| Lane | Left | Right | Checksum weight |
-| ---: | --- | --- | ---: |
-| 0 | a | b+2 | 3 |
-| 1 | b | a-3 | 5 |
-| 2 | a+1 | 7*b+13 | 7 |
-| 3 | b-1 | 11*a-17 | 11 |
-
-Inputs narrow to signed 32 bits. The third left lane uses scalar `plusInt32#`
-with `intToInt32# 1#`, preserving a genuine folded `int32` literal without an
-extra entry or vector operation. Every result lane widens via `int32ToInt#`
-before weighting. Weights sum to 26: checksums lie between -55,834,574,848 and
-55,834,574,822; adding the scalar helper's 48 stays below 2^36 in magnitude.
-Machine input wrap is harmless under later low-32-bit reduction. The independent
-model uses arbitrary-precision integers; separate test formulas explicitly wrap
-the machine input arithmetic and implement signed narrowing with masks/XOR.
-
-`laneCase` has arity three: `lane, a, b`. Only lane selectors 0..3 belong to the
-declared domain. It computes the same local multiplication and returns one
-independently sign-extended lane. Left/right affine coefficients are odd and
-depend on independent seeds, so modular inverses produce the full 9-by-9 grid
-`[-2147483648,-2147483647,-65537,-1,0,1,65537,2147483646,2147483647]` at every
-selected lane. The resulting 324 observations include positive and negative
-extremes, sign-bit products and MIN * -1, independently of weighted checksums.
-
-The scalar corpus has 466 distinct pairs spanning all 32 power-of-two
-neighborhoods, signed boundaries, machine extremes and large positive/negative
-inputs. Three arity-two entries plus the lane observations give exactly 1,722
-native/model rows. Model tests also sample 65,536 distinct encodings with both
-16-bit halves covered bijectively, testing nine signed boundary products each.
-This is 589,824 scalar products, not all 2^32 encodings or 2^64 binary pairs.
-
-## Actual roots and rejected boundaries
-
-`scalarHelperCase` calls opaque `scalarWorker`, which forms the multiplication
-checksum and adds 31; the caller adds 17. `tupleHelperCase` calls opaque
-`tupleWorker`, receiving four actual scalar `Int32#` product lanes, and forms
-the checksum in the caller. No vector crosses either helper boundary.
-
-Preparation proves one actual guest root for `timesCase` and `laneCase`, and
-two for each helper entry, before and after Tidy. The proof requires exact
-closure membership, no hidden lambda or alias, unconditional saturated helper
-calls with original scalar inputs, machine-Int formals/results, exact signed
-tuple leaves and two packs/one multiply/one unpack per reachable entry.
-The full pre/post × AST/bytecode × inlining-on/off corpus checks 13,776 compiled
-invocations and 21,232 guest entries per handoff mode, excluding the host bridge.
-Actual JVM tests separately require the exact per-call increments, stable active
-target identities, valid installed code and released handoff pools.
-
-The genuine `vectorArgument` negative must yield exactly one public host vector-argument
-issue and no missing globals; it is not a rejection of guest vector formals. Two separately labeled metadata mutations change a
-`timesCase` pack tuple to `Word32Rep` or its first vector operand to
-`VecRep 4 Word32ElemRep`. They are not original Core or native oracle inputs.
-`unsignedLaneTuple` requires one vector-shape, five aggregate-shape and four
-scalar-representation issues. `unsignedVectorOperand` requires two vector-shape
-and two aggregate-shape issues. These are exact primitive argument/result proof
-failures, not public host admission failures. Both require zero missing globals.
-
-## Preparation and limits
-
-Use the pinned environment and [shared resource gate](contributing.md):
+With the pinned environment and checkout's build lease:
 
 ```sh
 python3 scripts/test-int32x4-multiply-model.py
@@ -96,26 +27,25 @@ python3 scripts/prepare-int32x4-multiply-audit.py
   testDense --tests 'thc.runtime.SimdInt32MultiplyTest'
 ```
 
-The existing model test uses hash-verified retained genuine pre/post Core and
-also checks fresh exports when present. It can run before preparation.
-Preparation exports real pre/post Core, requires all
-eight positive audits to have zero issues and missing globals, checks the exact
-negatives and closure counts, then compiles/runs the genuine GHC NCG oracle.
-The complete keyed output must equal the independent model; duplicate or
-wrong-arity rows fail.
+The model test uses hash-verified genuine pre/post-Tidy Core and also checks
+fresh exports when present, so it can run before preparation. The producer
+exports `SimdInt32X4Multiply.hs`, checks exact reachable shapes and compares
+fresh native GHC output with an independent arbitrary-precision integer model.
+Scalar-host roots observe each lane and weighted checksums through direct,
+scalar-helper and tuple-helper paths. Boundary controls include overflow,
+negative products and independent signed narrowing.
 
-`build/simd-int32x4-multiply/provenance.json` uses vector identity
-`int32x4-multiply`, records commands/toolchain/entry cases/actual root counts,
-and retains `signedUnsignedNegativeControls` separately from genuine Core.
-Source and artifact hashes cover both Core stages, their audits, expected/native
-rows and `native/int32x4-multiply-oracle`.
+The genuine `vectorArgument` negative tests public host admission, not guest
+vector formals. Separately labeled metadata mutations test signed/unsigned
+proof mismatches; they are not original Core or native oracle inputs.
 
-`--export-only` provides pre-Tidy Core and model rows only, with null native
-row/match fields and no native or post-Tidy claim. It removes stale oracle and
-provenance outputs; it is not a fallback after a native failure. A fresh full
-preparation restores native evidence after testing this mode.
+`build/simd-int32x4-multiply/provenance.json` records commands, toolchain,
+source/artifact hashes, input domains, actual guest-root counts and mutation
+controls. `--export-only` emits pre-Tidy/model inputs with null native fields,
+not native or post-Tidy evidence. ARM preparation in `scripts/prepare-tests.sh`
+uses that mode.
 
-The fixture producer establishes native/model agreement, not JVM compilation,
-packed instructions, allocation elimination or performance. The JVM suite
-checks both backends, inlining modes and handoff configurations separately.
-ARM preparation in `scripts/prepare-tests.sh` uses export-only mode.
+The JVM suite checks both backends, inlining modes and handoff configurations,
+with exact per-call compiled entries, stable active targets, valid installed
+code and released handoff storage. Native/model agreement alone does not prove
+packed instructions, allocation elimination or performance.
