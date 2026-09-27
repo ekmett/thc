@@ -701,7 +701,9 @@ internal class BytecodeTupleSlots(shape: TupleShape,
         }
     }
     override fun consume(frame: VirtualFrame, node: Node, result: Any?) {
-        val root = node.rootNode as BytecodeRoot
+        val rootValue = node.rootNode
+        if (rootValue == null) CompilerDirectives.transferToInterpreter()
+        val root = rootValue as BytecodeRoot
         if (result === TupleComplete) {
             val pool = shape.language.handoffState.get().results
             val output = pool.completed()

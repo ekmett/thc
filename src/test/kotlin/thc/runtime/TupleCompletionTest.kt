@@ -6,10 +6,14 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.BytecodeConfig
+import com.oracle.truffle.api.bytecode.LocalAccessor
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.IndirectCallNode
+import com.oracle.truffle.api.nodes.Node
 import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -93,6 +97,61 @@ class TupleCompletionTest {
     private fun released(language: Language) {
         assertEquals(0, language.handoffState.get().results.depth)
         assertEquals(0, language.handoffState.get().results.retainedReferences())
+    }
+
+    @Test fun invalidBytecodeConsumerRootFailsBeforeResultConsumptionOrLocalWrites() = withLanguage { language ->
+        val shape = shape(language)
+        val locals = mutableListOf<LocalAccessor>()
+        val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+            b.beginRoot()
+            repeat(2) { locals += LocalAccessor.constantOf(b.createLocal("tuple field $it", null)) }
+            b.beginReturn(); b.emitLoadConstant(0L); b.endReturn()
+            b.endRoot()
+        }.getNode(0)
+        val destination = BytecodeTupleSlots(shape, locals.toTypedArray())
+        val frame = Truffle.getRuntime().createVirtualFrame(arrayOf(0L), root.frameDescriptor)
+        val nonBytecodeRoot = object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any = error("Invalid consumer root reached guest code")
+        }
+        val state = language.handoffState.get()
+        val input = state.arguments.acquire(shape.layout)
+        val inputMarker = Any()
+        shape.layout.setObject(input, 1, inputMarker)
+        for (node in listOf(object : Node() {}, nonBytecodeRoot)) {
+            val marker = Any()
+            locals[0].setLong(root.bytecodeNode, frame, 11L)
+            locals[1].setObject(root.bytecodeNode, frame, marker)
+            val output = state.results.acquire(shape.layout)
+            val outputMarker = Any()
+            shape.layout.setLong(output, 0, 23L); shape.layout.setObject(output, 1, outputMarker)
+            val token = state.results.complete(output)
+            val generation = output.generation
+            val fresh = shape.layout.create()
+            val freshMarker = Any()
+            shape.layout.setLong(fresh, 0, 37L); shape.layout.setObject(fresh, 1, freshMarker)
+            val type = if (node === nonBytecodeRoot) ClassCastException::class.java else NullPointerException::class.java
+            // Root admission precedes token/pool lookup and even malformed-carrier validation.
+            for (result in listOf(token, fresh, null)) {
+                val failure = assertThrows(type) { destination.consume(frame, node, result) }
+                if (node !== nonBytecodeRoot)
+                    assertEquals("null cannot be cast to non-null type thc.runtime.BytecodeRoot", failure.message)
+                assertEquals(11L, locals[0].getLong(root.bytecodeNode, frame))
+                assertSame(marker, locals[1].getObject(root.bytecodeNode, frame))
+                assertSame(output, state.results.completed()); assertTrue(output.live)
+                assertEquals(generation, output.generation); assertEquals(generation, output.completedGeneration)
+                assertEquals(1, state.results.depth); assertSame(outputMarker, shape.layout.getObject(output, 1))
+                assertEquals(1, state.arguments.depth); assertTrue(input.live)
+                assertSame(inputMarker, shape.layout.getObject(input, 1)); assertNull(state.pending)
+            }
+            destination.consume(frame, root, token)
+            assertEquals(23L, locals[0].getLong(root.bytecodeNode, frame))
+            assertSame(outputMarker, locals[1].getObject(root.bytecodeNode, frame)); released(language)
+            destination.consume(frame, root, fresh)
+            assertEquals(37L, locals[0].getLong(root.bytecodeNode, frame))
+            assertSame(freshMarker, locals[1].getObject(root.bytecodeNode, frame)); released(language)
+        }
+        state.arguments.release(input, shape.layout)
+        assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
 
     @Test fun asyncTupleCarrierStaysVirtualUntilItsCompiledCaptureOwnsIt() = withLanguage { language ->
