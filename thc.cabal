@@ -169,6 +169,9 @@ extra-source-files:
   compiler/test-fixtures/OriginalErrnoAudit.hs
   compiler/test-fixtures/OriginalErrnoNative.hs
   compiler/test-fixtures/OriginalProcessIdentityAudit.hs
+  compiler/test-fixtures/ProcessLifecycleAudit.hs
+  test/fixtures/process-lifecycle/Main.hs
+  test/fixtures/process-lifecycle/sigchld-policy.c
   compiler/test-fixtures/OriginalProcessIdentityNative.hs
   compiler/test-fixtures/OriginalOpenAudit.hs
   compiler/test-fixtures/OriginalOpenNative.hs
@@ -868,6 +871,7 @@ executable thc-fixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures
     ProcessSignalFixtures
+    ProcessLifecycleFixtures
     SignalDispatchFixtures
     RtsShutdownFixtures
     FileWaitFixtures

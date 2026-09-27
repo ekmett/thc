@@ -83,6 +83,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     // capability control pipes. Values retain logical identity, never fd numbers.
     private val eventControls = linkedMapOf<Long, Descriptor>()
     private val nativeAbi by lazy { StdioHostAbi.load() }
+    internal val processForeign by lazy { ManagedProcessForeign() }
 
     init { require(descriptorLimit in 3L..(Int.MAX_VALUE.toLong() + 1)) }
 
@@ -528,6 +529,114 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
 
     @TruffleBoundary internal fun eventfd(initial: Int, flags: Int): Long = result {
         anonymousDescriptors(AnonymousKind.EVENT, initial, flags) {}.single()
+    }
+
+    /** Original process creation's descriptor transaction. The caller has
+     * already borrowed and validated every output cell; publication is inside
+     * this registry's commit. Foreign activation/completion belongs to the caller. */
+    @TruffleBoundary internal fun launchProcess(arguments: List<ByteArray>, environment: List<ByteArray>,
+        cwd: ByteArray?, streams: IntArray, flags: Int, childGroup: Long?, childUser: Long?, searchPath: ByteArray?,
+        publish: (Int, IntArray) -> Unit): Int {
+        require(streams.size == 3)
+        val claims = arrayOfNulls<OpenClaim>(3)
+        val pins = mutableListOf<OpenDescription>()
+        val endpoints = Array<ManagedProcesses.Stream>(3) { ManagedProcesses.Stream.Closed }
+        val acquired = mutableListOf<NativeFileResource>()
+        var launch: ManagedProcesses.Launch? = null
+        var processes: ManagedProcesses? = null
+        var committed = false
+        var primary: Throwable? = null
+        fun releasePins() {
+            val retired = synchronized(this) { pins.filter { --it.references == 0L }.also { pins.clear() } }
+            var failure: Throwable? = null
+            for (owner in retired) try { retire(owner) } catch (closing: Throwable) {
+                if (failure == null) failure = closing else failure.addSuppressed(closing)
+            }
+            failure?.let { throw it }
+        }
+        try {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                val provider = nativeProvider ?: fail(7, "Process descriptors require the explicit NativeIO context")
+                for (index in streams.indices) {
+                    val fd = streams[index]
+                    when {
+                        fd == -1 -> {
+                            val claim = OpenClaim(null, index == 0, unusedDescriptor(0))
+                            claims[index] = claim; opening.add(claim)
+                            endpoints[index] = ManagedProcesses.Stream.Pipe
+                        }
+                        fd == -2 -> Unit
+                        fd >= 0 -> {
+                            val owner = descriptor(fd.toLong()).owner
+                            val resource = owner.native ?: fail(7, "Inherited process descriptor has no native capability")
+                            if (owner.references == Long.MAX_VALUE) fail(10, "Native descriptor reference limit")
+                            pins.add(owner); owner.references++
+                            endpoints[index] = ManagedProcesses.Stream.Descriptor(resource)
+                        }
+                        else -> fail(4, "Invalid inherited process descriptor")
+                    }
+                }
+                provider
+            }
+            processes = provider.processes
+            launch = processes.spawn(arguments, environment, cwd, endpoints[0], endpoints[1], endpoints[2],
+                flags, childGroup, childUser, searchPath)
+            val pipes = listOf(launch.input, launch.output, launch.error)
+            val opened = arrayOfNulls<OpenDescription>(3)
+            val returned = IntArray(3) { -1 }
+            for (index in pipes.indices) pipes[index]?.let { pipe ->
+                val resource = provider.adoptProcessPipe(pipe, index != 0, index == 0)
+                acquired.add(resource)
+                opened[index] = OpenDescription(channel = resource, native = resource, anonymousKind = AnonymousKind.PIPE,
+                    readable = index != 0, writable = index == 0, canExtend = false, readiness = Readiness.NATIVE_UNCLASSIFIED)
+                returned[index] = claims[index]!!.reserved!!.toInt()
+            }
+            // The child now owns its native duplicates. Release temporary
+            // inherited-owner pins before publishing any result to the guest.
+            releasePins()
+            return synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                val pid = processes.publishProcessId(launch.handle)
+                publish(pid, returned)
+                for (index in opened.indices) opened[index]?.let { owner ->
+                    owners.add(owner); descriptors[returned[index].toLong()] = Descriptor(owner)
+                }
+                committed = true
+                pid
+            }
+        } catch (failure: Throwable) {
+            val reported = if (failure is FileFailure)
+                NativeFileException("process descriptors", nativeAbi.error(failure.kind).toInt()) else failure
+            primary = reported
+            throw reported
+        } finally {
+            var cleanupFailure: Throwable? = null
+            fun cleanup(action: () -> Unit) { try { action() } catch (failure: Throwable) {
+                if (cleanupFailure == null) cleanupFailure = failure else cleanupFailure.addSuppressed(failure)
+            } }
+            if (!committed) {
+                launch?.let { cleanup { processes!!.abortUnpublished(it.handle) } }
+                acquired.forEach { cleanup { it.close() } }
+            }
+            synchronized(this) {
+                claims.filterNotNull().forEach { opening.remove(it); it.finished.countDown() }
+            }
+            cleanup { releasePins() }
+            cleanupFailure?.let { if (primary == null) throw it else primary.addSuppressed(it) }
+        }
+    }
+
+    @TruffleBoundary internal fun processOperation(operation: ProcessOp, pid: Int, node: Node? = null,
+        beforeBlock: (() -> Unit)? = null): ProcessResult {
+        val service = NativeFileProvider.current().processes
+        val handle = service.fromProcessId(pid)
+        return when (operation) {
+            ProcessOp.POLL -> service.poll(handle)
+            ProcessOp.WAIT -> service.waitFor(handle, node, beforeBlock)
+            ProcessOp.TERMINATE -> service.terminate(handle)
+            ProcessOp.CREATE -> fault("Creation requires a descriptor transaction")
+        }
     }
 
     @TruffleBoundary internal fun epollCreate(size: Int): Long = result {

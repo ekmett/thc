@@ -520,6 +520,27 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
+    /** Process WAIT has saved both scalar and errno before this delivery cut. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "request")
+    public static final class PollProcessCompleted {
+        @Specialization public static boolean poll(VirtualFrame frame, LocalAccessor request,
+                long result, long errno, @Bind Node node) {
+            boolean compiled = CompilerDirectives.inCompiledCode();
+            AsyncRequest pending = GuestThreads.pollCurrent(node, result == -1L && errno == 4L);
+            request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
+            if (pending == null) return false;
+            pending.compiledCapture = compiled;
+            return true;
+        }
+    }
+
+    @Operation public static final class RestoreProcessErrno {
+        @Specialization public static void restore(long errno, @Bind Node node) {
+            CoreOriginalStdio.current(node).setErrno(errno);
+        }
+    }
+
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "status")
     @ConstantOperand(type = LocalAccessor.class, name = "capability")
@@ -1109,6 +1130,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             ManagedByteArray.requireState(state);
             destination.fill(count, value);
             return kotlin.Unit.INSTANCE;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = BytecodeProcessArguments.class, name = "arguments")
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = LocalAccessor.class, name = "errno")
+    public static final class OriginalProcess {
+        @Specialization public static void execute(VirtualFrame frame, BytecodeProcessArguments arguments,
+                LocalAccessor destination, LocalAccessor errno, @Bind Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            long result = ManagedProcessForeign.current(node).invoke(arguments.getOperation(), arguments.read(bytecode, frame), node);
+            destination.setLong(bytecode, frame, result);
+            errno.setLong(bytecode, frame, CoreOriginalStdio.current(node).errno());
         }
     }
 

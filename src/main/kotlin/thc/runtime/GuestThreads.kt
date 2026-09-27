@@ -228,7 +228,7 @@ internal class GuestThreads internal constructor(
             activation.caller === activeIdentity.get())
         if (callback) {
             if (activation.owner!!.closed) fault("Foreign caller context has closed")
-            if (activation.safety != ForeignSafety.SAFE) fault("Unsafe foreign call cannot re-enter guest code")
+            if (activation.safety == ForeignSafety.UNSAFE) fault("Unsafe foreign call cannot re-enter guest code")
         }
         val suspended = if (callback) activeIdentity.get() else null
         // Cross-context reverse entries must never acquire two registry locks.

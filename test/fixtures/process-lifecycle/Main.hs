@@ -19,6 +19,34 @@ foreign import ccall interruptible "waitForProcess"
   waitProcess :: CPid -> Ptr CInt -> IO CInt
 foreign import ccall unsafe "terminateProcess"
   stopProcess :: CPid -> IO CInt
+foreign import ccall unsafe "runInteractiveProcess"
+  createRawProcess :: Ptr CString -> CString -> Ptr CString -> CInt -> CInt -> CInt ->
+    Ptr CInt -> Ptr CInt -> Ptr CInt -> Ptr () -> Ptr () -> CInt -> Ptr CString -> IO CPid
+
+creationOracle :: IO ()
+creationOracle = do
+  observe "missing-command" "/definitely-missing-thc-command" Nothing
+  observe "missing-cwd" "/bin/true" (Just "/definitely-missing-thc-directory")
+  observe "create-success" "/bin/true" Nothing
+  where
+    observe name command directory = withCString command $ \commandString ->
+      withArray0 nullPtr [commandString] $ \arguments ->
+      maybe ($ nullPtr) withCString directory $ \cwdString ->
+      alloca $ \input -> alloca $ \output -> alloca $ \err -> alloca $ \failure -> do
+        mapM_ (`poke` 991) [input, output, err]
+        poke failure nullPtr
+        resetErrno
+        pid <- createRawProcess arguments cwdString nullPtr (-2) (-2) (-2)
+          input output err nullPtr nullPtr 0 failure
+        Errno number <- getErrno
+        failed <- peek failure >>= \pointer -> if pointer == nullPtr then pure "null" else peekCString pointer
+        outputs <- mapM peek [input, output, err]
+        if pid == -1 then putStrLn $ unwords ([name, "-1", show number, failed] ++ map show outputs)
+        else alloca $ \code -> do
+          status <- waitProcess pid code
+          exit <- peek code
+          if status /= 0 || exit /= 0 then fail "native creation control did not exit successfully"
+          else putStrLn $ unwords ([name, "positive", "0", failed] ++ map show outputs)
 
 row :: String -> CInt -> CInt -> IO ()
 row name status code = do
@@ -86,6 +114,7 @@ oracle = do
 main :: IO ()
 main = getArgs >>= \args -> case args of
   ["oracle"] -> oracle
+  ["creation-oracle"] -> creationOracle
   ["exit", code] -> exitWith (if code == "0" then ExitSuccess else ExitFailure (read code))
   ["hold"] -> do
     hPutChar stdout 'R' >> hFlush stdout

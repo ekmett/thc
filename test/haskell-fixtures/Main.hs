@@ -71,6 +71,7 @@ import WindowsDirectoryFixtures (prepareWindowsDirectory)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
+import ProcessLifecycleFixtures (prepareProcessLifecycle)
 import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
@@ -1013,6 +1014,7 @@ main = do
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
     ["process-signals"] -> prepareProcessSignals root
+    ["process-lifecycle"] -> prepareProcessLifecycle root
     ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
