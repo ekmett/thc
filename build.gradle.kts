@@ -1016,6 +1016,45 @@ val compileNativeDirectories by tasks.registering {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-directories")) }
 tasks.processResources { dependsOn(compileNativeDirectories) }
 
+// Context-owned process transport needs libc posix_spawn and Linux pidfds.
+val compileNativeProcesses by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-processes")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-process-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-processes")) }
+tasks.processResources { dependsOn(compileNativeProcesses) }
+
+val prepareProcessLifecycleOracle by tasks.registering {
+    val source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
+    val output = layout.buildDirectory.dir("process-lifecycle/native")
+    val ghc = providers.environmentVariable("GHC").orElse("ghc")
+    inputs.file(source); inputs.property("ghc", ghc)
+    outputs.dir(output)
+    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in listOf("amd64", "x86_64") }
+    doLast {
+        val version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
+        check(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
+        val destination = output.get().asFile
+        destination.mkdirs()
+        providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
+            "-outputdir", destination.path, source.asFile.path, "-o", destination.resolve("process-oracle").path) }.result.get()
+    }
+}
+tasks.withType<Test>().configureEach { dependsOn(prepareProcessLifecycleOracle) }
 
 // Owned native workers and asynchronous syscall guard must run as machine code.
 val compileNativeOpenRequests by tasks.registering {
@@ -1227,7 +1266,7 @@ tasks.processResources { dependsOn(generateSigsetAbi) }
 // original C resources are independent of these optional providers.
 if (windowsHost) {
     listOf("generateStdioAbi", "generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
-        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
         .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.
