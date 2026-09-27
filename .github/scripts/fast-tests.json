@@ -1084,7 +1084,9 @@
       "python": []
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
-      "junit": ["thc.runtime.ByteStringDecimalTest", "thc.runtime.UnixLibcTest",
+      "junit": ["thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.ByteStringDecimalTest",
+        "thc.runtime.UnixLibcTest",
         "thc.runtime.GhcBCOTest",
         "thc.runtime.StableNamesTest",
         "thc.runtime.HintTraceTest",
