@@ -1,0 +1,19 @@
+diff --git a/com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java b/com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java
+--- a/com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java
++++ b/com/oracle/truffle/llvm/parser/coff/WindowsLibraryLocator.java
+@@ -74,6 +74,11 @@ public final class WindowsLibraryLocator extends LibraryLocator {
+         // then try the current directory
+-        Path path = Paths.get(context.getEnv().getCurrentWorkingDirectory().getPath());
+-        file = DefaultLibraryLocator.locateAbsolute(context, path.resolve(libPath));
+-        if (file != null) {
+-            return file;
++        try {
++            Path path = Paths.get(context.getEnv().getCurrentWorkingDirectory().getPath());
++            file = DefaultLibraryLocator.locateAbsolute(context, path.resolve(libPath));
++            if (file != null) {
++                return file;
++            }
++        } catch (SecurityException denied) {
++            // Guest IO may forbid even resolving its working directory.
++            // Skip this optional location; native loading keeps its own authority.
+         }

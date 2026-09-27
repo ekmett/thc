@@ -100,6 +100,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
 }
+if (windowsHost) apply(from = "gradle/windows-sulong.gradle.kts")
 apply(from = "gradle/bytecode-metadata.gradle.kts")
 kotlin {
     jvmToolchain(25)

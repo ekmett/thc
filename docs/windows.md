@@ -152,8 +152,9 @@ FFM transport keeps one native image per backing array, copies back only the
 touched ranges, retains owners through calls, and confines temporary native
 memory to the invocation. Existing range, alignment, memcpy-overlap, native
 authority, and foreign-call cleanup boundaries remain in force. This is not a
-performance claim. Windows Sulong's PE dependency lookup requires guest file
-access even for system DLL lookup; the MD5 bridge works with IOAccess.NONE.
+performance claim. The MD5 bridge works with IOAccess.NONE. Package bitcode uses
+the pinned Windows Sulong lookup correction described below, while MD5 retains
+its native transport.
 
 Gradle windowsSmokeTest and windowsDenseSmokeTest run the selected smoke,
 runtime, bytecode, request, frame, CString, MD5, and Windows distribution tests.
@@ -339,6 +340,23 @@ Native GHC 9.14.1 on the tested Windows host replaces `λ` in an absolute
 with relative `-outputdir dist` inside the Unicode working directory, then
 verifies the full absolute Unicode path through the helper. Arbitrary Unicode
 compiler command-line arguments remain a separate upstream toolchain boundary.
+
+## Sulong system-DLL lookup without guest IO
+
+The pinned Windows Sulong PE locator queries the guest current directory before
+native DLL fallback. With `IOAccess.NONE`, that optional path query throws and
+prevents loading `KERNEL32.dll`. The Windows Gradle build applies a small,
+hash-pinned upstream-source patch that skips the denied cwd search and continues
+the original global/native lookup. It grants no guest filesystem access and
+leaves native authority, C-owned pointer carriers and context ownership intact.
+Linux/macOS continue to use the unmodified pinned Sulong dependency.
+
+See the [patch provenance and focused checks](../tools/sulong-windows/README.md).
+`verifyWindowsSulongSelection` verifies that only the intended upstream class
+changes and that the runtime selects exactly one patched artifact. The first
+build downloads the pinned source classifier; subsequent builds work offline.
+This addresses library loading, not general Windows native IO or full-Core
+exporter parity.
 
 ## Current boundaries
 
