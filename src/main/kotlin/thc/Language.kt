@@ -411,7 +411,8 @@ object CoreModules {
             require(consumers == null || consumers is List<*> && consumers.all { it is Map<*, *> }) {
                 "Invalid loose package consumers"
             }
-            val result = CorePackageManifest.visitModules(manifest, expected) { module, _ ->
+            val result = CorePackageManifest.visitRuntimeModules(manifest, expected,
+                input["sourceNotesEnabled"] != false, indexed) { module ->
                 accept(module + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"]))
             }
             require(input["foreignExceptionBridgeUnit"] == result.foreignExceptionBridgeUnit) { "Package bridge selection changed after request" }
@@ -461,6 +462,14 @@ object CoreModules {
             Json.stringify(settings)) }
         if (manifest != null) {
             val consumers = paths.filterNot { it.startsWith("@") }.map { File(it).readText() }
+            CorePackageManifest.indexedRequestIdentity(manifest)?.let { identity ->
+                return Json.stringify(settings + mapOf(
+                    "packageManifest" to identity.manifestPath,
+                    "packageManifestSha256" to identity.manifestSha256,
+                    "packageCapability" to packageCapability(identity.manifestPath, identity.manifestSha256),
+                    "foreignExceptionBridgeUnit" to identity.foreignExceptionBridgeUnit) +
+                    (if (consumers.isEmpty()) emptyMap() else mapOf("consumerModules" to consumers.map(Json::parse))))
+            }
             // Small requests retain their established JSON shape. Large package
             // sets carry a content-bound manifest reference, never a combined
             // multi-gigabyte module document or raw modules array.

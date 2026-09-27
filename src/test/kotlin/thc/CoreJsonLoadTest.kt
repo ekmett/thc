@@ -41,6 +41,7 @@ class CoreJsonLoadTest {
             val serialized = request(json, index, backend, async)
             assertFalse(serialized.contains("unused body is deliberately"), "the host request must not embed Core bodies")
             val value = context.eval("thc", serialized)
+            assertEquals("reject-at-binding-admission", statistics(value)["unsupportedPolicy"])
             assertEquals(1L, count(value, "jsonBodyMaterializations"))
             assertEquals(1L, count(value, "loweredRootCount"))
             assertEquals(1L, count(value, "hostEntryRootCount"))
