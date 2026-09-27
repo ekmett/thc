@@ -3,6 +3,16 @@
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-worker-wrapper -Wno-tabs #-}
+
+-- |
+-- Module      : SourceNotes
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for source notes Core and metadata.
 module SourceNotes where
 import GHC.Exts
 

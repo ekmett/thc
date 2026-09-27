@@ -1,23 +1,124 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver) where
+
+-- |
+-- Module      : WindowsSmokeFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
+-- Fixture acquisition support for windows smoke.
+module WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM, unless)
 import Data.Aeson (Value(..), eitherDecodeStrict, object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
+import qualified Data.Aeson as Aeson
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Time (defaultTimeLocale, formatTime, getCurrentTime)
 import FixtureSupport
-import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, findExecutable, listDirectory)
+import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, findExecutable, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory, takeExtension)
 import qualified System.Info as Host
+import GHC.ResponseFile (escapeArgs)
+import THC.Driver.Project (prepareWindowsRuntime)
+
+-- Execute the real opaque boxer/projector and its Exception dictionary. Native
+-- expected values and exported Core use the same actual Cabal runtime unit.
+prepareWindowsBridge :: FilePath -> IO ()
+prepareWindowsBridge root = do
+  unless (Host.os == "mingw32") (die "windows-bridge requires native Windows GHC")
+  ghc <- maybe "ghc" id <$> lookupEnv "GHC" >>= canonicalizePath
+  let pkg = takeDirectory ghc </> "ghc-pkg.exe"
+  cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+  python <- maybe "python" id <$> lookupEnv "THC_PYTHON"
+  stamp <- formatTime defaultTimeLocale "%Y%m%dT%H%M%S%q" <$> getCurrentTime
+  let directory = "build/windows-bridge"
+      logs = directory </> stamp
+      native = logs </> "native"
+      core = logs </> "core"
+      source = "compiler/test-fixtures/WindowsBridgeAudit.hs"
+      db = root </> "dist-newstyle/packagedb/ghc-9.14.1"
+      entries = ["roundTrip","dictionaryRoundTrip","inertDisplay","caughtRoundTrip"]
+      readValue path = either die pure . eitherDecodeStrict =<< BS.readFile path
+      field name (Object fields) = case KeyMap.lookup name fields of
+        Just value -> case Aeson.fromJSON value of
+          Aeson.Success result -> pure result
+          Aeson.Error message -> die message
+        Nothing -> die ("missing fixture field " ++ show name)
+      field _ _ = die "expected fixture object"
+  createDirectoryIfMissing True (root </> native)
+  built <- runLogged 180 root logs "runtime-native" [] cabal
+    ["build","lib:runtime","--offline","--disable-shared","--with-compiler=" ++ ghc,"--with-hc-pkg=" ++ pkg]
+  plan <- readValue (root </> "dist-newstyle/cache/plan.json")
+  units <- field "install-plan" plan :: IO [Value]
+  let runtime = [value | value@(Object fields) <- units,
+        KeyMap.lookup "pkg-name" fields == Just (String "thc"),
+        KeyMap.lookup "component-name" fields == Just (String "lib:runtime")]
+  owner <- case runtime of [value] -> field "id" value; _ -> die "no unique actual Cabal runtime unit"
+  let package = ["-package-db",db,"-package-id",owner]
+  compiled <- runLogged 180 root logs "native-build" [] ghc
+    (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-main-is","WindowsBridgeAudit",
+      "-odir",root </> native,"-hidir",root </> native,source,"-o",root </> native </> "oracle.exe"] ++ package)
+  observed <- runLogged 60 root logs "native-oracle" [] (root </> native </> "oracle.exe") []
+  let rows = map (splitTab . BSC.unpack) (BSC.lines (commandStdout observed))
+  unless (length rows == 3 && all ((==5) . length) rows) (die "unexpected native bridge inventory")
+  driver <- reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse <$> run root [] cabal
+    ["list-bin","exe:thc","--disable-shared","--with-compiler=" ++ ghc] ""
+  (supportOptions, supportManifest) <- prepareWindowsRuntime root ghc pkg driver (root </> logs)
+  powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+  let response = root </> logs </> "export.args"
+  writeFile response (escapeArgs (supportOptions ++ package ++ ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++
+    ["-fplugin-opt=THC.Plugin:foreign-import-provenance",source]))
+  exported <- runLogged 180 root logs "export"
+    [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> logs </> "objects")]
+    powershell ["-NoProfile","-File",root </> "compiler/export.ps1","@" ++ response]
+  modules <- map ((root </> core) </>) . filter ((==".json") . takeExtension) <$> listDirectory (root </> core)
+  let linked = modules ++ ["@" ++ supportManifest]
+  support <- readValue supportManifest
+  selected <- field "foreignExceptionBridgeUnit" support
+  unless (selected == owner) (die "native oracle and acquired runtime dictionary have different owners")
+  -- Retain even a failed audit's exact acquisition and native-oracle inputs.
+  writeJson (root </> directory </> "linked.json") (object ["modules" .= linked,"owner" .= owner,"logs" .= logs])
+  audits <- forM entries $ \entry -> runLogged 60 root logs ("audit-" ++ entry) [] python
+    (["scripts/audit-core.py","--entry",entry,"--package-manifest",supportManifest,
+      "--output",root </> logs </> entry ++ ".audit.json"] ++ modules)
+  rejected <- runLoggedExpect 1 60 root logs "audit-missing-support" [] python
+    (["scripts/audit-core.py","--entry","roundTrip","--output",root </> logs </> "missing-support.audit.json"] ++ modules)
+  negative <- readValue (root </> logs </> "missing-support.audit.json")
+  issues <- field "issues" negative :: IO [Value]
+  unless (any (\value -> case value of
+    Object fields -> KeyMap.lookup "detail" fields == Just (String "Interface closure lacks its exact complete provided module")
+    _ -> False) issues) (die "missing-support control did not fail the provided-module contract")
+  drivers <- listDirectory (root </> "src/THC/Driver")
+  let commands = [built,compiled,observed,exported] ++ audits ++ [rejected]
+      sources = [source,"test/haskell-fixtures/WindowsSmokeFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs","thc.cabal","compiler/export.ps1","compiler/THC/Plugin.hs",
+        "compiler/THC/Interface.hs","compiler/interface/Main.hs","compiler/windows-ghc-internal.json",
+        "compiler/target-layout.c","scripts/windows-common.ps1",
+        "scripts/audit-core.py","scripts/core-capabilities.json","scripts/core_original_foreign.py",
+        "scripts/core_package_manifest.py","scripts/core_md5_foreign.py",
+        "runtime/THC/Internal/Exception.hs","runtime/THC/Exception.hs"] ++
+        ["src/THC/Driver" </> path | path <- drivers,takeExtension path == ".hs"]
+  inputHashes <- hashes root sources
+  supportUnits <- field "units" support :: IO [Value]
+  bundles <- forM [bundle | Object fields <- supportUnits, Just bundle <- [KeyMap.lookup "bundle" fields]] (field "path")
+  artifactHashes <- hashes root (modules ++ bundles ++ [native </> "oracle.exe"] ++ concatMap commandArtifacts commands ++
+    [logs </> entry ++ ".audit.json" | entry <- entries] ++
+    [logs </> "missing-support.audit.json",logs </> "runtime-support/packages.json"])
+  writeJson (root </> directory </> "provenance.json") (object
+    ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"system" .= Host.os,"owner" .= owner,
+     "modules" .= linked,"logs" .= logs,"entries" .= entries,"nativeRows" .= rows,
+     "inputHashes" .= inputHashes,"artifactHashes" .= artifactHashes,"commands" .= map commandRecord commands])
 
 -- Extend the existing native fixture producer. Expected values come only from
 -- GHC's executable, while the late plugin supplies actual Core for JVM tests.
@@ -164,7 +265,9 @@ prepareWindowsDriver root = do
     forM [(backend,dense) | backend <- ["ast","bytecode"], dense <- ["false","true"]] $ \(backend,dense) -> do
       let label = backend ++ "-" ++ dense
           output = root </> logs </> ("dist with spaces " ++ label)
-      result <- runLogged 180 root logs label
+      -- The first run may build the pinned vanilla support graph from source;
+      -- later modes must reuse that exact checked cache.
+      result <- runLogged (if backend == "ast" && dense == "false" then 1800 else 180) root logs label
         [("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)]
         driver ["run", "--project-dir", root </> package, "completed",
                 "--thc-root", root, "--dist-dir", output]
@@ -176,16 +279,24 @@ prepareWindowsDriver root = do
       pure result
   drivers <- listDirectory (root </> "src/THC/Driver")
   let commands = [compiled, observed] ++ runs
+      supportManifests = [logs </> ("dist with spaces " ++ backend ++ "-" ++ dense) </>
+        "thc-run/completed/runtime-support/packages.json" | backend <- ["ast","bytecode"], dense <- ["false","true"]]
       sources = ["test/fixtures/run-pure" </> path | path <- originals] ++
         ["src/THC/Driver" </> path | path <- drivers, takeExtension path == ".hs"] ++
         ["test/haskell-fixtures/WindowsSmokeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
-         "compiler/export.ps1", "scripts/windows-common.ps1", "scripts/windows.ps1", "thc.cabal"]
+         "compiler/export.ps1", "compiler/interface/Main.hs", "compiler/windows-ghc-internal.json", "compiler/WindowsRunMain.hs",
+         "scripts/windows-common.ps1", "scripts/windows.ps1", "thc.cabal"]
   sourceHashes <- hashes root sources
-  artifactHashes <- hashes root (copied ++ [native </> "completed.exe"] ++ concatMap commandArtifacts commands)
+  exports <- fmap concat $ forM supportManifests $ \manifest -> do
+    let output = takeDirectory (takeDirectory manifest)
+        core = output </> "core"
+    files <- filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
+    pure ([core </> file | file <- files] ++ [output </> "audit.json", output </> "export.args"])
+  artifactHashes <- hashes root (copied ++ supportManifests ++ exports ++ [native </> "completed.exe"] ++ concatMap commandArtifacts commands)
   writeJson (root </> "build/windows-driver/provenance.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "system" .= Host.os,
      "runs" .= (4 :: Int), "packageToolSelection" .= ("compiler-companion" :: String),
-     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
+     "supportManifests" .= supportManifests, "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn "windows-driver: native GHC completion matches AST/bytecode, default/dense, paths with spaces"

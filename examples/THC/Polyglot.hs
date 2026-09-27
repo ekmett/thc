@@ -2,7 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE GHCForeignImportPrim, MagicHash, UnboxedTuples, UnliftedFFITypes #-}
--- | A GHC-typed module boundary for THC's versioned Truffle polyglot calls.
+
+-- |
+-- Module      : THC.Polyglot
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- A GHC-typed module boundary for THC's versioned Truffle polyglot calls.
 -- The foreign symbols are supplied by THC, not by a native C library.
 module THC.Polyglot (Value, eval, evalJS, readMember, executeInt) where
 

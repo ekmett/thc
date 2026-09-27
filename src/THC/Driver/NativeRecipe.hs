@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
+
+-- |
+-- Module      : THC.Driver.NativeRecipe
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
 -- Receipts of actual successful Cabal compiler calls, never setup-config data.
 module THC.Driver.NativeRecipe
   ( NativeRecipe(..), captureNativeRecipe, readNativeRecipe, recipePath

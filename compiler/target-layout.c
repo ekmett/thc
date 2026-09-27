@@ -25,6 +25,8 @@
 #define THC_OS "osx"
 #elif defined(__linux__)
 #define THC_OS "linux"
+#elif defined(_WIN32)
+#define THC_OS "windows"
 #else
 #error Unsupported GHC target OS for stack layout
 #endif

@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, ScopedTypeVariables #-}
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; declared foreign symbols required at link/run time
+--
+-- Check runtime service statuses and tracing cleanup with native GHC fallbacks.
 module Main (main) where
 
 import Control.Exception
@@ -90,7 +100,7 @@ main = do
   check (failed == Left ProbeFailure) "span preserves original action exception"
   interrupted <- try (Trace.withSpan "interruption" (throwIO ThreadKilled)) :: IO (Either AsyncException ())
   check (interrupted == Left ThreadKilled) "span does not swallow async exceptions"
-  oversized <- try (Trace.traceEvent (replicate 1048577 'x')) :: IO (Either IOError (Availability ()))
+  oversized <- try (Trace.traceEvent (replicate 1048577 'x')) :: IO (Either IOError (Available ()))
   check (case oversized of Left _ -> True; Right _ -> False) "UTF-8 payload limit checked before allocation"
   check (fmap (+ (1 :: Int)) Disabled == Disabled && fmap (+ (1 :: Int)) Denied == Denied
     && fmap (+ (1 :: Int)) Unavailable == Unavailable && fmap (+ (1 :: Int)) (Available 0) == Available 1)

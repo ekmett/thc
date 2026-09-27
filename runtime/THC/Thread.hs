@@ -2,11 +2,19 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, Trustworthy #-}
 
--- | Current-thread observations. No API exposes a carrier handle, arbitrary
+-- |
+-- Module      : THC.Thread
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Current-thread observations. No API exposes a carrier handle, arbitrary
 -- host-thread access, raw pinning or Java interruption. Guest forks currently
 -- use platform threads; affinity operations refuse virtual-thread callers.
 module THC.Thread
-  ( Availability(..), ThreadKind(..), ThreadInfo(..), ThreadAccounting(..)
+  ( Available(..), ThreadKind(..), ThreadInfo(..), ThreadAccounting(..)
   , CpuCoordinate(..), currentThreadInfo, currentThreadAccounting, eligibleCPUs
   , CpuAffinitySupport(..), cpuAffinitySupport, affinityApplied, forkOnWithAffinity
   ) where
@@ -17,28 +25,31 @@ import Data.Word (Word64)
 import Foreign.C.Types (CInt(..))
 import THC.Internal.RuntimeABI
 
+-- | Kind of thread observed by the service, not a handle to its host carrier.
 data ThreadKind = NativeHaskellThread | PlatformThread | VirtualThread
   deriving (Eq, Ord, Show)
 
+-- | Strength of the runtime's affinity mechanism. Even pinned support does
+-- not prove that a particular thread's request was accepted.
 data CpuAffinitySupport = NoCpuAffinity | AdvisoryCpuAffinity | PinnedCpuAffinity
   deriving (Eq, Ord, Show)
 
 -- | Logical lock/request information is not evidence of OS pin acceptance.
 data ThreadInfo = ThreadInfo
-  { threadKind :: Availability ThreadKind
-  , logicalCapability :: Availability Int
-  , logicalCapabilityLocked :: Availability Bool
-  , threadAffinitySupport :: Availability CpuAffinitySupport
-  , threadAffinityApplied :: Availability Bool
+  { threadKind :: Available ThreadKind
+  , logicalCapability :: Available Int
+  , logicalCapabilityLocked :: Available Bool
+  , threadAffinitySupport :: Available CpuAffinitySupport
+  , threadAffinityApplied :: Available Bool
   } deriving (Eq, Show)
 
 -- | Cumulative accounting for the currently executing JVM thread. Does not
 -- enable monitoring, and is not an allocation/time budget. On a platform
 -- thread these counters include other host work performed on that thread.
 data ThreadAccounting = ThreadAccounting
-  { threadCpuNanoseconds :: Availability Word64
-  , threadUserNanoseconds :: Availability Word64
-  , threadAllocatedBytes :: Availability Word64
+  { threadCpuNanoseconds :: Available Word64
+  , threadUserNanoseconds :: Available Word64
+  , threadAllocatedBytes :: Available Word64
   } deriving (Eq, Show)
 
 -- | OS coordinate: Linux group zero plus sparse OS CPU ID; Windows processor
@@ -48,6 +59,8 @@ data CpuCoordinate = CpuCoordinate
   , cpuProcessor :: Int
   } deriving (Eq, Ord, Show)
 
+-- | Inspect the caller's thread and logical capability without changing its
+-- scheduling or affinity. Fields are independently sampled.
 currentThreadInfo :: IO ThreadInfo
 currentThreadInfo = ThreadInfo
   <$> queryEnum 100 [(0, NativeHaskellThread), (1, PlatformThread), (2, VirtualThread)]
@@ -56,15 +69,17 @@ currentThreadInfo = ThreadInfo
   <*> queryEnum 103 [(0, NoCpuAffinity), (1, AdvisoryCpuAffinity), (2, PinnedCpuAffinity)]
   <*> queryEnum 104 [(0, False), (1, True)]
 
+-- | Sample the executing JVM thread's cumulative counters. This neither
+-- enables monitoring nor isolates this guest's work from other carrier work.
 currentThreadAccounting :: IO ThreadAccounting
 currentThreadAccounting = ThreadAccounting <$> queryWord64 105 0 0 <*> queryWord64 106 0 0 <*> queryWord64 107 0 0
 
 -- | Initial context eligibility in dense capability order, capped by the
 -- JVM's CPU capacity. This is not a live process-affinity query. Unavailable
 -- discovery is explicit, rather than a fabricated list of CPU IDs.
-eligibleCPUs :: IO (Availability [CpuCoordinate])
+eligibleCPUs :: IO (Available [CpuCoordinate])
 eligibleCPUs = do
-  count <- query 108 0 0 :: IO (Availability Int64)
+  count <- query 108 0 0 :: IO (Available Int64)
   case count of
     Available size -> collect [0 .. size - 1] []
     Unsupported -> pure Unsupported

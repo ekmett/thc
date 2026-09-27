@@ -2,10 +2,18 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, Unsafe #-}
 
--- | Private versioned FFI boundary. Raw selectors and pointers are hazardous;
+-- |
+-- Module      : THC.Internal.RuntimeABI
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Private versioned FFI boundary. Raw selectors and pointers are hazardous;
 -- applications should use the typed service modules, not this implementation.
 module THC.Internal.RuntimeABI
-  ( Availability(..), query, queryInt, queryWord64, queryEnum, queryText, control, traceCall
+  ( Available(..), query, queryInt, queryWord64, queryEnum, queryText, control, traceCall
   ) where
 
 import Data.Char (chr)
@@ -13,7 +21,7 @@ import Data.Int (Int64)
 import Data.Word (Word8, Word64)
 import Foreign.C.Types (CInt(..), CLLong(..))
 import Foreign.Ptr (Ptr)
-import THC.Runtime.Types (Availability(..))
+import THC.Runtime.Types (Available(..))
 
 foreign import ccall unsafe "thc_runtime_v1_query"
   queryCode :: CInt -> CLLong -> CLLong -> IO CLLong
@@ -22,7 +30,7 @@ foreign import ccall unsafe "thc_runtime_v1_control"
 foreign import ccall unsafe "thc_runtime_v1_trace"
   traceCode :: CInt -> CLLong -> Ptr Word8 -> CLLong -> IO CLLong
 
-decode :: CLLong -> IO (Availability Int64)
+decode :: CLLong -> IO (Available Int64)
 decode value = case value of
   -1 -> pure Unsupported
   -2 -> pure Disabled
@@ -33,17 +41,17 @@ decode value = case value of
 
 -- Keep the primitive result concrete. An Integral dictionary would retain
 -- unrelated Real/toRational/Integer machinery in an application's Core closure.
-query :: Int -> Int64 -> Int64 -> IO (Availability Int64)
+query :: Int -> Int64 -> Int64 -> IO (Available Int64)
 query selector index detail =
   queryCode (fromIntegral selector) (fromIntegral index) (fromIntegral detail) >>= decode
 
-queryInt :: Int -> Int64 -> Int64 -> IO (Availability Int)
+queryInt :: Int -> Int64 -> Int64 -> IO (Available Int)
 queryInt selector index detail = fmap (fmap fromIntegral) (query selector index detail)
 
-queryWord64 :: Int -> Int64 -> Int64 -> IO (Availability Word64)
+queryWord64 :: Int -> Int64 -> Int64 -> IO (Available Word64)
 queryWord64 selector index detail = fmap (fmap fromIntegral) (query selector index detail)
 
-queryEnum :: Int -> [(Int64, a)] -> IO (Availability a)
+queryEnum :: Int -> [(Int64, a)] -> IO (Available a)
 queryEnum selector choices = do
   result <- query selector 0 0
   case result of
@@ -56,7 +64,7 @@ queryEnum selector choices = do
     Unavailable -> pure Unavailable
 
 -- Text indices are Unicode codepoints, not UTF-16 code units.
-queryText :: Int -> Int64 -> IO (Availability String)
+queryText :: Int -> Int64 -> IO (Available String)
 queryText selector index = do
   size <- query selector index (-1)
   case size of
@@ -80,10 +88,10 @@ queryText selector index = do
             Denied -> pure Denied
             Unavailable -> pure Unavailable
 
-control :: Int -> Int64 -> IO (Availability ())
+control :: Int -> Int64 -> IO (Available ())
 control selector setting = fmap (fmap (const ())) $
   controlCode (fromIntegral selector) (fromIntegral setting) >>= decode
 
-traceCall :: Int -> Int64 -> Ptr Word8 -> Int -> IO (Availability Int64)
+traceCall :: Int -> Int64 -> Ptr Word8 -> Int -> IO (Available Int64)
 traceCall operation token pointer count =
   traceCode (fromIntegral operation) (fromIntegral token) pointer (fromIntegral count) >>= decode

@@ -2,7 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE LambdaCase #-}
--- | GHC 9.14.1 plugin and direct serializers for THC's executable Core format.
+
+-- |
+-- Module      : THC.Plugin
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- GHC 9.14.1 plugin and direct serializers for THC's executable Core format.
 --
 -- Use @-fplugin=THC.Plugin@ with the output directory as the first plugin
 -- option. Package exports require @post-tidy@ and @unit-qualified@; add
@@ -72,6 +81,14 @@ import System.FilePath ((</>), takeDirectory)
 -- interfaces. The first option is the destination directory (default
 -- @build/core@). GHC compilations using the plugin are forced to recompile so
 -- the export is not silently skipped by native recompilation checks.
+--
+-- For example, after making the plugin package visible to the selected GHC:
+--
+-- @
+-- ghc -O2 -fplugin=THC.Plugin -fplugin-opt=THC.Plugin:build/core \\
+--   -fplugin-opt=THC.Plugin:post-tidy -fplugin-opt=THC.Plugin:unit-qualified \\
+--   -fplugin-opt=THC.Plugin:source-notes -c Example.hs
+-- @
 plugin :: Plugin
 plugin = defaultPlugin
   { parsedResultAction = rewriteJavaScriptImports
@@ -1399,6 +1416,13 @@ exportInterfaceClosure :: HscEnv -> [CommandLineOption] -> FilePath -> Ctx -> [I
 exportInterfaceClosure hsc opts dir rootCtx roots = do
   modules <- readIORef sourceDefinitions
   let sourceEnv = mkVarEnv [(v,(d,e)) | (d,bs) <- modules, (v,e) <- bs]
+      -- A driver can supply complete, checked modules alongside this closure.
+      -- Do not also import their partial interface unfoldings. Missing supplied
+      -- definitions still fail the ordinary final reachable-Core audit.
+      provided = mapMaybe (stripPrefix "closure-provided-module=") opts
+      providedId v = case nameModule_maybe (varName v) of
+        Nothing -> False
+        Just m -> (unitString (moduleUnit m) ++ ":" ++ moduleNameString (moduleName m)) `elem` provided
       -- exprFreeVars deliberately omits global IDs. Dependency discovery
       -- instead walks all term references with explicit lexical scopes.
       refs = go emptyVarSet
@@ -1486,6 +1510,7 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         | Just _ <- isDataConWorkId_maybe v = walk seen' todo found missing
         | polyglotForeign v = walk seen' todo found missing
         | Just (_,e) <- lookupVarEnv sourceEnv v = walk seen' (refs e ++ todo) found missing
+        | providedId v = walk seen' todo found missing
         | Just e <- maybeUnfoldingTemplate (realIdUnfolding v) =
             let kind = case realIdUnfolding v of DFunUnfolding{} -> "interface-dfun-unfolding"; _ -> "interface-core-unfolding"
             in walk seen' (refs e ++ todo) ((originCtx v,v,e,kind):found) missing
@@ -1511,7 +1536,7 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
         , ("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports]))
-        ] ++ sourceTableFields closureCtx
+        ] ++ [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
   writeFile path (json result ++ "\n")

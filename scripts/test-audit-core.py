@@ -9,11 +9,13 @@ import hashlib
 import io
 import json
 import re
+import tempfile
 from pathlib import Path
 import unittest
 import core_original_foreign
 import core_package_manifest
 from collections import deque
+from contextlib import closing
 import gc
 import os
 import sqlite3
@@ -52,6 +54,57 @@ LONG = dict(primReps=['IntRep'], kind='long', evaluated=True)
 REFERENCE = dict(primReps=['BoxedRep (Just Lifted)'], kind='data', evaluated=False)
 CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
+
+
+class CommandLineEncodingTest(unittest.TestCase):
+    def test_utf8_core_and_module_paths_do_not_use_windows_ansi_encoding(self):
+        # U+201D contains a UTF-8 byte undefined in cp1252. This is the real
+        # failure reached when hydrating unchanged GHC sources on Windows.
+        read_text = Path.read_text
+        def ansi_default(path, encoding=None, errors=None, **kwargs):
+            return read_text(path, encoding=encoding or 'cp1252', errors=errors, **kwargs)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = 'root\u201d'
+            source = root / 'core\u201d.json'
+            source.write_bytes(json.dumps(dict(schema=1, ghc='9.14.1',
+                bindings=[bind(entry, lit(42))], constructors=[]), ensure_ascii=False).encode('utf-8'))
+            manifest = root / 'modules.txt'
+            manifest.write_bytes((source.name + '\n').encode('utf-8'))
+            report = root / 'audit.json'
+            with patch.object(Path, 'read_text', ansi_default), patch('sys.argv',
+                    ['audit-core.py', '--module-list', str(manifest), '--entry', entry, '--output', str(report)]), \
+                    patch('sys.stderr', io.StringIO()):
+                self.assertEqual(0, audit_core.main())
+            self.assertEqual([entry], json.loads(report.read_bytes())['roots'])
+
+
+class ProvidedModuleTest(unittest.TestCase):
+    def test_exact_complete_provider_is_required_by_interface_fragment(self):
+        fragment = dict(schema=1, ghc='9.14.1', unit='dependency-closure', module='THC.InterfaceClosure',
+                        boundary='actual-interface-unfoldings', providedModules=['pkg:Library'],
+                        bindings=[bind('root', lit(42))], constructors=[])
+        provider = dict(schema=1, ghc='9.14.1', unit='pkg', module='Library',
+                        boundary='optimized-Core-after-Tidy-before-CorePrep', bindings=[], constructors=[])
+        def check(*modules):
+            supplied = [(str(index), module) for index, module in enumerate(modules)]
+            expected = audit_core.Audit(supplied, CAP).run(['root'])
+            with tempfile.TemporaryDirectory() as directory:
+                with AuditStore(Path(directory) / 'provided.sqlite', {}) as store:
+                    actual = audit_core.Audit(iter(supplied), CAP, store=store).run(['root'])
+                    output = io.StringIO()
+                    audit_core.write_report(actual, output)
+                    self.assertEqual(expected, json.loads(output.getvalue()))
+            return expected
+        self.assertTrue(check(fragment, provider)['accepted'])
+        for invalid in (None, dict(provider, unit='other'), dict(provider, module='Other'),
+                        dict(provider, boundary='actual-interface-unfoldings')):
+            modules = [fragment] + ([] if invalid is None else [invalid])
+            result = check(*modules)
+            self.assertFalse(result['accepted'])
+            self.assertTrue(any(issue['detail'] == 'Interface closure lacks its exact complete provided module'
+                                for issue in result['issues']))
+        self.assertFalse(check(dict(fragment, unit='forged'), provider)['accepted'])
 
 
 class OriginalTimeClockOperandTest(unittest.TestCase):
@@ -4423,7 +4476,7 @@ class AuditStoreTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'closed'): action()
         store.close()  # Idempotent, and the partial private DB remains evidence.
         self.assertTrue(self.path.is_file())
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             self.assertEqual(b'"ingesting"', connection.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
 
     def test_seal_requires_exact_completion_and_freezes_input_not_acceptance(self):
@@ -4455,7 +4508,7 @@ class AuditStoreTest(unittest.TestCase):
                 store.put_binding('source', self.binding('pending'))
                 raise Interrupted('original interruption')
         self.assertFalse(store.complete)
-        with sqlite3.connect(self.path) as connection:
+        with closing(sqlite3.connect(self.path)) as connection:
             self.assertEqual([(b'committed',)], connection.execute('SELECT key FROM bindings').fetchall())
 
     def test_exclusive_creation_never_overwrites_or_reopens(self):
@@ -4591,7 +4644,7 @@ class AuditStoreTest(unittest.TestCase):
         with self.assertRaises(sqlite3.OperationalError): store.seal(validation_complete=True)
         store._connection = connection
         store.close()
-        with sqlite3.connect(self.path) as saved:
+        with closing(sqlite3.connect(self.path)) as saved:
             self.assertEqual(b'"ingesting"', saved.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
 
     def test_sqlite_record_limit_failure_does_not_truncate_or_complete(self):
@@ -4614,7 +4667,7 @@ class AuditStoreTest(unittest.TestCase):
         with patch.object(audit_core.sqlite3, 'connect', side_effect=failing_connect), self.assertRaises(sqlite3.OperationalError):
             AuditStore(self.path, {})
         with self.assertRaises(sqlite3.ProgrammingError): opened[0].execute('SELECT 1')
-        with real_connect(self.path) as saved:
+        with closing(real_connect(self.path)) as saved:
             self.assertEqual([], saved.execute('SELECT name FROM sqlite_master').fetchall())
 
     def test_validated_stream_exhaustion_is_required_before_store_seal(self):
@@ -4822,11 +4875,15 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
         outer = self
         runs = 0
         class ComparingAudit(original):
-            def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None):
+            def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None, *, store=None):
                 self.test_modules = list(modules)
-                super().__init__(self.test_modules, capabilities, foreign_exception_bridge_unit)
+                super().__init__(self.test_modules, capabilities, foreign_exception_bridge_unit, store=store)
             def run(self, entries, io_main=False):
                 nonlocal runs
+                if self.store is not None:
+                    # Explicit indexed callers already exercise their requested
+                    # store; only eager calls need the extra parity execution.
+                    return super().run(entries, io_main=io_main)
                 expected = super().run(entries, io_main=io_main)
                 runs += 1
                 # Semantic equivalence does not need ten thousand filesystem
@@ -4916,7 +4973,7 @@ class BoundedAuditIntegrationTest(unittest.TestCase):
         self.assertEqual(2, result.returncode, result.stderr)
         self.assertEqual('', result.stdout)
         self.assertEqual('previous verified output', output.read_text())
-        with sqlite3.connect(store) as connection:
+        with closing(sqlite3.connect(store)) as connection:
             self.assertEqual(b'"ingesting"', connection.execute("SELECT payload FROM metadata WHERE key='phase'").fetchone()[0])
 
     def test_loose_cli_json_retains_previous_duplicate_key_behavior(self):

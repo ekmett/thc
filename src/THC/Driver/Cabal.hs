@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : THC.Driver.Cabal
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
+-- Resolve and configure Cabal components, then describe their compiler inputs.
 module THC.Driver.Cabal (PlanOptions(..), defaultPlanOptions, configurePackage, planPackage) where
 
 import Control.Monad (filterM, unless, when)
@@ -27,6 +36,8 @@ import System.FilePath
 import System.IO (hPutStrLn, stderr)
 import THC.Driver.Json
 
+-- | Compiler, output-directory and component choices for configuring one
+-- Simple Cabal package against installed dependencies.
 data PlanOptions = PlanOptions
   { distDirectory :: FilePath
   , ghcPath :: Maybe FilePath
@@ -36,10 +47,15 @@ data PlanOptions = PlanOptions
   , enableBenchmarks :: Bool
   }
 
+-- | Use @dist-thc@, discover compiler tools normally, and leave optional
+-- test and benchmark components disabled.
+--
+-- >>> (distDirectory defaultPlanOptions, enableTests defaultPlanOptions, enableBenchmarks defaultPlanOptions)
+-- ("dist-thc",False,False)
 defaultPlanOptions :: PlanOptions
 defaultPlanOptions = PlanOptions "dist-thc" Nothing Nothing [] False False
 
--- Cabal's configure action resolves against the selected compiler's installed
+-- | Cabal's configure action resolves against the selected compiler's installed
 -- global package database. It is not cabal-install's project dependency solver.
 configurePackage :: PlanOptions -> FilePath -> IO (FilePath, LocalBuildInfo)
 configurePackage opts target = do
@@ -84,6 +100,8 @@ configurePackage opts target = do
   mapM_ (checkComponent . getComponent configuredPackage . componentLocalName) components
   pure (cabalFile, lbi)
 
+-- | Configure a package and describe its enabled components as ordered JSON.
+-- This writes Cabal configuration, but does not build or execute artifacts.
 planPackage :: PlanOptions -> FilePath -> IO Json
 planPackage opts target = do
   (cabalFile, lbi) <- configurePackage opts target

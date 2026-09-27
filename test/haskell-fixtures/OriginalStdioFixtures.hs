@@ -3,6 +3,14 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : OriginalStdioFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
 -- Production of native observations only. Independent semantics, host ABI and
 -- exact original FCall proofs are checked by the Kotlin fixture consumers.
 module OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl, prepareOriginalErrno, prepareOriginalProcessIdentity) where

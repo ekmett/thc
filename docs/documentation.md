@@ -100,7 +100,7 @@ missing local anchors to rendered instance-method declarations and removes an
 empty source-line suffix from record-selector file links. All resulting links
 still pass the same checker; missing targets are not exempted. Haddock 2.33 also
 links derived-instance origins to the hidden `THC.Runtime.Types` module even
-though `Availability` is documented through its public reexports. Those exact
+though `Available` is documented through its public reexports. Those exact
 module-origin links point to the defining module's tracked source at the same
 revision. Public symbol links remain unchanged, and the private module and raw
 FFI boundary are not added to the published API.

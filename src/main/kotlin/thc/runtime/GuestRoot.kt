@@ -19,6 +19,15 @@ import com.oracle.truffle.api.nodes.RootNode
  * calling convention. This is interpreter structure, not a node in Graal's compiler IR.
  */
 abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescriptor) : RootNode(language, descriptor) {
+    companion object {
+        init {
+            // Establish the pinned runtime's module exports before linking its implementation API.
+            com.oracle.truffle.api.Truffle.getRuntime()
+            if (com.oracle.truffle.runtime.OptimizedCallTarget.declaredReturnPolicyVersion() != 1)
+                throw LinkageError("THC requires the declared root completion runtime")
+        }
+    }
+
     @field:CompilationFinal internal var delimitedControlEnabled: Boolean = false
         private set
 

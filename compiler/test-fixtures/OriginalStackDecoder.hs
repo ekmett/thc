@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-cse #-}
+
+-- |
+-- Module      : OriginalStackDecoder
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 internal library APIs
+--
+-- Compiler fixture for original stack decoder Core and metadata.
 module OriginalStackDecoder (captureNamed, observeSnapshot) where
 
 import Data.List (intercalate, isInfixOf)

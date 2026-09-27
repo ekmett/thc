@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ForeignFunctionInterface, MagicHash, UnliftedFFITypes, UnboxedTuples #-}
+
+-- |
+-- Module      : Unresolved
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; declared foreign symbols required at link/run time
+--
+-- Module for the @run-native-archive@ integration fixture.
 module Unresolved (process, stdio, partialProbe#, throughGlobal) where
 import GHC.Exts (Int(I#), Int#, runRW#, (+#), (*#))
 import GHC.IO (IO(..))

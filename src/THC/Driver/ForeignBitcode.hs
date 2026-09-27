@@ -3,6 +3,15 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : THC.Driver.ForeignBitcode
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC utilities and host filesystem/process services
+--
+-- Acquire and validate the retained CPU-time and time-package CAPI clock wrappers.
 module THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders) where
 
 import Control.Exception (finally)

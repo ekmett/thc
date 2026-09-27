@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+- arguments:
+  # Fixtures and their producers deliberately preserve particular Core shapes.
+  - --ignore-glob=compiler/test-fixtures/**
+  - --ignore-glob=test/fixtures/**
+  - --ignore-glob=test/haskell-fixtures/**
+  # Upstream source snapshots retain upstream style and compiler configuration.
+  - --ignore-glob=compiler/pinned-*/**
+  # Frozen benchmark source is retained evidence, not current implementation.
+  - --ignore-glob=bench/results/**
+
+# Keep the standard hints visible. In particular, do not generate a blanket
+# ignore list from the current tree.

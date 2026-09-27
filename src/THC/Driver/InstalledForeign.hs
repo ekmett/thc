@@ -2,6 +2,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : THC.Driver.InstalledForeign
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
 -- An acquisition-only view of genuine recompiled interfaces. Native compilation
 -- always retains the caller's compiler, package database and installed libraries.
 module THC.Driver.InstalledForeign
@@ -45,7 +53,7 @@ import THC.Driver.Lock (withLock)
 import System.Process (proc, CreateProcess(..), readCreateProcessWithExitCode)
 import THC.Driver.Installed
 
--- The published plugin library and the actual Cabal registration are both
+-- | The published plugin library and the actual Cabal registration are both
 -- checked: -plugin-package-id loads the latter, not an arbitrary copied .so.
 data ForeignCompiler = ForeignCompiler
   { foreignGhc :: FilePath, foreignPluginDb :: FilePath, foreignPluginUnit :: String
@@ -61,6 +69,7 @@ unixModules :: [String]
 unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
   "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString"]
 
+-- | Determine whether a configured producer module lacks retained provenance.
 -- Presence is not permission to replace bad evidence. The helper has already
 -- checked actual annotations against the retained Core/foreign products.
 missingForeignProof :: String -> Value -> Either String Bool
@@ -78,6 +87,9 @@ missingForeignProof name core
       | otherwise = Left (name ++ ": present foreign provenance is not verified; refusing regeneration" ++
           case member "reason" proof of Just (String reason) -> ": " ++ Text.unpack reason; _ -> "")
 
+-- | Acquire configured-source interfaces for the supported foreign profiles,
+-- preserving original unit identities and validating cached source/tool inputs.
+-- The returned view is for Core acquisition, not a replacement native compiler.
 prepareForeignInterfaces :: ForeignCompiler -> FilePath -> FilePath -> InstalledContext ->
                             [InstalledUnit] -> IO InstalledContext
 prepareForeignInterfaces producer cache source context registrations = do

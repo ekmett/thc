@@ -66,8 +66,8 @@ internal fun executionContext(fileIO: Boolean, ffiMode: FfiMode): Context {
  * entry instead exposes `runIO`; invoking that member executes the accepted IO action.
  * Loading does not imply support for arbitrary Haskell types or foreign artifacts.
  *
- * @param modules individual Core JSON paths, or one `@/absolute/path/packages.json`
- * for a checked package closure with strict linking.
+ * @param modules individual Core JSON paths, optionally accompanied by one
+ * `@/absolute/path/packages.json` for checked dependency bundles and strict linking.
  * @param entry exact binder ID or unambiguous exported name.
  * @param instrument enable runtime development metrics.
  * @param backend `bytecode` or `ast`, selected when loading this entry.

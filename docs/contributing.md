@@ -16,6 +16,28 @@ Kotlin for JVM checks and independent runtime models. Introduce Python only for
 a concrete Python-specific need. Migrations must preserve native comparisons,
 negative controls, strict Core audits, provenance, and all active CI callers.
 
+## Haskell lint
+
+Install [HLint 3.10](https://github.com/ndmitchell/hlint/releases/tag/v3.10), then
+run `make lint-haskell` (or set `HLINT=/path/to/hlint`). It checks tracked `.hs`
+and `.lhs` sources, including tools, examples and unit tests, using `.hlint.yaml`.
+Fixture sources and producers (`compiler/test-fixtures`, `test/fixtures`, and
+`test/haskell-fixtures`), vendored compiler sources and frozen benchmark snapshots
+are excluded. Build products and untracked files are not traversed. Stage new
+modules to include them.
+HLint does not preprocess `.hsc` templates or check `.hs-boot` declarations;
+their native GHC build remains the check for those files.
+
+`HLINT_FLAGS` accepts ordinary HLint options, for example
+`make lint-haskell HLINT_FLAGS='--report=build/hlint.html'` after creating `build`.
+To inspect Windows CPP branches, also run
+`make lint-haskell HLINT_FLAGS=--cpp-define=mingw32_HOST_OS`.
+
+The command exits nonzero for hints. The Haskell lint workflow retains JSON
+reports for both CPP profiles: parse/tool errors fail the job, while style
+hints are advisory and remain visible. Review useful suggestions individually.
+Keep suppressions narrow and explain them rather than hiding all existing hints.
+
 ## Build and test
 
 Use proportionate verification for a compiler/JIT with reasonable GHC semantics:
@@ -116,9 +138,12 @@ not one giant primop executor. The processor offers no option to split it.
 splits complete case/return groups into bounded private helpers at the end of
 `kaptKotlin`, before Gradle snapshots that task's output. Every argument
 description is retained verbatim; the interpreter and primop implementations are
-untouched. There is no processor-JAR patch, metadata removal, extra dependency,
-or GHC requirement. The normalization is idempotent and rejects unrecognized
-generator shapes or processor versions; review it when upgrading Truffle.
+untouched. This normalization removes no metadata and requires no GHC. It is
+idempotent and rejects unrecognized generator shapes or processor versions;
+review it when upgrading Truffle. Separate, hash-pinned
+[protocol artifacts](../tools/truffle-protocol/README.md) add unprofiled runtime
+branches and explicit root materialization/completion declarations. They are
+rebuilt from upstream source and never replace shared Maven cache files.
 
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add

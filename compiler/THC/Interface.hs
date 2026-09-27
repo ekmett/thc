@@ -2,7 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE GADTs, PatternSynonyms #-}
--- | Recover complete installed Core with the selected GHC 9.14.1 session.
+
+-- |
+-- Module      : THC.Interface
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- Recover complete installed Core with the selected GHC 9.14.1 session.
 --
 -- Call 'loadInterfaceCore' with an exact resolved unit/module and interface
 -- path, then 'interfaceCoreJSON' to use THC's post-Tidy serialization. Missing

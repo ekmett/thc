@@ -4,6 +4,7 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -14,6 +15,9 @@ import org.graalvm.polyglot.PolyglotAccess
 import org.graalvm.polyglot.proxy.ProxyExecutable
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Tag
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import thc.Language
 import thc.EntryValue
 import java.util.concurrent.atomic.AtomicInteger
@@ -452,6 +456,90 @@ class PolyglotFFITest {
                 } finally { owner.threads.leaveCurrent() }
             } finally { context.leave() }
         }
+    }
+
+    private fun foreignModule(expression: List<Any?>): Map<String, Any?> {
+        val arguments = expression[2] as List<List<Any?>>
+        val parameters = arguments.map { value -> mapOf("id" to value[1], "name" to value[1],
+            "lifted" to ((value.last() as Map<*, *>)["rep"] as Map<*, *>)["primReps"]
+                .let { it == listOf("BoxedRep (Just Lifted)") },
+            "coercion" to false, "rep" to (value.last() as Map<*, *>)["rep"]) }
+        val result = (expression.last() as Map<*, *>)["rep"]
+        return mapOf("bindings" to listOf(mapOf("id" to "call", "name" to "call", "lifted" to true,
+            "expr" to listOf("lam", parameters, expression, mapOf("resultRep" to result)))), "instrument" to true)
+    }
+
+    @Tag("foreign-exceptions-full-core")
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = ["ast/js-safe", "ast/js-unsafe", "ast/polyglot",
+        "bytecode/js-safe", "bytecode/js-unsafe", "bytecode/polyglot"])
+    fun safeManagedCallsSaveTheirFirstCompiledResultBeforeAsyncDeliveryWithoutReplay(mode: String) {
+        val (backend, kind) = mode.split('/')
+            Context.newBuilder("thc", "js").allowExperimentalOptions(true).allowPolyglotAccess(PolyglotAccess.ALL)
+                .allowNativeAccess(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.SingleTierCompilationThreshold", "10000000")
+                .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", "false")
+                .build().use { context ->
+                    context.initialize("thc"); context.enter()
+                    try {
+                        val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                        val owner = Language.currentState()
+                        val effects = AtomicInteger()
+                        val pending = AtomicReference<AsyncRequest>()
+                        var deliver = false
+                        context.getBindings("js").putMember("thcCompleted", ProxyExecutable { args ->
+                            effects.incrementAndGet()
+                            if (deliver) pending.set(owner.threads.send(owner.threads.currentIdentity(), "completed"))
+                            assertNull(owner.threads.poll(object : Node() {}), "No delivery inside foreign execution")
+                            args[0].asLong() + 7L
+                        })
+                        val polyglot = kind == "polyglot"
+                        val expression = if (polyglot) call(PolyglotOp.EXECUTE_INT)
+                            else javascriptCall("globalThis.thcCompleted", safety = if (kind == "js-safe") "safe" else "unsafe")
+                        val module = thc.ForeignExceptionFixtureSupport.link(foreignModule(expression), "call")
+                        val program: ExecutableProgram = if (backend == "ast") Program(language, module, true)
+                            else BytecodeProgram(language, module, true)
+                        val target = program.entryTarget("call")
+                        val shape = checkNotNull((target.rootNode as GuestRoot).tupleResult)
+                        val handle = if (polyglot) Calls.target(root().callTarget,
+                            arrayOf("eval", "(x => globalThis.thcCompleted(x))")) else null
+                        val arguments = if (polyglot) arrayOf<Any?>(0L, handle, 35L, Unit)
+                            else arrayOf<Any?>(0L, 35L, Unit)
+                        fun result(value: Any?) = shape.layout.getLong(ownedTupleResult(value, shape), 0)
+                        fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        owner.threads.enterCurrent()
+                        try {
+                            repeat(3) { assertEquals(42L, result(Calls.target(target, arguments))) }
+                            target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                            val targetClass = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")
+                            val runtime = Truffle.getRuntime()
+                            runtime.javaClass.getMethod("bypassedInstalledCode", targetClass).invoke(runtime, target)
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            val before = count()
+                            val interpreted = target.javaClass.getMethod("getCallCount").invoke(target)
+                            effects.set(0); deliver = true
+                            val answer = Calls.target(target, arguments)
+                            val retainedAfterFirstCall = target.javaClass.getMethod("isValidLastTier").invoke(target)
+                            assertEquals(before + 1L, count(), "$backend/$kind exact first installed entry")
+                            assertEquals(interpreted, target.javaClass.getMethod("getCallCount").invoke(target))
+                            assertEquals(1, effects.get())
+                            if (kind == "js-unsafe") {
+                                assertEquals(42L, result(answer))
+                                assertEquals(AsyncRequestState.PENDING, pending.get().state)
+                                assertSame(pending.get(), owner.threads.poll(target.rootNode)); pending.get().acknowledge()
+                            } else {
+                                val saved = checkNotNull(savedGuestContinuation(answer))
+                                assertSame(pending.get(), saved.asyncRequest())
+                                assertTrue(pending.get().compiledCapture)
+                                pending.get().acknowledge()
+                                assertEquals(42L, result(saved.continueWith(Unit)))
+                            }
+                            assertEquals(1, effects.get(), "Resuming a completed call never repeats the foreign effect")
+                            assertEquals(true, retainedAfterFirstCall, "The exact first installed call retains its target")
+                        } finally { owner.threads.leaveCurrent() }
+                    } finally { context.leave() }
+                }
     }
 
     @Test fun javascriptImportRebindsGlobalFunctionAndKeepsContextCachePrivate() {

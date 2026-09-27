@@ -3,6 +3,14 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : PrimopTools
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
 -- The inventory and scalar contracts share one pinned, compiled GHC API query.
 module PrimopTools where
 

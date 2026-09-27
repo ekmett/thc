@@ -96,26 +96,24 @@ The current [guest transport contract](simd-families.md) carries 30 exact `VecRe
 shapes through calls, results, PAPs, joins, tuple fields, owned closure/thunk
 captures and boxed constructor fields. Public host vector arguments/results,
 other shapes and unimplemented operations remain outside that contract. The
-local operations and listed managed-memory slices below have their own
-native/model checks and separate graph evidence.
+local operations and listed managed-memory families below have their own
+operation-specific native/model checks.
 
-These are GHC vector type names, not JVM classes. Current execution uses
-[raw fixed-species JDK vectors](simd.md); the foundation pages retain historical
-implementation and measurement checkpoints, not the removed THC wrappers as
-current APIs.
+These are GHC vector type names. Execution uses [fixed-species JDK vectors](simd.md);
+Core metadata retains exact lane width and signedness.
 
 | GHC vector shape | Local arithmetic | Managed byte-array memory |
 | --- | --- | --- |
 | Int64X2 | [Foundation](simd.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Word64X2 | [Generated arithmetic](simd-wide-arithmetic.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
-| Int32X4 | [Foundation](simd.md), [wrapping multiplication](int32x4-multiply.md) | [Signed packed memory](int32x4-bytearray.md) |
+| Int32X4 | [Foundation](simd.md), [wrapping multiplication](int32x4-multiply.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Int16X8 | [Foundation](int16x8.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Int8X16 | [Foundation](int8x16.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Word8X16 | [Foundation](word8x16.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 | Word16X8 | [Foundation](word16x8.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
-| Word32X4 | [Foundation](word32x4.md) | [Unsigned packed memory](word32x4-bytearray.md) |
-| FloatX4 | [Foundation](floatx4.md) | [Raw-bit packed memory](floatx4-bytearray.md) |
-| DoubleX2 | [Foundation](doublex2.md) | [Raw-bit packed memory](doublex2-bytearray.md) |
+| Word32X4 | [Foundation](word32x4.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
+| FloatX4 | [Foundation](floatx4.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
+| DoubleX2 | [Foundation](doublex2.md) | [ByteArray](simd128-array-memory.md), [Addr#](simd128-address-memory.md) |
 
 The [generated wide arithmetic families](simd-wide-arithmetic.md) share exact
 lane contracts and finite scalar-entry Haskell oracles/compiled JVM drivers.

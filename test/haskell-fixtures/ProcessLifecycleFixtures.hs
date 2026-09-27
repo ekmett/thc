@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : ProcessLifecycleFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- Fixture acquisition support for process lifecycle.
 module ProcessLifecycleFixtures (prepareProcessLifecycle, main) where
 
 import Control.Monad (forM, unless, void, when)
@@ -169,7 +179,7 @@ prepareProcessLifecycle root = do
         (cg_binds tidied) emptyIfaceForeign >>= writeFile (root </> directory </> "post.json")
   audits <- forM ["pre", "post"] $ \stage -> execute (stage ++ "-audit") [] "python3"
     (["scripts/audit-core.py", directory </> stage ++ ".json", "--output", directory </> stage ++ ".audit.json"] ++
-      concat [["--entry", entry] | entry <- entries])
+      concat [["--entry", entryName] | entryName <- entries])
   inputHashes <- hashes root [source, "test/haskell-fixtures/ProcessLifecycleFixtures.hs",
     "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"]
   interfaceHashes <- hashes root interfaces

@@ -3,6 +3,14 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : OriginalStdioCloseFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
 -- The installed GHC declaration supplies Core; a private native fd supplies
 -- observations. Kotlin owns the independent model and compiled comparisons.
 module OriginalStdioCloseFixtures (prepareOriginalStdioClose) where

@@ -3,6 +3,14 @@
 
 {-# LANGUAGE MagicHash #-}
 
+-- |
+-- Module      : FingerprintDataRun
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 internal library APIs
+--
 -- Execute the installed GHC implementation; this fixture does not replace MD5.
 module FingerprintDataRun (main) where
 

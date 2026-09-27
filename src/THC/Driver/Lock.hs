@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE CPP #-}
+
+-- |
+-- Module      : THC.Driver.Lock
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC handle locking on Windows; POSIX file locking elsewhere
+--
+-- Serialize cache transactions with operating-system file locks.
 module THC.Driver.Lock (withLock) where
 
 #if defined(mingw32_HOST_OS)

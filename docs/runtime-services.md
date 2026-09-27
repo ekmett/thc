@@ -26,7 +26,7 @@ does not re-export hazardous internal diagnostics.
 
 ## Availability, scope and safety
 
-Every optional value uses `Availability a`:
+Every optional value uses `Available a`:
 
 | Result | Meaning |
 | --- | --- |
@@ -102,7 +102,7 @@ allocation accounting on first guest entry when supported. This batch does not
 change that existing policy; these new read-only accounting queries never call
 the management bean's enable/disable setters themselves.
 
-`eligibleCPUs :: IO (Availability [CpuCoordinate])` returns the context's
+`eligibleCPUs :: IO (Available [CpuCoordinate])` returns the context's
 initial CPU eligibility in dense logical-capability order, capped by JVM CPU
 capacity. Linux uses group zero and potentially sparse OS CPU IDs. Windows uses
 processor group and processor number, not CPU Set IDs. This is an initial
@@ -130,7 +130,7 @@ native-access permission; native GHC has no such THC registry and returns
 
 ## `THC.GC`
 
-`collectors :: IO (Availability [CollectorStats])` reports collector names,
+`collectors :: IO (Available [CollectorStats])` reports collector names,
 cumulative collection counts, and approximate cumulative elapsed collection
 **milliseconds** for the whole JVM. Collection elapsed time is neither pause
 time nor collector CPU time. Unknown/invalidated counters remain `Unavailable`.
@@ -146,7 +146,7 @@ never starts a process-wide recording. With only JFR selected and no enabled
 recording consumer, emitting/beginning a span returns `Disabled`. With both
 sinks selected, a successful stderr write suffices even if JFR is disabled.
 
-`traceEvent :: String -> IO (Availability ())` emits a structured instant event.
+`traceEvent :: String -> IO (Available ())` emits a structured instant event.
 Labels are exact UTF-8 data, including embedded NUL, limited to 1 MiB of encoded
 bytes. Invalid Unicode surrogate `Char`s are replaced with U+FFFD. Oversized
 labels raise an IO error before native-buffer allocation; they are not silently
@@ -174,7 +174,7 @@ can perturb compilation timing. It exposes no raw Java target handles, does not
 force compilation and does not claim that a particular Haskell entry compiled.
 
 `jitTelemetryEnabled` observes context-local telemetry and
-`setJitTelemetryEnabled :: Bool -> IO (Availability ())` explicitly toggles it.
+`setJitTelemetryEnabled :: Bool -> IO (Available ())` explicitly toggles it.
 It starts off. `jitSnapshot :: IO JitSnapshot` reads compilation queued, started,
 succeeded and failed callbacks, invalidations and deoptimizations attributed to
 this context. Counter queries are `Disabled` while off. Unsupported runtime
