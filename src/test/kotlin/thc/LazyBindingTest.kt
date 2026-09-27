@@ -159,6 +159,44 @@ class LazyBindingTest {
         assertEquals(1, count(program, "initializedBindingCount"))
     }
 
+    @Test fun bytecodeDeferredFailureKeepsItsIdentityAndAddsOnlyItsExactOwner() {
+        for (async in listOf(false, true)) executionContext().use { context ->
+            context.initialize("thc")
+            context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val cause = IllegalArgumentException("original cause")
+                val previous = IllegalStateException("original suppressed context")
+                val original = UnsupportedCore("original deferred failure").also {
+                    it.initCause(cause)
+                    it.addSuppressed(previous)
+                }
+                val stack = original.stackTrace.copyOf()
+                val broken = lambda { throw original }
+                val cold = lambda { error("unrequested body must stay cold") }
+                val id = "actual-unit:Original.Module.\$worker"
+                val program = BytecodeProgram(language, module(listOf(
+                    binding(id, broken), binding("cold-unit:Cold.entry", cold))), async)
+                assertEquals(0, broken.decodeAttempts())
+                assertEquals(0, cold.decodeAttempts())
+                val failure = assertThrows(UnsupportedCore::class.java) { program.entryValue(id) }
+                assertSame(original, failure)
+                assertEquals("original deferred failure", failure.message)
+                assertSame(cause, failure.cause)
+                assertArrayEquals(stack, failure.stackTrace)
+                assertEquals(2, failure.suppressed.size)
+                assertSame(previous, failure.suppressed[0])
+                assertEquals("While preparing Core binding $id", failure.suppressed[1].message)
+                assertSame(original, assertThrows(UnsupportedCore::class.java) { program.entryValue(id) })
+                assertEquals(2, original.suppressed.size, "memoized failure must not acquire duplicate context")
+                assertEquals(1, broken.decodeAttempts())
+                assertEquals(0, cold.decodeAttempts())
+                assertEquals(0, count(program, "initializedBindingCount"))
+                assertEquals(0, count(program, "loweredRootCount"))
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun codePreparationKeepsCafIdentityAndDoesNotEvaluateItsBottom() = bothBackends { language, backend, async ->
         val bottom = CoreBindingBody(CoreBindingBody.Header(2, mapOf(0 to "var", 1 to "bottom"), false)) {
             listOf("var", "bottom")

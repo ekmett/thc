@@ -231,10 +231,18 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 continue
             }
             globals.getValue(binding["id"] as String).defer(preparationLock) {
-                validateBindings(listOf(binding))
-                prepareClosedBinding(binding).also { value ->
-                    CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
-                    initializedBindingCount++
+                try {
+                    validateBindings(listOf(binding))
+                    prepareClosedBinding(binding).also { value ->
+                        CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
+                        initializedBindingCount++
+                    }
+                } catch (failure: UnsupportedCore) {
+                    // Keep the original failure/cause/stack and cached identity.
+                    // A cold worker's generic lowering stack otherwise loses
+                    // the exact definition whose preparation was demanded.
+                    failure.addSuppressed(IllegalStateException("While preparing Core binding ${binding["id"]}"))
+                    throw failure
                 }
             }
         }

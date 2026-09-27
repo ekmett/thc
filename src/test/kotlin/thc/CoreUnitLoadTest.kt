@@ -6,6 +6,7 @@ package thc
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Engine
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Source
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
+import thc.runtime.UnsupportedCore
 
 class CoreUnitLoadTest {
     @TempDir lateinit var directory: Path
@@ -317,6 +319,37 @@ class CoreUnitLoadTest {
             assertEquals(2L, count(entry, "coreUnitSourceOpens"))
         }
     }
+    @Test fun demandedBytecodeFailureNamesOnlyItsOwnerAndKeepsOtherUnitsUnopened() {
+        val manifest = fixture(badB = true)
+        Files.delete(directory.resolve("C.jsons"))
+        Files.delete(directory.resolve("C.symbols"))
+        for (async in listOf(false, true)) executionContext().use { context ->
+            @Suppress("UNCHECKED_CAST")
+            val input = Json.parse(request(manifest, "bytecode", async)) as Map<String, Any?>
+            val units = checkNotNull(CoreModules.unitDirectory(input))
+            context.initialize("thc")
+            context.enter()
+            val owner = Language.currentState()
+            owner.threads.enterCurrent()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                CoreUnitProgram(language, units, input, "uA:A.entry", "bytecode", async, owner).use { program ->
+                    fun statistic(name: String) = (program.diagnostics().getValue(name) as Number).toLong()
+                    program.entryValue("uA:A.entry")
+                    assertEquals(1L, statistic("coreUnitSourceOpens"))
+                    assertEquals(1L, statistic("coreUnitDecodedBindings"))
+                    val failure = assertThrows(UnsupportedCore::class.java) { program.entryValue("uB:B.entry") }
+                    assertEquals(listOf("While preparing Core binding uB:B.entry"), failure.suppressed.map { it.message })
+                    assertSame(failure, assertThrows(UnsupportedCore::class.java) { program.entryValue("uB:B.entry") })
+                    assertEquals(1, failure.suppressed.size)
+                    assertEquals(2L, statistic("coreUnitSourceOpens"))
+                    assertEquals(2L, statistic("coreUnitDirectoryOpens"))
+                    assertEquals(2L, statistic("coreUnitDecodedBindings"))
+                }
+            } finally { owner.threads.leaveCurrent(); context.leave() }
+        }
+    }
+
     @Test fun mutualFunctionReferencesPrepareWithoutRecursingThroughColdBodies() {
         val manifest = fixture(cycle = true)
         for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
