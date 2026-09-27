@@ -108,7 +108,7 @@ internal class AstTailApplication(function: Expr, arguments: Array<Expr>,
     private val suppliedCount = layout.arity - arguments.size
     @Child private var function = Evaluate(function, metrics)
     @Children private var operands = Array(arguments.size) { index ->
-        LocalBinding(temporaries[index + suppliedCount], arguments[index], preferLong = true)
+        LocalBinding(temporaries[index + suppliedCount], arguments[index], true)
     }
     @Child private var selfTarget = AstSelfTarget()
     @Child private var dispatch = Dispatch.create(arguments.size, true, metrics,
