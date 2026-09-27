@@ -827,6 +827,7 @@ executable thc-fixtures
     OriginalStrerrorFixtures
     OriginalStdioTruncateFixtures
     OriginalHandleReadinessFixtures
+    OriginalPathStatFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
     ByteStringUtf8Fixtures

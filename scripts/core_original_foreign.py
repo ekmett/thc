@@ -155,6 +155,10 @@ OPERATIONS = {
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    '__hscore_stat': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_lstat': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat':
+        ('capi', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     '__hscore_fstat': ('ccall', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
     '__hscore_open': ('ccall', ('unsafe', 'safe', 'interruptible'), ('AddrRep', 'Int32Rep', 'Word32Rep', None), (None, 'Int32Rep')),
     'lockFile': ('ccall', 'unsafe', ('Word64Rep', 'Word64Rep', 'Word64Rep', 'Int32Rep', None), (None, 'Int32Rep')),
@@ -257,6 +261,8 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 LIBRARY_OPERATIONS = {
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol]
        for symbol in ('close', 'dup', 'isatty', 'getenv')},
+    ('unix-2.8.8.0-inplace', 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat'):
+        OPERATIONS['ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat'],
     ('unix-2.8.8.0-inplace', 'stg_sig_install'): OPERATIONS['stg_sig_install'],
     **{('unix-2.8.8.0-inplace', symbol): operation for symbol, operation in WAIT_STATUS_OPERATIONS.items()},
     **{('text-2.1.3-inplace', symbol): operation for symbol, operation in TEXT_OPERATIONS.items()},
@@ -386,6 +392,8 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
         require(text_unit(target.get('unit')), 'supported installed text unit')
+    if symbol == 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat':
+        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix path-stat unit')
     if symbol in WAIT_STATUS_OPERATIONS:
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix wait-status unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',

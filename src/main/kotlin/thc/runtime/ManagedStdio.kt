@@ -220,6 +220,13 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun pathStat(operation: OriginalStdioOp, path: ManagedAddress, destination: ManagedAddress): Long {
+        check(operation.pathStat)
+        val result = files.pathStatOriginal(path, destination, operation == OriginalStdioOp.STAT)
+        if (result < 0) lastError.set(fileError(hostAbi))
+        return result
+    }
+
     @TruffleBoundary fun fstat(fd: Long, destination: ManagedAddress): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong()) fault("Original fstat requires a canonical signed CInt descriptor")
