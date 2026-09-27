@@ -7,7 +7,7 @@ package thc
 import org.graalvm.polyglot.Value
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import thc.runtime.CALL_DEMANDS_PROPERTY
+import thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY
 import java.io.File
 
 /** Original GHC demand signatures license individual calls without upgrading ordinary function entries. */
