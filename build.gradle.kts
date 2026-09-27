@@ -74,7 +74,7 @@ val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {
     outputs.dir(layout.buildDirectory.dir("generated/simd"))
     commandLine(python.get(), "scripts/generate-simd-families.py", "--check")
 }
-kotlin.sourceSets.main { kotlin.srcDir(layout.buildDirectory.dir("generated/simd/kotlin")) }
+sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
 tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateStubsKotlin") }.configureEach {
     dependsOn(generateSimdFamilies)
 }

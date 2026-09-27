@@ -16,7 +16,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / 'scripts/simd-families.json'
-# primitive scalar type, bit width, Java Vector type, Kotlin scalar accessor
+# primitive scalar type, bit width, Java Vector type, frame scalar accessor
 LANES = {
     'Int8Rep': ('byte', 8, 'ByteVector', 'Int'),
     'Word8Rep': ('byte', 8, 'ByteVector', 'Int'),
@@ -130,88 +130,116 @@ def operation_expression(f, op, args):
 
 
 def proof_code(fs):
-    lines = [HEADER, 'package thc.runtime\n', 'internal object GeneratedVectors {',
-             '    private val index = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))']
+    lines = [HEADER, 'package thc.runtime;\n', 'import java.util.Collections;',
+             'import java.util.List;', 'import java.util.Set;', 'import java.util.LinkedHashSet;', 'import java.util.function.IntFunction;',
+             'import com.oracle.truffle.api.CompilerDirectives;\n',
+             'public final class GeneratedVectors {', '    private GeneratedVectors() {}',
+             '    private static final CoreRepresentation index = new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep"), null, null, null, null, null);']
     for f in fs:
         n=f['name']; kind=LANES[f['laneRep']][3].upper();kind='LONG' if kind == 'INT' else kind;count=f['lanes'];rep=f['laneRep']
-        lines += [f'    val vector{n} = CoreVector({count}, "{f["element"]}")',
-                  f'    val proof{n} = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep {count} {f["element"]}"), vector = vector{n})',
-                  f'    private val lane{n} = CoreRepresentation(CoreKind.{kind}, true, true, listOf("{rep}"))',
-                  f'    val unpacked{n} = CoreRepresentation(CoreKind.UNKNOWN, true, true, List({count}) {{ "{rep}" }}, List({count}) {{ lane{n} }})',
-                  f'    private val indices{n} = CoreRepresentation(CoreKind.UNKNOWN, true, true, List({count}) {{ "IntRep" }}, List({count}) {{ index }})']
+        lines += [f'    public static final CoreVector vector{n} = new CoreVector({count}, "{f["element"]}");',
+                  f'    public static final CoreRepresentation proof{n} = new CoreRepresentation(CoreKind.VECTOR, true, true, List.of("VecRep {count} {f["element"]}"), null, vector{n}, null, null, null);',
+                  f'    private static final CoreRepresentation lane{n} = new CoreRepresentation(CoreKind.{kind}, true, true, List.of("{rep}"), null, null, null, null, null);',
+                  f'    public static final CoreRepresentation unpacked{n} = new CoreRepresentation(CoreKind.UNKNOWN, true, true, Collections.nCopies({count}, "{rep}"), Collections.nCopies({count}, lane{n}), null, null, null, null);',
+                  f'    private static final CoreRepresentation indices{n} = new CoreRepresentation(CoreKind.UNKNOWN, true, true, Collections.nCopies({count}, "IntRep"), Collections.nCopies({count}, index), null, null, null, null);']
     allops=list(contracts(fs))
-    lines += ['    val operations = setOf('+', '.join('"'+name+'"' for name in allops)+')',
-              '    fun supports(vector: CoreVector): Boolean = '+ ' || '.join(f'vector == vector{f["name"]}' for f in fs if f['newCarrier']),
-              '    fun validate(name: String, arguments: List<CoreRepresentation>, result: CoreRepresentation) {',
-              '        val contract = when (name) {']
+    lines += ['    public static final Set<String> operations = Collections.unmodifiableSet(new LinkedHashSet<>(List.of('+', '.join('"'+name+'"' for name in allops)+')));',
+              '    public static boolean supports(CoreVector vector) { return '+ ' || '.join(f'vector{f["name"]}.equals(vector)' for f in fs if f['newCarrier']) + '; }',
+              '    public static void validate(String name, List<CoreRepresentation> arguments, CoreRepresentation result) {',
+              '        List<CoreRepresentation> expected;', '        CoreRepresentation expectedResult;',
+              '        switch (name) {']
     for f in fs:
         n=f['name']
         for op in f['operations']:
             args=f'unpacked{n}' if op=='pack' else f'lane{n}' if op=='broadcast' else f'proof{n}, lane{n}, index' if op=='insert' else f'proof{n}, proof{n}, indices{n}' if op=='shuffle' else ', '.join([f'proof{n}']*(2 if op in BINARY else 1))
             result=f'unpacked{n}' if op=='unpack' else f'proof{n}'
-            lines.append(f'            "{op}{n}#" -> Pair(listOf({args}), {result})')
-    lines += ['            else -> throw UnsupportedCore("Unsupported generated vector primitive $name")','        }',
-              '        CoreVectors.validateSignature(name, arguments, result, contract.first, contract.second)', '    }',
-              '    fun expression(name: String, arguments: Array<Expr>, shuffleIndices: IntArray? = null, allocate: (Int) -> IntArray): Expr = when (name) {']
+            lines.append(f'            case "{op}{n}#" -> {{ expected = List.of({args}); expectedResult = {result}; }}')
+    lines += ['            default -> throw new UnsupportedCore("Unsupported generated vector primitive " + name);','        }',
+              '        CoreVectors.INSTANCE.validateSignature(name, arguments, result, expected, expectedResult);', '    }',
+              '    public static Expr expression(String name, Expr[] arguments, int[] shuffleIndices, IntFunction<int[]> allocate) {',
+              '        return switch (name) {']
     for f in fs:
         n=f['name']
         for op in f['operations']:
-            expr=f'Generated{n}Pack(arguments[0], allocate({f["lanes"]}))' if op=='pack' else f'Generated{n}Unpack(arguments[0])' if op=='unpack' else f'Generated{n}Shuffle(arguments[0], arguments[1], shuffleIndices ?: fault("Missing shuffle indices"))' if op=='shuffle' else f'Generated{n}Operation(name, arguments)'
-            lines.append(f'        "{op}{n}#" -> {expr}')
-    lines += ['        else -> throw UnsupportedCore("Unsupported generated vector primitive $name")','    }','}']
+            if op == 'shuffle':
+                lines += [f'            case "{op}{n}#" -> {{',
+                          '                if (shuffleIndices == null) {',
+                          '                    CompilerDirectives.transferToInterpreterAndInvalidate();',
+                          '                    throw new RuntimeFault("Missing shuffle indices");', '                }',
+                          f'                yield new Generated{n}Shuffle(arguments[0], arguments[1], shuffleIndices);', '            }']
+                continue
+            expr=f'Generated{n}Pack(arguments[0], allocate.apply({f["lanes"]}))' if op=='pack' else f'Generated{n}Unpack(arguments[0])' if op=='unpack' else f'Generated{n}Operation(name, arguments)'
+            lines.append(f'            case "{op}{n}#" -> new {expr};')
+    lines += ['            default -> throw new UnsupportedCore("Unsupported generated vector primitive " + name);','        };','    }','}']
     return '\n'.join(lines)+'\n'
 
 
 
 def ast_code(fs):
-    lines=[HEADER,'package thc.runtime\n','import jdk.incubator.vector.*','import com.oracle.truffle.api.CompilerDirectives.CompilationFinal','import com.oracle.truffle.api.frame.VirtualFrame\n']
+    lines=[HEADER,'package thc.runtime;\n','import jdk.incubator.vector.*;',
+           'import com.oracle.truffle.api.CompilerDirectives;',
+           'import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;',
+           'import com.oracle.truffle.api.frame.VirtualFrame;\n']
     for f in fs:
-        n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']]; cast=f'.to{scalar.capitalize()}()' if scalar in ('byte', 'short', 'int') else ''
+        n=f['name'];count=f['lanes'];scalar,_,_,access=LANES[f['laneRep']]; cast=f'({scalar}) ' if scalar in ('byte', 'short', 'int') else ''
         if 'pack' in f['operations']:
-            lines += [f'internal class Generated{n}Pack(@field:Child private var argument: Expr,',
-                      '    @field:CompilationFinal(dimensions = 1) private val slots: IntArray) : Expr() {',
-                      f'    init {{ representation = GeneratedVectors.proof{n} }}',
-                      f'    override fun execute(frame: VirtualFrame): {vector_type(f)} {{', '        argument.executeTuple(frame, slots)',
-                      f'        return {packed(f, [f"frame.get{access}(slots[{i}]){cast}" for i in range(count)])}','    }','}']
+            lines += [f'final class Generated{n}Pack extends Expr {{',
+                      '    @Child private Expr argument;',
+                      '    @CompilationFinal(dimensions = 1) private final int[] slots;',
+                      f'    Generated{n}Pack(Expr argument, int[] slots) {{',
+                      '        this.argument = argument; this.slots = slots;',
+                      f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
+                      f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{', '        argument.executeTuple(frame, slots, 0);',
+                      f'        return {packed(f, [f"{cast}frame.get{access}(slots[{i}])" for i in range(count)])};','    }','}']
         if 'unpack' in f['operations']:
-            lines += [f'internal class Generated{n}Unpack(@field:Child private var argument: Expr) : Expr() {{',
-                      f'    init {{ representation = GeneratedVectors.unpacked{n} }}',
-                      '    override fun execute(frame: VirtualFrame): Nothing = fault("Vector unpack requires a tuple destination")',
-                      '    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {',
-                      f'        val value = {checked(f, "argument.execute(frame)")}']
+            lines += [f'final class Generated{n}Unpack extends Expr {{',
+                      '    @Child private Expr argument;',
+                      f'    Generated{n}Unpack(Expr argument) {{', '        this.argument = argument;',
+                      f'        setRepresentation(GeneratedVectors.unpacked{n});', '    }',
+                      '    @Override public Object execute(VirtualFrame frame) {',
+                      '        CompilerDirectives.transferToInterpreterAndInvalidate();',
+                      '        throw new RuntimeFault("Vector unpack requires a tuple destination");', '    }',
+                      '    @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {',
+                      f'        {vector_type(f)} value = {checked(f, "argument.execute(frame)")};']
             mask = UNSIGNED_MASK.get(f['laneRep'])
             for i in range(count):
-                lane = (f'value.lane({i}).toInt() and {mask}' if mask
-                        else f'value.lane({i}).toInt()' if cast else f'value.lane({i})')
-                lines.append(f'        FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
-            lines += ['        return null','    }','}']
+                lane = f'value.lane({i})' + (f' & {mask}' if mask else '')
+                lines.append(f'        FrameAccess.INSTANCE.write{access}(frame, slots[offset + {i}], {lane});')
+            lines += ['        return null;','    }','}']
         if 'shuffle' in f['operations']:
-            lines += [f'internal class Generated{n}Shuffle(@field:Child private var left: Expr,',
-                      '    @field:Child private var right: Expr, indices: IntArray) : Expr() {',
-                      f'    @field:CompilationFinal private val shuffle = VectorShuffle.fromArray({species(f)}, indices, 0)',
-                      f'    init {{ representation = GeneratedVectors.proof{n} }}',
-                      f'    override fun execute(frame: VirtualFrame): {vector_type(f)} {{',
-                      f'        val a = {checked(f, "left.execute(frame)")}',
-                      f'        val b = {checked(f, "right.execute(frame)")}',
-                      '        return a.rearrange(shuffle, b)', '    }', '}']
+            boxed = {'byte':'Byte', 'short':'Short', 'int':'Integer', 'long':'Long', 'float':'Float', 'double':'Double'}[scalar]
+            lines += [f'final class Generated{n}Shuffle extends Expr {{',
+                      '    @Child private Expr left;', '    @Child private Expr right;',
+                      f'    @CompilationFinal private final VectorShuffle<{boxed}> shuffle;',
+                      f'    Generated{n}Shuffle(Expr left, Expr right, int[] indices) {{',
+                      '        this.left = left; this.right = right;',
+                      f'        shuffle = VectorShuffle.fromArray({species(f)}, indices, 0);',
+                      f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
+                      f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{',
+                      f'        {vector_type(f)} a = {checked(f, "left.execute(frame)")};',
+                      f'        {vector_type(f)} b = {checked(f, "right.execute(frame)")};',
+                      '        return a.rearrange(shuffle, b);', '    }', '}']
         ops=[op for op in f['operations'] if op not in ('pack','unpack','shuffle')]
-        lines += [f'internal class Generated{n}Operation(name: String, @field:Children private var arguments: Array<Expr>) : Expr() {{',
-                  '    private val operation = when (name) {']
-        lines += [f'        "{op}{n}#" -> {i}' for i,op in enumerate(ops)]
-        lines += [f'        else -> throw RuntimeFault("Invalid {n} operation")','    }',
-                  f'    init {{ representation = GeneratedVectors.proof{n} }}',
-                  f'    override fun execute(frame: VirtualFrame): {vector_type(f)} = when (operation) {{']
+        lines += [f'final class Generated{n}Operation extends Expr {{',
+                  '    @Children private Expr[] arguments;', '    private final int operation;',
+                  f'    Generated{n}Operation(String name, Expr[] arguments) {{',
+                  '        this.arguments = arguments;', '        operation = switch (name) {']
+        lines += [f'            case "{op}{n}#" -> {i};' for i,op in enumerate(ops)]
+        lines += [f'            default -> throw new RuntimeFault("Invalid {n} operation");','        };',
+                  f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
+                  f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{', '        return switch (operation) {']
         for i,op in enumerate(ops):
-            operands = [f'arguments[0].executeRequired{access}(frame){cast}'] if op == 'broadcast' else ['vector(frame, 0)', f'arguments[1].executeRequired{access}(frame){cast}', 'arguments[2].executeRequiredLong(frame)'] if op == 'insert' else ['vector(frame, 0)'] if op == 'negate' else ['vector(frame, 0)', 'vector(frame, 1)']
+            operands = [f'{cast}arguments[0].executeRequired{access}(frame)'] if op == 'broadcast' else ['vector(frame, 0)', f'{cast}arguments[1].executeRequired{access}(frame)', 'arguments[2].executeRequiredLong(frame)'] if op == 'insert' else ['vector(frame, 0)'] if op == 'negate' else ['vector(frame, 0)', 'vector(frame, 1)']
             if op == 'insert':
                 # Evaluate Core operands in source order before withLane's index-first API.
-                lines += [f'        {i} -> {{', f'            val value = {operands[0]}',
-                          f'            val lane = {operands[1]}', f'            val index = {operands[2]}',
-                          f'            {operation_expression(f, op, ["value", "lane", "index"])}', '        }']
+                lines += [f'            case {i} -> {{', f'                {vector_type(f)} value = {operands[0]};',
+                          f'                {scalar} lane = {operands[1]};', f'                long index = {operands[2]};',
+                          f'                yield {operation_expression(f, op, ["value", "lane", "index"])};', '            }']
             else:
-                lines.append(f'        {i} -> {operation_expression(f, op, operands)}')
-        lines += [f'        else -> fault("Invalid {n} operation")','    }',
-                  f'    private fun vector(frame: VirtualFrame, index: Int): {vector_type(f)} = {checked(f, "arguments[index].execute(frame)")}','}\n']
+                lines.append(f'            case {i} -> {operation_expression(f, op, operands)};')
+        lines += ['            default -> {', '                CompilerDirectives.transferToInterpreterAndInvalidate();',
+                  f'                throw new RuntimeFault("Invalid {n} operation");', '            }','        };','    }',
+                  f'    private {vector_type(f)} vector(VirtualFrame frame, int index) {{ return {checked(f, "arguments[index].execute(frame)")}; }}','}\n']
     return '\n'.join(lines)+'\n'
 
 
@@ -551,10 +579,12 @@ def main():
     if args.verify_ghc:verify_ghc(fs)
     region(ROOT/'src/main/java/thc/runtime/BytecodeRoot.java',bytecode_nodes(fs),args.write)
     region(ROOT/'src/main/kotlin/thc/runtime/BytecodeProgram.kt',bytecode_emitter(fs),args.write)
-    outputs={'kotlin/thc/runtime/GeneratedVectorProofs.kt':proof_code(fs),'kotlin/thc/runtime/GeneratedVectorExpressions.kt':ast_code(fs)}
+    outputs={'java/thc/runtime/GeneratedVectors.java':proof_code(fs),'java/thc/runtime/GeneratedVectorExpressions.java':ast_code(fs)}
     outputs.update(fixture_sources(fs))
     outputs.update(smoke_sources(fs))
     # Remove only former generated carriers/helpers when switching an existing build.
+    (args.output / 'kotlin/thc/runtime/GeneratedVectorProofs.kt').unlink(missing_ok=True)
+    (args.output / 'kotlin/thc/runtime/GeneratedVectorExpressions.kt').unlink(missing_ok=True)
     (args.output / 'kotlin/thc/runtime/GeneratedVectorInsert.kt').unlink(missing_ok=True)
     (args.output / 'kotlin/thc/runtime/GeneratedVectorTransport.kt').unlink(missing_ok=True)
     (args.output / 'kotlin/thc/runtime/RawVectors.kt').unlink(missing_ok=True)
