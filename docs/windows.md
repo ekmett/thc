@@ -384,6 +384,13 @@ Both runtime backends and first-installed-entry checks are exercised by that
 class. Its two termios tests still require the POSIX provider. These allocation
 checks do not establish Windows POSIX stdio or complete installed-library Core.
 
+Address bulk copies retain their complete range, overlap, pointer-cell and
+ordered-borrow checks behind a shared compilation boundary. Expanding these
+storage and cleanup paths exceeded the pinned Windows JIT's native code
+installation limit, including a control using pinned storage without malloc.
+The regression checks require successful first compilation and the first
+installed entry on both backends; compiler limits and assertions stay unchanged.
+
 The generated stdio receipt has a separate Windows descriptor profile. It
 records real CRT errno/seek constants and LLP64 widths for transfers through
 context-owned streams. `_read`/`_write` have 32-bit counts and results; this profile

@@ -56,7 +56,11 @@ try {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('native-addresses')
         $focusedTests += @('thc.runtime.NativeMallocTest', 'thc.runtime.WindowsStdioHostAbiTest',
-            'thc.runtime.ReturnedForeignPointerTest', 'thc.runtime.ReturnedPointerCompilationTest')
+            'thc.runtime.ReturnedForeignPointerTest', 'thc.runtime.ReturnedPointerCompilationTest',
+            'thc.runtime.NarrowReturnedPointerTest', 'thc.runtime.ForeignExceptionPolicyTest',
+            'thc.runtime.WindowsSulongLibraryLookupTest',
+            'thc.runtime.PinnedPointerCellsTest.nonOverlappingAddressCopyPreservesPointerCellsAndRejectsInvalidRegions',
+            'thc.runtime.ScalarMemoryUtilitiesTest.addressRangesAndPointerCellsAreCheckedBeforeEffects')
     }
     if ($Action -in @('Test', 'DirectoryTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
