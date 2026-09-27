@@ -84,19 +84,11 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
             throw RuntimeFault("Undefined input to $primitive")
         }
     }
-    private fun narrow(value: Long): Long = if (unsigned) value and (-1L ushr (64 - narrowBits))
-        else (value shl (64 - narrowBits)) shr (64 - narrowBits)
     fun first(left: Long, right: Long): Long = when (this) {
         QUOT_REM_INT -> { divisionDomain(left, right); left / right }
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.divideUnsigned(left, right) }
-        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 -> {
-            val x = narrow(left); val y = narrow(right)
-            if (y == 0L) {
-                CompilerDirectives.transferToInterpreter()
-                throw RuntimeFault("Undefined input to $primitive")
-            }
-            narrow(x / y)
-        }
+        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 ->
+            fault("Narrow tuple arithmetic requires Int operands")
         QUOT_REM_WORD_2 -> error("Double-word division needs three operands")
         ADD_INT_C, ADD_WORD_C -> left + right
         SUB_INT_C, SUB_WORD_C -> left - right
@@ -107,14 +99,8 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     fun second(left: Long, right: Long): Long = when (this) {
         QUOT_REM_INT -> { divisionDomain(left, right); left % right }
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.remainderUnsigned(left, right) }
-        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 -> {
-            val x = narrow(left); val y = narrow(right)
-            if (y == 0L) {
-                CompilerDirectives.transferToInterpreter()
-                throw RuntimeFault("Undefined input to $primitive")
-            }
-            narrow(x % y)
-        }
+        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 ->
+            fault("Narrow tuple arithmetic requires Int operands")
         QUOT_REM_WORD_2 -> error("Double-word division needs three operands")
         ADD_INT_C -> if (((left xor (left + right)) and (right xor (left + right))) < 0) 1L else 0L
         SUB_INT_C -> if (((left xor right) and (left xor (left - right))) < 0) 1L else 0L

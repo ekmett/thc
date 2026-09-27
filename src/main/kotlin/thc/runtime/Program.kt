@@ -1827,6 +1827,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics))
     @Child private var delimitedHandoff: HandoffCaller? = null
     override fun requiresUnprofiledReturn(): Boolean = enableAsync || enableDelimited
+    override fun requiresMaterializableFrame(): Boolean = enableAsync || enableDelimited
 
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {

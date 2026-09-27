@@ -164,7 +164,9 @@ class HandoffTest {
         val reps = listOf("IntRep", "BoxedRep (Just Lifted)", "WordRep")
         val layout = language.handoffLayouts.intern(reps)
         assertSame(layout, language.handoffLayouts.intern(reps.toList()))
-        assertSame(layout, language.handoffLayouts.intern(listOf("WordRep", "BoxedRep (Just Unlifted)", "Int8Rep")))
+        assertSame(layout, language.handoffLayouts.intern(listOf("WordRep", "BoxedRep (Just Unlifted)", "Int64Rep")))
+        assertNotSame(layout, language.handoffLayouts.intern(listOf("WordRep", "BoxedRep (Just Unlifted)", "Int8Rep")),
+            "A narrow stored Int field is not a machine Long field")
         val state = language.handoffState.get()
         val input = state.arguments.acquire(layout)
         val independentPool = HandoffPool()

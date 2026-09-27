@@ -114,12 +114,25 @@ class AtomicIntArrayTest {
         val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
         val integer = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
         for (operation in AtomicIntArrayOp.entries) {
-            val arguments = listOf(owner) + List(operation.operands + 1) { integer } + state
-            val tuple = CoreRepresentation(CoreKind.UNKNOWN, primReps = listOf("IntRep"), components = listOf(state, integer))
+            val payload = integer.copy(primReps = listOf(when (operation.width) {
+                1 -> "Int8Rep"; 2 -> "Int16Rep"; 4 -> "Int32Rep"; else -> "IntRep"
+            }))
+            val arguments = listOf(owner, integer) + List(operation.operands) { payload } + state
+            val tuple = CoreRepresentation(CoreKind.UNKNOWN, primReps = payload.primReps, components = listOf(state, payload))
             val result = if (operation.tuple) tuple else state
             val flags = List(arguments.size) { false }
             for (rep in listOf("IntRep", "WordRep", "Int8Rep", "Word16Rep", "Int32Rep", "Word64Rep")) {
                 val relabelled = arguments.map { if (it.kind == CoreKind.LONG) it.copy(primReps = listOf(rep)) else it }
+                // Offsets are always machine Long; only payloads of narrow CAS use Int.
+                if (relabelled[1].isLong && (operation.width == 8 || operation.operands == 0))
+                    operation.validate(relabelled, flags, result)
+                else assertThrows(RuntimeFault::class.java) { operation.validate(relabelled, flags, result) }
+            }
+            for (rep in if (operation.width < 8) listOf("Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep")
+                else listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")) {
+                val relabelled = arguments.mapIndexed { index, proof ->
+                    if (index in 2 until arguments.lastIndex) proof.copy(primReps = listOf(rep)) else proof
+                }
                 operation.validate(relabelled, flags, result)
             }
             for (index in arguments.indices) {
@@ -324,10 +337,10 @@ class AtomicIntArrayTest {
                 val entry = program.entryTarget("atomic")
                 fun call(owner: Any?, index: Long, operand: Long, replacement: Long, state: Any? = Unit): Any? {
                     val args = mutableListOf<Any?>(0L, owner, index)
-                    if (operation.operands > 0) args.add(operand)
-                    if (operation.operands == 2) args.add(replacement)
+                    if (operation.operands > 0) args.add(if (operation.width < 8) operand.toInt() else operand)
+                    if (operation.operands == 2) args.add(if (operation.width < 8) replacement.toInt() else replacement)
                     args.add(state)
-                    return Calls.target(entry, args.toTypedArray())
+                    return callScalarTestTarget(entry, args.toTypedArray())
                 }
                 fun positives(compiled: Boolean) {
                     for (initial in initials) for (operand in listOf(initial, initial + 256, initial.inv())) {
@@ -336,7 +349,8 @@ class AtomicIntArrayTest {
                         val old = narrow(initial, operation.width)
                         store(expected, operation.width, model(operation, old, operand, 128))
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        assertEquals(if (operation.tuple) old else 19L, call(owner, 1, operand, 128))
+                        val expectedOld = if (operation.width < 8) old.toInt() else old
+                        assertEquals(if (operation.tuple) expectedOld else 19L, call(owner, 1, operand, 128))
                         assertArrayEquals(expected, owner.copyBytesOut(0, 32), "$backend/$operation")
                         if (compiled) {
                             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())

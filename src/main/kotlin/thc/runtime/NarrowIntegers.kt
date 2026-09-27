@@ -69,6 +69,15 @@ internal class NarrowScalarOp private constructor(val integer: NarrowInteger, va
     val result = CoreRepresentation(CoreKind.LONG, true, true,
         listOf(if (!resultLong) integer.rep else if (code == Code.CONVERT && integer.unsigned) "WordRep" else "IntRep"))
 
+    /** Lowering checks actual carrier/aggregate differences, not scalar names
+     * that share a carrier. An unconstrained legacy operand is checked at use. */
+    fun validateOperand(proof: CoreRepresentation, index: Int) {
+        val wide = sourceLong && index == 0 || shift && index == 1
+        if (proof.isTypedTransport || proof.kind != CoreKind.UNKNOWN &&
+            (if (wide) !proof.isLong else !proof.isInt))
+            fault("Narrow primitive operand carrier mismatch")
+    }
+
     fun intResult(left: Int, right: Int): Int {
         val x = integer.narrow(left)
         val y = integer.narrow(right)
@@ -137,6 +146,7 @@ internal class NarrowScalarExpression(name: String, private val operation: Narro
     @field:Children private var arguments: Array<Expr>) : Expr() {
     init {
         if (arguments.size != if (operation.unary) 1 else 2) fault("Primitive arity mismatch: $name")
+        arguments.forEachIndexed { index, argument -> operation.validateOperand(argument.representation, index) }
         representation = operation.result
     }
     override fun execute(frame: VirtualFrame): Any =

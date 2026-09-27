@@ -185,12 +185,12 @@ class IntegerCompletionTest {
     }
     @Test fun allEightBitQuotientRemainderInputsAreNarrowedByTheOperation() {
         for (x in -128L..127L) for (y in -128L..127L) if (y != 0L && !(x == -128L && y == -1L)) {
-            assertEquals(x / y, TupleArithmeticOp.QUOT_REM_INT8.first(x or (123L shl 8), y or (45L shl 8)))
-            assertEquals(x % y, TupleArithmeticOp.QUOT_REM_INT8.second(x, y))
+            assertEquals((x / y).toInt(), TupleArithmeticOp.QUOT_REM_INT8.firstInt((x or (123L shl 8)).toInt(), (y or (45L shl 8)).toInt()))
+            assertEquals((x % y).toInt(), TupleArithmeticOp.QUOT_REM_INT8.secondInt(x.toInt(), y.toInt()))
         }
         for (x in 0L..255L) for (y in 1L..255L) {
-            assertEquals(x / y, TupleArithmeticOp.QUOT_REM_WORD8.first(x or (123L shl 8), y or (45L shl 8)))
-            assertEquals(x % y, TupleArithmeticOp.QUOT_REM_WORD8.second(x, y))
+            assertEquals((x / y).toInt(), TupleArithmeticOp.QUOT_REM_WORD8.firstInt((x or (123L shl 8)).toInt(), (y or (45L shl 8)).toInt()))
+            assertEquals((x % y).toInt(), TupleArithmeticOp.QUOT_REM_WORD8.secondInt(x.toInt(), y.toInt()))
         }
     }
     private fun applications(value: Any?): List<MutableList<Any?>> = when (value) {
@@ -204,7 +204,12 @@ class IntegerCompletionTest {
         fun project(value: Any?, rep: String): Any? = when (value) {
             is Map<*, *> -> value.mapValues { project(it.value, rep) }
             is List<*> -> value.map { project(it, rep) }
-            is String -> if (value in integral) rep else value
+            // Preserve actual stored widths while varying names sharing the carrier.
+            is String -> if (value in integral) {
+                if (value in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")) rep
+                else if (value.startsWith("Word")) value.replaceFirst("Word", "Int")
+                else value.replaceFirst("Int", "Word")
+            } else value
             else -> value
         }
         for (backend in listOf("ast", "bytecode")) context().use { context ->

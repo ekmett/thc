@@ -5338,6 +5338,7 @@ CoreStackForeign.validateHead(fn, defined)
     private fun primitive(name: String, args: List<Expression>, someException: Boolean = false): Expression {
         NarrowScalarOp.named(name)?.let { operation ->
             if (args.size != if (operation.unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            args.forEachIndexed { index, argument -> operation.validateOperand(argument.proof, index) }
             return ProvenExpression(Expression { e ->
                 val b = e.builder
                 when {

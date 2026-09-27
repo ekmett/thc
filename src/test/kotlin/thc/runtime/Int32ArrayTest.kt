@@ -92,7 +92,7 @@ class Int32ArrayTest {
 
     @Test fun statePrecedesAccessAndFailedReadsNeverPublish() {
         val descriptor = FrameDescriptor.newBuilder()
-        val slot = descriptor.addSlot(FrameSlotKind.Long, "result", null)
+        val slot = descriptor.addSlot(FrameSlotKind.Int, "result", null)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor.build())
         for (unsigned in listOf(false, true)) {
             val readOp = if (unsigned) ByteArrayOp.READ_WORD32 else ByteArrayOp.READ_INT32
@@ -108,31 +108,31 @@ class Int32ArrayTest {
                 operand("state") { ManagedByteArray.writeInt32(bytes, 0, (0x8000_0000L).toInt()); Unit }))
             read.executeTuple(frame, intArrayOf(slot), 0)
             assertEquals(listOf("array", "index", "state"), events)
-            assertTrue(frame.isLong(slot))
-            assertEquals(if (unsigned) 0x8000_0000L else -0x8000_0000L, frame.getLong(slot))
+            assertTrue(frame.isInt(slot))
+            assertEquals(Int.MIN_VALUE, frame.getInt(slot), "Word32 retains its raw high bit")
             events.clear()
             val write = byteArrayExpression(writeOp, CoreRepresentation.UNKNOWN, arrayOf(
-                operand("array") { bytes }, operand("index") { 0L }, operand("value") { 0x1_ffff_ffffL },
+                operand("array") { bytes }, operand("index") { 0L }, operand("value") { -1 },
                 operand("state") { assertEquals(0x8000_0000L, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0))); Unit }))
             assertSame(Unit, write.execute(frame))
             assertEquals(listOf("array", "index", "value", "state"), events)
             assertEquals(0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)))
             for (badState in listOf<() -> Any?>({ throw RuntimeFault("state failed") }, { 0L })) {
-                frame.setLong(slot, 73)
+                frame.setInt(slot, 73)
                 val failedRead = byteArrayExpression(readOp, CoreRepresentation.UNKNOWN, arrayOf(
                     operand("array") { bytes }, operand("index") { 0L }, operand("state", badState)))
                 assertThrows(RuntimeFault::class.java) { failedRead.executeTuple(frame, intArrayOf(slot), 0) }
-                assertEquals(73L, frame.getLong(slot))
+                assertEquals(73, frame.getInt(slot))
                 val failedWrite = byteArrayExpression(writeOp, CoreRepresentation.UNKNOWN, arrayOf(
-                    operand("array") { bytes }, operand("index") { 0L }, operand("value") { 99L }, operand("state", badState)))
+                    operand("array") { bytes }, operand("index") { 0L }, operand("value") { 99 }, operand("state", badState)))
                 assertThrows(RuntimeFault::class.java) { failedWrite.execute(frame) }
                 assertEquals(0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)))
             }
-            frame.setLong(slot, 73)
+            frame.setInt(slot, 73)
             val badIndexRead = byteArrayExpression(readOp, CoreRepresentation.UNKNOWN, arrayOf(
                 operand("array") { bytes }, operand("index") { 1L }, operand("state") { Unit }))
             assertThrows(RuntimeFault::class.java) { badIndexRead.executeTuple(frame, intArrayOf(slot), 0) }
-            assertEquals(73L, frame.getLong(slot))
+            assertEquals(73, frame.getInt(slot))
             // Bytecode specializations likewise validate State before any access.
             assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt32Array.write(false, bytes, 0, 99, 0L) }
             assertEquals(0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)))

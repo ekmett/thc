@@ -54,7 +54,7 @@ class Int8ArrayTest {
 
     @Test fun statePrecedesReadAndWriteAndFailedReadNeverPublishes() {
         val builder = FrameDescriptor.newBuilder()
-        val slot = builder.addSlot(FrameSlotKind.Long, "result", null)
+        val slot = builder.addSlot(FrameSlotKind.Int, "result", null)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), builder.build())
         for (unsigned in listOf(false, true)) {
             val bytes = byteArrayOf(7)
@@ -71,23 +71,23 @@ class Int8ArrayTest {
                 operand("state") { ManagedByteArray.write(bytes, 0, (128).toInt()); Unit }))
             read.executeTuple(frame, intArrayOf(slot), 0)
             assertEquals(listOf("array", "index", "state"), events)
-            assertTrue(frame.isLong(slot))
-            assertEquals(if (unsigned) 128L else -128L, frame.getLong(slot))
+            assertTrue(frame.isInt(slot))
+            assertEquals(if (unsigned) 128 else -128, frame.getInt(slot))
             events.clear()
             val write = byteArrayExpression(ByteArrayOp.WRITE_INT8, CoreRepresentation.UNKNOWN, arrayOf(
-                operand("array") { bytes }, operand("index") { 0L }, operand("value") { 511L },
+                operand("array") { bytes }, operand("index") { 0L }, operand("value") { 511 },
                 operand("state") { assertEquals(128L, ManagedByteArray.read(bytes, 0).toLong()); Unit }))
             assertSame(Unit, write.execute(frame))
             assertEquals(listOf("array", "index", "value", "state"), events)
             assertEquals(-1L, ManagedByteArray.readSigned(bytes, 0).toLong())
             for (badState in listOf<() -> Any?>({ throw RuntimeFault("state failed") }, { 0L })) {
-                frame.setLong(slot, 73)
+                frame.setInt(slot, 73)
                 val badRead = byteArrayExpression(readOp, CoreRepresentation.UNKNOWN, arrayOf(
                     operand("array") { bytes }, operand("index") { 0L }, operand("state", badState)))
                 assertThrows(RuntimeFault::class.java) { badRead.executeTuple(frame, intArrayOf(slot), 0) }
-                assertEquals(73L, frame.getLong(slot))
+                assertEquals(73, frame.getInt(slot))
                 val badWrite = byteArrayExpression(ByteArrayOp.WRITE_INT8, CoreRepresentation.UNKNOWN, arrayOf(
-                    operand("array") { bytes }, operand("index") { 0L }, operand("value") { 99L },
+                    operand("array") { bytes }, operand("index") { 0L }, operand("value") { 99 },
                     operand("state", badState)))
                 assertThrows(RuntimeFault::class.java) { badWrite.execute(frame) }
                 assertEquals(255L, ManagedByteArray.read(bytes, 0).toLong())
@@ -100,7 +100,7 @@ class Int8ArrayTest {
             assertThrows(RuntimeFault::class.java) {
                 BytecodeRoot.ReadByteArray.read(frame, unsigned, null, bytes, 0, 0L, null)
             }
-            assertEquals(73L, frame.getLong(slot))
+            assertEquals(73, frame.getInt(slot))
         }
     }
 }

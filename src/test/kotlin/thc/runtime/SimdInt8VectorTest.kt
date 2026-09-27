@@ -50,7 +50,7 @@ class SimdInt8VectorTest {
         assertEquals(CoreVectors.proof8, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
         assertEquals(List(16) { "Int8Rep" }, CoreVectors.unpacked8.primReps)
-        assertTrue(CoreVectors.unpacked8.components!!.all { it.isLong })
+        assertTrue(CoreVectors.unpacked8.components!!.all { it.isInt })
         for (wrong in listOf(CoreVectors.proof, CoreVectors.proof16, CoreVectors.proof32, CoreVectors.proofFloat, CoreVectors.proofDouble, CoreVectors.unpacked8)) {
             assertFalse(TupleShape.compatible(proof, wrong))
             assertThrows(RuntimeFault::class.java) { proof.refine(wrong) }
@@ -112,13 +112,14 @@ class SimdInt8VectorTest {
             for (flag in listOf(true, null, 0L, "false")) assertThrows(RuntimeFault::class.java) {
                 program(language, backend, broadcastModule(exact, flag), "root", diagnostic)
             }
-            // Lowering shares Long across integral reps; the literal tag supplies narrowing.
+            // Lowering shares Int across narrow integral reps; the literal tag supplies narrowing.
             for (shared in listOf("Word8Rep", "Int32Rep")) {
                 val operand = listOf("lit", "int8", "1", mapOf("rep" to (lane + ("primReps" to listOf(shared)))))
                 val p = program(language, backend, broadcastModule(operand), "root", diagnostic)
                 assertEquals(1L, Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("root"), arrayOf(0L))))
             }
             for (wrong in listOf(lane + ("kind" to "unknown"),
+                lane + ("primReps" to listOf("IntRep")), lane + ("primReps" to listOf("Word64Rep")),
                 lane + mapOf("kind" to "float", "primReps" to listOf("FloatRep")),
                 lane + mapOf("kind" to "double", "primReps" to listOf("DoubleRep")))) {
                 assertThrows(RuntimeFault::class.java) { program(language, backend,
@@ -143,7 +144,7 @@ class SimdInt8VectorTest {
             return base + ("bindings" to listOf(binding + ("expr" to lambda)))
         }
         val malformed = listOf("-129", "128", "255", "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")
-        for (value in -128L..127L) assertEquals(value, int8Literal(value.toString()))
+        for (value in -128L..127L) assertEquals(value.toInt(), int8Literal(value.toString()))
         for (text in malformed) assertThrows(RuntimeFault::class.java) { int8Literal(text) }
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             for (text in malformed) for (input in listOf(broadcastModule(listOf("lit", "int8", text, mapOf("rep" to lane))), alternative(text)))

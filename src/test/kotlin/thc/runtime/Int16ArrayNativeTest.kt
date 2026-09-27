@@ -581,7 +581,7 @@ class Int16ArrayNativeTest {
     private fun paths() = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
     private fun owner(operation: ByteArrayOp) = if (operation.primitive.contains("Word16")) "aliasWord16Bytes" else "aliasInt16Bytes"
 
-    @Test fun longAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() {
+    @Test fun loweredAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() {
         val paths = paths()
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
@@ -632,9 +632,9 @@ class Int16ArrayNativeTest {
                             } else metadata["rep"] = payload
                         }
                     }
-                    // Scalar aliases share Long, but a unilateral tuple change
+                    // Narrow scalar aliases share Int; machine offsets stay Long. A unilateral tuple change
                     // still conflicts with the untouched case binder's ABI.
-                    val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 7 || mutation in 10..17))
+                    val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 10 || mutation in 14..17))
                     if (sameCarrier) {
                         val name = owner(operation)
                         val p = program(language, module + ("diagnosticUnsupported" to diagnostic), backend)
