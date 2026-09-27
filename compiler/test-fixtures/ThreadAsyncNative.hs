@@ -45,10 +45,12 @@ main = do
       , I# (Audit.savedMaskCatchSelf 0#), I# (Audit.savedMaskCatchSelf 1#) ]
     ["external-saved"] -> mapM_ print
       [I# (Audit.externalSaved 0#), I# (Audit.externalSaved 1#)]
+    ["scheduled-saved"] -> mapM_ print
+      [I# (Audit.scheduledSaved 0#), I# (Audit.scheduledSaved 1#)]
     ["yield"] -> do
       ordinary <- evaluate (I# (Audit.yieldProbe 0#))
       masked <- evaluate (I# (Audit.yieldMasked 0#))
       case (ordinary, masked) of
         (37, 39) -> putStr "37\n39\n"
         other -> error ("yield# State/mask oracle failed: " ++ show other)
-    _ -> error "Usage: ThreadAsyncNative [extras|saved|external-saved|yield]"
+    _ -> error "Usage: ThreadAsyncNative [extras|saved|external-saved|scheduled-saved|yield]"

@@ -49,8 +49,9 @@ park it away from the carrier thread while suspended. Multi-shot delimited
 continuations carry annotations inside the matching prompt, rebasing the outer
 prefix to each resumer's ambient annotations. Capturing them again preserves
 the same lexical return boundaries. Contexts and carrier threads do not share
-ambient annotation state. This does not establish the existing, separate
-mixed one-shot asynchronous/delimited continuation composition gap.
+ambient annotation state. A new `control0#` crossing a parked one-shot caller
+chain still rejects; ordinary saved-image invocation scheduling keeps that
+owner separate from the reusable annotated frames.
 
 An inlining-enabled bytecode continuation test currently retires its installed
 handler in `ContinuationTupleDestination.consume` after producing the correct

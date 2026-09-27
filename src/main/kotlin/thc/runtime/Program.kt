@@ -585,7 +585,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     }
 
     @CompilerDirectives.TruffleBoundary
-    private fun resumeChain(original: Any, drainSpills: Boolean = false): Any? {
+    private fun resumeChain(original: Any, drainSpills: Boolean = false,
+                            delimitedInvocation: Boolean = false): Any? {
         val parked = java.util.ArrayDeque<Parked>()
         val seen = java.util.IdentityHashMap<Any, Boolean>()
         var leaf: Any = original
@@ -594,6 +595,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             while (true) {
                 if (seen.put(leaf, true) != null) fault("Suspended thunk dependency cycle")
                 leafContinuation = continuationOf(leaf)
+                if (delimitedInvocation && leafContinuation?.yielded is DelimitedCut)
+                    throw UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain")
                 val child = suspendedChild(leafContinuation) ?: break
                 parked.addLast(Parked(leaf, leafContinuation!!))
                 leaf = child
@@ -611,7 +614,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     }
                     if (answer === Retry) null else ChildResume(answer, null)
                 } catch (suspension: ThunkSuspended) {
-                    if (drainSpills && suspension.stackSpill && suspension.asyncRequest == null) {
+                    if (drainSpills && (suspension.stackSpill || delimitedInvocation) && suspension.asyncRequest == null) {
                         spilled = true
                         null
                     } else if (suspension.thunk === current && suspension.asyncRequest != null &&
@@ -623,7 +626,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                         throw suspension
                     }
                 } catch (suspension: CallSegmentSuspended) {
-                    if (drainSpills && suspension.stackSpill && suspension.asyncRequest == null) {
+                    if (drainSpills && (suspension.stackSpill || delimitedInvocation) && suspension.asyncRequest == null) {
                         spilled = true
                         null
                     } else if (suspension.segment === current && suspension.asyncRequest != null &&
@@ -636,6 +639,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                         resignalParked(original, suspension.asyncRequest, suspension.stackSpill)
                         throw suspension
                     }
+                } catch (cut: DelimitedCut) {
+                    if (delimitedInvocation)
+                        throw UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain")
+                    throw cut
                 } catch (failure: GuestException) { ChildResume(null, failure) }
                 val pending = (input as? AstChildSuspension)?.request
                     ?.takeIf { it.state == AsyncRequestState.CLAIMED }
@@ -691,15 +698,17 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         }
     }
 
-    /** Called only after every nested AST activation has unwound to its entry driver. */
+    /** Drain after unwinding to the entry driver or a cold invocation-owned boundary. */
     @CompilerDirectives.TruffleBoundary
-    internal fun drainStack(initial: SavedGuestContinuation): Any? {
+    internal fun drainStack(initial: SavedGuestContinuation,
+                            resultShape: TupleShape? = (initial.sourceRoot as? GuestRoot)?.tupleResult,
+                            delimitedInvocation: Boolean = false): Any? {
         val mask = SynchronousMasking.current(this)
         val root = initial.sourceRoot as? GuestRoot ?: fault("AST stack cut has no guest root")
         val parkedMask = (initial.yielded as? CallSegmentSuspended)?.parkedActiveMask ?: mask
-        val segment = CallSegment(initial.identity, parkedMask, mask, root.tupleResult)
+        val segment = CallSegment(initial.identity, parkedMask, mask, resultShape)
         while (true) {
-            try { return resumeChain(segment, drainSpills = true) }
+            try { return resumeChain(segment, drainSpills = true, delimitedInvocation = delimitedInvocation) }
             catch (cut: CallSegmentSuspended) {
                 if (cut.segment !== segment) throw cut
                 if (!cut.stackSpill || cut.asyncRequest != null)
@@ -707,6 +716,11 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             }
         }
     }
+
+    /** The caller already owns the saved invocation, not a new evaluation of its prefix. */
+    @CompilerDirectives.TruffleBoundary
+    internal fun drainDelimitedBoundary(boundary: Any): Any? =
+        resumeChain(boundary, drainSpills = true, delimitedInvocation = true)
 
     private fun continuationOf(boundary: Any): SavedGuestContinuation? = when (boundary) {
         is Thunk -> if (boundary.state == 5) savedGuestContinuation(boundary.value) else null
