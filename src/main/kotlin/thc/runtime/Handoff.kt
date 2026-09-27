@@ -260,7 +260,9 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
                 if (sourceValue == null) CompilerDirectives.transferToInterpreter()
                 val source = sourceValue as GuestRoot
                 val mask = source.bloom(frame)
-                val destination = target.rootNode as GuestRoot
+                val destinationValue = target.rootNode
+                if (destinationValue == null) CompilerDirectives.transferToInterpreter()
+                val destination = destinationValue as GuestRoot
                 if (mask and destination.mask == destination.mask) {
                     transferred = true
                     if (metrics.enabled) { state.tailTransfers++; metrics.incrementTailBounces() }
