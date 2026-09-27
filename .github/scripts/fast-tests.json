@@ -24,12 +24,14 @@
     "src/main/kotlin/thc/runtime/CoreCpuAffinity.kt": {
       "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/GuestEnvironment.kt": {
+    "src/main/java/thc/runtime/GuestEnvironment.java": {
       "junit": ["thc.runtime.GuestEnvironmentTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt": {
+    "src/main/java/thc/runtime/CoreEnvironmentForeign.java": {
       "junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/EnvironmentOp.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/EnvironmentExpression.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/GhcBCO.kt": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
@@ -39,12 +41,14 @@
     "src/main/kotlin/thc/runtime/CoreStringRtsForeign.kt": {
       "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/GuestArguments.kt": {
-      "junit": ["thc.runtime.GuestArgumentsTest"], "python": []
+    "src/main/java/thc/runtime/GuestArguments.java": {
+      "junit": ["thc.runtime.GuestArgumentsTest", "thc.runtime.GuestArgumentsEncodingTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreRtsArgumentsForeign.kt": {
+    "src/main/java/thc/runtime/CoreRtsArgumentsForeign.java": {
       "junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/RtsArgumentsOp.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/RtsArgumentsExpression.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/ManagedCompacts.kt": {
       "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },

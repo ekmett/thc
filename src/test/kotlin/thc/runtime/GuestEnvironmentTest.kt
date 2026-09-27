@@ -56,7 +56,7 @@ class GuestEnvironmentTest {
     private fun module(): Map<String, Any?> {
         // Explicitly synthetic consumers. EnvironmentFullCore exercises genuine
         // original installed System.Environment definitions independently.
-        val bindings = EnvironmentOp.entries.map { operation ->
+        val bindings = EnvironmentOp.values().map { operation ->
             val name = operation.symbol
             val formals = operation.arguments.mapIndexed { index, rep ->
                 mapOf("id" to "$name-$index", "lifted" to false, "rep" to scalar(rep)) }
@@ -80,7 +80,7 @@ class GuestEnvironmentTest {
     @Test fun firstInstalledCallsUseBothTypedBackendsAndReleaseHandoffs() {
         for (backend in listOf("ast", "bytecode")) inside { language ->
             val program = if (backend == "ast") Program(language, module()) else BytecodeProgram(language, module())
-            val targets = EnvironmentOp.entries.associateWith { program.entryTarget(it.symbol) }
+            val targets = EnvironmentOp.values().associateWith { program.entryTarget(it.symbol) }
             val name = string("THC_LOCAL")
             val entry = string("THC_LOCAL=first")
             val environment = Language.currentState().environment
@@ -100,11 +100,11 @@ class GuestEnvironmentTest {
                 return result
             }
             fun semantics() {
-                assertEquals(0L, call(EnvironmentOp.PUT, entry))
+                assertEquals(0, call(EnvironmentOp.PUT, entry))
                 assertEquals("first", text(call(EnvironmentOp.GET, name) as ManagedAddress))
                 assertEquals(setOf("THC_INITIAL=lambda-\u03bb", "THC_LOCAL=first"),
                     entries(call(EnvironmentOp.ENUMERATE) as ManagedAddress).toSet())
-                assertEquals(0L, call(EnvironmentOp.UNSET, name))
+                assertEquals(0, call(EnvironmentOp.UNSET, name))
                 assertSame(ManagedAddress.nullAddress(), call(EnvironmentOp.GET, name))
             }
             // Check the entire semantic corpus in the interpreter, then install
@@ -166,7 +166,7 @@ class GuestEnvironmentTest {
     }
 
     @Test fun foreignAdmissionRejectsWrongOwnerAbiAndTuple() {
-        for (operation in EnvironmentOp.entries) {
+        for (operation in EnvironmentOp.values()) {
             val original = declaration(operation)
             fun validate(call: Map<String, Any?>) = CoreEnvironmentForeign.validate(
                 mapOf("foreignCall" to call, "rep" to tuple(operation)), operation.arguments.map { scalar(it) },

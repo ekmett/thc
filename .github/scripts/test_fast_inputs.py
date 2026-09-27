@@ -1973,7 +1973,7 @@ class RenamedInputContractTests(unittest.TestCase):
                           "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
                           "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
                           "src/main/c/bytestring-utf8-api.c",
-                          "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
+                          "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java",
                           "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                           "src/main/kotlin/thc/runtime/VectorMemory.kt",
                           "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"), cache.RUNTIME_INPUTS)

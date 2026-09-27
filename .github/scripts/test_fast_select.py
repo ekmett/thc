@@ -1134,7 +1134,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             self.assertNotIn("src/test/kotlin/thc/" + helper + ".kt", self.policy["owners"])
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
-        self.assertEqual({"RubbishLiterals", "CoreMemmoveForeign", "CoreStringRtsForeign", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
+        self.assertEqual({"RubbishLiterals", "CoreMemmoveForeign", "CoreStringRtsForeign", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
                          "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStack"} |
                          set(self.integer_vector_nodes + self.floating_vector_nodes),
                          {Path(path).stem for path in self.families})
@@ -1506,7 +1506,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertFalse(any(path.startswith("compiler/") for path in self.families))
         self.assertEqual({"src/main/java/thc/runtime/" + name + ".java"
                           for name in self.integer_vector_nodes + self.floating_vector_nodes +
-                          ("BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatDecodeExpression")},
+                          ("BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatDecodeExpression",
+                           "GuestArguments", "GuestEnvironment", "CoreEnvironmentForeign", "CoreRtsArgumentsForeign",
+                           "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):

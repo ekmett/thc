@@ -146,7 +146,7 @@ class GuestArgumentsTest {
             "primReps" to listOfNotNull(primitive), "evaluated" to evaluated)
         val result = mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to true,
             "aggregate" to "unboxed-tuple", "components" to listOf(scalar(null)))
-        for (operation in RtsArgumentsOp.entries) {
+        for (operation in RtsArgumentsOp.values()) {
             val descriptor = mapOf("schema" to 1, "target" to mapOf("kind" to "static",
                 "symbol" to operation.symbol, "unit" to "ghc-internal", "isFunction" to true),
                 "convention" to "ccall", "safety" to "unsafe", "arity" to 3, "suppliedArity" to 3,
