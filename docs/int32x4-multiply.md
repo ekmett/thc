@@ -119,10 +119,3 @@ The fixture producer establishes native/model agreement, not JVM compilation,
 packed instructions, allocation elimination or performance. The JVM suite
 checks both backends, inlining modes and handoff configurations separately.
 ARM preparation in `scripts/prepare-tests.sh` uses export-only mode.
-
-## Historical evidence
-
-The [archived multiplication checkpoint](../research/int32x4-multiply-checkpoint.md)
-preserves the original commands and source-matched x86-64 graph/LIR results,
-including unsigned negative controls. Those captures describe their recorded
-runtime, not current raw-vector code generation or a cross-platform guarantee.

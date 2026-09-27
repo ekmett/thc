@@ -90,12 +90,3 @@ inlining on/off, and checks exact source-proven guest-entry deltas, installed
 target identity and validity. First-compiled-call checks do not use settling
 calls or retries. Model agreement alone does not establish JVM compilation,
 packed instructions, allocation elimination or performance.
-
-## Historical evidence
-
-The [archived DoubleX2 memory checkpoint](../research/doublex2-bytearray-checkpoint.md)
-preserves the original command descriptions, source revisions, failures and
-graph/LIR results. Those results apply to their recorded sources and hosts,
-not automatically to the current segment-backed runtime. Current use of the
-Vector API does not by itself prove packed-code survival, absence of spills,
-allocation-free execution or behavior on another architecture.
