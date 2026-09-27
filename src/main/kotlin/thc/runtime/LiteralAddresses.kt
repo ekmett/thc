@@ -36,7 +36,8 @@ internal class ManagedAddress private constructor(
     private val capabilities: GuestThreads? = null,
     private val heap: HeapAddresses.Handle? = null,
     private val compiler: CompilerRts? = null,
-    private val foreign: PackageReturnedAddress? = null
+    private val foreign: PackageReturnedAddress? = null,
+    private val rtsFlags: CompilerRts? = null
 ) {
     /** This is an RTS data label, not a projection of a JVM or native pointer. */
     internal fun readCapabilitiesWord32(elementOffset: Long, width: Int): Long? {
@@ -85,6 +86,7 @@ internal class ManagedAddress private constructor(
     private fun requireBytes() {
         compiler?.requireCurrent()
         foreign?.requireCurrent()
+        rtsFlags?.let { it.requireCurrent(); fault("RtsFlags permits only supported read-only fields") }
         if (heap != null) fault("Opaque guest heap address is not byte-addressable")
         if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
@@ -98,6 +100,7 @@ internal class ManagedAddress private constructor(
         ?: fault("Native image requires static literal or runtime metadata storage")
     fun toNativeBits(): Long {
         compiler?.requireCurrent()
+        rtsFlags?.let { it.requireCurrent(); fault("RtsFlags has no numeric guest address") }
         foreign?.let { return it.bits() }
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
@@ -152,6 +155,10 @@ internal class ManagedAddress private constructor(
     fun sameLocation(other: ManagedAddress): Boolean {
         compiler?.requireCurrent(); other.compiler?.requireCurrent()
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        if (rtsFlags != null || other.rtsFlags != null) {
+            rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
+            return rtsFlags != null && rtsFlags === other.rtsFlags && offset == other.offset
+        }
         if (foreign?.backing != null || other.foreign?.backing != null)
             return (foreign?.backing ?: this).sameLocation(other.foreign?.backing ?: other)
         foreign?.let { return it.compare(other, "equal") != 0L }
@@ -230,6 +237,10 @@ internal class ManagedAddress private constructor(
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
+        if (rtsFlags != null || other.rtsFlags != null) {
+            rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
+            fault("RtsFlags has no address ordering")
+        }
         if (foreign?.backing != null || other.foreign?.backing != null)
             return (foreign?.backing ?: this).compareWithinAllocation(other.foreign?.backing ?: other)
         foreign?.let { return it.compare(other, "compare").toInt() }
@@ -260,6 +271,11 @@ internal class ManagedAddress private constructor(
      * Original bytestring unpacking uses a before-start sentinel; only a memory
      * access must lie inside storage. A managed origin must not overflow. */
     fun plus(displacement: Long): ManagedAddress {
+        rtsFlags?.let {
+            it.requireCurrent()
+            return if (displacement == 0L) this
+                else ManagedAddress(null, null, displacedOffset(displacement), rtsFlags = it)
+        }
         if (heap != null) {
             HeapAddresses.current().require(heap)
             if (displacement != 0L) fault("Opaque guest heap address cannot be offset")
@@ -359,6 +375,7 @@ internal class ManagedAddress private constructor(
 
     /** Both backing variants use byte offsets and return zero-extended Word8#. */
     fun readWord8(displacement: Long): Long {
+        rtsFlags?.let { return it.readFlagByte(displacedOffset(displacement)) }
         externalPointer()?.let { return it.read(displacement, 1) }
         native?.let { allocation -> return allocation.accessLong { segment ->
             requireRange(displacement, 1)
@@ -745,6 +762,7 @@ internal class ManagedAddress private constructor(
     override fun toString(): String = if (heap != null) "Addr#(opaque guest heap)"
         else if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
         else if (capabilities != null) "Addr#(enabled_capabilities)"
+        else if (rtsFlags != null) "Addr#(RtsFlags+$offset)"
         else if (foreign != null) "Addr#(returned C pointer)"
         else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
@@ -851,6 +869,8 @@ internal class ManagedAddress private constructor(
             ManagedAddress(null, null, 0L, finalizer = function)
         internal fun enabledCapabilities(threads: GuestThreads): ManagedAddress =
             ManagedAddress(null, null, 0L, capabilities = threads)
+        internal fun rtsFlags(compiler: CompilerRts): ManagedAddress =
+            ManagedAddress(null, null, 0L, rtsFlags = compiler)
 
         /** Views retain their existing storage, including native pinned arrays.
          * Creating an address never copies or promotes a moving heap array. */
