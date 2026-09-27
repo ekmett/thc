@@ -82,7 +82,7 @@ class PackageSafeForeignTest {
         @Child private var access = PackageScalarAccess(call)
         override fun execute(frame: VirtualFrame): Any = when (call.result) {
             "DoubleRep" -> access.executeDouble(frame.arguments, Unit)
-            "Int32Rep" -> access.executeLong(frame.arguments, Unit)
+            "Int32Rep" -> access.executeInt(frame.arguments, Unit).toLong()
             "void" -> { access.executeVoid(frame.arguments, Unit); Unit }
             else -> error("Unexpected safe control ABI")
         }
