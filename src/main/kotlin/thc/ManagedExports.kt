@@ -147,7 +147,7 @@ internal class ManagedExportValue(private val registry: ManagedExportRegistry, p
             }
         } catch (failure: RuntimeFault) { throw UnsupportedTypeException.create(values, failure.message) }
         val threads = owner.threads
-        threads.enterCurrent()
+        threads.enterCurrent(externalAsync = program.asynchronousExceptions)
         var outcome = GuestThreadStatus.FINISHED
         try {
             try {
