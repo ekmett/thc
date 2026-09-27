@@ -2126,6 +2126,89 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
                     source + ' operand 3' in issue['detail'] for issue in report['issues']), report)
 
 
+
+
+class OriginalForeignOperandAuditTest(unittest.TestCase):
+    """Producer proofs must agree with every admitted original occurrence."""
+
+    @staticmethod
+    def declarations():
+        targets = [('bytestring-0.12.2.0-inplace', symbol) for symbol in (
+            'memcmp', 'memchr', 'memset', 'bytestring_is_valid_utf8',
+            '_hs_bytestring_long_long_int_dec', '_hs_bytestring_long_long_int_dec_padded18')]
+        targets += [('ghc-internal', symbol) for symbol in (
+            'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr')]
+        for unit, symbol in targets:
+            target = dict(kind='static', symbol=symbol, unit=unit, isFunction=True)
+            convention, safety, arguments, output = core_original_foreign.operation(target)
+            def scalar(rep, evaluated=False):
+                return dict(kind=core_original_foreign.scalar_kind(rep),
+                            primReps=[] if rep is None else [rep], evaluated=evaluated)
+            result = dict(kind='unknown', primReps=[rep for rep in output if rep is not None],
+                          evaluated=False, aggregate='unboxed-tuple',
+                          components=[scalar(rep, True) for rep in output])
+            for mode in safety if isinstance(safety, tuple) else (safety,):
+                yield dict(schema=1, target=target, convention=convention, safety=mode,
+                    arity=len(arguments), suppliedArity=len(arguments),
+                    argumentReps=list(map(scalar, arguments)), resultRep=result)
+
+    def test_catalog_arguments_have_checked_scalar_or_unlifted_carriers(self):
+        # Adding a new carrier (especially a lifted closure or aggregate) needs
+        # an explicit review of original_stack_operand, not another symbol list.
+        supported = {None, 'AddrRep', 'FloatRep', 'DoubleRep', 'BoxedRep (Just Unlifted)',
+                     'IntRep', 'Int8Rep', 'Int16Rep', 'Int32Rep', 'Int64Rep',
+                     'WordRep', 'Word8Rep', 'Word16Rep', 'Word32Rep', 'Word64Rep'}
+        for declaration in (*core_original_foreign.OPERATIONS.values(),
+                            *core_original_foreign.LIBRARY_OPERATIONS.values()):
+            self.assertLessEqual(set(declaration[2]), supported)
+        # Unit-specific operands must be selected before checking producers.
+        target = dict(symbol='memcpy', unit='array-0.5.8.0-inplace')
+        self.assertEqual(('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', 'Word64Rep', None),
+                         core_original_foreign.operation(target)[2])
+
+    def test_genuine_shaped_occurrences_and_refinable_stored_proofs_remain_valid(self):
+        fixture = LibdwUnavailableAuditTest()
+        for declaration in self.declarations():
+            with self.subTest(symbol=declaration['target']['symbol'], safety=declaration['safety']):
+                module = fixture.fixture(declaration)
+                self.assertTrue(fixture.audit(module)['accepted'])
+                for formal in module['bindings'][0]['expr'][1]:
+                    formal['rep'] = dict(kind='unknown', primReps=None, evaluated=False)
+                self.assertTrue(fixture.audit(module)['accepted'])
+
+    def test_state_occurrences_cannot_hide_stored_or_lowered_values(self):
+        fixture = LibdwUnavailableAuditTest()
+        for declaration in self.declarations():
+            index = len(declaration['argumentReps']) - 1
+            for source in ('formal', 'global', 'literal', 'let', 'case'):
+                with self.subTest(symbol=declaration['target']['symbol'], safety=declaration['safety'], source=source):
+                    module = fixture.fixture(declaration)
+                    wrapper = module['bindings'][0]['expr']
+                    call = wrapper[2][1]
+                    metadata = copy.deepcopy(call[2][index][-1])
+                    if source == 'formal':
+                        wrapper[1][index]['rep'] = copy.deepcopy(LONG)
+                    elif source == 'global':
+                        module['bindings'].append(dict(bind('stored-state', lit(1), False), rep=copy.deepcopy(LONG)))
+                        call[2][index][1] = 'stored-state'
+                    else:
+                        operand = ['lit', 'int', '1', metadata]
+                        if source == 'let':
+                            operand = ['let', False, [], operand, metadata]
+                        elif source == 'case':
+                            operand = ['case', [*lit(0), dict(rep=LONG)], 'unused',
+                                [['default', None, [], operand]],
+                                dict(metadata, binder=dict(id='unused', lifted=False, rep=LONG))]
+                        call[2][index] = operand
+                    self.assertEqual([], core_original_foreign.raw_rep(call[2][index])['primReps'])
+                    report = fixture.audit(module)
+                    self.assertFalse(report['accepted'], report)
+                    self.assertEqual([], report['foreignCalls'])
+                    diagnostic = ('stored' if source in ('formal', 'global') else 'lowered') + f' operand {index}'
+                    self.assertTrue(any(issue['code'] == 'foreign-call' and diagnostic in issue['detail']
+                                        for issue in report['issues']), report)
+
+
 class OriginalByteStringUtf8DeclarationTest(unittest.TestCase):
     def test_safe_and_unsafe_pointer_contracts_stay_closed(self):
         fixture = LibdwUnavailableAuditTest()
