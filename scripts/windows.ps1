@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'JsonIndexTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -19,7 +19,7 @@ try {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'JsonIndexTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -51,6 +51,13 @@ try {
             'windowsSmokeTest', 'windowsDenseSmokeTest', '--rerun')
     }
     $focusedTests = @()
+    if ($Action -in @('Test', 'MallocTest')) {
+        Assert-ThcJava
+        $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
+        Invoke-ThcTool $fixture @('native-addresses')
+        $focusedTests += @('thc.runtime.NativeMallocTest', 'thc.runtime.WindowsStdioHostAbiTest',
+            'thc.runtime.ReturnedForeignPointerTest', 'thc.runtime.ReturnedPointerCompilationTest')
+    }
     if ($Action -in @('Test', 'DirectoryTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-directory')

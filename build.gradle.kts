@@ -1396,7 +1396,7 @@ tasks.processResources { dependsOn(generateWindowsDirectoryAbi) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {
-    val source = layout.projectDirectory.file("src/main/c/stdio-abi-probe.c").asFile
+    val source = layout.projectDirectory.file(if (windowsHost) "src/main/c/windows-stdio-abi-probe.c" else "src/main/c/stdio-abi-probe.c").asFile
     val output = layout.buildDirectory.dir("generated/stdio-abi")
     val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source)
@@ -1410,31 +1410,33 @@ val generateStdioAbi by tasks.registering {
             "arm64" -> "aarch64"
             else -> value.lowercase()
         }
-        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else it }
+        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else if (windowsHost) "Windows" else it }
         val arch = architecture(System.getProperty("os.arch"))
         val compiler = clang.get()
         val defaultTarget = run(listOf(compiler, "-dumpmachine")).trim()
         val parts = defaultTarget.split('-')
-        require(system in setOf("Linux", "Darwin") && arch in setOf("x86_64", "aarch64") &&
+        require(system in setOf("Linux", "Darwin", "Windows") && arch in (if (windowsHost) setOf("x86_64") else setOf("x86_64", "aarch64")) &&
             parts.size >= 3 && architecture(parts[0]) == arch &&
-            (if (system == "Linux") parts.drop(2) == listOf("linux", "gnu") else parts[2].startsWith("darwin"))) {
-            "Original stdio requires a native Linux GNU/macOS LP64 compiler: $system/$arch, clang=$defaultTarget"
+            (if (system == "Linux") parts.drop(2) == listOf("linux", "gnu")
+             else if (windowsHost) parts.drop(2) == listOf("windows", "gnu") else parts[2].startsWith("darwin"))) {
+            "Stdio probing requires a native supported C compiler: $system/$arch, clang=$defaultTarget"
         }
         val target = if (system == "Linux") "$arch-unknown-linux-gnu" else defaultTarget
         val command = listOf(compiler) + if (system == "Linux") listOf("--target=$target") else emptyList()
         require(run(command + "-dumpmachine").trim() == target) { "Clang did not select the native stdio target $target" }
-        val executable = temporaryDir.resolve("stdio-abi-probe")
+        val executable = temporaryDir.resolve(if (windowsHost) "stdio-abi-probe.exe" else "stdio-abi-probe")
         run(command + listOf("-std=c11", source.path, "-o", executable.path))
         val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == setOf("widths", "errno", "seek", "open", "at", "siginfoBytes")) { "Malformed native stdio ABI probe" }
+        require(probe.keys == (if (windowsHost) setOf("widths", "errno", "seek") else setOf("widths", "errno", "seek", "open", "at", "siginfoBytes"))) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
-        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to system,
+        val manifest = linkedMapOf<String, Any?>("schema" to (if (windowsHost) 2 else 1), "system" to system,
             "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
             "compilerVersion" to run(listOf(compiler, "--version")),
             "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
                 .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"], "open" to probe["open"], "at" to probe["at"],
-            "siginfoBytes" to probe["siginfoBytes"])
+            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"])
+        if (windowsHost) manifest["profile"] = "windows-managed-descriptors"
+        else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"] }
         val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
         destination.parentFile.mkdirs()
         destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
@@ -1537,13 +1539,13 @@ tasks.processResources { dependsOn(generateSigsetAbi) }
 // Windows must not publish guessed POSIX ABI receipts. Managed Core and portable
 // original C resources are independent of these optional providers.
 if (windowsHost) {
-    listOf("generateStdioAbi", "generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
+    listOf("generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
         "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
         .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.
         exclude { !it.isDirectory && it.path.startsWith("thc/native/") &&
-            it.path != "thc/native/windows-directory-abi.json" }
+            it.path !in setOf("thc/native/windows-directory-abi.json", "thc/native/stdio-host-abi.json") }
         exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
         exclude("thc/cbits/windows-malloc-probe.exe")
     }

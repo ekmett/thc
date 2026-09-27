@@ -29,7 +29,8 @@ auditor separately checks the exact original GHC representations.
 Numeric arrays accept ordinary host byte arrays and allocation-owned guest
 storage. Addresses use the existing bounded literal, managed and owned-native
 storage paths, with full-range validation and native lifetime/context checks.
-Owned native malloc remains restricted to the verified Linux x86_64 ABI.
+Owned native malloc uses the verified Linux x86_64 LP64 or Windows x86_64
+LLP64 allocator boundary; [Windows builds](windows.md) probe the selected CRT.
 
 Addr and StablePtr memory cells use retained ManagedAddress references inside
 allocation-owned storage, including unaligned cells. They do not fabricate
