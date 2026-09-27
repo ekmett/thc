@@ -20,7 +20,7 @@ min/max and shuffle operations, plus four fused multiply/add variants.
 See [generated arithmetic](simd-wide-arithmetic.md),
 [floating extrema](floating-vector-minmax.md),
 [shuffle](simd-quot-rem-shuffle.md) and the [capability checklist](primops.md).
-[DoubleX2 ByteArray operations](doublex2-bytearray.md) distinguish packed-vector
+[DoubleX2 ByteArray operations](simd128-array-memory.md) distinguish packed-vector
 indices from scalar-Double offsets. [Address operations](simd-address-families.md)
 have their own memory rules; ordinary scalar Double arrays are independent.
 
