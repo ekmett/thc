@@ -1,41 +1,40 @@
-# Int16X8 vectors
+> Historical snapshot of `docs/int16x8.md` at
+> `6f4caf89107fea5544bbe6311b5042e6a25a1193`. The complete body below is preserved
+> with relative links repaired. It describes earlier implementations and retained
+> evidence, not current instructions or support limits. See the
+> [current Int16X8 guide](../docs/int16x8.md).
 
-Both backends execute `VecRep 8 Int16ElemRep` with raw
-`ShortVector.SPECIES_128` values. An activation carries one exact vector
-reference; owned captures and boxed constructor fields store primitive lanes
-inside the enclosing heap object. Equal bit width does not make another vector
-shape compatible.
+# Local Int16X8 vectors
 
-The foundation fixture covers seven GHC 9.14.1 operations:
+This page records the original foundation and its retained evidence. Current
+execution uses raw `ShortVector.SPECIES_128` values, not an `Int16X8` JVM wrapper.
+The historical storage and local-only limits below are superseded by the
+[current SIMD representation and transport contract](../docs/simd.md).
+
+The bounded contract is exactly seven GHC 9.14.1 primitives:
 `packInt16X8#`, `unpackInt16X8#`, `broadcastInt16X8#`,
-`plusInt16X8#`, `minusInt16X8#`, `negateInt16X8#`, `timesInt16X8#`.
-This is a fixture scope, not the complete operation inventory; see
-[SIMD families](simd-families.md) and the [primop checklist](primops.md).
+`plusInt16X8#`, `minusInt16X8#`, `negateInt16X8#`, and
+`timesInt16X8#`. The exact vector representation is
+`VecRep 8 Int16ElemRep`. Each lane is `Int16#`/`Int16Rep`, not
+machine Int, Word16, or another 128-bit vector shape.
 
-Pack takes one logical 8-component unboxed tuple; unpack returns that
-scalar-lane tuple with exact `Int16Rep` leaves. Arithmetic wraps modulo
-65,536, including low-16-bit multiplication and minimum-value negation.
-Unpack sign-extends each lane to -32,768..32,767.
+Pack takes **one logical eight-component unboxed tuple**; unpack returns that
+scalar-lane tuple. Arithmetic wraps each lane modulo 65536, including low-16-bit
+multiplication and negation of -32768. Widening sign-extends. No vector formal,
+function result, capture, heap field, or vector-containing tuple ABI is enabled
+by these fixtures. The explicit `vectorArgument` negative control must be
+rejected specifically for its vector formal.
 
-Guest vector arguments/results, PAP prefixes, joins, tuple fields, nonrecursive
-unlifted lets, owned captures and boxed constructor fields are supported.
-Public host vector arguments/results, recursive or lifted vector lets, and
-sum fields remain unsupported; see the [SIMD transport contract](simd.md).
-The scalar-observation fixtures below keep vectors local. Their
-`vectorArgument` negative tests the public host boundary, not guest calls.
-
-Canonical `int16` literals use -32,768..32,767. After lowering, integral
-annotations share a `Long` carrier and the literal tag supplies narrowing.
-Wrong physical carriers, malformed literal values, lifted operand flags, tuple
-lane proofs and vector shapes are checked separately. The strict exporter audit
-also checks exact source-level representations; it is not the runtime's scalar
-carrier contract.
-
-`SimdInt16VectorTest` checks the raw carrier, lane arithmetic, exact shape and
-literal controls on both loaders. Native/Core tests require exact per-call
-compiled guest-entry counts, stable active targets, valid last-tier code and
-released argument/result handoff pools, with Truffle inlining on and off.
-No post-compilation settling calls or retries are part of those checks.
+The original AST and bytecode loaders used a durable carrier with eight final primitive
+`short` fields (16 bytes of lane payload, not a 16-byte Java object). Arithmetic
+constructed transient `ShortVector.SPECIES_128` values with constant lane indices,
+then reconstructed the short fields. No durable vector object, generic payload
+array, or boxed lane was stored in that carrier. The interpreted JDK fallback may allocate private
+`short[]` arrays; compiled allocation elimination is a separate evidence gate.
+Operation dispatch is selected numerically while lowering Core. Unpack writes
+eight sign-extended primitive Long frame slots. Exact unlifted operand flags and
+recursive lane proofs are mandatory; intrinsic narrow literals may refine absent
+or genuinely unconstrained metadata without relaxing variable or tuple proofs.
 
 ## Scalar signatures and independent observations
 
@@ -99,7 +98,7 @@ evidence.
 
 ## Preparation
 
-See the shared [integer SIMD fixture guide](integer-simd-fixtures.md) for the
+See the shared [integer SIMD fixture guide](../docs/integer-simd-fixtures.md) for the
 independent Kotlin model controls and both-handoff recipe.
 
 With the pinned environment and the shared resource gate:
@@ -117,7 +116,7 @@ against a separate mask/sign implementation, verify every lane's operand grid,
 and exercise malformed tuple/root proofs.
 
 Preparation regenerates original pre/post-Tidy Core, requires all eighteen
-positive root audits to accept, and requires the negative public-host-vector audit at
+positive root audits to accept, and requires the negative vector-formal audit at
 each stage to have precisely that one issue and no missing globals. It compiles
 `SimdInt16X8Native.hs` and compares complete unique native rows with the
 independent model. `build/simd-int16x8/provenance.json` records entry arities
@@ -133,8 +132,8 @@ Native and static evidence does not claim JVM execution, packed hardware code,
 allocation elimination, throughput, or timing improvement. Those require the
 separate runtime tests and retained graph/final-LIR evidence.
 
-`SimdInt16VectorTest` checks raw vector storage and all 65,536 lane encodings,
-accepts guest vector formals, rejects malformed proofs/flags, and runs the full corpus
+`SimdInt16VectorTest` checks dense storage and all 65,536 lane encodings, rejects
+malformed proofs/flags and unsupported vector formals, and runs the full corpus
 on each available Core stage and both AST/bytecode backends. It tests Truffle
 inlining enabled and disabled separately, installing actual residual callees
 before callers. Every measured invocation requires exactly one or two compiled
@@ -150,8 +149,8 @@ allocations, lane boxing, field traffic and fallback calls, while allowing the
 public host Long result box. Instrumentation is disabled only for these graph
 captures, not for the correctness tests above.
 
-## Research history
-
-The [foundation checkpoint](../research/int16x8-checkpoint.md) preserves the
-original representation discussion, measurements and graph evidence at their
-recorded revisions. Those results are not a validation run of the current tree.
+The retained [x86-64 evidence](../bench/experiments/int16x8-foundation/evidence-x86_64/README.md)
+passes all16 graph controls and453 JVM tests in each handoff mode. The initial
+reader rejected duplicate metadata headers for one compilation; a separately
+tracked offline correction passed the original captures without replaying guest
+code. Original failure and both reader revisions remain in the evidence.
