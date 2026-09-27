@@ -16,6 +16,35 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class FrameAccessThreadTest {
+    @Test fun explicitScratchCarriersStartTypedAndRetainOrdinaryWidening() {
+        val kinds = listOf(FrameSlotKind.Int, FrameSlotKind.Long, FrameSlotKind.Float,
+            FrameSlotKind.Double, FrameSlotKind.Object)
+        val values = listOf<Any>(-128, 255L, -0.0f, -0.0, Any())
+        val layout = FrameLayout()
+        val slots = kinds.map { layout.bind("scratch", it) }
+        val unknown = layout.bind("scratch")
+        assertEquals(slots.size + 1, (slots + unknown).distinct().size, "Shadowed names own fresh slots")
+        val descriptor = layout.build()
+        assertEquals(FrameSlotKind.Illegal, descriptor.getSlotKind(unknown))
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
+        fun write(index: Int) = when (val value = values[index]) {
+            is Int -> FrameAccess.writeInt(frame, slots[index], value)
+            is Long -> FrameAccess.writeLong(frame, slots[index], value)
+            is Float -> FrameAccess.writeFloat(frame, slots[index], value)
+            is Double -> FrameAccess.writeDouble(frame, slots[index], value)
+            else -> FrameAccess.writeObject(frame, slots[index], value)
+        }
+        for (index in slots.indices) {
+            assertEquals(kinds[index], descriptor.getSlotKind(slots[index]))
+            write(index)
+            assertEquals(values[index], FrameAccess.read(frame, slots[index]))
+            FrameAccess.writeObject(frame, slots[index], null)
+            write(index)
+            assertEquals(FrameSlotKind.Object, descriptor.getSlotKind(slots[index]))
+            assertEquals(values[index], FrameAccess.read(frame, slots[index]))
+        }
+    }
+
     @Test fun genericWritesKeepExactScalarKindsAndOtherNumbersAsReferences() {
         val customNumber = object : Number() {
             override fun toByte(): Byte = error("not a guest scalar")
@@ -35,6 +64,7 @@ class FrameAccessThreadTest {
             val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
             FrameAccess.write(frame, slot, value)
             val expectedKind = when (value) {
+                is Int -> FrameSlotKind.Int
                 is Long -> FrameSlotKind.Long
                 is Float -> FrameSlotKind.Float
                 is Double -> FrameSlotKind.Double

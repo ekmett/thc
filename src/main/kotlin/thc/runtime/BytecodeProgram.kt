@@ -121,6 +121,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private class Emission(val builder: BytecodeRootGen.Builder) {
         val locals = mutableMapOf<Int, BytecodeLocal>()
         val staticLocals = mutableSetOf<Int>()
+        val staticObjectLocals = mutableSetOf<Int>()
         var checkpointRootEntry: BytecodeLocal? = null
         var annotationRootEntry: BytecodeLocal? = null
         var continueLabel: BytecodeLabel? = null
@@ -201,6 +202,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val b = emission.builder
             if (local.id in emission.staticLocals) {
                 b.emitStaticLoadLong(emission.locals.getValue(local.id))
+                return
+            }
+            if (local.id in emission.staticObjectLocals) {
+                b.emitStaticLoadObject(emission.locals.getValue(local.id))
                 return
             }
             val narrow = local.directInt || resolve && local.proof.isInt && local.proof.evaluated
@@ -475,24 +480,38 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             if (resumable) {
                 // Only proof roots pay for a mask snapshot. A yielded caller
                 // parks to this root's entry mask before its frame is captured.
-                e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", "object").also {
-                    b.beginStoreLocal(it); b.emitCurrentMask(); b.endStoreLocal()
+                // Each snapshot has one write, with an exact reference carrier;
+                // stateless stores/loads must not await first-entry quickening.
+                e.checkpointRootEntry = b.createLocal("checkpoint root entry mask", FrameSlotKind.Object).also {
+                    b.beginStaticStoreObject(it); b.emitCurrentMask(); b.endStaticStoreObject()
                 }
-                e.annotationRootEntry = b.createLocal("checkpoint root entry annotations", "object").also {
-                    b.beginStoreLocal(it); b.emitCurrentAnnotations(); b.endStoreLocal()
+                e.annotationRootEntry = b.createLocal("checkpoint root entry annotations", FrameSlotKind.Object).also {
+                    b.beginStaticStoreObject(it); b.emitCurrentAnnotations(); b.endStaticStoreObject()
                 }
             }
+            val argumentIndices = context.arguments.mapIndexedNotNull { index, local -> local?.id?.let { it to index } }.toMap()
             for (local in context.captures + context.vectorCaptures.flatMap { it.destinations } +
                     context.typedArguments.map { it.second }.ifEmpty { context.arguments.filterNotNull() }) {
-                // Exactly one store, through restoreArgument. Joins, self loops,
-                // typed ingress and resumable/captured state remain uncertified.
-                val staticallyStored = !resumable && !context.mayLoop && context.typedInput == null &&
+                // One emitted restore; lifted references may additionally be
+                // memoized by ForceLocal/ResumeForcedLocal, whose publish uses
+                // setObject even for boxed results. No deferred strict rewrite.
+                // Joins, loops, captures and typed ingress stay generic.
+                val argumentIndex = argumentIndices[local.id] ?: -1
+                val singleWrite = !context.mayLoop && context.typedInput == null &&
                     context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell &&
-                    local in context.arguments && staticWideLong(local.proof)
-                val info = if (staticallyStored) {
-                    e.staticLocals += local.id
-                    FrameSlotKind.Long
-                } else if (local.primitive) "primitive" else "object"
+                    argumentIndex >= 0 && !(enableAsync && context.entryStrict[argumentIndex])
+                val info = when {
+                    singleWrite && staticWideLong(local.proof) -> {
+                        e.staticLocals += local.id
+                        FrameSlotKind.Long
+                    }
+                    singleWrite && staticLiftedReference(local.proof) -> {
+                        e.staticObjectLocals += local.id
+                        FrameSlotKind.Object
+                    }
+                    local.primitive -> "primitive"
+                    else -> "object"
+                }
                 e.locals[local.id] = b.createLocal(local.name, info)
             }
             val typed = context.typedInput
@@ -603,13 +622,14 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun emitAsyncPoll(e: Emission, processResult: BytecodeLocal? = null, processErrno: BytecodeLocal? = null) {
         val b = e.builder
         b.beginBlock()
-        val request = b.createLocal("pending async request", "object")
-        val active = b.createLocal("async logical mask", "object")
-        val annotations = b.createLocal("yielded annotations", "object")
-        // These private registers have object carriers before any request arrives.
-        // The first cut must not specialize uninitialized cached local tags.
+        val request = b.createLocal("pending async request", FrameSlotKind.Object)
+        val active = b.createLocal("async logical mask", FrameSlotKind.Object)
+        val annotations = b.createLocal("yielded annotations", FrameSlotKind.Object)
+        // Exhaustive writers: null here; PollAsync/PollProcessCompleted write
+        // AsyncRequest; ParkPendingAsyncMask writes MaskingState; ParkAnnotations
+        // writes StackAnnotationState. Each runtime writer uses setObject.
         for (local in listOf(request, active, annotations)) {
-            b.beginStoreLocal(local); b.emitLoadNull(); b.endStoreLocal()
+            b.beginStaticStoreObject(local); b.emitLoadNull(); b.endStaticStoreObject()
         }
         b.beginUnprofiledIfThen()
         if (processResult == null) b.emitPollAsync(request)
@@ -704,7 +724,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         beginAnnotationYield(e)
         b.beginParkAsyncMask()
         b.emitLoadLocal(request)
-        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
         b.endParkAsyncMask()
         endAnnotationYield(e)
         b.emitLoadLocal(active)
@@ -728,7 +748,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             return
         }
         val reference = if (local.cell || deferStrictDemand) null else local.proof.referenceCarrier()
-        b.beginStoreLocal(e.locals.getValue(local.id))
+        val staticObject = local.id in e.staticObjectLocals
+        if (staticObject) {
+            check(!deferStrictDemand)
+            b.beginStaticStoreObject(e.locals.getValue(local.id))
+        } else b.beginStoreLocal(e.locals.getValue(local.id))
         when {
             local.directInt -> { b.beginToInt(); value(); b.endToInt() }
             local.directLong -> { b.beginToLong(); value(); b.endToLong() }
@@ -739,7 +763,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             reference == ManagedAddress::class.java -> { b.beginRequireAddress(); value(); b.endRequireAddress() }
             else -> value()
         }
-        b.endStoreLocal()
+        if (staticObject) b.endStaticStoreObject() else b.endStoreLocal()
     }
 
     private fun sourced(value: Expression, source: CoreSourceLocation?): Expression =
@@ -1106,7 +1130,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         beginAnnotationYield(e)
         b.beginParkCallMask()
         b.emitLoadLocal(suspended)
-        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
         b.emitLoadLocal(callerMask)
         b.endParkCallMask()
         endAnnotationYield(e)
@@ -2685,7 +2709,7 @@ CoreStackForeign.validateHead(fn, defined)
                                     beginAnnotationYield(e)
                                     b.beginParkCallMask()
                                     b.emitLoadLocal(suspended)
-                                    b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                                    b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
                                     b.emitLoadLocal(callerMask)
                                     b.endParkCallMask()
                                     endAnnotationYield(e)
@@ -2731,7 +2755,7 @@ CoreStackForeign.validateHead(fn, defined)
                                     beginAnnotationYield(e)
                                     b.beginParkCallMask()
                                     b.emitLoadLocal(suspended)
-                                    b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                                    b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
                                     b.emitLoadLocal(handlerMask)
                                     b.endParkCallMask()
                                     endAnnotationYield(e)
@@ -2779,7 +2803,7 @@ CoreStackForeign.validateHead(fn, defined)
                                     beginAnnotationYield(e)
                                     b.beginParkCallMask()
                                     b.emitLoadLocal(suspended)
-                                    b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                                    b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
                                     b.emitLoadLocal(actionMask)
                                     b.endParkCallMask()
                                     endAnnotationYield(e)
@@ -3061,7 +3085,7 @@ CoreStackForeign.validateHead(fn, defined)
                         beginAnnotationYield(e)
                         b.beginParkAsyncMask()
                         b.emitLoadLocal(incoming)
-                        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+                        b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
                         b.endParkAsyncMask()
                         endAnnotationYield(e)
                         b.emitLoadLocal(active)
@@ -4349,7 +4373,7 @@ CoreStackForeign.validateHead(fn, defined)
         beginAnnotationYield(e)
         b.beginParkCallMask()
         b.emitLoadLocal(suspended)
-        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
         b.emitLoadLocal(callerMask)
         b.endParkCallMask()
         endAnnotationYield(e)
@@ -5337,6 +5361,10 @@ CoreStackForeign.validateHead(fn, defined)
 
     private fun staticWideLong(proof: CoreRepresentation) = proof.evaluated && proof.isLong &&
         !proof.isTypedTransport && proof.primReps?.singleOrNull() in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
+
+    private fun staticLiftedReference(proof: CoreRepresentation) = !proof.isTypedTransport &&
+        proof.kind in setOf(CoreKind.OBJECT, CoreKind.DATA, CoreKind.CLOSURE) &&
+        proof.primReps?.singleOrNull() == "BoxedRep (Just Lifted)"
 
     private fun primitive(name: String, args: List<Expression>, someException: Boolean = false): Expression {
         NarrowScalarOp.named(name)?.let { operation ->

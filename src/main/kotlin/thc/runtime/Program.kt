@@ -1510,7 +1510,7 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
             val data = frame.getObject(binderSlot) as? DataValue ?: fault("Invalid constructor case")
             val layout = alt.value as? DataLayout ?: fault("Invalid constructor alternative")
             for (i in alt.fields.indices) {
-                val lanes = alt.vectorFields.getOrNull(i)
+                val lanes = if (i < alt.vectorFields.size) alt.vectorFields[i] else null
                 if (lanes == null) layout.restore(data, i, frame, alt.fields[i])
                 else layout.restoreVector(data, i, frame, lanes, 0)
             }
@@ -2200,7 +2200,18 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 bindings += LocalBinding(-1, value, false, slots)
                 return if (proof.isVector) VectorLocalRead(shape, slots) else TupleLocalRead(shape, slots)
             }
-            val slot = layout.bind("<async operand ${bindings.size}>")
+            // This fresh scratch slot has exactly the writer below, including
+            // its resumed value. Establish its known carrier before compilation;
+            // unknown values keep ordinary first-write profiling and widening.
+            val kind = when {
+                proof.isInt -> FrameSlotKind.Int
+                proof.isLong -> FrameSlotKind.Long
+                proof.isFloat -> FrameSlotKind.Float
+                proof.isDouble -> FrameSlotKind.Double
+                proof.isEvaluatedReference -> FrameSlotKind.Object
+                else -> FrameSlotKind.Illegal
+            }
+            val slot = layout.bind("<async operand ${bindings.size}>", kind)
             temporaries += slot
             bindings += LocalBinding(slot, value, proof.isLong)
             return LocalRead(slot, false).proven(proof)

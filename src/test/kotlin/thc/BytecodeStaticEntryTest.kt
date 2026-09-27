@@ -164,7 +164,7 @@ class BytecodeStaticEntryTest {
         valid(clone.callTarget)
     }
 
-    @Test fun compilerCertifiesOnlyExactWideSingleWriteFormalsAndKeepsAsyncAndLazyInputsGeneric() = withLanguage { language ->
+    @Test fun compilerCertifiesOnlyExactWideSingleWriteFormalsAndKeepsUnknownAndNarrowInputsGeneric() = withLanguage { language ->
         for (marker in listOf(FrameSlotKind.Int, "object", "primitive", null)) {
             val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
                 b.beginRoot()
@@ -185,13 +185,75 @@ class BytecodeStaticEntryTest {
                 "arity" to 1L, "lifted" to true, "expr" to expression)), "constructors" to emptyList<Any>()), async)
         }
         val wide = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
-        val selected = program(wide, false, false).entryTarget("f").rootNode as BytecodeRoot
-        assertTrue(selected.bytecodeNode.locals.any { it.info === FrameSlotKind.Long })
-        for ((rep, lifted, async) in listOf(Triple(wide, false, true),
-            Triple(mapOf("kind" to "unknown", "evaluated" to false), true, false),
+        for (async in listOf(false, true)) {
+            val selected = program(wide, false, async).entryTarget("f").rootNode as BytecodeRoot
+            assertSame(FrameSlotKind.Long, selected.bytecodeNode.locals.single { it.name == "x" }.info)
+        }
+        for ((rep, lifted, async) in listOf(Triple(mapOf("kind" to "unknown", "evaluated" to false), true, false),
             Triple(mapOf("kind" to "long", "primReps" to listOf("Int32Rep"), "evaluated" to true), false, false))) {
             val root = program(rep, lifted, async).entryTarget("f").rootNode as BytecodeRoot
             assertTrue(root.bytecodeNode.locals.none { it.info === FrameSlotKind.Long })
+        }
+    }
+
+    @Test fun unprofiledBooleanBranchRetainsItsFirstCompiledBothArmsAndReplay() = withLanguage { language ->
+        val layout = DataLayout(language, "BranchTrue", "BranchTrue", emptyArray())
+        val trueValue = layout.create(emptyArray())
+        val falseValue = DataLayout(language, "BranchFalse", "BranchFalse", emptyArray()).create(emptyArray())
+        for (primitiveCondition in listOf(false, true)) {
+            val metrics = Metrics(true)
+            var sourceReads = 0
+            val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                if (b.isParsingSources()) {
+                    sourceReads++
+                    b.beginSource(Source.newBuilder("thc", "if p then 11 else 22", "ColdBranch.hs").build())
+                    b.beginSourceSection(0, 20)
+                }
+                b.beginRoot(); b.emitEnterRoot(metrics)
+                b.beginUnprofiledIfThen()
+                // MatchData accepts an Object without an adaptive scalar
+                // specialization and produces a primitive Boolean. Literal
+                // tests have their own cold specialization boundary.
+                if (primitiveCondition) b.beginMatchData(layout)
+                b.emitLoadArgument(0)
+                if (primitiveCondition) b.endMatchData()
+                b.beginReturn(); b.emitLoadConstant(11L); b.endReturn()
+                b.endUnprofiledIfThen()
+                b.beginReturn(); b.emitLoadConstant(22L); b.endReturn()
+                b.endRoot()
+                if (b.isParsingSources()) { b.endSourceSection(); b.endSource() }
+            }.getNode(0)
+            val target = root.callTarget
+            fun code() = root.bytecodeNode.instructions.map { it.name to it.arguments.map(Any::toString) }
+            assertTrue(code().any { it.first == "branch.false.unprofiled" })
+            compile(target)
+            // Cold compilation creates cached operation nodes but executes no
+            // guest bytecode. Compare that prepared view before the FIRST call.
+            val beforeCode = code()
+            assertEquals(0L, metrics.compiledEntries)
+            for ((index, condition) in listOf(true, false, true).withIndex()) {
+                val input: Any = if (primitiveCondition) { if (condition) trueValue else falseValue } else condition
+                assertEquals(if (condition) 11L else 22L, Calls.target(target, arrayOf(input)))
+                assertEquals(index + 1L, metrics.compiledEntries,
+                    "primitiveCondition=$primitiveCondition, call=$index, condition=$condition")
+                valid(target)
+            }
+            assertEquals(beforeCode, code(), "Unprofiled branch does not require observed quickening")
+            root.bytecodeNode.ensureSourceInformation()
+            assertEquals(1, sourceReads)
+            assertEquals(beforeCode, code())
+            val clone = root.javaClass.getDeclaredMethod("cloneUninitialized").apply { isAccessible = true }.invoke(root) as BytecodeRoot
+            val clonedTarget = clone.callTarget
+            compile(clonedTarget)
+            val before = metrics.compiledEntries
+            val input: Any = if (primitiveCondition) falseValue else false
+            assertEquals(22L, Calls.target(clonedTarget, arrayOf(input)))
+            assertEquals(before + 1, metrics.compiledEntries)
+            valid(clonedTarget)
+            if (!primitiveCondition) {
+                assertThrows(ClassCastException::class.java) { Calls.target(target, arrayOf<Any?>("not Boolean")) }
+                assertThrows(NullPointerException::class.java) { Calls.target(target, arrayOfNulls<Any>(1)) }
+            }
         }
     }
 }
