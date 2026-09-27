@@ -16,6 +16,10 @@ WAIT_STATUS_OPERATIONS = {
     for index, name in enumerate(('WCOREDUMP', 'WSTOPSIG', 'WIFSTOPPED', 'WTERMSIG',
                                   'WIFSIGNALED', 'WEXITSTATUS', 'WIFEXITED'))
 }
+BYTESTRING_DECIMAL_OPERATIONS = {
+    '_hs_bytestring_long_long_int_dec': ('ccall', 'unsafe', ('Int64Rep', 'AddrRep', None), (None, 'AddrRep')),
+    '_hs_bytestring_long_long_int_dec_padded18': ('ccall', 'unsafe', ('Int64Rep', 'AddrRep', None), (None,)),
+}
 TEXT_OPERATIONS = {
     '_hs_text_reverse': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', None), (None,)),
     '_hs_text_memchr': ('ccall', 'unsafe', ('BoxedRep (Just Unlifted)', 'Word64Rep', 'Word64Rep', 'Word8Rep', None), (None, 'Int64Rep')),
@@ -91,6 +95,7 @@ TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosi
 
 OPERATIONS = {
     **TEXT_OPERATIONS,
+    **BYTESTRING_DECIMAL_OPERATIONS,
     **WAIT_STATUS_OPERATIONS,
     **{'is' + precision + predicate: ('ccall', 'unsafe', (rep, None), (None, 'IntRep'))
        for precision, rep in (('Float', 'FloatRep'), ('Double', 'DoubleRep'))
@@ -367,6 +372,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
+    if symbol in BYTESTRING_DECIMAL_OPERATIONS:
+        require(bytestring_unit(target.get('unit')), 'pinned original bytestring decimal unit')
     if symbol == 'memchr':
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
@@ -381,7 +388,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
-                 symbol in ('memcmp', 'memchr', 'strlen') and bytestring_unit(target.get('unit')) or
+                 symbol in ('memcmp', 'memchr', 'strlen', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),

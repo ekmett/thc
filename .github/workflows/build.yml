@@ -358,6 +358,7 @@ jobs:
             build/unsafe-equality/
             build/proxy-void/
             build/unix-libc/
+            build/bytestring-decimal/
             build/test-results/
             build/mask-functions/
             build/deep-evaluation/

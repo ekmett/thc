@@ -22,6 +22,7 @@ extra-source-files:
   test/fixtures/run-native-archive/unresolved/native.c
   test/fixtures/run-native-archive/unresolved/Unresolved.hs
   compiler/test-fixtures/TextCbitsAudit.hs
+  compiler/test-fixtures/ByteStringDecimalAudit.hs
   compiler/test-fixtures/UnixLibcAudit.hs
   compiler/test-fixtures/UnixWaitStatusAudit.hs
   compiler/test-fixtures/TextCbitsNative.hs
@@ -837,6 +838,7 @@ executable thc-fixtures
     GetEntropyFixtures
     WcwidthFixtures
     TextCbitsFixtures
+    ByteStringDecimalFixtures
     UnixLibcFixtures
     UnixWaitStatusFixtures
     HashableFfiFixtures

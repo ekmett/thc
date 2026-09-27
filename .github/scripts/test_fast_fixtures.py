@@ -32,6 +32,20 @@ class FixturePreparationTest(unittest.TestCase):
                      'pre/audit.json', 'post/audit.json'):
             self.assertIn('build/deep-evaluation/' + path, fast_fixtures.FULL_REQUIRED)
 
+    def test_bytestring_decimal_has_focused_preparation_and_closed_cache(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual("bytestring-decimal", owners["thc.runtime.ByteStringDecimalTest"])
+        group = manifest["groups"]["bytestring-decimal"]
+        self.assertEqual(["build/bytestring-decimal"], group["outputs"])
+        self.assertTrue(all((project / path).is_file() for path in group["sources"]))
+        outputs = fast_fixtures.fast_inputs.BYTESTRING_DECIMAL_OUTPUTS
+        self.assertEqual(32, len(outputs))
+        self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn("build/bytestring-decimal", fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/bytestring-decimal/ghc/ByteStringDecimalAudit.o", {}))
+
     def test_unix_libc_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
