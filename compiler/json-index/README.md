@@ -79,3 +79,31 @@ under the BSD-2-Clause choice retained in `LICENSE.everett-bsd`. It is a rank
 directory, not a select directory. Readers regenerate at most one 512-byte mask
 for a local rank/select query and account for that scan; JSON string/scalar
 projection may require additional source scanning.
+
+## Core export and packages
+
+The plugin option `-fplugin-opt=THC.Plugin:json-index` writes each sidecar next to
+its JSON output as `MODULE.json.idx`. It indexes the bytes of the finished file,
+including the existing encoding and newline behavior. Without that option,
+plugin output inventories remain JSON-only. The simple-package driver enables
+it and removes stale `.json.idx` siblings when refreshing its Core directory.
+
+Package acquisition generates indexes after native, clock and scalar-bitcode
+linking has finished. A module record keeps its existing JSON `path` and
+`sha256`, with an optional `index` object containing its own `path` and `sha256`.
+ZIPs contain adjacent JSON/index pairs. Cache hits and projections preserve the
+pair and check the declared digest, v2 envelope, source length and digest, exact
+section lengths and trailer. These checks do not replace JSON/Core auditing or
+the navigation reader's structural validation. Bundles without an `index` field
+remain valid; malformed declared indexes are errors, not a legacy fallback.
+
+`lib:core-json-index` supplies the same encoder to the plugin, driver and command
+line tool. Its Haskell modules live under `json-index/`; the library has no GHC
+API dependency. The upstream scanner and rank license notices are included in
+the package's `license-files`.
+
+Direct GHC plugin loads use the genuine dependency closure of the selected Cabal
+plan, including the encoder's store dependencies. `compiler/plugin.py
+--registry-only` prepares a private registry from those existing registrations
+without requiring a shared plugin library; the Windows vanilla exporter uses
+that same registry. It does not build or synthesize package registrations.

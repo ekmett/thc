@@ -2062,6 +2062,17 @@ class FixturePreparationTest(unittest.TestCase):
         self.toolchain["ghcVersion"] = "9.14.2"
         self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
 
+    def test_shared_json_index_dependency_change_rebuilds(self):
+        self.prepare("thc.AlphaTest")
+        for name in ("json-index/THC/JsonIndex.hs", "json-index/THC/JsonIndex/Scanner.hs",
+                     "compiler/json-index/json_index.c", "compiler/json-index/json_index.h"):
+            with self.subTest(path=name):
+                self.calls.clear()
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("changed shared index dependency")
+                self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
+
     def test_preparatory_source_change_rechecks_previous_hits(self):
         self.prepare("thc.AlphaTest")
         self.calls.clear()

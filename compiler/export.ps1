@@ -19,7 +19,12 @@ try {
     if ($libraries.Count -ne 1) { throw 'Expected exactly one Cabal THC library' }
     $library = $libraries[0]
     if ([IO.Path]::GetFullPath($library.'pkg-src'.path) -ne $root) { throw 'Cabal plan belongs to another checkout' }
-    $db = Join-Path $root 'dist-newstyle/packagedb/ghc-9.14.1'
+    $python = if ($env:THC_PYTHON) { $env:THC_PYTHON } else { 'python' }
+    $registryOutput = Invoke-ThcTool $python @((Join-Path $root 'compiler/plugin.py'),
+        '--root', $root, '--ghc-pkg', $tools.PackageTool, '--registry-only')
+    $registry = ($registryOutput -join "`n") | ConvertFrom-Json
+    if ($registry.schema -ne 1 -or $registry.unitId -ne $library.id) { throw 'Plugin registry does not match the Cabal plan' }
+    $db = $registry.packageDb
     $registered = Invoke-ThcTool $tools.PackageTool @('--unit-id', 'field', $library.id, 'id', '--simple-output', '--package-db', $db)
     if ($registered -ne $library.id) { throw 'Plugin registration does not match the Cabal plan' }
     # The pinned Windows GHC is static (GHC Dynamic=NO). Let GHC load its actual

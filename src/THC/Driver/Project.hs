@@ -52,6 +52,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
                        readCreateProcessWithExitCode)
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
+import THC.Driver.CoreIndex (indexedModules, modulePaths, moduleEntries, indexFormat)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
@@ -180,7 +181,15 @@ prepareWindowsRuntime repository selectedCompiler selectedPkg selectedDriver out
     pluginUnit <- field plugin "id"
     sourceRoot <- field plugin "pkg-src" >>= (`field` "path") >>= canonicalizePath
     require (sourceRoot == root) "Windows plugin plan belongs to another checkout"
-    let pluginDb = root </> "dist-newstyle/packagedb/ghc-9.14.1"
+    python <- maybe "python" id <$> lookupEnv "THC_PYTHON"
+    (registryStatus, registryOutput, registryDiagnostic) <- readCreateProcessWithExitCode
+      (proc python [root </> "compiler/plugin.py", "--root", root,
+        "--ghc-pkg", pkg, "--registry-only"]) ""
+    require (registryStatus == ExitSuccess) ("cannot resolve plugin dependency registry: " ++ registryDiagnostic)
+    registry <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack registryOutput)))
+    registryUnit <- field registry "unitId"
+    require (registryUnit == pluginUnit) "plugin dependency registry differs from the Cabal plan"
+    pluginDb <- field registry "packageDb"
     (status, description, diagnostic) <- readCreateProcessWithExitCode
       (proc pkg ["--package-db",pluginDb,"--ipid","describe",pluginUnit]) ""
     require (status == ExitSuccess) ("cannot read actual vanilla plugin registration: " ++ diagnostic)
@@ -664,7 +673,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
     (rtsRegistration, _) <- installedLayoutHeaders context registrationUnit
     probe <- probeCurrent
     let identity = object ["schema" .= (1 :: Int), "helperHash" .= helperHash,
-          "driverHash" .= driverHash, "recipeHash" .= recipeHash,
+          "driverHash" .= driverHash, "jsonIndex" .= indexFormat, "recipeHash" .= recipeHash,
           "rtsRegistration" .= rtsRegistration,
           "registration" .= installedProvenance context registrationUnit]
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
@@ -803,7 +812,7 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
             "generatedCore" .= [object ["module" .= name, "sha256" .= shaHex bytes] | (name, bytes) <- modules],
             "dependencies" .= installedDepends registrationUnit]
           buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash,
+          exporter = object (["helperHash" .= helperHash, "driverHash" .= driverHash, "jsonIndex" .= indexFormat,
                              "options" .= (["post-tidy", "unit-qualified", "source-notes", "dynamic"] :: [String])] ++
                              ["foreignLinkRecipe" .= ("original-capi-llvm-v5" :: String)
                              | any ((`elem` ["System.CPUTime.Posix.ClockGetTime", "Data.Time.Clock.Internal.CTimespec"]) . fst) modules])
@@ -836,12 +845,10 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
                 pure (name, result)
               currentClockHeaders <- if null clockHeaders then pure [] else timeClockHeaders (installedLibdir context) includes
               require (currentClockHeaders == clockHeaders) "Selected time headers changed during installed acquisition"
-              let members = [("core/" ++ show index ++ ".json", bytes)
-                            | (index, (_, bytes)) <- zip [0 :: Int ..] linked]
-                  refs = [object ["name" .= name, "boundary" .= boundary,
-                                  "path" .= member, "sha256" .= shaHex bytes]
-                         | ((name, bytes), (member, _)) <- zip linked members]
-                  receiptBytes = BL.toStrict (encode (object (inputFields ++
+              (refs, members) <- indexedModules
+                [(name, "core/" ++ show index ++ ".json", bytes)
+                | (index, (name, bytes)) <- zip [0 :: Int ..] linked]
+              let receiptBytes = BL.toStrict (encode (object (inputFields ++
                     ["buildKey" .= buildKey, "exportKey" .= exportKey,
                      "exporter" .= exporter, "targetLayout" .= layout])))
                   inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
@@ -917,7 +924,7 @@ wiredGhcInternal context thcRoot = do
       exporter = object (["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context,
+                         "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
                          "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
                                         "source-notes", "foreign-import-provenance",
                                         "hsc2hs", "-g"] ++
@@ -969,7 +976,7 @@ wiredGhcInternal context thcRoot = do
           generated <- forM (generatedSources artifacts) $ \(name, path) -> do
             digest <- digestFile path
             pure (object ["path" .= map (\c -> if c == '\\' then '/' else c) name, "sha256" .= digest])
-          members <- forM names $ \name -> do
+          originalMembers <- forM names $ \name -> do
             let core = staging </> "core" </> (name ++ ".json")
                 member = "core/" ++ name ++ ".json"
             artifact <- readJson core
@@ -980,11 +987,9 @@ wiredGhcInternal context thcRoot = do
               ("pinned wired Core has wrong identity: " ++ name)
             bytes <- BS.readFile core
             pure (member, bytes)
-          let refs = [object ["name" .= name, "boundary" .= boundary,
-                              "path" .= ("core/" ++ name ++ ".json"),
-                              "sha256" .= shaHex bytes]
-                     | (name, (_, bytes)) <- zip names members]
-              derived = ["targetLayout" .= layout, "generatedSources" .= generated] ++
+          (refs, members) <- indexedModules
+            [(name, member, bytes) | (name, (member, bytes)) <- zip names originalMembers]
+          let derived = ["targetLayout" .= layout, "generatedSources" .= generated] ++
                 ["sourceBuild" .= value | Just value <- [sourceBuildReceipt artifacts]]
               inputsBytes = BL.toStrict (encode (object
                 (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey,
@@ -1060,12 +1065,9 @@ projectWindowsWiredBundle directory full specification = do
     case hit of
       Just value -> pure value
       Nothing -> do
-        members <- forM refs $ \ref -> do
-          member <- field ref "path"
-          expected <- field ref "sha256"
-          body <- maybe (fail "Missing projected module") pure (lookup member entries)
-          require (shaHex body == expected) "Projected module differs from genuine source archive"
-          pure (member, body)
+        members <- fmap concat $ forM refs $ \ref ->
+          maybe (fail "Projected Core/index pair differs from genuine source archive") pure
+            (moduleEntries ref entries)
         let inputBytes = BL.toStrict (encode (case inputs of
               Object fields -> Object (KeyMap.insert "generatedSources" (Aeson.toJSON generated) (KeyMap.insert "targetLayout" layout fields))
               _ -> inputs))
@@ -1219,7 +1221,7 @@ exporterIdentity context = do
   pure $ object ["pluginUnit" .= contextPluginUnit context,
                  "pluginDb" .= contextPluginDb context,
                  "pluginHash" .= pluginHash,
-                 "driverHash" .= contextDriverHash context,
+                 "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
                  "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                 "foreign-import-provenance",
                                 "native-debug-info", "-dynamic", "-dcore-lint",
@@ -1401,12 +1403,10 @@ packGlobalBundle store dist capture unit buildKey exportKey destination = do
       names = map fst sorted
   require (length names == length (nub names))
     ("duplicate exported store modules for " ++ unitId unit)
-  let members = [("core/" ++ show index ++ ".json", bytes)
-                | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]
-      modules = [object ["name" .= name, "boundary" .= boundary,
-                         "path" .= member, "sha256" .= shaHex bytes]
-                | ((name, bytes), (member, _)) <- zip sorted members]
-      inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+  (modules, members) <- indexedModules
+    [(name, "core/" ++ show index ++ ".json", bytes)
+    | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
+  let inner = object (["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                       "unit" .= unitId unit, "buildKey" .= buildKey,
                       "exportKey" .= exportKey, "modules" .= modules] ++ empty)
   archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode inner)) : members))
@@ -1421,6 +1421,7 @@ readGlobalBundle path unit dependencies buildKey exportKey = do
     raw <- lookup "manifest.json" entries
     inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
     modules <- jsonField inner "modules" :: Maybe [Value]
+    payloadPaths <- concat <$> mapM modulePaths modules
     let emptyReceipt = jsonField inner "emptyRegistration" :: Maybe Text.Text
         reexportReceipt = jsonField inner "reexportRegistration" :: Maybe Text.Text
     reexports <- case reexportReceipt of
@@ -1432,13 +1433,13 @@ readGlobalBundle path unit dependencies buildKey exportKey = do
           (Nothing, Just _) -> null modules && not (null reexports)
           _ -> False
         names = [name | Just name <- map (`jsonField` "name") modules :: [Maybe String]]
-        paths = [member | Just member <- map (`jsonField` "path") modules :: [Maybe String]]
         validModule item = do
           name <- jsonField item "name" :: Maybe String
           member <- jsonField item "path" :: Maybe String
           digest <- jsonField item "sha256" :: Maybe String
           foundBoundary <- jsonField item "boundary" :: Maybe String
-          body <- lookup member entries
+          checkedPair <- moduleEntries item entries
+          body <- lookup member checkedPair
           artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
           owner <- jsonField artifact "unit" :: Maybe String
           actual <- jsonField artifact "module" :: Maybe String
@@ -1451,8 +1452,9 @@ readGlobalBundle path unit dependencies buildKey exportKey = do
         jsonField inner "buildKey" == Just buildKey &&
         jsonField inner "exportKey" == Just exportKey &&
         validInventory && length names == length modules &&
-        length paths == length modules && length names == length (nub names) &&
-        sort (map fst entries) == sort ("manifest.json" : paths) &&
+        length names == length (nub names) &&
+        length payloadPaths == length (nub payloadPaths) &&
+        sort (map fst entries) == sort ("manifest.json" : payloadPaths) &&
         all (== Just True) (map validModule modules))
       then Just (Bundle path (shaHex bytes) modules buildKey reexports)
       else Nothing
@@ -1508,7 +1510,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
   let exporter = object $ ["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
-                         "driverHash" .= contextDriverHash context,
+                         "driverHash" .= contextDriverHash context, "jsonIndex" .= indexFormat,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
                                          "native-debug-info"] ++ exportWayOptions ++
@@ -1625,12 +1627,10 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
         retained <- scalarInterfaceModules selectedHelper component unit objects expected
         validateRuntimeShimModules shim retained
       _ -> fail "scalar cbits interface helper missing"
-    let members = [("core/" ++ show index ++ ".json", bytes)
-                  | (index, (_, bytes)) <- zip [0 :: Int ..] sorted]
-        modules = [object ["name" .= name, "boundary" .= boundary,
-                           "path" .= member, "sha256" .= shaHex bytes]
-                  | ((name, bytes), (member, _)) <- zip sorted members]
-        inputsBytes = BL.toStrict (encode buildInputs)
+    (modules, members) <- indexedModules
+      [(name, "core/" ++ show index ++ ".json", bytes)
+      | (index, (name, bytes)) <- zip [0 :: Int ..] sorted]
+    let inputsBytes = BL.toStrict (encode buildInputs)
         inner = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
                         "unit" .= unitId unit, "buildKey" .= buildKey,
                         "exportKey" .= exportKey, "modules" .= modules,
@@ -1677,6 +1677,7 @@ readBundle receipt path unit buildKey exportKey buildInputs expected = do
     raw <- lookup "manifest.json" entries
     inner <- either (const Nothing) Just (eitherDecodeStrict' raw)
     modules <- jsonField inner "modules" :: Maybe [Value]
+    payloadPaths <- concat <$> mapM modulePaths modules
     inputRef <- jsonField inner "buildInputs" :: Maybe Value
     inputPath <- jsonField inputRef "path" :: Maybe String
     inputHash <- jsonField inputRef "sha256" :: Maybe String
@@ -1694,13 +1695,13 @@ readBundle receipt path unit buildKey exportKey buildInputs expected = do
         platform = compiler >>= (`jsonField` "platform") :: Maybe String
         layoutPlatform = layout >>= (`jsonField` "targetPlatform") :: Maybe String
     let names = [name | Just name <- map (`jsonField` "name") modules]
-        paths = [member | Just member <- map (`jsonField` "path") modules]
         validModule item = do
           name <- jsonField item "name" :: Maybe String
           member <- jsonField item "path" :: Maybe String
           digest <- jsonField item "sha256" :: Maybe String
           foundBoundary <- jsonField item "boundary" :: Maybe String
-          body <- lookup member entries
+          checkedPair <- moduleEntries item entries
+          body <- lookup member checkedPair
           artifact <- either (const Nothing) Just (eitherDecodeStrict' body)
           owner <- jsonField artifact "unit" :: Maybe String
           actual <- jsonField artifact "module" :: Maybe String
@@ -1722,9 +1723,10 @@ readBundle receipt path unit buildKey exportKey buildInputs expected = do
             generated == innerGenerated && maybe False validTargetLayout layout &&
             layoutPlatform == platform &&
             maybe False (validGeneratedSources buildInputs) generated) &&
-        length names == length modules && length paths == length modules &&
+        length names == length modules &&
         length names == length (nub names) && sort names == expected &&
-        sort (map fst entries) == sort ("manifest.json" : inputPath : paths) &&
+        length payloadPaths == length (nub payloadPaths) &&
+        sort (map fst entries) == sort ("manifest.json" : inputPath : payloadPaths) &&
         all (== Just True) (map validModule modules))
       then Just (Bundle path (shaHex bytes) modules buildKey [])
       else Nothing

@@ -11,6 +11,7 @@ from pathlib import Path
 import platform
 import re
 import stat
+import struct
 import zlib
 from zipfile import BadZipFile, ZipFile
 
@@ -857,6 +858,50 @@ def zip_member(name):
             all(ord(char) >= 32 for char in name))
 
 
+def _index_reference(path, item):
+    if 'index' not in item:
+        return None
+    reference = item['index']
+    if (not isinstance(reference, dict) or set(reference) != {'path', 'sha256'} or
+            not zip_member(reference['path']) or not isinstance(reference['sha256'], str) or
+            not SHA256.fullmatch(reference['sha256'])):
+        raise ValueError(f'{path}: invalid JSON index reference')
+    return reference
+
+
+def _validate_index_envelope(path, reference, source, index):
+    """Check the source-bound v2 transport, not its navigation or JSON semantics.
+
+    The auditor parses the original JSON and never navigates through this index.
+    Runtime consumers independently verify the directory/topology against source.
+    """
+    if hashlib.sha256(index).hexdigest() != reference['sha256']:
+        raise ValueError(f'{path}: JSON index hash mismatch: {reference["path"]!r}')
+    if len(index) < 96 or index[:8] != b'THCJSIX1':
+        raise ValueError(f'{path}: invalid JSON index envelope')
+    version, flags, size, events = struct.unpack_from('<IIQQ', index, 8)
+    if version != 2 or flags != 0 or size != len(source) or events > size:
+        raise ValueError(f'{path}: invalid JSON index version, flags, or source extent')
+    expected_size = 96 + sum(((count + per - 1) // per) * 8 for count, per in
+                             ((size, 1 << 32), (size, 2048), (size, 16384), (events, 32)))
+    if len(index) != expected_size:
+        raise ValueError(f'{path}: JSON index section length mismatch')
+    if index[32:64] != hashlib.sha256(source).digest():
+        raise ValueError(f'{path}: JSON index source identity mismatch')
+    if index[-32:] != hashlib.sha256(memoryview(index)[:-32]).digest():
+        raise ValueError(f'{path}: JSON index integrity mismatch')
+
+
+def _module_bytes(path, item, read):
+    # This helper returns before the generator yields, so neither the raw JSON
+    # nor its index survives delivery of the parsed module to the audit consumer.
+    data = read(item['path'])
+    reference = _index_reference(path, item)
+    if reference is not None:
+        _validate_index_envelope(path, reference, data, read(reference['path']))
+    return data
+
+
 def bundle_modules(path, unit, records):
     """Compatibility list API; streaming consumers use open_modules instead."""
     with closing(_iter_bundle_modules(path, unit, records)) as modules:
@@ -895,7 +940,16 @@ def _iter_bundle_modules(path, unit, records):
                         not isinstance(inner.get('exportKey'), str) or not SHA256.fullmatch(inner['exportKey']) or
                         inner.get('modules') != records):
                     raise ValueError(f'{path}: bundle manifest disagrees with unit {unit["id"]}')
-                expected = {'manifest.json', *(item['path'] for item in records)}
+                expected = {'manifest.json'}
+                claimed = {'manifest.json', 'inplace-manifest.json'}
+                for item in records:
+                    reference = _index_reference(path, item)
+                    members = [item['path']] + ([] if reference is None else [reference['path']])
+                    for member in members:
+                        if not zip_member(member) or member in claimed:
+                            raise ValueError(f'{path}: duplicate or unsafe JSON/index ZIP member path: {member!r}')
+                        claimed.add(member)
+                        expected.add(member)
                 if 'buildInputs' in inner:
                     ref = inner['buildInputs']
                     if (not isinstance(ref, dict) or set(ref) != {'path', 'sha256'} or
@@ -921,7 +975,7 @@ def _iter_bundle_modules(path, unit, records):
                 # Keep the verified archive open, but never retain all its
                 # decompressed members beside the caller's parsed Core.
                 for item in records:
-                    yield item, str(archive_path) + '!/' + item['path'], archive.read(item['path'])
+                    yield item, str(archive_path) + '!/' + item['path'], _module_bytes(path, item, archive.read)
     except (BadZipFile, RuntimeError, EOFError, zlib.error) as error:
         raise ValueError(f'{path}: invalid ZIP bundle {archive_path}: {error}') from error
 
@@ -1002,10 +1056,15 @@ class _ModuleStream:
             raise ValueError(f'{self._path}: Core module stream was not fully consumed')
 
 
-def _iter_loose_modules(root, records):
+def _iter_loose_modules(path, root, records):
+    def read(relative):
+        artifact = (root / relative).resolve()
+        if not artifact.is_relative_to(root):
+            raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
+        return artifact.read_bytes()
     for item in records:
         artifact = (root / item['path']).resolve()
-        yield item, str(artifact), artifact.read_bytes()
+        yield item, str(artifact), _module_bytes(path, item, read)
 
 
 def _iter_load(path, audit_archives, manifest_read=None):
@@ -1023,6 +1082,7 @@ def _iter_load(path, audit_archives, manifest_read=None):
         raise ValueError(f'{path}: requires {FORMAT} schema 1 / GHC 9.14.1')
     units = set()
     module_keys = set()
+    loose_paths = {path.resolve()}
     found = False
     for unit in manifest['units']:
         if not isinstance(unit, dict):
@@ -1049,19 +1109,24 @@ def _iter_load(path, audit_archives, manifest_read=None):
                     not isinstance(expected, str) or not SHA256.fullmatch(expected)):
                 raise ValueError(f'{path}: invalid/duplicate post-Tidy module: {key!r}')
             module_keys.add(key)
+            reference = _index_reference(path, item)
             if 'bundle' in unit:
                 if not zip_member(relative) or relative == 'manifest.json':
                     raise ValueError(f'{path}: unsafe ZIP member path: {relative!r}')
             else:
-                artifact = Path(relative)
-                if artifact.is_absolute() or '..' in artifact.parts:
-                    raise ValueError(f'{path}: module path must stay inside manifest root: {relative!r}')
-                artifact = (root / artifact).resolve()
-                if not artifact.is_relative_to(root):
-                    raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
+                for member in [relative] + ([] if reference is None else [reference['path']]):
+                    artifact = Path(member)
+                    if artifact.is_absolute() or '..' in artifact.parts:
+                        raise ValueError(f'{path}: module path must stay inside manifest root: {member!r}')
+                    artifact = (root / artifact).resolve()
+                    if not artifact.is_relative_to(root):
+                        raise ValueError(f'{path}: module path escapes manifest root: {member!r}')
+                    if artifact in loose_paths:
+                        raise ValueError(f'{path}: duplicate JSON/index path: {member!r}')
+                    loose_paths.add(artifact)
             records.append(item)
         artifacts = (_iter_bundle_modules(path, unit, records) if 'bundle' in unit else
-                     _iter_loose_modules(root, records))
+                     _iter_loose_modules(path, root, records))
         with closing(artifacts):
             for item, artifact, data in artifacts:
                 module = _validated_module(path, unit_id, item, data, audit_archives)

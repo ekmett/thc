@@ -15,6 +15,9 @@ module ProjectTests (tests, acquisitionTests, exceptionBridgeTests) where
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
 import Data.Aeson (Value)
+import qualified Data.ByteString as BS
+import qualified THC.Driver.CoreIndex as CoreIndex
+import THC.Driver.Zip (decodeZip)
 import Data.List (isInfixOf, isPrefixOf, sort)
 import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing,
                          doesFileExist, getModificationTime, listDirectory)
@@ -136,7 +139,14 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
     let units = objects manifest "units"
         supplied = [unit | unit <- units, not (null $ objects unit "modules")]
     assertBool "genuine executable and boot-library Core acquired" (length supplied >= 2)
-    forM_ supplied $ \unit -> requireFile (string $ field (field unit "bundle") "path")
+    forM_ supplied $ \unit -> do
+      bytes <- BS.readFile (string $ field (field unit "bundle") "path")
+      members <- either fail pure =<< decodeZip bytes
+      forM_ (objects unit "modules") $ \ref -> do
+        assertEqual "fresh production modules declare JSON/index pairs" 2
+          (maybe 0 length (CoreIndex.modulePaths ref))
+        assertBool "sidecar binds final linked module bytes"
+          (maybe False ((== 2) . length) (CoreIndex.moduleEntries ref members))
     plan <- readJson (output </> "native/cache/plan.json")
     let entry = one ((== "exe:fail-frontier") . string . (`field` "component-name"))
                     (objects plan "install-plan")
@@ -146,9 +156,14 @@ acquisitionTests env = TestLabel "project acquisition stops before audit and exe
     -- Existing reports are historical evidence, never silently replaced by an
     -- acquisition-only rerun or presented as acceptance of the new manifest.
     writeText (output </> "audit.json") "retained older audit evidence\n"
+    identities <- mapM (getModificationTime . string . (`field` "path") . (`field` "bundle")) supplied
     repeated <- run env base Nothing 240 arguments
     assertSuccess repeated
     assertNoStdout repeated
+    warm <- readJson (output </> "packages.json")
+    assertEqual "warm acquisition preserves module/index records" (field manifest "units") (field warm "units")
+    assertEqual "warm acquisition never rewrites immutable bundles" identities
+      =<< mapM (getModificationTime . string . (`field` "path") . (`field` "bundle")) supplied
     assertEqual "prior audit untouched" "retained older audit evidence\n"
       =<< readText (output </> "audit.json")
 
@@ -179,7 +194,7 @@ projectTests env = TestLabel "three-package project native versus THC run" $ Tes
     -- The first project run must bootstrap the ordinary Cabal plugin library.
     -- Keep this source-only root private so shared compiler artifacts and other
     -- worktrees are never renamed or deleted during the test.
-    forM_ ["compiler", "scripts", "src", "app", "test"] $ \directory ->
+    forM_ ["compiler", "json-index", "scripts", "src", "app", "test"] $ \directory ->
       copyTree (root env </> directory) (sourceOnlyRoot </> directory)
     forM_ ["thc.cabal", "cabal.project", "Setup.hs", "LICENSE", "LICENSE.txt", "README.md"] $ \name ->
       copyFile (root env </> name) (sourceOnlyRoot </> name)
