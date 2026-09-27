@@ -23,12 +23,12 @@ are different claims; each report identifies which it establishes.
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
 | Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md), including [bounded C finalizers](c-finalizers.md); no automatic GC/ephemerons |
 | Managed exports | [Declared scalar and IO actions](site/embedding.md) through polyglot bindings; not native C callback addresses |
-| Native executable investigation | [Native Image feasibility](native-image-feasibility.md); pinned-toolchain build blockers and runtime packaging versus guest AOT, not a working native executable |
+| Native executable probe | [Native Image feasibility](native-image-feasibility.md); pure-Core interpretation in a native executable, not guest JIT/AOT or a complete native FFI lifecycle |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Byte comparison and search | [Original libc `memcmp`/`memchr`](original-memory-search.md), unsigned byte semantics and allocation-preserving interior pointers |
 | Byte sorting | [Original ByteString `fps_sort`](original-bytestring-sort.md), unsigned ordering in checked writable slices |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
-| Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); Java thread identities, masking and interruptible MVar waits |
+| Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); context-owned logical guest identities, masking and interruptible MVar waits |
 | Delimited continuations | [Initial synchronous multi-shot slice](delimited-continuations.md); prompt identity, saved suffixes, shared effects, and catch/mask restoration |
 | GHC bytecode objects | [Executable scalar BCOs and updating wrappers](ghc-bco.md); real instruction decoding and guest application, with explicit opcode/ABI limits |
 | Compiler-library RTS hooks | [FastString shared CAF, CAF retention and unique-supply cells](compiler-rts.md); not the native GHC object loader |
@@ -149,7 +149,9 @@ variation and native correctness checks; these are not general Haskell timings.
   and [demand probes](demand-probe.md).
 * [Bytecode backend](bytecode.md), [source locations](debug-locations.md),
   [graph inspection](graph-inspection.md) and [kernel measurements](prototype-results.md).
-* [Architecture](architecture.md) and [development checks](contributing.md).
+* [Current architecture and planned work](architecture.md), the preserved
+  [2026-09-22 proposal](../research/architecture-2026-09-22.md), and
+  [development checks](contributing.md).
 
 Runtime experiments are opt-in except compact headers and class-owned layouts.
 `-Dthc.classOwnedLayouts=false` selects field-bearing layouts;

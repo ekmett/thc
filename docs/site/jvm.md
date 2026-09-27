@@ -66,7 +66,7 @@ or access them. Public visibility does not make them a supported embedding ABI.
 Internal node types are named here to explain the implementation; they are not
 all included in this public API index.
 
-## From Core to compiled code
+## JVM execution and compilation
 
 The loader supplies optimized Core together with representation, demand and
 source information. `Program` lowers it to an AST; `BytecodeProgram` lowers it
@@ -79,6 +79,10 @@ graph before producing machine code. The Truffle nodes documented here are
 **not Graal IR nodes**. A constructor allocation or call visible in interpreter
 source may disappear after partial evaluation, inlining and escape analysis;
 that is an optimization outcome, not a different source-level value contract.
+
+This describes the optimizing JVM configuration. The separate Native Image
+probe packages a native executable that interprets accepted pure Core; it does
+not establish guest JIT or guest AOT compilation, or the full native FFI lifecycle.
 
 ## Values and representation
 
@@ -95,8 +99,10 @@ forces thunks has its own execution state and target caches; it is not the
 thunk's shared evaluation state.
 
 Unboxed tuples are different from lifted tuple constructors. Their components
-can occupy several physical slots; a `State#` component occupies none. Logical
-argument count therefore differs from physical field count. Representation
+can occupy several physical slots; a `State#` component occupies none. Supported
+aggregate fields in boxed constructors likewise flatten into typed properties:
+[DataLayout.arity][thc.runtime.DataLayout.arity] counts physical fields, not logical
+constructor arguments. Representation
 proofs determine which primitive lanes can be used, rather than a Haskell type
 name alone. Unsupported representations are rejected at admission.
 
@@ -115,9 +121,11 @@ argument layout metadata let the compiler specialize a call without making
 the closure itself part of the Truffle node tree.
 
 Core join points lower to local control flow where their checked shape permits
-it. Recursive and tail calls use loop and dispatch machinery to avoid repeatedly
-growing the Java stack. The AST backend expresses this with expression, call
-and loop nodes; the bytecode backend also has explicit labels and branches.
+it. Recursive joins and tail transfers use loop and dispatch machinery to avoid
+repeatedly growing the Java stack. Non-tail stack behavior depends on the backend
+and continuation mode; tail-call support alone is not a general stack-safety
+guarantee. The AST backend uses expression, call and loop nodes; the bytecode
+backend also has explicit labels and branches.
 These are the control-flow portions of the interpreter, distinct from the
 constructor and closure objects they manipulate.
 

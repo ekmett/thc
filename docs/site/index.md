@@ -26,22 +26,25 @@ Truffle/Graal. Cabal still builds the native code needed for Template Haskell an
 other compile-time work. THC exports the executable Core and caches package
 bundles so that an unchanged dependency need not be exported again.
 
-The command-line interface I'm working toward is:
+The implemented commands separate acquisition from execution:
 
 ```sh
-thc build
+thc acquire my-program
 thc run my-program
-thc repl
 ```
 
-`thc run [TARGET] [FLAGS] [-- ARG...]` has a working, limited implementation
-today. Targets use Cabal's syntax, including `my-package:bench:my-benchmark` and
+`thc acquire [TARGET] [FLAGS]` produces a package manifest without auditing or
+executing the guest. `thc run [TARGET] [FLAGS] [-- ARG...]` also audits the
+reachable program and executes an accepted `Main.main :: IO ()`.
+Targets use Cabal's syntax, including `my-package:bench:my-benchmark` and
 `my-package:test:my-test`. With no target, Cabal selects the current package's
 sole buildable executable, otherwise its sole buildable runnable component.
 Use `--project-dir` or `--project-file` to select a different project.
-`thc build` is planned;
-`thc repl` is not yet implemented. The aim is to run complete programs, including
-their error paths.
+General `thc build` and interactive `thc repl` commands are planned, not
+implemented. The aim is to run complete programs, including their error paths;
+acquisition alone does not establish that a program is runnable. The
+[architecture guide](../architecture.md) describes the current pipeline and
+planned work.
 
 You can already run real generators and utilities: see the
 [Happy, HsColour and Alex command lines](../driver.md#run-real-applications).
@@ -49,7 +52,7 @@ They use ordinary upstream packages and the complete-Core installation described
 below, with setup, expected output and current backend limits spelled out.
 
 Running on Truffle also gives Haskell a route into other languages. The
-[JavaScript example](../polyglot.md) already supports `foreign import javascript`.
+[JavaScript example](../polyglot.md) supports `foreign import javascript`.
 The [embedding guide](embedding.md) describes the current JVM entrypoints for
 loading and calling accepted Haskell code from Java or Kotlin.
 The public [`thc:runtime` library](../runtime-services.md) gives Haskell programs
@@ -58,7 +61,7 @@ and GC statistics, structured tracing, and optional JIT diagnostics. Unavailable
 services are explicit; JVM-wide statistics are distinguished from context-local
 measurements.
 
-## Build it today
+## Build and run
 
 You need **GHC 9.14.1**, **cabal-install 3.16**, **GraalVM 25.3.4.1 / JDK 25**,
 and **Python 3.12+**. Put GHC, `ghc-pkg` and `runghc` on `PATH`. Linux x86_64
@@ -106,7 +109,7 @@ compiled guest execution. That does not yet amount to general Cabal package
 support.
 
 On Linux x86_64, with complete installed Core and matching configured GHC sources, the bytecode
-backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
+backend runs ordinary `putStrLn`, including GHC's original startup and Handle
 shutdown. A file-lifecycle test also matches native GHC on UTF-8 reads and writes,
 append, seeking, EOF, caught missing-file errors, and shutdown flushing.
 A binary-buffer test covers `hPutBuf` and `hGetBuf` with offset pointers, binary
