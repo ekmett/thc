@@ -255,7 +255,9 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertEqual(suites, selected["affected"]["haskell"])
                 self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
 
-    def test_compact_core_sources_and_goldens_select_the_cabal_suite(self):
+    def test_compact_core_sources_and_goldens_select_all_consumers(self):
+        self.write("src/test/kotlin/thc/CoreCompactGoldenTest.kt",
+                   kotlin("CoreCompactGoldenTest").replace("package example", "package thc"))
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         for path in ("compact-core/THC/Compact/Wire.hs", "compact-core/THC/Compact/Writer.hs",
                      "test/compact-core/Main.hs", "test/compact-core/golden/integers-v1.json",
@@ -272,7 +274,10 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertTrue(selected["runnable"])
                 self.assertEqual(["compact-core-tests"], selected["haskell"]["suites"])
                 self.assertEqual(["compact-core-tests"], selected["affected"]["haskell"])
-                self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
+                junit = ["example.SmokeTest"]
+                if path.startswith("test/compact-core/golden/"):
+                    junit.append("thc.CoreCompactGoldenTest")
+                self.assertEqual(junit, selected["junit"]["classes"])
 
     def test_json_index_documentation_retains_only_smoke(self):
         for path in ("compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"):
