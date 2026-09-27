@@ -262,3 +262,52 @@ rename/deletion, long names and exact first-installed AST/bytecode calls.
 `NativeDirectoryFileSystemTest` checks context isolation, transactional setters,
 ordinary IO, stream path/lifetime behavior and descriptor reuse. The native
 oracle restores only its own child CWD; the coordinator and JVM stay unchanged.
+
+## Original directory streams
+
+The original Unix 2.8.8.0 unsafe `opendir`, `fdopendir`, `closedir`,
+`__hscore_readdir`, `__hscore_d_name`, and `__hscore_free_dirent` declarations
+use context-owned opaque handles on Linux x86_64 with glibc 2.23 or newer. The
+CAPI wrapper owner, module, index, safety, and exact argument/result types stay
+authoritative. Opening a pathname borrows the current directory descriptor and
+retains native directory identity through rename or unlink.
+
+Successful `fdopendir` consumes its guest descriptor exactly once; failure
+leaves it owned by the caller. Other duplicate guest descriptors stay valid and
+share the original kernel open-file description. No guest integer is treated as
+a raw host descriptor. Context disposal closes remaining streams.
+
+Readdir validates the writable pointer cell, alignment, ownership, and possible
+alias with the current name before advancing the native cursor. It publishes an
+entry or NULL and preserves the guest errno seed when native EOF leaves errno
+unchanged. Names retain their raw bytes and trailing NUL. Entry/name views expire
+at the next read or close; the selected glibc Unix helper's `free_dirent` is a
+no-op and does not prematurely retire a view. Cross-context, forged, and retired
+handles fail explicitly. Guest output cells may be managed or live native
+allocations; stream and entry identities cannot be fabricated from pointer bits.
+
+`OriginalDirectoryStreamsTest` compares six genuine source-built Unix FCallIds
+with native GHC across pathname, descriptor alias/failure, raw-name, EOF, rename,
+and deleted-directory observations. Both backends preserve exact first-installed
+entry counts and compiled target validity. `NativeDirectoryStreamsTest` covers
+handle lifetime, disposal, and pre-effect output validation.
+
+## Original directory pathname calls
+
+The genuine unsafe Unix 2.8.8.0 `rmdir` declaration uses the same authenticated
+context directory anchor and Linux `unlinkat(AT_REMOVEDIR)` service as existing
+removal calls. It preserves raw names, symlink and trailing-slash behavior,
+namespace changes, and native errno. Failed State or address validation occurs
+before removal, and a renamed context directory keeps its identity.
+
+The `ghc-internal` declaration in `GHC.Internal.System.Environment.ExecutablePath`
+is also accepted for `readlink`. Its original result is `CInt`/`Int32Rep`, matching
+the already admitted Unix declaration; an `Int64Rep` replacement is rejected.
+Both owners share checked output staging, exact native truncation without an
+added NUL, failure preservation, raw path bytes, and native filesystem authority.
+This adds no special interpretation of process-specific symlink contents.
+
+`OriginalDirectoryPathsTest` compares the actual installed declarations with
+native GHC across removal and guarded read-buffer cases, checks first-installed
+entries in both backends, and retains negative owner/ABI/State tests and renamed
+context isolation.

@@ -21,7 +21,9 @@ prepareThreadInventory root = do
       manifest = output </> "manifest.json"
       source = "examples/ThreadInventory.hs"
       driver = "compiler/test-fixtures/ThreadInventoryNative.hs"
-      entries = ["selfInventory", "boundQuery", "snapshotSize", "forkSnapshot", "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork"]
+      callbackDriver = "compiler/test-fixtures/CallbackIdentityNative.hs"
+      callbackC = "compiler/test-fixtures/callback-identity.c"
+      entries = ["selfInventory", "boundQuery", "snapshotSize", "forkSnapshot", "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork", "callbackObservation"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -52,15 +54,24 @@ prepareThreadInventory root = do
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") ["+RTS", "-N2", "-RTS"] ""
   unless (observations == "10\n0\n111\n1\n42\n210\n17\n1\n") (die "Native thread inventory disagreed")
   writeFile (output </> "oracle.txt") observations
+  _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-Wall", "-Werror",
+    "-dcore-lint", "-dstg-lint", "-i" ++ (root </> "examples"), "-odir", native, "-hidir", native,
+    "-stubdir", native, root </> callbackDriver, root </> callbackC, "-o", native </> "callback-oracle"] ""
+  callbacks <- runWithTimeout (Just 30000000) root [] (native </> "callback-oracle") ["+RTS", "-N2", "-RTS"] ""
+  let expectedCallbacks = concatMap (\mask -> "(" ++ mask ++
+        ",True,True,Unmasked,True,True,True,Unmasked,True,1,8)\n(True,True)\n")
+        ["Unmasked", "MaskedInterruptible", "MaskedUninterruptible"]
+  unless (callbacks == expectedCallbacks ++ "(True,True,True,True)\n") (die "Native callback identity/mask contract disagreed")
+  writeFile (output </> "callback-oracle.txt") callbacks
   pluginFiles <- listDirectory (root </> "compiler/THC")
   coreScripts <- listDirectory (root </> "scripts")
-  let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
+  let sources = sort $ [source, driver, callbackDriver, callbackC, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ThreadInventoryFixtures.hs",
         "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
         "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
         ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
         ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
-      artifacts = [directory </> "oracle.txt"] ++
+      artifacts = [directory </> "oracle.txt", directory </> "callback-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
           suffix <- "core/ThreadInventory.json" : [entry ++ "-audit.json" | entry <- entries]]
   sourceHashes <- hashes root sources

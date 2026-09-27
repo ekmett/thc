@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver) where
 
+import Control.Exception (bracket)
 import Control.Monad (forM, unless)
 import Data.Aeson (Value(..), eitherDecodeStrict, object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -12,8 +13,8 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Time (defaultTimeLocale, formatTime, getCurrentTime)
 import FixtureSupport
-import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, listDirectory)
-import System.Environment (lookupEnv)
+import System.Directory (copyFile, createDirectoryIfMissing, doesDirectoryExist, findExecutable, listDirectory)
+import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory, takeExtension)
 import qualified System.Info as Host
@@ -34,7 +35,8 @@ prepareWindowsSmoke root = do
       oracle = native </> "native-oracle.exe"
       modules = ["build/core/THC.Prim.json", "build/core/THC.Fixtures.json"]
   createDirectoryIfMissing True (root </> native)
-  exported <- runLogged 300 root logs "export" [] "powershell.exe"
+  powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+  exported <- runLogged 300 root logs "export" [] powershell
     ["-NoProfile", "-File", root </> "compiler/export.ps1", "examples/THC/Fixtures.hs"]
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-iexamples",
@@ -154,19 +156,24 @@ prepareWindowsDriver root = do
   observed <- runLogged 60 root logs "native-run" [] (root </> native </> "completed.exe") []
   unless (BS.null (commandStdout observed)) (die "unexpected run-pure native output")
   driver <- oneLine <$> run root [] cabal ["list-bin", "exe:thc", "--disable-shared", "--with-compiler=" ++ ghc] ""
-  runs <- forM [(backend,dense) | backend <- ["ast","bytecode"], dense <- ["false","true"]] $ \(backend,dense) -> do
-    let label = backend ++ "-" ++ dense
-        output = root </> logs </> ("dist with spaces " ++ label)
-    result <- runLogged 180 root logs label
-      [("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)]
-      driver ["run", "--project-dir", root </> package, "completed",
-              "--thc-root", root, "--dist-dir", output]
-    unless (commandStdout result == commandStdout observed) (die "driver output differs from native GHC")
-    let diagnostics = [fields | line <- BSC.lines (commandStderr result),
-          Right (Object fields) <- [eitherDecodeStrict line]]
-    unless (any ((== Just (String (Text.pack backend))) . KeyMap.lookup "backend") diagnostics)
-      (die ("driver did not report selected backend: " ++ label))
-    pure result
+  -- The build script sets GHC_PKG, which would hide a broken .exe companion
+  -- lookup. Exercise ordinary compiler-relative discovery, restoring our
+  -- process environment even if a CLI regression throws.
+  runs <- bracket (lookupEnv "GHC_PKG" <* unsetEnv "GHC_PKG")
+    (maybe (unsetEnv "GHC_PKG") (setEnv "GHC_PKG")) $ \_ ->
+    forM [(backend,dense) | backend <- ["ast","bytecode"], dense <- ["false","true"]] $ \(backend,dense) -> do
+      let label = backend ++ "-" ++ dense
+          output = root </> logs </> ("dist with spaces " ++ label)
+      result <- runLogged 180 root logs label
+        [("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)]
+        driver ["run", "--project-dir", root </> package, "completed",
+                "--thc-root", root, "--dist-dir", output]
+      unless (commandStdout result == commandStdout observed) (die "driver output differs from native GHC")
+      let diagnostics = [fields | line <- BSC.lines (commandStderr result),
+            Right (Object fields) <- [eitherDecodeStrict line]]
+      unless (any ((== Just (String (Text.pack backend))) . KeyMap.lookup "backend") diagnostics)
+        (die ("driver did not report selected backend: " ++ label))
+      pure result
   drivers <- listDirectory (root </> "src/THC/Driver")
   let commands = [compiled, observed] ++ runs
       sources = ["test/fixtures/run-pure" </> path | path <- originals] ++
@@ -178,6 +185,7 @@ prepareWindowsDriver root = do
   artifactHashes <- hashes root (copied ++ [native </> "completed.exe"] ++ concatMap commandArtifacts commands)
   writeJson (root </> "build/windows-driver/provenance.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "system" .= Host.os,
-     "runs" .= (4 :: Int), "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
+     "runs" .= (4 :: Int), "packageToolSelection" .= ("compiler-companion" :: String),
+     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn "windows-driver: native GHC completion matches AST/bytecode, default/dense, paths with spaces"

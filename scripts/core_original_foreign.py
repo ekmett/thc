@@ -10,6 +10,22 @@ These declarations alone do not enable complete decoding or remote capture.
 import re
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+WINDOWS_DIRECTORY_OPERATIONS = {
+    'FindFirstFileW': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'AddrRep')),
+    'FindNextFileW': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'IntRep')),
+    'FindClose': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
+    'GetLastError': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
+}
+DIRECTORY_STREAM_OPERATIONS = {
+    'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziPosixPathZCopendir':
+        ('capi', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziCommonZCfdopendir':
+        ('capi', 'unsafe', ('Int32Rep', None), (None, 'AddrRep')),
+    'closedir': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_readdir': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    '__hscore_d_name': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
+    '__hscore_free_dirent': ('ccall', 'unsafe', ('AddrRep', None), (None,)),
+}
 WAIT_STATUS_OPERATIONS = {
     f'ghczuwrapperZC{index}ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZC{name}':
         ('capi', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep'))
@@ -94,6 +110,8 @@ TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosix
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
 OPERATIONS = {
+    **DIRECTORY_STREAM_OPERATIONS,
+    **WINDOWS_DIRECTORY_OPERATIONS,
     **TEXT_OPERATIONS,
     **BYTESTRING_DECIMAL_OPERATIONS,
     'fps_sort': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None,)),
@@ -159,6 +177,7 @@ OPERATIONS = {
     'chdir': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     'getcwd': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'symlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'rmdir': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     'readlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'mkdir': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC1ZCdirectoryzm1zi3zi10zi0zminplaceZCSystemziDirectoryziInternalziPosixZCfstatat': ('capi', 'safe', ('Int32Rep', 'AddrRep', 'AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
@@ -272,7 +291,8 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
-    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink', 'chdir', 'getcwd')},
+    **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in DIRECTORY_STREAM_OPERATIONS.items()},
+    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir')},
     ('unix-2.8.8.0-inplace', 'geteuid'): OPERATIONS['geteuid'],
     ('unix-2.8.8.0-inplace', 'mkdir'): OPERATIONS['mkdir'],
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol]
@@ -315,7 +335,7 @@ def operation_symbol(target):
     if isinstance(symbol, str):
         canonical = re.sub(r'unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC',
                            'unixzm2zi8zi8zi0zminplaceZC', symbol)
-        if canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS:
+        if canonical == UNIX_LSTAT or canonical in WAIT_STATUS_OPERATIONS or canonical in DIRECTORY_STREAM_OPERATIONS:
             return canonical
         canonical_directory = re.sub(r'directoryzm1zi3zi10zi0zm(?:inplace|[0-9a-f]+)ZC',
                                      'directoryzm1zi3zi10zi0zminplaceZC', symbol)
@@ -336,6 +356,10 @@ def ram_unit(unit):
 
 def text_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'text-2\.1\.3-(?:inplace|[0-9a-f]+)', unit) is not None
+
+
+def win32_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'Win32-2\.14\.2\.1-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
 def operation(target):
@@ -444,8 +468,11 @@ def validate(metadata, argument_reps, flags, result_rep):
                 'matching installed directory fstatat unit and symbol')
     if symbol == 'unlinkat':
         require(directory_unit(target.get('unit')), 'supported installed directory unlinkat unit')
-    if symbol in ('symlink', 'readlink', 'chdir', 'getcwd'):
+    if symbol in ('symlink', 'chdir', 'getcwd', 'rmdir'):
         require(unix_libc_unit(target.get('unit')), 'supported installed unix pathname unit')
+    if symbol == 'readlink':
+        require(target.get('unit') == 'ghc-internal' or unix_libc_unit(target.get('unit')),
+                'supported original ghc-internal or installed unix readlink unit')
     if symbol == 'geteuid':
         require(unix_libc_unit(target.get('unit')), 'supported installed unix effective UID unit')
     if symbol == 'mkdir':
@@ -455,6 +482,13 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
                 'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
                 'matching installed unix wait-status unit and symbol')
+    if symbol in DIRECTORY_STREAM_OPERATIONS:
+        unit = target.get('unit')
+        require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
+                'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
+                'matching installed unix directory-stream unit and symbol')
+    if symbol in WINDOWS_DIRECTORY_OPERATIONS:
+        require(win32_unit(target.get('unit')), 'pinned original Win32 directory unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
@@ -464,8 +498,9 @@ def validate(metadata, argument_reps, flags, result_rep):
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
+                 symbol in WINDOWS_DIRECTORY_OPERATIONS and win32_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
-                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS) and unix_libc_unit(target.get('unit')) or
+                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'rmdir', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS, *DIRECTORY_STREAM_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  symbol in ('unlinkat', DIRECTORY_FSTATAT) and directory_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),

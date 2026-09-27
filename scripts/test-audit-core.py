@@ -3576,7 +3576,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
         state = dict(kind='void', primReps=[], evaluated=False)
         capacity = dict(kind='long', primReps=['Word64Rep'], evaluated=False)
         args = {'symlink': [address, address, state], 'readlink': [address, address, capacity, state],
-                'chdir': [address, state], 'getcwd': [address, capacity, state]}[symbol]
+                'rmdir': [address, state], 'chdir': [address, state], 'getcwd': [address, capacity, state]}[symbol]
         output = dict(address, evaluated=True) if symbol == 'getcwd' else dict(kind='long', primReps=['Int32Rep'], evaluated=True)
         return dict(schema=1, target=dict(kind='static', symbol=symbol, isFunction=True,
             unit='unix-2.8.8.0-inplace'), convention='ccall', safety='unsafe',
@@ -3585,16 +3585,22 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
 
     def test_exact_original_pathname_signatures_and_result(self):
         fixture = LibdwUnavailableAuditTest()
-        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd'):
+        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             report = fixture.audit(fixture.fixture(declaration))
             self.assertTrue(report['accepted'], report)
             for unit in ('unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
                 installed = copy.deepcopy(declaration); installed['target']['unit'] = unit
                 self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'], unit)
-            for unit in ('ghc-internal', 'main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-ABCD',
+            if symbol == 'readlink':
+                installed = copy.deepcopy(declaration); installed['target']['unit'] = 'ghc-internal'
+                self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'])
+            for unit in ('main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-ABCD',
                          'unix-2.8.8.0-', 'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged'):
                 wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            if symbol != 'readlink':
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'ghc-internal'
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
             for key, value in (('convention', 'capi'), ('safety', 'safe'), ('arity', declaration['arity'] + 1), ('suppliedArity', declaration['arity'] + 1)):
                 wrong = copy.deepcopy(declaration); wrong[key] = value
@@ -3607,7 +3613,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
 
     def test_stored_and_lowered_pathname_operands_cannot_be_relabelled(self):
         fixture = LibdwUnavailableAuditTest()
-        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd'):
+        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             for index in range(declaration['arity']):
                 module = fixture.fixture(declaration)
@@ -3618,6 +3624,49 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
                 producer = ['lit', 'string-bytes', '41'] if (symbol == 'readlink' and index == 2 or symbol == 'getcwd' and index == 1) else lit(9)
                 call[2][index] = [*producer, call[2][index][2]]
                 self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'lowered'))
+
+
+class OriginalDirectoryStreamTest(unittest.TestCase):
+    @staticmethod
+    def declarations():
+        def rep(value, evaluated):
+            return dict(kind='void' if value is None else 'address' if value == 'AddrRep' else 'long',
+                        primReps=[] if value is None else [value], evaluated=evaluated)
+        for symbol, (convention, safety, arguments, result) in core_original_foreign.DIRECTORY_STREAM_OPERATIONS.items():
+            yield dict(schema=1, target=dict(kind='static', symbol=symbol, unit='unix-2.8.8.0-inplace', isFunction=True),
+                convention=convention, safety=safety, arity=len(arguments), suppliedArity=len(arguments),
+                argumentReps=[rep(value, False) for value in arguments],
+                resultRep=dict(tuple_rep(*(rep(value, True) for value in result)), evaluated=False))
+
+    def test_installed_wrapper_owner_abi_and_safety_stay_exact(self):
+        fixture = LibdwUnavailableAuditTest()
+        for declaration in self.declarations():
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], declaration)
+            installed = copy.deepcopy(declaration)
+            installed['target']['unit'] = 'unix-2.8.8.0-460b'
+            installed['target']['symbol'] = installed['target']['symbol'].replace('zminplaceZC', 'zm460bZC')
+            self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'], installed)
+            for key, value in (('safety', 'safe'), ('suppliedArity', declaration['arity'] - 1)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            for unit in ('ghc-internal', 'unix-2.8.9.0-inplace', 'unix-2.8.8.0-', 'unix-2.8.8.0-inplace\n'):
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            if declaration['convention'] == 'capi':
+                wrong = copy.deepcopy(installed); wrong['target']['unit'] = 'unix-2.8.8.0-abcd'
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
+
+    def test_output_and_state_operand_authority_cannot_be_relabelled(self):
+        fixture = LibdwUnavailableAuditTest()
+        for declaration in self.declarations():
+            for index in range(declaration['arity']):
+                module = fixture.fixture(declaration)
+                module['bindings'][0]['expr'][1][index]['rep'] = LONG
+                self.assertFalse(fixture.audit(module)['accepted'])
+            wrong = copy.deepcopy(declaration)
+            wrong['resultRep']['components'][0] = LONG
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
 
 
 class OriginalRtsDiagnosticTest(unittest.TestCase):

@@ -39,6 +39,8 @@ runTests arguments = do
     ["--installed-hydration-only"] -> pure [InstalledHydrationTests.tests]
     ["--runnable-targets-only"] -> pure [RunOptionsTests.tests env, BenchmarkTests.tests env]
     ["--acquire-project-only"] -> pure [ProjectTests.acquisitionTests env]
+    ["--exception-bridge-only"] -> pure [RuntimeShimTests.tests, ProjectTests.exceptionBridgeTests env]
+    ["--runtime-shim-only"] -> pure [RuntimeShimTests.tests]
     ["--run-options-only"] -> pure [RunOptionsTests.tests env]
     ["--run-ffi-only"] -> pure [RunOptionsTests.tests env, RunTests.tests env]
     ["--store-inventory-only"] -> pure [EmptyStoreProjectTests.tests env]

@@ -4,8 +4,8 @@
 # Asynchronous exceptions
 
 Both backends implement `fork#`, `myThreadId#` and `killThread#` using
-Truffle-managed Java threads. A `ThreadId#` contains the Java thread ID and its
-owning context. There is no separate scheduler identity. The command-line
+Truffle-managed Java threads. A `ThreadId#` names a logical guest lifetime in its
+owning context and separately records its Java carrier. The command-line
 runtime permits thread creation; an embedding must enable
 `Context.Builder.allowCreateThread(true)`.
 
@@ -26,6 +26,17 @@ their own threads. With async disabled, AST supports self-delivery but rejects
 external sends and delivery to its children before enqueueing; bytecode rejects
 `killThread#` during lowering. Nested entry does not upgrade a thread lifetime
 that was registered without external delivery support.
+
+Managed foreign reverse entries create fresh bound guest identities on the same
+carrier. They start unmasked and cannot claim the suspended caller's mailbox.
+Self-directed delivery compares logical identities, so sending to that caller
+from its callback is not a self-throw. Return retires the callback and restores
+the caller's mask, polling cell and AST stack scope. Allocation counters pause
+while a nested callback owns the carrier, including cross-context callbacks;
+resetting a suspended counter does not restart its accounting interval.
+Ordinary nested guest entries continue to share their current identity.
+Foreign-origin tracking alone does not certify a safe declaration: per-call
+callback authorization and raw C callback transport remain separate work.
 
 The [capture contract](async-continuation-contract.md) separates delivery
 eligibility from the caller's obligation to preserve a suspended computation.

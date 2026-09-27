@@ -1626,7 +1626,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
+                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio.directoryStream || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1637,6 +1637,17 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     val result = if (originalStdio.result != null) destination.single()
                         else b.createLocal("unused original State destination", "primitive")
+                    if (originalStdio.windowsDirectory) {
+                        b.beginOriginalWindowsDirectory(result, originalStdio)
+                        if (originalStdio != OriginalStdioOp.LAST_ERROR) operands[0].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        if (originalStdio == OriginalStdioOp.FIND_FIRST || originalStdio == OriginalStdioOp.FIND_NEXT)
+                            operands[1].emit(e)
+                        else b.emitLoadConstant(ManagedAddress.nullAddress())
+                        operands.last().emit(e)
+                        b.endOriginalWindowsDirectory()
+                        return@tupleExpression
+                    }
                     if (originalStdio.eventManager) {
                         // Retain source operand order before selecting typed lanes.
                         val values = operands.dropLast(1).mapIndexed { index, operand ->
@@ -1675,7 +1686,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         (0..1).map { index -> b.createLocal("original tcsetattr integer $index", "primitive").also {
                             b.beginStoreLocal(it); operands[index].emit(e); b.endStoreLocal()
                         } } else null
-                    val status = originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.PIPE || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                    val status = originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.PIPE || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
                     // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
@@ -1684,6 +1695,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
+                    else if (originalStdio.directoryPointer) b.beginOriginalDirectoryPointer(result, originalStdio)
+                    else if (originalStdio == OriginalStdioOp.FDOPENDIR) b.beginOriginalFdopendir(result)
+                    else if (originalStdio == OriginalStdioOp.READDIR) b.beginOriginalReaddir(result)
+                    else if (originalStdio == OriginalStdioOp.CLOSEDIR || originalStdio == OriginalStdioOp.FREE_DIRENT)
+                        b.beginOriginalDirectoryRelease(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.CHDIR) b.beginOriginalChdir(result)
                     else if (originalStdio == OriginalStdioOp.GETCWD) b.beginOriginalGetcwd(result)
                     else if (originalStdio == OriginalStdioOp.SYMLINK) b.beginOriginalSymlink(result)
@@ -1737,10 +1753,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (status) {
-                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.PIPE || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
+                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.PIPE || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)
-                        if (originalStdio == OriginalStdioOp.PIPE || originalStdio == OriginalStdioOp.UNLINK || originalStdio.statField) operands[0].emit(e)
+                        if (originalStdio == OriginalStdioOp.PIPE || originalStdio.pathRemoval || originalStdio.statField) operands[0].emit(e)
                         else if (originalStdio.readImage) operands[1].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
@@ -1761,6 +1777,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     } else operands.forEach { it.emit(e) }
                     if (originalStdio == OriginalStdioOp.LOCALE) b.endOriginalLocale()
+                    else if (originalStdio.directoryPointer) b.endOriginalDirectoryPointer()
+                    else if (originalStdio == OriginalStdioOp.FDOPENDIR) b.endOriginalFdopendir()
+                    else if (originalStdio == OriginalStdioOp.READDIR) b.endOriginalReaddir()
+                    else if (originalStdio == OriginalStdioOp.CLOSEDIR || originalStdio == OriginalStdioOp.FREE_DIRENT)
+                        b.endOriginalDirectoryRelease()
                     else if (originalStdio == OriginalStdioOp.CHDIR) b.endOriginalChdir()
                     else if (originalStdio == OriginalStdioOp.GETCWD) b.endOriginalGetcwd()
                     else if (originalStdio == OriginalStdioOp.SYMLINK) b.endOriginalSymlink()

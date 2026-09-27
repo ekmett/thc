@@ -14,6 +14,7 @@
     "thc.runtime.TermiosAbiTest",
     "thc.runtime.NativeFileProviderTest",
     "thc.runtime.NativeDirectoryFileSystemTest",
+    "thc.runtime.NativeDirectoryStreamsTest",
     "thc.runtime.NativeFileBuffersTest",
     "thc.runtime.NativeFdWaitTest",
     "thc.runtime.NativeEventWaitTest",
@@ -60,6 +61,17 @@
     "thc.runtime.TypedInputScalarSourceTest"
   ],
   "groups": {
+    "integer-simd": {
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "commands": [{"argv": ["sh", "-c", "set -e; fixture_mode=; case \"$(uname -m)\" in arm64|aarch64) fixture_mode=--export-only ;; esac; cabal build exe:thc-fixtures --offline; fixture_bin=$(cabal list-bin exe:thc-fixtures --offline); for family in int8x16 int16x8 word16x8 word32x4; do \"$fixture_bin\" \"$family\" $fixture_mode; done"]}],
+      "outputs": ["build/simd-int8x16", "build/simd-int16x8", "build/simd-word16x8", "build/simd-word32x4"],
+      "sources": ["compiler/test-fixtures/SimdInt8X16.hs", "compiler/test-fixtures/SimdInt8X16Native.hs",
+        "compiler/test-fixtures/SimdInt16X8.hs", "compiler/test-fixtures/SimdInt16X8Native.hs",
+        "compiler/test-fixtures/SimdWord16X8.hs", "compiler/test-fixtures/SimdWord16X8Native.hs",
+        "compiler/test-fixtures/SimdWord32X4.hs", "compiler/test-fixtures/SimdWord32X4Native.hs",
+        "test/haskell-fixtures/IntegerSimdFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"]
+    },
     "text-cbits": {
       "junit": ["thc.runtime.TextCbitsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "text-cbits"]}],
@@ -183,6 +195,7 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
       "outputs": ["build/thread-inventory"],
       "sources": ["examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+        "compiler/test-fixtures/CallbackIdentityNative.hs", "compiler/test-fixtures/callback-identity.c",
         "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
@@ -419,7 +432,9 @@
         "thc.runtime.OriginalPathAccessTest",
         "thc.runtime.OriginalUnlinkAtTest",
         "thc.runtime.OriginalFstatAtTest",
-        "thc.runtime.OriginalCurrentDirectoryTest"
+        "thc.runtime.OriginalCurrentDirectoryTest",
+        "thc.runtime.OriginalDirectoryStreamsTest",
+        "thc.runtime.OriginalDirectoryPathsTest"
       ],
       "commands": [
         {
@@ -441,7 +456,9 @@
         "build/original-path-access",
         "build/original-unlinkat",
         "build/original-fstatat",
-        "build/original-current-directory"
+        "build/original-current-directory",
+        "build/original-directory-streams",
+        "build/original-directory-paths"
       ],
       "sources": [
         "compiler/test-fixtures/OriginalPosixStatAudit.hs",
@@ -463,7 +480,11 @@
         "compiler/test-fixtures/OriginalFstatAtAudit.hs",
         "test/haskell-fixtures/OriginalFstatAtFixtures.hs",
         "compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs",
-        "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs"
+        "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
+        "compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs",
+        "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs",
+        "compiler/test-fixtures/OriginalDirectoryPathsAudit.hs",
+        "test/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"
       ]
     },
     "original-fd-ready": {

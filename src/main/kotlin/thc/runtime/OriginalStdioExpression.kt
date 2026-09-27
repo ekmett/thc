@@ -20,6 +20,44 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.windowsDirectory) {
+            val first = if (operation != OriginalStdioOp.LAST_ERROR) operands[0].executeRequiredAddress(frame) else null
+            val output = if (operation == OriginalStdioOp.FIND_FIRST || operation == OriginalStdioOp.FIND_NEXT)
+                operands[1].executeRequiredAddress(frame) else null
+            requireVoidCarrier(operands.last().execute(frame))
+            val streams = WindowsDirectoryStreams.current(this)
+            if (operation == OriginalStdioOp.FIND_FIRST)
+                FrameAccess.writeObject(frame, slots[offset], streams.first(first!!, output!!))
+            else FrameAccess.writeLong(frame, slots[offset],
+                if (operation == OriginalStdioOp.FIND_NEXT) streams.next(first!!, output!!)
+                else if (operation == OriginalStdioOp.FIND_CLOSE) streams.closeSearch(first!!)
+                else streams.error())
+            return null
+        }
+        if (operation.directoryStream) {
+            if (operation == OriginalStdioOp.FDOPENDIR) {
+                val fd = operands[0].executeRequiredLong(frame)
+                requireVoidCarrier(operands[1].execute(frame))
+                FrameAccess.writeObject(frame, slots[offset], CoreOriginalStdio.current(this).openDirectoryFd(fd))
+            } else {
+                val first = operands[0].executeRequiredAddress(frame)
+                val second = if (operation == OriginalStdioOp.READDIR) operands[1].executeRequiredAddress(frame) else null
+                requireVoidCarrier(operands.last().execute(frame))
+                if (operation == OriginalStdioOp.OPENDIR)
+                    FrameAccess.writeObject(frame, slots[offset], CoreOriginalStdio.current(this).openDirectory(first))
+                else {
+                    val streams = CoreOriginalStdio.directories(this)
+                    if (operation == OriginalStdioOp.DIRENT_NAME)
+                        FrameAccess.writeObject(frame, slots[offset], streams.name(first))
+                    else if (operation == OriginalStdioOp.READDIR)
+                        FrameAccess.writeLong(frame, slots[offset], streams.read(first, second!!))
+                    else if (operation == OriginalStdioOp.CLOSEDIR)
+                        FrameAccess.writeLong(frame, slots[offset], streams.closeStream(first))
+                    else streams.freeEntry(first)
+                }
+            }
+            return null
+        }
         if (operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT) {
             val fd = operands[0].executeRequiredLong(frame)
             val path = operands[1].executeRequiredAddress(frame)
@@ -176,10 +214,11 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val mode = operands[1].executeRequiredLong(frame)
             requireVoidCarrier(operands[2].execute(frame))
             CoreOriginalStdio.current(this).pathMode(operation, path, mode)
-        } else if (operation == OriginalStdioOp.UNLINK) {
+        } else if (operation.pathRemoval) {
             val path = operands[0].executeRequiredAddress(frame)
             requireVoidCarrier(operands[1].execute(frame))
-            CoreOriginalStdio.current(this).unlink(path)
+            if (operation == OriginalStdioOp.RMDIR) CoreOriginalStdio.current(this).removeDirectory(path)
+            else CoreOriginalStdio.current(this).unlink(path)
         } else if (operation == OriginalStdioOp.LOCK) {
             val key = operands[0].executeRequiredLong(frame)
             val device = operands[1].executeRequiredLong(frame)

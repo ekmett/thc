@@ -44,7 +44,8 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/c/bytestring-utf8-api.c",
                   "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                   "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
-                  "src/main/kotlin/thc/runtime/VectorMemory.kt")
+                  "src/main/kotlin/thc/runtime/VectorMemory.kt",
+                  "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt")
 MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
@@ -101,6 +102,13 @@ ORIGINAL_PATH_LINK_OUTPUTS = frozenset("build/original-path-link/" + name for na
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_LINK_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
+ORIGINAL_DIRECTORY_PATHS_ENTRIES = ("pathRemoveDirectory", "executableReadlink")
+ORIGINAL_DIRECTORY_PATHS_OUTPUTS = frozenset("build/original-directory-paths/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_PATHS_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_PATHS_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_ACCESS_ENTRIES = ("pathAccess",)
 ORIGINAL_PATH_ACCESS_OUTPUTS = frozenset("build/original-path-access/" + name for name in (
     "manifest.json", "pre.json", "post.json", "oracle.json",
@@ -128,6 +136,13 @@ ORIGINAL_CURRENT_DIRECTORY_OUTPUTS = frozenset("build/original-current-directory
     *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_CURRENT_DIRECTORY_ENTRIES),
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "native-child", "unix-extract", "unix-build",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_CURRENT_DIRECTORY_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
+ORIGINAL_DIRECTORY_STREAMS_ENTRIES = ("directoryOpen", "directoryFdOpen", "directoryClose", "directoryRead", "directoryName", "directoryFree")
+ORIGINAL_DIRECTORY_STREAMS_OUTPUTS = frozenset("build/original-directory-streams/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json", "unix-source.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_STREAMS_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_STREAMS_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
@@ -158,7 +173,7 @@ STABLE_NAME_OUTPUTS = frozenset("build/stable-names/" + name for name in (
         for suffix in ("core/StableNames.json", *(f"{entry}-audit.json" for entry in STABLE_NAME_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in STABLE_NAME_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
-                            "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
+                            "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork", "callbackObservation")
 SCALAR_MEMORY_ENTRIES = ("memoryCase", "pinCase", "thawCase", "shrinkCase", "differenceCase",
                          "remainderCase", "numericDifference", "numericRemainder")
 SCALAR_MEMORY_OUTPUTS = frozenset("build/scalar-memory-utilities/" + name for name in (
@@ -179,7 +194,7 @@ DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name i
         for suffix in ("core/DelimitedContinuations.json", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in DELIMITED_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
-    "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+    "manifest.json", "oracle.txt", "callback-oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
         for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
 THREAD_SCHEDULING_ENTRIES = ("emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter",
                              "pinnedFork", "otherCounter", "timedDelay")
@@ -441,6 +456,48 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.json", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
+INTEGER_SIMD_FAMILIES = {
+    "simd-int8x16": ("Int8X16", 9168), "simd-int16x8": ("Int16X8", 6032),
+    "simd-word16x8": ("Word16X8", 5116), "simd-word32x4": ("Word32X4", 4882),
+}
+
+
+def integer_simd_outputs(family, native):
+    shape, _ = INTEGER_SIMD_FAMILIES[family]
+    stages = ("pre", "post") if native else ("pre",)
+    entries = ("plusCase", "minusCase", "timesCase", *(("negateCase",) if shape.startswith("Int") else ()),
+               "packCase", "broadcastCase", "laneCase", "scalarHelperCase", "tupleHelperCase", "vectorArgument")
+    negatives = ("signedLaneTuple", "signedVectorOperand") if shape.startswith("Word") else ()
+    commands = ("ghc-version", "ghc-info", "plugin-build", *(f"{s}-export" for s in stages),
+                *(f"{s}-audit-{e}" for s in stages for e in entries),
+                *(f"{s}-{n}" for s in stages for n in negatives),
+                *(("native-build", "native-oracle") if native else ()))
+    return frozenset(f"build/{family}/{name}" for name in (
+        "provenance.json", "expected.tsv", "requests.tsv",
+        *(f"{s}-core/Simd{shape}.json" for s in stages), *(f"{s}-audit.json" for s in stages),
+        *(f"{s}-{e}-audit.json" for s in stages for e in entries),
+        *(f"{s}-MUTATED-{n}{suffix}.json" for s in stages for n in negatives for suffix in ("", "-audit")),
+        *(f"commands/{c}.{suffix}" for c in commands for suffix in ("stdout", "stderr", "command.json")),
+        *(("oracle.tsv", f"native/{family.removeprefix('simd-')}-oracle") if native else ())))
+
+
+def integer_simd_artifact_hashes(family, manifest):
+    stages = manifest.get("stages")
+    require(stages in (["pre"], ["pre", "post"]), "Invalid integer SIMD stages")
+    native = len(stages) == 2
+    _, rows = INTEGER_SIMD_FAMILIES[family]
+    require(manifest.get("modelRows") == rows and manifest.get("nativeRows") == (rows if native else None)
+            and manifest.get("modelMatched") is (True if native else None)
+            and manifest.get("positiveAuditsAccepted") is True and manifest.get("proofNegativeControlsPassed") is True,
+            "Invalid integer SIMD evidence")
+    records = manifest.get("artifacts", [])
+    hashes = {record["path"]: record["sha256"] for record in records}
+    require(len(records) == len(hashes) and set(hashes) == integer_simd_outputs(family, native) - {f"build/{family}/provenance.json"},
+            "Incomplete/unreviewed integer SIMD artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in hashes.values()), "Invalid integer SIMD hash")
+    return hashes
+
+
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
@@ -460,10 +517,12 @@ REQUIRED = tuple(sorted({
     *(ORIGINAL_PATH_STAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_MODE_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_LINK_OUTPUTS if platform.system() == "Linux" else []),
+    *(ORIGINAL_DIRECTORY_PATHS_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_ACCESS_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_UNLINKAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_FSTATAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_CURRENT_DIRECTORY_OUTPUTS if platform.system() == "Linux" else []),
+    *(ORIGINAL_DIRECTORY_STREAMS_OUTPUTS if platform.system() == "Linux" else []),
     *BYTESTRING_SORT_OUTPUTS,
     *BYTESTRING_DECIMAL_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
@@ -485,7 +544,7 @@ REQUIRED = tuple(sorted({
     *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
@@ -1376,6 +1435,20 @@ def original_path_link_artifact_hashes(manifest):
             "Invalid original path link artifact hash")
     return artifacts
 
+def original_directory_paths_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
+            manifest.get("entries") == list(ORIGINAL_DIRECTORY_PATHS_ENTRIES) and
+            manifest.get("installedArtifactsHashed") is False and manifest.get("readlinkUnit") == "ghc-internal",
+            "Invalid original directory pathname fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_DIRECTORY_PATHS_OUTPUTS - {"build/original-directory-paths/manifest.json"},
+            "Incomplete/unreviewed original directory pathname artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original directory pathname artifact hash")
+    return artifacts
+
 
 def original_current_directory_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
@@ -1393,6 +1466,24 @@ def original_current_directory_artifact_hashes(manifest):
             "Incomplete/unreviewed original current directory artifacts")
     require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
             "Invalid original current directory artifact hash")
+    return artifacts
+
+
+def original_directory_streams_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
+            manifest.get("entries") == list(ORIGINAL_DIRECTORY_STREAMS_ENTRIES) and
+            manifest.get("installedArtifactsHashed") is False and
+            manifest.get("privateRebuiltUnix") is True and
+            manifest.get("unixSourceReceipt") == "build/original-directory-streams/unix-source.json" and
+            manifest.get("unixArchiveSha256") == "a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e",
+            "Invalid original directory streams fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_DIRECTORY_STREAMS_OUTPUTS - {"build/original-directory-streams/manifest.json"},
+            "Incomplete/unreviewed original directory streams artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original directory streams artifact hash")
     return artifacts
 
 
@@ -1708,6 +1799,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_PATH_MODE_OUTPUTS
     if parts[1] == "original-path-link":
         return name in ORIGINAL_PATH_LINK_OUTPUTS
+    if parts[1] == "original-directory-paths":
+        return name in ORIGINAL_DIRECTORY_PATHS_OUTPUTS
     if parts[1] == "original-path-access":
         return name in ORIGINAL_PATH_ACCESS_OUTPUTS
     if parts[1] == "original-unlinkat":
@@ -1716,6 +1809,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_FSTATAT_OUTPUTS
     if parts[1] == "original-current-directory":
         return name in ORIGINAL_CURRENT_DIRECTORY_OUTPUTS
+    if parts[1] == "original-directory-streams":
+        return name in ORIGINAL_DIRECTORY_STREAMS_OUTPUTS
     if parts[1] == "proxy-void":
         return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":
@@ -1760,6 +1855,8 @@ def allowed_payload(name, pins):
             return True
         attempt = "/".join(parts[:3]) if parts[2].startswith("prepare-run-") else f"build/{parts[1]}/prepare-run-placeholder"
         return name in simd_bytearray_outputs(parts[1], attempt, True)
+    if parts[1] in INTEGER_SIMD_FAMILIES:
+        return name in integer_simd_outputs(parts[1], True)
     if parts[1] == "pinned-addresses":
         return name in PINNED_ADDRESS_OUTPUTS
     if parts[1] == "float-decode":
@@ -1937,6 +2034,8 @@ def inventory(root, current, read, core_files, verified=None):
         doc = json.loads(data)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in SIMD_BYTEARRAY_FAMILIES:
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
+        if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in INTEGER_SIMD_FAMILIES:
+            integer_simd_artifact_hashes(name.split("/")[1], doc)
         if name == "build/thread-inventory/manifest.json":
             thread_inventory_artifact_hashes(doc)
         if name == "build/thread-scheduling/manifest.json":
@@ -1984,6 +2083,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_path_mode_artifact_hashes(doc)
         if name == "build/original-path-link/manifest.json":
             original_path_link_artifact_hashes(doc)
+        if name == "build/original-directory-paths/manifest.json":
+            original_directory_paths_artifact_hashes(doc)
         if name == "build/original-path-access/manifest.json":
             original_path_access_artifact_hashes(doc)
         if name == "build/original-unlinkat/manifest.json":
@@ -1992,6 +2093,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_fstatat_artifact_hashes(doc)
         if name == "build/original-current-directory/manifest.json":
             original_current_directory_artifact_hashes(doc)
+        if name == "build/original-directory-streams/manifest.json":
+            original_directory_streams_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
         if name == "build/unix-wait-status/manifest.json":

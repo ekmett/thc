@@ -260,7 +260,7 @@ class ThreadSchedulingTest {
             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
             val first = start(300_000L, MaskingState.MASKED_INTERRUPTIBLE)
             awaitBlocked(first)
-            val request = state.threads.send(identity.get().javaId, "wake delay")
+            val request = state.threads.send(identity.get(), "wake delay")
             val saved = first.get(5, TimeUnit.SECONDS) as ContinuationResult
             assertSame(request, AsyncContinuations.request(saved))
             assertTrue(request.compiledCapture)
@@ -277,14 +277,14 @@ class ThreadSchedulingTest {
             identity.set(null)
             val huge = start(Long.MAX_VALUE, MaskingState.UNMASKED)
             awaitBlocked(huge) // Saturation must not turn a huge positive delay into an immediate return.
-            val hugeRequest = state.threads.send(identity.get().javaId, "cancel huge delay")
+            val hugeRequest = state.threads.send(identity.get(), "cancel huge delay")
             assertSame(hugeRequest, AsyncContinuations.request(huge.get(5, TimeUnit.SECONDS) as ContinuationResult))
 
             identity.set(null)
             val maskedStart = System.nanoTime()
             val masked = start(150_000L, MaskingState.MASKED_UNINTERRUPTIBLE)
             awaitBlocked(masked)
-            val pending = state.threads.send(identity.get().javaId, "masked delay")
+            val pending = state.threads.send(identity.get(), "masked delay")
             assertEquals(AsyncRequestState.PENDING, pending.state)
             assertSame(Unit, masked.get(5, TimeUnit.SECONDS))
             assertTrue(System.nanoTime() - maskedStart >= 150_000_000L)

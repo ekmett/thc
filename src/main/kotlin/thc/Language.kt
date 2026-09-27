@@ -436,6 +436,7 @@ class Language : TruffleLanguage<Language.State>() {
         // Ordinary/custom Context builders retain the embedding file service;
         // the CLI and explicit NativeIO factory install the fixed native provider.
         internal var nativeFiles: thc.runtime.NativeFileProvider? = null
+        internal var windowsDirectories: thc.runtime.WindowsDirectoryStreams? = null
         internal val stdio = thc.runtime.ManagedStdio(files)
         internal val signalMask = thc.runtime.ManagedSignalMask(this)
         internal val signals = thc.runtime.ManagedSignals(this, language)

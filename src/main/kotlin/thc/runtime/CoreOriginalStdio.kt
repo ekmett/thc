@@ -9,6 +9,7 @@ import thc.Language
 // Preserve the genuine installed owner; only this pinned Unix release is reviewed.
 private val unixUnit = Regex("unix-2\\.8\\.8\\.0-(?:inplace|[0-9a-f]+)")
 private val directoryUnit = Regex("directory-1\\.3\\.10\\.0-(?:inplace|[0-9a-f]+)")
+private val win32Unit = Regex("Win32-2\\.14\\.2\\.1-(?:inplace|[0-9a-f]+)")
 private val directoryWrapperUnit = Regex("directoryzm1zi3zi10zi0zm(?:inplace|[0-9a-f]+)ZC")
 private val unixWrapperUnit = Regex("unixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZC")
 internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUnit.matches(unit)
@@ -16,6 +17,12 @@ internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUni
 /** Exact pinned GHC/library declarations, not aliases for arbitrary POSIX imports. */
 internal enum class OriginalStdioOp(val symbol: String, val convention: String, val safety: String,
     val arguments: List<String?>, val result: String?, val unit: String = "ghc-internal") {
+    // GHC marshals source BOOL through Int#, while the native Windows ABI uses
+    // a 32-bit BOOL. GetLastError's DWORD retains its Word32# declaration.
+    FIND_FIRST("FindFirstFileW", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "AddrRep", "Win32-2.14.2.1-inplace"),
+    FIND_NEXT("FindNextFileW", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "IntRep", "Win32-2.14.2.1-inplace"),
+    FIND_CLOSE("FindClose", "ccall", "unsafe", listOf("AddrRep", null), "IntRep", "Win32-2.14.2.1-inplace"),
+    LAST_ERROR("GetLastError", "ccall", "unsafe", listOf(null), "Word32Rep", "Win32-2.14.2.1-inplace"),
     WCOREDUMP("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWCOREDUMP", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     WSTOPSIG("ghczuwrapperZC1ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWSTOPSIG", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     WIFSTOPPED("ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziProcessziInternalsZCWIFSTOPPED", "capi", "unsafe", listOf("Int32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
@@ -95,8 +102,17 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     IO_CONTROL_FD("setIOManagerControlFd", "ccall", "unsafe", listOf("Word32Rep", "Int32Rep", null), null),
     TIMER_CONTROL_FD("setTimerManagerControlFd", "ccall", "unsafe", listOf("Int32Rep", null), null),
     CHDIR("chdir", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    OPENDIR("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziPosixPathZCopendir", "capi", "unsafe",
+        listOf("AddrRep", null), "AddrRep", "unix-2.8.8.0-inplace"),
+    FDOPENDIR("ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziCommonZCfdopendir", "capi", "unsafe",
+        listOf("Int32Rep", null), "AddrRep", "unix-2.8.8.0-inplace"),
+    CLOSEDIR("closedir", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    READDIR("__hscore_readdir", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    DIRENT_NAME("__hscore_d_name", "ccall", "unsafe", listOf("AddrRep", null), "AddrRep", "unix-2.8.8.0-inplace"),
+    FREE_DIRENT("__hscore_free_dirent", "ccall", "unsafe", listOf("AddrRep", null), null, "unix-2.8.8.0-inplace"),
     GETCWD("getcwd", "ccall", "unsafe", listOf("AddrRep", "Word64Rep", null), "AddrRep", "unix-2.8.8.0-inplace"),
     SYMLINK("symlink", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    RMDIR("rmdir", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     READLINK("readlink", "ccall", "unsafe", listOf("AddrRep", "AddrRep", "Word64Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     MKDIR("mkdir", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     FSTATAT("ghczuwrapperZC1ZCdirectoryzm1zi3zi10zi0zminplaceZCSystemziDirectoryziInternalziPosixZCfstatat", "capi", "safe", listOf("Int32Rep", "AddrRep", "AddrRep", "Int32Rep", null), "Int32Rep", "directory-1.3.10.0-inplace"),
@@ -141,13 +157,15 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
+        windowsDirectory && value is String && win32Unit.matches(value) ||
+        this == READLINK && value == "ghc-internal" ||
         (this == UNLINKAT || this == FSTATAT) && value is String && directoryUnit.matches(value) ||
-        isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY ||
-            this == UNIX_LSTAT || currentDirectory || waitStatus || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
+        isOriginalUnixUnit(value) && !windowsDirectory && (this == CLOSE || this == DUP || this == ISATTY ||
+            this == UNIX_LSTAT || currentDirectory || directoryStream || waitStatus || this == MKDIR || this == RMDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
 
     fun matchesSymbol(value: Any?): Boolean = value == symbol ||
         this == FSTATAT && value is String && value.replace(directoryWrapperUnit, "directoryzm1zi3zi10zi0zminplaceZC") == symbol ||
-        (this == UNIX_LSTAT || waitStatus) && value is String &&
+        (this == UNIX_LSTAT || waitStatus || this == OPENDIR || this == FDOPENDIR) && value is String &&
             value.replace(unixWrapperUnit, "unixzm2zi8zi8zi0zminplaceZC") == symbol
 
     val processIdentity: Boolean get() = this == GET_PID || this == GET_EUID
@@ -173,6 +191,11 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
     val currentDirectory: Boolean get() = this == CHDIR || this == GETCWD
+    val windowsDirectory: Boolean get() = this == FIND_FIRST || this == FIND_NEXT || this == FIND_CLOSE || this == LAST_ERROR
+    val directoryStream: Boolean get() = windowsDirectory || this == OPENDIR || this == FDOPENDIR || this == CLOSEDIR ||
+        this == READDIR || this == DIRENT_NAME || this == FREE_DIRENT
+    val directoryPointer: Boolean get() = this == OPENDIR || this == DIRENT_NAME
+    val pathRemoval: Boolean get() = this == UNLINK || this == RMDIR
     val pathLink: Boolean get() = this == SYMLINK || this == READLINK
     val pathMode: Boolean get() = this == MKDIR || this == CHMOD
     val pathStat: Boolean get() = this == STAT || this == LSTAT || this == UNIX_LSTAT
@@ -198,6 +221,7 @@ internal object CoreOriginalStdio {
         finally { state.threads.leaveForeign(previous) }
     }
     @JvmStatic fun current(node: Node): ManagedStdio = Language.currentState(node).stdio
+    @JvmStatic fun directories(node: Node): NativeDirectoryStreams = NativeFileProvider.current().directoryStreams
     @JvmStatic fun locks(node: Node): RtsFileLocks = Language.currentState(node).rtsFileLocks
     @JvmStatic fun iconv(node: Node): ManagedIconv = Language.currentState(node).iconv
     @JvmStatic fun strerror(node: Node): ManagedStrerror = Language.currentState(node).strerror
@@ -215,7 +239,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.pathLink || operation.currentDirectory || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation.pathRemoval || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.pathLink || operation.currentDirectory || operation.directoryStream || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
@@ -287,7 +311,7 @@ internal object CoreOriginalStdio {
             target["kind"] == "static" && operation.acceptsUnit(target["unit"]) && target["isFunction"] == true,
             "static original installed-library function target")
         // The strict unit grammar needs only these two z-encoding substitutions.
-        requireProof(!(operation == OriginalStdioOp.UNIX_LSTAT || operation.waitStatus) || symbol == operation.symbol.replace(
+        requireProof(!(operation == OriginalStdioOp.UNIX_LSTAT || operation.waitStatus || operation == OriginalStdioOp.OPENDIR || operation == OriginalStdioOp.FDOPENDIR) || symbol == operation.symbol.replace(
             "unixzm2zi8zi8zi0zminplace", (target["unit"] as String).replace("-", "zm").replace(".", "zi")),
             "Unix wrapper owner")
         requireProof(operation != OriginalStdioOp.FSTATAT || symbol == operation.symbol.replace(

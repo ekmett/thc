@@ -339,6 +339,8 @@ tasks.withType<Test>().configureEach {
             "simd-word8x16/**/*.json", "simd-word8x16/*.tsv", "simd-word8x16/native/word8x16-oracle",
             "simd-word16x8/**/*.json", "simd-word16x8/*.tsv", "simd-word16x8/native/word16x8-oracle",
             "simd-word32x4/**/*.json", "simd-word32x4/*.tsv", "simd-word32x4/native/word32x4-oracle",
+            "simd-int8x16/commands/*", "simd-int16x8/commands/*",
+            "simd-word16x8/commands/*", "simd-word32x4/commands/*",
             "simd-int32x4-multiply/**/*.json", "simd-int32x4-multiply/*.tsv", "simd-int32x4-multiply/native/int32x4-multiply-oracle",
             "simd-int32x4-bytearray/**/*.json", "simd-int32x4-bytearray/*.tsv", "simd-int32x4-bytearray/native/int32x4-bytearray-oracle",
             "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
@@ -380,14 +382,10 @@ tasks.withType<Test>().configureEach {
             "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
             "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
             "prepare-managed-md5.py",
-            "prepare-int16x8-audit.py", "int16x8_model.py", "test-int16x8-model.py",
             "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
             "prepare-managed-address-reads.py",
             "prepare-data-to-tag.py", "test-core-data-tags.py",
-            "prepare-int8x16-audit.py", "int8x16_model.py", "test-int8x16-model.py",
             "prepare-word8x16-audit.py", "word8x16_model.py", "test-word8x16-model.py",
-            "prepare-word16x8-audit.py", "word16x8_model.py", "test-word16x8-model.py",
-            "prepare-word32x4-audit.py", "word32x4_model.py", "test-word32x4-model.py",
             "prepare-int32x4-multiply-audit.py", "int32x4_multiply_model.py", "test-int32x4-multiply-model.py",
             "test-core-vector-memory.py",
             "test-core-word32-vector-memory.py",
@@ -1059,6 +1057,53 @@ val compileNativeDirectories by tasks.registering {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-directories")) }
 tasks.processResources { dependsOn(compileNativeDirectories) }
 
+// Context-owned process transport needs libc posix_spawn and Linux pidfds.
+val compileNativeProcesses by tasks.registering {
+    dependsOn("generateStdioAbi")
+    val source = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    val output = layout.buildDirectory.dir("generated/native-processes")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            val destination = output.get().asFile.resolve("thc/native/native-process-api.so")
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-processes")) }
+tasks.processResources { dependsOn(compileNativeProcesses) }
+
+val prepareProcessLifecycleOracle by tasks.registering {
+    val source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
+    val policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
+    val transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    val output = layout.buildDirectory.dir("process-lifecycle/native")
+    val ghc = providers.environmentVariable("GHC").orElse("ghc")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.property("ghc", ghc)
+    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang)
+    outputs.dir(output)
+    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in listOf("amd64", "x86_64") }
+    doLast {
+        val version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
+        check(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
+        val destination = output.get().asFile
+        destination.mkdirs()
+        providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
+            "-outputdir", destination.path, source.asFile.path, "-o", destination.resolve("process-oracle").path) }.result.get()
+        // Signal dispositions belong to this standalone control, never the test JVM.
+        providers.exec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
+            "-o", destination.resolve("sigchld-policy").path) }.result.get()
+    }
+}
+tasks.withType<Test>().configureEach { dependsOn(prepareProcessLifecycleOracle) }
 
 // Owned native workers and asynchronous syscall guard must run as machine code.
 val compileNativeOpenRequests by tasks.registering {
@@ -1125,6 +1170,38 @@ val compileNativeProcessSignals by tasks.registering {
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-process-signals")) }
 tasks.processResources { dependsOn(compileNativeProcessSignals) }
+
+// Probe the genuine Windows search-buffer ABI with the native target headers.
+val generateWindowsDirectoryAbi by tasks.registering {
+    val source = layout.projectDirectory.file("src/main/c/windows-directory-abi.c").asFile
+    val output = layout.buildDirectory.dir("generated/windows-directory-abi")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source)
+    inputs.property("clang", clang)
+    inputs.property("host", System.getProperty("os.name") + "/" + System.getProperty("os.arch"))
+    outputs.dir(output)
+    onlyIf { windowsHost }
+    doLast {
+        fun run(command: List<String>): String = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        val target = run(listOf(clang.get(), "-dumpmachine")).trim()
+        require(System.getProperty("os.arch") in setOf("amd64", "x86_64") &&
+            target.startsWith("x86_64-") && (target.contains("windows") || target.contains("mingw"))) {
+            "Windows directory probing requires a native x86_64 Windows compiler: " + target
+        }
+        val executable = temporaryDir.resolve("windows-directory-abi.exe")
+        run(listOf(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path))
+        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
+        val document = linkedMapOf("schema" to 1, "architecture" to "x86_64", "target" to target,
+            "compilerVersion" to run(listOf(clang.get(), "--version")),
+            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
+                .joinToString("") { "%02x".format(it) }, "layout" to probe)
+        val destination = output.get().asFile.resolve("thc/native/windows-directory-abi.json")
+        destination.parentFile.mkdirs()
+        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(document)) + "\n")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/windows-directory-abi")) }
+tasks.processResources { dependsOn(generateWindowsDirectoryAbi) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
 val generateStdioAbi by tasks.registering {
@@ -1270,12 +1347,16 @@ tasks.processResources { dependsOn(generateSigsetAbi) }
 // original C resources are independent of these optional providers.
 if (windowsHost) {
     listOf("generateStdioAbi", "generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
-        "compileNativeAtomics", "compileNativeFiles", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
         .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.
-        exclude("thc/native/**", "thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
+        exclude { !it.isDirectory && it.path.startsWith("thc/native/") &&
+            it.path != "thc/native/windows-directory-abi.json" }
+        exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
     }
+} else {
+    tasks.processResources { exclude("thc/native/windows-directory-abi.json") }
 }
 
 // Native Windows checkpoint: the default test task keeps its complete contract.

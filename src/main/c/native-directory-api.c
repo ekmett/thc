@@ -142,3 +142,44 @@ int64_t thc_directory_name(int fd, char *output, uint64_t capacity) {
     close(root);
     return result;
 }
+
+/* The admitted Unix 2.8.8.0 helpers select readdir (and a no-op free_dirent)
+   on glibc >= 2.23. Keep the same EOF/errno protocol, not readdir_r semantics. */
+#if !defined(__GLIBC__) || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 23)
+#error "Directory streams require the verified glibc readdir contract"
+#endif
+
+int thc_directory_stream_open(int at, const char *name, DIR **slot) {
+    int fd = openat(at, name, O_RDONLY | O_DIRECTORY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return errno;
+    DIR *stream = fdopendir(fd);
+    if (!stream) { int error = errno; close(fd); return error; }
+    *slot = stream;
+    return 0;
+}
+
+/* Only a privately owned duplicate enters here. Failure leaves it with its
+   caller; success moves it into DIR and clears the lease before returning. */
+int thc_directory_stream_fdopen(int *lease, DIR **slot) {
+    DIR *stream = fdopendir(*lease);
+    if (!stream) return errno;
+    *lease = -1;
+    *slot = stream;
+    return 0;
+}
+
+int thc_directory_stream_read(DIR *stream, char **name, uint64_t *length, int *error) {
+    errno = *error;
+    struct dirent *entry = readdir(stream);
+    *error = errno;
+    *name = entry ? entry->d_name : NULL;
+    *length = entry ? strlen(entry->d_name) : 0;
+    return entry ? 0 : -1;
+}
+
+int thc_directory_stream_close(DIR **slot) {
+    DIR *stream = *slot;
+    *slot = NULL;
+    if (!stream) return 0;
+    return closedir(stream) ? errno : 0;
+}

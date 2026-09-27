@@ -139,7 +139,7 @@ internal class NativeDirectoryOwner(initial: Path) : Closeable {
 
 /** FileSystem callbacks may run outside an entered guest context. This small
  * native bridge therefore uses FFM, not LLVM or a guest-context callback. */
-private object NativeDirectoryApi {
+internal object NativeDirectoryApi {
     private val library: SymbolLookup = run {
         val file = Files.createTempFile("thc-directory-", ".so")
         try {
@@ -155,6 +155,40 @@ private object NativeDirectoryApi {
         FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
     private val name = linker.downcallHandle(library.find("thc_directory_name").orElseThrow(),
         FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.JAVA_LONG))
+    private val streamOpen = linker.downcallHandle(library.find("thc_directory_stream_open").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
+    private val streamFdOpen = linker.downcallHandle(library.find("thc_directory_stream_fdopen").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
+    private val streamRead = linker.downcallHandle(library.find("thc_directory_stream_read").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS))
+    private val streamClose = linker.downcallHandle(library.find("thc_directory_stream_close").orElseThrow(),
+        FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS))
+
+    fun openStream(at: Int, path: ByteArray, slot: MemorySegment) = Arena.ofConfined().use { arena ->
+        val bytes = arena.allocate(path.size.toLong()).also { it.copyFrom(MemorySegment.ofArray(path)) }
+        val error = streamOpen.invokeExact(at, bytes, slot) as Int
+        if (error != 0) throw NativeFileException("opendir", error)
+    }
+    fun fdOpenStream(lease: MemorySegment, slot: MemorySegment) {
+        val error = streamFdOpen.invokeExact(lease, slot) as Int
+        if (error != 0) throw NativeFileException("fdopendir", error)
+    }
+    fun readStream(stream: MemorySegment, errno: Int, receive: (Int, Int, ByteArray?) -> Unit) =
+        Arena.ofConfined().use { arena ->
+            val name = arena.allocate(ValueLayout.ADDRESS)
+            val size = arena.allocate(ValueLayout.JAVA_LONG)
+            val error = arena.allocate(ValueLayout.JAVA_INT).also { it.set(ValueLayout.JAVA_INT, 0, errno) }
+            val result = streamRead.invokeExact(stream, name, size, error) as Int
+            val count = size.get(ValueLayout.JAVA_LONG, 0)
+            check(result == 0 || result == -1)
+            check(count in 0L until Int.MAX_VALUE.toLong())
+            val pointer = name.get(ValueLayout.ADDRESS, 0)
+            check((result == -1) == (pointer.address() == 0L))
+            val bytes = if (result == -1) null else pointer.reinterpret(count + 1).toArray(ValueLayout.JAVA_BYTE)
+            check(bytes == null || bytes.last() == 0.toByte())
+            receive(result, error.get(ValueLayout.JAVA_INT, 0), bytes)
+        }
+    fun closeStream(slot: MemorySegment): Int = streamClose.invokeExact(slot) as Int
 
     fun open(at: Int, path: ByteArray, slot: MemorySegment) = Arena.ofConfined().use { arena ->
         check(path.isNotEmpty() && path.last() == 0.toByte() && path.dropLast(1).none { it == 0.toByte() })

@@ -33,7 +33,7 @@ class ThreadInventoryNativeTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = File(root, "build/thread-inventory")
     private val entries = listOf("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
-        "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
+        "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork", "callbackObservation")
 
     /** Fixed source calls, independent of scheduling and of measured counters.
      * awaitStatus retries through one local join, not additional guest entries. */
@@ -158,6 +158,7 @@ class ThreadInventoryNativeTest {
         assertEquals(listOf("pre", "post"), manifest["stages"])
         assertEquals("unbound forkIO, threaded RTS -N2", manifest["nativeThread"])
         val sourcePaths = setOf("examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+            "compiler/test-fixtures/CallbackIdentityNative.hs", "compiler/test-fixtures/callback-identity.c",
             "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
             "test/haskell-fixtures/ThreadInventoryFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
             "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh",
@@ -165,7 +166,7 @@ class ThreadInventoryNativeTest {
             File(root, "compiler/THC").listFiles()!!.filter { it.extension == "hs" }.map { "compiler/THC/${it.name}" } +
             File(root, "scripts").listFiles()!!.filter { it.name.startsWith("core_") && it.extension == "py" }
                 .map { "scripts/${it.name}" }
-        val artifacts = setOf("build/thread-inventory/oracle.txt") + listOf("pre", "post").flatMap { stage ->
+        val artifacts = setOf("build/thread-inventory/oracle.txt", "build/thread-inventory/callback-oracle.txt") + listOf("pre", "post").flatMap { stage ->
             (listOf("core/ThreadInventory.json") + entries.map { "$it-audit.json" }).map { "build/thread-inventory/$stage/$it" }
         }
         assertEquals(sourcePaths, (manifest["inputHashes"] as Map<*, *>).keys)
@@ -184,11 +185,95 @@ class ThreadInventoryNativeTest {
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val names = (audit["primitives"] as List<*>).map { (it as Map<*, *>)["name"] }.toSet()
             val required = when (entry) {
-                "boundQuery" -> "isCurrentThreadBound#"
+                "boundQuery", "callbackObservation" -> "isCurrentThreadBound#"
                 "selfInventory", "snapshotSize", "forkSnapshot" -> "listThreads#"
                 else -> "fork#"
             }
             assertTrue(required in names)
+        }
+    }
+
+    @Test fun genuineCallbacksStartUnmaskedAndBoundWithoutStealingCallerDelivery() {
+        provenance()
+        val expectedNative = listOf("Unmasked", "MaskedInterruptible", "MaskedUninterruptible").flatMap { mask ->
+            listOf("($mask,True,True,Unmasked,True,True,True,Unmasked,True,1,8)", "(True,True)")
+        }
+        assertEquals(expectedNative + "(True,True,True,True)", File(directory, "callback-oracle.txt").readLines())
+        for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                @Suppress("UNCHECKED_CAST")
+                val module = Json.parse(File(directory, "$stage/core/ThreadInventory.json").readText()) as Map<String, Any?>
+                val proof = ArrayCoreEvidence(module, "callbackObservation")
+                val lambda = proof.root["expr"] as List<*>
+                proof.immediateStateLambda(lambda[2])
+                assertEquals(1, proof.bindings.size)
+                assertEquals(2, proof.guestLambdas(lambda).size)
+                val calls = proof.loweredGuestLambdas(lambda).size
+                assertEquals(1, calls, "Only the original entry survives immediate State# lowering")
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val owner = Language.currentState()
+                val linked = CoreModules.reachable(module, "callbackObservation") + ("instrument" to true)
+                val program: ExecutableProgram = if (backend == "ast") Program(language, linked, true)
+                    else BytecodeProgram(language, linked, true)
+                val function = context.asValue(EntryValue(program, "callbackObservation", 1))
+                val active = targets(program.entryTarget("callbackObservation"))
+                assertEquals(calls, active.size)
+                fun count() = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                // These are existing managed reverse entries. The native C trampoline
+                // above is an independent oracle, not a THC transport under test.
+                repeat(3) {
+                    val foreign = owner.threads.enterForeign()
+                    try { assertEquals(1L, function.execute(0L).asLong()) }
+                    finally { owner.threads.leaveForeign(foreign) }
+                }
+                val beforeInstallation = count()
+                val interpretedBefore = interpretedCalls(active)
+                install(active)
+                assertTrue(function.invokeMember("compile").asBoolean())
+                assertEquals(beforeInstallation, count())
+                assertEquals(interpretedBefore, interpretedCalls(active), "Installation executes no guest calls")
+                for (mask in MaskingState.entries) {
+                    val registry = owner.threads
+                    registry.enterCurrent(mask)
+                    val caller = registry.currentIdentity()
+                    try {
+                        val queued = AtomicReference<AsyncRequest>()
+                        val sender = Thread { queued.set(registry.send(caller, "suspended caller")) }
+                        sender.start(); sender.join(5000); assertFalse(sender.isAlive)
+                        val request = queued.get()
+                        val foreign = registry.enterForeign()
+                        try {
+                            val before = count()
+                            assertEquals(8L, function.execute(7L).asLong(), "$stage/$backend/$mask native callback result")
+                            assertEquals(before + calls, count(), "First installed callback must enter its exact original root")
+                            assertTrue(active.all(::valid)); assertEquals(interpretedBefore, interpretedCalls(active))
+                            assertSame(caller, registry.currentIdentity())
+                            assertEquals(mask, owner.maskingState.get())
+                            assertEquals(AsyncRequestState.PENDING, request.state, "Callback never claims its caller's mailbox")
+                            registry.enterCurrent()
+                            val callback = registry.currentIdentity()
+                            try {
+                                owner.maskingState.set(MaskingState.MASKED_UNINTERRUPTIBLE)
+                                val nestedForeign = registry.enterForeign()
+                                try {
+                                    val nestedBefore = count()
+                                    assertEquals(8L, function.execute(7L).asLong())
+                                    assertEquals(nestedBefore + calls, count())
+                                    assertTrue(active.all(::valid)); assertEquals(interpretedBefore, interpretedCalls(active))
+                                    assertSame(callback, registry.currentIdentity())
+                                    assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, owner.maskingState.get())
+                                } finally { registry.leaveForeign(nestedForeign) }
+                            } finally { registry.leaveCurrent() }
+                        } finally { registry.leaveForeign(foreign) }
+                        assertSame(caller, registry.currentIdentity())
+                        owner.maskingState.set(MaskingState.UNMASKED)
+                        val node = program.entryTarget("callbackObservation").rootNode
+                        assertSame(request, registry.poll(node)); request.acknowledge()
+                        released(language)
+                    } finally { registry.leaveCurrent() }
+                }
+            } finally { context.leave() }
         }
     }
 

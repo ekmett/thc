@@ -951,6 +951,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
                          set(self.family("ThreadObservation")["junit"]))
         for path in ("examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+                     "compiler/test-fixtures/CallbackIdentityNative.hs", "compiler/test-fixtures/callback-identity.c",
                      "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
 
@@ -1100,7 +1101,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(39, len(consumers))
+        self.assertEqual(42, len(consumers))
+        self.assertIn("thc.runtime.ManagedWeakTest", consumers)
         self.assertIn("thc.runtime.OriginalHandleReadinessNativeTest", consumers)
         self.assertIn("thc.runtime.OriginalTermiosTest", consumers)
 
@@ -1112,6 +1114,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.OriginalUnlinkAtTest", consumers)
         self.assertIn("thc.runtime.OriginalFstatAtTest", consumers)
         self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", consumers)
+        self.assertIn("thc.runtime.OriginalDirectoryStreamsTest", consumers)
+        self.assertIn("thc.runtime.OriginalDirectoryPathsTest", consumers)
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)
@@ -1224,9 +1228,26 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                               "thc.runtime.FusedFloatingTest"},
                              set(owners["compiler/test-fixtures/" + fixture + ".hs"]["junit"]))
 
+    def test_integer_simd_producer_and_shared_model_keep_every_consumer(self):
+        expected = {"thc.runtime." + name for name in ("IntegerSimdModelTest", "SimdInt8VectorTest",
+                    "SimdInt16VectorTest", "SimdWord16VectorTest", "SimdWord32VectorTest")}
+        for path in ("test/haskell-fixtures/IntegerSimdFixtures.hs",
+                     "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"):
+            self.assertEqual(expected, set(self.policy["owners"][path]["junit"]))
+            self.assertEqual(["scripts/test-core-vectors.py"], self.policy["owners"][path]["python"])
+        self.assertLessEqual(expected, set(self.policy["owners"]["test/haskell-fixtures/Main.hs"]["junit"]))
+        self.assertIn("    IntegerSimdFixtures", (self.root / "thc.cabal").read_text())
+        callers = [(self.root / path).read_text() for path in ("scripts/prepare-tests.sh",
+                   "scripts/test-core-vectors.py", "build.gradle.kts", ".github/workflows/build.yml")]
+        for family in ("int8x16", "int16x8", "word16x8", "word32x4"):
+            for name in (f"prepare-{family}-audit.py", f"{family}_model.py", f"test-{family}-model.py"):
+                self.assertFalse((self.root / "scripts" / name).exists(), name)
+                for caller in callers:
+                    self.assertNotIn(name.removesuffix(".py"), caller)
+
     def test_grouped_vectors_keep_the_union_of_all_former_family_consumers(self):
         expected = {
-            "IntegerVectorPrimitives": ["SimdVectorTest", "SimdInt8VectorTest", "SimdInt16VectorTest",
+            "IntegerVectorPrimitives": ["IntegerSimdModelTest", "SimdVectorTest", "SimdInt8VectorTest", "SimdInt16VectorTest",
                 "SimdWord8VectorTest", "SimdWord16VectorTest", "SimdInt32VectorTest", "SimdInt32MultiplyTest",
                 "SimdInt32ByteArrayTest", "Int32VectorMemoryProofTest", "Int32VectorStorageTest",
                 "SimdWord32VectorTest", "SimdWord32ByteArrayTest", "Word32VectorMemoryProofTest",
@@ -1240,8 +1261,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         }
         python = {
             "IntegerVectorPrimitives": ["core-vector-memory", "core-vectors", "core-word32-vector-memory",
-                "int16x8-model", "int32x4-multiply-model", "int8x16-model",
-                "word16x8-model", "word32x4-model", "word8x16-model"],
+                "int32x4-multiply-model", "word8x16-model"],
             "FloatingVectorPrimitives": ["core-double-vector-memory", "core-float-vector-memory", "core-vectors",
                 "doublex2-model", "floatx4-model"],
         }

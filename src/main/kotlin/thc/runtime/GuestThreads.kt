@@ -13,9 +13,11 @@ import java.util.ArrayDeque
 import java.util.WeakHashMap
 import java.lang.ref.WeakReference
 
-/** An unlifted ThreadId# is the actual JVM thread ID scoped to its owning context. */
-internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, @Volatile var capability: Long,
-                             carrier: Thread, internal val forked: Boolean, internal val capabilityLocked: Boolean = false) {
+/** An unlifted ThreadId# names a guest lifetime, independently of its Java carrier. */
+internal class GuestThreadId(val logicalId: Long, val owner: GuestThreads, @Volatile var capability: Long,
+                             carrier: Thread, internal val forked: Boolean, internal val capabilityLocked: Boolean = false,
+                             internal val callback: Boolean = false) {
+    val javaId = carrier.threadId()
     internal val carrier = WeakReference(carrier)
     // Outcome of this fork's initial native request, not a perpetual OS promise.
     var affinityApplied = false
@@ -25,9 +27,10 @@ internal class GuestThreadId(val javaId: Long, val owner: GuestThreads, @Volatil
     internal var allocationRemaining = 0L
     internal var allocationBaseline = -1L
     internal var allocationUnavailable = false
+    internal var allocationSuspended = false
     override fun equals(other: Any?): Boolean =
-        other is GuestThreadId && owner === other.owner && javaId == other.javaId
-    override fun hashCode(): Int = 31 * System.identityHashCode(owner) + javaId.hashCode()
+        other is GuestThreadId && owner === other.owner && logicalId == other.logicalId
+    override fun hashCode(): Int = 31 * System.identityHashCode(owner) + logicalId.hashCode()
 }
 
 /** GHC 9.14.1 Constants.h why_blocked codes and PrimOps.cmm terminal overrides. */
@@ -50,7 +53,7 @@ internal class GuestThreadExtent internal constructor(private val identity: Gues
     }
 }
 
-/** Guest identities are carrier-local; logical capabilities do not resize JVM pools. */
+/** A carrier can suspend one guest in foreign code and enter a distinct bound callback. */
 internal class GuestThreads internal constructor(
     private val maskingState: ThreadLocal<MaskingState>,
     val cpuAffinity: CpuAffinity = CpuAffinity.discover(false),
@@ -84,7 +87,8 @@ internal class GuestThreads internal constructor(
         @Volatile var pending = false
     }
 
-    internal class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus, val astStack: AstStackScope)
+    internal class GuestEntry(val active: GuestThreadId?, val status: GuestThreadStatus, val astStack: AstStackScope,
+                              val prior: GuestThread?, val mask: MaskingState)
     /** Stable per-context/carrier cell, including between nested guest entries. */
     internal class PollState {
         internal var current: GuestThread? = null
@@ -94,6 +98,7 @@ internal class GuestThreads internal constructor(
     @TruffleBoundary @Synchronized internal fun pollState(thread: Thread): PollState =
         pollStates.getOrPut(thread) { PollState() }
     private val threads = HashMap<Long, GuestThread>()
+    private var nextIdentity = 1L
     // Weak keys release dead Java carriers; retained IDs keep their assigned
     // capability, which other carriers may also use.
     private val identities = WeakHashMap<Thread, GuestThreadId>()
@@ -176,28 +181,52 @@ internal class GuestThreads internal constructor(
         return state.permission == DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
     }
 
-    @TruffleBoundary @Synchronized fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false,
-                                                   externalAsync: Boolean = true, capability: Long? = null): Long {
+    @TruffleBoundary fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false,
+                                    externalAsync: Boolean = true, capability: Long? = null): Long {
+        // Origin alone is not a declaration that an FFI call is safe. A future
+        // foreign activation must authorize/reject reverse entry at this seam.
+        val callback = delivery.get()?.permission != DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
+        val suspended = if (callback) activeIdentity.get() else null
+        // Cross-context reverse entries must never acquire two registry locks.
+        suspended?.owner?.pauseAllocation(suspended)
+        try { return enterCurrentImpl(inheritedMask, forked, externalAsync, capability, callback) }
+        catch (failure: Throwable) {
+            suspended?.owner?.resumeAllocation(suspended)
+            throw failure
+        }
+    }
+
+    @Synchronized private fun enterCurrentImpl(inheritedMask: MaskingState?, forked: Boolean,
+                                              externalAsync: Boolean, capability: Long?, callback: Boolean): Long {
         check(!closed) { "Guest context has closed" }
         val current = Thread.currentThread()
-        val id = current.threadId()
-        val prior = threads[id]
-        check(prior == null || prior.thread === current) { "Java thread ID was reused before guest completion" }
-        if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
-        val identity = identities.getOrPut(current) {
+        val prior = currentSlot.get()
+        val previousMask = maskingState.get()
+        // A nested ordinary entry shares the guest. Only an actual reverse
+        // foreign entry creates a new bound TSO, including cross-context entry.
+        fun freshIdentity(): GuestThreadId {
             val selected = Math.floorMod(capability ?: nextCapability, logicalCapabilities)
             if (capability == null) nextCapability = (selected + 1L) % logicalCapabilities
-            GuestThreadId(id, this, selected, current, forked, capability != null).also { knownThreads[it] = Unit }
+            check(nextIdentity > 0L) { "Guest thread identity space exhausted" }
+            return GuestThreadId(nextIdentity++, this, selected, current, forked, capability != null, callback)
+                .also { knownThreads[it] = Unit }
         }
+        val identity = if (callback) freshIdentity() else prior?.identity ?: identities.getOrPut(current, ::freshIdentity)
         check(!identity.status.terminal) { "Terminated guest Java thread re-entered" }
+        if (callback) {
+            // GHC's createIOThread callback starts unmasked even when the
+            // suspended caller is masked. It never inherits that caller's queue.
+            maskingState.set(MaskingState.UNMASKED)
+        } else if (prior == null && inheritedMask != null) maskingState.set(inheritedMask)
         // Re-entry cannot turn a nonresumable fork into an async receiver.
-        val slot = prior ?: GuestThread(current, identity, externalAsync).also { threads[id] = it }
+        val slot = if (!callback && prior != null) prior else GuestThread(current, identity, externalAsync)
+            .also { threads[identity.logicalId] = it }
         if (slot.entries == 0) {
-            identity.allocationBaseline = GuestAllocationAccounting.sample(id)
+            identity.allocationBaseline = GuestAllocationAccounting.sample(identity.javaId)
             if (identity.allocationBaseline < 0L) identity.allocationUnavailable = true
         }
         val poll = pollState(current)
-        slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack))
+        slot.entriesPrevious.addLast(GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask))
         poll.astStack = AstStackScope()
         slot.identity.status = GuestThreadStatus.RUNNING
         activeIdentity.set(slot.identity)
@@ -205,16 +234,37 @@ internal class GuestThreads internal constructor(
         currentSlot.set(slot)
         pollState(current).current = slot
         enterGuestPermission()
-        return id
+        return identity.logicalId
     }
 
     fun registerCurrent(): Long = enterCurrent()
 
     /** myThreadId# observes an existing guest entry; it never creates a new lifetime. */
-    fun currentId(): Long = currentIdentity().javaId
+    fun currentId(): Long = currentIdentity().logicalId
 
     fun currentIdentity(): GuestThreadId = currentSlot.get()?.takeIf { it.entries > 0 }?.identity
         ?: fault("Current Java thread has not entered this guest context")
+
+    private fun settleAllocation(identity: GuestThreadId) {
+        val end = GuestAllocationAccounting.sample(identity.javaId)
+        if (end >= 0L && identity.allocationBaseline >= 0L)
+            identity.allocationRemaining -= end - identity.allocationBaseline
+        else identity.allocationUnavailable = true
+        identity.allocationBaseline = -1L
+    }
+
+    @Synchronized private fun pauseAllocation(identity: GuestThreadId) {
+        check(!identity.allocationSuspended)
+        settleAllocation(identity)
+        identity.allocationSuspended = true
+    }
+
+    @Synchronized private fun resumeAllocation(identity: GuestThreadId) {
+        identity.allocationSuspended = false
+        if (closed || identity.status.terminal) return
+        identity.allocationBaseline = GuestAllocationAccounting.sample(identity.javaId)
+        if (identity.allocationBaseline < 0L) identity.allocationUnavailable = true
+    }
 
     @TruffleBoundary @Synchronized fun allocationCounter(): Long {
         if (closed) fault("Guest context has closed")
@@ -234,7 +284,7 @@ internal class GuestThreads internal constructor(
         if (identity.owner !== this || !knownThreads.containsKey(identity))
             fault("ThreadId# belongs to another guest context")
         // A completed or currently foreign-only carrier has no active allocation extent.
-        if (threads[identity.javaId]?.identity === identity)
+        if (!identity.allocationSuspended && threads[identity.logicalId]?.identity === identity)
             identity.allocationBaseline = GuestAllocationAccounting.bytes(identity.javaId)
         identity.allocationRemaining = value
         identity.allocationUnavailable = false
@@ -249,12 +299,11 @@ internal class GuestThreads internal constructor(
         return knownThreads.keys.toTypedArray<Any?>()
     }
 
-    /** The admitted runtime has no forkOS/bound-foreign-TLS contract. A Java
-     * carrier, foreign-call extent or capability lock does not make a bound TSO. */
+    /** A reverse foreign entry is bound to its actual carrier for its lifetime.
+     * Ordinary entries and fork# still make no forkOS/native-TLS promise. */
     @TruffleBoundary @Synchronized fun isCurrentBound(): Boolean {
         if (closed) fault("Guest context has closed")
-        currentIdentity()
-        return false
+        return currentIdentity().callback
     }
 
     @TruffleBoundary @Synchronized fun status(identity: GuestThreadId): GuestThreadStatus {
@@ -287,16 +336,17 @@ internal class GuestThreads internal constructor(
         if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
         if (closed || identity.status.terminal) return null
         val carrier = identity.carrier.get() ?: return null
-        if (!carrier.isAlive || carrier.threadId() != identity.javaId || identities[carrier] !== identity) return null
-        val active = threads[identity.javaId]
+        if (!carrier.isAlive || carrier.threadId() != identity.javaId || !knownThreads.containsKey(identity)) return null
+        val active = threads[identity.logicalId]
         if (active != null && (active.identity !== identity || active.thread !== carrier)) return null
+        if (active == null && identities[carrier] !== identity) return null
         // A live host carrier can be FOREIGN between guest entries; no new lifetime is registered.
         return identity.javaId
     }
 
     @TruffleBoundary fun send(identity: GuestThreadId, payload: Any?): AsyncRequest {
         if (identity.owner !== this) fault("ThreadId# belongs to another guest context")
-        return send(identity.javaId, payload)
+        return send(identity.logicalId, payload)
     }
 
     /** The sender waits on the returned token; mere safepoint observation is not delivery. */
@@ -307,7 +357,9 @@ internal class GuestThreads internal constructor(
                 ?: return@synchronized AsyncRequest(this, targetId, null, payload).also {
                     it.transition(AsyncRequestState.TARGET_FINISHED)
                 }
-            val self = target.thread === Thread.currentThread()
+            // Another context may retain its suspended caller on this carrier.
+            // Only the active logical guest receives self-throwTo semantics.
+            val self = currentSlot.get() === target && activeIdentity.get() === target.identity
             if (!self && !target.externalAsync)
                 throw UnsupportedCore("External killThread# to a nonresumable AST fork is unsupported")
             AsyncRequest(this, targetId, target.thread, payload, self).also {
@@ -348,7 +400,7 @@ internal class GuestThreads internal constructor(
      */
     @TruffleBoundary @Synchronized internal fun interruptibleForeignPending(): Boolean {
         val slot = currentSlot.get() ?: return false
-        if (closed || threads[Thread.currentThread().threadId()] !== slot ||
+        if (closed || threads[slot.identity.logicalId] !== slot ||
             slot.claimed != null || slot.queue.isEmpty()) return false
         return slot.queue.first().forceSelf || maskingState.get() != MaskingState.MASKED_UNINTERRUPTIBLE
     }
@@ -360,8 +412,8 @@ internal class GuestThreads internal constructor(
     ): AsyncRequest? {
         if (closed) return null
         val current = Thread.currentThread()
-        if (target.thread !== current || threads[current.threadId()] !== target ||
-            delivery.get()?.permission != DeliveryPermission.GUEST ||
+        if (target.thread !== current || currentSlot.get() !== target || threads[target.identity.logicalId] !== target ||
+            delivery.get()?.permission != DeliveryPermission.GUEST || activeIdentity.get() !== target.identity ||
             target.claimed != null || target.queue.isEmpty()) return null
         val request = target.queue.first()
         val allowed = request.forceSelf || when (maskingState.get()) {
@@ -381,6 +433,7 @@ internal class GuestThreads internal constructor(
     @TruffleBoundary fun leaveCurrent(outcome: GuestThreadStatus = GuestThreadStatus.FINISHED) {
         require(outcome.terminal)
         leaveGuestPermission()
+        var resumed: GuestThreadId? = null
         val finished = synchronized(this) {
             val current = Thread.currentThread()
             val target = currentSlot.get()
@@ -394,22 +447,20 @@ internal class GuestThreads internal constructor(
                 if (!closed) target.identity.status = previous.status
                 return@synchronized emptyList<AsyncRequest>()
             }
-            val allocationEnd = GuestAllocationAccounting.sample(current.threadId())
-            if (allocationEnd >= 0L && target.identity.allocationBaseline >= 0L)
-                target.identity.allocationRemaining -= allocationEnd - target.identity.allocationBaseline
-            else target.identity.allocationUnavailable = true
-            target.identity.allocationBaseline = -1L
+            settleAllocation(target.identity)
             target.identity.lastOutcome = outcome
-            if (!closed) target.identity.status = if (target.identity.forked) outcome else GuestThreadStatus.FOREIGN
-            threads.remove(current.threadId())
+            if (!closed) target.identity.status = if (target.identity.forked || target.identity.callback) outcome else GuestThreadStatus.FOREIGN
+            threads.remove(target.identity.logicalId)
+            if (previous.prior == null) currentSlot.remove() else currentSlot.set(previous.prior)
+            pollState(current).current = previous.prior
+            if (target.identity.callback) {
+                maskingState.set(previous.mask)
+                resumed = previous.active
+            } else maskingState.remove()
             target.pending = false
             target.queue.toList().also { target.queue.clear(); target.claimed = null }
         }
-        if (currentSlot.get()?.entries == 0) {
-            currentSlot.remove()
-            pollState(Thread.currentThread()).current = null
-            maskingState.remove()
-        }
+        resumed?.let { it.owner.resumeAllocation(it) }
         finished.forEach { it.finish(AsyncRequestState.TARGET_FINISHED) }
     }
 

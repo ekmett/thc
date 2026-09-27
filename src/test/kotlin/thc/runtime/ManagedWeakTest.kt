@@ -153,7 +153,7 @@ class ManagedWeakTest {
             try {
                 capability = owner.mainThreadKey(weak, threads)
                 assertEquals(Thread.currentThread().threadId(), capability.liveJavaId(), "Native main-thread projection reads KEY, not value")
-                val impostor = GuestThreadId(key.javaId, threads, key.capability, Thread.currentThread(), false)
+                val impostor = GuestThreadId(key.logicalId, threads, key.capability, Thread.currentThread(), false)
                 assertEquals(key, impostor, "Numeric equality alone must not establish canonical identity")
                 assertNull(threads.liveJavaId(impostor))
                 assertNull(owner.mainThreadKey(owner.make(impostor, Any(), null), threads).liveJavaId())
@@ -412,6 +412,23 @@ class ManagedWeakTest {
             assertTrue(primitives.containsAll(originalOps.map { it.primitive }))
             assertFalse("addCFinalizerToWeak#" in primitives)
             val merged = CoreModules.merge(paths.map { json(File(root, it)) })
+            val proof = ArrayCoreEvidence(merged, "weakComposite")
+            val lambda = proof.root["expr"] as List<*>
+            val exported = proof.guestLambdas(lambda)
+            assertEquals(listOf(listOf("Int#"), listOf("State# RealWorld"), listOf("State# RealWorld")),
+                exported.map { (it[1] as List<Map<*, *>>).map { formal -> formal["type"] } })
+            assertSame(exported[1], proof.immediateStateLambda(lambda[2]),
+                "Only the exact void State# application executes in-frame")
+            val registration = proof.nodes(lambda).single { expression ->
+                expression.firstOrNull() == "app" &&
+                    (expression.getOrNull(1) as? List<*>)?.take(2) == listOf("prim", "mkWeak#") &&
+                    (((expression[2] as List<*>)[2]) as? List<*>)?.firstOrNull() == "lam"
+            }
+            assertSame(exported[2], (registration[2] as List<*>)[2], "Retain the real finalizer action root")
+            val lowered = proof.loweredGuestLambdas(lambda)
+            assertEquals(listOf(exported[0], exported[2]), lowered)
+            val expectedEntries = lowered.size.toLong()
+            assertEquals(2L, expectedEntries, "Public input and returned finalizer execute once; runRW is in-frame")
             for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -440,7 +457,7 @@ class ManagedWeakTest {
                             (active + original).distinct().map { target -> target.rootNode.name + ":valid=" +
                                 target.javaClass.getMethod("isValidLastTier").invoke(target) })
                         // EntryRoot does not increment compiledEntries; this is guest entry evidence.
-                        assertEquals(3L, delta, "$stage/$backend compiled input/runRW/returned-action guest entries")
+                        assertEquals(expectedEntries, delta, "$stage/$backend compiled input/returned-action guest entries")
                         assertSame(original, program.entryTarget("weakComposite"))
                         assertEquals(active, activeTargets(host), "$stage/$backend target graph changed")
                         (active + original).distinct().forEach(::valid)

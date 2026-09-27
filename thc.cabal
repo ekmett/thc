@@ -88,6 +88,8 @@ extra-source-files:
   compiler/test-fixtures/ThreadSchedulingNative.hs
   docs/thread-scheduling.md
   compiler/test-fixtures/ThreadInventoryNative.hs
+  compiler/test-fixtures/CallbackIdentityNative.hs
+  compiler/test-fixtures/callback-identity.c
   docs/thread-inventory.md
   compiler/test-fixtures/SimdWideFloatFma.hs
   compiler/test-fixtures/SimdWideFloatFmaNative.hs
@@ -155,10 +157,13 @@ extra-source-files:
   compiler/test-fixtures/RtsDiagnosticsNative.hs
   compiler/test-fixtures/OriginalFcntlAudit.hs
   compiler/test-fixtures/OriginalPathLinkAudit.hs
+  compiler/test-fixtures/OriginalDirectoryPathsAudit.hs
   compiler/test-fixtures/OriginalPathAccessAudit.hs
   compiler/test-fixtures/OriginalUnlinkAtAudit.hs
   compiler/test-fixtures/OriginalFstatAtAudit.hs
   compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs
+  compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs
+  compiler/test-fixtures/WindowsDirectoryAudit.hsc
   compiler/test-fixtures/OriginalFcntlNative.hs
   compiler/test-fixtures/OriginalErrnoAudit.hs
   compiler/test-fixtures/OriginalErrnoNative.hs
@@ -829,6 +834,7 @@ executable thc-fixtures
     SimdWideArrayFixtures
     SimdAddressFixtures
     SimdArithmeticFixtures
+    IntegerSimdFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures
@@ -845,10 +851,13 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPathModeFixtures
     OriginalPathLinkFixtures
+    OriginalDirectoryPathsFixtures
     OriginalPathAccessFixtures
     OriginalUnlinkAtFixtures
     OriginalFstatAtFixtures
     OriginalCurrentDirectoryFixtures
+    OriginalDirectoryStreamsFixtures
+    WindowsDirectoryFixtures
     OriginalPathStatFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures

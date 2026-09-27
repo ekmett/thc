@@ -49,7 +49,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         internal fun createContext(endpoints: Set<StandardEndpoint>,
                                    profile: ContextProfile = ContextProfile.NATIVE,
                                    ffiMode: FfiMode = FfiMode.NATIVE): Context {
-            if (!NativeIO.supportedHost())
+            if (!NativeIO.supportedPosixHost())
                 throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
             val filesystem = NativeFileSystem(endpoints)
             val context = try {
@@ -86,13 +86,14 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     private val library: Any
     private val leases = linkedSetOf<NativeFileLease>()
     private var disposed = false
+    internal val directoryStreams = NativeDirectoryStreams(directory)
     private val statSize: Int
     private val termiosSize: Int
 
     init {
         if (!env.isNativeAccessAllowed || !env.isFileIOAllowed)
             throw SecurityException("Native files require explicit file IO and native access")
-        if (!NativeIO.supportedHost())
+        if (!NativeIO.supportedPosixHost())
             throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
         val bytes = javaClass.getResourceAsStream("/thc/native/native-file-api.so")?.use { it.readBytes() }
             ?: fault("Missing native file provider bridge")
@@ -408,6 +409,7 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
             leases.toList()
         }
         var failed: Throwable? = null
+        try { directoryStreams.close() } catch (failure: Throwable) { failed = failure }
         for (lease in pending) try { retire(lease) } catch (failure: Throwable) {
             if (failed == null) failed = failure else if (failed !== failure) failed.addSuppressed(failure)
         }

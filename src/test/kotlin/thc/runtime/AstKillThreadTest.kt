@@ -197,7 +197,7 @@ class AstKillThreadTest {
                             request.acknowledge()
                             assertSame(Unit, continuation.continueWith(Unit))
                         }
-                        assertEquals(self, selfId.javaId)
+                        assertEquals(self, selfId.logicalId)
                         val target = captured.entryTarget("direct")
                         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
