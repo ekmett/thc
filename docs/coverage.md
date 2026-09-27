@@ -235,9 +235,3 @@ The exporter auditor checks source-level representations; lowering shares a
 `Long` carrier across integral annotations and lets the selected operation
 supply signedness and narrowing. Physical carrier, arity, aggregate and vector
 shape checks remain meaningful runtime boundaries.
-
-## Research history
-
-The [archived coverage guide](../research/coverage-checkpoint.md) preserves the
-implementation sequence, historical test counts and original frontier reports.
-Those checkpoints are not current validation results.

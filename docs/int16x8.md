@@ -149,9 +149,3 @@ and allocated XMM word instructions. It disallows surviving vector/carrier/array
 allocations, lane boxing, field traffic and fallback calls, while allowing the
 public host Long result box. Instrumentation is disabled only for these graph
 captures, not for the correctness tests above.
-
-## Research history
-
-The [foundation checkpoint](../research/int16x8-checkpoint.md) preserves the
-original representation discussion, measurements and graph evidence at their
-recorded revisions. Those results are not a validation run of the current tree.

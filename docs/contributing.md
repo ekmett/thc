@@ -199,10 +199,6 @@ The retained merge-bot code, workflow and `auto-merge` label are not an active
 submission or integration path. Do not queue work, dispatch the retained bot or
 wait for its historical status/merge sequence as a publication prerequisite.
 
-The [archived merge-bot contract](../research/merge-bot-workflow.md) preserves the
-old automation, permissions and queue instructions for reference. It is not
-current contributor guidance and does not authorize re-enabling the automation.
-
 ## Broader local checks
 
 To reproduce the main checks locally:

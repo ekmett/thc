@@ -237,9 +237,3 @@ literals. Its arithmetic controls accept Natural addition statically and retain
 only the exact missing `raiseUnderflow` worker for Integer addition; that fixture's
 native/JVM execution corpus remains literals and conversions. Original GMP
 execution has [separate provider tests](gmp-limb-provider.md).
-
-## Research history
-
-The [archived library guide](../research/library-coverage-checkpoint.md) preserves
-original export failures, compiler investigations and recorded test runs. Those
-measurements describe their recorded revisions, not validation of the current tree.

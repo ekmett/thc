@@ -71,10 +71,3 @@ reports. Do not use `--rerun-tasks` to select the mode or force unrelated
 compilation. For the full suite with fresh native/Core fixtures, use the
 [development workflow](contributing.md#build-and-test); selected synthetic
 protocol checks are not a replacement for original-GHC coverage.
-
-## Historical evidence
-
-The [reference-return v3 integration record](../research/handoff-integration-checkpoint.md)
-retains its exact revisions, mode results and original command sequence.
-Those historical counts and commands are not the current suite inventory or
-recommended test workflow; use the named mode tasks above.

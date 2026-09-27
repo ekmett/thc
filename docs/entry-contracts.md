@@ -64,7 +64,5 @@ establish those outcomes separately.
 genuine export evidence and runtime entry routes. They retain separate checks
 for PAP laziness, strict failures, sharing and self-call restoration.
 
-The [entry-contract and storage investigation](../research/entry-contracts-checkpoint.md)
-preserves its original comparisons, allocation probes and rejected experiments.
-Those historical observations do not establish current workload performance or
-the current test inventory.
+The [performance questions](../research/open-questions.md#residual-calls-and-allocation) cover how to
+evaluate residual costs without confusing stronger proofs with a measured gain.
