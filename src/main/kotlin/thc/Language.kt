@@ -34,6 +34,8 @@ import thc.runtime.CoreRepresentation
 import thc.runtime.IoMainRoot
 import thc.runtime.TargetLayout
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
@@ -294,7 +296,9 @@ object CoreModules {
         }
         while (pending.isNotEmpty()) {
             owner = pending.removeFirst()
-            visit(byId.getValue(owner)["expr"] as List<Any?>, emptySet())
+            val body = byId.getValue(owner)["expr"] as List<Any?>
+            if (body is CoreBindingBody) body.visitForLinking { visit(it, emptySet()) }
+            else visit(body, emptySet())
         }
         require(missing.isEmpty()) {
             "Unlinked Core globals: " + missing.entries.joinToString { (id, uses) -> "$id referenced by ${uses.joinToString()}" }
@@ -320,7 +324,8 @@ object CoreModules {
      */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
-                shutdownEntry: String? = null, asyncExceptions: Boolean? = null): String {
+                shutdownEntry: String? = null, asyncExceptions: Boolean? = null,
+                jsonSidecars: Map<String, String>? = null): String {
         require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
             "Executable shutdown requires a distinct IO entry"
         }
@@ -333,7 +338,8 @@ object CoreModules {
         if (ioMain) settings["ioMain"] = true
         if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
         if (asyncExceptions != null) settings["asyncExceptions"] = asyncExceptions
-        return requestDocument(paths, settings)
+        return if (jsonSidecars == null) requestDocument(paths, settings)
+            else indexedRequestDocument(paths, jsonSidecars, settings)
     }
 
     internal fun managedExportRequest(paths: List<String>, backend: String, instrument: Boolean): String =
@@ -341,7 +347,53 @@ object CoreModules {
             "instrument" to instrument, "strictLink" to true))
 
     @Suppress("UNCHECKED_CAST")
-    internal fun visitRequestModules(input: Map<String, Any?>, accept: (Map<String, Any?>) -> Unit): TargetLayout? {
+    internal fun visitRequestModules(input: Map<String, Any?>, accept: (Map<String, Any?>) -> Unit): TargetLayout? =
+        visitRequestModules(input, { _, _ -> }, accept)
+
+    @Suppress("UNCHECKED_CAST")
+    internal fun visitRequestModules(input: Map<String, Any?>,
+        indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
+        accept: (Map<String, Any?>) -> Unit): TargetLayout? {
+        val files = input["indexedModuleFiles"]
+        if (files != null) {
+            require(files is List<*> && files.isNotEmpty() &&
+                listOf("modules", "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules", "targetLayout")
+                    .all { input[it] == null }) { "Indexed module request must not mix input protocols" }
+            val adapter = CoreJsonBindings(input["sourceNotesEnabled"] != false)
+            val opened = ArrayList<CoreJsonIndex>()
+            try {
+                for (raw in files) {
+                    val file = raw as? Map<*, *> ?: error("Invalid indexed Core descriptor")
+                    require(file.keys == setOf("path", "sha256", "sidecar", "sidecarSha256", "capability")) {
+                        "Invalid indexed Core descriptor fields"
+                    }
+                    val path = file["path"] as? String ?: error("Missing indexed Core path")
+                    val sha = file["sha256"] as? String ?: error("Missing indexed Core identity")
+                    val sidecar = file["sidecar"] as? String ?: error("Missing JSON sidecar path")
+                    val sidecarSha = file["sidecarSha256"] as? String ?: error("Missing JSON sidecar identity")
+                    val capability = file["capability"] as? String ?: error("Missing indexed Core capability")
+                    require(sha.matches(Regex("[0-9a-f]{64}")) && sidecarSha.matches(Regex("[0-9a-f]{64}")) &&
+                        MessageDigest.isEqual(capability.toByteArray(Charsets.US_ASCII),
+                            indexedCapability(path, sha, sidecar, sidecarSha).toByteArray(Charsets.US_ASCII))) {
+                        "Invalid indexed Core capability"
+                    }
+                    val indexBytes = Files.readAllBytes(Path.of(sidecar))
+                    require(sha256(indexBytes) == sidecarSha) { "JSON sidecar changed after request: $sidecar" }
+                    val source = indexBytes.inputStream().use { CoreJsonIndex.loadSidecar(Path.of(path), it) }
+                    opened += source
+                    require(source.sha256() == sha) { "Core JSON changed after request: $path" }
+                    accept(adapter.module(source.root) + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"]))
+                    indexed(source, adapter)
+                }
+                // These are byte snapshots, not open file handles. Parsed Engine
+                // roots own their immutable sources; Context disposal must not
+                // close another Context's shared parse plan. GC releases them.
+                return null
+            } catch (failure: Throwable) {
+                opened.forEach(CoreJsonIndex::close)
+                throw failure
+            }
+        }
         val manifest = input["packageManifest"]
         if (manifest != null) {
             require(manifest is String && input["modules"] == null && input["targetLayout"] == null) {
@@ -374,6 +426,31 @@ object CoreModules {
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
         modules.forEach { accept(it + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"])) }
         return input["targetLayout"]?.let(TargetLayout::fromDocument)
+    }
+
+    private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
+        .joinToString("") { "%02x".format(it) }
+    private fun indexedCapability(path: String, sha: String, sidecar: String, sidecarSha: String): String =
+        packageCapability("indexed-json:" + Json.stringify(listOf(path, sidecar, sidecarSha)), sha)
+
+    /** Opt-in host path: exact JSON and explicit producer sidecars, without
+     * embedding or parsing a module body while assembling the load request.
+     * Legacy whole-file hashes are still paid, here and at checked replay.
+     */
+    private fun indexedRequestDocument(paths: List<String>, sidecars: Map<String, String>, settings: Map<String, Any>): String {
+        require(paths.isNotEmpty() && paths.distinct().size == paths.size &&
+            paths.none { it.startsWith("@") } && sidecars.keys == paths.toSet()) {
+            "Indexed loading currently requires explicit loose JSON/sidecar pairs"
+        }
+        val files = paths.map { raw ->
+            val path = Path.of(raw).toRealPath().toString()
+            val sidecar = Path.of(sidecars.getValue(raw)).toRealPath().toString()
+            val sha = sha256(Files.readAllBytes(Path.of(path)))
+            val sidecarSha = sha256(Files.readAllBytes(Path.of(sidecar)))
+            mapOf("path" to path, "sha256" to sha, "sidecar" to sidecar, "sidecarSha256" to sidecarSha,
+                "capability" to indexedCapability(path, sha, sidecar, sidecarSha))
+        }
+        return Json.stringify(settings + mapOf("indexedModuleFiles" to files))
     }
 
     private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {
@@ -619,13 +696,42 @@ class Language : TruffleLanguage<Language.State>() {
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
-        val layout = CoreModules.visitRequestModules(input) { merger.add(it) }
+        val indexedSources = ArrayList<CoreJsonIndex>()
+        val indexedAdapters = linkedSetOf<CoreJsonBindings>()
+        val layout = CoreModules.visitRequestModules(input, indexed = { source, adapter ->
+            indexedSources += source
+            indexedAdapters += adapter
+        }) { merger.add(it) }
+        val loadingStatistics: () -> Map<String, Any> = {
+            val sources = indexedSources.map(CoreJsonIndex::statistics)
+            val adapters = indexedAdapters.map(CoreJsonBindings::statistics)
+            mapOf("jsonSourceBytes" to sources.sumOf { it.sourceByteSize.toLong() },
+                "jsonIndexPrimitiveBytes" to sources.sumOf { it.indexByteSize },
+                "jsonSidecarBytes" to sources.sumOf { it.serializedByteSize ?: 0L },
+                "jsonSourceFileBytesRead" to sources.sumOf { it.sourceFileBytesRead },
+                "jsonSourceHashBytesScanned" to sources.sumOf { it.sourceHashBytesScanned },
+                "jsonStructuralBytesScanned" to sources.sumOf { it.structuralBytesScanned },
+                "jsonIndexSourceBytesScanned" to sources.sumOf { it.indexSourceBytesScanned },
+                "jsonDecodedSpanCount" to sources.sumOf { it.decodedSpanCount },
+                "jsonDecodedByteCount" to sources.sumOf { it.decodedByteCount },
+                "jsonNavigationByteReads" to sources.sumOf { it.navigationByteReads },
+                "jsonRegeneratedSourceBytes" to sources.sumOf { it.regeneratedSourceBytes },
+                "jsonBindingHeaders" to adapters.sumOf { it.bindingHeaders },
+                "jsonBodyMaterializations" to adapters.sumOf { it.bodyMaterializations },
+                "jsonExpressionViews" to adapters.sumOf { it.expressionViews },
+                "jsonLinkingExpressionViews" to adapters.sumOf { it.linkingExpressionViews },
+                "jsonScalarDecodes" to adapters.sumOf { it.scalarDecodes },
+                "jsonLinkingScalarDecodes" to adapters.sumOf { it.linkingScalarDecodes },
+                "jsonSummaryExpressionsVisited" to adapters.sumOf { it.summaryExpressionsVisited },
+                "jsonCanonicalStrings" to adapters.sumOf { it.canonicalStrings })
+        }
         val linked = CoreModules.reachable(merger.finish(),
             if (shutdownEntry == null) listOf(entry) else listOf(entry, shutdownEntry),
             input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
-            (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
+            (if (layout == null) emptyMap() else mapOf("targetLayout" to layout)) +
+            (if (indexedSources.isEmpty()) emptyMap() else mapOf("coreLoadingStatistics" to loadingStatistics))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>

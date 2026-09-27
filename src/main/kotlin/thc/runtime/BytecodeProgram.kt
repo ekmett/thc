@@ -34,12 +34,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         this(language, moduleData, null, enableAsync)
     internal constructor(language: Language, moduleData: Map<String, Any?>, checkpoint: BytecodeCheckpoint) :
         this(language, moduleData, checkpoint, false)
-    private val delimited = DelimitedControl.contains(moduleData["bindings"])
+    private val delimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
+        val body = (binding as? Map<*, *>)?.get("expr")
+        if (body is thc.CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(binding)
+    } ?: DelimitedControl.contains(moduleData["bindings"])
     private val resumable = checkpoint != null || enableAsync || delimited
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val sources = CoreSources(moduleData)
     private val metrics = Metrics(moduleData["instrument"] != false)
+    private val loadingStatistics = moduleData["coreLoadingStatistics"] as? (() -> Map<String, Any>)
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()
     private val bindings = moduleData["bindings"] as? List<Map<String, Any?>> ?: throw RuntimeFault("Missing bindings")
@@ -56,8 +60,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
+    private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors)
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val roots = arrayListOf<BytecodeRoot>()
+    private var initializedBindingCount = 0
+    private val preparationLock = Any()
     private var nextLocal = 0
     private var localJoinCount = 0
 
@@ -198,57 +205,103 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                     val captures: List<Local>, val hasVectorCaptures: Boolean = false)
 
     init {
-        ArrayOp.validateApplications(bindings)
-        CoreStackForeign.validateHeads(bindings)
-        CoreStackInfoForeign.validateHeads(bindings)
-        CoreOriginalStdio.validateHeads(bindings)
-        CoreProcessForeign.validateHeads(bindings)
-        CoreStablePointers.validateHeads(bindings)
-        CoreRtsShutdown.validateHeads(bindings)
-        CoreMainThreadForeign.validateHeads(bindings)
-        CoreBoundThreadForeign.validateHeads(bindings)
-        CoreStringRtsForeign.validateHeads(bindings)
-        CoreEnvironmentForeign.validateHeads(bindings)
-        CoreRtsDiagnosticForeign.validateHeads(bindings)
-        CoreRtsArgumentsForeign.validateHeads(bindings)
-        CoreManagedFiles.validateHeads(bindings)
-        CoreMd5Foreign.validateHeads(bindings)
-        CoreGmpForeign.validateHeads(bindings)
-        CoreLibdwForeign.validateHeads(bindings)
-        CoreNativeAllocationForeign.validateHeads(bindings)
-        CoreMemmoveForeign.validateHeads(bindings)
-        CoreMemcpyForeign.validateHeads(bindings)
-        CoreSignalForeign.validateHeads(bindings)
-        if (!diagnosticUnsupported) {
-            CoreRepresentations.validateAggregates(bindings, constructors)
-            CoreInputCalls.validate(bindings, constructors)
-        }
-        val scope = Scope(FunctionContext(0))
-        val initializers = bindings.map { binding ->
-            CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
-            val expr = binding["expr"] as List<Any?>
-            CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
-            val bindingScope = scope.withSource(sources.binding(binding))
-            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, bindingScope, binding["name"] as String)
-            else argument(expr, bindingScope, representation(binding), binding["name"] as String)
-        }
-        val body = Expression { e ->
-            val b = e.builder
-            b.beginBlock()
-            bindings.forEachIndexed { index, binding ->
-                b.beginInitializeGlobal(globals.getValue(binding["id"] as String))
-                initializers[index].emit(e)
-                b.endInitializeGlobal()
+        val eager = ArrayList<Map<String, Any?>>()
+        for (binding in bindings) {
+            val source = binding["expr"] as? thc.CoreBindingBody
+            // Keep strict and inert-value initialization on the original path.
+            // Deferred functions/CAFs can be published without running a guest
+            // initializer root (and its async polls) during code preparation.
+            if (source == null || !representation(binding) || source.header.tag in listOf("lit", "con", "void")) {
+                eager += binding
+                continue
             }
-            b.emitLoadConstant(Unit)
-            b.endBlock()
+            globals.getValue(binding["id"] as String).defer(preparationLock) {
+                validateBindings(listOf(binding))
+                prepareClosedBinding(binding).also { value ->
+                    CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
+                    initializedBindingCount++
+                }
+            }
         }
-        // Publication stores lazy values, so the initializer deliberately has no WHNF return obligation.
-        val initializer = build("Core module initialization", scope.function, body, forceResult = false)
-        Calls.target(initializer, arrayOf(0L))
-        bindings.forEach { binding ->
-            CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read(),
-                globalArityCertificates)
+        validateBindings(eager)
+        if (eager.isNotEmpty() || bindings.isEmpty()) {
+            val scope = Scope(FunctionContext(0))
+            val initializers = eager.map { binding ->
+                CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
+                val expr = binding["expr"] as List<Any?>
+                CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
+                val bindingScope = scope.withSource(sources.binding(binding))
+                if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, bindingScope, binding["name"] as String)
+                else argument(expr, bindingScope, representation(binding), binding["name"] as String)
+            }
+            val body = Expression { e ->
+                val b = e.builder
+                b.beginBlock()
+                eager.forEachIndexed { index, binding ->
+                    b.beginInitializeGlobal(globals.getValue(binding["id"] as String))
+                    initializers[index].emit(e)
+                    b.endInitializeGlobal()
+                }
+                b.emitLoadConstant(Unit)
+                b.endBlock()
+            }
+            // Publication stores lazy values, so the initializer deliberately has no WHNF return obligation.
+            val initializer = build("Core module initialization", scope.function, body, forceResult = false)
+            Calls.target(initializer, arrayOf(0L))
+            eager.forEach { binding ->
+                CoreFunctionIdentity.install(moduleData, binding, globals.getValue(binding["id"] as String).read(),
+                    globalArityCertificates)
+                initializedBindingCount++
+            }
+        }
+    }
+
+    private fun validateBindings(requested: List<Map<String, Any?>>) {
+        if (requested.isEmpty()) return
+        ArrayOp.validateApplications(requested)
+        CoreStackForeign.validateHeads(requested)
+        CoreStackInfoForeign.validateHeads(requested)
+        CoreOriginalStdio.validateHeads(requested)
+        CoreProcessForeign.validateHeads(requested)
+        CoreStablePointers.validateHeads(requested)
+        CoreRtsShutdown.validateHeads(requested)
+        CoreMainThreadForeign.validateHeads(requested)
+        CoreBoundThreadForeign.validateHeads(requested)
+        CoreStringRtsForeign.validateHeads(requested)
+        CoreEnvironmentForeign.validateHeads(requested)
+        CoreRtsDiagnosticForeign.validateHeads(requested)
+        CoreRtsArgumentsForeign.validateHeads(requested)
+        CoreManagedFiles.validateHeads(requested)
+        CoreMd5Foreign.validateHeads(requested)
+        CoreGmpForeign.validateHeads(requested)
+        CoreLibdwForeign.validateHeads(requested)
+        CoreNativeAllocationForeign.validateHeads(requested)
+        CoreMemmoveForeign.validateHeads(requested)
+        CoreMemcpyForeign.validateHeads(requested)
+        CoreSignalForeign.validateHeads(requested)
+        if (!diagnosticUnsupported) {
+            CoreRepresentations.validateAggregates(requested, constructors)
+            checkNotNull(validateInputs).invoke(requested)
+        }
+    }
+
+    private fun prepareClosedBinding(binding: Map<String, Any?>): Any {
+        CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
+        val expr = binding["expr"] as List<Any?>
+        CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
+        val scope = Scope(FunctionContext(0), source = sources.binding(binding))
+        return if (expr[0] == "lam") {
+            CoreRepresentations.requireScalar(CoreRepresentations.expression(expr), "argument")
+            val args = expr[1] as List<Map<String, Any?>>
+            val fn = function("lambda ${args.joinToString { it["name"].toString() }}", args,
+                expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr))
+            check(fn.captureLayout == null && fn.captures.isEmpty()) { "Top-level closure has lexical captures" }
+            Closure(null, arity = args.size, target = fn.target)
+        } else {
+            val fn = function(binding["name"] as String, emptyList(), expr, scope)
+            (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }
+            check(fn.captureLayout == null && fn.captures.isEmpty()) { "Top-level thunk has lexical captures" }
+            Thunk(fn.target, null)
         }
     }
 
@@ -266,6 +319,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "bytecode", "asyncExceptions" to enableAsync, "bytecodeRootCount" to roots.size,
+        "loweredRootCount" to roots.size, "hostEntryRootCount" to hostEntries.size,
+        "initializedBindingCount" to initializedBindingCount,
         "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
         "sourceRootCount" to roots.count { it.bytecodeNode.hasSourceInformation() && it.sourceSection != null }, "localJoinCount" to localJoinCount,
         "localJoinTransfers" to metrics.localJoinTransfers,
@@ -278,7 +333,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "Bytecode DSL primitive locals; selective StaticShape captures",
-        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; resumable asynchronous delivery")
+        "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; resumable asynchronous delivery") +
+        (loadingStatistics?.invoke() ?: emptyMap())
 
     /** Actual decoded instruction listings, available without a Graal graph viewer. */
     fun bytecodeDump(): String = roots.joinToString("\n\n") { "${it.name}\n${it.bytecodeNode.dump()}" }
