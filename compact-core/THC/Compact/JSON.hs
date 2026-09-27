@@ -72,7 +72,7 @@ moduleRecords debug = withObject "Core module" $ \fields -> do
     <*> optional fields "targetLayout" targetLayout <*> (fields .: "constructors" >>= array constructor)
     <*> optional fields "foreign" foreignArtifacts <*> optional fields "foreignExceptionBridge" exceptionBridge
     <*> optional fields "foreignExceptionBridgeUnit" bytes
-    <*> mapM (\key -> optional fields (bytesKey key) (const (fail ("Unmapped compact provenance field: " ++ show key)))) pendingProvenanceNames
+    <*> mapM (\(slot,key) -> optional fields (bytesKey key) (provenance slot)) (zip [0..] pendingProvenanceNames)
   values <- fields .: "bindings" >>= array pure
   bindings <- forM values $ \value -> do
     (record,ConvertState _ _ annotations) <- runStateT (binding Map.empty Nothing value) (ConvertState 0 debug [])
@@ -364,8 +364,8 @@ foreignCall :: Value -> Parser ForeignCall
 foreignCall = withObject "foreign call" $ \fields -> do
   checked fields ["schema","target","convention","safety","arity","suppliedArity","argumentReps","resultRep","intrinsic","javascriptSource"]
   ForeignCall <$> fields .: "schema" <*> (fields .: "target" >>= target)
-    <*> (fields .: "convention" >>= choice (zip ["ccall","capi","stdcall","prim","javascript"] [minBound..maxBound]))
-    <*> (fields .: "safety" >>= choice (zip ["unsafe","safe","interruptible"] [minBound..maxBound]))
+    <*> (fields .: "convention" >>= parseConvention)
+    <*> (fields .: "safety" >>= parseSafety)
     <*> fields .: "arity" <*> fields .: "suppliedArity" <*> (fields .: "argumentReps" >>= array rep)
     <*> (fields .: "resultRep" >>= rep) <*> optional fields "intrinsic" bytes <*> optional fields "javascriptSource" bytes
   where
@@ -376,6 +376,99 @@ foreignCall = withObject "foreign call" $ \fields -> do
           (StaticTarget <$> bytesAt fields "symbol" <*> optional fields "unit" bytes <*> fields .: "isFunction")
         "dynamic" -> checked fields ["kind"] >> pure DynamicTarget
         _ -> fail "Unknown foreign target"
+
+parseConvention :: Value -> Parser Convention
+parseConvention = choice (zip ["ccall","capi","stdcall","prim","javascript"] [minBound..maxBound])
+parseSafety :: Value -> Parser Safety
+parseSafety = choice (zip ["unsafe","safe","interruptible"] [minBound..maxBound])
+
+provenance :: Int -> Value -> Parser ModuleProvenance
+provenance slot value = case slot of
+  1 -> ImportsRecord <$> importProof value
+  2 -> ImportsRecord <$> importProof value
+  3 -> ExportsRecord <$> exports value
+  4 -> RegistrationRecord <$> registration value
+  _ -> fail "Unmapped nonempty compact provenance slot"
+
+qualifiedName :: Value -> Parser QualifiedName
+qualifiedName = withObject "qualified foreign identity" $ \fields -> do
+  checked fields ["unit","module","occurrence","namespace"]
+  QualifiedName <$> bytesAt fields "unit" <*> bytesAt fields "module" <*> bytesAt fields "occurrence" <*> bytesAt fields "namespace"
+
+foreignType :: Value -> Parser ForeignType
+foreignType = withObject "nominal foreign type" $ \fields -> do
+  kind <- fields .: "kind" :: Parser Text.Text
+  let recurse key = fields .: key >>= foreignType
+  case kind of
+    "tycon" -> checked fields ["kind","name","arguments"] >>
+      (ForeignTyCon <$> (fields .: "name" >>= qualifiedName) <*> (fields .: "arguments" >>= array foreignType))
+    "application" -> checked fields ["kind","function","argument"] >>
+      (ForeignApplication <$> recurse "function" <*> recurse "argument")
+    "function" -> checked fields ["kind","multiplicity","argument","result"] >>
+      (ForeignArrow <$> recurse "multiplicity" <*> recurse "argument" <*> recurse "result")
+    "bound-variable" -> checked fields ["kind","index"] >> (ForeignVariable <$> fields .: "index")
+    "forall" -> checked fields ["kind","binderKind","body"] >>
+      (ForeignForall <$> recurse "binderKind" <*> recurse "body")
+    _ -> fail "Unknown nominal foreign type kind"
+
+importProof :: Value -> Parser ImportProof
+importProof = withObject "original import proof" $ \fields -> do
+  status <- fields .: "status" :: Parser Text.Text
+  let common = ["schema","scope","execution","profile","unit","module","status"]
+  details <- case status of
+    "unclassified" -> checked fields (common ++ ["reason"]) >> (ImportsUnclassified <$> bytesAt fields "reason")
+    "rejected" -> checked fields (common ++ ["reason"]) >> (ImportsRejected <$> bytesAt fields "reason")
+    "verified" -> checked fields (common ++ ["wordBits","expectedForeign","imports","expectedCalls"]) >>
+      (ImportsVerified <$> fields .: "wordBits" <*> (fields .: "expectedForeign" >>= foreignArtifacts)
+        <*> (fields .: "imports" >>= array association) <*> (fields .: "expectedCalls" >>= array foreignCall))
+    _ -> fail "Unknown original import proof status"
+  ImportProof <$> fields .: "schema" <*> bytesAt fields "scope" <*> bytesAt fields "execution"
+    <*> bytesAt fields "profile" <*> bytesAt fields "unit" <*> bytesAt fields "module" <*> pure details
+  where
+    association = withObject "original import association" $ \fields -> do
+      checked fields ["binder","header","symbol","unit","isFunction","convention","safety",
+        "declaredType","normalizedType","normalizationRole","emitted"]
+      ImportAssociation <$> (fields .: "binder" >>= qualifiedName) <*> optional fields "header" bytes
+        <*> bytesAt fields "symbol" <*> optional fields "unit" bytes <*> fields .: "isFunction"
+        <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
+        <*> (fields .: "declaredType" >>= foreignType) <*> (fields .: "normalizedType" >>= foreignType)
+        <*> bytesAt fields "normalizationRole" <*> (fields .: "emitted" >>= emittedCall)
+
+emittedCall :: Value -> Parser EmittedCall
+emittedCall = withObject "emitted foreign ABI" $ \fields -> do
+  checked fields ["symbol","unit","convention","safety","arguments","result"]
+  EmittedCall <$> bytesAt fields "symbol" <*> optional fields "unit" bytes
+    <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "safety" >>= parseSafety)
+    <*> (fields .: "arguments" >>= array bytes) <*> (fields .: "result" >>= array bytes)
+
+exports :: Value -> Parser Exports
+exports = withObject "original export inventory" $ \fields -> do
+  checked fields ["schema","producer","scope","execution","unit","module","exports"]
+  Exports <$> fields .: "schema" <*> bytesAt fields "producer" <*> bytesAt fields "scope"
+    <*> bytesAt fields "execution" <*> bytesAt fields "unit" <*> bytesAt fields "module"
+    <*> (fields .: "exports" >>= array association)
+  where
+    association = withObject "original export association" $ \fields -> do
+      checked fields ["binder","symbol","convention","declaredType","normalizedType","normalizationRole","arguments","result","effect"]
+      ExportAssociation <$> (fields .: "binder" >>= qualifiedName) <*> bytesAt fields "symbol"
+        <*> (fields .: "convention" >>= parseConvention) <*> (fields .: "declaredType" >>= foreignType)
+        <*> (fields .: "normalizedType" >>= foreignType) <*> bytesAt fields "normalizationRole"
+        <*> (fields .: "arguments" >>= array foreignType) <*> (fields .: "result" >>= foreignType)
+        <*> (fields .: "effect" >>= choice [("pure",PureExport),("io",IOExport)])
+
+registration :: Value -> Parser Registration
+registration = withObject "original export registration" $ \fields -> do
+  status <- fields .: "status" :: Parser Text.Text
+  let common = ["schema","scope","execution","profile","status"]
+  details <- case status of
+    "unclassified" -> checked fields (common ++ ["reason"]) >> (RegistrationUnclassified <$> bytesAt fields "reason")
+    "rejected" -> checked fields (common ++ ["reason"]) >> (RegistrationRejected <$> bytesAt fields "reason")
+    "verified" -> checked fields (common ++ ["roots","wordBits","expectedForeign","expectedExports"]) >>
+      (RegistrationVerified <$> (fields .: "roots" >>= array qualifiedName) <*> fields .: "wordBits"
+        <*> (fields .: "expectedForeign" >>= foreignArtifacts) <*> (fields .: "expectedExports" >>= exports))
+    _ -> fail "Unknown original export registration status"
+  Registration <$> fields .: "schema" <*> bytesAt fields "scope" <*> bytesAt fields "execution"
+    <*> bytesAt fields "profile" <*> pure details
 
 literal :: Value -> Value -> Parser Literal
 literal (String kind) (String payload) = case kind of

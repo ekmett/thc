@@ -254,8 +254,67 @@ moduleJSON facts bindings = object $ ["schema" .= factsSchema facts,"ghc" .= str
   ++ p "providedModules" (arr str) (factsProvidedModules facts) ++ p "targetLayout" targetLayout (factsTargetLayout facts)
   ++ p "foreign" foreignArtifacts (factsForeign facts) ++ p "foreignExceptionBridge" exceptionBridge (factsExceptionBridge facts)
   ++ p "foreignExceptionBridgeUnit" str (factsExceptionBridgeUnit facts)
-  ++ concat (zipWith (\key -> p (Key.fromText (Text.decodeUtf8 key)) (const (error "Unmapped known provenance")))
+  ++ concat (zipWith (\key -> p (Key.fromText (Text.decodeUtf8 key)) provenance)
        pendingProvenanceNames (factsPendingProvenance facts))
+
+provenance :: ModuleProvenance -> Value
+provenance (ImportsRecord proof) = importProof proof
+provenance (ExportsRecord proof) = exports proof
+provenance (RegistrationRecord proof) = registration proof
+
+qualifiedName :: QualifiedName -> Value
+qualifiedName (QualifiedName unit moduleName occurrence namespace) = object
+  ["unit" .= str unit,"module" .= str moduleName,"occurrence" .= str occurrence,"namespace" .= str namespace]
+
+foreignType :: ForeignType -> Value
+foreignType value = object $ case value of
+  ForeignTyCon name arguments -> ["kind" .= String "tycon","name" .= qualifiedName name,"arguments" .= arr foreignType arguments]
+  ForeignApplication function argument -> ["kind" .= String "application","function" .= foreignType function,"argument" .= foreignType argument]
+  ForeignArrow multiplicity argument result -> ["kind" .= String "function","multiplicity" .= foreignType multiplicity,
+    "argument" .= foreignType argument,"result" .= foreignType result]
+  ForeignVariable index -> ["kind" .= String "bound-variable","index" .= index]
+  ForeignForall kind body -> ["kind" .= String "forall","binderKind" .= foreignType kind,"body" .= foreignType body]
+
+importProof :: ImportProof -> Value
+importProof (ImportProof schema scope execution profile unit moduleName status) = object $
+  ["schema" .= schema,"scope" .= str scope,"execution" .= str execution,"profile" .= str profile,
+   "unit" .= str unit,"module" .= str moduleName] ++ case status of
+    ImportsUnclassified reason -> ["status" .= String "unclassified","reason" .= str reason]
+    ImportsRejected reason -> ["status" .= String "rejected","reason" .= str reason]
+    ImportsVerified wordBits original associations calls -> ["status" .= String "verified","wordBits" .= wordBits,
+      "expectedForeign" .= foreignArtifacts original,"imports" .= arr association associations,"expectedCalls" .= arr foreignCall calls]
+  where
+    association (ImportAssociation binderName header symbol unitName function convention safety declared normalized role emitted) = object $
+      ["binder" .= qualifiedName binderName,"symbol" .= str symbol,"isFunction" .= function,
+       "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
+       "safety" .= tagName ["unsafe","safe","interruptible"] safety,"declaredType" .= foreignType declared,
+       "normalizedType" .= foreignType normalized,"normalizationRole" .= str role,"emitted" .= emittedCall emitted]
+      ++ p "header" str header ++ p "unit" str unitName
+
+emittedCall :: EmittedCall -> Value
+emittedCall (EmittedCall symbol unit convention safety arguments result) = object $
+  ["symbol" .= str symbol,"convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
+   "safety" .= tagName ["unsafe","safe","interruptible"] safety,"arguments" .= arr str arguments,"result" .= arr str result]
+  ++ p "unit" str unit
+
+exports :: Exports -> Value
+exports (Exports schema producer scope execution unit moduleName associations) = object
+  ["schema" .= schema,"producer" .= str producer,"scope" .= str scope,"execution" .= str execution,
+   "unit" .= str unit,"module" .= str moduleName,"exports" .= arr association associations]
+  where
+    association (ExportAssociation binderName symbol convention declared normalized role arguments result effect) = object
+      ["binder" .= qualifiedName binderName,"symbol" .= str symbol,
+       "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
+       "declaredType" .= foreignType declared,"normalizedType" .= foreignType normalized,"normalizationRole" .= str role,
+       "arguments" .= arr foreignType arguments,"result" .= foreignType result,"effect" .= tagName ["pure","io"] effect]
+
+registration :: Registration -> Value
+registration (Registration schema scope execution profile status) = object $
+  ["schema" .= schema,"scope" .= str scope,"execution" .= str execution,"profile" .= str profile] ++ case status of
+    RegistrationUnclassified reason -> ["status" .= String "unclassified","reason" .= str reason]
+    RegistrationRejected reason -> ["status" .= String "rejected","reason" .= str reason]
+    RegistrationVerified roots wordBits original expected -> ["status" .= String "verified","roots" .= arr qualifiedName roots,
+      "wordBits" .= wordBits,"expectedForeign" .= foreignArtifacts original,"expectedExports" .= exports expected]
 
 targetLayout :: TargetLayout -> Value
 targetLayout value = object ["format" .= String "thc-target-layout","schema" .= targetDocumentSchema value,

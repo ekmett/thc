@@ -2,7 +2,7 @@
 
 This is the shared version 1 wire contract under implementation. Framing,
 integer primitives, scoped assembly, typed executable/header records and explicit
-flat-JSON conversion and optional name/source maps have native controls. Eight
+flat-JSON conversion and optional name/source maps have native controls. Four
 module-level provenance families and complete runtime integration are not yet
 complete.
 Existing JSON and unit-directory routes remain available and unchanged.
@@ -254,10 +254,12 @@ p(str foreignExceptionBridgeUnit)`, then eight typed optional provenance fields:
 `foreignLink`, `staticForeignImportStubs`, `staticForeignImports`,
 `staticForeignExports`, `staticForeignExportRegistration`, `packageScalarLink`,
 `packageNativeLink`, `packageNativeArchive`, in that order. The initial header
-tranche accepts only missing/null for these last eight slots and rejects known
-records until their typed payload schemas are implemented. It does not omit,
-guess or hide those records in JSON text. This is a conversion limitation, not
-permission to execute a module without its original foreign admission facts.
+tranche implements the import/stub, export and registration payloads below.
+Known `foreignLink`, `packageScalarLink`, `packageNativeLink` and
+`packageNativeArchive` records still reject until their typed payload schemas
+are implemented; missing/null remain distinct in every slot. The converter does
+not omit, guess or hide those records in JSON text. This is a conversion
+limitation, not permission to execute a module without its original admission facts.
 
 `TargetLayout` carries `u documentSchema`, then four compiler strings (`id`,
 `abi`, `platform`, `way`), then `u layoutSchema, b profiled, u wordBytes,
@@ -298,6 +300,55 @@ finalizers`. `Label` is `b isInitializer, str unit, str module, str name`.
 remain semantic/provenance content, not optional display-name debug data.
 `ForeignExceptionBridge` is `u schema, str unit, str module, str box, str project,
 str payloadType, str exceptionType`; its unit reference remains semantic too.
+
+### Retained import and export provenance
+
+This ordered grammar is implemented by the typed-header codec. Header
+slots `staticForeignImportStubs` and `staticForeignImports` use `ImportProof`;
+`staticForeignExports` uses `Exports`; `staticForeignExportRegistration` uses
+`Registration`. The surrounding `p(T)` presence bytes are unchanged.
+
+`QualifiedName` is four semantic strings: `str unit, str module, str occurrence,
+str namespace`. These names identify declarations and type constructors; they
+are not optional display names. `ForeignType` has these one-byte tags:
+
+| Tag | Type | Payload |
+| ---: | --- | --- |
+| 0 | tycon | `QualifiedName, list(ForeignType) arguments` |
+| 1 | application | `ForeignType function, ForeignType argument` |
+| 2 | function | `ForeignType multiplicity, ForeignType argument, ForeignType result` |
+| 3 | bound-variable | `u index` |
+| 4 | forall | `ForeignType binderKind, ForeignType body` |
+
+Binder indices preserve their original scope. Declared and representationally
+normalized types are separate operative provenance, not pretty text.
+
+`ImportProof` is `u schema, str scope, str execution, str profile, str unit,
+str module, ImportStatus`. Status tag 0 UNCLASSIFIED and tag 1 REJECTED each
+carry a reason `str`. Tag 2 VERIFIED carries `u wordBits, ForeignArtifacts,
+list(ImportAssociation), list(HeaderForeignCall) expectedCalls`.
+`ImportAssociation` is `QualifiedName binder, p(str header), str symbol,
+p(str unit), b isFunction, Convention, Safety, ForeignType declaredType,
+ForeignType normalizedType, str normalizationRole, EmittedCall`.
+`EmittedCall` is `str symbol, p(str unit), Convention, Safety, list(str)
+arguments, list(str) result`; its exact ABI labels include the original void
+slots. `HeaderForeignCall` has the existing ForeignCall order, except that
+every argument/result representation uses `InlineRep`, never a DATA shape
+reference. Complete expected-call order and multiplicity remain intact without
+reading executable bodies during metadata admission.
+
+`Exports` is `u schema, str producer, str scope, str execution, str unit,
+str module, list(ExportAssociation)`. `ExportAssociation` is `QualifiedName
+binder, str symbol, Convention, ForeignType declaredType, ForeignType
+normalizedType, str normalizationRole, list(ForeignType) arguments,
+ForeignType result, Effect`; Effect tags 0/1 mean pure/io.
+
+`Registration` is `u schema, str scope, str execution, str profile,
+RegistrationStatus`. Status tags 0 UNCLASSIFIED and 1 REJECTED carry a reason
+`str`; tag 2 VERIFIED carries `list(QualifiedName) roots, u wordBits,
+ForeignArtifacts expectedForeign, Exports expectedExports`. Retained product
+and export-inventory equality remain the existing admission rules; encoding
+these records does not grant new foreign execution authority.
 
 ### Optional debug tables
 
@@ -364,7 +415,7 @@ cabal run exe:thc-compact -- name Module.thcc 0 0
 Normal encoding preserves supplied original names and source notes, recording
 origins while semantic records are emitted. The explicit `--without-debug` option
 omits those maps. Unknown semantic fields and
-known values in the eight unmapped provenance slots fail conversion. Header
+known values in the four remaining unmapped provenance slots fail conversion. Header
 constructors, target-layout facts, foreign artifacts and exception-bridge facts
 are typed; the original JSON remains the reference path for other modules.
 The converter is not yet a default project-publication path.

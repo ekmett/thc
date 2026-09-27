@@ -147,7 +147,7 @@ semanticTests = TestList
       withSystemTempDirectory "compact-header-rejection" $ \directory -> do
         failure <- try (writeContainerPrepared (directory </> "bad.thcc")
           (\streams -> newEncoder streams >>= \encoder -> encodeFacts encoder
-            completeFacts {factsPendingProvenance=Known () : replicate 7 Missing}) 0 (const (pure 0)))
+            completeFacts {factsPendingProvenance=Known (ImportsRecord completeImports) : replicate 7 Missing}) 0 (const (pure 0)))
           :: IO (Either IOException Footer)
         assertBool "unmapped known record rejected" (isLeft failure)
   , TestLabel "module directory captures actual data-relative binding positions" $ TestCase $
@@ -190,6 +190,36 @@ semanticTests = TestList
         let value = completeBinding {bindingExpr=Lit emptyMeta lit}
         assertEqual (show lit) (Right (completeFacts,[value]))
           (parseModuleWithoutDebug (moduleJSON completeFacts [value]))
+  , TestLabel "retained typed import and export provenance needs no DATA scan" $ TestCase $
+      withSystemTempDirectory "compact-provenance" $ \directory -> do
+        let facts = completeFacts {factsPendingProvenance =
+              [Missing,Known (ImportsRecord completeImports),Known (ImportsRecord completeImports),
+               Known (ExportsRecord completeExports),Known (RegistrationRecord completeRegistration),Missing,Unknown,Missing]}
+        assertEqual "exact nominal types and inventory multiplicity survive flat conversion" (Right (facts,[]))
+          (parseModuleWithoutDebug (moduleJSON facts []))
+        let destination = directory </> "provenance.thcc"
+        footer <- writeModule destination facts []
+        assertEqual "actual registration and declaration provider, no bindings" 10 (footerSummaries footer)
+        bytes <- BS.readFile destination
+        header <- either fail pure (decodeExact getHeader (BS.take 24 bytes))
+        let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
+        case map slice (footerSegments footer) of
+          payload:strings:_ -> do
+            assertEqual "header provenance has no executable shape references" BS.empty payload
+            assertEqual "all scoped types, safety and original expected calls preserved"
+              (Right facts) (decodeFacts (BS.take (fromIntegral (headerFactsLength header)) (BS.drop 24 bytes)) strings)
+          _ -> assertFailure "Missing provenance container segments"
+  , TestLabel "unclassified and rejected provenance remain non-verified records" $ TestCase $
+      forM_ [(ImportsUnclassified "unknown original declaration",RegistrationUnclassified "unknown original product"),
+             (ImportsRejected "rejected original declaration",RegistrationRejected "rejected original product")] $ \(imports,registration) -> do
+        let proof = ImportProof 1 "retained-static-import-products" "not-linked" "original-profile" "main" "Typed" imports
+            registered = Registration 2 "retained-foreign-products" "not-linked" "original-profile" registration
+            facts = completeFacts {factsPendingProvenance =
+              [Missing,Missing,Known (ImportsRecord proof),Missing,Known (RegistrationRecord registered),Missing,Missing,Missing]}
+        assertEqual "status/reason survive JSON conversion without invented evidence" (Right (facts,[]))
+          (parseModuleWithoutDebug (moduleJSON facts []))
+        withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
+          assertEqual "status/reason survive typed bytes" (Right facts) (decodeFacts bytes strings)
   , TestLabel "unknown semantic JSON and nonempty provenance fail explicitly" $ TestCase $ do
       let original = moduleJSON completeFacts [completeBinding]
           add key value = case original of Object fields -> Object (KM.insert key value fields); _ -> original
@@ -316,3 +346,33 @@ completeFacts = Facts 2 "9.14.1" "main" "Typed" "optimized-Core-before-Tidy" (Kn
   (Known (ExceptionBridge 1 "main" "Typed" "main:Typed.box" "main:Typed.project"
     "main:Typed.Payload" "ghc-internal:GHC.Internal.Exception.Type.SomeException"))
   (Known "main") [Missing,Unknown,Missing,Unknown,Missing,Missing,Missing,Missing]
+
+completeImports :: ImportProof
+completeImports = ImportProof 1 "retained-static-import-products" "not-linked"
+  "ghc-9.14.1-thc-only-static-c-imports-v1" "main" "Typed" (ImportsVerified 64 originalProducts
+    [ImportAssociation qualified Unknown "original_fn" (Known "main") True CApi InterruptibleCall
+      nominal (ForeignApplication nominal (ForeignVariable 0)) "representational"
+      (EmittedCall "original_fn" (Known "main") CApi InterruptibleCall ["IntRep","void"] ["void","IntRep"])]
+    [expected,expected])
+  where
+    expected = ForeignCall 1 (StaticTarget "original_fn" (Known "main") True) CApi InterruptibleCall
+      2 2 [longRep,tupleCold] tupleHot Unknown Missing
+
+qualified :: QualifiedName
+qualified = QualifiedName "main" "Typed" "original" "value"
+
+nominal :: ForeignType
+nominal = ForeignForall (ForeignTyCon (QualifiedName "ghc-prim" "GHC.Types" "TYPE" "type") [])
+  (ForeignArrow (ForeignTyCon (QualifiedName "ghc-prim" "GHC.Types" "Many" "data") [])
+    (ForeignVariable 0) (ForeignTyCon qualified [ForeignVariable 0]))
+
+originalProducts :: ForeignArtifacts
+originalProducts = ForeignArtifacts 1 "not-linked" Unknown []
+
+completeExports :: Exports
+completeExports = Exports 1 "THC.Plugin/typeCheckResultAction" "static-export-associations" "not-linked" "main" "Typed"
+  [ExportAssociation qualified "thc_original" CCall nominal nominal "representational" [nominal] nominal IOExport]
+
+completeRegistration :: Registration
+completeRegistration = Registration 2 "retained-foreign-products" "not-linked"
+  "ghc-9.14.1-thc-only-native-static-ccall-imports-v2" (RegistrationVerified [qualified] 64 originalProducts completeExports)

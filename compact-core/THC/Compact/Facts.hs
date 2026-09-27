@@ -30,7 +30,7 @@ data Facts = Facts
   , factsForeign :: !(Presence ForeignArtifacts)
   , factsExceptionBridge :: !(Presence ExceptionBridge)
   , factsExceptionBridgeUnit :: !(Presence BS.ByteString)
-  , factsPendingProvenance :: ![Presence ()]
+  , factsPendingProvenance :: ![Presence ModuleProvenance]
   } deriving (Eq, Show)
 
 data Endianness = LittleEndian | BigEndian deriving (Eq, Ord, Enum, Bounded, Show)
@@ -57,9 +57,38 @@ data ForeignFile = ForeignFile !BS.ByteString !BS.ByteString !BS.ByteString deri
 data ExceptionBridge = ExceptionBridge !Word64 !BS.ByteString !BS.ByteString
   !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString deriving (Eq, Show)
 
--- | Header slots whose typed nonempty payloads are not implemented yet.
--- Conversion rejects them, instead of preserving unexamined JSON text or
--- silently treating a present record as absent.
+data ModuleProvenance = ImportsRecord !ImportProof | ExportsRecord !Exports
+  | RegistrationRecord !Registration deriving (Eq, Show)
+data QualifiedName = QualifiedName !BS.ByteString !BS.ByteString !BS.ByteString !BS.ByteString
+  deriving (Eq, Show)
+data ForeignType = ForeignTyCon !QualifiedName ![ForeignType]
+  | ForeignApplication !ForeignType !ForeignType
+  | ForeignArrow !ForeignType !ForeignType !ForeignType
+  | ForeignVariable !Word64 | ForeignForall !ForeignType !ForeignType
+  deriving (Eq, Show)
+data EmittedCall = EmittedCall !BS.ByteString !(Presence BS.ByteString) !Convention !Safety
+  ![BS.ByteString] ![BS.ByteString] deriving (Eq, Show)
+data ImportAssociation = ImportAssociation !QualifiedName !(Presence BS.ByteString)
+  !BS.ByteString !(Presence BS.ByteString) !Bool !Convention !Safety !ForeignType !ForeignType
+  !BS.ByteString !EmittedCall deriving (Eq, Show)
+data ImportStatus = ImportsUnclassified !BS.ByteString | ImportsRejected !BS.ByteString
+  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall]
+  deriving (Eq, Show)
+data ImportProof = ImportProof !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
+  !BS.ByteString !BS.ByteString !ImportStatus deriving (Eq, Show)
+data ExportEffect = PureExport | IOExport deriving (Eq, Ord, Enum, Bounded, Show)
+data ExportAssociation = ExportAssociation !QualifiedName !BS.ByteString !Convention
+  !ForeignType !ForeignType !BS.ByteString ![ForeignType] !ForeignType !ExportEffect
+  deriving (Eq, Show)
+data Exports = Exports !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
+  !BS.ByteString !BS.ByteString ![ExportAssociation] deriving (Eq, Show)
+data RegistrationStatus = RegistrationUnclassified !BS.ByteString | RegistrationRejected !BS.ByteString
+  | RegistrationVerified ![QualifiedName] !Word64 !ForeignArtifacts !Exports deriving (Eq, Show)
+data Registration = Registration !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
+  !RegistrationStatus deriving (Eq, Show)
+
+-- | Fixed typed-header provenance slot order. Known payloads without a typed
+-- variant still reject; absent and null remain distinct for every slot.
 pendingProvenanceNames :: [BS.ByteString]
 pendingProvenanceNames =
   [ "foreignLink", "staticForeignImportStubs", "staticForeignImports"

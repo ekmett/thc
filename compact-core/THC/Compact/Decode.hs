@@ -53,7 +53,7 @@ facts decoder = Facts <$> getUVar <*> string decoder <*> string decoder <*> stri
   <*> present (list decoder (string decoder)) <*> present (targetLayout decoder)
   <*> list decoder (constructor decoder) <*> present (foreignArtifacts decoder)
   <*> present (exceptionBridge decoder) <*> present (string decoder)
-  <*> replicateM (length pendingProvenanceNames) (present (fail "Unimplemented nonempty compact provenance record"))
+  <*> mapM (present . provenance decoder) [0..length pendingProvenanceNames-1]
 
 targetLayout :: Decoder -> Get TargetLayout
 targetLayout decoder = TargetLayout <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> string decoder
@@ -74,13 +74,70 @@ exceptionBridge decoder = ExceptionBridge <$> getUVar <*> string decoder <*> str
 constructor :: Decoder -> Get Constructor
 constructor decoder = Constructor <$> string decoder <*> getUVar <*> getUVar <*> enumeration
   <*> list decoder boolean <*> list decoder (arrayElement boolean)
-  <*> list decoder (arrayElement (list decoder primRep)) <*> list decoder inlineRep
+  <*> list decoder (arrayElement (list decoder primRep)) <*> list decoder (inlineRepresentation decoder)
   <*> present getUVar <*> present (enumFamily decoder) <*> present (tagFamily decoder)
+inlineRepresentation :: Decoder -> Get Rep
+inlineRepresentation decoder = do
+  layout <- inlineShape
+  Rep layout <$> evaluation layout
+  where inlineShape = shapeFields decoder inlineShape
+
+provenance :: Decoder -> Int -> Get ModuleProvenance
+provenance decoder slot = case slot of
+  1 -> ImportsRecord <$> importProof decoder
+  2 -> ImportsRecord <$> importProof decoder
+  3 -> ExportsRecord <$> exports decoder
+  4 -> RegistrationRecord <$> registration decoder
+  _ -> fail "Unimplemented nonempty compact provenance record"
+
+qualifiedName :: Decoder -> Get QualifiedName
+qualifiedName decoder = QualifiedName <$> string decoder <*> string decoder <*> string decoder <*> string decoder
+
+foreignType :: Decoder -> Get ForeignType
+foreignType decoder = getWord8 >>= \kind -> case kind of
+  0 -> ForeignTyCon <$> qualifiedName decoder <*> list decoder recurse
+  1 -> ForeignApplication <$> recurse <*> recurse
+  2 -> ForeignArrow <$> recurse <*> recurse <*> recurse
+  3 -> ForeignVariable <$> getUVar
+  4 -> ForeignForall <$> recurse <*> recurse
+  _ -> fail "Unknown compact foreign type tag"
+  where recurse = foreignType decoder
+
+importProof :: Decoder -> Get ImportProof
+importProof decoder = ImportProof <$> getUVar <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> string decoder <*> status
   where
-    inlineRep = do
-      layout <- inlineShape
-      Rep layout <$> evaluation layout
-    inlineShape = shapeFields decoder inlineShape
+    status = getWord8 >>= \kind -> case kind of
+      0 -> ImportsUnclassified <$> string decoder
+      1 -> ImportsRejected <$> string decoder
+      2 -> ImportsVerified <$> getUVar <*> foreignArtifacts decoder <*> list decoder association
+        <*> list decoder (foreignCallWith decoder (inlineRepresentation decoder))
+      _ -> fail "Unknown compact import provenance status"
+    association = ImportAssociation <$> qualifiedName decoder <*> present (string decoder)
+      <*> string decoder <*> present (string decoder) <*> boolean <*> enumeration <*> enumeration
+      <*> foreignType decoder <*> foreignType decoder <*> string decoder <*> emittedCall decoder
+
+emittedCall :: Decoder -> Get EmittedCall
+emittedCall decoder = EmittedCall <$> string decoder <*> present (string decoder) <*> enumeration <*> enumeration
+  <*> list decoder (string decoder) <*> list decoder (string decoder)
+
+exports :: Decoder -> Get Exports
+exports decoder = Exports <$> getUVar <*> string decoder <*> string decoder <*> string decoder
+  <*> string decoder <*> string decoder <*> list decoder association
+  where
+    association = ExportAssociation <$> qualifiedName decoder <*> string decoder <*> enumeration
+      <*> foreignType decoder <*> foreignType decoder <*> string decoder <*> list decoder (foreignType decoder)
+      <*> foreignType decoder <*> enumeration
+
+registration :: Decoder -> Get Registration
+registration decoder = Registration <$> getUVar <*> string decoder <*> string decoder <*> string decoder <*> status
+  where
+    status = getWord8 >>= \kind -> case kind of
+      0 -> RegistrationUnclassified <$> string decoder
+      1 -> RegistrationRejected <$> string decoder
+      2 -> RegistrationVerified <$> list decoder (qualifiedName decoder) <*> getUVar
+        <*> foreignArtifacts decoder <*> exports decoder
+      _ -> fail "Unknown compact export registration status"
 
 arrayElement :: Get a -> Get (Presence a)
 arrayElement parser = do
@@ -189,8 +246,11 @@ tagFamily :: Decoder -> Get TagFamily
 tagFamily decoder = TagFamily <$> enumFamily decoder <*> getUVar <*> boolean
 
 foreignCall :: Decoder -> Get ForeignCall
-foreignCall decoder = ForeignCall <$> getUVar <*> target <*> enumeration <*> enumeration
-  <*> getUVar <*> getUVar <*> list decoder (representation decoder) <*> representation decoder
+foreignCall decoder = foreignCallWith decoder (representation decoder)
+
+foreignCallWith :: Decoder -> Get Rep -> Get ForeignCall
+foreignCallWith decoder representationValue = ForeignCall <$> getUVar <*> target <*> enumeration <*> enumeration
+  <*> getUVar <*> getUVar <*> list decoder representationValue <*> representationValue
   <*> present (string decoder) <*> present (string decoder)
   where
     target = getWord8 >>= \kind -> case kind of

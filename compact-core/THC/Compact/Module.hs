@@ -60,7 +60,8 @@ writeModuleRecords destination facts bindings catalog = do
         void (appendBytes streams Fingerprints directory)
         control <- containsDelimitedControl encoder
         let summaries = (if control then 1 else 0) .|.
-              (if registration then 2 else 0) .|. (if alias then 4 else 0)
+              (if registration then 2 else 0) .|. (if alias then 4 else 0) .|.
+              (if declarations then 8 else 0)
         pure (count,summaries)
       binding encoder debug (!count,!alias,rows) (value,annotations) = do
         key <- case bindingIdentity value of
@@ -83,5 +84,8 @@ writeModuleRecords destination facts bindings catalog = do
         Known (ForeignArtifacts _ _ stubs files) -> not (null files) || case stubs of
           Known (Stubs _ _ initializers finalizers) -> not (null initializers && null finalizers)
           _ -> False
+        _ -> False
+      declarations = case drop 2 (factsPendingProvenance facts) of
+        Known (ImportsRecord (ImportProof _ _ _ _ _ _ (ImportsVerified _ _ imports _))) : _ -> not (null imports)
         _ -> False
   writeContainerStreamed destination prepare produce

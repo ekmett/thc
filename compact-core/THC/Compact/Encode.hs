@@ -73,7 +73,8 @@ encodeFacts (Encoder streams strings shapes _ found observer) facts = do
   present encoder (string encoder) (factsExceptionBridgeUnit facts)
   unless (length (factsPendingProvenance facts) == length pendingProvenanceNames)
     (fail "Compact header requires eight provenance-presence slots")
-  mapM_ (present encoder (const (fail "Unimplemented nonempty compact provenance record"))) (factsPendingProvenance facts)
+  mapM_ (\(slot,value) -> present encoder (provenance encoder slot) value)
+    (zip [0..] (factsPendingProvenance facts))
   BL.toStrict . Builder.toLazyByteString <$> readIORef output
 
 targetLayout :: Encoder -> TargetLayout -> IO ()
@@ -119,21 +120,110 @@ constructor encoder value = do
     (fail "Absent compact constructor array element")
   list encoder (present encoder (boolean encoder)) (constructorFieldLifted value)
   list encoder (present encoder (list encoder (primRep encoder))) (constructorFieldReps value)
-  list encoder inlineRep (constructorFieldTypes value)
+  list encoder (inlineRep encoder) (constructorFieldTypes value)
   present encoder (number encoder) (constructorSumArity value)
   present encoder (enumFamily encoder) (constructorEnumFamily value)
   present encoder (tagFamily encoder) (constructorTagFamily value)
+inlineRep :: Encoder -> Rep -> IO ()
+inlineRep encoder (Rep layout state) = inlineShape layout >> evaluation encoder layout state
   where
-    inlineRep (Rep layout state) = inlineShape layout >> evaluation encoder layout state
-    inlineShape layout = do
-      enumeration encoder (shapeKind layout)
-      present encoder (list encoder (primRep encoder)) (shapePrimReps layout)
-      present encoder (vector encoder) (shapeVector layout)
-      present encoder (enumeration encoder) (shapeAggregate layout)
-      present encoder (list encoder inlineShape) (shapeComponents layout)
-      present encoder (list encoder inlineShape) (shapeAlternatives layout)
-      present encoder (number encoder) (shapeTagSlot layout)
-      present encoder (list encoder (list encoder (number encoder))) (shapeAlternativeSlots layout)
+    inlineShape shape = do
+      enumeration encoder (shapeKind shape)
+      present encoder (list encoder (primRep encoder)) (shapePrimReps shape)
+      present encoder (vector encoder) (shapeVector shape)
+      present encoder (enumeration encoder) (shapeAggregate shape)
+      present encoder (list encoder inlineShape) (shapeComponents shape)
+      present encoder (list encoder inlineShape) (shapeAlternatives shape)
+      present encoder (number encoder) (shapeTagSlot shape)
+      present encoder (list encoder (list encoder (number encoder))) (shapeAlternativeSlots shape)
+
+provenance :: Encoder -> Int -> ModuleProvenance -> IO ()
+provenance encoder slot value = case (slot,value) of
+  (1,ImportsRecord proof) -> importProof encoder proof
+  (2,ImportsRecord proof) -> importProof encoder proof
+  (3,ExportsRecord proof) -> exports encoder proof
+  (4,RegistrationRecord proof) -> registration encoder proof
+  _ -> fail "Unimplemented or mismatched compact provenance slot"
+
+qualifiedName :: Encoder -> QualifiedName -> IO ()
+qualifiedName encoder (QualifiedName unit moduleName occurrence namespace) =
+  mapM_ (string encoder) [unit,moduleName,occurrence,namespace]
+
+foreignType :: Encoder -> ForeignType -> IO ()
+foreignType encoder value = case value of
+  ForeignTyCon name arguments -> tag encoder 0 >> qualifiedName encoder name >> list encoder recurse arguments
+  ForeignApplication function argument -> tag encoder 1 >> recurse function >> recurse argument
+  ForeignArrow multiplicity argument result -> tag encoder 2 >> recurse multiplicity >> recurse argument >> recurse result
+  ForeignVariable index -> tag encoder 3 >> number encoder index
+  ForeignForall kind body -> tag encoder 4 >> recurse kind >> recurse body
+  where recurse = foreignType encoder
+
+importProof :: Encoder -> ImportProof -> IO ()
+importProof encoder (ImportProof schema scope execution profile unit moduleName status) = do
+  number encoder schema
+  mapM_ (string encoder) [scope,execution,profile,unit,moduleName]
+  case status of
+    ImportsUnclassified reason -> tag encoder 0 >> string encoder reason
+    ImportsRejected reason -> tag encoder 1 >> string encoder reason
+    ImportsVerified wordBits original associations calls -> do
+      tag encoder 2
+      number encoder wordBits
+      foreignArtifacts encoder original
+      list encoder association associations
+      list encoder (foreignCallWith encoder (inlineRep encoder)) calls
+  where
+    association (ImportAssociation binderName header symbol owner function convention safety declared normalized role emitted) = do
+      qualifiedName encoder binderName
+      present encoder (string encoder) header
+      string encoder symbol
+      present encoder (string encoder) owner
+      boolean encoder function
+      enumeration encoder convention
+      enumeration encoder safety
+      foreignType encoder declared
+      foreignType encoder normalized
+      string encoder role
+      emittedCall encoder emitted
+
+emittedCall :: Encoder -> EmittedCall -> IO ()
+emittedCall encoder (EmittedCall symbol unit convention safety arguments result) = do
+  string encoder symbol
+  present encoder (string encoder) unit
+  enumeration encoder convention
+  enumeration encoder safety
+  list encoder (string encoder) arguments
+  list encoder (string encoder) result
+
+exports :: Encoder -> Exports -> IO ()
+exports encoder (Exports schema producer scope execution unit moduleName associations) = do
+  number encoder schema
+  mapM_ (string encoder) [producer,scope,execution,unit,moduleName]
+  list encoder association associations
+  where
+    association (ExportAssociation binderName symbol convention declared normalized role arguments result effect) = do
+      qualifiedName encoder binderName
+      string encoder symbol
+      enumeration encoder convention
+      foreignType encoder declared
+      foreignType encoder normalized
+      string encoder role
+      list encoder (foreignType encoder) arguments
+      foreignType encoder result
+      enumeration encoder effect
+
+registration :: Encoder -> Registration -> IO ()
+registration encoder (Registration schema scope execution profile status) = do
+  number encoder schema
+  mapM_ (string encoder) [scope,execution,profile]
+  case status of
+    RegistrationUnclassified reason -> tag encoder 0 >> string encoder reason
+    RegistrationRejected reason -> tag encoder 1 >> string encoder reason
+    RegistrationVerified roots wordBits original expected -> do
+      tag encoder 2
+      list encoder (qualifiedName encoder) roots
+      number encoder wordBits
+      foreignArtifacts encoder original
+      exports encoder expected
 
 -- | Intern semantic UTF-8, never literal raw bytes. Referenced string spans are
 -- direct byte positions, with no separate string-ID table.
@@ -273,7 +363,10 @@ tagFamily :: Encoder -> TagFamily -> IO ()
 tagFamily encoder (TagFamily family limit small) = enumFamily encoder family >> number encoder limit >> boolean encoder small
 
 foreignCall :: Encoder -> ForeignCall -> IO ()
-foreignCall encoder value = do
+foreignCall encoder = foreignCallWith encoder (encodeRep encoder)
+
+foreignCallWith :: Encoder -> (Rep -> IO ()) -> ForeignCall -> IO ()
+foreignCallWith encoder representation value = do
   number encoder (foreignSchema value)
   case foreignTarget value of
     StaticTarget symbol unit isFunction -> do
@@ -286,8 +379,8 @@ foreignCall encoder value = do
   enumeration encoder (foreignSafety value)
   number encoder (foreignArity value)
   number encoder (foreignSuppliedArity value)
-  list encoder (encodeRep encoder) (foreignArgumentReps value)
-  encodeRep encoder (foreignResultRep value)
+  list encoder representation (foreignArgumentReps value)
+  representation (foreignResultRep value)
   present encoder (string encoder) (foreignIntrinsic value)
   present encoder (string encoder) (foreignJavaScriptSource value)
 
