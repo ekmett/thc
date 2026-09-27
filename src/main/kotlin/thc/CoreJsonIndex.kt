@@ -142,14 +142,20 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         Json.parse(text)
     }
 
-    /** Validated grammar makes the next marker a scalar's delimiter; only intervening whitespace is scanned. */
+    /** The supplied topology locates a value; check the accessed bounds before
+     * using them. Exhaustive source/topology agreement is an opt-in check. */
     private fun endAt(s: Storage, start: Int, limit: Int): Int = when (read(s, start)) {
         123, 91 -> {
             val marker = s.interest.rank1(start)
             val open = Math.multiplyExact(marker, 2)
             check(open < s.bp.bits.size && s.bp.bits[open] && s.bp.bits[open + 1])
             val close = s.bp.close(open) { counters.balancedParenthesisBitsExamined++ }
-            Math.addExact(s.interest.select(close / 2), 1)
+            val end = Math.addExact(s.interest.select(close / 2), 1)
+            require(end in (start + 2)..limit &&
+                read(s, end - 1) == (if (s.bytes[start].toInt() == 123) 125 else 93)) {
+                "Invalid JSON container extent"
+            }
+            end
         }
         else -> {
             val marker = s.interest.rank1(start)
@@ -293,19 +299,23 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         }
     }
     companion object {
-        /** Load a verified navigation cache over a defensive snapshot; the caller owns [input]. */
-        fun loadSidecar(bytes: ByteArray, input: InputStream): CoreJsonIndex =
-            loadOwned(bytes.copyOf(), input, 0, bytes.size.toLong())
+        /** Load the supplied navigation cache over a defensive snapshot. Normal
+         * loading trusts the producer; [verifyArtifacts] additionally hashes the
+         * complete source/index and checks every source/topology correspondence.
+         * The caller owns [input]. */
+        fun loadSidecar(bytes: ByteArray, input: InputStream, verifyArtifacts: Boolean = false): CoreJsonIndex =
+            loadOwned(bytes.copyOf(), input, 0, bytes.size.toLong(), verifyArtifacts)
 
         /** Pin the file contents once; later pathname replacement cannot redirect any span. */
-        fun loadSidecar(path: Path, input: InputStream): CoreJsonIndex {
+        fun loadSidecar(path: Path, input: InputStream, verifyArtifacts: Boolean = false): CoreJsonIndex {
             val bytes = Files.readAllBytes(path)
-            return loadOwned(bytes, input, bytes.size.toLong(), 0)
+            return loadOwned(bytes, input, bytes.size.toLong(), 0, verifyArtifacts)
         }
 
-        private fun loadOwned(bytes: ByteArray, input: InputStream, fileBytesRead: Long, copiedBytes: Long): CoreJsonIndex {
-            val digest = MessageDigest.getInstance("SHA-256")
-            val checked = DigestInputStream(input, digest)
+        private fun loadOwned(bytes: ByteArray, input: InputStream, fileBytesRead: Long, copiedBytes: Long,
+                              verifyArtifacts: Boolean): CoreJsonIndex {
+            val digest = if (verifyArtifacts) MessageDigest.getInstance("SHA-256") else null
+            val checked = if (digest == null) input else DigestInputStream(input, digest)
             val header = checked.readNBytes(64)
             require(header.size == 64) { "Truncated JSON index header" }
             require(header.copyOfRange(0, 8).contentEquals("THCJSIX1".toByteArray(Charsets.US_ASCII))) { "Unknown JSON index magic" }
@@ -317,8 +327,10 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             require(sourceLength == bytes.size.toLong()) { "JSON index source length mismatch" }
             val shape = JsonIndexShape(sourceLength, markerCount)
             val count = Math.toIntExact(markerCount)
-            val sourceHash = MessageDigest.getInstance("SHA-256").digest(bytes)
-            require(MessageDigest.isEqual(header.copyOfRange(32, 64), sourceHash)) { "JSON index source identity mismatch" }
+            val sourceHash = if (verifyArtifacts) MessageDigest.getInstance("SHA-256").digest(bytes) else null
+            if (sourceHash != null) require(MessageDigest.isEqual(header.copyOfRange(32, 64), sourceHash)) {
+                "JSON index source identity mismatch"
+            }
             val chunk = ByteArray(8192)
             fun sectionWords(wordCount: Int): LongArray {
                 val result = LongArray(wordCount)
@@ -350,16 +362,26 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             val bpWords = sectionWords(words(shape.bpBits))
             checkPadding(states, shape.checkpointBits)
             checkPadding(bpWords, shape.bpBits)
-            val expectedDigest = digest.digest()
+            val expectedDigest = digest?.digest()
             val trailer = input.readNBytes(32)
-            require(trailer.size == 32 && MessageDigest.isEqual(trailer, expectedDigest)) { "JSON index integrity mismatch" }
+            require(trailer.size == 32) { "Truncated JSON index integrity field" }
+            if (expectedDigest != null) require(MessageDigest.isEqual(trailer, expectedDigest)) { "JSON index integrity mismatch" }
             require(input.read() == -1) { "Trailing JSON index bytes" }
 
             val interest = SourceInterest(bytes, count, directory, supers, states)
             val bp = Bits(bpWords, shape.bpBits)
-            interest.verify(bp)
-            val (start, end) = scan(bytes, {}, {})
-            return CoreJsonIndex(Storage(bytes, interest, Parentheses(bp), bytes.size.toLong(), start, end,
+            if (verifyArtifacts) interest.verify(bp)
+            val (start, end) = if (verifyArtifacts) scan(bytes, {}, {}) else {
+                // This only trims the document boundary. Do not replace the
+                // optional audit with another whole-source grammar scan.
+                var start = 0
+                var end = bytes.size
+                while (start < end && whitespace(bytes[start].toInt() and 255)) start++
+                while (end > start && whitespace(bytes[end - 1].toInt() and 255)) end--
+                require(start < end) { "Missing JSON value" }
+                start to end
+            }
+            return CoreJsonIndex(Storage(bytes, interest, Parentheses(bp), if (verifyArtifacts) bytes.size.toLong() else 0L, start, end,
                 fileBytesRead, copiedBytes, shape.serializedBytes, sourceHash))
         }
 

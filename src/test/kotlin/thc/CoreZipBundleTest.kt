@@ -418,7 +418,7 @@ class CoreZipBundleTest {
         val source = Json.stringify(first + ("sourceFiles" to listOf(mapOf("id" to "pkg-a-source",
             "path" to "Shared.hs", "content" to "x".repeat(2 * 1024 * 1024))))).toByteArray()
         val path = manifest(listOf(unit("pkg-b", layout = targetLayout()), unit("pkg-a", source)))
-        val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry")
+        val request = CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", verifyArtifacts = true)
         val input = Json.parse(request) as Map<*, *>
         assertEquals(true, input["strictLink"])
         assertFalse(input.containsKey("modules"))
@@ -469,7 +469,7 @@ class CoreZipBundleTest {
         val original = unit("pkg-a")
         val path = manifest(listOf(original))
         fun rejected() = assertThrows(RuntimeException::class.java) {
-            CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry")
+            CoreModules.request(listOf("@$path"), "pkg-a:Shared.entry", verifyArtifacts = true)
         }
         val archive = temporary.resolve("pkg-a.zip")
         val valid = Files.readAllBytes(archive)

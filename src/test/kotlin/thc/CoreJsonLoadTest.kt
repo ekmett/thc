@@ -23,10 +23,10 @@ class CoreJsonLoadTest {
         javaClass.getResourceAsStream("/core/$name")!!.use { Files.copy(it, path) }
         return path
     }
-    private fun request(json: Path, index: Path, backend: String, async: Boolean = false): String =
+    private fun request(json: Path, index: Path, backend: String, async: Boolean = false, verifyArtifacts: Boolean = false): String =
         CoreModules.request(listOf(json.toString()), "synthetic:LazyJson.entry", backend = backend,
             sourceNotesEnabled = false, asyncExceptions = async,
-            jsonSidecars = mapOf(json.toString() to index.toString()))
+            jsonSidecars = mapOf(json.toString() to index.toString()), verifyArtifacts = verifyArtifacts)
     private fun statistics(value: Value) = Json.parse(value.getMember("diagnostics").asString()) as Map<String, Any?>
     private fun count(value: Value, key: String) = (statistics(value).getValue(key) as Number).toLong()
     private fun digest(path: Path) = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))
@@ -40,11 +40,16 @@ class CoreJsonLoadTest {
             // JSON/index documents: actual format validation belongs to admission.
             Files.write(json, ByteArray(size) { (it * 31 + 7).toByte() })
             Files.write(index, ByteArray(size + 3) { (it * 17 + 11).toByte() })
-            val input = Json.parse(request(json, index, "bytecode")) as Map<String, Any?>
+            val input = Json.parse(request(json, index, "bytecode", verifyArtifacts = true)) as Map<String, Any?>
             val descriptor = (input["indexedModuleFiles"] as List<Map<String, Any?>>).single()
             assertEquals(digest(json), descriptor["sha256"], "source size $size")
             assertEquals(digest(index), descriptor["sidecarSha256"], "index size ${size + 3}")
             assertEquals(setOf("path", "sha256", "sidecar", "sidecarSha256", "capability"), descriptor.keys)
+            val ordinary = Json.parse(request(json, index, "bytecode")) as Map<String, Any?>
+            val trusted = (ordinary["indexedModuleFiles"] as List<Map<String, Any?>>).single()
+            assertEquals(false, ordinary["verifyArtifacts"])
+            assertEquals("", trusted["sha256"], "default request does not read/hash source content")
+            assertEquals("", trusted["sidecarSha256"], "default request does not read/hash index content")
         }
     }
 
@@ -66,7 +71,9 @@ class CoreJsonLoadTest {
             assertEquals(Files.size(json), count(value, "jsonSourceBytes"))
             assertEquals(Files.size(index), count(value, "jsonSidecarBytes"))
             assertEquals(Files.size(json), count(value, "jsonSourceFileBytesRead"))
-            assertTrue(count(value, "jsonSourceHashBytesScanned") >= Files.size(json))
+            assertEquals(0L, count(value, "jsonSourceHashBytesScanned"))
+            assertEquals(0L, count(value, "jsonStructuralBytesScanned"))
+            assertEquals(0L, count(value, "jsonIndexSourceBytesScanned"))
             assertTrue(count(value, "jsonLinkingExpressionViews") > 0, "do not hide strict dependency traversal")
             assertTrue(count(value, "jsonLinkingScalarDecodes") > 0)
             assertTrue(count(value, "jsonDecodedSpanCount") > 0, "header/link scalars really are decoded before entry")
@@ -88,7 +95,7 @@ class CoreJsonLoadTest {
     @Test fun sourceSnapshotSurvivesReplacementButNewAdmissionChecksBothFiles() {
         val json = fixture("lazy-json-module.json")
         val index = fixture("lazy-json-module.idx")
-        val serialized = request(json, index, "bytecode")
+        val serialized = request(json, index, "bytecode", verifyArtifacts = true)
         executionContext().use { context ->
             val value = context.eval("thc", serialized)
             Files.writeString(json, "{}")
@@ -120,6 +127,13 @@ class CoreJsonLoadTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             CoreModules.visitRequestModules(input + ("modules" to emptyList<Any>())) { }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.visitRequestModules(input + ("verifyArtifacts" to true)) { }
+        }
+        val verified = Json.parse(request(json, index, "ast", verifyArtifacts = true)) as Map<String, Any?>
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.visitRequestModules(verified + ("verifyArtifacts" to false)) { }
         }
     }
 
