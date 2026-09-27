@@ -294,7 +294,7 @@ internal class DelimitedActionSite(private val language: Language, private val m
             }
             saved.asyncRequest()?.let { throw AsyncDelivery(it, this) }
             if (!AsyncContinuations.isYieldMarker(saved.yielded)) fault("Unsupported delimited invocation cut")
-            val drained = force.drainStack(saved, shape, delimitedInvocation = true)
+            val drained = force.drainStack(saved, shape, true)
             DelimitedControl.asyncResult(drained, this)
             drained
         }
