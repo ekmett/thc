@@ -4,7 +4,7 @@
 import java.security.MessageDigest
 
 // This distinct build artifact adds only an explicitly unprofiled protocol
-// conditional. All API/runtime dependencies retain their upstream coordinates.
+// conditional. API/runtime declarations are built by their separate pinned tasks.
 val protocolProcessorVersion = "25.3.4.1"
 val protocolProcessorSources = configurations.create("protocolProcessorSources") {
     isCanBeConsumed = false

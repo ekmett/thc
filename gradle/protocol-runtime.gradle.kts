@@ -169,3 +169,27 @@ tasks.register<JavaExec>("testReturnContinuations") {
     maxHeapSize = "1g"
 }
 tasks.named("check") { dependsOn("testReturnContinuations") }
+
+val compileRuntimeLinkageControl = tasks.register<JavaCompile>("compileRuntimeLinkageControl") {
+    source("tools/truffle-protocol/tests/RuntimeLinkageProbe.java")
+    classpath = files()
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/linkage"))
+}
+for (mode in listOf("stock", "overlay")) {
+    val task = tasks.register<JavaExec>("testRuntimeLinkage" + mode.replaceFirstChar { it.uppercaseChar() }) {
+        dependsOn("verifyProtocolRuntimeSelection")
+        val api = if (mode == "stock") files(configurations.getByName("materializableApiBinary"))
+            else files(tasks.named<Jar>("materializableApiJar").flatMap { it.archiveFile })
+        val runtime = if (mode == "stock") files(protocolRuntimeBinary)
+            else files(protocolRuntimeJar.flatMap { it.archiveFile })
+        classpath = files(compileRuntimeLinkageControl.flatMap { it.destinationDirectory }) + api + runtime +
+            returnPolicyRuntime.filter { !it.name.startsWith("thc-truffle-api-") && !it.name.startsWith("thc-truffle-runtime-") }
+        mainClass.set("protocolprobe.RuntimeLinkageProbe")
+        args(mode)
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+        maxHeapSize = "512m"
+    }
+    tasks.named("testReturnPolicy") { dependsOn(task) }
+}
