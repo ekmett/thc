@@ -80,6 +80,53 @@ static void check_chain(const uint8_t *s, size_t n, int backend) {
         ++tests;
     }
 }
+static void check_complete(const uint8_t *source, size_t n) {
+    size_t words = (n + 63) / 64;
+    uint8_t *model[3];
+    for (unsigned i = 0; i < 3; ++i) {
+        model[i] = calloc(words ? words * 8 : 1, 1);
+        assert(model[i]);
+    }
+    unsigned expected_state = reference(source, n, 0, model[0], model[1], model[2]);
+    uint64_t expected_count = 0;
+    for (size_t i = 0; i < n; ++i) expected_count += (model[0][i / 8] >> (i % 8)) & 1u;
+    for (int backend = THC_JSON_AUTO; backend <= THC_JSON_NEON; ++backend) {
+        if (!thc_json_backend_available(backend)) continue;
+        uint64_t events = UINT64_MAX;
+        uint32_t state = 99;
+        assert(thc_json_simple_count(source, n, backend, &events, &state) == THC_JSON_OK);
+        assert(events == expected_count && state == expected_state);
+        uint64_t sizes[4] = {n ? 8 : 0, ((n + 2047) / 2048) * 8,
+                            ((n + 16383) / 16384) * 8, ((events + 31) / 32) * 8};
+        uint8_t *storage[4];
+        for (unsigned i = 0; i < 4; ++i) {
+            storage[i] = malloc((size_t)sizes[i] + 16);
+            assert(storage[i]); memset(storage[i], 0xa5, (size_t)sizes[i] + 16);
+        }
+        assert(thc_json_simple_build(source, n, backend, events,
+            storage[0] + 8, sizes[0], storage[1] + 8, sizes[1],
+            storage[2] + 8, sizes[2], storage[3] + 8, sizes[3]) == THC_JSON_OK);
+        for (unsigned i = 0; i < 4; ++i) {
+            for (unsigned k = 0; k < 8; ++k) {
+                assert(storage[i][k] == 0xa5);
+                assert(storage[i][8 + sizes[i] + k] == 0xa5);
+            }
+        }
+        /* Exact caller-supplied capacities are checked before output writes. */
+        assert(thc_json_simple_build(source, n, backend, events,
+            storage[0] + 8, sizes[0], storage[1] + 8, sizes[1],
+            storage[2] + 8, sizes[2], storage[3] + 8, sizes[3] + 1) == THC_JSON_ARGUMENT);
+        if (events) {
+            uint64_t short_bp = ((events - 1 + 31) / 32) * 8;
+            assert(thc_json_simple_build(source, n, backend, events - 1,
+                storage[0] + 8, sizes[0], storage[1] + 8, sizes[1],
+                storage[2] + 8, sizes[2], storage[3] + 8, short_bp) == THC_JSON_COUNT_MISMATCH);
+        }
+        for (unsigned i = 0; i < 4; ++i) free(storage[i]);
+        ++tests;
+    }
+    for (unsigned i = 0; i < 3; ++i) free(model[i]);
+}
 #ifdef THC_JSON_TEST_EMBEDDED
 int thc_json_test_native(void) {
 #else
@@ -109,6 +156,12 @@ int main(void) {
         memcpy(data + 600, "{:,[}]", 6);
         for (int backend = 0; backend <= THC_JSON_NEON; ++backend) check_chain(data, 4099, backend);
     }
+    for (size_t n = 0; n <= 4099; n += 31) check_complete(data, n);
+    uint8_t *large = malloc(16385);
+    assert(large);
+    for (size_t i = 0; i < 16385; ++i) large[i] = alphabet[next_byte() % (sizeof alphabet - 1)];
+    check_complete(large, 16383); check_complete(large, 16384); check_complete(large, 16385);
+    free(large);
     uint8_t masks[3][64] = {{0}};
     uint32_t state;
     assert(thc_json_scan_block(NULL, 0, THC_JSON_SCALAR, 2, &state, NULL, NULL, NULL, 0) == 0 && state == 2);

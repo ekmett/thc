@@ -10,7 +10,7 @@ at `6ee3210413d1f180fd6a93ab30c5bc6aaad29b78` in `rust-works/succinctly`:
 
 The original MIT copyright 2025 rust-works is retained in
 [LICENSE.succinctly](LICENSE.succinctly). John Ky is credited for the source
-implementation. The changed encoding is THC's responsibility.
+implementation. THC owns the sidecar layout and source-lifetime contract.
 
 The portable scalar implementation is always available. AVX2 is compiled only
 inside a target-specific function and selected after runtime CPU/OS feature
@@ -37,3 +37,45 @@ cc -std=c11 -O2 -Wall -Wextra -Werror -Icompiler/json-index \
 The test compares all supported backends with an independent scalar model,
 including every byte class, initial state, short tail, unaligned input, and
 carry across 512-byte boundaries. Explicit unavailable backends are rejected.
+
+## Sidecar v2 producer
+
+`cabal run thc-json-index -- INPUT.json OUTPUT.idx` reads one immutable source
+snapshot and writes a navigation sidecar. It does not change the input, parse
+scalar values, certify JSON syntax, or admit Core. There is no default format
+switch. Use `--backend scalar`, `avx2`, or `neon` before the paths to select an
+explicit supported backend; the default is runtime dispatch.
+
+Two safe native calls count structural events and fill the final sections. They
+reuse 192 bytes of stack masks, resolve the ISA once per pass, and retain no
+interest bitmap or per-quarter Haskell objects. A third source pass computes the
+source SHA-256. Output uses the final section buffers directly; it does not copy
+an assembled sidecar before writing. Peak producer memory includes the complete
+immutable JSON snapshot plus its section buffers. This is not a streaming JSON
+reader claim.
+
+All integer fields are little-endian. The envelope is:
+
+- 64-byte header: `THCJSIX1`, Word32 version 2, Word32 flags 0, Word64 source
+  byte count U, Word64 interest count M, and 32-byte source SHA-256.
+- Word64 absolute epoch counts: one per 2^32 source bytes.
+- Eight-byte Poppy entries: one per 2048 source bytes, with Word32 epoch-relative
+  prefix and Word32 independent quarter populations at shifts 0, 11, and 22.
+- Two-bit lexer state before each 512-byte quarter: JSON=0, string=1, escaped=2;
+  packed least-significant first and padded to eight bytes.
+- Simple Cursor BP: two chronological bits per event, open=11, close=00,
+  comma/colon=01, packed least-significant first and padded to eight bytes.
+- 32-byte SHA-256 over header and sections. There are no trailing bytes.
+
+M counts all outside-string `{ } [ ] , :` and may be odd. Empty input has zero
+sections; deciding whether it is a JSON document belongs to the reader's syntax
+checks. All unused padding is zero. Source and sidecar digests detect stale or
+corrupt data and provide no execution authority. Readers must check version 2
+before interpreting the section layout.
+
+The Poppy directory representation follows Edward Kmett's public
+[Everett rank.h](https://github.com/ekmett/everett/blob/eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca/include/everett/rank.h),
+under the BSD-2-Clause choice retained in `LICENSE.everett-bsd`. It is a rank
+directory, not a select directory. Readers regenerate at most one 512-byte mask
+for a local rank/select query and account for that scan; JSON string/scalar
+projection may require additional source scanning.

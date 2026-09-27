@@ -1,0 +1,16 @@
+Everett
+Copyright (c) 2026 Edward Kmett <ekmett@gmail.com>
+
+Everett-authored material is licensed, at the recipient's choice, under either:
+
+  * the BSD 2-Clause License, in LICENSES/BSD-2-Clause.txt; or
+  * the Apache License, Version 2.0, in LICENSES/Apache-2.0.txt.
+
+You may choose either license. The full terms of each license are included in
+those files.
+
+Third-party components and their generated derivatives retain their own
+licenses and copyright notices. See THIRD_PARTY.md; Everett's license choice
+does not replace those terms.
+
+SPDX-License-Identifier: BSD-2-Clause OR Apache-2.0
