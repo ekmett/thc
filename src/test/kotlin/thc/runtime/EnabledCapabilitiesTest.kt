@@ -57,7 +57,7 @@ class EnabledCapabilitiesTest {
                 try {
                     val program = if (backend == "ast") Program(language, module()) else BytecodeProgram(language, module())
                 val target = program.entryTarget("read")
-                fun read() = Calls.target(target, arrayOf(0L, Unit)) as Long
+                fun read() = Integer.toUnsignedLong(Calls.target(target, arrayOf(0L, Unit)) as Int)
                 repeat(100) { assertEquals(cpuCount, read()) }
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                 valid(target)
@@ -78,10 +78,12 @@ class EnabledCapabilitiesTest {
 
                 val cell = CoreDataLabels.fromCore("enabled_capabilities",
                     CoreRepresentations.parse(address))
-                assertEquals(cpuCount, ManagedAddressRead.WORD32.read(cell, 0))
+                assertEquals(cpuCount, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(cell, 0)))
                 for (operation in ManagedAddressRead.entries.filter { it != ManagedAddressRead.WORD32 })
-                    assertThrows(RuntimeFault::class.java) { operation.read(cell, 0) }
-                assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.read(cell, 1) }
+                    assertThrows(RuntimeFault::class.java) {
+                        if (operation.isInt) operation.readInt(cell, 0) else operation.read(cell, 0)
+                    }
+                assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.readInt(cell, 1) }
                 assertThrows(RuntimeFault::class.java) { cell.readWord8(0) }
                 assertThrows(RuntimeFault::class.java) { cell.writeWord8(0, 1) }
                 assertThrows(RuntimeFault::class.java) { cell.writeNativeScalar(0, 4, 1) }
@@ -97,12 +99,12 @@ class EnabledCapabilitiesTest {
                 val foreignCell = context().use { foreign ->
                     foreign.initialize("thc"); foreign.enter()
                     try {
-                        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.read(cell, 0) }
+                        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD32.readInt(cell, 0) }
                         CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentations.parse(address))
                     }
                     finally { foreign.leave() }
                 }
-                assertEquals(cpuCount, ManagedAddressRead.WORD32.read(cell, 0))
+                assertEquals(cpuCount, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(cell, 0)))
                 assertTrue(cell.sameLocation(cell))
                 assertThrows(RuntimeFault::class.java) { cell.sameLocation(foreignCell) }
                 } finally { threads.leaveCurrent() }

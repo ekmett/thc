@@ -142,6 +142,16 @@ class ManagedAddressReadTest {
         }
     }
 
+    private fun observed(operation: ManagedAddressRead, value: Any?): Long =
+        if (operation.isInt) when (operation) {
+            ManagedAddressRead.WORD16 -> (value as Int).toLong() and 0xffffL
+            ManagedAddressRead.WORD32 -> Integer.toUnsignedLong(value as Int)
+            else -> (value as Int).toLong()
+        } else value as Long
+
+    private fun read(operation: ManagedAddressRead, address: ManagedAddress, offset: Long): Long =
+        observed(operation, if (operation.isInt) operation.readInt(address, offset) else operation.read(address, offset))
+
     @Test fun fullWidthBoundsNegativeDerivedOffsetsAndOverflow() {
         val bytes = ByteArray(32) { (it * 37 + 129).toByte() }
         for (operation in ManagedAddressRead.entries) {
@@ -151,40 +161,46 @@ class ManagedAddressReadTest {
                 for (offset in -9L..9L) {
                     val start = base + offset * width
                     if (start >= 0 && start + width <= bytes.size)
-                        assertEquals(expected(operation, bytes, start.toInt()), operation.read(address, offset), "$operation/$base/$offset")
-                    else assertThrows(RuntimeFault::class.java) { operation.read(address, offset) }
+                        assertEquals(expected(operation, bytes, start.toInt()), read(operation, address, offset), "$operation/$base/$offset")
+                    else assertThrows(RuntimeFault::class.java) { read(operation, address, offset) }
                 }
                 for (offset in listOf(Long.MIN_VALUE, Long.MAX_VALUE, Long.MIN_VALUE / width - 1,
                     Long.MAX_VALUE / width + 1, 1L shl 32, -(1L shl 32)))
-                    assertThrows(RuntimeFault::class.java) { operation.read(address, offset) }
+                    assertThrows(RuntimeFault::class.java) { read(operation, address, offset) }
             }
-            assertThrows(RuntimeFault::class.java) { operation.read(ManagedAddress.fromByteArray(ByteArray(width - 1)), 0) }
-            assertThrows(RuntimeFault::class.java) { operation.read(ManagedAddress.fromByteArray(ByteArray(0)), 0) }
+            assertThrows(RuntimeFault::class.java) { read(operation, ManagedAddress.fromByteArray(ByteArray(width - 1)), 0) }
+            assertThrows(RuntimeFault::class.java) { read(operation, ManagedAddress.fromByteArray(ByteArray(0)), 0) }
         }
         val allOnes = ManagedAddress.fromHex("ffffffffffffffff")
-        assertEquals(65535L, ManagedAddressRead.WORD16.read(allOnes, 0))
-        assertEquals(-1L, ManagedAddressRead.INT16.read(allOnes, 0))
-        assertEquals(4294967295L, ManagedAddressRead.WORD32.read(allOnes, 0))
+        assertEquals(65535L, read(ManagedAddressRead.WORD16, allOnes, 0))
+        assertEquals(-1L, read(ManagedAddressRead.INT16, allOnes, 0))
+        assertEquals(4294967295L, read(ManagedAddressRead.WORD32, allOnes, 0))
         assertEquals(4294967295L, ManagedAddressRead.WIDE_CHAR.read(allOnes, 0))
-        assertEquals(-1L, ManagedAddressRead.INT32.read(allOnes, 0))
+        assertEquals(-1L, read(ManagedAddressRead.INT32, allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.WORD.read(allOnes, 0))
         assertEquals(-1L, ManagedAddressRead.INT.read(allOnes, 0))
     }
 
     @Test fun stateValidationPrecedesReadsAndFailedReadsDoNotPublish() {
-        val descriptor = FrameDescriptor.newBuilder().apply { repeat(2) { addSlot(FrameSlotKind.Long, null, null) } }.build()
-        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
         for (operation in operations) for (mode in listOf("ok", "state-throws", "bad-state", "bounds")) {
+            val read = operation.addressRead!!
+            val descriptor = FrameDescriptor.newBuilder().apply {
+                addSlot(FrameSlotKind.Long, null, null)
+                addSlot(if (read.isInt) FrameSlotKind.Int else FrameSlotKind.Long, null, null)
+            }.build()
+            val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
+            fun payload() = observed(read, if (read.isInt) frame.getInt(1) else frame.getLong(1))
             val bytes = ByteArray(16) { 127 }
             val events = mutableListOf<String>()
-            FrameAccess.writeLong(frame, 0, 17L); FrameAccess.writeLong(frame, 1, 91L)
+            FrameAccess.writeLong(frame, 0, 17L)
+            if (read.isInt) FrameAccess.writeInt(frame, 1, 91) else FrameAccess.writeLong(frame, 1, 91L)
             fun operand(name: String, value: Any?) = object : Expr() {
                 override fun execute(frame: VirtualFrame): Any? { events.add(name); return value }
             }
             val state = object : Expr() {
                 override fun execute(frame: VirtualFrame): Any {
                     events.add("state")
-                    assertEquals(91L, frame.getLong(1))
+                    assertEquals(91L, payload())
                     if (mode == "state-throws") throw RuntimeFault("failed state")
                     bytes[0] = 0 // A read before State would observe the old byte.
                     return if (mode == "bad-state") 1L else Unit
@@ -194,10 +210,10 @@ class ManagedAddressReadTest {
                 operand("address", ManagedAddress.fromByteArray(bytes)), operand("offset", if (mode == "bounds") 17L else 0L), state))
             if (mode == "ok") {
                 expression.executeTuple(frame, intArrayOf(0, 1), 1)
-                assertEquals(expected(operation.addressRead!!, bytes, 0), frame.getLong(1))
+                assertEquals(expected(read, bytes, 0), payload())
             } else {
                 assertThrows(RuntimeFault::class.java) { expression.executeTuple(frame, intArrayOf(0, 1), 1) }
-                assertEquals(91L, frame.getLong(1))
+                assertEquals(91L, payload())
             }
             assertEquals(17L, frame.getLong(0))
             assertEquals(listOf("address", "offset", "state"), events)
@@ -232,7 +248,8 @@ class ManagedAddressReadTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val runtime = program(language, synthetic(operation), backend)
                 val target = runtime.entryTarget("read")
-                fun call(value: Any?, offset: Any? = 0L, token: Any? = Unit) = Calls.target(target, arrayOf(0L, value, offset, token))
+                fun call(value: Any?, offset: Any? = 0L, token: Any? = Unit) =
+                    observed(operation.addressRead!!, Calls.target(target, arrayOf(0L, value, offset, token)))
                 val bytes = ByteArray(16)
                 val derived = ManagedAddress.fromByteArray(bytes).plus(8)
                 for (v in 0..255) { bytes[0] = v.toByte(); call(derived, -8L / operation.addressRead!!.width) }

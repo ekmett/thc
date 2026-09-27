@@ -140,9 +140,9 @@ class PinnedPointerCellsTest {
         base.writeAddressElementIndex(1, target)
         base.writeWord8(16, 0x1e9)
         assertEquals(0xe9L, base.readWord8(16))
-        assertDoesNotThrow { ManagedAddressRead.WORD16.read(base, 8) }
-        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD16.read(base, 4) }
-        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.INT16.read(base, Long.MAX_VALUE) }
+        assertDoesNotThrow { ManagedAddressRead.WORD16.readInt(base, 8) }
+        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD16.readInt(base, 4) }
+        assertThrows(RuntimeFault::class.java) { ManagedAddressRead.INT16.readInt(base, Long.MAX_VALUE) }
         assertThrows(RuntimeFault::class.java) { base.writeWord8(8, 0x41) }
         assertSame(target, base.readAddressElementIndex(1))
     }
@@ -426,8 +426,8 @@ class PinnedPointerCellsTest {
         base.writeNativeScalar(4, 4, -1)
         base.writeNativeScalar(5, 8, 0x123456789abcdef)
         val derived = base.plus(24)
-        assertEquals(-1L, ManagedAddressRead.INT32.read(derived, -2))
-        assertEquals(0xffffffffL, ManagedAddressRead.WORD32.read(derived, -2))
+        assertEquals(-1L, ManagedAddressRead.INT32.readInt(derived, -2).toLong())
+        assertEquals(0xffffffffL, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(derived, -2)))
         assertEquals(0x123456789abcdefL, ManagedAddressRead.INT64.read(derived, 2))
         assertEquals(0x123456789abcdefL, ManagedAddressRead.WORD64.read(derived, 2))
         assertEquals(0x123456789abcdefL, ManagedAddressRead.INT64.read(base.plus(48), -1))
@@ -435,7 +435,9 @@ class PinnedPointerCellsTest {
             ManagedAddressRead.INT, ManagedAddressRead.WORD,
             ManagedAddressRead.INT64, ManagedAddressRead.WORD64))
             for (index in listOf(Long.MIN_VALUE, Long.MAX_VALUE))
-                assertThrows(RuntimeFault::class.java) { operation.read(derived, index) }
+                assertThrows(RuntimeFault::class.java) {
+                    if (operation.isInt) operation.readInt(derived, index) else operation.read(derived, index)
+                }
         val target = base.plus(56)
         base.writeAddressElementIndex(1, target)
         assertThrows(RuntimeFault::class.java) { ManagedAddressRead.WORD64.read(base, 1) }

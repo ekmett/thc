@@ -47,7 +47,7 @@ class ProcessLifecycleCoreTest {
         values.forEachIndexed { index, value -> array.writeAddressElementIndex(index.toLong(), string(value)) }
         array.writeAddressElementIndex(values.size.toLong(), nil)
     }
-    private fun int(address: ManagedAddress) = ManagedAddressRead.INT32.read(address, 0)
+    private fun int(address: ManagedAddress) = ManagedAddressRead.INT32.readInt(address, 0).toLong()
     private fun text(address: ManagedAddress) = ByteArray(address.cStringLength().toInt()) { address.readWord8(it.toLong()).toByte() }.toString(Charsets.UTF_8)
     private fun nativeRows(mode: String): Map<String, String> {
         val native = ProcessBuilder(oracle.toString(), mode).redirectError(ProcessBuilder.Redirect.INHERIT).start()
