@@ -82,12 +82,37 @@ class ScalarBitCastTest {
     private fun inputs(width: Int): List<Long> = (patterns(width) + if (width == 32)
         setOf(Long.MIN_VALUE, Long.MAX_VALUE, -1L, -(1L shl 32), 1L shl 32,
             (1L shl 48) or 0x7f800001L, -((1L shl 40) or 0x123456L)) else emptySet()).sorted()
+    // The producer pins the original exported lambda inventory, including
+    // immediate runRW State# lambdas. It is not the lowered entry count.
     private val expectedCalls = names.associateWith { name -> when {
         name.endsWith("Roundtrip") -> 5L
         name.endsWith("Field") -> 6L
         name.endsWith("Captured") -> 7L
         else -> 4L
     } }
+    private data class RetainedCalls(val globals: List<String>, val callbacks: Int) {
+        val count: Long get() = (globals.size + callbacks).toLong()
+    }
+    private fun retainedCalls(module: Map<String, Any?>, name: String, shape: Map<String, Any?>): RetainedCalls {
+        val evidence = ArrayCoreEvidence(module, name)
+        val functions = evidence.bindings.filter { (it["expr"] as List<*>).firstOrNull() == "lam" }
+        val globals = functions.map { it["id"] as String }
+        assertEquals((shape["globalFunctions"] as List<String>).toSet(), globals.toSet(), "$name original global identities")
+        val exported = evidence.bindings.flatMap { evidence.guestLambdas(it["expr"]) }
+        assertEquals(expectedCalls.getValue(name), exported.size.toLong(), "$name original lambda inventory")
+        // This independent fixture helper validates the exact zero-slot formal,
+        // literal void argument and call flags. It never calls the runtime rewriter.
+        val lowered = evidence.bindings.flatMap { evidence.loweredGuestLambdas(it["expr"]) }
+        val eliminated = exported.filter { original -> lowered.none { it === original } }
+        val stateCount = if (name.endsWith("Decode") || name.endsWith("Encode")) 1 else 0
+        assertEquals(stateCount, eliminated.size, "$name exact State# redex inventory")
+        assertEquals(shape["stateLambdas"], eliminated.size.toLong())
+        functions.forEach { function -> assertTrue(lowered.any { it === function["expr"] }, "$name retained global") }
+        val callbacks = lowered.filter { lambda -> functions.none { it["expr"] === lambda } }
+        assertEquals(if (name.endsWith("Captured")) 1 else 0, callbacks.size, "$name genuine callback inventory")
+        assertEquals(shape["nestedCallbacks"], callbacks.size.toLong())
+        return RetainedCalls(globals, callbacks.size)
+    }
     private fun evidence() = Json.parse(File(root, "build/scalar-bitcasts/manifest.json").readText()) as Map<String, Any?>
     private fun verifyEvidence(manifest: Map<String, Any?>) {
         val prefix = "build/scalar-bitcasts"
@@ -174,6 +199,40 @@ class ScalarBitCastTest {
     }
     @Test fun nativeRawBitsWithInlining() = native(true)
     @Test fun nativeRawBitsAcrossResidualCalls() = native(false)
+    @Test fun loweredPathsKeepGlobalIdentitiesAndCallbacksAndRejectNonStateRedexes() {
+        val manifest = evidence(); verifyEvidence(manifest)
+        for ((stage, path) in manifest["stages"] as Map<String, String>) {
+            val module = Json.parse(File(root, path).readText()) as Map<String, Any?>
+            val shapes = manifest["structure"] as Map<String, Map<String, Any?>>
+            for (name in names) {
+                val retained = retainedCalls(module, name, shapes.getValue("$stage/$name"))
+                assertEquals(when {
+                    name.endsWith("Roundtrip") -> 5L
+                    name.endsWith("Field") -> 6L
+                    name.endsWith("Captured") -> 7L
+                    else -> 3L
+                }, retained.count, "$stage/$name independently retained roots")
+            }
+            for (mutation in listOf("type", "lifted", "coercion", "formal", "argument", "flags")) {
+                val bad = Json.parse(Json.stringify(module)) as Map<String, Any?>
+                val core = ArrayCoreEvidence(bad, "floatDecode")
+                val call = core.nodes(core.root["expr"]).single { it.firstOrNull() == "app" &&
+                    (it.getOrNull(1) as? List<*>)?.firstOrNull() == "lam" } as MutableList<Any?>
+                val formal = ((call[1] as List<*>)[1] as List<*>).single() as MutableMap<String, Any?>
+                when (mutation) {
+                    "type" -> formal["type"] = "Int#"
+                    "lifted" -> formal["lifted"] = true
+                    "coercion" -> formal["coercion"] = true
+                    "formal" -> formal["rep"] = proof("IntRep")
+                    "argument" -> call[2] = listOf(listOf("lit", "int", "0", mapOf("rep" to proof("IntRep"))))
+                    "flags" -> call[3] = listOf(true)
+                }
+                assertThrows(IllegalArgumentException::class.java, {
+                    retainedCalls(bad, "floatDecode", shapes.getValue("$stage/floatDecode"))
+                }, "$stage/$mutation must not silently remove an arbitrary lambda")
+            }
+        }
+    }
     private fun native(inlining: Boolean) {
         val manifest = evidence(); verifyEvidence(manifest)
         val rows = File(root, "build/scalar-bitcasts/oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
@@ -188,6 +247,8 @@ class ScalarBitCastTest {
                     val p = program(language, CoreModules.reachable(module, name) + ("instrument" to true), backend)
                     val entry = p.entryTarget(name); val host = p.hostEntryTarget(1)
                     val function = context.asValue(EntryValue(p, name, 1)); val label = "$stage/$backend/$name/inline=$inlining"
+                    val retained = retainedCalls(module, name,
+                        (manifest["structure"] as Map<String, Map<String, Any?>>).getValue("$stage/$name"))
                     val cases = rows.getValue(name)
                     assertEquals((manifest["inputsByWidth"] as Map<String, List<Number>>).getValue(if (name.startsWith("float")) "32" else "64").map { it.toLong() }, cases.map { it[1].toLong() })
                     fun check(row: List<String>) {
@@ -198,11 +259,16 @@ class ScalarBitCastTest {
                     cases.forEach(::check)
                     val active = activeTargets(host)
                     assertTrue(active.size > 1, "$label actual guest call target")
+                    assertEquals(retained.count + 1, active.size.toLong(), "$label retained roots plus separate host root")
+                    val globals = retained.globals.map(p::entryTarget)
+                    globals.forEach { target -> assertTrue(active.any { it === target }, "$label original global ${target.rootNode.name}") }
+                    assertEquals(retained.callbacks, active.count { target -> target !== host && globals.none { it === target } },
+                        "$label retain genuine callbacks, not the in-frame State# redex")
                     active.filter { it !== host }.forEach(::compile)
                     assertTrue(function.invokeMember("compile").asBoolean(), "$label host installation")
                     for (row in cases.asReversed()) {
                         val before = count(p); check(row)
-                        assertEquals(before + (manifest["expectedGuestCalls"] as Map<String, Number>).getValue(name).toLong(),
+                        assertEquals(before + retained.count,
                             count(p), "$label/${row[1]} exact retained guest entries")
                         assertEquals(active, activeTargets(host), "$label active target identities")
                         valid(entry, "$label original"); active.forEach { valid(it, "$label active") }; released(language)
