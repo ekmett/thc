@@ -14,11 +14,17 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
     data class UnitRecord(val id: String, val depends: List<String>, val json: Artifact?, val symbols: Artifact?,
         val modules: List<ModuleRecord>, val legacyBundle: Artifact? = null,
         val symbolsFormat: CoreJsonSymbols.Format = CoreJsonSymbols.Format.TEXT)
-    data class ModuleRecord(val unit: String, val name: String, val sha256: String, val span: CoreJsonSymbols.ModuleSpan,
-        val metadata: CoreJsonSymbols.ValueSpan, val sourceMetadata: CoreJsonSymbols.ValueSpan?,
+    sealed interface Storage
+    data class JsonStorage(val span: CoreJsonSymbols.ModuleSpan, val metadata: CoreJsonSymbols.ValueSpan,
+        val sourceMetadata: CoreJsonSymbols.ValueSpan?) : Storage
+    data class CompactStorage(val artifact: Artifact) : Storage
+    data class ModuleRecord(val unit: String, val name: String, val sha256: String, val storage: Storage,
         val containsDelimitedControl: Boolean, val registrationObligations: Boolean, val mainAlias: Boolean,
         val packageScalarDeclarations: Boolean) {
         val prefix = "$unit:$name."
+        val span get() = (storage as JsonStorage).span
+        val metadata get() = (storage as JsonStorage).metadata
+        val sourceMetadata get() = (storage as JsonStorage).sourceMetadata
     }
     val modules = units.flatMap { it.modules }
     private val owners = modules.associateBy { it.prefix }
@@ -37,14 +43,21 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
     }
 
     fun open(verifyArtifacts: Boolean, sourceNotes: Boolean = true,
-             admitted: (CoreJsonSymbols.Counters) -> Unit = {}) = Sources(this, verifyArtifacts, sourceNotes, admitted)
+             admitted: (CoreJsonSymbols.Counters) -> Unit = {},
+             compactAdmitted: (CoreCompactFile.Counters) -> Unit = {}) =
+        Sources(this, verifyArtifacts, sourceNotes, admitted, compactAdmitted)
 
     class Sources(private val directory: CoreUnitDirectory, private val verifyArtifacts: Boolean,
-                  private val sourceNotes: Boolean, private val admitted: (CoreJsonSymbols.Counters) -> Unit) : AutoCloseable {
+                  private val sourceNotes: Boolean, private val admitted: (CoreJsonSymbols.Counters) -> Unit,
+                  private val compactAdmitted: (CoreCompactFile.Counters) -> Unit) : AutoCloseable {
         private var closed = false
         private val readers = HashMap<String, CoreJsonSymbols>()
+        private val compactReaders = HashMap<ModuleRecord, CoreCompactModule>()
         private val metadata = HashMap<ModuleRecord, Map<String, Any?>>()
         private val verified = HashSet<ModuleRecord>()
+        private fun compact(module: ModuleRecord) = compactReaders.getOrPut(module) {
+            CoreCompactModule(module, directory.targetLayout, verifyArtifacts).also { compactAdmitted(it.counters) }
+        }
         private fun reader(unit: String): CoreJsonSymbols {
             check(!closed) { "Core unit sources are closed" }
             return readers.getOrPut(unit) {
@@ -58,6 +71,7 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
         @Synchronized fun metadata(module: ModuleRecord): Map<String, Any?> {
             check(!closed) { "Core unit sources are closed" }
             verifyModule(module)
+            if (module.storage is CompactStorage) return compact(module).metadata()
             return metadata.getOrPut(module) {
                 val reader = reader(module.unit)
                 val required = reader.metadata(module.metadata, true)
@@ -78,16 +92,23 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
         @Synchronized fun binding(id: String): Map<String, Any?>? {
             check(!closed) { "Core unit sources are closed" }
             val module = directory.owner(id) ?: return null
+            if (module.storage is CompactStorage) return compact(module).binding(id)
             return reader(module.unit).binding(id, module.span)
         }
         @Synchronized fun containsSymbol(id: String): Boolean {
             check(!closed) { "Core unit sources are closed" }
             val module = directory.owner(id) ?: return false
+            if (module.storage is CompactStorage) return compact(module).containsSymbol(id)
             return reader(module.unit).containsSymbol(id)
         }
         @Synchronized fun verifyModule(module: ModuleRecord) {
             check(!closed) { "Core unit sources are closed" }
             if (!verifyArtifacts || module in verified) return
+            if (module.storage is CompactStorage) {
+                compact(module).verify()
+                verified += module
+                return
+            }
             val reader = reader(module.unit)
             reader.verifyModule(module.span, module.sha256) { original ->
                 require(original.filterKeys { it in METADATA_FIELDS } == reader.metadata(module.metadata, true)) {
@@ -104,12 +125,16 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
             verified += module
         }
         @Synchronized fun counters(): List<CoreJsonSymbols.Counters> = readers.values.map { it.counters }
+        @Synchronized fun compactCounters(): List<CoreCompactFile.Counters> = compactReaders.values.map { it.counters }
         @Synchronized override fun close() {
             if (closed) return
             closed = true
             metadata.clear()
             verified.clear()
-            try { readers.values.forEach { it.close() } } finally { readers.clear() }
+            try { readers.values.forEach { it.close() } } finally {
+                readers.clear()
+                try { compactReaders.values.forEach { it.close() } } finally { compactReaders.clear() }
+            }
         }
     }
 
@@ -124,18 +149,20 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
          * sidecar discovery or conversion. New unit pairs are explicit. */
         fun read(document: Map<*, *>): CoreUnitDirectory? {
             val rawUnits = document["units"] as? List<*> ?: error("Missing package units")
-            if (rawUnits.none { it is Map<*, *> && (it.containsKey("json") || it.containsKey("symbols")) }) return null
+            if (rawUnits.none { it is Map<*, *> && (it.containsKey("json") || it.containsKey("symbols") ||
+                (it["modules"] as? List<*>)?.any { module -> module is Map<*, *> && module.containsKey("compact") } == true) }) return null
             require(document["format"] == "thc-core-packages" && document["schema"] == 1L &&
                 document["ghc"] == "9.14.1") { "Core package manifest requires schema 1 / GHC 9.14.1" }
             val unitIds = HashSet<String>()
             val artifactPaths = HashSet<Path>()
             var layout: TargetLayout? = null
-            fun artifact(raw: Any?, symbols: Boolean = false): Artifact {
+            fun artifact(raw: Any?, symbols: Boolean = false, compact: Boolean = false): Artifact {
                 val record = raw as? Map<*, *> ?: error("Missing unit artifact")
                 val path = Path.of(record["path"] as? String ?: error("Missing unit artifact path"))
                 val hash = record["sha256"] as? String ?: error("Missing unit artifact identity")
-                require((record.keys == setOf("path", "sha256") || symbols &&
-                    record.keys == setOf("path", "sha256", "format") && record["format"] == CoreJsonSymbols.MD5_FORMAT) &&
+                require((!compact && record.keys == setOf("path", "sha256") ||
+                    record.keys == setOf("path", "sha256", "format") &&
+                    (symbols && record["format"] == CoreJsonSymbols.MD5_FORMAT || compact && record["format"] == CoreCompactFormat.NAME)) &&
                     path.isAbsolute && hash.matches(SHA) &&
                     artifactPaths.add(path.normalize())) { "Invalid or duplicate unit artifact reference" }
                 // No toRealPath/stat/open: a cold unit need not exist yet.
@@ -159,13 +186,30 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                 require(!unit.containsKey("bundle")) {
                     "Only moduleless legacy units may accompany direct unit pairs: $id"
                 }
+                val compact = rawModules.any { it is Map<*, *> && it.containsKey("compact") }
+                require(!compact || !unit.containsKey("json") && !unit.containsKey("symbols") &&
+                    rawModules.all { it is Map<*, *> && it.containsKey("compact") }) {
+                    "Mixed compact and JSON storage within GHC unit: $id"
+                }
                 val names = HashSet<String>()
                 var previousEnd = 0L
-                val modules = rawModules.map { item ->
+                val modules = rawModules.map module@ { item ->
                     val module = item as? Map<*, *> ?: error("Invalid module record")
                     val name = module["name"] as? String ?: error("Missing module name")
                     require(name.isNotEmpty() && names.add(name) && module["boundary"] == BOUNDARY &&
                         (module["sha256"] as? String)?.matches(SHA) == true) { "Invalid module directory record: $id:$name" }
+                    fun record(storage: Storage) = ModuleRecord(id, name, module["sha256"] as String, storage,
+                        module["containsDelimitedControl"] as? Boolean ?: error("Missing delimited-control summary"),
+                        module["registrationObligations"] as? Boolean ?: error("Missing registration summary"),
+                        module["mainAlias"] as? Boolean ?: error("Missing main-alias summary"),
+                        module["packageScalarDeclarations"] as? Boolean ?: error("Missing package declaration summary"))
+                    if (compact) {
+                        require(module.keys.none { it in setOf("start", "end", "bindingsStart", "bindingsEnd",
+                            "metadataStart", "metadataEnd", "sourceMetadataStart", "sourceMetadataEnd", "index") }) {
+                            "Compact module contains JSON storage extents"
+                        }
+                        return@module record(CompactStorage(artifact(module["compact"], compact = true)))
+                    }
                     fun offset(field: String) = (module[field] as? Long)?.also {
                         require(it >= 0) { "Negative module byte offset: $field" }
                     } ?: error("Missing exact module byte offset: $field")
@@ -181,19 +225,16 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                             require(it.start >= metadata.end && it.end > it.start) { "Invalid Core source metadata extent" }
                         } else null
                     previousEnd = notes?.end ?: metadata.end
-                    ModuleRecord(id, name, module["sha256"] as String, span, metadata, notes,
-                        module["containsDelimitedControl"] as? Boolean ?: error("Missing delimited-control summary"),
-                        module["registrationObligations"] as? Boolean ?: error("Missing registration summary"),
-                        module["mainAlias"] as? Boolean ?: error("Missing main-alias summary"),
-                        module["packageScalarDeclarations"] as? Boolean ?: error("Missing package declaration summary"))
+                    record(JsonStorage(span, metadata, notes))
                 }
                 unit["targetLayout"]?.let { rawLayout ->
                     val candidate = TargetLayout.fromDocument(rawLayout)
                     require(layout == null || layout == candidate) { "Conflicting GHC target layouts" }
                     layout = candidate
                 }
-                UnitRecord(id, depends.filterIsInstance<String>(), artifact(unit["json"]), artifact(unit["symbols"], true), modules,
-                    symbolsFormat = if ((unit["symbols"] as Map<*, *>).containsKey("format"))
+                UnitRecord(id, depends.filterIsInstance<String>(), if (compact) null else artifact(unit["json"]),
+                    if (compact) null else artifact(unit["symbols"], true), modules,
+                    symbolsFormat = if (!compact && (unit["symbols"] as Map<*, *>).containsKey("format"))
                         CoreJsonSymbols.Format.MD5_UTF8_U64LE else CoreJsonSymbols.Format.TEXT)
             }
             val bridge = document["foreignExceptionBridgeUnit"]

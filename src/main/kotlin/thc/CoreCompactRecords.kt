@@ -127,7 +127,13 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         field(cursor, result, "info") { info(cursor) }
         return result
     }
-    fun binding(offset: Long): Map<String, Any?> = file.data(offset) { binding(it) }
+    fun binding(offset: Long): Map<String, Any?> = file.data(offset) {
+        binding(it).also { binding ->
+            require(!(binding["id"] as String).startsWith("\u0000compact-local:")) {
+                "Compact top-level binding has local identity"
+            }
+        }
+    }
     private fun binding(cursor: CoreCompactCursor): Map<String, Any?> {
         val origin = Origin(identity, cursor.position)
         val id = id(cursor)
@@ -187,6 +193,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private fun expression(cursor: CoreCompactCursor): List<Any?> {
         val origin = Origin(identity, cursor.position)
         val tag = cursor.byte()
+        require(tag in 0..8) { "Invalid compact Core expression tag: $tag" }
         val metadata = meta(cursor, origin)
         val fields: List<Any?> = when (tag) {
             0 -> listOf("var", id(cursor))
@@ -264,7 +271,83 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return result
     }
 
+    /** Header constructors use inline shapes: admission never reads a body to
+     * discover its module's identity, layout or foreign obligations. */
+    fun header(): Map<String, Any?> = file.facts { cursor ->
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned(),
+            "ghc" to text(cursor), "unit" to text(cursor), "module" to text(cursor),
+            "boundary" to text(cursor))
+        field(cursor, result, "providedModules") { list(cursor) { text(cursor) } }
+        field(cursor, result, "targetLayout") { targetLayout(cursor) }
+        result["constructors"] = list(cursor) { constructor(cursor) }
+        field(cursor, result, "foreign") { artifacts(cursor) }
+        field(cursor, result, "foreignExceptionBridge") {
+            linkedMapOf<String, Any?>("schema" to cursor.unsigned()).also { bridge ->
+                for (key in listOf("unit", "module", "box", "project", "payloadType", "exceptionType"))
+                    bridge[key] = text(cursor)
+            }
+        }
+        field(cursor, result, "foreignExceptionBridgeUnit") { text(cursor) }
+        for (key in listOf("foreignLink", "staticForeignImportStubs", "staticForeignImports",
+            "staticForeignExports", "staticForeignExportRegistration", "packageScalarLink",
+            "packageNativeLink", "packageNativeArchive")) {
+            field(cursor, result, key) { error("Compact Core provenance record is not yet supported: $key") }
+        }
+        cursor.expectEnd()
+        result
+    }
+
+    private fun targetLayout(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("format" to "thc-target-layout", "schema" to cursor.unsigned())
+        result["compiler"] = listOf("id", "abi", "platform", "way").associateWith { text(cursor) }
+        val layout = linkedMapOf<String, Any?>("schema" to cursor.unsigned(), "profiled" to cursor.boolean(),
+            "wordBytes" to cursor.unsigned(), "endianness" to enum(cursor, listOf("little", "big")),
+            "targetPlatform" to text(cursor), "tablesNextToCode" to cursor.boolean())
+        for (key in LAYOUT_NUMBERS) layout[key] = cursor.unsigned()
+        result["layout"] = layout
+        return result
+    }
+
+    private fun artifacts(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned(), "execution" to text(cursor))
+        field(cursor, result, "stubs") {
+            linkedMapOf<String, Any?>("header" to text(cursor), "source" to text(cursor)).also { stubs ->
+                for (key in listOf("initializers", "finalizers")) stubs[key] = list(cursor) {
+                    mapOf("isInitializer" to cursor.boolean(), "unit" to text(cursor),
+                        "module" to text(cursor), "name" to text(cursor))
+                }
+            }
+        }
+        result["files"] = list(cursor) {
+            mapOf("language" to text(cursor), "source" to text(cursor), "extension" to text(cursor))
+        }
+        return result
+    }
+
     companion object {
+        // Wire order, independently fixed by compact-core-format.md; not a
+        // host-derived layout or iteration over a runtime implementation map.
+        private val LAYOUT_NUMBERS = listOf(
+            "infoTableBytes", "infoTablePtrsOffset", "infoTablePtrsBytes",
+            "infoTableNptrsOffset", "infoTableNptrsBytes", "infoTableTypeOffset",
+            "infoTableTypeBytes", "infoTableSrtOffset", "infoTableSrtBytes",
+            "infoProvEntBytes", "infoProvBytes", "infoProvEntInfoOffset",
+            "infoProvEntProvOffset", "infoProvNameOffset", "infoProvDescOffset",
+            "infoProvDescBytes", "infoProvTyDescOffset", "infoProvLabelOffset",
+            "infoProvUnitOffset", "infoProvModuleOffset", "infoProvFileOffset",
+            "infoProvSpanOffset", "closureRetBco", "closureRetSmall",
+            "closureRetBig", "closureRetFun", "closureUpdateFrame",
+            "closureCatchFrame", "closureUnderflowFrame", "closureStopFrame",
+            "closureStack", "closureAtomicallyFrame", "closureCatchRetryFrame",
+            "closureCatchStmFrame", "closureAnnFrame", "stackHeaderBytes",
+            "stackCatchHandlerBytes", "stackCatchFrameBytes", "stackCatchStmCodeBytes",
+            "stackCatchStmHandlerBytes", "stackCatchStmFrameBytes", "stackUpdateeBytes",
+            "stackUpdateFrameBytes", "stackAtomicallyCodeBytes", "stackAtomicallyResultBytes",
+            "stackAtomicallyFrameBytes", "stackCatchRetryAltCodeBytes",
+            "stackCatchRetryFirstCodeBytes", "stackCatchRetryAltBytes",
+            "stackCatchRetryFrameBytes", "stackRetFunSizeBytes", "stackRetFunFunBytes",
+            "stackRetFunPayloadBytes", "stackRetFunFrameBytes", "stackAnnPayloadBytes",
+            "stackAnnFrameBytes", "stackClosurePayloadBytes")
         private val KINDS = listOf("long", "float", "double", "address", "void", "data", "closure", "object", "vector", "unknown")
         private val ELEMENTS = listOf("Int8ElemRep", "Int16ElemRep", "Int32ElemRep", "Int64ElemRep", "Word8ElemRep",
             "Word16ElemRep", "Word32ElemRep", "Word64ElemRep", "FloatElemRep", "DoubleElemRep")

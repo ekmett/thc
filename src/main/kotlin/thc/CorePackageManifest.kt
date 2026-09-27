@@ -175,7 +175,7 @@ object CorePackageManifest {
     internal data class VisitResult(val targetLayout: TargetLayout?, val manifestSha256: String,
                                     val manifestPath: String, val foreignExceptionBridgeUnit: String?)
 
-    /** Read only the package directory when an index is declared, or when a
+    /** Read only the package directory when indexed/compact storage is declared, or when a
      * mixed indexed-consumer request requires a descriptor. Artifact hashes and
      * source/index agreement are checked at replay only with explicit verification.
      */
@@ -190,7 +190,9 @@ object CorePackageManifest {
         val units = document["units"] as? List<*> ?: error("Missing package units: $path")
         val indexed = units.any { unit -> (unit as? Map<*, *>)?.let { record ->
             record.containsKey("json") || record.containsKey("symbols") ||
-                (record["modules"] as? List<*>)?.any { (it as? Map<*, *>)?.containsKey("index") == true } == true } == true }
+                (record["modules"] as? List<*>)?.any {
+                    it is Map<*, *> && (it.containsKey("index") || it.containsKey("compact"))
+                } == true } == true }
         if (!indexed && !forceDescriptor) return null
         val bridge = document["foreignExceptionBridgeUnit"]
         require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }
