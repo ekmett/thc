@@ -144,7 +144,6 @@ class ManagedAddressReadTest {
 
     private fun observed(operation: ManagedAddressRead, value: Any?): Long =
         if (operation.isInt) when (operation) {
-            ManagedAddressRead.WORD16 -> (value as Int).toLong() and 0xffffL
             ManagedAddressRead.WORD32 -> Integer.toUnsignedLong(value as Int)
             else -> (value as Int).toLong()
         } else value as Long
