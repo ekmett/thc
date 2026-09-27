@@ -3164,8 +3164,14 @@ class OriginalDupAuditTest(unittest.TestCase):
             self.assertFalse(self.audit(module)['accepted'])
 
     def test_process_identity_keeps_exact_owner_and_signedness(self):
+        for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+            module = self.fixture('geteuid')
+            self.call(module)[6]['foreignCall']['target']['unit'] = unit
+            self.assertTrue(self.audit(module)['accepted'], unit)
         for symbol, expected in (('getpid', 'Int32Rep'), ('geteuid', 'Word32Rep')):
             for unit in ('main', 'unix-2.8.7.0-inplace', 'ghc-internal-9.1401.0-inplace',
+                         'unix-2.8.8.0-', 'unix-2.8.8.0-ABCD', 'unix-2.8.8.0-xyz',
+                         'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged',
                          'ghc-internal' if symbol == 'geteuid' else 'unix-2.8.8.0-inplace'):
                 module = self.fixture(symbol)
                 self.call(module)[6]['foreignCall']['target']['unit'] = unit
@@ -3335,6 +3341,31 @@ class OriginalPathStatDeclarationTest(unittest.TestCase):
                 call[2][index] = [*lit(9), call[2][index][2]]
                 self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'producer'))
 
+    def test_installed_lstat_wrapper_keeps_original_symbol_and_exact_owner(self):
+        fixture = LibdwUnavailableAuditTest()
+        for suffix in ('inplace', '460b', 'deadbeef'):
+            declaration = self.declaration(self.unix_symbol)
+            symbol = self.unix_symbol.replace('zminplaceZC', 'zm' + suffix + 'ZC')
+            declaration['target'].update(unit='unix-2.8.8.0-' + suffix, symbol=symbol)
+            module = fixture.fixture(declaration)
+            report = fixture.audit(module)
+            self.assertTrue(report['accepted'], report)
+            self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
+            self.assertFalse(fixture.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
+            for owner in ('unix-2.8.8.0-' + ('460b' if suffix == 'inplace' else 'inplace'),
+                          'unix-2.8.7.0-' + suffix, 'unix-2.8.8.0-' + suffix + ':forged',
+                          'unix-2.8.8.0-' + suffix + '\n', 'unix-2.8.8.0-ABCD', 'unix-2.8.8.0-'):
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = owner
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], owner)
+            for wrong_symbol in (symbol.replace('ZC2ZC', 'ZC3ZC'), symbol.replace('ZClstat', 'ZCstat'),
+                                 symbol.replace('FilesziPosixString', 'Files'),
+                                 symbol.replace('unixzm2zi8zi8zi0', 'unixzm2zi8zi7zi0')):
+                wrong = copy.deepcopy(declaration); wrong['target']['symbol'] = wrong_symbol
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], wrong_symbol)
+            for key, value in (('convention', 'ccall'), ('safety', 'safe'), ('arity', 2)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], key)
+
 
 class OriginalPathModeDeclarationTest(unittest.TestCase):
     """Synthetic rejection controls; Haskell fixtures retain the original FCallIds."""
@@ -3360,6 +3391,9 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
             self.assertTrue(report['accepted'], report)
             self.assertEqual([symbol], [call['symbol'] for call in report['foreignCalls']])
             self.assertFalse(fixture.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
+        for unit in ('unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+            declaration = self.declaration('mkdir'); declaration['target']['unit'] = unit
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'], unit)
 
     def test_path_mode_owner_abi_and_actual_stored_operands_reject_spoofs(self):
         fixture = LibdwUnavailableAuditTest()
@@ -3369,7 +3403,8 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
                                ('safety', 'safe'), ('arity', 2), ('suppliedArity', 2), ('resultRep', LONG)):
                 wrong = copy.deepcopy(declaration); wrong[key] = value
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, key))
-            for unit in ('main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-abcd',
+            for unit in ('main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-ABCD',
+                         'unix-2.8.8.0-', 'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged',
                          'ghc-internal' if symbol == self.unix_symbol else 'unix-2.8.8.0-inplace'):
                 wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (symbol, unit))
@@ -3404,7 +3439,11 @@ class OriginalPathLinkDeclarationTest(unittest.TestCase):
             declaration = self.declaration(symbol)
             report = fixture.audit(fixture.fixture(declaration))
             self.assertTrue(report['accepted'], report)
-            for unit in ('ghc-internal', 'main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-abcd'):
+            for unit in ('unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+                installed = copy.deepcopy(declaration); installed['target']['unit'] = unit
+                self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'], unit)
+            for unit in ('ghc-internal', 'main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-ABCD',
+                         'unix-2.8.8.0-', 'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged'):
                 wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
             for key, value in (('convention', 'capi'), ('safety', 'safe'), ('arity', 2), ('suppliedArity', 2)):

@@ -57,13 +57,19 @@ operations = [("pathStat","__hscore_stat"),("pathLstat","__hscore_lstat"),("unix
 unixLstat :: String
 unixLstat = "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat"
 
-symbol :: Id -> Maybe String
-symbol value = case isFCallId_maybe value of
+-- Only the validated unit suffix varies; wrapper index/module/function remain
+-- exact. The returned operation key never replaces the original FCallId.
+unixLstatFor :: String -> String
+unixLstatFor owner = "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zm" ++ drop (length ("unix-2.8.8.0-" :: String)) owner ++
+  "ZCSystemziPosixziFilesziPosixStringZClstat"
+
+originalSymbol :: String -> Id -> Maybe String
+originalSymbol owner value = case isFCallId_maybe value of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) convention F.PlayRisky))
     | unitString unit == "ghc-internal", convention == F.CCallConv,
       elem (unpackFS name) ["__hscore_stat","__hscore_lstat"] -> Just (unpackFS name)
-    | unitString unit == "unix-2.8.8.0-inplace", convention == F.CApiConv,
-      unpackFS name == unixLstat -> Just (unpackFS name)
+    | unitString unit == owner, isOriginalUnixUnit owner, convention == F.CApiConv,
+      unpackFS name == unixLstatFor (unitString unit) -> Just unixLstat
   _ -> Nothing
 
 variables :: CoreExpr -> [Id]
@@ -96,12 +102,13 @@ prepareOriginalPathStat root = do
   library <- execute "libdir" [] ghc ["--print-libdir"]
   imports <- execute "imports" [] pkg ["field", "unix", "import-dirs", "--simple-output"]
   owner <- execute "unit" [] pkg ["field", "unix", "id", "--simple-output"]
-  unless (oneLine owner == "unix-2.8.8.0-inplace") (die "Path-stat CAPI proof requires the exact pinned unix owner")
+  unless (isOriginalUnixUnit (oneLine owner)) (die "Path-stat CAPI proof requires the pinned installed unix owner")
   ghcImports <- execute "ghc-imports" [] pkg ["field", "ghc-internal", "import-dirs", "--simple-output"]
   let interfaces = [oneLine ghcImports </> "GHC/Internal/System/Posix/Internals.hi",
                     oneLine imports </> "System/Posix/Files/PosixString.hi"]
       entries = map fst operations
   oracle <- runGhc (Just (oneLine library)) $ do
+    let symbol = originalSymbol (oneLine owner)
     initial <- getSessionDynFlags
     env0 <- getSession
     (configured, _, _) <- parseDynamicFlags (hsc_logger env0) initial (map noLoc

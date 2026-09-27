@@ -5,7 +5,7 @@
 
 module FixtureSupport
   ( run, runWithTimeout, CommandResult(..), runLogged, runLoggedExpect, runLoggedWithInput
-  , writeJson, hashFile, hashes, hexBytes, splitTab, readInteger
+  , writeJson, hashFile, hashes, hexBytes, splitTab, readInteger, isOriginalUnixUnit
   ) where
 
 import Control.Monad (forM, unless)
@@ -15,6 +15,7 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map.Strict as Map
+import Data.List (stripPrefix)
 import Numeric (showHex)
 import System.Directory (createDirectoryIfMissing)
 import System.Environment (getEnvironment)
@@ -24,6 +25,13 @@ import System.IO (IOMode(ReadMode, WriteMode), withBinaryFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode,
                        waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
+
+-- The pinned package version may have a source-build or installed ABI suffix.
+isOriginalUnixUnit :: String -> Bool
+isOriginalUnixUnit value = case stripPrefix "unix-2.8.8.0-" value of
+  Just "inplace" -> True
+  Just suffix -> not (null suffix) && all (`elem` ("0123456789abcdef" :: String)) suffix
+  Nothing -> False
 
 environmentWith :: [(String,String)] -> IO [(String,String)]
 environmentWith overrides = do

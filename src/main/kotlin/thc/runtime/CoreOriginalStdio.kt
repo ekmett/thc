@@ -8,6 +8,7 @@ import thc.Language
 
 // Preserve the genuine installed owner; only this pinned Unix release is reviewed.
 private val unixUnit = Regex("unix-2\\.8\\.8\\.0-(?:inplace|[0-9a-f]+)")
+private val unixLstatSymbol = Regex("ghczuwrapperZC2ZCunixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZCSystemziPosixziFilesziPosixStringZClstat")
 internal fun isOriginalUnixUnit(unit: Any?): Boolean = unit is String && unixUnit.matches(unit)
 
 /** Exact pinned GHC/unix declarations, not aliases for arbitrary POSIX imports. */
@@ -131,10 +132,13 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep"),
     STRERROR("base_strerror_r", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int32Rep");
 
-    // These original unix declarations have the same CInt ABI as GHC's.
-    // Other symbols and releases require their own declaration evidence.
+    // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
-        isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY)
+        isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY ||
+            this == UNIX_LSTAT || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
+
+    fun matchesSymbol(value: Any?): Boolean = value == symbol ||
+        this == UNIX_LSTAT && value is String && unixLstatSymbol.matches(value)
 
     val processIdentity: Boolean get() = this == GET_PID || this == GET_EUID
     val readiness: Boolean get() = this == READY_SAFE || this == READY_UNSAFE
@@ -229,7 +233,7 @@ internal object CoreOriginalStdio {
                     val meta = value.getOrNull(6) as? Map<*, *>
                     val descriptor = meta?.get("foreignCall") as? Map<*, *>
                     val target = descriptor?.get("target") as? Map<*, *>
-                    if (OriginalStdioOp.entries.any { it.symbol == target?.get("symbol") })
+                    if (OriginalStdioOp.entries.any { it.matchesSymbol(target?.get("symbol")) })
                         validateHead(value.getOrNull(1) as? List<Any?>
                             ?: throw RuntimeFault("Invalid original stdio call: missing variable head"), false)
                 }
@@ -263,7 +267,7 @@ internal object CoreOriginalStdio {
         val descriptor = meta["foreignCall"] as? Map<*, *> ?: return null
         val target = descriptor["target"] as? Map<*, *> ?: return null
         val symbol = target["symbol"] as? String ?: return null
-        val candidates = OriginalStdioOp.entries.filter { it.symbol == symbol }
+        val candidates = OriginalStdioOp.entries.filter { it.matchesSymbol(symbol) }
         if (candidates.isEmpty()) return null
         val operation = candidates.firstOrNull { it.convention == descriptor["convention"] && it.safety == descriptor["safety"] }
             ?: throw RuntimeFault("Invalid original stdio call: calling convention/safety")
@@ -271,6 +275,10 @@ internal object CoreOriginalStdio {
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
             target["kind"] == "static" && operation.acceptsUnit(target["unit"]) && target["isFunction"] == true,
             "static original installed-library function target")
+        // The strict unit grammar needs only these two z-encoding substitutions.
+        requireProof(operation != OriginalStdioOp.UNIX_LSTAT || symbol == operation.symbol.replace(
+            "unixzm2zi8zi8zi0zminplace", (target["unit"] as String).replace("-", "zm").replace(".", "zi")),
+            "Unix wrapper owner")
         requireProof(descriptor["convention"] == operation.convention && descriptor["safety"] == operation.safety,
             "calling convention/safety")
         val expected = operation.arguments

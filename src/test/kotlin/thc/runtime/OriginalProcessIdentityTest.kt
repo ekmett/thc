@@ -72,6 +72,9 @@ class OriginalProcessIdentityTest {
         val manifest = json("$prefix/manifest.json") as Map<String, Any?>
         assertEquals(1L, manifest["schema"]); assertEquals("9.14.1", manifest["ghc"])
         assertEquals(true, manifest["strictAccepted"]); assertEquals(entries.keys.toList(), manifest["entries"])
+        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        for (stage in listOf("pre", "post"))
+            assertEquals(manifest["unixUnit"], (((original(source(stage), "geteuid")[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"])
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/OriginalProcessIdentityAudit.hs", "compiler/test-fixtures/OriginalProcessIdentityNative.hs",
             "test/haskell-fixtures/OriginalStdioFixtures.hs", "scripts/core_original_foreign.py",
@@ -171,8 +174,16 @@ class OriginalProcessIdentityTest {
                     assertThrows(RuntimeFault::class.java) { program(language, backend, changed) }
                 }
                 for (unit in listOf("main", "ghc-internal-9.1401.0-inplace", "unix-2.8.7.0-inplace",
+                    "unix-2.8.8.0-ABCD", "unix-2.8.8.0-nothex",
                     if (symbol == "getpid") "unix-2.8.8.0-inplace" else "ghc-internal"))
                     rejects { _, descriptor -> (descriptor["target"] as MutableMap<String, Any?>)["unit"] = unit }
+                for (unit in listOf("unix-2.8.8.0-inplace", "unix-2.8.8.0-460b")) {
+                    val installed = Json.parse(Json.stringify(call)) as MutableList<Any?>
+                    (((installed[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>)["unit"] = unit
+                    val changed = OriginalStdioChecks.rawModule(installed, module)
+                    if (symbol == "geteuid") program(language, backend, changed)
+                    else assertThrows(RuntimeFault::class.java) { program(language, backend, changed) }
+                }
                 for ((key, value) in listOf("schema" to true, "convention" to "capi", "safety" to "safe",
                     "arity" to 2L, "suppliedArity" to 0L)) rejects { _, descriptor -> descriptor[key] = value }
                 for (rep in listOf("IntRep", "WordRep", if (symbol == "getpid") "Word32Rep" else "Int32Rep"))

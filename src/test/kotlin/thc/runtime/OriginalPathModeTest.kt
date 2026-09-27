@@ -77,7 +77,7 @@ class OriginalPathModeTest {
     @Test fun originalNativeModesMatchBothBackendsAndFirstInstalledCalls() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertEquals("unix-2.8.8.0-inplace", manifest["unixUnit"])
+        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalPathModeAudit.hs",
             "test/haskell-fixtures/OriginalPathModeFixtures.hs", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +
@@ -106,6 +106,8 @@ class OriginalPathModeTest {
             assertEquals(1, evidence.guestLambdas(evidence.root["expr"]).size)
             assertEquals(1, evidence.loweredGuestLambdas(evidence.root["expr"]).size)
             assertEquals(operation, validate(original(name, stage)))
+            if (operation == OriginalStdioOp.MKDIR)
+                assertEquals(manifest["unixUnit"], (((original(name, stage)[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"])
             for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
                 val executable = program(language, backend, linked)
                 val entry = executable.entryTarget(name)
@@ -160,13 +162,21 @@ class OriginalPathModeTest {
                 ((bad[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)[key] = value
                 assertThrows(RuntimeFault::class.java) { validate(bad) }
             }
-            for (unit in listOf("main", "unix-2.8.7.0-inplace", "unix-2.8.8.0-abcd",
+            for (unit in listOf("main", "unix-2.8.7.0-inplace", "unix-2.8.8.0-ABCD", "unix-2.8.8.0-nothex",
                 if (operation == OriginalStdioOp.MKDIR) "ghc-internal" else "unix-2.8.8.0-inplace")) {
                 val bad = copy(call) as MutableList<Any?>
                 (((bad[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)["target"] as MutableMap<String, Any?>)["unit"] = unit
                 assertThrows(RuntimeFault::class.java) { validate(bad) }
             }
             for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
+                for (unit in listOf("unix-2.8.8.0-inplace", "unix-2.8.8.0-460b")) {
+                    val installed = copy(call) as MutableList<Any?>
+                    (((installed[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>)["unit"] = unit
+                    if (operation == OriginalStdioOp.MKDIR) {
+                        assertEquals(operation, validate(installed))
+                        program(language, backend, raw(installed))
+                    } else assertThrows(RuntimeFault::class.java) { program(language, backend, raw(installed)) }
+                }
                 for (index in 0..2) assertThrows(RuntimeFault::class.java) {
                     program(language, backend, OriginalStdioChecks.rawModule(call, source("post"), index))
                 }

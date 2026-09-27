@@ -69,7 +69,7 @@ class OriginalPathStatTest {
     @Test fun originalNativePathImagesMatchBothBackendsAndFirstInstalledCalls() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertEquals("unix-2.8.8.0-inplace", manifest["unixUnit"])
+        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalPathStatAudit.hs",
             "test/haskell-fixtures/OriginalPathStatFixtures.hs", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +
@@ -105,6 +105,8 @@ class OriginalPathStatTest {
             assertEquals(1, evidence.guestLambdas(evidence.root["expr"]).size)
             assertEquals(1, evidence.loweredGuestLambdas(evidence.root["expr"]).size)
             assertEquals(operation, validate(original(name, stage)))
+            if (operation == OriginalStdioOp.UNIX_LSTAT)
+                assertEquals(manifest["unixUnit"], (((original(name, stage)[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"])
             for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
                 val executable = program(language, backend, linked)
                 val entry = executable.entryTarget(name)
@@ -155,7 +157,7 @@ class OriginalPathStatTest {
                 ((bad[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)[key] = value
                 assertThrows(RuntimeFault::class.java) { validate(bad) }
             }
-            for (unit in listOf("main", "unix-2.8.7.0-inplace", "unix-2.8.8.0-abcd",
+            for (unit in listOf("main", "unix-2.8.7.0-inplace", "unix-2.8.8.0-ABCD", "unix-2.8.8.0-nothex",
                 if (operation == OriginalStdioOp.UNIX_LSTAT) "ghc-internal" else "unix-2.8.8.0-inplace")) {
                 val bad = copy(call) as MutableList<Any?>
                 (((bad[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)["target"] as MutableMap<String, Any?>)["unit"] = unit
@@ -171,6 +173,46 @@ class OriginalPathStatTest {
                 copied[1] = listOf("var", "p0", (copied[1] as List<*>)[2])
                 assertThrows(RuntimeFault::class.java) { program(language, backend, shadowed) }
             } }
+        }
+    }
+
+    @Test fun installedLstatWrapperMustEncodeItsExactOwner() {
+        val call = original("unixPathLstat")
+        fun label(suffix: String) = "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zm${suffix}ZCSystemziPosixziFilesziPosixStringZClstat"
+        fun declaration(owner: String, symbol: String): MutableList<Any?> = (copy(call) as MutableList<Any?>).also {
+            val target = (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>)
+            target["unit"] = owner; target["symbol"] = symbol
+        }
+        for (suffix in listOf("inplace", "460b", "deadbeef")) {
+            val accepted = declaration("unix-2.8.8.0-$suffix", label(suffix))
+            assertEquals(OriginalStdioOp.UNIX_LSTAT, validate(accepted))
+            CoreOriginalStdio.validateHeads(accepted)
+            for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
+                program(language, backend, raw(accepted))
+                val shadowed = raw(accepted)
+                val boundCall = OriginalStdioChecks.foreignCalls(shadowed).single() as MutableList<Any?>
+                boundCall[1] = listOf("var", "p0", (boundCall[1] as List<*>)[2])
+                assertThrows(RuntimeFault::class.java) { program(language, backend, shadowed) }
+                val malformed = raw(accepted)
+                val malformedCall = OriginalStdioChecks.foreignCalls(malformed).single() as MutableList<Any?>
+                malformedCall[1] = listOf("var", 17L, (malformedCall[1] as List<*>)[2])
+                assertThrows(RuntimeFault::class.java) { program(language, backend, malformed) }
+            } }
+            val otherSuffix = if (suffix == "inplace") "460b" else "inplace"
+            assertThrows(RuntimeFault::class.java) { validate(declaration("unix-2.8.8.0-$suffix", label(otherSuffix))) }
+        }
+        for (badSymbol in listOf(label("460B"), label("nothex"), label(""),
+            label("460b").replace("ZC2ZC", "ZC3ZC"), label("460b").replace("PosixString", "ByteString"),
+            label("460b").replace("ZClstat", "ZCstat"), label("460b").replace("2zi8zi8zi0", "2zi8zi7zi0"))) {
+            val rejected = declaration("unix-2.8.8.0-460b", badSymbol)
+            assertNull(validate(rejected))
+            for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
+                assertThrows(RuntimeFault::class.java) { program(language, backend, raw(rejected)) }
+            } }
+        }
+        for (operation in OriginalStdioOp.entries.filter { it.waitStatus }) {
+            assertFalse(operation.acceptsUnit("unix-2.8.8.0-460b"))
+            assertFalse(operation.matchesSymbol(operation.symbol.replace("zminplaceZC", "zm460bZC")))
         }
     }
 

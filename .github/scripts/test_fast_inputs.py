@@ -33,7 +33,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(artifacts, cache.original_path_stat_artifact_hashes(good))
         for path in outputs:
             self.assertTrue(cache.allowed_payload(path, {}), path)
-        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-abc'),
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathStat', 'pathLstat']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
                         dict(artifactHashes={**artifacts, 'build/original-path-stat/pre.json': 'bad'})):
@@ -58,7 +58,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(artifacts, cache.original_path_mode_artifact_hashes(good))
         for path in outputs:
             self.assertTrue(cache.allowed_payload(path, {}), path)
-        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-abc'),
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathMkdir']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
                         dict(artifactHashes={**artifacts, 'build/original-path-mode/pre.json': 'bad'})):
@@ -83,7 +83,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(artifacts, cache.original_path_link_artifact_hashes(good))
         for path in outputs:
             self.assertTrue(cache.allowed_payload(path, {}), path)
-        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-abc'),
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathSymlink']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
                         dict(artifactHashes={**artifacts, 'build/original-path-link/pre.json': 'bad'})):
