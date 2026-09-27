@@ -28,9 +28,9 @@ from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case
 
 # The identical checked-in resource is packaged in the JVM runtime jar.
 SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
-    'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+    'src/main/resources/thc/scalar-primop-signatures.json').read_text(encoding='utf-8'))['primitives']
 POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
-    'src/test/resources/thc/polyglot-abi.json').read_text())
+    'src/test/resources/thc/polyglot-abi.json').read_text(encoding='utf-8'))
 
 # Closed scalar PrimRep identities emitted from GHC's LitRubbish RuntimeRep.
 # Do not infer singleton aggregates, vectors, or unknown levity as scalars.
@@ -68,7 +68,19 @@ class Audit:
         self.package_scalar_proofs = {}
         self.archive_bindings = {}
         self.retained_exports = []
+        provided_modules = set()
+        complete_modules = set()
         for source, module in modules:
+            if module.get('boundary') == 'optimized-Core-after-Tidy-before-CorePrep':
+                complete_modules.add(str(module.get('unit')) + ':' + str(module.get('module')))
+            if 'providedModules' in module:
+                supplied = module['providedModules']
+                if (module.get('unit') != 'dependency-closure' or module.get('module') != 'THC.InterfaceClosure'
+                        or module.get('boundary') != 'actual-interface-unfoldings' or not isinstance(supplied, list)
+                        or any(not isinstance(name, str) or not name.strip() for name in supplied)):
+                    self.issue('module-format', None, source, 'Invalid provided-module interface closure')
+                else:
+                    provided_modules.update(supplied)
             scalar_link = None
             native_archive = None
             try:
@@ -150,6 +162,8 @@ class Audit:
                     self.issue('inconsistent-constructor', None, source, key)
                 else:
                     self.constructors[key] = constructor
+        for name in sorted(provided_modules - complete_modules):
+            self.issue('module-format', None, name, 'Interface closure lacks its exact complete provided module')
         for unit, link in self.package_scalar_links.items():
             if self.package_scalar_proofs[unit] != {entry['entry'] for entry in link['abi']}:
                 self.issue('module-format', None, unit, 'Package C ABI lacks complete typed import provenance')
@@ -2204,20 +2218,20 @@ def main():
         files.extend(sorted(path.glob('*.json')) if path.is_dir() else [path])
     try:
         for manifest in args.module_list:
-            for line in manifest.read_text().splitlines():
+            for line in manifest.read_text(encoding='utf-8').splitlines():
                 if line.strip():
                     path = Path(line.strip())
                     files.append(path if path.is_absolute() else manifest.parent / path)
         if not files and not args.package_manifest:
             parser.error('Supply modules or --module-list')
         modules = (core_package_manifest.load_for_audit(args.package_manifest) if args.package_manifest else [])
-        modules += [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)]
-        report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
+        modules += [(str(path), json.loads(path.read_text(encoding='utf-8'))) for path in dict.fromkeys(files)]
+        report = Audit(modules, json.loads(args.capabilities.read_text(encoding='utf-8'))).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        with args.output.open('w') as stream:
+        with args.output.open('w', encoding='utf-8') as stream:
             write_report(report, stream)
     else:
         write_report(report, sys.stdout)

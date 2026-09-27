@@ -9,8 +9,10 @@ import hashlib
 import io
 import json
 import re
+import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 import core_original_foreign
 
 ROOT = Path(__file__).resolve().parent
@@ -41,6 +43,49 @@ LONG = dict(primReps=['IntRep'], kind='long', evaluated=True)
 REFERENCE = dict(primReps=['BoxedRep (Just Lifted)'], kind='data', evaluated=False)
 CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
+
+
+class CommandLineEncodingTest(unittest.TestCase):
+    def test_utf8_core_and_module_paths_do_not_use_windows_ansi_encoding(self):
+        # U+201D contains a UTF-8 byte undefined in cp1252. This is the real
+        # failure reached when hydrating unchanged GHC sources on Windows.
+        read_text = Path.read_text
+        def ansi_default(path, encoding=None, errors=None, **kwargs):
+            return read_text(path, encoding=encoding or 'cp1252', errors=errors, **kwargs)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            entry = 'root\u201d'
+            source = root / 'core\u201d.json'
+            source.write_bytes(json.dumps(dict(schema=1, ghc='9.14.1',
+                bindings=[bind(entry, lit(42))], constructors=[]), ensure_ascii=False).encode('utf-8'))
+            manifest = root / 'modules.txt'
+            manifest.write_bytes((source.name + '\n').encode('utf-8'))
+            report = root / 'audit.json'
+            with patch.object(Path, 'read_text', ansi_default), patch('sys.argv',
+                    ['audit-core.py', '--module-list', str(manifest), '--entry', entry, '--output', str(report)]), \
+                    patch('sys.stderr', io.StringIO()):
+                self.assertEqual(0, audit_core.main())
+            self.assertEqual([entry], json.loads(report.read_bytes())['roots'])
+
+
+class ProvidedModuleTest(unittest.TestCase):
+    def test_exact_complete_provider_is_required_by_interface_fragment(self):
+        fragment = dict(schema=1, ghc='9.14.1', unit='dependency-closure', module='THC.InterfaceClosure',
+                        boundary='actual-interface-unfoldings', providedModules=['pkg:Library'],
+                        bindings=[bind('root', lit(42))], constructors=[])
+        provider = dict(schema=1, ghc='9.14.1', unit='pkg', module='Library',
+                        boundary='optimized-Core-after-Tidy-before-CorePrep', bindings=[], constructors=[])
+        def check(*modules):
+            return audit_core.Audit([(str(index), module) for index, module in enumerate(modules)], CAP).run(['root'])
+        self.assertTrue(check(fragment, provider)['accepted'])
+        for invalid in (None, dict(provider, unit='other'), dict(provider, module='Other'),
+                        dict(provider, boundary='actual-interface-unfoldings')):
+            modules = [fragment] + ([] if invalid is None else [invalid])
+            result = check(*modules)
+            self.assertFalse(result['accepted'])
+            self.assertTrue(any(issue['detail'] == 'Interface closure lacks its exact complete provided module'
+                                for issue in result['issues']))
+        self.assertFalse(check(dict(fragment, unit='forged'), provider)['accepted'])
 
 
 class AggregateHeapFieldTest(unittest.TestCase):

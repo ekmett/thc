@@ -142,6 +142,8 @@ extra-source-files:
   compiler/test-fixtures/LazyIOCallbackAudit.hs
   compiler/test-fixtures/LazyIOCallbackNative.hs
   compiler/target-layout.c
+  compiler/windows-ghc-internal.json
+  compiler/WindowsRunMain.hs
   compiler/test-fixtures/OriginalStackAudit.hs
   compiler/test-fixtures/OriginalStackAuditNative.hs
   compiler/test-fixtures/OriginalStackDecoder.hs
@@ -164,6 +166,7 @@ extra-source-files:
   compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs
   compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs
   compiler/test-fixtures/WindowsDirectoryAudit.hsc
+  compiler/test-fixtures/WindowsBridgeAudit.hs
   compiler/test-fixtures/OriginalFcntlNative.hs
   compiler/test-fixtures/OriginalErrnoAudit.hs
   compiler/test-fixtures/OriginalErrnoNative.hs
@@ -507,7 +510,8 @@ executable thc-interface
     aeson >= 2.3 && < 2.4,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
-    deepseq >= 1.5 && < 1.6
+    deepseq >= 1.5 && < 1.6,
+    filepath >= 1.5.4 && < 1.6
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)

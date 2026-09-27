@@ -106,7 +106,7 @@ import MutVarFixtures (prepareMutVar)
 import STMFixtures (prepareSTM)
 import HintTraceFixtures (prepareHintTrace)
 import ClosureInspectionFixtures (prepareClosureInspection)
-import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver)
+import WindowsSmokeFixtures (prepareWindowsSmoke, prepareWindowsDriver, prepareWindowsBridge)
 import StablePointerFixtures (prepareStablePointers)
 import StablePtrFFIFixtures (prepareStablePtrFFI)
 import StableNameFixtures (prepareStableNames)
@@ -942,6 +942,7 @@ main = do
     ["integer-completion"] -> prepareIntegerCompletion root
     ["windows-smoke"] -> prepareWindowsSmoke root
     ["windows-driver"] -> prepareWindowsDriver root
+    ["windows-bridge"] -> prepareWindowsBridge root
     ["word-floating"] -> prepareWordFloating root
     ["scalar-bitcasts"] -> prepareScalarBitCasts root
     ["simd128-addresses"] -> prepareSimd128Addresses root

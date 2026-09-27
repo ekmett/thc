@@ -11,12 +11,15 @@ import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.io.TempDir
 import thc.runtime.ManagedAddress
 import thc.runtime.ManagedMd5
+import thc.runtime.CoreRepresentations
+import thc.runtime.UnsupportedCore
 import thc.runtime.RuntimeFault
 import java.io.File
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.zip.ZipFile
 
 /** Native Windows packaging and authority regressions; never a full-platform parity gate. */
 @EnabledOnOs(OS.WINDOWS)
@@ -72,6 +75,115 @@ class WindowsDistributionTest {
                 val environment = it["environment"] as Map<String, String>
                 environment["THC_BACKEND"] to environment["JAVA_OPTS"]
             }.toSet())
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature() {
+        val receipt = verifiedReceipt("build/windows-driver/provenance.json")
+        for (manifest in receipt["supportManifests"] as List<String>) {
+            val output = File(root, manifest).parentFile.parentFile
+            fun document(path: String) = Json.parse(File(output, path).readText()) as Map<String, Any?>
+            val original = document("core/Main.json")["bindings"] as List<Map<String, Any?>>
+            val host = document("core/THC.WindowsRunMain.json")["bindings"] as List<Map<String, Any?>>
+            val main = original.single { it["id"] == "main:Main.main" }
+            assertEquals(0L, main["arity"], "The actual no-interface-pragmas main remains a thunk")
+            assertEquals("IO ()", main["type"])
+            val bindings = original + host
+            assertThrows(UnsupportedCore::class.java) { CoreRepresentations.ioUnitMainResult(main, bindings) }
+            val entry = host.single { it["id"] == "main:THC.WindowsRunMain.thcRunMain" }
+            val result = CoreRepresentations.ioUnitMainResult(entry, bindings)
+            assertEquals(2, result.components!!.size)
+            assertThrows(UnsupportedCore::class.java) {
+                CoreRepresentations.ioUnitMainResult(entry + ("type" to "IO Int"), bindings)
+            }
+            val audit = document("audit.json")
+            assertEquals(true, audit["accepted"])
+            assertEquals(listOf(entry["id"]), audit["roots"])
+            assertEquals(emptyList<Any>(), audit["issues"])
+            assertEquals(emptyList<Any>(), audit["missingGlobals"])
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun nativeSourceArchiveAndRuntimeProjectionKeepExactModuleBytes() {
+        val receipt = verifiedReceipt("build/windows-driver/provenance.json")
+        val manifests = receipt["supportManifests"] as List<String>
+        assertEquals(4, manifests.size)
+        val bundles = manifests.map { path ->
+            val manifest = Json.parse(File(root, path).readText()) as Map<String, Any?>
+            val units = manifest["units"] as List<Map<String, Any?>>
+            val unit = units.single { it["id"] == "ghc-internal" }
+            val bundle = unit["bundle"] as Map<String, String>
+            unit to bundle
+        }
+        assertEquals(1, bundles.map { it.second }.toSet().size, "All CLI modes must reuse the same exact support bundle")
+        val (unit, bundle) = bundles.first()
+        fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
+        fun digest(path: String): String {
+            val hash = MessageDigest.getInstance("SHA-256")
+            File(path).inputStream().use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    hash.update(buffer, 0, count)
+                }
+            }
+            return hex(hash.digest())
+        }
+        assertEquals(bundle["sha256"], digest(bundle.getValue("path")))
+        ZipFile(bundle.getValue("path")).use { projected ->
+            fun document(zip: ZipFile, path: String) = Json.parse(zip.getInputStream(zip.getEntry(path)).reader(Charsets.UTF_8).use { it.readText() }) as Map<String, Any?>
+            val inputs = document(projected, "inplace-manifest.json")
+            val complete = inputs["completeSourceBundle"] as Map<String, String>
+            val excluded = inputs["archiveOnlyModules"] as List<Map<String, String>>
+            assertEquals(listOf("GHC.Internal.Conc.Bound"), excluded.map { it["module"] })
+            assertEquals(complete["sha256"], digest(complete.getValue("path")))
+            ZipFile(complete.getValue("path")).use { full ->
+                val fullManifest = document(full, "manifest.json")
+                val fullInputs = document(full, "inplace-manifest.json")
+                assertEquals(fullInputs["generatedSources"], inputs["generatedSources"])
+                val steps = (fullInputs["sourceBuild"] as Map<*, *>)["steps"] as List<Map<String, Any?>>
+                assertEquals(235, steps.size)
+                assertEquals(24, steps.count { it["boot"] == true })
+                steps.forEach {
+                    assertEquals(0L, it["exit"])
+                    val arguments = it["arguments"] as List<String>
+                    assertTrue(arguments.containsAll(listOf("-O2", "-dcore-lint", "-fwrite-if-simplified-core", "-DBIGNUM_GMP")))
+                    assertFalse(arguments.contains("-fignore-interface-pragmas"))
+                }
+                val fullModules = fullManifest["modules"] as List<Map<String, Any?>>
+                val selected = unit["modules"] as List<Map<String, Any?>>
+                assertEquals(211, fullModules.size)
+                assertEquals(210, selected.size)
+                for (module in selected) {
+                    assertEquals(module, fullModules.single { it["name"] == module["name"] })
+                    val member = module["path"] as String
+                    // Source-rich genuine modules can each exceed the test heap.
+                    // Compare every byte and the checked digest with bounded buffers.
+                    val hash = MessageDigest.getInstance("SHA-256")
+                    full.getInputStream(full.getEntry(member)).use { expected ->
+                        projected.getInputStream(projected.getEntry(member)).use { actual ->
+                            val left = ByteArray(64 * 1024)
+                            val right = ByteArray(left.size)
+                            while (true) {
+                                val count = expected.readNBytes(left, 0, left.size)
+                                assertEquals(count, actual.readNBytes(right, 0, right.size), member)
+                                if (count == 0) break
+                                assertEquals(-1, java.util.Arrays.mismatch(left, 0, count, right, 0, count), member)
+                                hash.update(right, 0, count)
+                            }
+                        }
+                    }
+                    assertEquals(module["sha256"], hex(hash.digest()))
+                }
+                val archived = fullModules.single { it["name"] == "GHC.Internal.Conc.Bound" }
+                assertNull(projected.getEntry(archived["path"] as String))
+                val module = document(full, archived["path"] as String)
+                assertTrue(assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(module)) }
+                    .message!!.contains("Unsupported foreign"))
+            }
+        }
     }
     @Test fun relocatedBatchLauncherAcceptsPathsWithSpacesOnBothBackends() {
         val destination = temporary.resolve("THC distribution with spaces").toFile()

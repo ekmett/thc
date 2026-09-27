@@ -904,7 +904,7 @@ def load_for_audit(path):
 def _load(path, audit_archives):
     path = Path(path)
     root = path.resolve().parent
-    manifest = strict_json(path.read_text())
+    manifest = strict_json(path.read_text(encoding='utf-8'))
     if (not isinstance(manifest, dict) or manifest.get('format') != FORMAT or
             type(manifest.get('schema')) is not int or manifest['schema'] != 1 or
             manifest.get('ghc') != '9.14.1' or
