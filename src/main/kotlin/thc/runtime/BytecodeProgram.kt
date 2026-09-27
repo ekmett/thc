@@ -1620,7 +1620,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio.directoryStream || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
+                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio.directoryStream || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1680,7 +1680,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         (0..1).map { index -> b.createLocal("original tcsetattr integer $index", "primitive").also {
                             b.beginStoreLocal(it); operands[index].emit(e); b.endStoreLocal()
                         } } else null
-                    val status = originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.PIPE || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
+                    val status = originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio == OriginalStdioOp.PIPE || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio == OriginalStdioOp.ERRNO || originalStdio == OriginalStdioOp.ISATTY ||
                         originalStdio == OriginalStdioOp.CLOSE || originalStdio == OriginalStdioOp.DUP || originalStdio.readImage || originalStdio == OriginalStdioOp.UNLOCK || originalStdio.seekConstant || originalStdio.stat
                     // Image updates declare address before value. Store that operand
                     // once before filling the shared long/address/State lanes.
@@ -1747,10 +1747,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)
                     } else if (status) {
-                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.PIPE || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
+                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.PIPE || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio == OriginalStdioOp.ERRNO || originalStdio.seekConstant ||
                             originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.statField)
                             b.emitLoadConstant(0L) else operands[0].emit(e)
-                        if (originalStdio == OriginalStdioOp.PIPE || originalStdio == OriginalStdioOp.UNLINK || originalStdio.statField) operands[0].emit(e)
+                        if (originalStdio == OriginalStdioOp.PIPE || originalStdio.pathRemoval || originalStdio.statField) operands[0].emit(e)
                         else if (originalStdio.readImage) operands[1].emit(e)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         operands.last().emit(e)

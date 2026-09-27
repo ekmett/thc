@@ -229,6 +229,9 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun removeDirectory(path: ManagedAddress): Long =
+        unlinkAt(hostAbi.atFdcwd, path, hostAbi.atRemoveDir)
+
     @TruffleBoundary fun unlinkAt(fd: Long, path: ManagedAddress, flags: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || flags != flags.toInt().toLong())

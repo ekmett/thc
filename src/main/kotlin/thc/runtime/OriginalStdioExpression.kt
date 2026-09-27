@@ -214,10 +214,11 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val mode = operands[1].executeRequiredLong(frame)
             requireVoidCarrier(operands[2].execute(frame))
             CoreOriginalStdio.current(this).pathMode(operation, path, mode)
-        } else if (operation == OriginalStdioOp.UNLINK) {
+        } else if (operation.pathRemoval) {
             val path = operands[0].executeRequiredAddress(frame)
             requireVoidCarrier(operands[1].execute(frame))
-            CoreOriginalStdio.current(this).unlink(path)
+            if (operation == OriginalStdioOp.RMDIR) CoreOriginalStdio.current(this).removeDirectory(path)
+            else CoreOriginalStdio.current(this).unlink(path)
         } else if (operation == OriginalStdioOp.LOCK) {
             val key = operands[0].executeRequiredLong(frame)
             val device = operands[1].executeRequiredLong(frame)

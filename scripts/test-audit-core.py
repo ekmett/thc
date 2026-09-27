@@ -3576,7 +3576,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
         state = dict(kind='void', primReps=[], evaluated=False)
         capacity = dict(kind='long', primReps=['Word64Rep'], evaluated=False)
         args = {'symlink': [address, address, state], 'readlink': [address, address, capacity, state],
-                'chdir': [address, state], 'getcwd': [address, capacity, state]}[symbol]
+                'rmdir': [address, state], 'chdir': [address, state], 'getcwd': [address, capacity, state]}[symbol]
         output = dict(address, evaluated=True) if symbol == 'getcwd' else dict(kind='long', primReps=['Int32Rep'], evaluated=True)
         return dict(schema=1, target=dict(kind='static', symbol=symbol, isFunction=True,
             unit='unix-2.8.8.0-inplace'), convention='ccall', safety='unsafe',
@@ -3585,16 +3585,22 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
 
     def test_exact_original_pathname_signatures_and_result(self):
         fixture = LibdwUnavailableAuditTest()
-        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd'):
+        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             report = fixture.audit(fixture.fixture(declaration))
             self.assertTrue(report['accepted'], report)
             for unit in ('unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
                 installed = copy.deepcopy(declaration); installed['target']['unit'] = unit
                 self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'], unit)
-            for unit in ('ghc-internal', 'main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-ABCD',
+            if symbol == 'readlink':
+                installed = copy.deepcopy(declaration); installed['target']['unit'] = 'ghc-internal'
+                self.assertTrue(fixture.audit(fixture.fixture(installed))['accepted'])
+            for unit in ('main', 'unix-2.8.7.0-inplace', 'unix-2.8.8.0-ABCD',
                          'unix-2.8.8.0-', 'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged'):
                 wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            if symbol != 'readlink':
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = 'ghc-internal'
                 self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
             for key, value in (('convention', 'capi'), ('safety', 'safe'), ('arity', declaration['arity'] + 1), ('suppliedArity', declaration['arity'] + 1)):
                 wrong = copy.deepcopy(declaration); wrong[key] = value
@@ -3607,7 +3613,7 @@ class OriginalPathnameDeclarationTest(unittest.TestCase):
 
     def test_stored_and_lowered_pathname_operands_cannot_be_relabelled(self):
         fixture = LibdwUnavailableAuditTest()
-        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd'):
+        for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir'):
             declaration = self.declaration(symbol)
             for index in range(declaration['arity']):
                 module = fixture.fixture(declaration)

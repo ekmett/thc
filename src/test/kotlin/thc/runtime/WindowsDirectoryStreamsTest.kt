@@ -240,7 +240,8 @@ class WindowsDirectoryStreamsTest {
         for ((entry, op) in operations) {
             val call = original(entry)
             assertEquals(op, validate(call))
-            for (unit in listOf("main", "ghc-internal", "Win32-2.14.2.2-inplace", "Win32-2.14.2.1-ABCD")) {
+            for (unit in listOf("main", "ghc-internal", "unix-2.8.8.0-inplace", "directory-1.3.10.0-inplace",
+                "Win32-2.14.2.2-inplace", "Win32-2.14.2.1-ABCD")) {
                 val bad = Json.parse(Json.stringify(call)) as MutableList<Any?>
                 (((bad[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>)["unit"] = unit
                 assertThrows(RuntimeFault::class.java) { validate(bad) }

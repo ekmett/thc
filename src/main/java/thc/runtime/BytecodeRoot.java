@@ -1503,7 +1503,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation.getSeekConstant()) result = CoreOriginalStdio.current(node).seekConstant(operation);
             else if (operation == OriginalStdioOp.ISATTY) result = CoreOriginalStdio.current(node).isTerminal(fd);
             else if (operation == OriginalStdioOp.CLOSE) result = CoreOriginalStdio.current(node).close(fd);
-            else if (operation == OriginalStdioOp.UNLINK) result = CoreOriginalStdio.current(node).unlink(address);
+            else if (operation.getPathRemoval()) result = operation == OriginalStdioOp.RMDIR
+                ? CoreOriginalStdio.current(node).removeDirectory(address) : CoreOriginalStdio.current(node).unlink(address);
             else if (operation == OriginalStdioOp.PIPE) result = CoreOriginalStdio.current(node).pipe(address);
             else if (operation == OriginalStdioOp.DUP) result = CoreOriginalStdio.current(node).duplicate(fd);
             else throw new RuntimeFault("Invalid original stdio status operation");
