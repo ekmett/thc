@@ -1180,6 +1180,7 @@
         "thc.runtime.BoxedCasTest",
         "thc.runtime.BoxedArrayExtensionsTest",
         "thc.runtime.ArrayCoreEvidenceTest",
+        "thc.runtime.ScalarBitCastTest",
         "thc.runtime.SumResultTest",
         "thc.runtime.TupleInputNativeTest",
         "thc.runtime.IntArrayNativeTest",
