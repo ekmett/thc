@@ -84,6 +84,8 @@ extra-source-files:
   compiler/test-fixtures/ThreadSchedulingNative.hs
   docs/thread-scheduling.md
   compiler/test-fixtures/ThreadInventoryNative.hs
+  compiler/test-fixtures/CallbackIdentityNative.hs
+  compiler/test-fixtures/callback-identity.c
   docs/thread-inventory.md
   compiler/test-fixtures/SimdWideFloatFma.hs
   compiler/test-fixtures/SimdWideFloatFmaNative.hs

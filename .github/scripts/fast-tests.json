@@ -483,6 +483,12 @@
     "examples/ThreadInventory.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
+    "compiler/test-fixtures/CallbackIdentityNative.hs": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
+    "compiler/test-fixtures/callback-identity.c": {
+      "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
+    },
     "compiler/test-fixtures/ThreadInventoryNative.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },

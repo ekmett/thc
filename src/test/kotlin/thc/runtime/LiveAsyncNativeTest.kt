@@ -125,7 +125,7 @@ class LiveAsyncNativeTest {
                 val (victim, answer) = if (ownerWait) startTarget().also {
                     awaitBoundary(it.first, it.second, "awaitOwner")
                 } else target to result
-                val request = state.threads.send(victim.threadId(), program.entryValue("asyncPayload"))
+                val request = state.threads.send(state.threads.pollState(victim).current!!.identity, program.entryValue("asyncPayload"))
                 assertEquals(-1L, answer.get(15, TimeUnit.SECONDS), "Original catch# must handle delivery")
                 victim.join(5000)
                 assertFalse(victim.isAlive)
@@ -138,7 +138,7 @@ class LiveAsyncNativeTest {
                 if (repeat) {
                     val (retry, retryResult) = startTarget()
                     awaitBoundary(retry, retryResult, "await")
-                    val second = state.threads.send(retry.threadId(), program.entryValue("asyncPayload"))
+                    val second = state.threads.send(state.threads.pollState(retry).current!!.identity, program.entryValue("asyncPayload"))
                     assertEquals(-1L, retryResult.get(15, TimeUnit.SECONDS))
                     retry.join(5000)
                     assertFalse(retry.isAlive)

@@ -113,7 +113,7 @@ class AsyncStrictEntryNativeTest {
                     assertTrue(ready.isDone, "The dynamic worker returned before demanding its strict PAP prefix")
                     assertEquals(1007L, ready.get(1, TimeUnit.SECONDS))
                     assertFalse(result.isDone, "The PAP prefix must be demanded before the worker returns")
-                    val request = state.threads.send(target.threadId(), program.entryValue("asyncPayload"))
+                    val request = state.threads.send(state.threads.pollState(target).current!!.identity, program.entryValue("asyncPayload"))
                     assertEquals(-1L, result.get(15, TimeUnit.SECONDS), "The original catch# handles delivery")
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
                     assertEquals(5, shared.state)

@@ -117,7 +117,7 @@ class CoreProofJoinTest {
                 while ((p.diagnostics().getValue("localJoinTransfers") as Number).toLong() < 1000 &&
                     !completed.isDone && System.nanoTime() < deadline) Thread.sleep(1)
                 assertFalse(completed.isDone, "The request must arrive inside the join loop")
-                val request = threads.send(worker.threadId(), "join loop")
+                val request = threads.send(threads.pollState(worker).current!!.identity, "join loop")
                 val saved = completed.get(10, TimeUnit.SECONDS) as ContinuationResult
                 worker.join(5000)
                 assertFalse(worker.isAlive)

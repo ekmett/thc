@@ -38,7 +38,7 @@ test commands.
 | `forkOn#` | Same thread and delivery requirements as `fork#`. Chooses a dense logical capability modulo the context's current logical capability count, then maps modulo its immutable eligible CPU capacity. Native affinity is **best effort**: Linux requests a per-thread pin; Windows requests advisory CPU Sets and declines unresolved multi-group topology; macOS, unavailable native access, or a rejected request run unpinned without failing the fork. |
 | `threadStatus#` | Capability is a context-local assignment, not a measurement of the currently executing physical CPU. The lock flag records a `forkOn#` request, **not successful OS affinity**. Ordinary threads share logical capabilities. |
 | `listThreads#` | Lists context-owned guest identities, not every JVM thread. Retained completed identities and host carriers between guest invocations can appear; ordering is unspecified. |
-| `isCurrentThreadBound#` | Always returns `0`. Platform threads and CPU affinity do not provide GHC's bound-thread/foreign-TLS contract. |
+| `isCurrentThreadBound#` | Returns `1` inside a managed foreign reverse entry and `0` for ordinary guest entries and forks. Callback identities stay on their carrier; raw C callback transport and `forkOS` remain unsupported. |
 | `setThreadAllocationCounter#` | Accounts JVM heap bytes during outer guest-entry extents, including runtime bookkeeping and excluding native/Sulong allocations and host work between entries. Requires JVM thread-allocation accounting support. Does **not** enforce allocation limits. |
 | `setOtherThreadAllocationCounter#` | Same accounting and missing allocation-limit enforcement, for the selected context-owned thread. |
 

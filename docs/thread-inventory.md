@@ -7,13 +7,20 @@ The registry uses weak keys, while a returned snapshot deliberately retains its
 identities. Snapshot storage never aliases the registry. Context close invalidates
 further observations without modifying arrays already returned.
 
-Both backends support this operation and `isCurrentThreadBound#`. THC currently
-admits only unbound guest threads: the latter returns zero for an actual registered
-guest entry, including foreign re-entry. This agrees with the existing negative
-`rtsSupportsBoundThreads` capability; it does not treat an OS/Java carrier or a
-logical capability number as a bound Haskell thread. Native threaded GHC's main
-thread is bound, so the native comparison explicitly executes in `forkIO`.
-`forkOS` and bound foreign TLS remain unsupported.
+Both backends support this operation and `isCurrentThreadBound#`. Ordinary guest
+entries and `fork#` children remain unbound. A managed foreign reverse entry gets
+a fresh bound identity on its existing Java carrier, with a separate mailbox and
+an initially unmasked state. Nested ordinary guest calls keep that identity;
+nested reverse entries get another identity. Return restores the suspended caller
+and its mask. Finished callbacks remain observable through retained ThreadIds.
+
+The native fixture uses GHC's actual C callback trampoline to check distinct
+ThreadIds, unmasked entry, boundness, same native carrier and caller restoration
+under all three caller masks. THC's matching tests exercise managed reverse
+entries only. This does not add raw C callback transport, `forkOS`, a general bound
+thread scheduler or admission of callbacks through unsafe foreign declarations.
+The existing negative `rtsSupportsBoundThreads` capability remains unchanged.
+Ordinary thread comparisons still use native `forkIO`, since GHC's main is bound.
 
 The array result uses GHC's unlifted `ThreadId#` elements. `indexArray#` and
 `readArray#` now also transport unlifted object references without forcing or

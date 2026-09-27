@@ -25,14 +25,20 @@ class GuestThreadStatusTest {
             try {
                 assertEquals(GuestThreadStatus.FOREIGN, threads.status(id))
                 threads.enterCurrent()
+                val callback = threads.currentIdentity()
                 try {
-                    assertSame(id, threads.currentIdentity())
-                    assertEquals(GuestThreadStatus.RUNNING, threads.status(id))
+                    assertNotSame(id, callback)
+                    assertEquals(id.javaId, callback.javaId)
+                    assertEquals(GuestThreadStatus.RUNNING, threads.status(callback))
+                    assertEquals(GuestThreadStatus.FOREIGN, threads.status(id))
                     GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use {
-                        assertEquals(GuestThreadStatus.BLACK_HOLE, threads.status(id))
+                        assertEquals(GuestThreadStatus.BLACK_HOLE, threads.status(callback))
+                        assertEquals(GuestThreadStatus.FOREIGN, threads.status(id))
                     }
-                    assertEquals(GuestThreadStatus.RUNNING, threads.status(id))
+                    assertEquals(GuestThreadStatus.RUNNING, threads.status(callback))
                 } finally { threads.leaveCurrent() }
+                assertEquals(GuestThreadStatus.FINISHED, threads.status(callback))
+                assertSame(id, threads.currentIdentity())
                 assertEquals(GuestThreadStatus.FOREIGN, threads.status(id))
             } finally { threads.leaveForeign(foreign) }
         } finally { threads.leaveCurrent() }
