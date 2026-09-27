@@ -484,6 +484,9 @@ internal class ManagedAddress private constructor(
         if (elementOffset < Long.MIN_VALUE / stride || elementOffset > Long.MAX_VALUE / stride)
             fault("Managed Addr# element offset overflow")
         val displacement = elementOffset * stride
+        // The existing C helper takes a machine carrier and stores only width
+        // bytes. Preserve raw narrow bits without inventing a managed backing.
+        externalPointer()?.let { it.write(displacement, width, value.toLong()); return }
         requireRange(displacement, width.toLong(), writable = true)
         val little = ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN
         native?.let { allocation -> allocation.access { segment ->

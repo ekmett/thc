@@ -10,6 +10,13 @@ void *thc_package_pointer_offset(void *base, long long offset) {
     return (unsigned char *) base + offset;
 }
 
+/* Transport regression fixture: C owns this storage; no incoming managed
+ * argument can supply backing or bounds for the returned pointer. */
+void *thc_package_pointer_test_buffer(void) {
+    static unsigned char buffer[32];
+    return buffer;
+}
+
 int thc_package_pointer_equal(void *left, void *right) { return left == right; }
 int thc_package_pointer_compare(void *left, void *right) {
     return left < right ? -1 : left > right;
