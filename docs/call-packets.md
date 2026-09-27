@@ -53,6 +53,15 @@ Timing used three fresh processes per engine and five two-second windows per pro
 
 [The packet audit tool](../tools/audit-call-packets.py) follows materialized array aliases to real indexed reads, residual calls, or escaping object stores. It separately counts the later allocation nodes, avoiding false allocation claims from pre-lowering boxing nodes. In particular, constant-zero bloom boxing disappears later; large bloom-mask boxes require separate analysis.
 
+The report also inventories explicit after-mid allocation nodes beyond the
+Object-array and Long subsets, including guest constructors, primitive arrays
+and frame objects. Zero packet or Long sites does not mean zero allocations;
+residual calls can allocate outside the inspected graph. Before-high null-result
+guards include their condition, accepted/rejected value, source and paths from
+call results through aliases. These paths do not prove which arm executed or
+caused a recorded deoptimization. Match a failing run's compilation and trace
+before drawing that conclusion. The existing strict lookup gate is unchanged.
+
 Run graph capture after throughput measurement has finished:
 
 ```sh
