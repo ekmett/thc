@@ -2,10 +2,12 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
 module Main where
-import GHC.Exts (Int(I#), nullAddr#)
+import GHC.Exts (Int(I#), Double(D#), nullAddr#)
 import Mixed
 import Unknown
 import Unresolved
+import Poisoned (poisoned)
+import qualified Provider
 import CapiMix (mixed)
 import Lifecycle (lifecycleProbe#)
 import Control.Monad (forM)
@@ -23,3 +25,11 @@ main = do
       (typed,wide,word16,staticPointer) <- mixed rounds keylen
       pure (rounds,keylen,typed,wide,word16,staticPointer)
   print observations
+  print (I# (partialProbe# 3#))
+  print (I# (partialProbe# 5#))
+  print (I# (partialProbe# (-2#)))
+  print (I# (partialProbe# 1#))
+  print (I# (partialProbe# 4#))
+  print (I# (throughGlobal 0#) > 0 && I# (poisoned 0#) > 0)
+  let result = D# (Provider.nativeMath 1.0##)
+  print (result > 0 && result < 1 && I# (Provider.process 0#) > 0)

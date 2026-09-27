@@ -27,12 +27,16 @@ class PackageNativeArchiveFullCoreTest {
             "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeArgumentBridge.hs",
             "src/THC/Driver/NativeLibrarySources.hs", "test/fixtures/run-native-archive/mixed/lifecycle.cpp",
             "test/fixtures/run-native-archive/mixed/src/Lifecycle.hs",
+            "test/fixtures/run-native-archive/poisoned/native.c", "test/fixtures/run-native-archive/poisoned/Poisoned.hs",
+            "test/fixtures/run-native-archive/provider/native.c", "test/fixtures/run-native-archive/provider/Provider.hs",
             "scripts/core_package_manifest.py", "scripts/audit-core.py"))
         val paths = manifest["modules"] as List<String>
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], (paths + listOf(
             "build/native-archive/supported-audit.json", "build/native-archive/interruptible.json",
             "build/native-archive/mixed-width-audit.json", "build/native-archive/narrow-conflict.json", "build/native-archive/wide-conflict.json",
             "build/native-archive/mixed-header-audit.json", "build/native-archive/lifecycle-audit.json",
+            "build/native-archive/partial-audit.json", "build/native-archive/indirect-unresolved.json", "build/native-archive/constructor-unresolved.json",
+            "build/native-archive/provider-container.json",
             "build/native-archive/non-static.json", "build/native-archive/unresolved.json")).toSet(), "build/native-archive/")
         val modules = paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> }
         val mixed = "native-archive-mixed-0.1.0.0-inplace:Mixed."
@@ -42,16 +46,20 @@ class PackageNativeArchiveFullCoreTest {
         val wideHeader = "native-archive-mixed-0.1.0.0-inplace:CapiMix.wideProbe#"
         val word16Header = "native-archive-mixed-0.1.0.0-inplace:CapiMix.word16Probe#"
         val lifecycle = "native-archive-mixed-0.1.0.0-inplace:Lifecycle.lifecycleProbe#"
+        val partial = "native-archive-unresolved-0.1.0.0-inplace:Unresolved.partialProbe#"
         val observations = manifest["mixedHeaderObservations"] as List<List<Number>>
         assertEquals(36, observations.size)
         val merged = CoreModules.merge(modules)
         val links = merged["packageScalarLinks"] as List<PackageScalarLink>
-        assertEquals(1, links.size)
+        assertEquals(2, links.size)
+        val mixedLink = links.single { it.unit == "native-archive-mixed-0.1.0.0-inplace" }
         assertEquals(setOf("archive_allowed", "archive_count", "archive_header_mix", "archive_header_mix_wide", "archive_header_mix16", "archive_lifecycle"),
-            links.single().abi.filter { it.convention == "ccall" }.map { it.symbol }.toSet())
-        assertEquals(2, links.single().abi.count { it.convention == "capi" })
-        assertEquals(listOf("AddrRep", "Word8Rep", "Word32Rep"), links.single().abi.single { it.symbol == "archive_header_mix" }.arguments)
-        assertEquals(listOf("AddrRep", "IntRep", "IntRep"), links.single().abi.single { it.symbol == "archive_header_mix_wide" }.arguments)
+            mixedLink.abi.filter { it.convention == "ccall" }.map { it.symbol }.toSet())
+        assertEquals(2, mixedLink.abi.count { it.convention == "capi" })
+        assertEquals(listOf("AddrRep", "Word8Rep", "Word32Rep"), mixedLink.abi.single { it.symbol == "archive_header_mix" }.arguments)
+        assertEquals(listOf("AddrRep", "IntRep", "IntRep"), mixedLink.abi.single { it.symbol == "archive_header_mix_wide" }.arguments)
+        assertEquals(setOf("archive_partial_add", "archive_partial_read"),
+            links.single { it.unit == "native-archive-unresolved-0.1.0.0-inplace" }.abi.map { it.symbol }.toSet())
         val nativeProof = modules.first { it["packageNativeLink"] != null }["packageNativeLink"] as Map<String, Any?>
         assertEquals("llvm-embedded-elf", nativeProof["format"])
         val libraries = (nativeProof["buildInputs"] as Map<String, Any?>)["nativeLibraries"] as List<Map<String, Any?>>
@@ -65,7 +73,10 @@ class PackageNativeArchiveFullCoreTest {
         for (width in listOf(8,16,32)) assertTrue(bridgeSource.contains(" to i$width"))
         val failures = listOf(mixed + "blocked", "native-archive-mixed-0.1.0.0-inplace:Unknown.other",
             narrow + "narrow", "native-archive-mixed-0.1.0.0-inplace:Wide.wide",
-            "native-archive-unresolved-0.1.0.0-inplace:Unresolved.process")
+            "native-archive-unresolved-0.1.0.0-inplace:Unresolved.process",
+            "native-archive-unresolved-0.1.0.0-inplace:Unresolved.throughGlobal",
+            "native-archive-poisoned-0.1.0.0-inplace:Poisoned.poisoned",
+            "native-archive-provider-0.1.0.0-inplace:Provider.nativeMath")
         for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc").allowNativeAccess(true)
             .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
                 context.initialize("thc"); context.enter()
@@ -74,7 +85,7 @@ class PackageNativeArchiveFullCoreTest {
                     val state = Language.currentState()
                     links.forEach(state.packageCbits::link)
                     val source = CoreModules.reachable(merged,
-                        listOf(mixed + "allowed", mixed + "count", narrow + "allowed", mixedHeader, staticPointer, wideHeader, word16Header, lifecycle), true) + ("instrument" to true)
+                        listOf(mixed + "allowed", mixed + "count", narrow + "allowed", mixedHeader, staticPointer, wideHeader, word16Header, lifecycle, partial), true) + ("instrument" to true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, source, enableAsync = true)
                         else BytecodeProgram(language, source, enableAsync = true)
                     state.threads.enterCurrent()
@@ -85,6 +96,19 @@ class PackageNativeArchiveFullCoreTest {
                         assertEquals(40L, Calls.target(allowed, arrayOf(0L, 3L)))
                         assertEquals(42L, Calls.target(program.entryTarget(narrow + "allowed"), arrayOf(0L, 5L)))
                         assertEquals(0L, effectCount())
+                        val shared = program.entryTarget(partial)
+                        val partialObservations = manifest["partialObservations"] as List<Number>
+                        // Exercise distinct positive/negative updates before installing code.
+                        // Each call adds through one adapter and reads through the other.
+                        for ((index, input) in listOf(3L, 5L, -2L, 1L).withIndex())
+                            assertEquals(partialObservations[index].toLong(), Calls.target(shared, arrayOf(0L, input)))
+                        shared.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(shared, true)
+                        assertEquals(true, shared.javaClass.getMethod("isValidLastTier").invoke(shared))
+                        val beforeShared = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                        assertEquals(partialObservations[4].toLong(), Calls.target(shared, arrayOf(0L, 4L)),
+                            "$backend partial adapters share one initialized C global")
+                        assertEquals(beforeShared + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                        assertEquals(true, shared.javaClass.getMethod("isValidLastTier").invoke(shared))
                         val initialized = program.entryTarget(lifecycle)
                         assertEquals(47L, Calls.target(initialized, arrayOf(0L, 5L)))
                         initialized.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(initialized, true)

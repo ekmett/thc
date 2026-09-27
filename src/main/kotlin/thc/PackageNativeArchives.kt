@@ -4,13 +4,18 @@ package thc
 
 /** A retained obligation is a prohibition, never a foreign execution capability. */
 internal class PackageNativeArchive(val detail: String, val wholeModule: Boolean,
-    private val unit: String, val excluded: List<Map<*, *>>) {
+    private val unit: String, val excluded: List<Map<*, *>>, private val unavailable: List<Map<*, *>> = emptyList()) {
     fun blocks(binding: Any?): Boolean = wholeModule || calls(binding).any { call ->
         val target = call["target"] as? Map<*, *>
-        target?.get("unit") == unit && excluded.any { emitted ->
+        target?.get("unit") == unit && (excluded.any { emitted ->
             target["symbol"] == emitted["symbol"] && call["convention"] == emitted["convention"] &&
                 call["safety"] == emitted["safety"]
-        }
+        } || unavailable.any { entry ->
+            target["symbol"] == entry["symbol"] && call["convention"] == entry["convention"] &&
+                call["safety"] == entry["safety"] &&
+                (call["argumentReps"] as? List<*>)?.map { (it as? Map<*, *>)?.get("primReps") } ==
+                (entry["arguments"] as List<*>).map { listOf(if (it in setOf("ByteArray#", "MutableByteArray#")) "BoxedRep (Just Unlifted)" else it) } + listOf(emptyList<String>())
+        })
     }
 
     companion object {
@@ -23,6 +28,7 @@ internal class PackageNativeArchive(val detail: String, val wholeModule: Boolean
 }
 
 internal object PackageNativeArchives {
+    private val hash = Regex("[0-9a-f]{64}")
     private fun check(value: Boolean, reason: String) = require(value) { "Invalid package native archive: $reason" }
     private fun version(value: Any?, n: Int) = value == n || value == n.toLong()
     private fun record(value: Any?, fields: String): Map<*, *> {
@@ -63,11 +69,49 @@ internal object PackageNativeArchives {
     fun excluded(module: Map<*, *>): List<*> = ((module["packageNativeArchive"] as? Map<*, *>)
         ?.get("unsupportedImports") as? List<*>) ?: emptyList<Any>()
 
+    /** A strict producer receipt binds every original adapter to its LLVM
+     * closure and independently checked union. Old archives gain no authority. */
+    fun available(module: Map<*, *>): Set<String> {
+        val archive = module["packageNativeArchive"] as? Map<*, *> ?: throw IllegalArgumentException("Missing native entry archive")
+        val original = archive["artifact"] as? Map<*, *> ?: throw IllegalArgumentException("Missing original native artifact")
+        val selected = module["packageNativeLink"] as? Map<*, *> ?: throw IllegalArgumentException("Missing selected native artifact")
+        val proof = record(archive["entryResolution"], "schema profile inputBitcodeSha256 entries outputBitcodeSha256 unresolved")
+        check(version(proof["schema"], 1) && proof["profile"] == "llvm-globaldce-adapter-closures-v1", "entry resolution profile")
+        check(original["format"] == "llvm-bitcode" && selected["format"] == "llvm-bitcode" &&
+            original["bitcodeSha256"] == proof["inputBitcodeSha256"] &&
+            selected["bitcodeSha256"] == proof["outputBitcodeSha256"], "entry resolution content identity")
+        check(original.filterKeys { it !in setOf("bitcodeSha256", "bitcodeHex") } ==
+            selected.filterKeys { it !in setOf("bitcodeSha256", "bitcodeHex", "availableEntries") }, "entry resolution changes component ABI/recipe")
+        fun names(raw: Any?): List<String> = list(raw).map(::text).also { check(it == it.distinct().sorted(), "sorted unique dependency symbols") }
+        val unsupported = names(archive["unresolvedSymbols"])
+        val externals = names((original["buildInputs"] as? Map<*, *>)?.get("unresolved"))
+        check(unsupported.isNotEmpty() && externals.containsAll(unsupported), "original unresolved inventory")
+        val entries = list(original["abi"]).map { (it as Map<*, *>)["entry"] }
+        val dependencies = list(proof["entries"]).map { value ->
+            val row = record(value, "entry bitcodeSha256 unresolved")
+            check(hash.matches(text(row["bitcodeSha256"])), "adapter closure digest")
+            val symbols = names(row["unresolved"])
+            check(externals.containsAll(symbols), "unrecorded adapter dependency")
+            text(row["entry"]) to symbols
+        }
+        check(dependencies.map { it.first } == entries, "complete ordered adapter coverage")
+        val available = dependencies.filter { (_, symbols) -> symbols.none { it in unsupported } }.map { it.first }
+        check(available.isNotEmpty() && available.size < entries.size && selected["availableEntries"] == available,
+            "exact available adapter selection")
+        val union = names(proof["unresolved"])
+        check(union.none { it in unsupported } && dependencies.filter { it.first in available }.flatMap { it.second }.containsAll(union),
+            "union unresolved dependencies")
+        check(union.all { it in setOf("memcpy", "memmove", "memset", "memcmp", "bcmp", "__cxa_atexit", "__dso_handle") || it.startsWith("llvm.") },
+            "selected bitcode requires an unrecorded native provider container")
+        return available.toSet()
+    }
+
     fun read(module: Map<*, *>): PackageNativeArchive? {
         val raw = module["packageNativeArchive"] ?: return null
         val conflictField = raw is Map<*, *> && raw.containsKey("conflictingImports")
+        val resolution = raw is Map<*, *> && raw.containsKey("entryResolution")
         val archive = record(raw, "schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact" +
-            if (conflictField) " conflictingImports" else "")
+            (if (conflictField) " conflictingImports" else "") + (if (resolution) " entryResolution" else ""))
         val unit = text(module["unit"])
         check(version(archive["schema"], 1) && archive["profile"] == "thc-package-native-archive-v1" &&
             archive["execution"] == "not-linked" && archive["unit"] == unit && archive["module"] == module["module"], "profile/owner")
@@ -131,15 +175,19 @@ internal object PackageNativeArchives {
         check((artifact == null) == unresolved.isEmpty(), "unresolved artifact pair")
         check(unknown != null || expected.isNotEmpty() || unresolved.isNotEmpty(), "empty archive obligation")
         if (artifact != null) {
-            check(!module.containsKey("packageNativeLink") && unknown == null, "archive is also executable")
+            check((!module.containsKey("packageNativeLink") || resolution) && unknown == null, "archive is also executable")
             // Validate the actual compiled bytes and complete typed ABI, but do
             // not hand this admission to the merger or load it into Sulong.
             @Suppress("UNCHECKED_CAST")
             PackageScalarLinks.read((module as Map<String, Any?>) + ("packageNativeLink" to artifact), validateArchive = false)
         }
+        val available = if (resolution) available(module) else null
+        if (available != null) PackageScalarLinks.read(module, validateArchive = false)
+        val unavailable = if (available == null) emptyList() else list((artifact as Map<*, *>)["abi"])
+            .map { it as Map<*, *> }.filter { it["entry"] !in available }
         return PackageNativeArchive("${unit}:${module["module"]} has archive-only native obligations" +
             " (unsupported=${expected.size}, conflicting=$conflictSymbols, unclassified=$unknown, unresolved=$unresolved)",
-            unknown != null || unresolved.isNotEmpty(), unit, expected)
+            unknown != null || unresolved.isNotEmpty() && available == null, unit, expected, unavailable)
     }
 
     private fun proofIdentity(proof: Map<*, *>, module: Map<*, *>) {

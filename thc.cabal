@@ -21,6 +21,12 @@ extra-source-files:
   test/fixtures/run-native-archive/unresolved/native-archive-unresolved.cabal
   test/fixtures/run-native-archive/unresolved/native.c
   test/fixtures/run-native-archive/unresolved/Unresolved.hs
+  test/fixtures/run-native-archive/poisoned/native-archive-poisoned.cabal
+  test/fixtures/run-native-archive/poisoned/native.c
+  test/fixtures/run-native-archive/poisoned/Poisoned.hs
+  test/fixtures/run-native-archive/provider/native-archive-provider.cabal
+  test/fixtures/run-native-archive/provider/native.c
+  test/fixtures/run-native-archive/provider/Provider.hs
   compiler/test-fixtures/TextCbitsAudit.hs
   compiler/test-fixtures/UnixLibcAudit.hs
   compiler/test-fixtures/UnixWaitStatusAudit.hs

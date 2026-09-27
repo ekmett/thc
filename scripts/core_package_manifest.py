@@ -337,6 +337,55 @@ def native_archive_calls(value):
     return []
 
 
+def native_entry_resolution(module):
+    """Bind a partial link to complete LLVM adapter closures and a checked union."""
+    def require(ok, reason):
+        if not ok: raise ValueError('Invalid package native entry resolution: ' + reason)
+    def record(value, fields):
+        require(isinstance(value, dict) and value.keys() == set(fields.split()), 'record fields')
+        return value
+    def names(value):
+        require(isinstance(value, list) and all(isinstance(s, str) and s and '\0' not in s for s in value), 'symbol list')
+        require(value == sorted(set(value)), 'sorted unique dependency symbols')
+        return value
+    archive = module.get('packageNativeArchive')
+    require(isinstance(archive, dict), 'missing original archive')
+    original, selected = archive.get('artifact'), module.get('packageNativeLink')
+    require(isinstance(original, dict) and isinstance(selected, dict), 'missing original/selected artifact')
+    proof = record(archive.get('entryResolution'), 'schema profile inputBitcodeSha256 entries outputBitcodeSha256 unresolved')
+    require(type(proof['schema']) is int and proof['schema'] == 1 and
+            proof['profile'] == 'llvm-globaldce-adapter-closures-v1', 'profile')
+    require(original.get('format') == selected.get('format') == 'llvm-bitcode' and
+            original.get('bitcodeSha256') == proof['inputBitcodeSha256'] and
+            selected.get('bitcodeSha256') == proof['outputBitcodeSha256'], 'content identity')
+    require({k: v for k, v in original.items() if k not in ('bitcodeSha256', 'bitcodeHex')} ==
+            {k: v for k, v in selected.items() if k not in ('bitcodeSha256', 'bitcodeHex', 'availableEntries')},
+            'component ABI/recipe differs')
+    unsupported = names(archive.get('unresolvedSymbols'))
+    inputs = original.get('buildInputs')
+    require(isinstance(inputs, dict), 'missing original build inputs')
+    externals = names(inputs.get('unresolved'))
+    require(unsupported and set(unsupported) <= set(externals), 'original unresolved inventory')
+    require(isinstance(proof['entries'], list), 'entry closures')
+    dependencies = []
+    for value in proof['entries']:
+        row = record(value, 'entry bitcodeSha256 unresolved')
+        require(isinstance(row['bitcodeSha256'], str) and SHA256.fullmatch(row['bitcodeSha256']), 'closure digest')
+        symbols = names(row['unresolved'])
+        require(set(symbols) <= set(externals), 'unrecorded adapter dependency')
+        dependencies.append((row['entry'], symbols))
+    require([entry for entry, _ in dependencies] == [entry['entry'] for entry in original['abi']], 'complete ordered adapter coverage')
+    available = [entry for entry, symbols in dependencies if not set(symbols) & set(unsupported)]
+    require(available and len(available) < len(dependencies) and selected.get('availableEntries') == available,
+            'exact available adapter selection')
+    union = names(proof['unresolved'])
+    require(not set(union) & set(unsupported) and set(union) <=
+            {symbol for entry, symbols in dependencies if entry in available for symbol in symbols}, 'union dependencies')
+    require(all(symbol in ('memcpy', 'memmove', 'memset', 'memcmp', 'bcmp', '__cxa_atexit', '__dso_handle') or
+                symbol.startswith('llvm.') for symbol in union), 'selected bitcode requires a native provider container')
+    return set(available)
+
+
 def package_native_archive(module):
     """Validate original unsupported obligations without granting execution."""
     if 'packageNativeArchive' not in module: return None
@@ -376,9 +425,10 @@ def package_native_archive(module):
             proof['unit'] == module['unit'] and proof['module'] == module['module'], 'typed provenance identity')
     raw_archive = module['packageNativeArchive']
     conflict_field = isinstance(raw_archive, dict) and 'conflictingImports' in raw_archive
+    resolution = isinstance(raw_archive, dict) and 'entryResolution' in raw_archive
     archive = record(raw_archive,
         'schema profile execution unit module unsupportedImports unclassifiedReason unresolvedSymbols artifact' +
-        (' conflictingImports' if conflict_field else ''))
+        (' conflictingImports' if conflict_field else '') + (' entryResolution' if resolution else ''))
     unit = text(module.get('unit'))
     require(type(archive['schema']) is int and archive['schema'] == 1 and archive['profile'] == 'thc-package-native-archive-v1' and
         archive['execution'] == 'not-linked' and archive['unit'] == unit and archive['module'] == module.get('module'), 'profile/owner')
@@ -455,13 +505,31 @@ def package_native_archive(module):
     require((artifact is None) == (not unresolved), 'unresolved artifact pair')
     require(unknown is not None or expected or unresolved, 'empty archive obligation')
     if artifact is not None:
-        require('packageNativeLink' not in module and unknown is None, 'archive is also executable')
+        require(('packageNativeLink' not in module or resolution) and unknown is None, 'archive is also executable')
         package_scalar_link(dict(module, packageNativeLink=artifact), validate_archive=False)
+    if resolution:
+        native_entry_resolution(module)
+        package_scalar_link(module, validate_archive=False)
     return archive
 
 
 def native_archive_blocks(module, binding, archive):
-    if archive['unclassifiedReason'] is not None or archive['unresolvedSymbols']: return True
+    partial = 'entryResolution' in archive
+    if archive['unclassifiedReason'] is not None or archive['unresolvedSymbols'] and not partial: return True
+    if partial:
+        available = native_entry_resolution(module)
+        unavailable = [entry for entry in archive['artifact']['abi'] if entry['entry'] not in available]
+        for call in native_archive_calls(binding):
+            target = call.get('target', {}) if isinstance(call, dict) else {}
+            if target.get('unit') != module['unit']: continue
+            for entry in unavailable:
+                expected = [['BoxedRep (Just Unlifted)' if rep in ('ByteArray#', 'MutableByteArray#') else rep]
+                            for rep in entry['arguments']] + [[]]
+                actual = call.get('argumentReps')
+                if (target.get('symbol') == entry['symbol'] and call.get('convention') == entry['convention'] and
+                        call.get('safety') == entry['safety'] and isinstance(actual, list) and
+                        [rep.get('primReps') if isinstance(rep, dict) else None for rep in actual] == expected):
+                    return True
     return any(isinstance(call, dict) and isinstance(call.get('target'), dict) and
         call['target'].get('unit') == module['unit'] and any(
             call['target'].get('symbol') == emitted['symbol'] and call.get('convention') == emitted['convention'] and
@@ -523,7 +591,9 @@ def package_scalar_link(module, validate_archive=True):
         'staticForeignExports', 'staticForeignExportRegistration')), 'mixed foreign obligations')
     raw_link = module['packageNativeLink' if native else 'packageScalarLink']
     inputs = native and isinstance(raw_link, dict) and 'buildInputs' in raw_link
-    link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' + (' buildInputs' if inputs else ''))
+    partial = native and isinstance(raw_link, dict) and 'availableEntries' in raw_link
+    link = record(raw_link, 'schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi' +
+                  (' buildInputs' if inputs else '') + (' availableEntries' if partial else ''))
     if inputs: require(isinstance(link['buildInputs'], dict), 'build inputs record')
     require(type(link['schema']) is int and link['schema'] == 1 and (link['format'] == 'llvm-bitcode' or
             native and link['format'] == 'llvm-embedded-elf' and platform.system() == 'Linux') and
@@ -577,10 +647,12 @@ def package_scalar_link(module, validate_archive=True):
                      for entry in variants}) == 1, 'conflicting C ABI variants')
         require(len({shape(entry, lambda rep: 'ByteArray#' if rep == 'MutableByteArray#' else rep, False)
                      for entry in variants}) == len(variants), 'ambiguous byte-array mutability variants')
+    available = native_entry_resolution(module) if partial else {entry['entry'] for entry in link['abi']}
+    selected_link = dict(link, abi=[entry for entry in link['abi'] if entry['entry'] in available]) if partial else link
     if native and 'staticForeignImports' not in module:
         require('foreign' not in module and 'staticForeignImportStubs' not in module,
                 'foreign products lack import provenance')
-        return link, set()
+        return selected_link, set()
     proof = record(module.get('staticForeignImports'),
         'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls')
     if native and 'staticForeignImportStubs' in module:
@@ -627,7 +699,7 @@ def package_scalar_link(module, validate_archive=True):
         require(len(variants) == 1, 'emitted ABI differs from compiled C')
         proved.add(variants[0]['entry'])
     require(exact(proof['expectedCalls'], calls(module.get('bindings'))), 'retained Core foreign inventory differs')
-    return link, proved
+    return selected_link, proved & available
 
 
 def foreign_execution_issue(module):

@@ -10,6 +10,64 @@ import java.util.HexFormat
 
 /** Structural controls only: these bytes are never parsed as LLVM or called. */
 class PackageScalarLinksTest {
+    @Test fun partialNativeLinkKeepsOriginalIndicesAndRequiresCompleteDependencyReceipt() {
+        val base = module()
+        val scalar = base["packageScalarLink"] as Map<String, Any?>
+        val entry = (scalar["abi"] as List<Map<String, Any?>>).single()
+        val entries = listOf("scalar_value", "scalar_z").mapIndexed { index, symbol -> entry + mapOf(
+            "symbol" to symbol, "entry" to "thc_native_${"a".repeat(64)}_$index", "convention" to "ccall", "safety" to "unsafe") }
+        val original = scalar + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to entries,
+            "buildInputs" to mapOf("unresolved" to listOf("unknown_external")))
+        val proof = base["staticForeignImports"] as Map<String, Any?>
+        val imported = (proof["imports"] as List<Map<String, Any?>>).single()
+        val extra = imported + mapOf("symbol" to "scalar_z", "binder" to
+            ((imported["binder"] as Map<String, Any?>) + ("occurrence" to "extra")),
+            "emitted" to ((imported["emitted"] as Map<String, Any?>) + ("symbol" to "scalar_z")))
+        val selected = original + mapOf("availableEntries" to listOf(entries[1]["entry"]), "bitcodeHex" to "4342",
+            "bitcodeSha256" to HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(byteArrayOf(0x43, 0x42))))
+        val closures = entries.mapIndexed { index, abi -> mapOf("entry" to abi["entry"], "bitcodeSha256" to "b".repeat(64),
+            "unresolved" to if (index == 0) listOf("unknown_external") else emptyList<String>()) }
+        val resolution = mapOf("schema" to 1L, "profile" to "llvm-globaldce-adapter-closures-v1",
+            "inputBitcodeSha256" to original["bitcodeSha256"], "outputBitcodeSha256" to selected["bitcodeSha256"],
+            "entries" to closures, "unresolved" to emptyList<String>())
+        val archive = mapOf("schema" to 1L, "profile" to "thc-package-native-archive-v1", "execution" to "not-linked",
+            "unit" to base["unit"], "module" to base["module"], "unsupportedImports" to emptyList<Any>(),
+            "unclassifiedReason" to null, "unresolvedSymbols" to listOf("unknown_external"), "artifact" to original,
+            "entryResolution" to resolution)
+        val partial = (base - "packageScalarLink") + mapOf("packageNativeArchive" to archive, "packageNativeLink" to selected,
+            "staticForeignImports" to (proof + ("imports" to listOf(imported, extra))))
+        val admission = PackageScalarLinks.read(partial)!!
+        assertEquals(listOf(entries[1]["entry"]), admission.link.abi.map { it.entry })
+        assertEquals(setOf(entries[1]["entry"]), admission.proved)
+        fun call(symbol: String) = mapOf("foreignCall" to mapOf("target" to mapOf("unit" to base["unit"], "symbol" to symbol),
+            "convention" to "ccall", "safety" to "unsafe", "argumentReps" to listOf(
+                mapOf("primReps" to listOf("Int32Rep")), mapOf("primReps" to emptyList<String>()))))
+        assertTrue(PackageNativeArchives.read(partial)!!.blocks(call("scalar_value")))
+        assertFalse(PackageNativeArchives.read(partial)!!.blocks(call("scalar_z")))
+        val old = (partial - "packageNativeLink") + ("packageNativeArchive" to (archive - "entryResolution"))
+        assertTrue(PackageNativeArchives.read(old)!!.blocks(emptyMap<String, Any>()))
+        for ((key, value) in listOf("schema" to true, "profile" to "invented", "inputBitcodeSha256" to "c".repeat(64),
+            "outputBitcodeSha256" to "c".repeat(64), "entries" to closures.reversed(), "entries" to closures.take(1),
+            "entries" to listOf(closures[0], closures[1] + ("unresolved" to listOf("unrecorded"))),
+            "unresolved" to listOf("unknown_external")))
+            assertThrows(IllegalArgumentException::class.java) {
+                PackageScalarLinks.read(partial + ("packageNativeArchive" to (archive + ("entryResolution" to (resolution + (key to value))))))
+            }
+        for (changed in listOf(selected - "availableEntries", selected + ("availableEntries" to entries.map { it["entry"] }),
+            selected + ("bitcodeHex" to "4243")))
+            assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(partial + ("packageNativeLink" to changed)) }
+        for (symbol in listOf("memcpy", "erf", "getentropy", "wcwidth", "_ZNSt8ios_base4InitC1Ev")) {
+            val inputs = mapOf("unresolved" to listOf(symbol, "unknown_external").sorted())
+            val providerResolution = resolution + mapOf("unresolved" to listOf(symbol),
+                "entries" to listOf(closures[0], closures[1] + ("unresolved" to listOf(symbol))))
+            val candidate = partial + mapOf("packageNativeLink" to (selected + ("buildInputs" to inputs)),
+                "packageNativeArchive" to (archive + mapOf("artifact" to (original + ("buildInputs" to inputs)),
+                    "entryResolution" to providerResolution)))
+            if (symbol == "memcpy") assertEquals(1, PackageScalarLinks.read(candidate)!!.link.abi.size)
+            else assertThrows(IllegalArgumentException::class.java) { PackageScalarLinks.read(candidate) }
+        }
+    }
+
     @Test fun conflictingOriginalAbiWitnessesExcludeOnlyThatSymbol() {
         val base = module()
         val scalar = base["packageScalarLink"] as Map<String, Any?>

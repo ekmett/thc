@@ -619,6 +619,48 @@ finishPackageNative pieces directory unit currentObjects modules = do
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
           "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
             "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]]
+    -- Keep the complete failed link as evidence. LLVM, rather than a textual
+    -- call-graph guess, computes each adapter's closure including global
+    -- initializers, destructors, aliases and address-taken functions. Load one
+    -- union of the usable closures so mutable C globals are never duplicated.
+    partial <- if null unsupported || format /= "llvm-bitcode" then pure Nothing else do
+      let selection = directory </> "native/entry-resolution"
+      createDirectoryIfMissing True selection
+      closures <- forM (zip [0::Int ..] entries) $ \(index,entry) -> do
+        let output = selection </> show index <.> "bc"
+        _ <- command directory opt ["-passes=internalize,globaldce",
+          "-internalize-public-api-list=" ++ entry,final,"-o",output]
+        _ <- command directory opt ["-passes=verify",output,"-disable-output"]
+        observed <- command directory nm ["--undefined-only","--format=posix",output]
+        digest <- sha <$> BS.readFile output
+        let dependencies = sort [name | line <- lines observed, name:_ <- [words line]]
+        check (all (`elem` externals) dependencies) "native adapter closure acquired an unrecorded external"
+        pure (entry,dependencies,object ["entry" .= entry,"bitcodeSha256" .= digest,"unresolved" .= dependencies])
+      let available = [entry | (entry,dependencies,_) <- closures, not (any (`elem` unsupported) dependencies)]
+      if null available then pure Nothing else do
+        let output = selection </> "available.bc"
+        _ <- command directory opt ["-passes=internalize,globaldce",
+          "-internalize-public-api-list=" ++ join "," available,final,"-o",output]
+        _ <- command directory opt ["-passes=verify",output,"-disable-output"]
+        observed <- command directory nm ["--undefined-only","--format=posix",output]
+        selectedBytes <- BS.readFile output
+        let dependencies = sort [name | line <- lines observed, name:_ <- [words line]]
+            expected = nub (concat [deps | (entry,deps,_) <- closures, entry `elem` available])
+        check (all (`elem` expected) dependencies && not (any (`elem` unsupported) dependencies))
+          "native adapter union retains an unsupported or unproved external"
+        let resolution = object ["schema" .= (1::Int),
+              "profile" .= ("llvm-globaldce-adapter-closures-v1"::String),
+              "inputBitcodeSha256" .= sha bytes,"entries" .= [closureRecord | (_,_,closureRecord) <- closures],
+              "outputBitcodeSha256" .= sha selectedBytes,"unresolved" .= dependencies]
+            selectedProof = setMember "availableEntries" (toJSON available) $
+              setMember "bitcodeHex" (toJSON (hex selectedBytes)) $
+              setMember "bitcodeSha256" (toJSON (sha selectedBytes)) proof
+        -- This profile carries raw bitcode only. An otherwise allowed libm,
+        -- entropy, width or C++ provider still needs the embedded container
+        -- produced by the complete-link path above; do not omit that recipe.
+        pure $ if all (\name -> name `elem` (["memcpy","memmove","memset","memcmp","bcmp"] ++ nativeLifecycleSymbols) ||
+                    "llvm." `isPrefixOf` name) dependencies
+          then Just (resolution,selectedProof) else Nothing
     writeJson (directory </> "native/inputs.json") (object ["sources" .= inputs,"unresolved" .= externals])
     forM modules $ \(name,bytes') -> do
       value <- either fail pure (eitherDecodeStrict' bytes')
@@ -633,8 +675,11 @@ finishPackageNative pieces directory unit currentObjects modules = do
               excluded <- maybe (pure []) (\archive -> get archive "unsupportedImports") prior
               conflicts <- maybe (pure []) (either fail pure . parseValue)
                 (prior >>= (`member` "conflictingImports"))
-              pure (setMember "packageNativeArchive"
-                (archiveRecord value excluded Nothing unsupported (Just proof) conflicts) value)
+              let archive = archiveRecord value excluded Nothing unsupported (Just proof) conflicts
+              pure $ case partial of
+                Nothing -> setMember "packageNativeArchive" archive value
+                Just (resolution,selectedProof) -> setMember "packageNativeLink" selectedProof $
+                  setMember "packageNativeArchive" (setMember "entryResolution" resolution archive) value
           pure (name, BL.toStrict (encode next))
         _ -> fail "package native Core module is not an object"
 
