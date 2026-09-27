@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact logical result shapes and known lifted Array# element contracts."""
+"""Exact logical result shapes and known boxed levity for Array# elements."""
 import copy
 import importlib.util
 import json
@@ -14,14 +14,15 @@ spec=importlib.util.spec_from_file_location('audit_core',ROOT/'audit-core.py')
 audit=importlib.util.module_from_spec(spec);spec.loader.exec_module(audit)
 CAP=json.loads((ROOT/'core-capabilities.json').read_text())
 
-def fixture(name,element_kind='data'):
+def fixture(name,element_kind='data',element_lifted=True):
     def role(r):
         if r=='state':return dict(kind='void',primReps=[],evaluated=True)
         if r=='int':return dict(kind='long',primReps=['IntRep'],evaluated=True)
         return dict(kind='object' if r=='array' else element_kind,
-                    primReps=['BoxedRep (Just Unlifted)' if r=='array' else 'BoxedRep (Just Lifted)'],evaluated=r=='array')
+                    primReps=['BoxedRep (Just Unlifted)' if r=='array' or not element_lifted else 'BoxedRep (Just Lifted)'],
+                    evaluated=r=='array' or not element_lifted)
     contract=CAP['managedArrayPrimitives'][name]
-    parameters=[dict(id=f'x{i}',lifted=r=='element',rep=role(r)) for i,r in enumerate(contract['arguments'])]
+    parameters=[dict(id=f'x{i}',lifted=r=='element' and element_lifted,rep=role(r)) for i,r in enumerate(contract['arguments'])]
     result=contract['result']
     if isinstance(result,list):
         fields=[role(r) for r in result]
@@ -39,23 +40,21 @@ def report(module):return audit.Audit([('array.json',module)],CAP).run(['root'])
 def codes(module):return {i['code'] for i in report(module)['issues']}
 
 class ArrayContracts(unittest.TestCase):
-    def test_reads_transport_unlifted_object_elements_but_not_scalar_or_forged_boxed_values(self):
-        for name in ('readArray#', 'indexArray#'):
-            module, app = fixture(name, 'object')
-            proof = app[6]['rep']
-            proof['components'][-1].update(primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
-            proof['primReps'] = ['BoxedRep (Just Unlifted)']
-            module['bindings'][0]['expr'][2][-1]['binder']['rep'] = copy.deepcopy(proof)
-            self.assertTrue(report(module)['accepted'], report(module)['issues'])
-            for kind in ('long', 'data', 'closure', 'unknown'):
-                changed = copy.deepcopy(module)
-                changed['bindings'][0]['expr'][2][1][6]['rep']['components'][-1]['kind'] = kind
-                self.assertIn('primitive-representation', codes(changed), (name, kind))
+    def test_reads_reject_scalar_or_unknown_kinds_for_boxed_elements(self):
+        for name in ('readArray#', 'indexArray#', 'readSmallArray#', 'indexSmallArray#'):
+            for lifted in (False, True):
+                for kind in ('long', 'unknown'):
+                    module, app = fixture(name, 'object', lifted)
+                    app[6]['rep']['components'][-1]['kind'] = kind
+                    module['bindings'][0]['expr'][2][-1]['binder']['rep'] = copy.deepcopy(app[6]['rep'])
+                    self.assertIn('primitive-representation', codes(module), (name, lifted, kind))
 
-    def test_all_lifted_reference_classes(self):
+    def test_all_reference_classes_at_either_known_boxed_levity(self):
         for name in CAP['managedArrayPrimitives']:
             for kind in ('data','closure','object'):
-                result=report(fixture(name,kind)[0]);self.assertTrue(result['accepted'],(name,kind,result['issues']))
+                for lifted in (False, True):
+                    result=report(fixture(name,kind,lifted)[0])
+                    self.assertTrue(result['accepted'],(name,kind,lifted,result['issues']))
 
     def test_arity_flags_and_absent_proofs(self):
         for name in CAP['managedArrayPrimitives']:
@@ -84,15 +83,26 @@ class ArrayContracts(unittest.TestCase):
             module,app=fixture(name);app[6]['rep']['components'][-1]=dict(kind='long',primReps=['IntRep'])
             app[6]['rep']['primReps']=['IntRep'];self.assertIn('primitive-representation',codes(module))
 
-    def test_element_levity_is_known_lifted_and_indices_are_exact_int(self):
+    def test_element_levity_is_known_boxed_and_indices_are_exact_int(self):
         for name,contract in CAP['managedArrayPrimitives'].items():
             for index,role in enumerate(contract['arguments']):
-                for bad in (['WordRep'] if role=='int' else ['BoxedRep Nothing','BoxedRep (Just Unlifted)'] if role=='element' else []):
+                for bad in (['WordRep'] if role=='int' else ['BoxedRep Nothing','IntRep'] if role=='element' else []):
                     module,app=fixture(name);app[2][index][2]['rep']['primReps']=[bad]
                     self.assertIn('primitive-representation',codes(module),(name,index,bad))
-            if name in ('readArray#','indexArray#'):
-                module,app=fixture(name);app[6]['rep']['components'][-1]['primReps']=['BoxedRep (Just Unlifted)']
-                app[6]['rep']['primReps']=['BoxedRep (Just Unlifted)'];self.assertIn('primitive-representation',codes(module))
+            if isinstance(contract['result'], list) and 'element' in contract['result']:
+                module,app=fixture(name)
+                proof=app[6]['rep']
+                proof['components'][-1]['primReps']=['BoxedRep Nothing']
+                proof['primReps']=[rep for field in proof['components'] for rep in field['primReps']]
+                module['bindings'][0]['expr'][2][-1]['binder']['rep']=copy.deepcopy(proof)
+                self.assertIn('primitive-representation',codes(module),name)
+
+    def test_result_levity_cannot_contradict_the_case_binder(self):
+        for name in ('readArray#', 'indexArray#', 'readSmallArray#', 'indexSmallArray#'):
+            module,app=fixture(name)
+            app[6]['rep']['components'][-1]['primReps']=['BoxedRep (Just Unlifted)']
+            app[6]['rep']['primReps']=['BoxedRep (Just Unlifted)']
+            self.assertIn('aggregate-shape',codes(module),name)
 
     def test_lexical_lifted_storage_proof_cannot_be_relabelled(self):
         for name in ('readArray#','writeArray#','unsafeFreezeArray#','indexArray#','cloneArray#','freezeArray#','thawArray#'):
@@ -109,11 +119,12 @@ class ArrayContracts(unittest.TestCase):
             else:proof.update(kind='vector',primReps=['VecRep 2 Int64ElemRep'],vector=dict(lanes=2,element='Int64ElemRep'))
             self.assertIn('primitive-representation',codes(module),change)
 
-    def test_first_class_and_atomic_operations_remain_unsupported(self):
+    def test_array_operations_require_saturated_applications(self):
         for name in CAP['managedArrayPrimitives']:
             module,app=fixture(name);app[:]=['prim',name]
             self.assertFalse(report(module)['accepted'])
-        self.assertNotIn('casArray#',CAP['primitives'])
+        for name in ('casArray#', 'casSmallArray#'):
+            self.assertEqual(CAP['primitives'][name], 5)
 
     def test_raw_flags_and_extra_scalar_fields_cannot_be_erased(self):
         for name in CAP['managedArrayPrimitives']:
