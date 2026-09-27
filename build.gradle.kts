@@ -1227,7 +1227,7 @@ tasks.processResources { dependsOn(generateSigsetAbi) }
 // original C resources are independent of these optional providers.
 if (windowsHost) {
     listOf("generateStdioAbi", "generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
-        "compileNativeAtomics", "compileNativeFiles", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
         .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.
