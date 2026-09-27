@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.CompilerDirectives.transferToInterpreter
 import com.oracle.truffle.api.frame.VirtualFrame
 import jdk.incubator.vector.Vector
 import java.nio.ByteBuffer
@@ -158,7 +159,10 @@ internal class ClosureInspectExpression(private val operation: ClosureInspectOp,
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
     override fun executeLong(frame: VirtualFrame): Long {
-        if (operation != ClosureInspectOp.SIZE) fault("${operation.primitive} requires a tuple destination")
+        if (operation != ClosureInspectOp.SIZE) {
+            transferToInterpreter()
+            fault("${operation.primitive} requires a tuple destination")
+        }
         return ClosureInspection.size(operands[0].execute(frame))
     }
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
