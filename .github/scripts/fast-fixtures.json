@@ -54,6 +54,7 @@
     "thc.CoreForeignArtifactsTest",
     "thc.CoreLoweringRootsTest",
     "thc.runtime.CoreFreeVariablesTest",
+    "thc.runtime.BytecodeColdHandlerTest",
     "thc.runtime.CompilerHeapHintTest",
     "thc.runtime.NarrowIntegerCarrierTest",
     "thc.runtime.NarrowIntegerContinuationTest",

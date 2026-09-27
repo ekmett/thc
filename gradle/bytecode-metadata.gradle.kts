@@ -238,7 +238,8 @@ class BytecodeStaticPreparation {
         "            int local = locals[at + LOCALS_OFFSET_LOCAL_INDEX];\n" +
         "            int index = locals[at + LOCALS_OFFSET_INFO];\n" +
         "            Object info = index < 0 ? null : constants[index];\n" +
-        "            byte tag = info == FrameSlotKind.Long ? FrameSlotKind.Long.tag : FrameSlotKind.Illegal.tag;\n" +
+        "            byte tag = info == FrameSlotKind.Long ? FrameSlotKind.Long.tag :\n" +
+        "                info == FrameSlotKind.Object ? FrameSlotKind.Object.tag : FrameSlotKind.Illegal.tag;\n" +
         "            if (!seen[local]) { localTags[local] = tag; seen[local] = true; }\n" +
         "            else if (localTags[local] != tag) localTags[local] = FrameSlotKind.Illegal.tag;\n" +
         "        }\n" +
@@ -296,6 +297,102 @@ val testBytecodeStaticPreparation = tasks.register("testBytecodeStaticPreparatio
         rejects(after.replace("info == FrameSlotKind.Long", "info instanceof FrameSlotKind"))
         rejects(after.replace("super.prepareForCompilation", "otherPreparation"))
         logger.lifecycle("Static cached-node/local metadata preparation: version, shape, clone, CRLF and idempotence controls passed.")
+    }
+}
+
+/** Capture roots must compile their first exceptional suspension path, not
+ * deoptimize it into existence. Do not manufacture observed exception profiles. */
+class BytecodeHandlerPreparation {
+    val version = "25.3.4.1"
+    private val marker = "THC nonadaptive capture handlers v1"
+    private val original = "                if (!this.exceptionProfiles_[handlerEntryIndex]) {\n" +
+        "                    CompilerDirectives.transferToInterpreterAndInvalidate();\n" +
+        "                    this.exceptionProfiles_[handlerEntryIndex] = true;\n" +
+        "                }\n"
+    private val changed = "                // $marker\n" +
+        original.replace("if (!this.exceptionProfiles_", "if (!getRoot().requiresUnprofiledExceptionHandlers() && !this.exceptionProfiles_")
+
+    fun transform(source: String, processorVersion: String): String {
+        require(processorVersion == version) { "Review handler preparation before changing Truffle $version." }
+        val unix = source.replace("\r\n", "\n")
+        fun shape(ok: Boolean) { require(ok) { "Unexpected Truffle handler preparation shape." } }
+        val crlf = source.contains("\r\n")
+        shape(!unix.contains('\r') && (!crlf || source == unix.replace("\n", "\r\n")))
+        fun replaceOnce(value: String, from: String, to: String): String {
+            val at = value.indexOf(from)
+            shape(at >= 0 && value.indexOf(from, at + from.length) < 0)
+            return value.replaceRange(at, at + from.length, to)
+        }
+        var result = unix
+        if (result.contains(marker)) result = replaceOnce(result, changed, original)
+        shape(!result.contains(marker))
+        val signature = "private int resolveHandler(long bci, int handler, int[] localHandlers)"
+        val method = result.indexOf(signature)
+        shape(method >= 0 && result.indexOf(signature, method + signature.length) < 0)
+        result = replaceOnce(result, original, changed)
+        return if (crlf) result.replace("\n", "\r\n") else result
+    }
+
+    fun fixture() = """
+        public class HandlerPreparationFixture {
+            private final boolean capture;
+            private final boolean[] exceptionProfiles_ = new boolean[2];
+            private static final int EXCEPTION_HANDLER_LENGTH = 3;
+            public HandlerPreparationFixture(boolean capture) { this.capture = capture; }
+            HandlerPreparationFixture getRoot() { return this; }
+            boolean requiresUnprofiledExceptionHandlers() { return capture; }
+            public boolean observed(int i) { return exceptionProfiles_[i]; }
+            public int probe(long bci, int first) { return resolveHandler(bci, first, new int[]{0, 5, 10, 3, 8, 20}); }
+            private int resolveHandler(long bci, int handler, int[] localHandlers) {
+                for (int i = handler; i < localHandlers.length; i += EXCEPTION_HANDLER_LENGTH) {
+                    if (localHandlers[i] > bci || localHandlers[i + 1] <= bci) continue;
+                    int handlerEntryIndex = Math.floorDiv(i, EXCEPTION_HANDLER_LENGTH);
+        """.trimIndent() + "\n" + original + """
+                    return i;
+                }
+                return -1;
+            }
+            static class CompilerDirectives { static void transferToInterpreterAndInvalidate() {} }
+        }
+        """.trimIndent() + "\n"
+}
+
+val testBytecodeHandlerPreparation = tasks.register("testBytecodeHandlerPreparation") {
+    group = "verification"
+    inputs.file("gradle/bytecode-metadata.gradle.kts")
+    doLast {
+        val patch = BytecodeHandlerPreparation()
+        val before = patch.fixture()
+        val after = patch.transform(before, patch.version)
+        check(patch.transform(after, patch.version) == after)
+        check(patch.transform(before.replace("\n", "\r\n"), patch.version) == after.replace("\n", "\r\n"))
+        fun reject(text: String, version: String = patch.version) {
+            check(runCatching { patch.transform(text, version) }.exceptionOrNull() is IllegalArgumentException)
+        }
+        reject(before, "changed-version")
+        reject(before + before)
+        reject(before.replace("long bci", "int bci"))
+        reject(before.replace("[handlerEntryIndex] = true", "[handlerEntryIndex] = false"))
+        reject(after.replace("requiresUnprofiledExceptionHandlers() &&", "requiresUnprofiledExceptionHandlers() ||"))
+        reject(before.replaceFirst("\n", "\r\n"))
+        val directory = temporaryDir.resolve("handlerPolicy").apply { mkdirs() }
+        val input = directory.resolve("HandlerPreparationFixture.java").apply { writeText(after) }
+        check(checkNotNull(ToolProvider.getSystemJavaCompiler()).run(null, null, null, "-d", directory.path, input.path) == 0)
+        URLClassLoader(arrayOf(directory.toURI().toURL()), null).use { loader ->
+            val type = loader.loadClass("HandlerPreparationFixture")
+            for (capture in listOf(false, true)) {
+                val value = type.getConstructor(Boolean::class.javaPrimitiveType).newInstance(capture)
+                val probe = type.getMethod("probe", Long::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+                val observed = type.getMethod("observed", Int::class.javaPrimitiveType)
+                check(probe.invoke(value, -1L, 0) == -1)
+                check(probe.invoke(value, 0L, 0) == 0)
+                check(probe.invoke(value, 4L, 3) == 3)
+                check(probe.invoke(value, 5L, 0) == 3)
+                check(probe.invoke(value, 8L, 0) == -1)
+                for (index in 0..1) check(observed.invoke(value, index) == !capture)
+            }
+        }
+        logger.lifecycle("Nonadaptive capture handlers: range/order/profile semantics, version/shape/CRLF/idempotence passed.")
     }
 }
 
@@ -389,7 +486,8 @@ val testBytecodeMetadataSplit = tasks.register("testBytecodeMetadataSplit") {
     }
 }
 
-tasks.named("check") { dependsOn(testBytecodeMetadataSplit, testBytecodeSourceModeAccessor, testBytecodeStaticPreparation) }
+tasks.named("check") { dependsOn(testBytecodeMetadataSplit, testBytecodeSourceModeAccessor, testBytecodeStaticPreparation,
+    testBytecodeHandlerPreparation) }
 tasks.matching { it.name == "kaptKotlin" }.configureEach {
     inputs.file("gradle/bytecode-metadata.gradle.kts")
     doLast {
@@ -399,8 +497,8 @@ tasks.matching { it.name == "kaptKotlin" }.configureEach {
         val source = layout.buildDirectory.file("generated/source/kapt/main/thc/runtime/BytecodeRootGen.java").get().asFile
         val before = source.readText()
         val version = checkNotNull(dependency.version)
-        val after = BytecodeStaticPreparation().transform(
-            BytecodeSourceModeAccessor().transform(BytecodeMetadataSplitter().transform(before, version), version), version)
+        val after = BytecodeHandlerPreparation().transform(BytecodeStaticPreparation().transform(
+            BytecodeSourceModeAccessor().transform(BytecodeMetadataSplitter().transform(before, version), version), version), version)
         if (before != after) source.writeText(after)
     }
 }

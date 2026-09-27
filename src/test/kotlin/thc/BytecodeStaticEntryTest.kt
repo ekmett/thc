@@ -123,8 +123,49 @@ class BytecodeStaticEntryTest {
         assertEquals(FrameSlotKind.Object, root.bytecodeNode.locals.single().typeProfile)
     }
 
+    @Test fun declaredObjectScratchIsColdStatelessAndRetainsReplayAndCloneMetadata() = withLanguage { language ->
+        val metrics = Metrics(true)
+        var sourceReads = 0
+        val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+            if (b.isParsingSources()) {
+                sourceReads++
+                b.beginSource(Source.newBuilder("thc", "scratch", "Scratch.hs").build())
+                b.beginSourceSection(0, 7)
+            }
+            b.beginRoot(); b.emitEnterRoot(metrics)
+            val local = b.createLocal("scratch", FrameSlotKind.Object)
+            b.beginStaticStoreObject(local); b.emitLoadArgument(0); b.endStaticStoreObject()
+            b.beginReturn(); b.emitStaticLoadObject(local); b.endReturn(); b.endRoot()
+            if (b.isParsingSources()) { b.endSourceSection(); b.endSource() }
+        }.getNode(0)
+        val target = root.callTarget
+        compile(target)
+        assertEquals(0, sourceReads)
+        assertEquals(0L, metrics.compiledEntries)
+        assertEquals(FrameSlotKind.Object, root.bytecodeNode.locals.single().typeProfile)
+        for (value in listOf(Any(), 1L, "value", null)) {
+            val before = metrics.compiledEntries
+            assertSame(value, Calls.target(target, arrayOf(value)))
+            assertEquals(before + 1, metrics.compiledEntries)
+            valid(target)
+        }
+        val code = root.bytecodeNode.instructions.map { it.name to it.arguments.map(Any::toString) }
+        root.bytecodeNode.ensureSourceInformation()
+        assertEquals(1, sourceReads)
+        assertSame(target, root.callTarget)
+        assertEquals(code, root.bytecodeNode.instructions.map { it.name to it.arguments.map(Any::toString) })
+        assertSame(FrameSlotKind.Object, root.bytecodeNode.locals.single().info)
+        val clone = root.javaClass.getDeclaredMethod("cloneUninitialized").apply { isAccessible = true }.invoke(root) as BytecodeRoot
+        compile(clone.callTarget)
+        assertSame(FrameSlotKind.Object, clone.bytecodeNode.locals.single().info)
+        assertEquals(FrameSlotKind.Object, clone.bytecodeNode.locals.single().typeProfile)
+        val value = Any()
+        assertSame(value, Calls.target(clone.callTarget, arrayOf(value)))
+        valid(clone.callTarget)
+    }
+
     @Test fun compilerCertifiesOnlyExactWideSingleWriteFormalsAndKeepsAsyncAndLazyInputsGeneric() = withLanguage { language ->
-        for (marker in listOf(FrameSlotKind.Int, FrameSlotKind.Object, "primitive", null)) {
+        for (marker in listOf(FrameSlotKind.Int, "object", "primitive", null)) {
             val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
                 b.beginRoot()
                 val local = b.createLocal("unapproved marker", marker)

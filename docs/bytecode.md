@@ -35,6 +35,15 @@ root. The generated interpreter executes those instructions directly; it does
 not call the AST interpreter to evaluate Core expressions. Layouts, call arities,
 and other metadata used during partial evaluation are constant operands.
 
+Async- or delimited-enabled roots compile handler selection without adaptive
+exception-history guards; resolving a first suspension does not mark an
+exception profile as observed. Blocking-request handlers use declared Object
+scratch carriers and stateless loads/stores, including the saved root mask.
+This is compiler metadata, not execution of a preparatory suspension. Ordinary
+roots retain their exception profiling, and ordinary local writes retain
+adaptive widening. The pinned generated-code normalization checks version and
+source shape before applying this policy.
+
 The implementation takes guidance from Cadenza's bytecode experiment while
 retaining THC's existing capture and constructor representation. The Bytecode DSL
 is experimental upstream; this implementation is pinned to Truffle 25.3.4.1.

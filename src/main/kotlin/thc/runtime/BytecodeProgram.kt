@@ -587,7 +587,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     /** Yield skips lexical finally. Save this activation's lazy annotations and
      * park to its caller; the resumed instruction reinstalls the saved extent. */
     private fun beginAnnotationYield(e: Emission,
-                                     active: BytecodeLocal = e.builder.createLocal("yielded annotations", "object")) {
+                                     active: BytecodeLocal = e.builder.createLocal("yielded annotations", FrameSlotKind.Object)) {
         val b = e.builder
         b.beginResumeAnnotations(active)
         b.beginYield()
@@ -640,9 +640,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             }
         }
         val retry = b.createLocal("Blocking request pending", "primitive")
-        val request = b.createLocal("Blocking async request", "object")
-        val active = b.createLocal("Blocking logical mask", "object")
-        val discard = b.createLocal("Blocking resume value", "object")
+        val request = b.createLocal("Blocking async request", FrameSlotKind.Object)
+        val active = b.createLocal("Blocking logical mask", FrameSlotKind.Object)
+        val discard = b.createLocal("Blocking resume value", FrameSlotKind.Object)
         b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal()
         b.beginWhile()
         b.emitLoadLocal(retry)
@@ -653,21 +653,21 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal()
         b.endBlock()
         b.beginBlock()
-        b.beginStoreLocal(request)
+        b.beginStaticStoreObject(request)
         b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly()
-        b.endStoreLocal()
-        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
-        b.beginStoreLocal(discard)
+        b.endStaticStoreObject()
+        b.beginStaticStoreObject(active); b.emitCurrentMask(); b.endStaticStoreObject()
+        b.beginStaticStoreObject(discard)
         b.beginReenterCallMask()
         beginAnnotationYield(e)
         b.beginParkAsyncMask()
-        b.emitLoadLocal(request)
-        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
+        b.emitStaticLoadObject(request)
+        b.emitStaticLoadObject(checkNotNull(e.checkpointRootEntry))
         b.endParkAsyncMask()
         endAnnotationYield(e)
-        b.emitLoadLocal(active)
+        b.emitStaticLoadObject(active)
         b.endReenterCallMask()
-        b.endStoreLocal()
+        b.endStaticStoreObject()
         b.endBlock()
         b.endTryCatch()
         b.endBlock()

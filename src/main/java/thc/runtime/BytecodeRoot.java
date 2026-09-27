@@ -69,6 +69,12 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @CompilerDirectives.CompilationFinal private boolean delimitedEnabled;
     public final void configureDelimited(boolean enabled) { delimitedEnabled = enabled; }
     public final boolean isDelimitedEnabled() { return delimitedEnabled; }
+
+    /** A first suspension is an ordinary compiled path, not an observed-exception
+     * specialization. The generated handler resolver keeps its profile untouched. */
+    public final boolean requiresUnprofiledExceptionHandlers() {
+        return asyncEnabled || delimitedEnabled;
+    }
     @CompilerDirectives.CompilationFinal private LocalAccessor typedBloom;
     public final void configureTypedBloom(LocalAccessor bloom) { typedBloom = bloom; }
 
@@ -741,14 +747,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class ReenterCallMask {
-        @Specialization public static DelimitedResume reenterDelimited(DelimitedResume resumed,
-                MaskingState callerActive) { return resumed; }
-        @Specialization(guards = "!isDelimited(resumed)") public static Object reenterOrdinary(Object resumed, MaskingState callerActive,
+        @Specialization public static Object reenter(Object resumed, MaskingState callerActive,
                 @Bind("$node") Node node) {
-            SynchronousMasking.set(node, callerActive);
+            if (!(resumed instanceof DelimitedResume)) SynchronousMasking.set(node, callerActive);
             return resumed;
         }
-        public static boolean isDelimited(Object value) { return value instanceof DelimitedResume; }
     }
 
     @Operation
@@ -5655,6 +5658,26 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static long apply(VirtualFrame frame, LocalAccessor local,
                 @Bind("$bytecodeNode") BytecodeNode bytecode) {
             return staticLong(local.getObject(bytecode, frame));
+        }
+    }
+
+    /** Compiler-owned suspension scratch registers have Object carriers on every
+     * write. Stateless operations also avoid first-use StoreLocal quickening. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticStoreObject {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor local, Object value,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            local.setObject(bytecode, frame, value);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "local")
+    public static final class StaticLoadObject {
+        @Specialization public static Object apply(VirtualFrame frame, LocalAccessor local,
+                @Bind("$bytecodeNode") BytecodeNode bytecode) {
+            return local.getObject(bytecode, frame);
         }
     }
 
