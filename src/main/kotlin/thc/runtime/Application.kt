@@ -540,8 +540,12 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
 
     override fun executeRepeating(frame: VirtualFrame): Boolean = try {
         if (metrics.enabled) metrics.incrementTrampolineIterations()
-        val target = frame.getObject(FrameLayout.TAIL_FUNCTION) as RootCallTarget
-        val transfer = frame.getObject(FrameLayout.TAIL_ARGUMENTS) as TailCall
+        val targetValue = frame.getObject(FrameLayout.TAIL_FUNCTION)
+        if (targetValue == null) CompilerDirectives.transferToInterpreter()
+        val target = targetValue as RootCallTarget
+        val transferValue = frame.getObject(FrameLayout.TAIL_ARGUMENTS)
+        if (transferValue == null) CompilerDirectives.transferToInterpreter()
+        val transfer = transferValue as TailCall
         val arguments = transfer.args
         frame.setObject(FrameLayout.TAIL_FUNCTION, null)
         frame.setObject(FrameLayout.TAIL_ARGUMENTS, null)
