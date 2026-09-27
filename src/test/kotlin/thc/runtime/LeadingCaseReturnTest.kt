@@ -241,7 +241,7 @@ class LeadingCaseReturnTest {
                 run(p, "driver", fn, 11L, stop, "invalid primitive carrier")
             }
             val expectedMessage = when {
-                backend == "ast" && java.lang.Boolean.getBoolean(HANDOFF_PROPERTY) -> "Invalid primitive handoff field"
+                backend == "ast" && java.lang.Boolean.getBoolean(HANDOFF_PROPERTY) -> "Invalid Long handoff field"
                 backend == "ast" -> "Expected primitive Long argument"
                 else -> "Expected primitive Long"
             }
