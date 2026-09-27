@@ -2680,11 +2680,7 @@ CoreStackForeign.validateHead(fn, defined)
                                 b.beginBlock()
                                 val payload = b.createLocal("caught exception payload", "object")
                                 b.beginStoreLocal(payload)
-                                if (!resumable) {
-                                    b.beginRequireGuestFailure(); b.emitLoadException(); b.endRequireGuestFailure()
-                                } else {
-                                    b.beginRequireCaughtIOFailure(); b.emitLoadException(); b.endRequireCaughtIOFailure()
-                                }
+                                b.beginRequireCaughtIOFailure(); b.emitLoadException(); b.endRequireCaughtIOFailure()
                                 b.endStoreLocal()
                                 val prior = b.createLocal("handler caller mask", "object")
                                 b.beginStoreLocal(prior); b.emitEnterHandlerMask(); b.endStoreLocal()
@@ -3001,8 +2997,11 @@ CoreStackForeign.validateHead(fn, defined)
                 CoreGuestThreads.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
                 if (name == "killThread#") {
-                    if (!enableAsync) throw UnsupportedCore("killThread# requires resumable bytecode async delivery")
-                    ProvenExpression(Expression { e ->
+                    if (!enableAsync) ProvenExpression(Expression { e ->
+                        e.builder.beginThreadPrimitive(BytecodeRoot.ThreadPrimitiveKind.SELF_KILL)
+                        operands.forEach { it.emit(e) }
+                        e.builder.endThreadPrimitive()
+                    }, tupleProof.copy(evaluated = true)) else ProvenExpression(Expression { e ->
                         val b = e.builder
                         b.beginBlock()
                         val values = operands.mapIndexed { index, operand ->
