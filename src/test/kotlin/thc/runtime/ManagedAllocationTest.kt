@@ -15,6 +15,47 @@ import thc.Language
 import thc.primopTestContext
 
 class ManagedAllocationTest {
+    @Test fun pointerWritesKeepTheFirstInstalledCallAndReferenceIdentity() {
+        primopTestContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        val storage = frame.arguments[0] as ManagedAllocation
+                        val address = frame.arguments[2] as ManagedAddress
+                        storage.writeAddressByteOffset(frame.arguments[1] as Long, address)
+                        return address
+                    }
+                }
+                val target = root.callTarget
+                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, pinned = true))
+                val addresses = storage.map { ManagedAddress.fromAllocation(it).plus(16) }
+                for ((owner, address) in storage.zip(addresses))
+                    assertSame(address, target.call(owner, 0L, address))
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                for ((owner, address) in storage.zip(addresses)) {
+                    val before = root.compiledEntries
+                    assertSame(address, target.call(owner, 8L, address))
+                    assertEquals(before + 1, root.compiledEntries, "first installed pointer write")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    assertSame(address, owner.readAddressByteOffset(0))
+                    assertSame(address, owner.readAddressByteOffset(8))
+                    assertThrows(RuntimeFault::class.java) { owner.writeAddressByteOffset(4, address) }
+                    assertFalse(Thread.holdsLock(owner))
+                    assertSame(address, owner.readAddressByteOffset(0))
+                    assertSame(address, owner.readAddressByteOffset(8))
+                }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun heapAndNativeByteAccessKeepTheFirstInstalledCallAndStorageIdentity() {
         primopTestContext().use { context ->
             context.initialize("thc"); context.enter()

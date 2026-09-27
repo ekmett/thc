@@ -133,7 +133,8 @@ internal class ManagedAllocation private constructor(
         }
     }
 
-    @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
+    // Pointer-cell bookkeeping is a host operation; scalar byte access stays inline.
+    @TruffleBoundary @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
         requireAddressCell(offset)
         val start = range(offset, pointerBytes.toLong())
         invalidate(start, pointerBytes)
