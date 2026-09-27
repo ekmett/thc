@@ -58,7 +58,7 @@ class NarrowIntegerCarrierTest {
         for (integer in NarrowInteger.values()) {
             val proof = proof(integer)
             val capture = CaptureLayout.withVectors(language, arrayOf(null), booleanArrayOf(true),
-                exactInt = arrayOf(integer))
+                booleanArrayOf(false), arrayOfNulls<Class<*>>(1), booleanArrayOf(false), booleanArrayOf(false), arrayOf(integer))
             val packet = language.handoffLayouts.intern(listOf(integer.rep))
             val data = DataLayout(language, "NarrowCarrier.${integer.name}", integer.name, arrayOf(integer.rep))
             for (bits in listOf(Int.MIN_VALUE, -65537, -129, -1, 0, 1, 127, 65535, Int.MAX_VALUE)) {

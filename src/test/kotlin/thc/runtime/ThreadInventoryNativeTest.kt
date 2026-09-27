@@ -294,7 +294,7 @@ class ThreadInventoryNativeTest {
                         @Suppress("UNCHECKED_CAST")
                         val module = Json.parse(File(directory, "$stage/core/ThreadInventory.json").readText()) as Map<String, Any?>
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        assertEquals(java.lang.Boolean.getBoolean(HANDOFF_PROPERTY), language.handoffLayouts.enabled)
+                        assertEquals(java.lang.Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY), language.handoffLayouts.enabled)
                         println("THREAD_INVENTORY_HANDOFF=${language.handoffLayouts.enabled}")
                         val linked = CoreModules.reachable(module, entry) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked, true)
@@ -410,7 +410,7 @@ class ThreadInventoryNativeTest {
                 val proof = ThreadInventoryCoreEvidence(module, "selfInventory")
                 assertEquals(3L, proof.compiledCalls(1), "Public and occurrences at indices zero and one; State# wrapper is inlined")
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                assertEquals(java.lang.Boolean.getBoolean(HANDOFF_PROPERTY), language.handoffLayouts.enabled)
+                assertEquals(java.lang.Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY), language.handoffLayouts.enabled)
                 println("THREAD_INVENTORY_BOUNDARY_HANDOFF=${language.handoffLayouts.enabled}")
                 val linked = CoreModules.reachable(module, "selfInventory") + ("instrument" to true)
                 val program: ExecutableProgram = if (backendName == "ast") Program(language, linked) else BytecodeProgram(language, linked, true)

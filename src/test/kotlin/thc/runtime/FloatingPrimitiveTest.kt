@@ -85,7 +85,8 @@ class FloatingPrimitiveTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val data = DataLayout(language, "Floating", "Floating", arrayOf("FloatRep", "DoubleRep"))
                 val captures = CaptureLayout(language, booleanArrayOf(false, false),
-                    exactFloat = booleanArrayOf(true, false), exactDouble = booleanArrayOf(false, true))
+                    booleanArrayOf(false, false), arrayOfNulls<Class<*>>(2),
+                    booleanArrayOf(true, false), booleanArrayOf(false, true))
                 val layout = FrameLayout()
                 val slots = intArrayOf(layout.bind("float"), layout.bind("double"))
                 val descriptor = layout.build()
@@ -102,7 +103,7 @@ class FloatingPrimitiveTest {
                     val payloadTypes = box.javaClass.declaredFields.filterNot { Modifier.isStatic(it.modifiers) }.map { it.type }
                     assertTrue(Float::class.javaPrimitiveType in payloadTypes)
                     assertTrue(Double::class.javaPrimitiveType in payloadTypes)
-                    for (capture in listOf(captures.capture(frame, slots), captures.captureValues(arrayOf(f, d)))) {
+                    for (capture in listOf(captures.capture(frame, slots), captures.captureValues(arrayOf<Any>(f, d)))) {
                         assertFalse(capture.isObject(0)); assertFalse(capture.isObject(1))
                         assertEquals(f.toRawBits(), captures.readFloat(capture, 0).toRawBits())
                         assertEquals(d.toRawBits(), captures.readDouble(capture, 1).toRawBits())
@@ -118,7 +119,7 @@ class FloatingPrimitiveTest {
                     assertEquals(f.toRawBits(), frame.getFloat(slots[0]).toRawBits())
                     assertEquals(d.toRawBits(), frame.getDouble(slots[1]).toRawBits())
                 }
-                assertThrows(RuntimeFault::class.java) { captures.captureValues(arrayOf(1L, 2.0)) }
+                assertThrows(RuntimeFault::class.java) { captures.captureValues(arrayOf<Any>(1L, 2.0)) }
                 assertThrows(RuntimeFault::class.java) { data.create(arrayOf(1.0, 2.0)) }
 
                 // Shared descriptor widening must not erase the live tags of older frames.
@@ -136,8 +137,8 @@ class FloatingPrimitiveTest {
                 val scalarSlots = intArrayOf(scalarLayout.bind("long"), scalarLayout.bind("float"), scalarLayout.bind("double"))
                 val scalarDescriptor = scalarLayout.build()
                 val scalarCaptures = CaptureLayout(language, booleanArrayOf(true, false, false),
-                    exactLong = booleanArrayOf(true, false, false), exactFloat = booleanArrayOf(false, true, false),
-                    exactDouble = booleanArrayOf(false, false, true))
+                    booleanArrayOf(true, false, false), arrayOfNulls<Class<*>>(3), booleanArrayOf(false, true, false),
+                    booleanArrayOf(false, false, true))
                 val scalarValues = arrayOf<Any>(Long.MIN_VALUE, -0.0f, Double.fromBits(0x7ff8000000001234L))
                 val primitiveFrame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scalarDescriptor)
                 scalarSlots.indices.forEach { FrameAccess.write(primitiveFrame, scalarSlots[it], scalarValues[it]) }

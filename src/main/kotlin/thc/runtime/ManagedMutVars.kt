@@ -65,7 +65,7 @@ internal class ModifiedMutVar(val old: Any?, val result: Thunk)
 internal class MutVarModifySite(language: Language, metrics: Metrics, async: Boolean, selectFirst: Boolean = true) {
     private val applicationLayout = CaptureLayout(language, booleanArrayOf(false, false))
     private val selectorLayout = if (selectFirst) CaptureLayout(language, booleanArrayOf(false),
-        exactReference = arrayOf<Class<*>?>(Thunk::class.java)) else null
+        booleanArrayOf(false), arrayOf<Class<*>?>(Thunk::class.java)) else null
     private val applicationTarget = ModifyApplicationRoot(language, applicationLayout, metrics, async).callTarget
     private val selectorTarget = selectorLayout?.let { ModifySelectorRoot(language, it, metrics, async).callTarget }
 

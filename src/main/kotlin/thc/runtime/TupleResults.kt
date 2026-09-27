@@ -589,7 +589,7 @@ internal class TupleApplication(private val language: Language, private val shap
                                              function: Closure, values: Array<Any?>, start: Int): Any? {
         for (index in start until arguments.size) {
             try {
-                if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+                if (inputLayout?.isEmpty(index) == true) arguments[index].executeTuple(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS, 0)
                 else values[ArgumentLayout.offset(inputLayout, index)] = arguments[index].execute(frame)
             } catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
