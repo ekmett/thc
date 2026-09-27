@@ -14,7 +14,9 @@ import java.util.concurrent.CancellationException
  * Executable nodes, lowered targets, CAFs and guest failures do not belong here:
  * those are per-program/Context state even when source is shared by an Engine.
  */
-internal class CoreBindingBody(val header: Header, private val decode: () -> List<Any?>) : AbstractList<Any?>() {
+internal class CoreBindingBody(val header: Header,
+    private val linking: (((List<Any?>) -> Unit) -> Unit)? = null,
+    private val decode: () -> List<Any?>) : AbstractList<Any?>() {
     class Header(val fieldCount: Int, fields: Map<Int, Any?>, val containsDelimitedControl: Boolean) {
         val fields: Map<Int, Any?> = Collections.unmodifiableMap(LinkedHashMap(fields))
         val tag: String = fields[0] as? String ?: error("Core body header lacks its exact opcode")
@@ -29,6 +31,15 @@ internal class CoreBindingBody(val header: Header, private val decode: () -> Lis
     override val size get() = header.fieldCount
     @Synchronized fun decodeAttempts(): Long = attempts
     @Synchronized fun isMaterialized(): Boolean = decoded?.isSuccess == true
+
+    /** Dependency/provenance inspection need not retain the runtime projection.
+     * The source adapter accounts for transient linking work independently.
+     * Ordinary sources preserve the existing traversal of this exact body.
+     */
+    fun visitForLinking(visitor: (List<Any?>) -> Unit) {
+        val inspect = linking
+        if (inspect == null) visitor(this) else inspect(visitor)
+    }
 
     override fun get(index: Int): Any? {
         if (index !in 0 until size) throw IndexOutOfBoundsException(index)

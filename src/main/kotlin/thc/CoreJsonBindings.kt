@@ -15,16 +15,26 @@ import java.util.concurrent.CancellationException
  */
 internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
     data class Statistics(val bindingHeaders: Long, val bodyMaterializations: Long,
-        val expressionViews: Long, val summaryExpressionsVisited: Long, val canonicalStrings: Int,
+        val expressionViews: Long, val linkingExpressionViews: Long, val scalarDecodes: Long,
+        val linkingScalarDecodes: Long, val summaryExpressionsVisited: Long, val canonicalStrings: Int,
         val canonicalLists: Int)
     private var bindingHeaders = 0L
     private var bodyMaterializations = 0L
     private var expressionViews = 0L
+    private var linkingExpressionViews = 0L
+    private var scalarDecodes = 0L
+    private var linkingScalarDecodes = 0L
     private var summaryExpressionsVisited = 0L
     private val strings = HashMap<String, String>()
     private val lists = HashMap<List<Any?>, List<Any?>>()
     @Synchronized fun statistics() = Statistics(bindingHeaders, bodyMaterializations,
-        expressionViews, summaryExpressionsVisited, strings.size, lists.size)
+        expressionViews, linkingExpressionViews, scalarDecodes, linkingScalarDecodes,
+        summaryExpressionsVisited, strings.size, lists.size)
+
+    fun module(span: CoreJsonIndex.Span): Map<String, Any?> = synchronized(this) {
+        require(span.kind == CoreJsonIndex.Kind.OBJECT) { "Core module must be an object" }
+        Record(span, Role.MODULE)
+    }
 
     /** One linear traversal of the immediate binding directory, not repeated indexed access. */
     fun bindings(span: CoreJsonIndex.Span): List<Map<String, Any?>> =
@@ -36,13 +46,18 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         Record(span, Role.BINDING)
     }
 
-    private enum class Role { BINDING, LOCAL_BINDING, FORMAL, METADATA, FULL }
+    private enum class Role { MODULE, BINDING, LOCAL_BINDING, FORMAL, METADATA, FULL }
+    private val moduleFields = setOf("schema", "ghc", "unit", "module", "boundary", "providedModules",
+        "bindings", "constructors", "sourceFiles", "sourceSpans", "foreign", "foreignLink",
+        "staticForeignImportStubs", "staticForeignImports", "staticForeignExports", "staticForeignExportRegistration",
+        "packageScalarLink", "packageNativeLink", "packageNativeArchive", "foreignExceptionBridge", "foreignExceptionBridgeUnit")
     private val bindingFields = setOf("id", "name", "type", "lifted", "coercion", "arity", "expr",
         "rep", "entryStrict", "joinValueArity", "joinResultRep", "source", "sourceNotes")
     private val formalFields = setOf("id", "name", "type", "lifted", "coercion", "rep", "source", "sourceNotes")
     private val metadataFields = setOf("rep", "resultRep", "entryStrict", "callDemand", "foreignCall",
         "exceptionPayload", "enumFamily", "dataToTagFamily", "binder", "binders", "source", "sourceNotes")
     private fun fields(role: Role): Set<String>? = when (role) {
+        Role.MODULE -> moduleFields
         Role.BINDING, Role.LOCAL_BINDING -> bindingFields
         Role.FORMAL -> formalFields
         Role.METADATA -> metadataFields
@@ -50,7 +65,7 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
     }
     private fun admitted(role: Role, key: String): Boolean =
         (fields(role)?.contains(key) != false) &&
-            (role == Role.FULL || sourceNotesEnabled || key !in setOf("source", "sourceNotes"))
+            (role == Role.FULL || sourceNotesEnabled || key !in setOf("source", "sourceNotes", "sourceFiles", "sourceSpans"))
 
     /** Cache ordinary data errors exactly; cancellation/interruption are not malformed Core. */
     private fun <K, V> memo(cache: MutableMap<K, Result<V>>, key: K, action: () -> V): V {
@@ -63,6 +78,7 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         return result.getOrThrow()
     }
     private fun scalar(span: CoreJsonIndex.Span): Any? {
+        scalarDecodes++
         val value = span.decodeUncached()
         return if (value is String) strings.getOrPut(value) { value } else value
     }
@@ -104,6 +120,7 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
             memo(decodedFields, key) {
                 val child = location(key) ?: return@memo null
                 when {
+                    key == "bindings" && role == Role.MODULE -> bindings(child)
                     key == "expr" && role == Role.BINDING -> body(child)
                     key == "expr" && role == Role.LOCAL_BINDING -> expression(child)
                     role == Role.METADATA && key == "binder" -> record(child, Role.FORMAL)
@@ -204,7 +221,22 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         val shallow = if (tag == "lam") listOf(1, metadataIndex(tag)) else listOf(metadataIndex(tag))
         for (index in shallow) if (index in parts.indices) header[index] = child(tag, index, parts[index])
         val containsControl = containsDelimitedControl(span)
-        return CoreBindingBody(CoreBindingBody.Header(parts.size, header, containsControl)) {
+        return CoreBindingBody(CoreBindingBody.Header(parts.size, header, containsControl), linking = { visit ->
+            // A short-lived projection runs the SAME linker/provenance checks.
+            // Do not retain all reachable body views or their local strings in
+            // the executable source cache just to discover dependency edges.
+            val inspection = CoreJsonBindings(sourceNotesEnabled)
+            try {
+                @Suppress("UNCHECKED_CAST")
+                visit(inspection.expression(span) as List<Any?>)
+            } finally {
+                val inspected = inspection.statistics()
+                synchronized(this) {
+                    linkingExpressionViews += inspected.expressionViews
+                    linkingScalarDecodes += inspected.scalarDecodes
+                }
+            }
+        }) {
             synchronized(this) {
                 // Check the owner even if all shallow header fields were already projected.
                 span.kind
