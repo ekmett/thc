@@ -116,9 +116,15 @@ class SignedNarrowPrimopsTest {
                 "coercion" to false)
         }
         val body = listOf("app", listOf("prim", primitive), List(supplied) { listOf("var", "x$it") }, List(supplied) { false })
+        val resultRep = when {
+            primitive.substringBefore("Int") in setOf("eq", "ne", "lt", "le", "gt", "ge") -> "IntRep"
+            primitive.startsWith("int") && "ToWord" in primitive -> "Word${width}Rep"
+            else -> "Int${width}Rep"
+        }
         return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignedNarrowCarrierControl",
             "constructors" to emptyList<Any?>(), "bindings" to listOf(mapOf("id" to "entry", "name" to "entry",
-                "lifted" to true, "arity" to supplied, "expr" to listOf("lam", parameters, body))))
+                "lifted" to true, "arity" to supplied, "expr" to listOf("lam", parameters, body,
+                    mapOf("resultRep" to mapOf("kind" to "long", "primReps" to listOf(resultRep), "evaluated" to true))))))
     }
 
     @Test fun directResultsAreCanonicalWithoutAnIntNToIntConversionMaskingTheResult() {
