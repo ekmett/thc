@@ -18,14 +18,20 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import System.Environment (getArgs)
 import System.Exit (die)
-import THC.Compact.JSON (parseModuleWithoutDebug)
-import THC.Compact.Inspect (inspectContainer)
-import THC.Compact.Module (writeModule)
+import Text.Read (readMaybe)
+import THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug)
+import THC.Compact.Inspect (inspectContainer, inspectName, inspectSource)
+import THC.Compact.Module (writeModule, writeModuleWithDebug)
 
 main :: IO ()
 main = do
   arguments <- getArgs
   case arguments of
+    ["encode",source,destination] -> do
+      value <- BS.readFile source >>= either die pure . eitherDecodeStrict'
+      (facts,bindings,annotations) <- either die pure (parseModuleWithDebug value)
+      _ <- writeModuleWithDebug destination facts bindings annotations
+      pure ()
     ["encode","--without-debug",source,destination] -> do
       value <- BS.readFile source >>= either die pure . eitherDecodeStrict'
       (facts,bindings) <- either die pure (parseModuleWithoutDebug value)
@@ -34,6 +40,21 @@ main = do
     ["decode",source,destination] -> do
       value <- BS.readFile source >>= either die pure . inspectContainer
       BL.writeFile destination (encode value)
+    ["source",source,offset] -> do
+      position <- unsigned offset
+      value <- BS.readFile source >>= either die pure . flip inspectSource position
+      BL.putStr (encode value)
+      putStrLn ""
+    ["name",source,scope,slot] -> do
+      binding <- unsigned scope
+      ordinal <- unsigned slot
+      value <- BS.readFile source >>= either die pure . (\bytes -> inspectName bytes binding ordinal)
+      BL.putStr (encode value)
+      putStrLn ""
     ["--help"] -> putStrLn usage
     _ -> die usage
-  where usage = "Usage: thc-compact encode --without-debug MODULE.json MODULE.thcc\n       thc-compact decode MODULE.thcc MODULE.json"
+  where
+    usage = "Usage: thc-compact encode [--without-debug] MODULE.json MODULE.thcc\n       thc-compact decode MODULE.thcc MODULE.json\n       thc-compact source MODULE.thcc DATA_OFFSET\n       thc-compact name MODULE.thcc BINDING_OFFSET ORDINAL_SLOT"
+    unsigned text = case readMaybe text of
+      Just value | value >= (0::Integer) && value <= 18446744073709551615 -> pure (fromInteger value)
+      _ -> die "Expected unsigned 64-bit decimal position"

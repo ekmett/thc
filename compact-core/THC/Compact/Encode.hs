@@ -13,7 +13,7 @@
 -- One-pass typed executable encoding. Shapes are interned independently of
 -- occurrence states; strings append directly to their private auxiliary stream.
 module THC.Compact.Encode
-  ( Encoder, newEncoder, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl ) where
+  ( Encoder, newEncoder, setRecordObserver, encodeBinding, encodeExpr, encodeRep, encodeFacts, internString, containsDelimitedControl ) where
 
 import Control.Monad (unless, void, when)
 import Data.Binary.Put
@@ -26,27 +26,43 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import Data.Word (Word8, Word64)
 import THC.Compact.Core
+import THC.Compact.Annotations
 import THC.Compact.Facts
 import THC.Compact.Wire
 import THC.Compact.Writer
 
 data Encoder = Encoder !Streams !(IORef (Map.Map BS.ByteString Span)) !(IORef (Map.Map Shape Word64))
-  !(Maybe (IORef Builder.Builder)) !(IORef Bool)
+  !(Maybe (IORef Builder.Builder)) !(IORef Bool) !(IORef (Maybe RecordObserver))
 
 newEncoder :: Streams -> IO Encoder
-newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty <*> pure Nothing <*> newIORef False
+newEncoder streams = Encoder streams <$> newIORef Map.empty <*> newIORef Map.empty <*> pure Nothing <*> newIORef False <*> newIORef Nothing
+
+-- | Attach optional display-only origin recording for subsequent DATA records.
+setRecordObserver :: Encoder -> Maybe RecordObserver -> IO ()
+setRecordObserver (Encoder _ _ _ _ _ observer) = writeIORef observer
+
+observe :: Encoder -> RecordKind -> IO a -> IO a
+observe (Encoder streams _ _ _ _ observer) kind action = do
+  selected <- readIORef observer
+  case selected of
+    Nothing -> action
+    Just callbacks -> do
+      streamOffset streams ExecutableData >>= enterRecord callbacks kind
+      result <- action
+      streamOffset streams ExecutableData >>= leaveRecord callbacks
+      pure result
 
 -- | Derived during expression emission, without a separate Core-body walk.
 containsDelimitedControl :: Encoder -> IO Bool
-containsDelimitedControl (Encoder _ _ _ _ found) = readIORef found
+containsDelimitedControl (Encoder _ _ _ _ found _) = readIORef found
 
 -- | Encode only the bounded known-start record in memory, while appending its
 -- strings to the auxiliary stream. Constructor shapes are inline: admitting
 -- header facts never requires reading an executable-body shape definition.
 encodeFacts :: Encoder -> Facts -> IO BS.ByteString
-encodeFacts (Encoder streams strings shapes _ found) facts = do
+encodeFacts (Encoder streams strings shapes _ found observer) facts = do
   output <- newIORef mempty
-  let encoder = Encoder streams strings shapes (Just output) found
+  let encoder = Encoder streams strings shapes (Just output) found observer
   number encoder (factsSchema facts)
   mapM_ (string encoder) [factsGhc facts, factsUnit facts, factsModule facts, factsBoundary facts]
   present encoder (list encoder (string encoder)) (factsProvidedModules facts)
@@ -122,7 +138,7 @@ constructor encoder value = do
 -- | Intern semantic UTF-8, never literal raw bytes. Referenced string spans are
 -- direct byte positions, with no separate string-ID table.
 internString :: Encoder -> BS.ByteString -> IO Span
-internString (Encoder streams strings _ _ _) bytes = do
+internString (Encoder streams strings _ _ _ _) bytes = do
   table <- readIORef strings
   case Map.lookup bytes table of
     Just ref -> pure ref
@@ -134,8 +150,8 @@ internString (Encoder streams strings _ _ _) bytes = do
       pure ref
 
 emit :: Encoder -> Put -> IO ()
-emit (Encoder streams _ _ Nothing _) = void . appendRecord streams ExecutableData
-emit (Encoder _ _ _ (Just output) _) = \record ->
+emit (Encoder streams _ _ Nothing _ _) = void . appendRecord streams ExecutableData
+emit (Encoder _ _ _ (Just output) _ _) = \record ->
   modifyIORef' output (<> Builder.lazyByteString (runPut record))
 
 tag :: Encoder -> Word8 -> IO ()
@@ -167,7 +183,7 @@ identity encoder value = case value of
   Local ordinal -> tag encoder 1 >> number encoder ordinal
 
 encodeBinding :: Encoder -> Binding -> IO Word64
-encodeBinding encoder@(Encoder streams _ _ _ _) binding = do
+encodeBinding encoder@(Encoder streams _ _ _ _ _) binding = observe encoder (BindingRecord (bindingIdentity binding)) $ do
   start <- streamOffset streams ExecutableData
   identity encoder (bindingIdentity binding)
   enumeration encoder (bindingEntryType binding)
@@ -183,7 +199,7 @@ encodeBinding encoder@(Encoder streams _ _ _ _) binding = do
   pure start
 
 binder :: Encoder -> Binder -> IO ()
-binder encoder value = do
+binder encoder value = observe encoder (BinderRecord (binderOrdinal value)) $ do
   number encoder (binderOrdinal value)
   enumeration encoder (binderEntryType value)
   present encoder (boolean encoder) (binderLifted value)
@@ -198,7 +214,7 @@ idInfo encoder (IdInfo joinArity cbvEligible marks) = do
   present encoder (list encoder (boolean encoder)) marks
 
 encodeExpr :: Encoder -> Expr -> IO ()
-encodeExpr encoder@(Encoder _ _ _ _ found) expression = case expression of
+encodeExpr encoder@(Encoder _ _ _ _ found _) expression = observe encoder ExpressionRecord $ case expression of
   Var metadata key -> prefix 0 metadata >> identity encoder key
   Prim metadata name -> do
     when (name == "prompt#" || name == "control0#")
@@ -286,7 +302,7 @@ encodeRep :: Encoder -> Rep -> IO ()
 encodeRep encoder (Rep layout state) = shapeUse encoder layout >> evaluation encoder layout state
 
 shapeUse :: Encoder -> Shape -> IO ()
-shapeUse encoder@(Encoder streams _ shapes _ _) layout = do
+shapeUse encoder@(Encoder streams _ shapes _ _ _) layout = do
   table <- readIORef shapes
   case Map.lookup layout table of
     Just offset -> tag encoder 1 >> number encoder offset

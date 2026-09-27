@@ -14,7 +14,7 @@
 -- are original source spelling. IEEE bit literals retain every payload bit.
 -- Reading a complete module here is an explicit inspection operation, never a
 -- runtime startup or linking prerequisite.
-module THC.Compact.Inspect (inspectContainer, moduleJSON) where
+module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, moduleJSON) where
 
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
@@ -23,9 +23,11 @@ import qualified Data.ByteString as BS
 import Data.List (sortOn)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
+import Data.Word (Word64)
 import Numeric (showHex)
 import THC.Compact.Core
 import THC.Compact.Decode
+import THC.Compact.Debug
 import THC.Compact.Facts
 import THC.Compact.Wire
 
@@ -49,6 +51,42 @@ inspectContainer bytes = do
       bindings <- mapM (\(_,offset) -> fst <$> decodeBindingAt payload strings offset) (sortOn snd rows)
       pure (moduleJSON facts bindings)
     _ -> Left "Compact container requires six segments"
+
+-- | Inspect only the selected display-name entry. A constructor uses the
+-- reserved max-uint64 scope and its one-based header slot.
+inspectName :: BS.ByteString -> Word64 -> Word64 -> Either String Value
+inspectName bytes scope slot = do
+  (_,segments) <- debugSegments bytes
+  case segments of
+    [_,_,names,_,_,_] -> maybe Null str <$> nameAt names scope slot
+    _ -> Left "Compact container requires six segments"
+
+-- | Inspect one source location by immutable DATA position, without decoding
+-- any executable record or unselected debug-name entry.
+inspectSource :: BS.ByteString -> Word64 -> Either String Value
+inspectSource bytes position = do
+  (footer,segments) <- debugSegments bytes
+  case (footerSegments footer,segments) of
+    (Span _ dataSize:_,[_,strings,_,filenames,positions,_]) -> do
+      location <- locationAt filenames positions strings dataSize position
+      pure $ case location of
+        Nothing -> Null
+        Just (SourceLocation primary notes) -> object
+          ["primaryIndex" .= primary,"notes" .= map note notes]
+    _ -> Left "Compact container requires six segments"
+  where
+    note (SourceFile fileId path content,SourcePosition identifier label sl sc el ec index size) = object $
+      [("id",str identifier),("file",str fileId),("path",str path),
+       ("startLine",toJSON sl),("startColumn",toJSON sc),("endLine",toJSON el),("endColumn",toJSON ec)]
+      ++ p "content" str content ++ p "label" str label ++ p "charIndex" toJSON index ++ p "charLength" toJSON size
+
+debugSegments :: BS.ByteString -> Either String (Footer,[BS.ByteString])
+debugSegments bytes = do
+  header <- decodeExact getHeader (BS.take 24 bytes)
+  footer <- decodeExact getFooter (BS.drop (BS.length bytes-128) bytes)
+  validateContainer (fromIntegral (BS.length bytes)) header footer
+  let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
+  pure (footer,map slice (footerSegments footer))
 
 str :: BS.ByteString -> Value
 str = String . Text.decodeUtf8

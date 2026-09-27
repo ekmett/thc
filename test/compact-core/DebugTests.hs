@@ -15,7 +15,8 @@
 module DebugTests (debugTests) where
 
 import Control.Exception (IOException, try)
-import Control.Monad (forM_, void)
+import Control.Monad (forM, forM_, void)
+import Data.Aeson (Value(..), object, toJSON, (.=))
 import Data.Binary.Get (getWord64le)
 import qualified Data.ByteString as BS
 import Data.Either (isLeft)
@@ -27,6 +28,9 @@ import Test.HUnit
 import THC.Compact.Core (Presence(..))
 import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
+import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
+import THC.Compact.Module (writeModuleWithDebug)
+import THC.Compact.Inspect (inspectContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
@@ -80,6 +84,37 @@ debugTests = TestList
           pure 0) :: IO (Either IOException Footer)
         assertBool "duplicate debug declaration rejected" (isLeft failure)
         assertEqual "original output preserved" original =<< BS.readFile destination
+  , TestLabel "original annotations follow emitted records without changing semantics" $ TestCase $
+      withSystemTempDirectory "compact-annotations" $ \directory -> do
+        (facts,bindings,annotations) <- either fail pure (parseModuleWithDebug originalModule)
+        let destination = directory </> "annotated.thcc"
+        footer <- writeModuleWithDebug destination facts bindings annotations
+        bytes <- BS.readFile destination
+        inspected <- either fail pure (inspectContainer bytes)
+        assertEqual "semantic records independent of optional debug" (parseModuleWithoutDebug originalModule)
+          (parseModuleWithoutDebug inspected)
+        let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
+        case map slice (footerSegments footer) of
+          [payload,strings,names,filenames,positions,_] -> do
+            assertEqual "original top-level display name" (Right (Just "originalFunction")) (nameAt names 0 0)
+            assertEqual "original parameter display name" (Right (Just "originalParameter")) (nameAt names 0 1)
+            assertEqual "header constructor has a separate exact-key namespace"
+              (Right (Just "OriginalBox")) (nameAt names maxBound 1)
+            locations <- forM [0..fromIntegral (BS.length payload)-1] $ \offset ->
+              either fail pure (locationAt filenames positions strings (fromIntegral (BS.length payload)) offset)
+            assertBool "inherited and explicit notes coexist with selected primary"
+              (any (\value -> case value of Just (SourceLocation 1 notes) -> length notes == 2; _ -> False) locations)
+            assertBool "original top-level location survives nested restoration"
+              (any (\value -> case value of Just (SourceLocation 0 [_]) -> True; _ -> False) locations)
+            assertEqual "following unannotated binding does not inherit preceding source" Nothing (last locations)
+          _ -> assertFailure "Missing annotation segments"
+        case bindings of
+          (value,notes):rest -> do
+            failure <- try (writeModuleWithDebug destination facts ((value,drop 1 notes):rest) annotations)
+              :: IO (Either IOException Footer)
+            assertBool "annotation mismatch cannot publish misleading origins" (isLeft failure)
+            assertEqual "original container preserved after mismatch" bytes =<< BS.readFile destination
+          _ -> assertFailure "Missing modeled bindings"
   ]
 
 rowCount :: BS.ByteString -> Either String Integer
@@ -120,3 +155,29 @@ file = SourceFile "f0" "MissingOriginal.hs" Unknown
 
 positionA :: SourcePosition
 positionA = SourcePosition "spanA" (Known "original label") 2 3 3 1 (Known 0) (Known 5)
+
+originalModule :: Value
+originalModule = object
+  [ "schema" .= (2::Int), "ghc" .= ("9.14.1"::String), "unit" .= ("main"::String)
+  , "module" .= ("Debug"::String), "boundary" .= ("optimized-Core-before-Tidy"::String)
+  , "constructors" .= [object
+      [ "id" .= ("main:Debug.Box"::String), "name" .= ("OriginalBox"::String)
+      , "arity" .= (0::Int), "tag" .= (1::Int), "kind" .= ("boxed"::String)
+      , "strictFields" .= ([]::[Bool]), "fieldLifted" .= ([]::[Bool])
+      , "fieldReps" .= ([]::[Value]), "fieldTypes" .= ([]::[Value]) ]]
+  , "bindings" .=
+      [ object ["id" .= ("main:Debug.f"::String), "name" .= ("originalFunction"::String),
+          "arity" .= (1::Int), "source" .= ("spanA"::String), "expr" .= toJSON
+            [String "lam",toJSON [object ["id" .= ("local0"::String), "name" .= ("originalParameter"::String)]],
+             toJSON [String "lit",String "int",String "42",object
+               ["source" .= ("spanB"::String),"sourceNotes" .= (["spanB"]::[String])]],object []]]
+      , object ["id" .= ("main:Debug.g"::String), "name" .= ("unannotated"::String),
+          "arity" .= (0::Int), "expr" .= toJSON [String "void",object []]]
+      ]
+  , "sourceFiles" .= [object ["id" .= ("f0"::String), "path" .= ("Original.hs"::String), "content" .= Null]]
+  , "sourceSpans" .= [spanRecord "spanA" 2,spanRecord "spanB" 4]
+  ]
+  where
+    spanRecord :: String -> Int -> Value
+    spanRecord identifier line = object ["id" .= identifier,"file" .= ("f0"::String),
+      "startLine" .= line,"startColumn" .= (1::Int),"endLine" .= line,"endColumn" .= (5::Int)]

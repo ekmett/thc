@@ -10,14 +10,14 @@
 -- Stability   : experimental
 -- Portability : GHC 9.14.1; existing flat Core JSON schema
 --
--- Explicit debug-free conversion of the reference JSON records. Unknown
--- semantic fields fail conversion; pretty diagnostics are not executable data.
--- This entry point deliberately requires a caller to choose omitted debug data.
-module THC.Compact.JSON (parseModuleWithoutDebug) where
+-- Conversion of reference JSON into independent semantic and display records.
+-- Unknown semantic fields fail conversion; pretty diagnostics are not executable
+-- data. Omitting original display annotations requires an explicit entry point.
+module THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug) where
 
 import Control.Monad (unless, forM, when)
 import Control.Monad.Trans.Class (lift)
-import Control.Monad.Trans.State.Strict (StateT, evalStateT, get, put)
+import Control.Monad.Trans.State.Strict (StateT, runStateT, get, put, modify')
 import Data.Aeson hiding (object, pairs)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
@@ -33,13 +33,37 @@ import Data.Word (Word64)
 import GHC.Float (castFloatToWord32, castDoubleToWord64)
 import Text.Read (readMaybe)
 import THC.Compact.Core
+import THC.Compact.Annotations
+import THC.Compact.Debug
 import THC.Compact.Facts
 
 type Locals = Map.Map Text.Text Word64
-type Convert = StateT Word64 Parser
+data ConvertState = ConvertState !Word64 !Bool ![Annotation]
+type Convert = StateT ConvertState Parser
 
 parseModuleWithoutDebug :: Value -> Either String (Facts,[Binding])
-parseModuleWithoutDebug = parseEither $ withObject "Core module" $ \fields -> do
+parseModuleWithoutDebug value = do
+  (facts,bindings) <- parseEither (moduleRecords False) value
+  pure (facts,map fst bindings)
+
+-- | Keep original names and source notes in a separate ordered annotation
+-- stream. They do not enter semantic records or affect lexical resolution.
+parseModuleWithDebug :: Value -> Either String (Facts,[(Binding,[Annotation])],ModuleAnnotations)
+parseModuleWithDebug value = parseEither (\input -> do
+  (facts,bindings) <- moduleRecords True input
+  sources <- sourceCatalog input
+  fields <- object input
+  constructors <- fields .: "constructors" >>= array object
+  names <- forM (zip [0..] constructors) $ \(index,record) -> case KM.lookup "name" record of
+    Nothing -> pure []
+    Just Null -> pure []
+    Just name -> do
+      original <- bytes name
+      pure [(index,original)]
+  pure (facts,bindings,ModuleAnnotations sources (concat names))) value
+
+moduleRecords :: Bool -> Value -> Parser (Facts,[(Binding,[Annotation])])
+moduleRecords debug = withObject "Core module" $ \fields -> do
   checked fields (["schema","ghc","unit","module","boundary","providedModules","targetLayout",
     "constructors","bindings","foreign","foreignExceptionBridge","foreignExceptionBridgeUnit",
     "sourceCore","rules","groups","lowering","sourceFiles","sourceSpans"] ++ map bytesKey pendingProvenanceNames)
@@ -50,7 +74,9 @@ parseModuleWithoutDebug = parseEither $ withObject "Core module" $ \fields -> do
     <*> optional fields "foreignExceptionBridgeUnit" bytes
     <*> mapM (\key -> optional fields (bytesKey key) (const (fail ("Unmapped compact provenance field: " ++ show key)))) pendingProvenanceNames
   values <- fields .: "bindings" >>= array pure
-  bindings <- mapM (\value -> evalStateT (binding Map.empty Nothing value) 0) values
+  bindings <- forM values $ \value -> do
+    (record,ConvertState _ _ annotations) <- runStateT (binding Map.empty Nothing value) (ConvertState 0 debug [])
+    pure (record,reverse annotations)
   pure (facts,bindings)
 
 checked :: Object -> [Key.Key] -> Parser ()
@@ -153,22 +179,70 @@ allocate :: Locals -> [Text.Text] -> Convert Locals
 allocate scope names = do
   unless (Set.size (Set.fromList names) == length names) (fail "Duplicate lexical declaration in one group")
   pairs <- forM names $ \name -> do
-    ordinal <- get
+    ConvertState ordinal debug annotations <- get
     when (ordinal == maxBound) (fail "Too many lexical declarations")
-    put (ordinal+1)
+    put (ConvertState (ordinal+1) debug annotations)
     pure (name,ordinal)
   pure (Map.union (Map.fromList pairs) scope)
 
 object :: Value -> Parser Object
 object = withObject "Core record" pure
 
-binder :: Locals -> Value -> Parser Binder
+annotate :: RecordKind -> Bool -> Object -> Convert ()
+annotate kind named fields = do
+  ConvertState _ enabled _ <- get
+  when enabled $ do
+    name <- if named then lift (maybeBytes "name") else pure Nothing
+    source <- lift (maybeBytes "source")
+    notes <- lift $ case KM.lookup "sourceNotes" fields of
+      Nothing -> pure []
+      Just Null -> pure []
+      Just value -> array bytes value
+    modify' (\(ConvertState ordinal debug annotations) ->
+      ConvertState ordinal debug (Annotation kind name source notes:annotations))
+  where
+    maybeBytes key = case KM.lookup key fields of
+      Nothing -> pure Nothing
+      Just Null -> pure Nothing
+      Just value -> Just <$> bytes value
+
+sourceCatalog :: Value -> Parser SourceCatalog
+sourceCatalog = withObject "Core source catalog" $ \fields -> do
+  files <- defaultArray fields "sourceFiles" >>= mapM (withObject "source file" $ \file -> do
+    checked file ["id","path","content"]
+    identifier <- bytesAt file "id"
+    value <- SourceFile identifier <$> bytesAt file "path" <*> optional file "content" bytes
+    pure (identifier,value))
+  fileMap <- unique "source file" files
+  spans <- defaultArray fields "sourceSpans" >>= mapM (withObject "source span" $ \spanFields -> do
+    checked spanFields ["id","file","label","startLine","startColumn","endLine","endColumn","charIndex","charLength"]
+    identifier <- bytesAt spanFields "id"
+    fileId <- bytesAt spanFields "file"
+    file <- maybe (fail "Original source span references missing file") pure (Map.lookup fileId fileMap)
+    position <- SourcePosition identifier <$> optional spanFields "label" bytes
+      <*> spanFields .: "startLine" <*> spanFields .: "startColumn"
+      <*> spanFields .: "endLine" <*> spanFields .: "endColumn"
+      <*> optional spanFields "charIndex" parseJSON <*> optional spanFields "charLength" parseJSON
+    pure (identifier,(file,position)))
+  unique "source span" spans
+  where
+    defaultArray fields key = case KM.lookup key fields of
+      Nothing -> pure []
+      Just Null -> pure []
+      Just value -> array pure value
+    unique role entries = do
+      let result = Map.fromList entries
+      unless (Map.size result == length entries) (fail ("Duplicate original " ++ role ++ " identity"))
+      pure result
+
+binder :: Locals -> Value -> Convert Binder
 binder scope value = do
-  fields <- object value
-  checked fields ["id","name","type","lifted","coercion","rep","info","source"]
-  key <- fields .: "id"
+  fields <- lift (object value)
+  lift (checked fields ["id","name","type","lifted","coercion","rep","info","source"])
+  key <- lift (fields .: "id")
   ordinal <- maybe (fail "Binder has no lexical declaration") pure (Map.lookup key scope)
-  Binder ordinal <$> entryType fields <*> optional fields "lifted" parseJSON
+  annotate (BinderRecord ordinal) True fields
+  lift $ Binder ordinal <$> entryType fields <*> optional fields "lifted" parseJSON
     <*> optional fields "coercion" parseJSON <*> optional fields "rep" rep <*> optional fields "info" idInfo
 
 binding :: Locals -> Maybe Locals -> Value -> Convert Binding
@@ -180,6 +254,7 @@ binding rhsScope declared value = do
   identity <- case declared of
     Nothing -> pure (Global (Text.encodeUtf8 key))
     Just scope -> maybe (fail "Local binding has no lexical ordinal") (pure . Local) (Map.lookup key scope)
+  annotate (BindingRecord identity) True fields
   Binding identity <$> lift (entryType fields) <*> lift (optional fields "lifted" parseJSON)
     <*> lift (fields .: "arity") <*> lift (optional fields "rep" rep) <*> lift (optional fields "info" idInfo)
     <*> lift (optional fields "entryStrict" (array parseJSON)) <*> lift (optional fields "entryStrictSource" bytes)
@@ -189,6 +264,9 @@ binding rhsScope declared value = do
 expr :: Locals -> Value -> Convert Expr
 expr scope value = do
   items <- lift (array pure value)
+  case reverse items of
+    Object metadata : _ -> annotate ExpressionRecord False metadata
+    _ -> fail "Core expression lacks metadata"
   case items of
     [String "var",String key,m] -> Var <$> lift (meta m) <*> pure
       (maybe (Global (Text.encodeUtf8 key)) Local (Map.lookup key scope))
@@ -200,7 +278,7 @@ expr scope value = do
       values <- lift (array pure parameters)
       names <- lift (mapM (\v -> object v >>= (.: "id")) values)
       inner <- allocate scope names
-      Lam <$> lift (meta m) <*> lift (mapM (binder inner) values) <*> expr inner body
+      Lam <$> lift (meta m) <*> mapM (binder inner) values <*> expr inner body
     [String "app",function,arguments,lifted,hnf,speculate,m] -> App <$> lift (meta m)
       <*> expr scope function <*> (lift (array pure arguments) >>= mapM (expr scope))
       <*> lift (array (nullable parseJSON) lifted) <*> lift (parseJSON hnf) <*> lift (parseJSON speculate)
@@ -217,7 +295,10 @@ expr scope value = do
       scrutinee' <- expr scope scrutinee
       inner <- allocate scope [name]
       ordinal <- maybe (fail "Missing case binder") pure (Map.lookup name inner)
-      information <- lift (optional metadata "binder" (binder inner))
+      information <- case KM.lookup "binder" metadata of
+        Nothing -> pure Missing
+        Just Null -> pure Unknown
+        Just v -> Known <$> binder inner v
       case information of
         Known record -> unless (binderOrdinal record == ordinal) (fail "Case binder ID and metadata disagree")
         _ -> pure ()
@@ -237,7 +318,7 @@ alternative scope value = do
       actual <- lift (mapM (\v -> object v >>= (.: "id")) binders)
       unless (names == actual) (fail "Alternative IDs and original binder metadata disagree")
       inner <- allocate scope names
-      parameters <- lift (mapM (binder inner) binders)
+      parameters <- mapM (binder inner) binders
       case kind of
         "default" | discriminator == Null -> DefaultAlt parameters <$> expr inner body
         "data" -> DataAlt <$> lift (bytes discriminator) <*> pure parameters <*> expr inner body

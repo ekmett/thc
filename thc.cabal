@@ -514,6 +514,7 @@ library compact-core
     THC.Compact.Encode
     THC.Compact.Decode
     THC.Compact.Debug
+    THC.Compact.Annotations
   build-depends:
     thc:core-json-index,
     aeson >= 2.3 && < 2.4,

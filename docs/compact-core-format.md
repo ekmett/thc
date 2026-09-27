@@ -2,8 +2,9 @@
 
 This is the shared version 1 wire contract under implementation. Framing,
 integer primitives, scoped assembly, typed executable/header records and explicit
-flat-JSON conversion have native controls. Optional debug maps, eight module-level
-provenance families and complete runtime integration are not yet complete.
+flat-JSON conversion and optional name/source maps have native controls. Eight
+module-level provenance families and complete runtime integration are not yet
+complete.
 Existing JSON and unit-directory routes remain available and unchanged.
 
 ## Assembly and addressing
@@ -300,7 +301,7 @@ str payloadType, str exceptionType`; its unit reference remains semantic too.
 
 ### Optional debug tables
 
-The following table grammar is agreed for the optional-debug implementation.
+The following table grammar is implemented by the optional-debug producer.
 A nonempty debug segment ends with a 16-byte local directory: `u64LE indexStart,
 u64LE rowCount`. Payload bytes precede the fixed-width rows; the rows end exactly
 at that directory. Offsets in a debug table address that same debug segment,
@@ -315,6 +316,10 @@ pair, with no duplicate keys. Slot 0 names the top-level binding; local ordinal
 raw UTF-8 bytes in this segment, independent of the common-string segment.
 The enclosing binding's immutable DATA offset scopes local ordinals. Original
 names are display data; no loader or linker resolution depends on their presence.
+The reserved first key `UINT64_MAX` names header constructors instead of DATA:
+slot `constructorIndex + 1` selects the original constructor display name; slot
+0 is unused. This reserved key cannot be a real DATA position. Readers compare
+keys unsigned and expose constructor-name lookup separately from binding origins.
 
 Each source table has 24-byte rows: `u64LE dataStart, u64LE dataEndExclusive,
 u64LE payloadOffset`. Rows are ordered by DATA start and have nonempty,
@@ -350,20 +355,25 @@ Build the native tool with `cabal build exe:thc-compact --offline -fdevelopment`
 It currently accepts one flat Core JSON module at a time:
 
 ```sh
-cabal run exe:thc-compact -- encode --without-debug Module.json Module.thcc
+cabal run exe:thc-compact -- encode Module.json Module.thcc
 cabal run exe:thc-compact -- decode Module.thcc inspected.json
+cabal run exe:thc-compact -- source Module.thcc 0
+cabal run exe:thc-compact -- name Module.thcc 0 0
 ```
 
-The explicit `--without-debug` choice omits display names and source notes; there
-is no default conversion that silently drops them. Unknown semantic fields and
+Normal encoding preserves supplied original names and source notes, recording
+origins while semantic records are emitted. The explicit `--without-debug` option
+omits those maps. Unknown semantic fields and
 known values in the eight unmapped provenance slots fail conversion. Header
 constructors, target-layout facts, foreign artifacts and exception-bridge facts
 are typed; the original JSON remains the reference path for other modules.
 The converter is not yet a default project-publication path.
 
-Inspection is an explicit full-module operation, separate from runtime demand
-loading. It emits flat records with deterministic `@local/N` identities and
-synthetic display names, not recovered original spellings. It preserves only the
+`decode` is an explicit full-module semantic inspection, separate from runtime
+demand loading. It emits flat records with deterministic `@local/N` identities
+and synthetic display names, not recovered original spellings. `source` and
+`name` inspect original debug values separately at the requested exact DATA
+origin/name key; they do not decode executable records. The semantic dump preserves only the
 two operative entry-type facts, not arbitrary pretty types or printed IdInfo.
 For lossless IEEE inspection it emits `float-bits` and `double-bits` literals with
 unsigned decimal bit payloads; this converter accepts those tags in addition to
