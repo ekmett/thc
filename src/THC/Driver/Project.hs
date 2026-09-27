@@ -933,8 +933,8 @@ acquireInstalledBundle verify cache staging recipe driverHash context registrati
                  ("inplace-manifest.json", receiptBytes) : members))
               -- Keep an existing file intact until the complete replacement is ready.
               atomicBytes destination (BL.toStrict archive)
-              readBundle True TargetLayoutBundle destination unit buildKey exportKey inputs (map fst modules)
-                >>= maybe (fail "fresh installed Core bundle failed validation") pure)
+              rememberFreshBundle TargetLayoutBundle unit exportKey inputs (map fst modules)
+                (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
               `finally` removePathForcibly temporary
       let result = InstalledBundle unit bundle
       remember result inputs modules
@@ -1080,8 +1080,8 @@ wiredGhcInternal context thcRoot = do
             (("manifest.json", BL.toStrict (encode inner)) :
              ("inplace-manifest.json", inputsBytes) : members))
           atomicBytes destination (BL.toStrict archive)
-          readBundle True PinnedSourceBundle destination unit buildKey exportKey buildInputs (sort names)
-            >>= maybe (fail "fresh wired Core bundle failed validation") pure)
+          rememberFreshBundle PinnedSourceBundle unit exportKey buildInputs (sort names)
+            (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
           `finally` cleanup
   selected <- maybe (pure bundle) (projectWindowsWiredBundle (contextVerifyArtifacts context) directory bundle) windowsSpec
   pure (object ["id" .= unit, "depends" .= ([] :: [String]),
@@ -1731,8 +1731,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     archive <- either fail pure (encodeZip
       (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
     atomicBytes destination (BL.toStrict archive)
-    readBundle True PlainBundle destination (unitId unit) buildKey exportKey buildInputs expected
-      >>= maybe (fail "fresh configured Core bundle failed validation") pure) `finally` cleanup
+    rememberFreshBundle PlainBundle (unitId unit) exportKey buildInputs expected
+      (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
 
 -- Source late-plugin JSON has no typed annotations. Recover the exact emitted
 -- full-Core interfaces through the selected GHC helper and Cabal's actual
@@ -1768,6 +1768,16 @@ readBundle verify receipt path unit buildKey exportKey buildInputs expected =
   rememberBundle verify (path ++ ".selection.json") [path]
     (Aeson.toJSON (show receipt, unit, buildKey, exportKey, buildInputs, expected)) $
       readBundleCold receipt path unit buildKey exportKey buildInputs expected
+
+-- Source acquisition has just validated/emitted these exact modules and
+-- receipts. Seed that successful result without reopening its ZIP while the
+-- emission buffers are still live. Existing artifacts never enter this path.
+rememberFreshBundle :: BundleReceipt -> String -> String -> Value -> [String] -> Bundle -> IO Bundle
+rememberFreshBundle receipt unit exportKey buildInputs expected bundle = do
+  let path = bundlePath bundle
+      request = Aeson.toJSON (show receipt, unit, bundleBuildKey bundle, exportKey, buildInputs, expected)
+  _ <- rememberBundle True (path ++ ".selection.json") [path] request (pure (Just bundle))
+  pure bundle
 
 readBundleCold :: BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
 readBundleCold receipt path unit buildKey exportKey buildInputs expected = do
