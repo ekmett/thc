@@ -33,7 +33,7 @@ internal class BytecodeProcessArguments(val operation: ProcessOp,
     @field:CompilationFinal(dimensions = 1) private val slots: Array<LocalAccessor>) {
     @ExplodeLoop fun read(bytecode: BytecodeNode, frame: VirtualFrame): Array<Any?> =
         arrayOfNulls<Any>(slots.size).also { values ->
-            for (index in values.indices) values[index] = if (operation.arguments[index] == "Int32Rep")
+            for (index in values.indices) values[index] = if ("Int32Rep" == operation.arguments[index])
                 slots[index].getLong(bytecode, frame) else slots[index].getObject(bytecode, frame)
         }
 }
