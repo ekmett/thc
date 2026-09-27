@@ -17,6 +17,21 @@ import java.nio.file.Path
 class LauncherDiagnosticsTest {
     @TempDir lateinit var directory: Path
 
+    @Test fun artifactVerificationIsExplicitAndNeverConsumesGuestArguments() {
+        val host = arrayOf("--ffi=native", "--run-io", "@packages.json", "main")
+        val (normal, default) = launcherArtifactVerification(host)
+        assertFalse(default)
+        assertArrayEquals(host, normal)
+        val (selected, verify) = launcherArtifactVerification(arrayOf("--verify-artifacts") + host +
+            arrayOf("--", "program", "--verify-artifacts"))
+        assertTrue(verify)
+        assertArrayEquals(host + arrayOf("--", "program", "--verify-artifacts"), selected)
+        assertFalse(launcherArtifactVerification(host + arrayOf("--", "program", "--verify-artifacts")).second)
+        assertThrows(IllegalArgumentException::class.java) {
+            launcherArtifactVerification(arrayOf("--verify-artifacts", "--verify-artifacts") + host)
+        }
+    }
+
     @Test fun explicitSidecarPairsAreRepeatableAndStopAtTheGuestSeparator() {
         val (arguments, pairs) = launcherJsonSidecars(arrayOf("--ffi", "native", "--json-sidecar", "a.json", "a.idx",
             "--run-io", "a.json,b.json,@packages.json", "main", "--json-sidecar", "b.json", "b.idx",

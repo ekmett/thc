@@ -92,11 +92,11 @@ object CoreModules {
     // Only the host-side request builder can authorize a deferred file read.
     // Arbitrary guest Source JSON must never acquire a new host-filesystem API.
     private val packageKey = ByteArray(32).also { SecureRandom().nextBytes(it) }
-    private fun packageCapability(path: String, sha256: String): String {
+    private fun packageCapability(path: String, sha256: String, verifyArtifacts: Boolean): String {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(packageKey, "HmacSHA256"))
         return Base64.getUrlEncoder().withoutPadding().encodeToString(
-            mac.doFinal((path.length.toString() + ":" + path + ":" + sha256).toByteArray(Charsets.UTF_8)))
+            mac.doFinal((verifyArtifacts.toString() + ":" + path.length + ":" + path + ":" + sha256).toByteArray(Charsets.UTF_8)))
     }
 
     private fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
@@ -354,15 +354,15 @@ object CoreModules {
 
     /**
      * Serialize a load request from Core files and at most one `@manifest` path.
-     * Manifest loading validates its archive and selects strict linking. This step
-     * does not execute the entry or bypass the backend's support audit.
-     * Large manifest requests are process-local capabilities; replay revalidates
-     * the unchanged manifest and every referenced artifact in this JVM.
+     * Manifest loading selects strict linking; this does not execute the entry
+     * or bypass binding admission. File reads require process-local capabilities.
+     * Normal loading trusts supplied artifacts; explicit [verifyArtifacts] checks
+     * complete hashes and source/index agreement before admitting their snapshots.
      */
     fun request(paths: List<String>, entry: String, instrument: Boolean = true, diagnosticUnsupported: Boolean = false,
                 backend: String = defaultBackend(), sourceNotesEnabled: Boolean = true, ioMain: Boolean = false,
                 shutdownEntry: String? = null, asyncExceptions: Boolean? = null,
-                jsonSidecars: Map<String, String>? = null): String {
+                jsonSidecars: Map<String, String>? = null, verifyArtifacts: Boolean = false): String {
         require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
             "Executable shutdown requires a distinct IO entry"
         }
@@ -370,7 +370,7 @@ object CoreModules {
         val settings = linkedMapOf<String, Any>(
             "entry" to entry, "instrument" to instrument,
             "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend,
-            "sourceNotesEnabled" to sourceNotesEnabled)
+            "sourceNotesEnabled" to sourceNotesEnabled, "verifyArtifacts" to verifyArtifacts)
         if (hasManifest) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
         if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
@@ -379,9 +379,10 @@ object CoreModules {
             else indexedRequestDocument(paths, jsonSidecars, settings)
     }
 
-    internal fun managedExportRequest(paths: List<String>, backend: String, instrument: Boolean): String =
+    internal fun managedExportRequest(paths: List<String>, backend: String, instrument: Boolean,
+                                      verifyArtifacts: Boolean = false): String =
         requestDocument(paths, mapOf("mode" to "managed-exports", "backend" to backend,
-            "instrument" to instrument, "strictLink" to true))
+            "instrument" to instrument, "strictLink" to true, "verifyArtifacts" to verifyArtifacts))
 
     @Suppress("UNCHECKED_CAST")
     internal fun visitRequestModules(input: Map<String, Any?>, accept: (Map<String, Any?>) -> Unit): TargetLayout? =
@@ -391,6 +392,8 @@ object CoreModules {
     internal fun visitRequestModules(input: Map<String, Any?>,
         indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
         accept: (Map<String, Any?>) -> Unit): TargetLayout? {
+        require(input["verifyArtifacts"] == null || input["verifyArtifacts"] is Boolean) { "verifyArtifacts must be a Boolean" }
+        val verifyArtifacts = input["verifyArtifacts"] == true
         val files = input["indexedModuleFiles"]
         if (files != null) {
             require(files is List<*> && files.isNotEmpty() &&
@@ -423,16 +426,17 @@ object CoreModules {
                     val sidecar = file["sidecar"] as? String ?: error("Missing JSON sidecar path")
                     val sidecarSha = file["sidecarSha256"] as? String ?: error("Missing JSON sidecar identity")
                     val capability = file["capability"] as? String ?: error("Missing indexed Core capability")
-                    require(sha.matches(Regex("[0-9a-f]{64}")) && sidecarSha.matches(Regex("[0-9a-f]{64}")) &&
+                    require((if (verifyArtifacts) sha.matches(Regex("[0-9a-f]{64}")) && sidecarSha.matches(Regex("[0-9a-f]{64}"))
+                            else sha.isEmpty() && sidecarSha.isEmpty()) &&
                         MessageDigest.isEqual(capability.toByteArray(Charsets.US_ASCII),
-                            indexedCapability(path, sha, sidecar, sidecarSha).toByteArray(Charsets.US_ASCII))) {
+                            indexedCapability(path, sha, sidecar, sidecarSha, verifyArtifacts).toByteArray(Charsets.US_ASCII))) {
                         "Invalid indexed Core capability"
                     }
                     val indexBytes = Files.readAllBytes(Path.of(sidecar))
-                    require(sha256(indexBytes) == sidecarSha) { "JSON sidecar changed after request: $sidecar" }
-                    val source = indexBytes.inputStream().use { CoreJsonIndex.loadSidecar(Path.of(path), it) }
+                    if (verifyArtifacts) require(sha256(indexBytes) == sidecarSha) { "JSON sidecar changed after request: $sidecar" }
+                    val source = indexBytes.inputStream().use { CoreJsonIndex.loadSidecar(Path.of(path), it, verifyArtifacts) }
                     opened += source
-                    require(source.sha256() == sha) { "Core JSON changed after request: $path" }
+                    if (verifyArtifacts) require(source.sha256() == sha) { "Core JSON changed after request: $path" }
                     accept(adapter.module(source.root) + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"]))
                     indexed(source, adapter)
                 }
@@ -455,7 +459,7 @@ object CoreModules {
             val supplied = input["packageCapability"] as? String
                 ?: error("Missing package request capability")
             require(MessageDigest.isEqual(supplied.toByteArray(Charsets.US_ASCII),
-                packageCapability(manifest, expected).toByteArray(Charsets.US_ASCII))) {
+                packageCapability(manifest, expected, verifyArtifacts).toByteArray(Charsets.US_ASCII))) {
                 "Invalid package request capability"
             }
             val consumers = input["consumerModules"]
@@ -463,7 +467,7 @@ object CoreModules {
                 "Invalid loose package consumers"
             }
             val result = CorePackageManifest.visitRuntimeModules(manifest, expected,
-                input["sourceNotesEnabled"] != false, indexed) { module ->
+                input["sourceNotesEnabled"] != false, verifyArtifacts, indexed) { module ->
                 accept(module + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"]))
             }
             require(input["foreignExceptionBridgeUnit"] == result.foreignExceptionBridgeUnit) { "Package bridge selection changed after request" }
@@ -495,15 +499,17 @@ object CoreModules {
         }
         digest.digest().joinToString("") { "%02x".format(it) }
     }
-    private fun indexedCapability(path: String, sha: String, sidecar: String, sidecarSha: String): String =
-        packageCapability("indexed-json:" + Json.stringify(listOf(path, sidecar, sidecarSha)), sha)
+    private fun indexedCapability(path: String, sha: String, sidecar: String, sidecarSha: String,
+                                  verifyArtifacts: Boolean): String =
+        packageCapability("indexed-json:" + Json.stringify(listOf(path, sidecar, sidecarSha)), sha, verifyArtifacts)
 
     /** Opt-in host path: exact loose JSON and explicit producer sidecars, without
      * embedding or parsing a module body while assembling the load request.
      * An optional package manifest retains its independently checked identity.
-     * Whole-file hashes are still paid here and at checked replay.
+     * Whole-file hashes and source/index agreement scans are explicit opt-in work.
      */
     private fun indexedRequestDocument(paths: List<String>, sidecars: Map<String, String>, settings: Map<String, Any>): String {
+        val verifyArtifacts = settings["verifyArtifacts"] == true
         val manifests = paths.filter { it.startsWith("@") }
         val loose = paths.filterNot { it.startsWith("@") }
         require(manifests.size <= 1 && paths.distinct().size == paths.size && loose.isNotEmpty() &&
@@ -515,22 +521,23 @@ object CoreModules {
             val path = Path.of(raw).toRealPath().toString()
             require(seenPaths.add(path)) { "Duplicate indexed Core path: $path" }
             val sidecar = Path.of(sidecars.getValue(raw)).toRealPath().toString()
-            val sha = sha256(Path.of(path))
-            val sidecarSha = sha256(Path.of(sidecar))
+            val sha = if (verifyArtifacts) sha256(Path.of(path)) else ""
+            val sidecarSha = if (verifyArtifacts) sha256(Path.of(sidecar)) else ""
             mapOf("path" to path, "sha256" to sha, "sidecar" to sidecar, "sidecarSha256" to sidecarSha,
-                "capability" to indexedCapability(path, sha, sidecar, sidecarSha))
+                "capability" to indexedCapability(path, sha, sidecar, sidecarSha, verifyArtifacts))
         }
         val identity = manifests.singleOrNull()?.let {
-            checkNotNull(CorePackageManifest.indexedRequestIdentity(it.drop(1), forceDescriptor = true))
+            checkNotNull(CorePackageManifest.indexedRequestIdentity(it.drop(1), forceDescriptor = true, verifyArtifacts = verifyArtifacts))
         }
         return Json.stringify(settings + mapOf("indexedModuleFiles" to files) +
             (identity?.let { mapOf("packageManifest" to it.manifestPath,
                 "packageManifestSha256" to it.manifestSha256,
-                "packageCapability" to packageCapability(it.manifestPath, it.manifestSha256),
+                "packageCapability" to packageCapability(it.manifestPath, it.manifestSha256, verifyArtifacts),
                 "foreignExceptionBridgeUnit" to it.foreignExceptionBridgeUnit) } ?: emptyMap()))
     }
 
     private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {
+        val verifyArtifacts = settings["verifyArtifacts"] == true
         val manifests = paths.filter { it.startsWith("@") }
         require(manifests.size <= 1) { "A Core request accepts at most one package manifest" }
         val manifest = manifests.singleOrNull()?.drop(1)
@@ -538,11 +545,11 @@ object CoreModules {
             Json.stringify(settings)) }
         if (manifest != null) {
             val consumers = paths.filterNot { it.startsWith("@") }.map { File(it).readText() }
-            CorePackageManifest.indexedRequestIdentity(manifest)?.let { identity ->
+            CorePackageManifest.indexedRequestIdentity(manifest, verifyArtifacts = verifyArtifacts)?.let { identity ->
                 return Json.stringify(settings + mapOf(
                     "packageManifest" to identity.manifestPath,
                     "packageManifestSha256" to identity.manifestSha256,
-                    "packageCapability" to packageCapability(identity.manifestPath, identity.manifestSha256),
+                    "packageCapability" to packageCapability(identity.manifestPath, identity.manifestSha256, verifyArtifacts),
                     "foreignExceptionBridgeUnit" to identity.foreignExceptionBridgeUnit) +
                     (if (consumers.isEmpty()) emptyMap() else mapOf("consumerModules" to consumers.map(Json::parse))))
             }
@@ -552,7 +559,7 @@ object CoreModules {
             val limit = 2 * 1024 * 1024
             var inline: StringBuilder? = StringBuilder()
             var count = 0
-            val result = CorePackageManifest.visitModules(manifest) { _, source ->
+            val result = CorePackageManifest.visitModules(manifest, verifyArtifacts = verifyArtifacts) { _, source ->
                 val destination = inline
                 if (destination != null) {
                     if (destination.length + source.length > limit) inline = null
@@ -565,7 +572,7 @@ object CoreModules {
             if (inline == null) return Json.stringify(settings + mapOf(
                 "packageManifest" to result.manifestPath,
                 "packageManifestSha256" to result.manifestSha256,
-                "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256),
+                "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256, verifyArtifacts),
                 "foreignExceptionBridgeUnit" to result.foreignExceptionBridgeUnit) +
                 (if (consumers.isEmpty()) emptyMap() else mapOf("consumerModules" to consumers.map(Json::parse))))
             return buildString {

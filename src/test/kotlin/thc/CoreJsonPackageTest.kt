@@ -48,8 +48,8 @@ class CoreJsonPackageTest {
         return directory.resolve("packages.json").also { Files.writeString(it, Json.stringify(mapOf(
             "format" to "thc-core-packages", "schema" to 1, "ghc" to "9.14.1", "units" to listOf(unit)))) }
     }
-    private fun request(path: Path, backend: String = "bytecode") = CoreModules.request(listOf("@$path"),
-        "synthetic:LazyJson.entry", backend = backend, sourceNotesEnabled = false)
+    private fun request(path: Path, backend: String = "bytecode", verifyArtifacts: Boolean = false) = CoreModules.request(listOf("@$path"),
+        "synthetic:LazyJson.entry", backend = backend, sourceNotesEnabled = false, verifyArtifacts = verifyArtifacts)
     private fun count(value: Value, name: String) = ((Json.parse(value.getMember("diagnostics").asString())
         as Map<*, *>)[name] as Number).toLong()
     private fun visit(request: String) = CoreModules.visitRequestModules(Json.parse(request) as Map<String, Any?>) { }
@@ -67,6 +67,9 @@ class CoreJsonPackageTest {
                 assertEquals(1L, count(value, "jsonBodyMaterializations"))
                 assertEquals(1L, count(value, "loweredRootCount"))
                 assertEquals(4L, count(value, "jsonBindingHeaders"))
+                assertEquals(0L, count(value, "jsonSourceHashBytesScanned"))
+                assertEquals(0L, count(value, "jsonStructuralBytesScanned"))
+                assertEquals(0L, count(value, "jsonIndexSourceBytesScanned"))
                 assertEquals(1L, value.execute(0L).asLong())
                 assertEquals(2L, count(value, "jsonBodyMaterializations"))
                 assertEquals(2L, count(value, "loweredRootCount"))
@@ -80,7 +83,7 @@ class CoreJsonPackageTest {
         val path = manifest()
         Files.delete(directory.resolve("LazyJson.json"))
         Files.delete(directory.resolve("LazyJson.idx"))
-        val serialized = request(path) // Neither module JSON nor sidecar is opened here.
+        val serialized = request(path, verifyArtifacts = true) // Neither module JSON nor sidecar is opened here.
         assertThrows(java.nio.file.NoSuchFileException::class.java) { visit(serialized) }
         manifest()
         Files.write(directory.resolve("LazyJson.idx"), byteArrayOf(0))
@@ -96,15 +99,41 @@ class CoreJsonPackageTest {
             .message.orEmpty().contains("manifest changed"))
     }
 
+    @Test fun normalLoadingTrustsDeclaredDigestsButVerificationRejectsMismatch() {
+        val wrong = module() + mapOf("sha256" to "0".repeat(64),
+            "index" to mapOf("path" to "LazyJson.idx", "sha256" to "0".repeat(64)))
+        for (order in listOf(null, listOf("manifest.json", "LazyJson.json", "LazyJson.idx"),
+            listOf("LazyJson.idx", "LazyJson.json", "manifest.json"))) {
+            val path = manifest(wrong, order)
+            if (order != null) {
+                val doc = Json.parse(Files.readString(path)) as Map<String, Any?>
+                val unit = (doc["units"] as List<Map<String, Any?>>).single()
+                val bundle = unit["bundle"] as Map<String, Any?>
+                Files.writeString(path, Json.stringify(doc + ("units" to listOf(unit +
+                    ("bundle" to (bundle + ("sha256" to "0".repeat(64))))))))
+            }
+            for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+                val serialized = request(path, backend)
+                Files.writeString(path, Files.readString(path) + " ")
+                val entry = context.eval("thc", serialized)
+                assertEquals(7L, entry.execute(5L).asLong())
+                assertEquals(0L, count(entry, "jsonSourceHashBytesScanned"))
+                assertEquals(0L, count(entry, "jsonStructuralBytesScanned"))
+                assertEquals(0L, count(entry, "jsonIndexSourceBytesScanned"))
+            }
+            assertThrows(IllegalArgumentException::class.java) { visit(request(path, verifyArtifacts = true)) }
+        }
+    }
+
     @Test fun bothArchiveOrdersRequireExactPairedInventoryAndEachIndexIdentity() {
         val valid = listOf("manifest.json", "LazyJson.json", "LazyJson.idx")
         for (order in listOf(valid, valid.reversed())) {
             val wrong = module() + ("index" to mapOf("path" to "LazyJson.idx", "sha256" to "0".repeat(64)))
-            assertThrows(IllegalArgumentException::class.java) { visit(request(manifest(wrong, order))) }
+            assertThrows(IllegalArgumentException::class.java) { visit(request(manifest(wrong, order), verifyArtifacts = true)) }
             // Hash-consistent sidecar from another JSON is still rejected by source binding.
             val other = resource("lazy-json-module.idx")
             val mismatched = module() + ("index" to mapOf("path" to "LazyJson.idx", "sha256" to digest(other)))
-            assertThrows(IllegalArgumentException::class.java) { visit(request(manifest(mismatched, order, other))) }
+            assertThrows(IllegalArgumentException::class.java) { visit(request(manifest(mismatched, order, other), verifyArtifacts = true)) }
         }
         for (order in listOf(valid.dropLast(1), valid + "extra.idx", valid.reversed() + "extra.idx")) {
             assertThrows(IllegalArgumentException::class.java) { visit(request(manifest(order = order))) }

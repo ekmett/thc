@@ -873,6 +873,7 @@ executable thc-fixtures
     THC.Driver.CoreIndex
     AggregateFixtures
     AggregateHeapFixtures
+    FourWayAggregateFixtures
     GraphFixtures
     IntegerCompletionFixtures
     ContinuationFixtures

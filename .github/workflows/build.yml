@@ -117,7 +117,9 @@ jobs:
       - name: Check original aggregate constructor fields against native GHC
         run: |
           cabal run exe:thc-fixtures --offline -- aggregate-heap
-          ./gradlew aggregateHeapFullCoreTest aggregateHeapFullCoreDenseTest
+          cabal run exe:thc-fixtures --offline -- fourway-aggregate
+          ./gradlew aggregateHeapFullCoreTest aggregateHeapFullCoreDenseTest \
+            fourwayAggregateFullCoreTest fourwayAggregateFullCoreDenseTest
       - name: Check tuple join arguments and bottoming tuple cases
         run: |
           cabal run exe:thc-fixtures --offline -- tuple-join --local

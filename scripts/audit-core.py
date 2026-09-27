@@ -835,8 +835,6 @@ class Audit:
                 physical = []
                 for index, component in enumerate(rep['components']):
                     self.representation(component, owner, f'{path}/components/{index}')
-                    if contains_sum(component):
-                        self.issue('aggregate-representation', owner, path, 'unboxed-tuple: sum component unsupported')
                     registers = component.get('primReps') if isinstance(component, dict) else None
                     if not isinstance(registers, list):
                         self.issue('aggregate-representation', owner, path, aggregate + ': unresolved component')
@@ -1020,12 +1018,14 @@ class Audit:
     def supported_tuple_join_input(self, rep):
         return (self.supported_empty_join_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateJoinInputs', []) and tuple_input_proof_error(rep,
-                    allow_vectors='join-arguments' in self.cap.get('vectorTransport', []), allow_addresses=True) is None)
+                    allow_vectors='join-arguments' in self.cap.get('vectorTransport', []), allow_addresses=True,
+                    allow_sums='unboxed-sum' in self.cap.get('aggregateJoinInputs', [])) is None)
 
-    def supported_tuple_input(self, rep):
+    def supported_tuple_input(self, rep, sum_capability='aggregateInputs'):
         return (self.supported_empty_input(rep) or
                 'unboxed-tuple' in self.cap.get('aggregateInputs', []) and tuple_input_proof_error(rep,
-                    allow_vectors='tuple-fields' in self.cap.get('vectorTransport', []), allow_addresses=True) is None)
+                    allow_vectors='tuple-fields' in self.cap.get('vectorTransport', []), allow_addresses=True,
+                    allow_sums='unboxed-sum' in self.cap.get(sum_capability, [])) is None)
 
     def supported_sum(self, rep, capability):
         return ('unboxed-sum' in self.cap.get(capability, []) and is_sum(rep) and
@@ -1044,7 +1044,8 @@ class Audit:
             return False
         return (sum_proof_error(rep) is None if is_sum(rep) else
                 tuple_input_proof_error(rep, allow_addresses=True,
-                    allow_vectors='heap-fields' in self.cap.get('vectorTransport', [])) is None)
+                    allow_vectors='heap-fields' in self.cap.get('vectorTransport', []),
+                    allow_sums='unboxed-sum' in self.cap.get('aggregateHeapFields', [])) is None)
 
     @classmethod
     def shape(cls, rep):
@@ -1670,7 +1671,7 @@ class Audit:
             if not is_sum(tuple_rep) or sum_proof_error(tuple_rep):
                 self.issue('aggregate-representation', owner, path, 'unboxed-sum: exact instantiated constructor result required')
             try:
-                sum_constructor_tag(info, arity)
+                sum_constructor_tag(info, arity, tuple_rep)
             except ValueError as error:
                 self.issue('constructor-arity', owner, path, str(error))
             return
@@ -1881,7 +1882,8 @@ class Audit:
                     self.issue('vector-boundary', owner, path, 'vector capture')
                 if captured and not ('unboxed-tuple' in self.cap.get(
                                      'aggregateJoinCaptures' if local_join_prefix else 'aggregateCaptures', []) and
-                                     all(self.supported_tuple_input(bound[key]) for key in captured)):
+                                     all(self.supported_tuple_input(bound[key],
+                                         'aggregateJoinCaptures' if local_join_prefix else 'aggregateCaptures') for key in captured)):
                     self.issue('aggregate-boundary', owner, path, 'unboxed-tuple capture')
                 metadata = expr[3] if len(expr) > 3 and isinstance(expr[3], dict) else {}
                 if any(is_vector(rep) and not self.supported_vector(rep,
@@ -1928,7 +1930,7 @@ class Audit:
                 proof = self.expression_rep(expr)
                 if sum_constructor:
                     try:
-                        sum_constructor_tag(self.constructors.get(function[1]), len(arguments))
+                        sum_constructor_tag(self.constructors.get(function[1]), len(arguments), proof)
                     except ValueError as error:
                         self.issue('constructor-arity', owner, path, str(error))
 
@@ -2507,7 +2509,7 @@ class Audit:
                             self.issue('application-levity', owner, path, 'Aggregate heap field must be unlifted')
                     if sum_constructor and is_sum(proof) and sum_proof_error(proof) is None:
                         try:
-                            selected = sum_constructor_tag(self.constructors.get(function[1]), len(arguments)) - 1
+                            selected = sum_constructor_tag(self.constructors.get(function[1]), len(arguments), proof) - 1
                             expected = proof['alternatives'][selected]
                             self.compare_shapes(expected, self.effective_rep(argument, bound), owner, f'{path}/arguments/{index}/rep', component=True)
                             if not isinstance(flags, list) or index >= len(flags) or flags[index] is not lifted_payload(expected):
@@ -2516,8 +2518,10 @@ class Audit:
                             self.issue('constructor-arity', owner, path, str(error))
                     if not sum_constructor and not heap_aggregate and is_sum(self.effective_rep(argument, bound)):
                         join = isinstance(target, dict) and '_join_arity' in target
-                        if (function[0] in ('prim', 'con') or not self.supported_sum(self.effective_rep(argument, bound),
-                                'aggregateJoinInputs' if join else 'aggregateInputs')):
+                        capability = ('aggregateResults' if tuple_constructor else
+                                      'aggregateJoinInputs' if join else 'aggregateInputs')
+                        if (function[0] in ('prim', 'con') and not tuple_constructor or
+                                not self.supported_sum(self.effective_rep(argument, bound), capability)):
                             self.issue('aggregate-boundary', owner, f'{path}/arguments/{index}', 'unboxed-sum argument')
                         if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:
                             self.issue('application-levity', owner, path, 'Sum argument must be unlifted')
@@ -2583,7 +2587,7 @@ class Audit:
                             self.issue('vector-boundary', owner, f'{path}/bindings/{index}', 'vector join capture')
                         tuple_captures = [bound[key] for key in captured if self.is_tuple_value(bound[key])]
                         if tuple_captures and ('unboxed-tuple' not in self.cap.get('aggregateJoinCaptures', []) or
-                                               not all(self.supported_tuple_input(rep) for rep in tuple_captures)):
+                                               not all(self.supported_tuple_input(rep, 'aggregateJoinCaptures') for rep in tuple_captures)):
                             self.issue('aggregate-boundary', owner, f'{path}/bindings/{index}', 'unboxed-tuple join capture')
                         self.compare_shapes(self.expression_rep(expr), binding.get('joinResultRep'), owner,
                                             f'{path}/bindings/{index}/joinResultRep')
@@ -2640,12 +2644,12 @@ class Audit:
                     if is_sum(binder_proof):
                         if kind == 'data':
                             try:
-                                selected = sum_constructor_tag(self.constructors.get(value), len(ids))
+                                selected = sum_constructor_tag(self.constructors.get(value), len(ids), binder_proof)
                                 if selected in sum_tags:
                                     raise ValueError('Duplicate sum alternative tag')
                                 sum_tags.add(selected)
                                 alternatives = binder_proof.get('alternatives')
-                                if (not isinstance(alternatives, list) or len(alternatives) != 2 or
+                                if (not isinstance(alternatives, list) or len(alternatives) < 2 or
                                         not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict)):
                                     raise ValueError('Sum alternative requires one exact payload binder')
                                 expected = alternatives[selected - 1]

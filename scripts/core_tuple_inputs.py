@@ -12,6 +12,7 @@ LONG_REPS = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep'
              'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep'}
 BOXED_REPS = {'BoxedRep (Just Lifted)', 'BoxedRep (Just Unlifted)'}
 from core_vectors import is_vector, proof_error as vector_proof_error
+from core_sums import is_sum, proof_error as sum_proof_error
 
 
 def contains_tuple(proof):
@@ -22,7 +23,7 @@ def contains_tuple(proof):
                 for child in (proof.get(key) if isinstance(proof.get(key), list) else [])))
 
 
-def proof_error(proof, allow_vectors=False, allow_addresses=False):
+def proof_error(proof, allow_vectors=False, allow_addresses=False, allow_sums=False):
     """Mirror TupleShape.validate plus the input-only known boxed-levity guard."""
     def visit(rep):
         if not isinstance(rep, dict) or type(rep.get('evaluated')) is not bool:
@@ -40,6 +41,11 @@ def proof_error(proof, allow_vectors=False, allow_addresses=False):
             if registers != flattened:
                 raise ValueError('Tuple input components disagree with physical representations')
             return flattened
+        if is_sum(rep) and allow_sums:
+            error = sum_proof_error(rep)
+            if error:
+                raise ValueError('Invalid sum tuple input component: ' + error)
+            return registers
         if is_vector(rep) and allow_vectors:
             if vector_proof_error(rep):
                 raise ValueError('Invalid exact vector tuple input component')

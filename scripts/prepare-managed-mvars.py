@@ -36,7 +36,7 @@ REQUIRED = {name: set(CONTRACTS) for name in ('transitions', 'lazyPayload', 'unl
 REQUIRED.update({name: {'newMVar#', 'putMVar#', 'takeMVar#', 'readMVar#'}
                  for name in ('aliasRoundTrip', 'closurePayload')})
 REQUIRED.update(waitTake={'takeMVar#'}, waitRead={'readMVar#'}, waitPut={'putMVar#'}, makeBox=set())
-COMMAND_LABELS = ['ghc-version', 'ghc-package-db', 'ghc-info', 'plugin-build', 'pre-export', 'post-export',
+COMMAND_LABELS = ['ghc-version', 'ghc-package-db', 'ghc-info', 'plugin-build', 'plugin-metadata', 'pre-export', 'post-export',
                   'native-build', 'native-word-bits', 'native-ready', 'native-concurrent-N1', 'native-concurrent-N2']
 
 
@@ -152,9 +152,12 @@ def input_vectors():
 
 def source_inputs(root=ROOT):
     inputs = [SOURCE, NATIVE, 'scripts/prepare-managed-mvars.py', 'scripts/audit-core.py',
-              'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json']
+              'scripts/core-capabilities.json', 'src/main/resources/thc/scalar-primop-signatures.json',
+              'thc.cabal', 'cabal.project', 'compiler/build.sh', 'compiler/plugin.py', 'compiler/toolchain.sh',
+              'compiler/json-index/json_index.c', 'compiler/json-index/json_index.h']
     inputs += sorted(str(p.relative_to(root)) for p in (root / 'scripts').glob('core_*.py'))
     inputs += sorted(str(p.relative_to(root)) for p in (root / 'compiler/THC').glob('*.hs'))
+    inputs += sorted(str(p.relative_to(root)) for p in (root / 'json-index').rglob('*.hs'))
     return inputs
 
 
@@ -172,13 +175,34 @@ def classify_audit(report, label):
     return 'accepted' if report['accepted'] else 'pending-managed-mvar-capabilities'
 
 
+def plugin_snapshot(build):
+    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
+    return build / 'plugin' / ('thc-core-plugin.' + suffix)
+
+
+def prepare_plugin(build, run, root=ROOT):
+    # Cabal owns the plugin's unit identity and complete dependency closure,
+    # including the JSON index library and its native classifier.
+    run(['compiler/build.sh'], 'plugin-build')
+    plugin = json.loads(run([sys.executable, 'compiler/plugin.py'], 'plugin-metadata'))
+    require(plugin.get('schema') == 1 and isinstance(plugin.get('unitId'), str) and plugin['unitId'],
+            'Invalid Cabal plugin identity')
+    library = Path(plugin['sharedLibrary']).resolve()
+    database = Path(plugin['packageDb']).resolve()
+    require(library.is_relative_to(root) and library.is_file() and
+            database.is_relative_to(root) and database.is_dir(), 'Plugin build products outside this checkout or missing')
+    snapshot = plugin_snapshot(build)
+    snapshot.parent.mkdir()
+    shutil.copy2(library, snapshot)
+    return plugin | {'sharedLibrary': str(snapshot)}
+
+
 def expected_artifacts(build, root=ROOT):
     stages = {stage: [str((build / stage / 'core' / name).relative_to(root))
                       for name in ('ManagedMVarAudit.json', 'THC.InterfaceClosure.json')] for stage in ('pre', 'post')}
     files = [build / stage / (name + '.audit.json') for stage in stages for name in ENTRIES + CONTEXT_ENTRIES]
     files += [build / 'logs' / (label + suffix) for label in COMMAND_LABELS for suffix in ('.stdout', '.stderr', '.command.json')]
-    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
-    files += [build / 'plugin' / ('libHSthc-core-plugin-0.1-ghc9.14.1.' + suffix),
+    files += [plugin_snapshot(build),
               build / 'native/managed-mvar-oracle', build / 'oracle.tsv', build / 'context-oracle.tsv', build / 'contracts.json']
     return stages, {str(path.relative_to(root)) for path in files} | {path for paths in stages.values() for path in paths}
 
@@ -187,7 +211,7 @@ def check_prepared(build, root=ROOT):
     """Read-only verification: never repair, delete, compile, or run an oracle."""
     try:
         manifest = json.loads((build / 'manifest.json').read_text())
-        require(manifest['schema'] == 1 and manifest['recipeVersion'] == 2 and manifest['ghc'] == '9.14.1',
+        require(manifest['schema'] == 1 and manifest['recipeVersion'] == 3 and manifest['ghc'] == '9.14.1',
                 'missing/current recipe version mismatch')
         require(manifest['entries'] == manifest['entryNames'] == ENTRIES and manifest['contextEntryNames'] == CONTEXT_ENTRIES,
                 'entry inventory mismatch')
@@ -297,17 +321,8 @@ def main():
     database = run([ghc, '--print-global-package-db'], 'ghc-package-db').strip()
     package_flags = ['-package-env', '-', '-clear-package-db', '-package-db', database]
     ghc_info = run([ghc, '--info'], 'ghc-info')
-    plugin_dir = build / 'plugin'
-    plugin_dir.mkdir()
-    suffix = 'dylib' if sys.platform == 'darwin' else 'so'
-    plugin = plugin_dir / ('libHSthc-core-plugin-0.1-ghc9.14.1.' + suffix)
-    command = [ghc, '--make', '-fforce-recomp', '-O1', '-dynamic', '-shared', '-fPIC', *package_flags]
-    for package in ('ghc', 'bytestring', 'directory', 'filepath', 'containers'):
-        command += ['-package', package]
-    command += ['-this-unit-id', 'thc-core-plugin-0.1', '-hisuf', 'dyn_hi', '-osuf', 'dyn_o',
-                '-icompiler', '-odir', plugin_dir, '-hidir', plugin_dir, 'compiler/THC/Plugin.hs', '-o', plugin]
-    run(command, 'plugin-build')
-    artifacts.append(relative(plugin))
+    plugin = prepare_plugin(build, run)
+    artifacts.append(relative(Path(plugin['sharedLibrary'])))
     spec = importlib.util.spec_from_file_location('core_audit', ROOT / 'scripts/audit-core.py')
     audit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(audit)
@@ -319,7 +334,8 @@ def main():
         options = [str(core), 'source-notes'] + (['post-tidy'] if stage == 'post' else [])
         options += ['closure=' + name for name in ENTRIES + CONTEXT_ENTRIES]
         run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint', '-g', *package_flags,
-             '-fplugin-library=' + str(plugin) + ';thc-core-plugin-0.1;THC.Plugin;' + json.dumps(options),
+             '-package-db', plugin['packageDb'],
+             '-fplugin-library=' + plugin['sharedLibrary'] + ';' + plugin['unitId'] + ';THC.Plugin;' + json.dumps(options),
              '-icompiler/test-fixtures', '-odir', directory / 'ghc', '-hidir', directory / 'ghc', SOURCE], stage + '-export')
         paths = sorted(core.glob('*.json'))
         require(paths, 'Missing genuine Core exports')
@@ -377,7 +393,7 @@ def main():
     require(input_hashes == hashes(inputs), 'Inputs changed during native/export preparation')
     save(build / 'contracts.json', {'primitiveRoles': CONTRACTS, 'applications': application_records,
                                     'contextEntries': context_records})
-    manifest = dict(schema=1, recipeVersion=2, ghc='9.14.1', ghcInfo=ghc_info, entries=ENTRIES, entryNames=ENTRIES,
+    manifest = dict(schema=1, recipeVersion=3, ghc='9.14.1', ghcInfo=ghc_info, entries=ENTRIES, entryNames=ENTRIES,
                     contextEntryNames=CONTEXT_ENTRIES, contextEntries=context_records,
                     stages=stages, nativeRows=len(ENTRIES) * len(values), nativeContextRows=len(READY_ENTRIES) * len(values),
                     nativeConcurrent=concurrent, inputs=values, reachableBindings=closures, auditStatus=audit_status,

@@ -69,8 +69,9 @@ or pool loan is needed for that local control flow. Same-frame join captures can
 read whole tuples from their existing typed slots. Empty tuple cases evaluate
 their scrutinee and propagate its exception/retry/bottom; a normal return traps
 as a non-exhaustive case instead of inventing an alternative.
-[Binary sum results](sum-results.md) reuse this completion protocol with exact tag
-and projection validation. Nested sums, unknown/null aggregate layouts and
+[Sum results](sum-results.md) reuse this completion protocol with exact tag
+and projection validation. Supported sums may occur inside recursive tuple
+components. Sums inside sum payloads, unknown/null aggregate layouts and
 unsupported physical leaves remain rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
 trap without executing a tuple producer.

@@ -32,8 +32,8 @@ class CoreJsonConsumersTest {
     private fun consumers(): LinkedHashMap<String, String> = linkedMapOf(
         file("indexed-consumer.json").toString() to file("indexed-consumer.idx").toString(),
         file("indexed-interface-closure.json").toString() to file("indexed-interface-closure.idx").toString())
-    private fun request(paths: List<String>, pairs: Map<String, String>) = CoreModules.request(paths,
-        "main:Main.entry", jsonSidecars = pairs, sourceNotesEnabled = false)
+    private fun request(paths: List<String>, pairs: Map<String, String>, verifyArtifacts: Boolean = false) = CoreModules.request(paths,
+        "main:Main.entry", jsonSidecars = pairs, sourceNotesEnabled = false, verifyArtifacts = verifyArtifacts)
     private fun document(request: String) = Json.parse(request) as Map<String, Any?>
     private fun modules(request: String): List<Map<String, Any?>> = ArrayList<Map<String, Any?>>().also { result ->
         CoreModules.visitRequestModules(document(request), result::add)
@@ -113,7 +113,7 @@ class CoreJsonConsumersTest {
         val pairs = consumers()
         val manifest = support()
         val paths = pairs.keys.toList() + "@$manifest"
-        val serialized = request(paths, pairs)
+        val serialized = request(paths, pairs, verifyArtifacts = true)
         val input = document(serialized)
         for (changed in listOf(input + ("packageCapability" to "forged"),
                 input + ("foreignExceptionBridgeUnit" to "forged"))) {

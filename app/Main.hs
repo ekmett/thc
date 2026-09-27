@@ -52,7 +52,7 @@ main = topHandler $ do
         (updates, _, []) | any isNothing updates -> putStr commandUsage
         (updates, targets, []) | length targets <= 1 -> do
           opts <- either (die . (++ "\n" ++ commandUsage)) pure $
-            foldM (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing Nothing guestArgs) (catMaybes updates)
+            foldM (flip ($)) (RunOptions defaultPlanOptions "" Nothing Nothing "" Nothing "pinned" Nothing Nothing False guestArgs) (catMaybes updates)
           let selected = opts {runTarget = case targets of [] -> ""; [target] -> target; _ -> error "checked above"}
           current <- getCurrentDirectory
           if acquire then acquireProject selected current else runProject selected current
@@ -87,6 +87,8 @@ runOptions =
   , Option [] ["project-file"] (ReqArg (\path r -> Right r {runProjectFile = Just path}) "FILE") "Cabal project file"
   , Option [] ["thc-root"] (ReqArg (\path r -> Right r {runThcRoot = path}) "DIR") "THC source/build root"
   , Option [] ["runtime"] (ReqArg (\path r -> Right r {runRuntime = Just path}) "PATH") "Installed THC JVM launcher"
+  , Option [] ["verify-artifacts"] (NoArg (\r -> Right r {runVerifyArtifacts = True}))
+      "Audit reachable Core before launch and verify runtime artifacts (default: off)"
   , Option [] ["ffi"] (ReqArg (\value r -> (\mode -> r {runFfiMode = Just mode}) <$> parseFfiMode value)
       "native|managed") "Runtime FFI mode (default: native); unavailable managed execution fails explicitly"
   , Option [] ["installed-core"] (ReqArg (\policy r -> Right r {runInstalledCore = policy}) "required|pinned") "Project boot-library provider (default: limited pinned sources); required never silently falls back"
@@ -101,11 +103,11 @@ liftPlanOption (Option shorts longs argument description) = Option shorts longs 
   where liftUpdate update run = Right run {runPlan = update (runPlan run)}
 
 runUsage :: String
-runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a Cabal runnable target, build and export its GHC main :: IO (), then audit and execute it in THC.\nTARGET uses Cabal syntax, including PACKAGE:exe:NAME, PACKAGE:test:NAME and PACKAGE:bench:NAME.\nWith no target, select the current package's sole buildable executable, otherwise its sole buildable runnable component.\nCabal reports ambiguous or disabled targets. Tests must be exitcode-stdio-1.0, not detailed library tests.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nUse --project-dir/--project-file for project location. The built native runnable is never executed.\n" (withHelp runOptions)
+runUsage = usageInfo "Usage: thc run [TARGET] [FLAGS] [-- ARG...]\n\nResolve a Cabal runnable target, build and export its GHC main :: IO (), then execute it in THC.\nUse --verify-artifacts to request a pre-launch Core audit and runtime artifact verification.\nTARGET uses Cabal syntax, including PACKAGE:exe:NAME, PACKAGE:test:NAME and PACKAGE:bench:NAME.\nWith no target, select the current package's sole buildable executable, otherwise its sole buildable runnable component.\nCabal reports ambiguous or disabled targets. Tests must be exitcode-stdio-1.0, not detailed library tests.\nArguments after -- are passed unchanged to the guest, including empty strings and option-looking arguments.\nUse --project-dir/--project-file for project location. The built native runnable is never executed.\n" (withHelp runOptions)
 
 acquireOptions :: [OptDescr (RunOptions -> Either String RunOptions)]
 acquireOptions = [option | option@(Option _ names _ _) <- runOptions,
-  not (any (`elem` ["runtime", "ffi"]) names)]
+  not (any (`elem` ["runtime", "ffi", "verify-artifacts"]) names)]
 
 acquireUsage :: String
 acquireUsage = usageInfo "Usage: thc acquire [TARGET] [FLAGS]\n\nResolve the same Cabal runnable target as run and export its dependency closure to DIST/packages.json.\nStops after atomic manifest publication: no reachable-Core audit, THC guest execution or native runnable invocation.\nThe manifest is acquisition evidence, not a claim of runtime support. No runtime launcher or guest arguments are needed.\n" (withHelp acquireOptions)

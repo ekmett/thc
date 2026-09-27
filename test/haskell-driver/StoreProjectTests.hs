@@ -104,7 +104,7 @@ concurrentTests env = TestLabel "overlapping project captures share immutable ca
         cache = base </> "cache/core-bundles/v1"
         output project = takeDirectory project </> "output"
         invoke project backend = run env (takeDirectory project) (Just backend) 240
-          ["run", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "completed", "--project-dir", project, "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output project]
     copyTree (first </> "dep-data") source
     sourceDist env source first
@@ -173,7 +173,7 @@ inplaceTests env = TestLabel "archive dependency retains its project-local depen
         leafSource = leaf </> "LocalLeaf.hs"
         output = base </> "output"
         invoke backend = run env base (Just backend) 300
-          ["run", "completed", "--project-dir", project, "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "completed", "--project-dir", project, "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         planned plan name = one ((== name) . string . (`field` "pkg-name")) (objects plan "install-plan")
         described manifest identifier = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
@@ -340,7 +340,7 @@ storeProjectTest env = TestLabel "source-built Cabal store Core" $ TestCase $
         output = base </> "output"
         archive = project </> "dep-data-0.1.0.0.tar.gz"
         invoke backend = run env base (Just backend) 240
-          ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "--project-dir", project, "completed", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         global plan = one (\unit -> string (field unit "style") == "global" &&
                             string (field unit "pkg-name") == "dep-data")
@@ -427,7 +427,7 @@ customStoreProjectTest env = TestLabel "Custom Setup library retains runtime-onl
         setupOnly = base </> "setup-source"
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
-          ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "--project-dir", project, "completed", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         planned plan name = one ((== name) . string . (`field` "pkg-name")) (objects plan "install-plan")
         described manifest identifier = one ((== identifier) . string . (`field` "id")) (objects manifest "units")
@@ -523,7 +523,7 @@ nativeVariantsTest env cxx = TestLabel
     let base = takeDirectory project
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
-          ["run", "--project-dir", project, "variants", "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "--project-dir", project, "variants", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
     forM_ ["ast", "bytecode"] $ \backend -> do
       actual <- invoke backend

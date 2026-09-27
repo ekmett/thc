@@ -53,7 +53,7 @@ internal enum class AtomicAddressOp(val primitive: String, val width: Int = 8,
 
     fun numeric(address: ManagedAddress, operand: Long = 0, replacement: Long = 0): Long {
         if (pointer) fault("Pointer atomic requires address operands")
-        if (address.hasNativeStorage()) return address.withNativeSegment { segment ->
+        if (address.hasNativeStorage()) return address.withNativeSegmentLong { segment ->
             address.requireByteRegion(width.toLong(), writable = this != READ)
             if (segment.address() % width != 0L) fault("Misaligned native atomic Addr#")
             native(segment, operand, replacement)

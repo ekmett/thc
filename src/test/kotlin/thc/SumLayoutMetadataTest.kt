@@ -28,7 +28,7 @@ class SumLayoutMetadataTest {
         val stages = checks["coverage"] as List<Map<String, Any?>>
         assertEquals(listOf("pre", "post"), stages.map { it["stage"] })
         assertEquals(130, (checks["nativeRows"] as Number).toInt())
-        assertEquals(6, (checks["supportedSumEntries"] as Number).toInt())
+        assertEquals(8, (checks["supportedSumEntries"] as Number).toInt())
         val manifestProof = checks["provenance"] as Map<String, String>
         assertEquals("build/sum-layout/provenance.json", manifestProof["path"])
         assertEquals(manifestProof["sha256"], MessageDigest.getInstance("SHA-256")

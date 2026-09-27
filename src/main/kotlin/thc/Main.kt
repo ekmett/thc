@@ -78,27 +78,29 @@ internal fun executionContext(fileIO: Boolean, ffiMode: FfiMode): Context {
  * `thc.asyncExceptions` launcher property. When absent, AST defaults to false and bytecode to true.
  * @param jsonSidecars explicit index paths for every listed loose Core JSON input;
  * an optional package manifest keeps its own module/index inventory.
+ * @param verifyArtifacts opt into complete artifact hashes and source/index verification.
+ * Normal loading trusts supplied artifacts and retains local format and ABI checks.
  */
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
               backend: String = defaultBackend(), ioMain: Boolean = false, shutdownEntry: String? = null,
               asyncExceptions: Boolean? = System.getProperty("thc.asyncExceptions")?.toBooleanStrict(),
-              jsonSidecars: Map<String, String>? = null): Value =
+              jsonSidecars: Map<String, String>? = null, verifyArtifacts: Boolean = false): Value =
     context.eval("thc", CoreModules.request(modules, entry, instrument,
         !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
-        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry, asyncExceptions, jsonSidecars))
+        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry, asyncExceptions, jsonSidecars, verifyArtifacts))
 
 /**
- * Load one verified managed export bundle into [context]. The result has read-only
+ * Load one managed export bundle into [context]. The result has read-only
  * unit → module → declared C-symbol members. Executing a symbol marshals its boxed
  * scalar signature and runs its pure function or IO action in this context.
  * This does not install native C entrypoints. Additional loads in the same context
- * are rejected; aliases in this bundle share their program and CAFs.
+ * are rejected; aliases share program/CAFs. [verifyArtifacts] opts into file checks.
  */
 @JvmOverloads
 fun loadManagedExports(context: Context, modules: List<String>, backend: String = defaultBackend(),
-                       instrument: Boolean = true): Value =
-    context.eval("thc", CoreModules.managedExportRequest(modules, backend, instrument))
+                       instrument: Boolean = true, verifyArtifacts: Boolean = false): Value =
+    context.eval("thc", CoreModules.managedExportRequest(modules, backend, instrument, verifyArtifacts))
 
 /** JVM launcher implementation; ordinary package users should invoke the Haskell `thc run` driver. */
 fun main(args: Array<String>) {
@@ -161,8 +163,23 @@ internal fun launcherJsonSidecars(rawArgs: Array<String>): Pair<Array<String>, M
     return arguments.toTypedArray() to sidecars.takeIf { it.isNotEmpty() }
 }
 
+internal fun launcherArtifactVerification(arguments: Array<String>): Pair<Array<String>, Boolean> {
+    val selected = ArrayList<String>()
+    var verify = false
+    var guest = false
+    for (argument in arguments) {
+        if (argument == "--") guest = true
+        if (!guest && argument == "--verify-artifacts") {
+            require(!verify) { "Duplicate --verify-artifacts" }
+            verify = true
+        } else selected += argument
+    }
+    return selected.toTypedArray() to verify
+}
+
 internal fun launch(arguments: Array<String>) {
-    val (rawArgs, sidecars) = launcherJsonSidecars(arguments)
+    val (withVerification, sidecars) = launcherJsonSidecars(arguments)
+    val (rawArgs, verifyArtifacts) = launcherArtifactVerification(withVerification)
     var prefix = 0
     var selected: FfiMode? = null
     while (prefix < rawArgs.size) {
@@ -184,7 +201,8 @@ internal fun launch(arguments: Array<String>) {
         val arguments = launcherArguments(args, 4)
         executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
-            val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3], jsonSidecars = sidecars)
+            val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3], jsonSidecars = sidecars,
+                verifyArtifacts = verifyArtifacts)
             check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))
                 System.err.println(action.getMember("diagnostics").asString())
@@ -197,7 +215,7 @@ internal fun launch(arguments: Array<String>) {
         val modules = args[1].split(',')
         executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
-            val action = loadEntry(context, modules, args[2], ioMain = true, jsonSidecars = sidecars)
+            val action = loadEntry(context, modules, args[2], ioMain = true, jsonSidecars = sidecars, verifyArtifacts = verifyArtifacts)
             check(action.invokeMember("runIO").asBoolean()) { "IO main did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))
                 System.err.println(action.getMember("diagnostics").asString())
@@ -209,7 +227,7 @@ internal fun launch(arguments: Array<String>) {
     val entry = args[1]
     val input = args[2].toLong()
     executionContext(fileIO = false, ffiMode = ffiMode).use { context ->
-        val function = loadEntry(context, modules, entry, jsonSidecars = sidecars)
+        val function = loadEntry(context, modules, entry, jsonSidecars = sidecars, verifyArtifacts = verifyArtifacts)
         if (args.drop(3).contains("--compile")) {
             repeat(40) { function.execute(input + (it and 3)).asLong() }
             function.invokeMember("compile")
