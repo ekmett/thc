@@ -158,7 +158,7 @@ STABLE_NAME_OUTPUTS = frozenset("build/stable-names/" + name for name in (
         for suffix in ("core/StableNames.json", *(f"{entry}-audit.json" for entry in STABLE_NAME_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in STABLE_NAME_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_ENTRIES = ("selfInventory", "boundQuery", "snapshotSize", "forkSnapshot",
-                            "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork")
+                            "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork", "callbackObservation")
 SCALAR_MEMORY_ENTRIES = ("memoryCase", "pinCase", "thawCase", "shrinkCase", "differenceCase",
                          "remainderCase", "numericDifference", "numericRemainder")
 SCALAR_MEMORY_OUTPUTS = frozenset("build/scalar-memory-utilities/" + name for name in (
@@ -179,7 +179,7 @@ DELIMITED_OUTPUTS = frozenset("build/delimited-continuations/" + name for name i
         for suffix in ("core/DelimitedContinuations.json", *(f"{entry}-audit.json" for entry in DELIMITED_ENTRIES))),
     *(f"commands/{command}.{suffix}" for command in DELIMITED_COMMANDS for suffix in ("stdout", "stderr", "command.json"))))
 THREAD_INVENTORY_OUTPUTS = frozenset("build/thread-inventory/" + name for name in (
-    "manifest.json", "oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
+    "manifest.json", "oracle.txt", "callback-oracle.txt", *(f"{stage}/{suffix}" for stage in ("pre", "post")
         for suffix in ("core/ThreadInventory.json", *(f"{entry}-audit.json" for entry in THREAD_INVENTORY_ENTRIES)))))
 THREAD_SCHEDULING_ENTRIES = ("emptySpark", "lazyPar", "lazySpark", "sparkValue", "currentCounter", "negativeCounter",
                              "pinnedFork", "otherCounter", "timedDelay")

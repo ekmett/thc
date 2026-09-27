@@ -153,7 +153,7 @@ class ManagedWeakTest {
             try {
                 capability = owner.mainThreadKey(weak, threads)
                 assertEquals(Thread.currentThread().threadId(), capability.liveJavaId(), "Native main-thread projection reads KEY, not value")
-                val impostor = GuestThreadId(key.javaId, threads, key.capability, Thread.currentThread(), false)
+                val impostor = GuestThreadId(key.logicalId, threads, key.capability, Thread.currentThread(), false)
                 assertEquals(key, impostor, "Numeric equality alone must not establish canonical identity")
                 assertNull(threads.liveJavaId(impostor))
                 assertNull(owner.mainThreadKey(owner.make(impostor, Any(), null), threads).liveJavaId())

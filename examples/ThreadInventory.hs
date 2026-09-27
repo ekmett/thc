@@ -138,3 +138,10 @@ parkedFork token = case newMVar# realWorld# of { (# s1, gate #) ->
   case fork# (\s -> case takeMVar# gate s of (# s2, Box _ #) -> (# s2, () #)) s1 of { (# s2, child #) ->
   case awaitStatus child 1# 1000000# s2 of { (# _, status #) -> token +# status }
   } }
+
+-- Source-shared native/guest observation used inside genuine reverse entries.
+{-# OPAQUE callbackObservation #-}
+callbackObservation :: Int# -> Int#
+callbackObservation token = runRW# (\s -> case getMaskingState# s of
+  (# s1, masking #) -> case isCurrentThreadBound# s1 of
+    (# _, bound #) -> token +# 10# *# masking +# bound)

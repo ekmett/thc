@@ -163,10 +163,10 @@ class RtsShutdownTest {
             }
             worker.start(); assertTrue(ready.await(5, TimeUnit.SECONDS))
             try {
-                val request = if (resume) threads.send(worker.threadId(), "payload").also { assertTrue(threads.pause(it)) } else null
+                val request = if (resume) threads.send(threads.pollState(worker).current!!.identity, "payload").also { assertTrue(threads.pause(it)) } else null
                 armed = true
                 val thrown = assertThrows(ThreadDeath::class.java) {
-                    if (request == null) threads.send(worker.threadId(), "payload") else threads.resume(request)
+                    if (request == null) threads.send(threads.pollState(worker).current!!.identity, "payload") else threads.resume(request)
                 }
                 assertSame(death, thrown)
             } finally { finish.countDown(); worker.join(5000); threads.close() }

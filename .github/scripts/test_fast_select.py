@@ -951,6 +951,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
                          set(self.family("ThreadObservation")["junit"]))
         for path in ("examples/ThreadInventory.hs", "compiler/test-fixtures/ThreadInventoryNative.hs",
+                     "compiler/test-fixtures/CallbackIdentityNative.hs", "compiler/test-fixtures/callback-identity.c",
                      "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
 

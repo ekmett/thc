@@ -98,7 +98,7 @@ class GuestThreadInventoryTest {
             val foreign = first.enterForeign()
             try {
                 first.enterCurrent()
-                try { assertFalse(first.isCurrentBound(), "Foreign re-entry is not forkOS") }
+                try { assertTrue(first.isCurrentBound(), "A callback is bound for this reverse-entry lifetime") }
                 finally { first.leaveCurrent() }
             } finally { first.leaveForeign(foreign) }
         } finally { first.leaveCurrent(); first.close() }

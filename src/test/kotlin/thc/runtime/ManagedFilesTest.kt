@@ -291,10 +291,12 @@ class ManagedFilesTest {
         val output = object : ByteArrayOutputStream() {
             override fun write(bytes: ByteArray, offset: Int, length: Int) {
                 assertNull(threads.poll(node), "Embedding stream code is foreign execution")
-                assertEquals(id, threads.enterCurrent())
+                assertNotEquals(id, threads.enterCurrent())
                 try {
-                    assertSame(request, threads.poll(node), "Reentrant guest entry has its own cut")
-                    request.acknowledge()
+                    assertNull(threads.poll(node), "A callback cannot claim its suspended caller's request")
+                    val callbackRequest = threads.send(threads.currentIdentity(), "callback self")
+                    assertSame(callbackRequest, threads.poll(node))
+                    callbackRequest.acknowledge()
                 } finally { threads.leaveCurrent() }
                 assertNull(threads.poll(node), "Stream execution resumes as foreign")
                 super.write(bytes, offset, length)
@@ -309,7 +311,9 @@ class ManagedFilesTest {
                 try {
                     request = threads.send(id, "stream callback")
                     assertEquals(3L, state.files.write(1, bytes("abc"), 3))
-                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertEquals(AsyncRequestState.PENDING, request.state)
+                    assertSame(request, threads.poll(node), "The completed write returns to the original caller")
+                    request.acknowledge()
                     assertEquals("abc", output.toString(Charsets.UTF_8))
                     val after = threads.send(id, "after stream")
                     assertSame(after, threads.poll(node))
