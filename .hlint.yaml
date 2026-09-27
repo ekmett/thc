@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+- arguments:
+  # Let each module enable PatternSynonyms itself. Otherwise HLint reserves the
+  # ordinary variable name "pattern" used by OriginalTermiosNative.
+  - -XNoPatternSynonyms
+  # Match the first real export-name variant in InterfaceForeignFacts.
+  - '--cpp-define=THC_FOREIGN_C_LABEL="thc_interface_alias_a"'
+  # The two libdw-disabled oracle sources require ghcautoconf.h. This include
+  # directory selects their documented profile for static analysis only.
+  - --cpp-include=scripts/hlint
+  # Upstream source snapshots retain upstream style and compiler configuration.
+  - --ignore-glob=compiler/pinned-*/**
+  - --ignore-glob=compiler/test-fixtures/empty-join-typeable/**
+
+# Keep the standard hints visible. In particular, do not generate a blanket
+# ignore list from the current tree. Review fixture hints against their intended
+# Core shape; data/newtype, strictness and eta changes can alter a regression.

@@ -9,6 +9,8 @@ GRADLE_FLAGS ?=
 CABAL_FLAGS ?=
 CORE_PACKAGES ?= ghc-internal base
 PANDOC ?= pandoc
+HLINT ?= hlint
+HLINT_FLAGS ?=
 DOCS_REVISION ?= $(shell git rev-parse HEAD)
 DOCS_CABAL_FLAGS = $(CABAL_FLAGS) --with-compiler='$(GHC)' --builddir=build/docs/cabal -j2
 export GRADLE_USER_HOME ?= $(CURDIR)/.gradle-user-home
@@ -18,6 +20,7 @@ CORE_PREFLIGHT = GHC='$(GHC)' GHC_PKG='$(GHC_PKG)' $(RUN_GHC) -f "$$(command -v 
 
 .PHONY: all runtime haskell run jar fixtures test test-modes jit-test probe clean distclean check-java check-ghc-core
 .PHONY: docs docs-haskell docs-jvm docs-check check-pandoc
+.PHONY: lint-haskell
 .PHONY: foreign-exception-fixtures foreign-exception-test-modes
 
 all: runtime haskell
@@ -35,6 +38,11 @@ run: all
 
 check-ghc-core:
 	@$(CORE_PREFLIGHT) check $(CORE_PACKAGES)
+
+# HLint reads .hlint.yaml; --git excludes build products and downloaded packages.
+# Hints retain HLint's nonzero exit status. No compiler or JVM build is needed.
+lint-haskell:
+	$(HLINT) --git -j2 $(HLINT_FLAGS)
 
 # These deliberately have no fixture, test, native library, or installDist dependency.
 # Run sequentially even when the caller uses make -j; both compilers are bounded.
