@@ -406,7 +406,9 @@ private class InputCallArm(private val source: InputSource, private val count: I
                         remainder!!.execute(frame, requireClosure(input), savedValues)
                 })
             }
-            return remainder!!.execute(frame, closure, values)
+            val rest = remainder
+            if (rest == null) CompilerDirectives.transferToInterpreter()
+            return rest!!.execute(frame, closure, values)
         }
         if (destination != null) { destination.consume(frame, this, result); return null }
         return result
