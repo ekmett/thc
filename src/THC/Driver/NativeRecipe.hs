@@ -256,7 +256,9 @@ componentHomeInterfaces dist allRoots component = do
         let relative = dropExtension (makeRelative root path)
             name = concatWithDots (splitDirectories relative)
         parsed <- either (const Nothing) Just (eitherParsec name :: Either String ModuleName)
-        if within root path && prettyShow parsed == name && name `notElem` declared
+        let mostSpecific = within root path && not (any (\other -> other /= root &&
+              within root other && within other path) roots)
+        if mostSpecific && prettyShow parsed == name && name `notElem` declared
           then Just (way, name, path) else Nothing
   pure (sort (nub (concatMap (\path -> mapMaybe (`candidate` path) roots) paths)))
   where concatWithDots [] = ""

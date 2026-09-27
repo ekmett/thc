@@ -320,6 +320,17 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         component (const (pure ()))
       assertBool "named-library declaration guard rejects hidden C after receipt loss" (isLeft hidden)
   , TestCase $ withScratch $ \root -> do
+      let dist = root </> "build"
+          artifacts = dist </> "Upper"
+          iface = artifacts </> "Nested/Unlisted.hi"
+          component = object ["type" .= ("lib" :: String), "name" .= ("lib:Upper" :: String),
+            "modules" .= ([] :: [String]), "src-dir" .= root,
+            "compiler-args" .= ["-outputdir",dist,"-odir",dist,"-hidir",dist]]
+      createDirectoryIfMissing True (takeDirectory iface)
+      writeFile iface "candidate only; GHC must verify the binary identity"
+      assertEqual "most-specific artifact root does not invent a component-name module prefix"
+        [("vanilla","Nested.Unlisted",iface)] =<< componentHomeInterfaces dist [dist] component
+  , TestCase $ withScratch $ \root -> do
       let native = root </> "native"; dist = native </> "build"; component = metadata root dist
       createDirectoryIfMissing True dist
       writePackage root False
