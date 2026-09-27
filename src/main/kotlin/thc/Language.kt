@@ -99,10 +99,11 @@ object CoreModules {
             mac.doFinal((verifyArtifacts.toString() + ":" + path.length + ":" + path + ":" + sha256).toByteArray(Charsets.UTF_8)))
     }
 
-    internal fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
+    internal fun admission(module: Map<String, Any?>,
+                           binding: ((String) -> Map<String, Any?>)? = null): ManagedExportAdmission? =
         if ((module["schema"] == 2L || module["schema"] == 2) &&
             module.containsKey("staticForeignExportRegistration") &&
-            CoreForeignArtifacts.hasRegistrationObligations(module)) ManagedExportAdmission.read(module) else null
+            CoreForeignArtifacts.hasRegistrationObligations(module)) ManagedExportAdmission.read(module, binding) else null
 
     fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = Merger().also { merger ->
         modules.forEach { merger.add(it) }
@@ -127,35 +128,51 @@ object CoreModules {
         private val providedModules = hashSetOf<String>()
         private val completeModules = hashSetOf<String>()
         @Suppress("UNCHECKED_CAST")
-        fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
-            require(admission == null || admission.module === module) {
+        fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) =
+            append(module, admission, null)
+
+        fun addSelected(admission: CoreModuleAdmission, bindings: List<Map<String, Any?>>) =
+            append(admission.selected(bindings), admission.exports, admission)
+
+        /** Declaration-only modules contribute their original typed ABI
+         * provenance, not bindings, constructors, or registration roots. */
+        fun addPackageProvenance(admission: PackageScalarAdmission) = packageProvenance(admission)
+
+        private fun packageProvenance(admission: PackageScalarAdmission) {
+            val link = admission.link
+            require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
+                "Package C entry namespace belongs to another unit: ${link.componentSha256}"
+            }
+            val previous = packageScalarLinks.putIfAbsent(link.unit, link)
+            require(previous == null || previous.same(link)) { "Conflicting package C component: ${link.unit}" }
+            packageScalarProofs.getOrPut(link.unit) { linkedSetOf() }.addAll(admission.proved)
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        private fun append(module: Map<String, Any?>, admission: ManagedExportAdmission?, prepared: CoreModuleAdmission?) {
+            require(admission == null || admission.module === (prepared?.module ?: module)) {
                 "Managed export admission belongs to a different Core module"
             }
             count++
-            thc.runtime.CoreForeignExceptionBridge.read(module)?.let { proof ->
+            (if (prepared == null) thc.runtime.CoreForeignExceptionBridge.read(module) else prepared.bridge)?.let { proof ->
                 require(exceptionBridges.putIfAbsent(proof["unit"] as String, proof) == null) { "Duplicate foreign exception bridge unit" }
             }
             (module["foreignExceptionBridgeUnit"] as? String)?.let { unit ->
                 require(exceptionBridgeUnit == null || exceptionBridgeUnit == unit) { "Conflicting foreign exception bridge selection" }
                 exceptionBridgeUnit = unit
             }
-            if (admission != null) admissions.add(admission)
-            CoreForeignArtifacts.validateArchive(module)
-            val nativeArchive = PackageNativeArchives.read(module)
-            val packageLink = PackageScalarLinks.read(module)
-            packageLink?.let { admission ->
-                val link = admission.link
-                require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
-                    "Package C entry namespace belongs to another unit: ${link.componentSha256}"
-                }
-                val previous = packageScalarLinks.putIfAbsent(link.unit, link)
-                require(previous == null || previous.same(link)) { "Conflicting package C component: ${link.unit}" }
-                packageScalarProofs.getOrPut(link.unit) { linkedSetOf() }.addAll(admission.proved)
-            }
-            val link = CoreForeignArtifacts.linked(module)
+            // Direct-unit startup registration is owned by CoreUnitProgram,
+            // not repeated in every selected binding's program.
+            if (admission != null && prepared == null) admissions.add(admission)
+            if (prepared == null) CoreForeignArtifacts.validateArchive(module)
+            val nativeArchive = if (prepared == null) PackageNativeArchives.read(module) else prepared.archive
+            val packageLink = if (prepared == null) PackageScalarLinks.read(module) else prepared.packageLink
+            packageLink?.let(::packageProvenance)
+            val link = if (prepared == null) CoreForeignArtifacts.linked(module) else prepared.foreignLink
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
             val managedExport = admission != null
-            val managedImports = packageLink == null && ManagedImportAdmission.read(module) != null
+            val managedImports = if (prepared == null) packageLink == null && ManagedImportAdmission.read(module) != null
+                else prepared.imports != null
             if (archiveOnly && link == null && packageLink == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
@@ -923,7 +940,7 @@ class Language : TruffleLanguage<Language.State>() {
                     val registrations = program.registerStartup()
                     val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), null,
                         io, this@Language, shutdown, shutdownResult,
-                        directory.owner(thc.runtime.CoreSignalForeign.dispatcher) != null)
+                        async && directory.owner(thc.runtime.CoreSignalForeign.dispatcher) != null)
                     owner.coreUnitPrograms += program
                     owner.foreignRoots.retain(program, registrations)
                     return value

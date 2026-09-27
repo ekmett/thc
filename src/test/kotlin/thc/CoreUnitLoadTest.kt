@@ -27,15 +27,19 @@ class CoreUnitLoadTest {
         "expr" to listOf("lam", listOf(mapOf("id" to "x", "name" to "x", "type" to "Int#", "lifted" to false, "coercion" to false)), body))
 
     /** Model writer for focused runtime tests, not the production publisher. */
-    private fun unit(name: String, body: Any?, padding: String = ""): Map<String, Any?> {
+    private fun unit(name: String, body: Any?, padding: String = "", diagnostics: Boolean = false): Map<String, Any?> {
         val id = "u$name:$name.entry"
-        val prefix = "{\"schema\":1,\"ghc\":\"9.14.1\",\"unit\":\"u$name\",\"module\":\"$name\",\"boundary\":\"$boundary\",\"bindings\":"
+        val ignored = if (diagnostics) "\"sourceCore\":${Json.stringify("x".repeat(1024 * 1024))}," else ""
+        val prefix = "{${ignored}\"schema\":1,\"ghc\":\"9.14.1\",\"unit\":\"u$name\",\"module\":\"$name\",\"boundary\":\"$boundary\",\"bindings\":"
         val expr = Json.stringify(listOf(binding(id, body), binding("u$name:$name.unused", listOf("unsupported", padding))))
-        val suffix = ",\"constructors\":[]}"
+        val notes = mapOf("sourceFiles" to listOf(mapOf("id" to "source", "content" to "original source")))
+        val suffix = ",\"constructors\":[]" + if (diagnostics)
+            ",\"groups\":${Json.stringify(List(10000) { id })},\"sourceFiles\":${Json.stringify(notes["sourceFiles"])}}" else "}"
         val original = (prefix + expr + suffix).toByteArray()
         val metadata = Json.stringify(mapOf("schema" to 1, "ghc" to "9.14.1", "unit" to "u$name",
             "module" to name, "boundary" to boundary, "constructors" to emptyList<Any>())).toByteArray()
-        val bytes = original + byteArrayOf(10) + metadata + byteArrayOf(10)
+        val source = if (diagnostics) Json.stringify(notes).toByteArray() else byteArrayOf()
+        val bytes = original + byteArrayOf(10) + metadata + byteArrayOf(10) + source
         val json = directory.resolve("$name.jsons")
         val symbols = directory.resolve("$name.symbols")
         Files.write(json, bytes)
@@ -52,7 +56,9 @@ class CoreUnitLoadTest {
                 "bindingsEnd" to prefix.toByteArray().size + expr.toByteArray().size,
                 "metadataStart" to original.size + 1, "metadataEnd" to original.size + 1 + metadata.size,
                 "containsDelimitedControl" to false, "registrationObligations" to false, "mainAlias" to false,
-                "packageScalarDeclarations" to false)))
+                "packageScalarDeclarations" to false) + if (diagnostics) mapOf(
+                    "sourceMetadataStart" to original.size + metadata.size + 2,
+                    "sourceMetadataEnd" to bytes.size) else emptyMap()))
     }
     private fun fixture(badB: Boolean = false, cycle: Boolean = false): Path {
         val a = unit("A", choice(literal(7), call("uB:B.entry", listOf("var", "x"))))
@@ -70,6 +76,56 @@ class CoreUnitLoadTest {
         CoreModules.request(listOf("@$path"), "uA:A.entry", backend = backend, sourceNotesEnabled = false,
             asyncExceptions = async, verifyArtifacts = verify)
     private fun count(value: Value, field: String) = ((Json.parse(value.getMember("diagnostics").asString()) as Map<*, *>)[field] as Number).toLong()
+
+    @Test fun projectedMetadataSkipsOriginalPrettyCoreGroupsAndDisabledSourceTables() {
+        val unit = unit("A", literal(7), diagnostics = true)
+        val document = Json.parse(Json.stringify(mapOf("format" to "thc-core-packages", "schema" to 1,
+            "ghc" to "9.14.1", "units" to listOf(unit)))) as Map<*, *>
+        val index = CoreUnitDirectory.read(document)!!
+        for (notes in listOf(false, true)) index.open(false, notes).use { sources ->
+            val metadata = sources.metadata(index.modules.single())
+            assertFalse(metadata.containsKey("sourceCore"))
+            assertFalse(metadata.containsKey("groups"))
+            assertEquals(notes, metadata.containsKey("sourceFiles"))
+            assertEquals(0L, sources.counters().single().statistics().decodedBindings)
+            assertTrue(sources.counters().single().statistics().metadataBytes < 1024)
+            assertTrue(sources.counters().single().statistics().sourceByteReads < 1024)
+        }
+        index.open(true, false).use { sources ->
+            sources.verifyModule(index.modules.single())
+            assertTrue(sources.counters().single().statistics().verifiedModuleBytes > 1024 * 1024)
+            val reads = sources.counters().single().statistics().sourceByteReads
+            sources.verifyModule(index.modules.single())
+            assertEquals(reads, sources.counters().single().statistics().sourceByteReads)
+        }
+    }
+
+    @Test fun modulelessLegacyUnitsKeepIdentityWithoutOpeningTheirZip() {
+        val manifest = fixture()
+        @Suppress("UNCHECKED_CAST")
+        val original = Json.parse(Files.readString(manifest)) as Map<String, Any?>
+        val empty = mapOf("id" to "reexports-only", "depends" to listOf("uA"),
+            "bundle" to mapOf("path" to directory.resolve("not-present.zip").toString(), "sha256" to "a".repeat(64)),
+            "modules" to emptyList<Any>())
+        val noBundle = mapOf("id" to "empty-dependency", "depends" to listOf("reexports-only"), "modules" to emptyList<Any>())
+        val updated = original + ("units" to (listOf(empty, noBundle) + (original["units"] as List<*>)))
+        Files.writeString(manifest, Json.stringify(updated))
+        val index = CoreUnitDirectory.read(Json.parse(Json.stringify(updated)) as Map<*, *>)!!
+        assertEquals(listOf("uA"), index.units.first().depends)
+        assertNotNull(index.units.first().legacyBundle)
+        assertEquals("empty-dependency", index.units[1].id)
+        assertNull(index.units[1].json)
+        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+            val entry = context.eval("thc", request(manifest, backend))
+            assertEquals(7L, entry.execute(0).asLong())
+            assertEquals(1L, count(entry, "coreUnitSourceOpens"))
+        }
+        val malformed = updated + ("units" to (listOf(empty + ("json" to empty["bundle"])) +
+            (original["units"] as List<*>)))
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreUnitDirectory.read(Json.parse(Json.stringify(malformed)) as Map<*, *>)
+        }
+    }
 
     @Test fun coldReferencesDoNotOpenOtherUnitsAndFirstDemandReusesTheBinding() {
         val manifest = fixture()

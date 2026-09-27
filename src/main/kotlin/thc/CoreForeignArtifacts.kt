@@ -49,7 +49,7 @@ internal object CoreForeignArtifacts {
     }
 
     /** Bytecode is a separate product of the original C stubs, never an alias for an unlinked archive. */
-    fun linked(module: Map<*, *>): ForeignBitcode? {
+    fun linked(module: Map<*, *>, completeBindings: Boolean = true): ForeignBitcode? {
         val raw = module["foreignLink"] ?: return null
         val link = raw as? Map<*, *> ?: throw IllegalArgumentException("Invalid foreign bitcode link")
         val time = link["module"] == "Data.Time.Clock.Internal.CTimespec"
@@ -123,17 +123,24 @@ internal object CoreForeignArtifacts {
              else abi.values.count { it == "clock-id" } == 1 && abi.values.count { it == "clock-buffer" } == 2)) {
             "CAPI ABI inventory differs from original symbols"
         }
-        val actual = calls(module["bindings"]).filter { !time ||
+        return ForeignBitcode(unit, name, target, symbols.toSet(), abi, bytes).also {
+            validateCalls(module["bindings"], it, completeBindings)
+        }
+    }
+
+    fun validateCalls(bindings: Any?, link: ForeignBitcode, complete: Boolean) {
+        val unit = link.unit
+        val time = link.module == "Data.Time.Clock.Internal.CTimespec"
+        val actual = calls(bindings).filter { !time ||
             (it["target"] as? Map<*, *>)?.get("unit") == unit }.map { descriptor ->
             val callTarget = descriptor["target"] as? Map<*, *> ?: throw IllegalArgumentException("Invalid foreign call target")
             val symbol = callTarget["symbol"] as? String ?: throw IllegalArgumentException("Invalid foreign call symbol")
-            require(callKind(descriptor, unit, symbol, time) == abi[symbol]) {
+            require(symbol in link.abi && callKind(descriptor, unit, symbol, time) == link.abi[symbol]) {
                 "CAPI original call disagrees with linked symbol ABI: $symbol"
             }
             symbol
         }.toSet()
-        require(actual == symbols.toSet()) { "Linked CAPI symbols differ from original Core declarations" }
-        return ForeignBitcode(unit, name, target, symbols.toSet(), abi, bytes)
+        require(!complete || actual == link.symbols) { "Linked CAPI symbols differ from original Core declarations" }
     }
 
     /** Backend tests may supply unversioned synthetic Core, but not foreign archives. */
@@ -146,10 +153,10 @@ internal object CoreForeignArtifacts {
         if (module.containsKey("schema") || module.containsKey("foreign")) requireExecutable(module)
     }
 
-    fun validateArchive(module: Map<*, *>) {
+    fun validateArchive(module: Map<*, *>, completeBindings: Boolean = true) {
         if (version(module["schema"], 1)) {
             require(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs")) { "Foreign artifacts require Core schema 2" }
-            PackageScalarLinks.read(module)
+            PackageScalarLinks.read(module, completeBindings = completeBindings)
             return
         }
         require(version(module["schema"], 2)) { "Unsupported Core schema: ${module["schema"]}" }
@@ -194,8 +201,9 @@ internal object CoreForeignArtifacts {
             nonempty = true
         }
         require(nonempty) { "Core schema 2 requires foreign artifacts" }
-        if (module.containsKey("foreignLink")) linked(module)
-        if (PackageScalarLinks.read(module) == null) ManagedImportAdmission.read(module)
+        if (module.containsKey("foreignLink")) linked(module, completeBindings)
+        if (PackageScalarLinks.read(module, completeBindings = completeBindings) == null)
+            ManagedImportAdmission.read(module, completeBindings)
     }
 
     /** Registrations and opaque foreign files can run independently of Core reachability. */

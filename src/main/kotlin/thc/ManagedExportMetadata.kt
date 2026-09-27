@@ -18,8 +18,8 @@ internal data class ManagedExportSignature(val unit: String, val module: String,
 internal class ManagedExportAdmission private constructor(val module: Map<String, Any?>,
     val exports: List<ManagedExportSignature>) {
     companion object {
-        fun read(module: Map<String, Any?>): ManagedExportAdmission {
-            CoreForeignArtifacts.validateArchive(module)
+        fun read(module: Map<String, Any?>, binding: ((String) -> Map<String, Any?>)? = null): ManagedExportAdmission {
+            CoreForeignArtifacts.validateArchive(module, completeBindings = binding == null)
             require(module["schema"] == 2L && !module.containsKey("foreignLink")) {
                 "Managed exports require original, unlinked static-export products"
             }
@@ -62,7 +62,9 @@ internal class ManagedExportAdmission private constructor(val module: Map<String
                 }
                 roots.add(binder)
                 val id = "$unit:$name.${binder["occurrence"]}"
-                require(bindings.count { it["id"] == id } == 1) { "Static export does not resolve to one exact Core binder: $id" }
+                require(if (binding == null) bindings.count { it["id"] == id } == 1 else binding(id)["id"] == id) {
+                    "Static export does not resolve to one exact Core binder: $id"
+                }
                 val symbol = text(export["symbol"])
                 require(names.add(symbol)) { "Duplicate static export symbol: $unit:$name/$symbol" }
                 require(export["convention"] == "ccall" && export["normalizationRole"] == "representational") {

@@ -19,6 +19,8 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     private val sources = directory.open(input["verifyArtifacts"] == true, input["sourceNotesEnabled"] != false, totals::add)
     private val constructors = HashMap<String, Map<String, Any?>>()
     private val admittedModules = HashMap<CoreUnitDirectory.ModuleRecord, Map<String, Any?>>()
+    private val admissions = HashMap<CoreUnitDirectory.ModuleRecord, CoreModuleAdmission>()
+    private val packageProvenance = HashMap<String, List<PackageScalarAdmission>>()
     private val linkedModules = HashSet<CoreUnitDirectory.ModuleRecord>()
     private var selectedBridge: Map<String, Any?>? = null
     private val demand = CoreDemandBindings({ directory.owner(it) != null }, ::binding, ::constructor,
@@ -44,27 +46,35 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     fun binding(id: String): Map<String, Any?> = sources.binding(id)
         ?: throw UnsupportedCore("Unresolved external binding $id")
 
+    private fun admission(module: CoreUnitDirectory.ModuleRecord): CoreModuleAdmission = admissions.getOrPut(module) {
+        sources.verifyModule(module)
+        CoreModuleAdmission(metadata(module), ::binding)
+    }
+
+    private fun packageProvenance(unit: String): List<PackageScalarAdmission> = packageProvenance.getOrPut(unit) {
+        directory.modules.filter { it.unit == unit && it.packageScalarDeclarations }.mapNotNull {
+            admission(it).packageLink
+        }
+    }
+
     private fun bridge(): Map<String, Any?> = selectedBridge ?: run {
         val candidates = directory.modules.filter { it.name == "THC.Internal.Exception" &&
             (directory.foreignExceptionBridgeUnit == null || it.unit == directory.foreignExceptionBridgeUnit) }
         require(candidates.size == 1) { "Missing or ambiguous foreign exception bridge unit" }
         val module = candidates.single()
-        val data = metadata(module)
-        val prefix = module.prefix
-        val helpers = listOf(binding(prefix + "boxForeign"), binding(prefix + "projectForeign"))
-        checkNotNull(CoreForeignExceptionBridge.read(data + ("bindings" to helpers))) {
+        checkNotNull(admission(module).bridge) {
             "Foreign execution requires a genuine THC.Exception runtime bundle"
         }.also { selectedBridge = it }
     }
     private fun prepare(id: String, binding: Map<String, Any?>): ExecutableProgram {
         val module = directory.owner(id) ?: error("Missing Core module owner: $id")
-        val data = metadata(module)
-        val bindings = if (data.containsKey("foreignExceptionBridge")) {
-            val proof = bridge()
-            listOf(binding, this.binding(proof["box"] as String), this.binding(proof["project"] as String))
-                .distinctBy { it["id"] }
-        } else listOf(binding)
-        val merged = CoreModules.Merger().also { it.add(data + ("bindings" to bindings)) }.finish()
+        val admitted = admission(module)
+        val merged = CoreModules.Merger().also { merger ->
+            merger.addSelected(admitted, listOf(binding))
+            admitted.packageLink?.let {
+                packageProvenance(module.unit).forEach(merger::addPackageProvenance)
+            }
+        }.finish()
         val linked = CoreModules.demanded(merged, id, demand, ::bridge) + mapOf(
             "instrument" to (input["instrument"] != false), "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false), "demandBindings" to demand) +
@@ -78,20 +88,14 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     fun registerStartup(): List<ManagedExportAdmission> {
         val registrations = ArrayList<ManagedExportAdmission>()
         for (module in directory.modules.filter { it.registrationObligations }) {
-            val data = metadata(module)
-            val raw = data["staticForeignExportRegistration"] as? Map<*, *>
-            val roots = (raw?.get("roots") as? List<*>)?.map {
-                val identity = it as? Map<*, *> ?: error("Invalid registration root")
-                val unit = identity["unit"] as? String ?: error("Missing registration unit")
-                val module = identity["module"] as? String ?: error("Missing registration module")
-                val occurrence = identity["occurrence"] as? String ?: error("Missing registration occurrence")
-                "$unit:$module.$occurrence"
-            }.orEmpty()
-            val admitted = data + ("bindings" to roots.map(::binding))
-            val admission = CoreModules.admission(admitted)
-            CoreModules.Merger().also { it.add(admitted, admission) }.finish()
-            if (admission != null) registrations += admission
-            roots.forEach { entryValue(it) }
+            val admitted = admission(module)
+            // This also rejects unclassified native initializers before any
+            // entry executes, without pretending a selected body is complete.
+            CoreModules.Merger().also { it.addSelected(admitted, emptyList()) }.finish()
+            admitted.exports?.let { exports ->
+                registrations += exports
+                exports.exports.forEach { entryValue(it.binder) }
+            }
         }
         return registrations
     }
@@ -141,6 +145,7 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         result["coreUnitDecodedModules"] = counters.sumOf { it.decodedModules }
         result["coreUnitDecodedBytes"] = counters.sumOf { it.decodedBytes }
         result["coreUnitMetadataBytes"] = counters.sumOf { it.metadataBytes }
+        result["coreUnitVerifiedModuleBytes"] = counters.sumOf { it.verifiedModuleBytes }
         return result
     }
     override fun close() = sources.close()

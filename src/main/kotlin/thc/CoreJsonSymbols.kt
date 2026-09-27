@@ -30,7 +30,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         val directoryByteReads: Long, val sourceByteReads: Long,
         val hashBytesScanned: Long, val lookupComparisons: Long,
         val decodedBindings: Long, val decodedBytes: Long,
-        val decodedModules: Long, val metadataBytes: Long)
+        val decodedModules: Long, val metadataBytes: Long, val verifiedModuleBytes: Long)
 
     /** Detached scalar totals: retaining diagnostics never retains a mapping. */
     class Counters {
@@ -46,9 +46,10 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         var decodedBytes = 0L
         var decodedModules = 0L
         var metadataBytes = 0L
+        var verifiedModuleBytes = 0L
         @Synchronized fun statistics() = Statistics(directoryOpens, sourceOpens,
             directoryMappedBytes, sourceMappedBytes, directoryByteReads, sourceByteReads,
-            hashBytesScanned, lookupComparisons, decodedBindings, decodedBytes, decodedModules, metadataBytes)
+            hashBytesScanned, lookupComparisons, decodedBindings, decodedBytes, decodedModules, metadataBytes, verifiedModuleBytes)
     }
 
     data class ModuleSpan(val start: Long, val end: Long, val bindingsStart: Long, val bindingsEnd: Long)
@@ -158,8 +159,9 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         return null
     }
 
-    private fun decode(id: String, start: Long): Selected {
+    private fun decode(id: String, start: Long, end: Long?): Selected {
         val mapped = source()
+        val limit = end?.also { require(it <= mapped.size) { "Core binding extent exceeds source" } } ?: mapped.size
         require(start in 0 until mapped.size && sourceByte(mapped, start) == 123) {
             "Core symbol does not point to a binding object: $id at $start"
         }
@@ -168,7 +170,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         var quoted = false
         var escaped = false
         do {
-            require(at < mapped.size) { "Unterminated Core binding: $id at $start" }
+            require(at < limit) { "Unterminated Core binding: $id at $start" }
             val c = sourceByte(mapped, at++)
             if (quoted) {
                 if (escaped) escaped = false
@@ -211,6 +213,23 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
             if (module) counters.decodedModules++
             parseObject(bytes)
         } }.getOrThrow()
+    }
+
+    /** Explicit verification only. The original body inventory is temporary;
+     * ordinary binding admission never copies or parses the complete module. */
+    fun verifyModule(span: ModuleSpan, sha256: String, verify: (Map<String, Any?>) -> Unit) = synchronized(counters) {
+        check(!closed && verifyArtifacts) { "Complete module checks require explicit artifact verification" }
+        val mapped = source()
+        require(span.start >= 0 && span.end > span.start && span.end <= mapped.size) { "Invalid original module extent" }
+        val length = Math.toIntExact(span.end - span.start)
+        val bytes = mapped.bytes.asSlice(span.start, length.toLong()).toArray(ValueLayout.JAVA_BYTE)
+        counters.sourceByteReads += length
+        counters.verifiedModuleBytes += length
+        counters.hashBytesScanned += length
+        require(MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) } == sha256) {
+            "Original Core module hash mismatch"
+        }
+        verify(parseObject(bytes))
     }
 
     /** The manifest locates the binding array, including its brackets. Read only
@@ -263,7 +282,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
             if (module != null) require(it > module.bindingsStart && it < module.bindingsEnd) {
                 "Core symbol lies outside its declared module: $id"
             }
-            decode(id, it)
+            decode(id, it, module?.bindingsEnd)
         } } }.getOrThrow()
         if (module != null && result != null) require(result.start > module.bindingsStart && result.end < module.bindingsEnd) {
             "Core symbol lies outside its declared module: $id"

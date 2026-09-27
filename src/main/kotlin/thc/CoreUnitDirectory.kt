@@ -11,9 +11,9 @@ import thc.runtime.TargetLayout
 internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>,
     val foreignExceptionBridgeUnit: String?, val targetLayout: TargetLayout?) {
     data class Artifact(val path: Path, val sha256: String)
-    data class UnitRecord(val id: String, val json: Artifact, val symbols: Artifact,
-        val modules: List<ModuleRecord>)
-    data class ModuleRecord(val unit: String, val name: String, val span: CoreJsonSymbols.ModuleSpan,
+    data class UnitRecord(val id: String, val depends: List<String>, val json: Artifact?, val symbols: Artifact?,
+        val modules: List<ModuleRecord>, val legacyBundle: Artifact? = null)
+    data class ModuleRecord(val unit: String, val name: String, val sha256: String, val span: CoreJsonSymbols.ModuleSpan,
         val metadata: CoreJsonSymbols.ValueSpan, val sourceMetadata: CoreJsonSymbols.ValueSpan?,
         val containsDelimitedControl: Boolean, val registrationObligations: Boolean, val mainAlias: Boolean,
         val packageScalarDeclarations: Boolean) {
@@ -43,16 +43,20 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
         private var closed = false
         private val readers = HashMap<String, CoreJsonSymbols>()
         private val metadata = HashMap<ModuleRecord, Map<String, Any?>>()
+        private val verified = HashSet<ModuleRecord>()
         private fun reader(unit: String): CoreJsonSymbols {
             check(!closed) { "Core unit sources are closed" }
             return readers.getOrPut(unit) {
                 val record = directory.units.single { it.id == unit }
-                CoreJsonSymbols(record.json.path, record.symbols.path, verifyArtifacts,
-                    record.json.sha256, record.symbols.sha256).also { admitted(it.counters) }
+                val json = checkNotNull(record.json) { "Moduleless unit has no JSON bindings" }
+                val symbols = checkNotNull(record.symbols) { "Moduleless unit has no symbol directory" }
+                CoreJsonSymbols(json.path, symbols.path, verifyArtifacts,
+                    json.sha256, symbols.sha256).also { admitted(it.counters) }
             }
         }
         @Synchronized fun metadata(module: ModuleRecord): Map<String, Any?> {
             check(!closed) { "Core unit sources are closed" }
+            verifyModule(module)
             return metadata.getOrPut(module) {
                 val reader = reader(module.unit)
                 val required = reader.metadata(module.metadata, true)
@@ -75,11 +79,30 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
             val module = directory.owner(id) ?: return null
             return reader(module.unit).binding(id, module.span)
         }
+        @Synchronized fun verifyModule(module: ModuleRecord) {
+            check(!closed) { "Core unit sources are closed" }
+            if (!verifyArtifacts || module in verified) return
+            val reader = reader(module.unit)
+            reader.verifyModule(module.span, module.sha256) { original ->
+                require(original.filterKeys { it in METADATA_FIELDS } == reader.metadata(module.metadata, true)) {
+                    "Core admission metadata differs from original module"
+                }
+                val notes = original.filterKeys { it == "sourceFiles" || it == "sourceSpans" }
+                require(notes == (module.sourceMetadata?.let { reader.metadata(it, false) } ?: emptyMap<String, Any?>())) {
+                    "Core source metadata differs from original module"
+                }
+                CoreForeignArtifacts.validateArchive(original)
+                CoreModules.admission(original)
+                thc.runtime.CoreForeignExceptionBridge.read(original)
+            }
+            verified += module
+        }
         @Synchronized fun counters(): List<CoreJsonSymbols.Counters> = readers.values.map { it.counters }
         @Synchronized override fun close() {
             if (closed) return
             closed = true
             metadata.clear()
+            verified.clear()
             try { readers.values.forEach { it.close() } } finally { readers.clear() }
         }
     }
@@ -118,10 +141,19 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                 require(depends.all { it is String && it.isNotEmpty() } && depends.distinct().size == depends.size) {
                     "Invalid dependencies for GHC unit $id"
                 }
-                require(!unit.containsKey("bundle")) { "Unit pair must not also select a ZIP bundle: $id" }
+                val rawModules = unit["modules"] as? List<*> ?: error("Missing unit modules")
+                if (rawModules.isEmpty() && !unit.containsKey("json") && !unit.containsKey("symbols")) {
+                    // Reexport-only/empty units retain their directory identity
+                    // and provenance. There is no body that requires their ZIP.
+                    return@map UnitRecord(id, depends.filterIsInstance<String>(), null, null, emptyList(),
+                        if (unit.containsKey("bundle")) artifact(unit["bundle"]) else null)
+                }
+                require(!unit.containsKey("bundle")) {
+                    "Only moduleless legacy units may accompany direct unit pairs: $id"
+                }
                 val names = HashSet<String>()
                 var previousEnd = 0L
-                val modules = (unit["modules"] as? List<*> ?: error("Missing unit modules")).map { item ->
+                val modules = rawModules.map { item ->
                     val module = item as? Map<*, *> ?: error("Invalid module record")
                     val name = module["name"] as? String ?: error("Missing module name")
                     require(name.isNotEmpty() && names.add(name) && module["boundary"] == BOUNDARY &&
@@ -141,7 +173,7 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                             require(it.start >= metadata.end && it.end > it.start) { "Invalid Core source metadata extent" }
                         } else null
                     previousEnd = notes?.end ?: metadata.end
-                    ModuleRecord(id, name, span, metadata, notes,
+                    ModuleRecord(id, name, module["sha256"] as String, span, metadata, notes,
                         module["containsDelimitedControl"] as? Boolean ?: error("Missing delimited-control summary"),
                         module["registrationObligations"] as? Boolean ?: error("Missing registration summary"),
                         module["mainAlias"] as? Boolean ?: error("Missing main-alias summary"),
@@ -152,7 +184,7 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                     require(layout == null || layout == candidate) { "Conflicting GHC target layouts" }
                     layout = candidate
                 }
-                UnitRecord(id, artifact(unit["json"]), artifact(unit["symbols"]), modules)
+                UnitRecord(id, depends.filterIsInstance<String>(), artifact(unit["json"]), artifact(unit["symbols"]), modules)
             }
             val bridge = document["foreignExceptionBridgeUnit"]
             require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }
