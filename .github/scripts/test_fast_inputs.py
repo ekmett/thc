@@ -1968,8 +1968,13 @@ class RenamedInputContractTests(unittest.TestCase):
     def test_recorded_runtime_and_compiler_sources_use_actual_published_paths(self):
         root = Path(__file__).resolve().parents[2]
         self.assertEqual(("src/main/c/stdio-abi-probe.c",
-                          "src/main/kotlin/thc/runtime/CoreByteStringSort.kt",
-                          "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
+                          "src/main/java/thc/runtime/CoreByteStringSort.java",
+                          "src/main/java/thc/runtime/ByteStringSort.java",
+                          "src/main/java/thc/runtime/ByteStringSortExpression.java",
+                          "src/main/java/thc/runtime/CoreByteStringDecimal.java",
+                          "src/main/java/thc/runtime/ByteStringDecimal.java",
+                          "src/main/java/thc/runtime/ByteStringDecimalOp.java",
+                          "src/main/java/thc/runtime/ByteStringDecimalExpression.java",
                           "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
                           "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
                           "src/main/c/bytestring-utf8-api.c",

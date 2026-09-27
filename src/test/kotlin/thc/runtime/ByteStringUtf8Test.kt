@@ -175,7 +175,7 @@ class ByteStringUtf8Test {
                 val target = load(language, backend, raw).entryTarget("entry")
                 val bytes = ManagedAddress.fromByteArray(byteArrayOf(65))
                 assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, bytes, 1L, 17L)) }
-                assertEquals(1L, Calls.target(target, arrayOf(0L, bytes, 1L, Unit)))
+                assertEquals(1, Calls.target(target, arrayOf(0L, bytes, 1L, Unit)))
             }
         }
     }
@@ -217,7 +217,7 @@ class ByteStringUtf8Test {
                         return raw
                     }
                     val ordinary = load(language, backend, shadowed(false)).entryTarget("entry")
-                    assertEquals(37L, Calls.target(ordinary, arrayOf(0L,
+                    assertEquals(37, Calls.target(ordinary, arrayOf(0L,
                         ManagedAddress.fromByteArray(byteArrayOf(-1)), 1L, Unit)),
                         "$stage/$backend ordinary lexical join keeps its result")
                     val failure = assertThrows(RuntimeFault::class.java) {
@@ -288,7 +288,7 @@ class ByteStringUtf8Test {
                     pending!!.acknowledge()
                     result
                 }
-                assertEquals(1L, shape.layout.getLong(ownedTupleResult(completed, shape), 0))
+                assertEquals(1, shape.layout.getInt(ownedTupleResult(completed, shape), 0))
                 assertEquals(1, evaluated)
                 assertEquals(0, language.handoffState.get().results.depth)
                 assertEquals(0, language.handoffState.get().results.retainedReferences())

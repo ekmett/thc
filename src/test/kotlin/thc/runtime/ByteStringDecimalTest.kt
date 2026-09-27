@@ -53,7 +53,9 @@ class ByteStringDecimalTest {
         assertTrue((manifest["interface"] as String).endsWith("/Data/ByteString/Internal/Type.hi"))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/ByteStringDecimalAudit.hs", "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
-            "src/test/resources/core/original-bytestring-decimal-descriptors.json", "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt"))
+            "src/test/resources/core/original-bytestring-decimal-descriptors.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java",
+            "src/main/java/thc/runtime/ByteStringDecimal.java", "src/main/java/thc/runtime/ByteStringDecimalOp.java",
+            "src/main/java/thc/runtime/ByteStringDecimalExpression.java"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/pre.json", "$prefix/post.json", "$prefix/oracle.json") +
             listOf("pre", "post").flatMap { stage -> entries.map { "$prefix/$stage-$it.audit.json" } }, "$prefix/")
         val retained = Json.parse(File(root, "src/test/resources/core/original-bytestring-decimal-descriptors.json").readText()) as Map<*, *>
