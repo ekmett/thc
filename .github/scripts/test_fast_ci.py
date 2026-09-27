@@ -86,6 +86,45 @@ class FastRunnerTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Empty/inconsistent"):
             ci.validate_xml(self.root, ["example.Test"])
 
+    def test_linux_records_disabled_windows_suite_without_counting_it_as_executed(self):
+        self.suite()
+        windows = "thc.WindowsDistributionTest"
+        self.suite(windows, body=f'<testcase name="windows" classname="{windows}"><skipped/></testcase>')
+        path = self.root / f"TEST-{windows}.xml"
+        path.write_text(path.read_text().replace('skipped="0"', 'skipped="1"'))
+        with patch.object(ci.sys, "platform", "linux"):
+            result = ci.validate_xml(self.root, ["example.Test", windows])
+        self.assertEqual(result["cases"], [["example.Test", "works"]])
+        self.assertEqual(result["platformSkippedCases"], [[windows, "windows"]])
+        self.assertEqual(result["skipped"], 1)
+        for platform in ("win32", "darwin"):
+            with self.subTest(platform=platform), patch.object(ci.sys, "platform", platform):
+                with self.assertRaisesRegex(RuntimeError, "Unsuccessful"):
+                    ci.validate_xml(self.root, ["example.Test", windows])
+        (self.root / "TEST-example.Test.xml").unlink()
+        with patch.object(ci.sys, "platform", "linux"):
+            with self.assertRaisesRegex(RuntimeError, "No executed"):
+                ci.validate_xml(self.root, [windows])
+
+    def test_linux_platform_exception_rejects_partial_unknown_and_failed_suites(self):
+        windows = "thc.WindowsDistributionTest"
+        for name, body in (
+                ("other.Test", '<skipped/>'),
+                (windows, '<skipped/><failure/>'),
+                (windows, '<skipped/><error/>')):
+            with self.subTest(name=name, body=body), patch.object(ci.sys, "platform", "linux"):
+                self.suite(name, body=f'<testcase name="bad" classname="{name}">{body}</testcase>')
+                with self.assertRaisesRegex(RuntimeError, "Unsuccessful"):
+                    ci.validate_xml(self.root, [name])
+                (self.root / f"TEST-{name}.xml").unlink()
+        self.suite(windows, body=f'<testcase name="skipped" classname="{windows}"><skipped/></testcase>'
+                   f'<testcase name="ran" classname="{windows}"/>')
+        path = self.root / f"TEST-{windows}.xml"
+        path.write_text(path.read_text().replace('tests="1"', 'tests="2"').replace('skipped="0"', 'skipped="1"'))
+        with patch.object(ci.sys, "platform", "linux"):
+            with self.assertRaisesRegex(RuntimeError, "Unsuccessful"):
+                ci.validate_xml(self.root, [windows])
+
     def test_wrong_testcase_class_rejected(self):
         self.suite(body='<testcase name="works" classname="other.Test"/>')
         with self.assertRaisesRegex(RuntimeError, "Mismatched"):
@@ -284,6 +323,27 @@ class FastRunnerTest(unittest.TestCase):
                     self.assertIn("Gradle handoff batch failed with exit 1", failures)
                 else:
                     self.assertIn("Default and dense handoff executed different testcase sets", failures)
+
+    def test_batch_requires_matching_platform_disabled_cases(self):
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        windows = "thc.WindowsDistributionTest"
+        classes = ["thc.runtime.HandoffTest", windows]
+        selection = self.batch_selection() | {"junit": {"classes": classes, "patterns": classes}}
+
+        def fresh(*args, **kwargs):
+            for task, dense in (("testDefault", False), ("testDense", True)):
+                self.mode_xml(task, dense)
+                output = self.root / "build/test-results" / task / f"TEST-{windows}.xml"
+                output.write_text(f'<testsuite name="{windows}" tests="1" skipped="1">'
+                                  f'<testcase name="case-{dense}" classname="{windows}">'
+                                  '<skipped/></testcase></testsuite>')
+            return 0, ""
+
+        with patch.object(ci.sys, "platform", "linux"), patch.object(recorder, "command", side_effect=fresh):
+            summaries, failures = ci.run_modes(recorder, selection)
+        self.assertEqual(len(summaries), 2)
+        self.assertIn("Default and dense handoff executed different testcase sets", failures)
 
     def test_linked_test_output_rejected(self):
         source = self.root / "build/test-results/test"
