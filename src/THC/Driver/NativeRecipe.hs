@@ -273,6 +273,9 @@ splitModule text = case break (== '.') text of (name,[]) -> [name]; (name,_:rest
 componentArtifacts :: FilePath -> [FilePath] -> Value -> IO ([FilePath], [FilePath])
 componentArtifacts dist allRoots component = do
   roots <- componentRoots dist component
+  -- Callers may retain separator or dot aliases of the same output directory.
+  -- Compare canonical owners so an alias cannot masquerade as a nested sibling.
+  owners <- nub <$> mapM canonicalizePath allRoots
   kind <- field component "type" :: IO String
   -- Cabal 3.16 build-info reports the base build directory, but its GHC
   -- builder nests executable artifacts in <name>/<name>-tmp and named-library
@@ -313,7 +316,7 @@ componentArtifacts dist allRoots component = do
   let haskellRoots = nub (roots ++ artifacts)
       owns path = any (`within` path) roots &&
         not (any (\other -> other `notElem` roots && within other path &&
-          any (\own -> own /= other && within own other) roots) allRoots)
+          any (\own -> own /= other && within own other) roots) owners)
   paths <- sort . nub . filter owns . concat <$> mapM files roots
   pure (haskellRoots, paths)
   where

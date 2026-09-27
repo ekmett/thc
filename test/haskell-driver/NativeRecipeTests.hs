@@ -124,18 +124,20 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         componentNativeDeclarations (component False "x86_64-windows" "ghc-9.14.1")
       absent <- tryIOError (componentNativeDeclarations (configured (object []) "x86_64-linux" "ghc-9.14.1"))
       assertBool "missing plan flags do not silently pick defaults" (isLeft absent)
-  , TestCase $ do
-      let args = ["-package-env=-","-c","-fPIC","-odir","/owned build","-pgmc","/usr/bin/gcc",
-                  "cbits/a.c","-O2","-optc-O2","-pgmc","/selected/clang","-fforce-recomp"]
+  , TestCase $ withScratch $ \root -> do
+      let compiler = root </> "selected" </> "clang"
+          args = ["-package-env=-","-c","-fPIC","-odir",root </> "owned build","-pgmc",root </> "gcc",
+                  "cbits/a.c","-O2","-optc-O2","-pgmc",compiler,"-fforce-recomp"]
       assertEqual "last explicit compiler wins and repair flag is harmless"
-        (Right ("cbits/a.c","/selected/clang",["-O2"])) (cRecipeOptions args)
+        (Right ("cbits/a.c",compiler,["-O2"])) (cRecipeOptions args)
       mapM_ (assertBool "unsupported native recipes are closed" . isLeft . cRecipeOptions)
         [args ++ ["extra.c"], args ++ ["x.cpp"], args ++ ["-optc-fsanitize=address"],
-         args ++ ["-pgma","/other/assembler"], args ++ ["-dynamic"], args ++ ["-prof"]]
+         args ++ ["-pgma",root </> "other" </> "assembler"], args ++ ["-dynamic"], args ++ ["-prof"],
+         args ++ ["-pgmc","relative/clang"]]
   , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
       let native = root </> "native"
           dist = native </> "build"
-          output = dist </> "cbits/proof.o"
+          output = dist </> "cbits" </> "proof.o"
           receipts = native </> "cache/thc/native-recipes-v1"
           component = metadata root dist
       createDirectoryIfMissing True (dist </> "cbits")
@@ -176,7 +178,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       assertBool "two declared sources cannot reuse one surviving object and receipt" (isLeft omitted)
       assertEqual "incomplete multiple-source inventory attempts one targeted rebuild" (before + 1) =<< readIORef calls
       writePackage root True
-      let child = dist </> "exe/exe-tmp"
+      let child = dist </> "exe" </> "exe-tmp"
       createDirectoryIfMissing True child
       writeFile (child </> "foreign.o") "other-component"
       assertEqual "nested component owns its objects" [output] =<<
@@ -198,9 +200,9 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       assertBool "public declaration guard rejects hidden C after receipt loss" (isLeft hidden)
   , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
       let native = root </> "native"
-          dist = native </> "build/scalar-first-0.1.0.0/x/oracle"
+          dist = native </> "build" </> "scalar-first-0.1.0.0" </> "x" </> "oracle"
           build = dist </> "build"
-          artifacts = build </> "oracle/oracle-tmp"
+          artifacts = build </> "oracle" </> "oracle-tmp"
           output = artifacts </> "Main.o"
           receipts = native </> "cache/thc/native-recipes-v1"
           -- Cabal 3.16.1's actual Linux scalar fixture build-info: modules is
@@ -233,7 +235,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       noC <- withScalarBitcode native dist [build] "/unused" "/unused" "scalar-first-inplace-oracle"
         component (pure . maybe True (const False))
       assertBool "ordinary executable requires no C recipe or native tools" noC
-      let unrelated = build </> "other/other-tmp"
+      let unrelated = build </> "other" </> "other-tmp"
       createDirectoryIfMissing True unrelated
       writeFile (unrelated </> "Main.o") "unknown object"
       writeFile (unrelated </> "Main.hi") "interface"
@@ -255,7 +257,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       assertBool "executable declaration guard rejects hidden C after receipt loss" (isLeft hidden)
   , TestCase $ withScratch $ \root -> withCurrentDirectory root $ do
       let native = root </> "native"
-          dist = native </> "build/app-run-0.1.0.0/l/bridge"
+          dist = native </> "build" </> "app-run-0.1.0.0" </> "l" </> "bridge"
           build = dist </> "build"
           artifacts = build </> "bridge"
           receipts = native </> "cache/thc/native-recipes-v1"
@@ -275,7 +277,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
         ["cabal-version: 3.0","name: app-run","version: 0.1.0.0","build-type: Simple",
          "library bridge","  exposed-modules: Bridge","  other-modules: Paths_app_run, Nested.Part",
          "  hs-source-dirs: src","  build-depends: base"]
-      forM_ ["Bridge", "Paths_app_run", "Nested/Part"] $ \name ->
+      forM_ ["Bridge", "Paths_app_run", "Nested" </> "Part"] $ \name ->
         forM_ ["o", "hi", "dyn_o", "dyn_hi"] $ \suffix ->
           writeFile (artifacts </> name <.> suffix) suffix
       assertEqual "named library excludes only its declared paired Haskell objects" [] =<< inventory
@@ -287,7 +289,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       assertEqual "another parsed component name cannot exempt bridge objects" 6 (length wrongName)
       invalid <- tryIOError $ componentNativeObjects native dist [build] (metadataFor "exe:bridge")
       assertBool "library kind requires a parsed library name" (isLeft invalid)
-      forM_ [build </> "other/Bridge", artifacts </> "Unlisted"] $ \unknown -> do
+      forM_ [build </> "other" </> "Bridge", artifacts </> "Unlisted"] $ \unknown -> do
         createDirectoryIfMissing True (takeDirectory unknown)
         writeFile (unknown <.> "o") "unknown object"
         writeFile (unknown <.> "hi") "interface"
@@ -297,7 +299,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
           [("vanilla", "Unlisted", unknown <.> "hi") | unknown == artifacts </> "Unlisted"] candidates
         removeFile (unknown <.> "o")
         removeFile (unknown <.> "hi")
-      let child = artifacts </> "child/child-tmp"
+      let child = artifacts </> "child" </> "child-tmp"
       createDirectoryIfMissing True child
       writeFile (child </> "foreign.o") "another component"
       assertEqual "nested component ownership survives the named-library layout" [] =<<
@@ -322,7 +324,7 @@ tests = TestLabel "actual native compiler receipts" $ TestList
   , TestCase $ withScratch $ \root -> do
       let dist = root </> "build"
           artifacts = dist </> "Upper"
-          iface = artifacts </> "Nested/Unlisted.hi"
+          iface = artifacts </> "Nested" </> "Unlisted.hi"
           component = object ["type" .= ("lib" :: String), "name" .= ("lib:Upper" :: String),
             "modules" .= ([] :: [String]), "src-dir" .= root,
             "compiler-args" .= ["-outputdir",dist,"-odir",dist,"-hidir",dist]]
@@ -330,6 +332,20 @@ tests = TestLabel "actual native compiler receipts" $ TestList
       writeFile iface "candidate only; GHC must verify the binary identity"
       assertEqual "most-specific artifact root does not invent a component-name module prefix"
         [("vanilla","Nested.Unlisted",iface)] =<< componentHomeInterfaces dist [dist] component
+      let slash path = map (\character -> if isPathSeparator character then '/' else character) path
+          aliases = [dist, dist </> ".", slash dist]
+          native = root </> "native"
+          output = artifacts </> "Foreign.o"
+          sibling = artifacts </> "Sibling"
+      writeFile output "native inventory control"
+      createDirectory sibling
+      writeFile (sibling </> "Hidden.hi") "another component's candidate"
+      writeFile (sibling </> "Hidden.o") "another component's native object"
+      let owners = aliases ++ [slash sibling </> "."]
+      assertEqual "canonical root aliases retain home interfaces but exclude the nested owner"
+        [("vanilla","Nested.Unlisted",iface)] =<< componentHomeInterfaces dist owners component
+      assertEqual "canonical root aliases cannot hide a native object or admit a sibling's object"
+        [output] =<< componentNativeObjects native dist owners component
   , TestCase $ withScratch $ \root -> do
       let native = root </> "native"; dist = native </> "build"; component = metadata root dist
       createDirectoryIfMissing True dist
@@ -418,7 +434,13 @@ writePackage root native = writeFile (root </> "proof.cabal") $ unlines
    ["  c-sources: cbits/proof.c" | native])
 
 withScratch :: (FilePath -> IO a) -> IO a
-withScratch = bracket create removePathForcibly
+withScratch action = bracket create removePathForcibly $ \parent -> do
+  -- Windows openTempFile may shorten its template to an ASCII natXXXX name.
+  -- Use an explicit child so every filesystem and binary-interface control
+  -- really crosses a path containing spaces and non-ASCII characters.
+  let root = parent </> "component café λ"
+  createDirectory root
+  canonicalizePath root >>= action
   where create = do
           temporary <- getTemporaryDirectory
           (path,handle) <- openTempFile temporary "native recipe café-"
