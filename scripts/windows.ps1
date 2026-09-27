@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 param(
-    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')]
+    [ValidateSet('Build', 'Runtime', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')]
     [string]$Action = 'Build',
     [ValidateRange(1, 32)][int]$Jobs = 4
 )
@@ -19,7 +19,7 @@ try {
         Assert-ThcJava
         Invoke-ThcTool "$root/gradlew.bat" @('--no-daemon', "--max-workers=$Jobs", 'installDist', 'toolsJar')
     }
-    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')) {
+    if ($Action -in @('Build', 'Haskell', 'Fixtures', 'Test', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest', 'LibdwTest', 'MallocTest', 'JsonIndexTest', 'CheckCore')) {
         $tools = Get-ThcGhc
         $env:GHC = $tools.Compiler
         $env:GHC_PKG = $tools.PackageTool
@@ -63,12 +63,20 @@ try {
             'thc.runtime.PinnedPointerCellsTest.nonOverlappingAddressCopyPreservesPointerCellsAndRejectsInvalidRegions',
             'thc.runtime.ScalarMemoryUtilitiesTest.addressRangesAndPointerCellsAreCheckedBeforeEffects')
     }
-    if ($Action -in @('Test', 'DirectoryTest')) {
+    if ($Action -eq 'WindowsServicesTest') {
+        Assert-ThcJava
+        $focusedTests += @('thc.runtime.PosixStdioHostAbiModelTest', 'thc.runtime.StdioHostAbiFailureTest',
+            'thc.runtime.WindowsStdioHostAbiTest')
+    }
+    if ($Action -in @('Test', 'DirectoryTest', 'CodePageTest', 'WindowsServicesTest')) {
+        $focusedTests += 'thc.runtime.WindowsAbiInitializationTest'
+    }
+    if ($Action -in @('Test', 'DirectoryTest', 'WindowsServicesTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-directory')
         $focusedTests += 'thc.runtime.WindowsDirectoryStreamsTest'
     }
-    if ($Action -in @('Test', 'CodePageTest')) {
+    if ($Action -in @('Test', 'CodePageTest', 'WindowsServicesTest')) {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('windows-codepages')
         $focusedTests += 'thc.runtime.WindowsCodePagesTest'

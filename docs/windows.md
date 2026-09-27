@@ -375,6 +375,10 @@ This does not use `GetLastError` for C allocation failures. The existing context
 ownership, ordered borrows, bounds, allocate/copy/retire realloc and disposal
 rules are shared with Linux; LocalFree allocations keep their own deallocator.
 
+Run `./scripts/windows.ps1 -Action WindowsServicesTest -Jobs 2` to build both native
+directory/code-page oracles and test both services plus the ABI parser controls
+in one Gradle invocation with both handoff modes.
+
 Run `./scripts/windows.ps1 -Action MallocTest -Jobs 2` to build the pinned native
 GHC oracle and distribution and run the allocation/returned-pointer/descriptor
 checks in `testDefault` and `testDense` together. It also runs portable Linux/macOS

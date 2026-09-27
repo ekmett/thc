@@ -123,7 +123,7 @@ def validate_xml(directory, expected):
             # assumption abort, partial suite or missing Windows run as a pass.
             require(sys.platform == "linux" and name in (
                         "thc.WindowsDistributionTest", "thc.runtime.WindowsDirectoryStreamsTest",
-                        "thc.runtime.WindowsCodePagesTest")
+                        "thc.runtime.WindowsCodePagesTest", "thc.runtime.WindowsAbiInitializationTest")
                     and len(skipped) == count and int(suite.attrib.get("skipped", "0")) == count
                     and all(len(case.findall("skipped")) == 1 for case in children),
                     f"Unsuccessful testcase in {name}")
