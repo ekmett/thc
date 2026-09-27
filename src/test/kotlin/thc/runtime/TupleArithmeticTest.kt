@@ -5,8 +5,11 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -227,14 +230,49 @@ class TupleArithmeticTest {
             8 to listOf(TupleArithmeticOp.QUOT_REM_INT8, TupleArithmeticOp.QUOT_REM_WORD8),
             16 to listOf(TupleArithmeticOp.QUOT_REM_INT16, TupleArithmeticOp.QUOT_REM_WORD16),
             32 to listOf(TupleArithmeticOp.QUOT_REM_INT32, TupleArithmeticOp.QUOT_REM_WORD32))) {
-            for (operation in operations) for (zero in listOf(0L, 1L shl bits)) {
+            for (operation in operations) for (zero in listOf(0, (1L shl bits).toInt())) {
                 assertEquals("Undefined input to ${operation.primitive}",
-                    assertThrows(RuntimeFault::class.java) { operation.first(7L, zero) }.message)
+                    assertThrows(RuntimeFault::class.java) { operation.firstInt(7, zero) }.message)
                 assertEquals("Undefined input to ${operation.primitive}",
-                    assertThrows(RuntimeFault::class.java) { operation.second(7L, zero) }.message)
-                assertEquals(2L, operation.first(7L, 3L))
-                assertEquals(1L, operation.second(7L, 3L))
+                    assertThrows(RuntimeFault::class.java) { operation.secondInt(7, zero) }.message)
+                assertEquals(2, operation.firstInt(7, 3))
+                assertEquals(1, operation.secondInt(7, 3))
             }
+        }
+    }
+
+    @Test fun narrowDivisionFirstInstalledResultAndColdFaultRetainExistingSemantics() {
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                for (operation in TupleArithmeticOp.entries.filter { it.isInt }) for (field in 0..1) {
+                    val root = object : RootNode(language) {
+                        var compiledEntries = 0L
+                        override fun execute(frame: VirtualFrame): Any {
+                            if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                            val left = frame.arguments[0] as Int
+                            val right = frame.arguments[1] as Int
+                            return if (field == 0) operation.firstInt(left, right)
+                                else operation.secondInt(left, right)
+                        }
+                    }
+                    val target = root.callTarget
+                    assertEquals(if (field == 0) 2 else 1, target.call(7, 3))
+                    val before = root.compiledEntries
+                    compile(target)
+                    assertEquals(before, root.compiledEntries, "Compilation must not execute arithmetic")
+                    assertEquals(if (field == 0) 2 else 3, target.call(13, 5))
+                    assertEquals(before + 1, root.compiledEntries, "Immediate installed arithmetic result")
+                    valid(target)
+                    val failure = assertThrows(RuntimeFault::class.java) { target.call(7, 0) }
+                    assertEquals("Undefined input to ${operation.primitive}", failure.message)
+                    assertEquals(before + 2, root.compiledEntries, "Cold fault enters installed code")
+                    // Preserve fault's existing interpreter/invalidation behavior;
+                    // only the normal first installed call promises retention.
+                    assertEquals(if (field == 0) 2 else 1, target.call(7, 3))
+                }
+            } finally { context.leave() }
         }
     }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import thc.Language
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -45,7 +46,10 @@ internal class CompilerRts {
 
     fun readFlagByte(byteOffset: Long): Long {
         requireCurrent()
-        if (byteOffset != 403L) fault("Unsupported RtsFlags byte field at offset $byteOffset")
+        if (byteOffset != 403L) {
+            CompilerDirectives.transferToInterpreter()
+            fault("Unsupported RtsFlags byte field at offset $byteOffset")
+        }
         // THC user trace primops always emit to context stderr, independently of
         // the final diagnostics-counter option. This is not native eventlog status.
         return 1L

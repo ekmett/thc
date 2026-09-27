@@ -68,13 +68,19 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     fun firstInt(left: Int, right: Int): Int {
         if (!isInt) fault("Expected narrow tuple arithmetic")
         val x = narrowInt(left); val y = narrowInt(right)
-        if (y == 0) fault("Undefined input to $primitive")
+        if (y == 0) {
+            CompilerDirectives.transferToInterpreter()
+            fault("Undefined input to $primitive")
+        }
         return narrowInt(if (unsigned) Integer.divideUnsigned(x, y) else x / y)
     }
     fun secondInt(left: Int, right: Int): Int {
         if (!isInt) fault("Expected narrow tuple arithmetic")
         val x = narrowInt(left); val y = narrowInt(right)
-        if (y == 0) fault("Undefined input to $primitive")
+        if (y == 0) {
+            CompilerDirectives.transferToInterpreter()
+            fault("Undefined input to $primitive")
+        }
         return narrowInt(if (unsigned) Integer.remainderUnsigned(x, y) else x % y)
     }
 
