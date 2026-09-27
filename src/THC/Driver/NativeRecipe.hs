@@ -13,7 +13,7 @@
 -- Receipts of actual successful Cabal compiler calls, never setup-config data.
 module THC.Driver.NativeRecipe
   ( NativeRecipe(..), captureNativeRecipe, readNativeRecipe, recipePath
-  , componentRoots, componentNativeObjects, componentNativeDeclarations, componentRuntimeShim, componentDeclaredModules
+  , componentRoots, componentNativeObjects, componentHomeInterfaces, componentNativeDeclarations, componentRuntimeShim, componentDeclaredModules
   , ensureNativeRecipes, cRecipeOptions ) where
 
 import Control.Monad (filterM, forM, unless, when)
@@ -24,10 +24,12 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.List (isPrefixOf, nub, sort)
+import Data.Maybe (mapMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text as Text
 import Distribution.Compiler (unknownCompilerInfo, AbiTag(NoAbiTag))
+import Distribution.ModuleName (ModuleName)
 import Distribution.PackageDescription (PackageDescription, BuildInfo, customFieldsBI,
   buildType, BuildType(Simple), cSources, cxxSources, asmSources, cmmSources, jsSources,
   genPackageFlags, flagName, mkFlagAssignment, mkFlagName, unFlagName, otherModules)
@@ -219,8 +221,58 @@ configuredBuildInfo component = do
 -- output directory can otherwise accidentally include a sibling executable.
 componentNativeObjects :: FilePath -> FilePath -> [FilePath] -> Value -> IO [FilePath]
 componentNativeObjects native dist allRoots component = do
-  roots <- componentRoots dist component
+  (haskellRoots, paths) <- componentArtifacts dist allRoots component
   modules <- field component "modules"
+  kind <- field component "type" :: IO String
+  let names = nub (modules ++ ["Main" | kind `elem` ["exe", "bench", "test"]])
+      expected = [joinPath (splitModule name) | name <- names]
+  filterM (\path -> do
+    let extension = takeExtension path
+        object = extension `elem` [".o", ".dyn_o", ".p_o", ".p_dyn_o"]
+        iface = replaceExtension path (drop 1 extension ++ "-unused")
+        hi = case extension of ".o" -> replaceExtension path "hi"; ".dyn_o" -> replaceExtension path "dyn_hi"; _ -> iface
+        moduleObject = any (\root -> dropExtension (makeRelative root path) `elem` expected) haskellRoots
+    receiptExists <- doesFileExist (recipePath (native </> "cache/thc/native-recipes-v1") path)
+    unless (not (object && moduleObject && receiptExists))
+      (fail ("Cabal Haskell/native object collision: " ++ path))
+    hasInterface <- doesFileExist hi
+    pure (object && not (moduleObject && hasInterface))) paths
+
+-- Candidate names are only filesystem coordinates, not authority. The selected
+-- GHC must check every returned binary interface's actual unit/module/way before
+-- the caller can add a name to the component inventory. Declared modules retain
+-- their existing Cabal authority; this recovers only compiler-discovered extras.
+componentHomeInterfaces :: FilePath -> [FilePath] -> Value -> IO [(String, String, FilePath)]
+componentHomeInterfaces dist allRoots component = do
+  (roots, paths) <- componentArtifacts dist allRoots component
+  modules <- field component "modules"
+  kind <- field component "type" :: IO String
+  let declared = modules ++ ["Main" | kind `elem` ["exe", "bench", "test"]]
+      candidate root path = do
+        way <- case takeExtension path of
+          ".hi" -> Just "vanilla"
+          ".dyn_hi" -> Just "dynamic"
+          _ -> Nothing
+        let relative = dropExtension (makeRelative root path)
+            name = concatWithDots (splitDirectories relative)
+        parsed <- either (const Nothing) Just (eitherParsec name :: Either String ModuleName)
+        let mostSpecific = within root path && not (any (\other -> other /= root &&
+              within root other && within other path) roots)
+        if mostSpecific && prettyShow parsed == name && name `notElem` declared
+          then Just (way, name, path) else Nothing
+  pure (sort (nub (concatMap (\path -> mapMaybe (`candidate` path) roots) paths)))
+  where concatWithDots [] = ""
+        concatWithDots [part] = part
+        concatWithDots (part:rest) = part ++ "." ++ concatWithDots rest
+
+splitModule :: String -> [String]
+splitModule text = case break (== '.') text of (name,[]) -> [name]; (name,_:rest) -> name:splitModule rest
+
+-- Both discovery and native classification use the same canonical component
+-- ownership and exact Cabal artifact layouts.
+componentArtifacts :: FilePath -> [FilePath] -> Value -> IO ([FilePath], [FilePath])
+componentArtifacts dist allRoots component = do
+  roots <- componentRoots dist component
   kind <- field component "type" :: IO String
   -- Cabal 3.16 build-info reports the base build directory, but its GHC
   -- builder nests executable artifacts in <name>/<name>-tmp and named-library
@@ -259,25 +311,12 @@ componentNativeObjects native dist allRoots component = do
     [directory </> suffix | suffix <- suffixes,
       (flag,directory) <- zip arguments (drop 1 arguments), flag `elem` ["-odir", "-outputdir"]]
   let haskellRoots = nub (roots ++ artifacts)
-  let names = nub (modules ++ ["Main" | kind `elem` ["exe", "bench", "test"]])
-      expected = [joinPath (splitModule name) | name <- names]
       owns path = any (`within` path) roots &&
         not (any (\other -> other `notElem` roots && within other path &&
           any (\own -> own /= other && within own other) roots) allRoots)
   paths <- sort . nub . filter owns . concat <$> mapM files roots
-  filterM (\path -> do
-    let extension = takeExtension path
-        object = extension `elem` [".o", ".dyn_o", ".p_o", ".p_dyn_o"]
-        iface = replaceExtension path (drop 1 extension ++ "-unused")
-        hi = case extension of ".o" -> replaceExtension path "hi"; ".dyn_o" -> replaceExtension path "dyn_hi"; _ -> iface
-        moduleObject = any (\root -> dropExtension (makeRelative root path) `elem` expected) haskellRoots
-    receiptExists <- doesFileExist (recipePath (native </> "cache/thc/native-recipes-v1") path)
-    unless (not (object && moduleObject && receiptExists))
-      (fail ("Cabal Haskell/native object collision: " ++ path))
-    hasInterface <- doesFileExist hi
-    pure (object && not (moduleObject && hasInterface))) paths
+  pure (haskellRoots, paths)
   where
-    splitModule text = case break (== '.') text of (name,[]) -> [name]; (name,_:rest) -> name:splitModule rest
     files root = do
       exists <- doesDirectoryExist root
       entries <- if exists then listDirectory root else pure []

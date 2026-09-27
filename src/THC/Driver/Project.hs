@@ -61,7 +61,7 @@ import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
-  readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules)
+  readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules, componentHomeInterfaces)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
@@ -436,10 +436,13 @@ runBuiltProject action project working thcRoot runtime output native target proj
   builtComponents <- forM builtLocals $ \unit -> do
     component <- readComponentMetadata (unitId unit `elem` map unitId ordered) unit context
     pure (unit, component)
-  let localComponents = filter (\(unit, _) -> unitId unit `elem` map unitId ordered) builtComponents
   roots <- fmap (sort . nub . concat) $ forM builtComponents $ \(unit, component) -> do
     dist <- field (unitValue unit) "dist-dir"
     componentRoots dist (componentValue component)
+  localComponents <- forM (filter (\(unit, _) -> unitId unit `elem` map unitId ordered) builtComponents) $
+    \(unit, component) -> do
+      completed <- completeHomeModules context roots unit component
+      pure (unit, completed)
   -- Repair missing native receipts through Cabal itself; never reconstruct
   -- the missing compiler invocation from a binary setup-config.
   forM_ localComponents $ \(unit, component) -> do
@@ -1600,7 +1603,7 @@ readGlobalBundleCold path unit dependencies buildKey exportKey = do
 
 exportUnit :: ExportContext -> [FilePath] -> Map.Map String String -> Unit -> IO Bundle
 exportUnit context roots keys unit = do
-  component <- readComponent unit context
+  component <- readComponent unit context >>= completeHomeModules context roots unit
   dist <- field (unitValue unit) "dist-dir"
   runtimeShim <- componentRuntimeShim (componentValue component)
   if runtimeShim
@@ -1952,6 +1955,44 @@ expectedModuleNames component = do
 
 readComponent :: Unit -> ExportContext -> IO Component
 readComponent = readComponentMetadata True
+
+-- Cabal's declared modules need not enumerate all home imports accepted by GHC
+-- --make (older packages such as HsColour legitimately omit other-modules).
+-- Complete that inventory from actual, component-owned binary interfaces, never
+-- imports, arbitrary neighboring files, or the later exporter output itself.
+completeHomeModules :: ExportContext -> [FilePath] -> Unit -> Component -> IO Component
+completeHomeModules context roots unit component = do
+  dist <- field (unitValue unit) "dist-dir"
+  candidates <- componentHomeInterfaces dist roots (componentValue component)
+  if null candidates then pure component else do
+    helper <- prepareInterfaceHelper context (contextRoot context)
+    forM_ ["vanilla", "dynamic"] $ \way -> do
+      let selected = [(name, path) | (actualWay, name, path) <- candidates, actualWay == way]
+          names = map fst selected
+          rows = [object ["unit" .= unitId unit, "module" .= name, "interface" .= path]
+                 | (name, path) <- selected]
+      require (length names == length (nub names)) "ambiguous compiler-discovered home module interfaces"
+      unless (null selected) $ do
+        (status, output, diagnostic) <- readCreateProcessWithExitCode
+          (proc (installedHelper helper) ["--home-interface-inventory", installedLibdir helper, unitId unit, way])
+          (Text.unpack (Text.decodeUtf8 (BL.toStrict (encode rows))))
+        require (status == ExitSuccess) ("home interface identity check failed: " ++ take 4096 diagnostic)
+        response <- either fail pure (eitherDecodeStrict' (Text.encodeUtf8 (Text.pack output)))
+        require (jsonField response "schema" == Just (1 :: Int) &&
+                 jsonField response "status" == Just ("home-interfaces" :: String) &&
+                 jsonField response "unit" == Just (unitId unit) &&
+                 jsonField response "way" == Just way &&
+                 jsonField response "interfaces" == Just rows)
+          "home interface helper returned a different component inventory"
+    declared <- field (componentValue component) "modules" :: IO [String]
+    let modules = sort (nub (declared ++ [name | (_,name,_) <- candidates]))
+    completed <- case componentValue component of
+      Object fields -> pure (Object (KeyMap.insert "modules" (Aeson.toJSON modules) fields))
+      _ -> fail "Cabal component metadata must be an object"
+    -- Keep the original compilation targets; GHC rediscovers their imports.
+    -- Adding the discovered modules as source targets could change Main naming
+    -- or incorrectly demand a source for compiler-generated modules.
+    pure component {componentValue = completed}
 
 readComponentMetadata :: Bool -> Unit -> ExportContext -> IO Component
 readComponentMetadata selected unit context = do

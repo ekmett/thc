@@ -90,6 +90,10 @@ main = do
   hSetEncoding stdout utf8
   arguments <- getArgs
   case arguments of
+    ["--home-interface-inventory",lib,owner,selectedWay] -> do
+      inventory <- homeInterfaceInventory lib owner selectedWay
+      BL.putStrLn (encode inventory)
+      exitWith ExitSuccess
     "--windows-ghc-source-graph":lib:source:objects:includes@(_:_) -> do
       graph <- windowsSourceGraph lib source objects includes
       BL.putStrLn (encode graph)
@@ -119,6 +123,22 @@ main = do
     synchronous failure = case Exception.fromException failure :: Maybe Exception.SomeAsyncException of
       Just _ -> Nothing
       Nothing -> Just (failure :: Exception.SomeException)
+
+-- Private batch protocol: the driver already checked canonical component
+-- ownership. GHC verifies each binary interface's version, way and exact Module;
+-- no unfolding hydration, dependency traversal or guest compilation occurs.
+homeInterfaceInventory :: FilePath -> String -> String -> IO Value
+homeInterfaceInventory lib owner selectedWay = do
+  unless (selectedWay `elem` ["vanilla", "dynamic"]) (fail "Unsupported home interface way")
+  entries <- (either fail pure . eitherDecode =<< BL.getContents) :: IO [ProbeEntry]
+  let options = Options lib owner "" "" selectedWay [] False False False (Just ".")
+  withSelected options $ \environment -> do
+    rows <- forM entries $ \(ProbeEntry identifier name path) -> do
+      unless (identifier == owner) (fail "Home interface request has another unit owner")
+      checkInterfaceIdentity environment (mkModule (stringToUnit owner) (mkModuleName name)) path
+      pure $ object ["unit" .= owner, "module" .= name, "interface" .= path]
+    pure $ object ["schema" .= (1 :: Int), "status" .= ("home-interfaces" :: String),
+      "unit" .= owner, "way" .= selectedWay, "interfaces" .= rows]
 
 -- Private protocol for the genuine vanilla ghc-internal build. GHC's own
 -- dependency analysis preserves SOURCE imports and hs-boot ordering. Prim is
