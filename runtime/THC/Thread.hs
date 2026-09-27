@@ -6,7 +6,7 @@
 -- host-thread access, raw pinning or Java interruption. Guest forks currently
 -- use platform threads; affinity operations refuse virtual-thread callers.
 module THC.Thread
-  ( Availability(..), ThreadKind(..), ThreadInfo(..), ThreadAccounting(..)
+  ( Available(..), ThreadKind(..), ThreadInfo(..), ThreadAccounting(..)
   , CpuCoordinate(..), currentThreadInfo, currentThreadAccounting, eligibleCPUs
   , CpuAffinitySupport(..), cpuAffinitySupport, affinityApplied, forkOnWithAffinity
   ) where
@@ -25,20 +25,20 @@ data CpuAffinitySupport = NoCpuAffinity | AdvisoryCpuAffinity | PinnedCpuAffinit
 
 -- | Logical lock/request information is not evidence of OS pin acceptance.
 data ThreadInfo = ThreadInfo
-  { threadKind :: Availability ThreadKind
-  , logicalCapability :: Availability Int
-  , logicalCapabilityLocked :: Availability Bool
-  , threadAffinitySupport :: Availability CpuAffinitySupport
-  , threadAffinityApplied :: Availability Bool
+  { threadKind :: Available ThreadKind
+  , logicalCapability :: Available Int
+  , logicalCapabilityLocked :: Available Bool
+  , threadAffinitySupport :: Available CpuAffinitySupport
+  , threadAffinityApplied :: Available Bool
   } deriving (Eq, Show)
 
 -- | Cumulative accounting for the currently executing JVM thread. Does not
 -- enable monitoring, and is not an allocation/time budget. On a platform
 -- thread these counters include other host work performed on that thread.
 data ThreadAccounting = ThreadAccounting
-  { threadCpuNanoseconds :: Availability Word64
-  , threadUserNanoseconds :: Availability Word64
-  , threadAllocatedBytes :: Availability Word64
+  { threadCpuNanoseconds :: Available Word64
+  , threadUserNanoseconds :: Available Word64
+  , threadAllocatedBytes :: Available Word64
   } deriving (Eq, Show)
 
 -- | OS coordinate: Linux group zero plus sparse OS CPU ID; Windows processor
@@ -62,9 +62,9 @@ currentThreadAccounting = ThreadAccounting <$> queryWord64 105 0 0 <*> queryWord
 -- | Initial context eligibility in dense capability order, capped by the
 -- JVM's CPU capacity. This is not a live process-affinity query. Unavailable
 -- discovery is explicit, rather than a fabricated list of CPU IDs.
-eligibleCPUs :: IO (Availability [CpuCoordinate])
+eligibleCPUs :: IO (Available [CpuCoordinate])
 eligibleCPUs = do
-  count <- query 108 0 0 :: IO (Availability Int64)
+  count <- query 108 0 0 :: IO (Available Int64)
   case count of
     Available size -> collect [0 .. size - 1] []
     Unsupported -> pure Unsupported

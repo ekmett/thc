@@ -5,7 +5,7 @@
 -- | Read-only memory accounting. A record contains independently sampled
 -- fields, not an atomic snapshot. All sizes are bytes.
 module THC.Memory
-  ( Availability(..), MemoryUsage(..), NativeAllocationUsage(..)
+  ( Available(..), MemoryUsage(..), NativeAllocationUsage(..)
   , heapUsage, nonHeapUsage, nativeAllocationUsage
   ) where
 
@@ -14,10 +14,10 @@ import THC.Internal.RuntimeABI
 
 -- | JVM-wide usage. Unknown maximum/initial sizes are 'Unavailable', not zero.
 data MemoryUsage = MemoryUsage
-  { usedBytes :: Availability Word64
-  , committedBytes :: Availability Word64
-  , maximumBytes :: Availability Word64
-  , initialBytes :: Availability Word64
+  { usedBytes :: Available Word64
+  , committedBytes :: Available Word64
+  , maximumBytes :: Available Word64
+  , initialBytes :: Available Word64
   } deriving (Eq, Show)
 
 -- | Only live allocations owned by the current THC context's libc allocator.
@@ -25,8 +25,8 @@ data MemoryUsage = MemoryUsage
 -- and allocator overhead. Includes allocations awaiting outstanding borrowers
 -- before release. This is not process RSS or total native memory.
 data NativeAllocationUsage = NativeAllocationUsage
-  { nativeRequestedBytes :: Availability Word64
-  , nativeAllocationCount :: Availability Word64
+  { nativeRequestedBytes :: Available Word64
+  , nativeAllocationCount :: Available Word64
   } deriving (Eq, Show)
 
 heapUsage :: IO MemoryUsage

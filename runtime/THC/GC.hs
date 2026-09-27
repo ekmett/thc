@@ -4,24 +4,24 @@
 
 -- | JVM-wide collector statistics. These queries neither force a collection
 -- nor enable monitoring. Values are independently sampled and cumulative.
-module THC.GC (Availability(..), CollectorStats(..), collectors) where
+module THC.GC (Available(..), CollectorStats(..), collectors) where
 
 import Data.Int (Int64)
 import Data.Word (Word64)
 import THC.Internal.RuntimeABI
 
 data CollectorStats = CollectorStats
-  { collectorName :: Availability String
-  , collectionCount :: Availability Word64
-  , collectionMilliseconds :: Availability Word64
+  { collectorName :: Available String
+  , collectionCount :: Available Word64
+  , collectionMilliseconds :: Available Word64
     -- ^ Approximate elapsed collection time, not pause time or CPU time.
   } deriving (Eq, Show)
 
 -- | Enumerate collectors. Individual optional/invalidated counters retain
 -- their own status. An empty available list is different from no JVM support.
-collectors :: IO (Availability [CollectorStats])
+collectors :: IO (Available [CollectorStats])
 collectors = do
-  count <- query 300 0 0 :: IO (Availability Int64)
+  count <- query 300 0 0 :: IO (Available Int64)
   case count of
     Available size -> Available <$> traverse readCollector [0 .. size - 1]
     Unsupported -> pure Unsupported

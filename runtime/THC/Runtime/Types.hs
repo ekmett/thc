@@ -3,10 +3,10 @@
 {-# LANGUAGE DeriveFunctor, Safe #-}
 
 -- | Shared public result type, re-exported by the service modules.
-module THC.Runtime.Types (Availability(..)) where
+module THC.Runtime.Types (Available(..)) where
 
 -- | An absent metric is not zero. Queries never enable JVM-wide monitoring.
-data Availability a
+data Available a
   = Available a -- ^ A genuine value; its scope is specified by the query.
   | Unsupported -- ^ The runtime or provider does not implement this service.
   | Disabled -- ^ Supported, but its instrumentation or sink is switched off.
