@@ -125,6 +125,20 @@ tests = TestLabel "bounded installed-interface hydration" $ TestList
       response <- timeout 5000000 (boundedInterfaceProcessInput executable ["--binary-input-fixture"] request)
       assertEqual "binary Unicode input and both large outputs make progress without locale conversion"
         (Just (ExitSuccess, pipePayload <> request, pipePayload)) response
+  , TestCase $ fixture ["A"] $ \directory context unit -> do
+      writeFile (directory </> "A.mode") "slow"
+      result <- newEmptyMVar
+      thread <- forkFinally (boundedInterfaceProcessInput (installedHelper context)
+        (helperCommand context unit ("A", directory </> "A.dyn_hi")) pipePayload) (putMVar result)
+      flip finally (killThread thread >> readMVar result >> pure ()) $ do
+        awaitFile (directory </> "A.started")
+        killThread thread
+        failed <- readMVar result
+        assertBool "Cancellation propagates while the helper leaves a large request unread"
+          (case failed of Left _ -> True; _ -> False)
+        threadDelay 2100000
+        finished <- doesFileExist (directory </> "A.finished")
+        assertBool "Blocked input writer cannot delay child termination" (not finished)
   , TestCase $ fixture ["A", "B", "C", "D"] $ \directory context unit -> do
       serial <- acquireInstalledWithJobs 1 context unit
       forM_ ["A", "B", "C", "D"] $ \name -> do

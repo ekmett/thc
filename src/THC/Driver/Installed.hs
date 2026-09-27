@@ -22,7 +22,7 @@ module THC.Driver.Installed
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
-import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, throwIO, try)
+import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, onException, throwIO, try)
 import Control.Monad (filterM, foldM, forM, forM_, unless, void)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
@@ -47,7 +47,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator)
 import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
-                       waitForProcess, withCreateProcess)
+                       terminateProcess, waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
 import qualified Data.Text as Text
@@ -457,22 +457,30 @@ boundedInterfaceProcessInput executable arguments request = do
             hSetBinaryMode stdinPipe True
             hSetBinaryMode stdoutPipe True
             hSetBinaryMode stderrPipe True
-            let startReader pipe = mask_ $ do
-                  result <- newEmptyMVar :: IO (MVar (Either SomeException BS.ByteString))
+            let startWorker :: IO a -> IO (ThreadId, MVar (Either SomeException a))
+                startWorker action = mask_ $ do
+                  result <- newEmptyMVar
                   thread <- forkIOWithUnmask $ \unmask ->
-                    try (unmask (BS.hGetContents pipe)) >>= putMVar result
+                    try (unmask action) >>= putMVar result
                   pure (thread, result)
-                stopReader (thread, result) = killThread thread >> void (readMVar result)
-            bracket (startReader stdoutPipe) stopReader $ \(_, outputResult) ->
-              bracket (startReader stderrPipe) stopReader $ \(_, diagnosticResult) -> do
-                BS.hPut stdinPipe request `finally` hClose stdinPipe
-                out <- readMVar outputResult >>= either throwIO pure
-                err <- readMVar diagnosticResult >>= either throwIO pure
-                status <- waitForProcess child
-                -- The previous text Handle rejected invalid UTF-8 even on
-                -- otherwise successful output. Do not relax that protocol.
-                forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
-                pure (status, out, err)
+                stopWorker (thread, result) = killThread thread >> void (readMVar result)
+                await result = readMVar result >>= either throwIO pure
+            bracket (startWorker (BS.hGetContents stdoutPipe)) stopWorker $ \(_, outputResult) ->
+              bracket (startWorker (BS.hGetContents stderrPipe)) stopWorker $ \(_, diagnosticResult) ->
+                bracket (startWorker (BS.hPut stdinPipe request `finally` hClose stdinPipe)) stopWorker $ \(_, inputResult) ->
+                  (do
+                    await inputResult
+                    out <- await outputResult
+                    err <- await diagnosticResult
+                    status <- waitForProcess child
+                    -- The previous text Handle rejected invalid UTF-8 even on
+                    -- otherwise successful output. Do not relax that protocol.
+                    forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
+                    pure (status, out, err))
+                  -- Windows pipe IO can defer a worker's asynchronous exception.
+                  -- Terminate the child before joining blocked readers/writers;
+                  -- withCreateProcess then closes the handles and reaps it.
+                  `onException` terminateProcess child
           _ -> fail "installed-Core helper pipes were unavailable"
   result <- timeout (180 * 1000000) execute
   maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result
