@@ -36,7 +36,8 @@ internal class ManagedAddress private constructor(
     private val capabilities: GuestThreads? = null,
     private val heap: HeapAddresses.Handle? = null,
     private val compiler: CompilerRts? = null,
-    private val foreign: PackageReturnedAddress? = null
+    private val foreign: PackageReturnedAddress? = null,
+    private val rtsFlags: CompilerRts? = null
 ) {
     /** This is an RTS data label, not a projection of a JVM or native pointer. */
     internal fun readCapabilitiesWord32(elementOffset: Long, width: Int): Long? {
@@ -88,6 +89,7 @@ internal class ManagedAddress private constructor(
     internal fun finalizerFunction(): CFinalizerFunction? = finalizer
     private fun requireBytes() {
         compiler?.requireCurrent()
+        rtsFlags?.let { it.requireCurrent(); fault("RtsFlags permits only supported read-only fields") }
         if (heap != null) fault("Opaque guest heap address is not byte-addressable")
         if (capabilities != null) fault("RTS data label is not byte-addressable")
         if (stable != null) fault("Opaque StablePtr# is not byte-addressable")
@@ -101,6 +103,7 @@ internal class ManagedAddress private constructor(
         ?: fault("Native image requires static literal or runtime metadata storage")
     fun toNativeBits(): Long {
         compiler?.requireCurrent()
+        rtsFlags?.let { it.requireCurrent(); fault("RtsFlags has no numeric guest address") }
         foreign?.requireCurrent()
         if (heap != null) fault("Opaque guest heap address has no native pointer bits")
         if (capabilities != null) fault("RTS data label has no numeric guest address")
@@ -145,6 +148,10 @@ internal class ManagedAddress private constructor(
     /** GHC pointer equality compares allocation identity and byte offset. */
     fun sameLocation(other: ManagedAddress): Boolean {
         compiler?.requireCurrent(); other.compiler?.requireCurrent()
+        if (rtsFlags != null || other.rtsFlags != null) {
+            rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
+            return rtsFlags != null && rtsFlags === other.rtsFlags && offset == other.offset
+        }
         if (heap != null || other.heap != null) {
             val registry = HeapAddresses.current()
             heap?.let(registry::require); other.heap?.let(registry::require)
@@ -218,6 +225,10 @@ internal class ManagedAddress private constructor(
     /** Only offsets within one allocation have a portable managed ordering.
      * Comparing unrelated native pointer values would invent host addresses. */
     fun compareWithinAllocation(other: ManagedAddress): Int {
+        if (rtsFlags != null || other.rtsFlags != null) {
+            rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
+            fault("RtsFlags has no address ordering")
+        }
         if (heap != null || other.heap != null) fault("Opaque guest heap addresses have no ordering")
         if (capabilities != null || other.capabilities != null)
             fault("RTS data label has no address ordering")
@@ -244,6 +255,11 @@ internal class ManagedAddress private constructor(
      * Original bytestring unpacking uses a before-start sentinel; only a memory
      * access must lie inside storage. A managed origin must not overflow. */
     fun plus(displacement: Long): ManagedAddress {
+        rtsFlags?.let {
+            it.requireCurrent()
+            return if (displacement == 0L) this
+                else ManagedAddress(null, null, displacedOffset(displacement), rtsFlags = it)
+        }
         if (heap != null) {
             HeapAddresses.current().require(heap)
             if (displacement != 0L) fault("Opaque guest heap address cannot be offset")
@@ -333,6 +349,7 @@ internal class ManagedAddress private constructor(
 
     /** Guest Word8# uses Int; the host byte API above has a machine-word boundary. */
     fun readWord8Int(displacement: Long): Int {
+        rtsFlags?.let { return it.readFlagByte(displacedOffset(displacement)).toInt() }
         native?.let { allocation -> return allocation.accessInt { segment ->
             requireRange(displacement, 1)
             segment.get(ValueLayout.JAVA_BYTE, offset + displacement).toInt() and 255
@@ -699,6 +716,7 @@ internal class ManagedAddress private constructor(
     override fun toString(): String = if (heap != null) "Addr#(opaque guest heap)"
         else if (stable != null) "Addr#(opaque StablePtr)" else if (this === NULL) "Addr#(null)"
         else if (capabilities != null) "Addr#(enabled_capabilities)"
+        else if (rtsFlags != null) "Addr#(RtsFlags+$offset)"
         else if (numeric != null) "Addr#(unowned numeric address)"
         else "Addr#(${if (literalBytes != null) "literal" else "managed"}+$offset)"
 
@@ -786,6 +804,8 @@ internal class ManagedAddress private constructor(
             ManagedAddress(null, null, 0L, finalizer = function)
         internal fun enabledCapabilities(threads: GuestThreads): ManagedAddress =
             ManagedAddress(null, null, 0L, capabilities = threads)
+        internal fun rtsFlags(compiler: CompilerRts): ManagedAddress =
+            ManagedAddress(null, null, 0L, rtsFlags = compiler)
 
         /** Views retain their existing storage, including native pinned arrays.
          * Creating an address never copies or promotes a moving heap array. */

@@ -904,7 +904,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "string-bytes" -> ManagedAddress.fromHex(value)
         "null-addr" -> if (value == "0") ManagedAddress.nullAddress() else throw UnsupportedCore("Malformed null Addr# literal")
         "function-addr" -> CFinalizerLabels.fromCore(value, proof)
-        "data-addr" -> CoreDataLabels.fromCore(value, proof)
+        "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout as? TargetLayout)
         "bignat" -> BigNatLiterals.decode(value)
         else -> throw UnsupportedCore("Unsupported literal kind $kind")
     }
@@ -4723,7 +4723,10 @@ CoreStackForeign.validateHead(fn, defined)
                 val arm = explicit[index]
                 if (destination == null) b.beginConditional() else b.beginIfThenElse()
                 b.beginMatchLiteral(arm.tag!!.toLong()); read(fields[0]).emit(e); b.endMatchLiteral()
-                emitResult(arm.body, e, destination); choice(index + 1)
+                // Aggregate arms emit one store per physical result slot. Each
+                // branch must still be one builder child (including zero slots).
+                b.beginBlock(); emitResult(arm.body, e, destination); b.endBlock()
+                b.beginBlock(); choice(index + 1); b.endBlock()
                 if (destination == null) b.endConditional() else b.endIfThenElse()
             }
             choice(0)

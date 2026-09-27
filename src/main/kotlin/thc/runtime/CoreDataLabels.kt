@@ -11,14 +11,17 @@ import thc.Language
  * Event-manager reconfiguration based on shrinking capabilities is still outside
  * the supported runtime contract. */
 internal object CoreDataLabels {
-    fun fromCore(symbol: String, proof: CoreRepresentation?): ManagedAddress {
-        if (symbol !in setOf("enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc"))
+    fun fromCore(symbol: String, proof: CoreRepresentation?, layout: TargetLayout? = null): ManagedAddress {
+        if (symbol !in setOf("enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc", "RtsFlags"))
             fault("Unsupported C data label $symbol")
         if (proof?.present != true || !proof.evaluated || proof.kind != CoreKind.ADDRESS ||
             proof.isAggregate || proof.isVector || proof.primReps != listOf("AddrRep"))
             fault("RTS data label requires exact evaluated AddrRep proof")
         val state = Language.currentState(null)
-        return if (symbol == "enabled_capabilities") ManagedAddress.enabledCapabilities(state.threads)
-        else state.compilerRts.address(symbol)
+        return when (symbol) {
+            "enabled_capabilities" -> ManagedAddress.enabledCapabilities(state.threads)
+            "RtsFlags" -> state.compilerRts.flagsAddress(layout)
+            else -> state.compilerRts.address(symbol)
+        }
     }
 }

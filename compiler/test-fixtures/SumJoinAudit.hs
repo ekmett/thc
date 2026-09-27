@@ -105,3 +105,30 @@ stateRecursiveCase :: Int# -> Int#
 stateRecursiveCase x = case stateRecursive x of
   (# n | #) -> n -# 37#
   (# | d #) -> double2Int# d +# 41#
+
+-- A sum alternative can emit several stores into its caller's result slots.
+-- Keep this boundary opaque so the case cannot dissolve into the scalar observer.
+{-# OPAQUE tupleForward #-}
+tupleForward :: Int# -> (# Int#, Int#, Int# #)
+tupleForward x = case forward x of
+  (# _ | #) -> (# -11#, x, x -# 1# #)
+  (# | n #) -> (# n, x, n +# 1# #)
+
+{-# OPAQUE tupleForwardCase #-}
+tupleForwardCase :: Int# -> Int#
+tupleForwardCase x = case tupleForward x of
+  (# a, b, c #) -> a +# b *# 2# +# c *# 3#
+
+-- Three physical sum slots include a reference and an inactive scalar. The
+-- left payload must remain lazy while the right arm clears the reference slot.
+{-# OPAQUE sumForward #-}
+sumForward :: Int# -> (# Box | Int# #)
+sumForward x = case forward x of
+  (# box | #) -> (# box | #)
+  (# | n #) -> (# | n +# 2# #)
+
+{-# OPAQUE sumForwardCase #-}
+sumForwardCase :: Int# -> Int#
+sumForwardCase x = case sumForward x of
+  (# _ | #) -> -43#
+  (# | n #) -> n *# 11#
