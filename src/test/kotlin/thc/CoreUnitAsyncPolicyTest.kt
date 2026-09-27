@@ -131,6 +131,30 @@ class CoreUnitAsyncPolicyTest {
         }
     }
 
+    @Test fun signalBindingUsesWrapperPolicyBeforeAcquiringTransportOrDemandingDispatcher() {
+        val manifest = fixture()
+        for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) context(ByteArrayOutputStream()).use { context ->
+            context.eval("thc", request(manifest, backend, async))
+            context.enter()
+            try {
+                val owner = Language.currentState()
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val program = owner.coreUnitPrograms.single()
+                assertEquals(async, program.asynchronousExceptions)
+                val decoded = count(program, "coreUnitDecodedBindings")
+                val signals = ManagedSignals(owner, language, reducedVmSignals = true) {
+                    error("binding alone must not acquire the native signal transport")
+                }
+                try {
+                    if (async) signals.bind(program)
+                    else assertTrue(assertThrows(RuntimeFault::class.java) { signals.bind(program) }
+                        .message.orEmpty().contains("asyncExceptions=true"))
+                    assertEquals(decoded, count(program, "coreUnitDecodedBindings"))
+                } finally { signals.close() }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun firstColdFunctionDemandDoesNotClaimPendingDeliveryOrMemoizeControlAsFailure() {
         val manifest = fixture()
         for (backend in listOf("ast", "bytecode")) {
