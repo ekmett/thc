@@ -13,7 +13,10 @@
 --
 -- Plan project components and acquire reproducible, dependency-closed Core bundles.
 module THC.Driver.Project
-  (runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
+  ( runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
+  , prepareInstalledBundle, installedRecords
+  , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
+  ) where
 
 import Control.Exception (evaluate, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
@@ -22,7 +25,7 @@ import Distribution.Types.Flag (mkFlagName, unFlagName)
 import qualified Distribution.InstalledPackageInfo as Package
 import Distribution.Pretty (prettyShow)
 import qualified Crypto.Hash.SHA256 as SHA
-import Data.Aeson (FromJSON, Value(..), eitherDecodeStrict', encode, object, (.=))
+import Data.Aeson (FromJSON, ToJSON, Value(..), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.Aeson as Aeson
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -94,6 +97,7 @@ data InstalledBundle = InstalledBundle
   { installedOwner :: String, installedBundle :: Bundle }
 
 data BundleReceipt = PlainBundle | TargetLayoutBundle | PinnedSourceBundle
+  deriving Show
 
 data ExportContext = ExportContext
   { contextCompiler :: String, contextAbi :: String, contextPlatform :: String
@@ -103,7 +107,8 @@ data ExportContext = ExportContext
   , contextGhc :: FilePath, contextGhcPkg :: Maybe FilePath
   , contextDriver :: FilePath, contextRoot :: FilePath
   , contextProjectOptions :: [String]
-  , contextNativeTools :: Value }
+  , contextNativeTools :: Value
+  , contextVerifyArtifacts :: Bool }
 
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
@@ -145,14 +150,18 @@ runWindowsProject opts working = do
     runPlan = flags {distDirectory = output, ghcPath = Just compiler,
       ghcPkgPath = Just packageTool,
       selectedFlags = [(mkFlagName name, value) | (name, value) <- Map.toList selectedPackageFlags]}}
-    working cabalFile (prepareWindowsRuntime (runThcRoot opts) compiler packageTool driver)
+    working cabalFile (prepareWindowsRuntimeWithVerification (runVerifyArtifacts opts)
+      (runThcRoot opts) compiler packageTool driver)
 
 -- Windows retains the simple-package raw-Core route. Acquire its support from
 -- the same real Cabal runtime unit and checked native/bundle cache as project
 -- exports, using vanilla interfaces and the selected compiler's plugin archive.
 -- This does not claim that arbitrary installed dependency Core is available.
 prepareWindowsRuntime :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> IO ([String], FilePath)
-prepareWindowsRuntime repository selectedCompiler selectedPkg selectedDriver output = do
+prepareWindowsRuntime = prepareWindowsRuntimeWithVerification True
+
+prepareWindowsRuntimeWithVerification :: Bool -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> IO ([String], FilePath)
+prepareWindowsRuntimeWithVerification verify repository selectedCompiler selectedPkg selectedDriver output = do
   require (Host.os == "mingw32") "vanilla Windows runtime acquisition requires native Windows"
   root <- canonicalizePath repository
   compiler <- canonicalizePath selectedCompiler
@@ -202,7 +211,7 @@ prepareWindowsRuntime repository selectedCompiler selectedPkg selectedDriver out
     driverHash <- digestFile driver
     nativeTools <- nativeToolIdentity
     let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools
+          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools verify
         proxy = nativeCompilerProxy context
     createDirectoryIfMissing True (takeDirectory proxy)
     writeFile proxy ghcProxyWindowsCommand
@@ -213,9 +222,9 @@ prepareWindowsRuntime repository selectedCompiler selectedPkg selectedDriver out
     wired <- wiredGhcInternal context root
     (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive [wired]
     let manifest = output </> "runtime-support/packages.json"
-    selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules records
+    selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules verify records
     require (selected == Just owner) "Windows runtime dictionary identity differs from its manifest"
-    published <- mapM (publishCoreUnit cache False) records
+    published <- mapM (publishCoreUnit cache verify) records
     atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
       "schema" .= (1::Int),"ghc" .= ("9.14.1" :: String),"foreignExceptionBridgeUnit" .= owner,"units" .= published])
     -- These exact module owners come from bundles validated above, never from
@@ -408,7 +417,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
   driverHash <- digestFile driver
   nativeTools <- nativeToolIdentity
   let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
-                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools
+                              pluginLibrary native cacheRoot driverHash ghc ghcPkg driver thcRoot projectOptions nativeTools verifyArtifacts
   records <- field plan "install-plan" :: IO [Value]
   units <- mapM readUnit records
   let byId = Map.fromList [(unitId unit, unit) | unit <- units]
@@ -461,7 +470,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
         (Map.lookup (registeredId registrationUnit) byId)
       require (sort (unitDepends planned) == sort (installedDepends registrationUnit))
         ("installed dependencies differ from Cabal plan for " ++ registeredId registrationUnit)
-      result <- prepareInstalledBundle cacheRoot (native </> "cache/thc/staging")
+      result <- prepareInstalledBundleWithVerification verifyArtifacts cacheRoot (native </> "cache/thc/staging")
         (thcRoot </> "compiler/target-layout.c") driverHash helperContext registrationUnit
       bundle <- either (\missing -> fail
         ("complete-interface-core unavailable for " ++ missingUnit missing ++ ":" ++ missingModule missing ++
@@ -534,8 +543,10 @@ runBuiltProject action project working thcRoot runtime output native target proj
         then ["--run-executable", '@' : manifest, entry, shutdown]
         else ["--run-io", '@' : manifest, entry]) programName guestArguments) working
 
-exceptionBridgeModules :: [Value] -> IO [Value]
-exceptionBridgeModules units = fmap concat $ forM units $ \unit -> do
+-- | Select the two original exception bridge modules. The flag requests full
+-- artifact verification rather than replaying an unchanged successful read.
+exceptionBridgeModules :: Bool -> [Value] -> IO [Value]
+exceptionBridgeModules verify units = fmap concat $ forM units $ \unit -> do
   references <- optionalField unit "modules" ([] :: [Value])
   let selected = [ref | ref <- references, jsonField ref "name" `elem`
         map Just (["THC.Exception", "THC.Internal.Exception"] :: [String])]
@@ -543,19 +554,23 @@ exceptionBridgeModules units = fmap concat $ forM units $ \unit -> do
     bundle <- field unit "bundle"
     path <- field bundle "path"
     expected <- field bundle "sha256"
-    bytes <- BS.readFile path
-    require (shaHex bytes == expected) "exception runtime bundle changed during linking"
-    entries <- either fail pure =<< decodeZip bytes
-    forM selected $ \ref -> do
-      member <- field ref "path"
-      digest <- field ref "sha256"
-      body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
-      require (shaHex body == digest) "exception runtime module hash mismatch"
-      value <- either fail pure (eitherDecodeStrict' body)
-      require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
-        jsonField value "module" == (jsonField ref "name" :: Maybe String))
-        "exception runtime module identity mismatch"
-      pure value
+    let request = object ["kind" .= ("exception-bridge" :: String), "bundle" .= bundle,
+          "unit" .= (jsonField unit "id" :: Maybe String), "modules" .= selected]
+    ready <- rememberSelection verify (path ++ ".bridge.json") [path] request $ do
+      bytes <- BS.readFile path
+      require (shaHex bytes == expected) "exception runtime bundle changed during linking"
+      entries <- either fail pure =<< decodeZip bytes
+      Just <$> forM selected (\ref -> do
+        member <- field ref "path"
+        digest <- field ref "sha256"
+        body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
+        require (shaHex body == digest) "exception runtime module hash mismatch"
+        value <- either fail pure (eitherDecodeStrict' body)
+        require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
+          jsonField value "module" == (jsonField ref "name" :: Maybe String))
+          "exception runtime module identity mismatch"
+        pure value)
+    maybe (fail "exception runtime metadata unavailable") pure ready
 
 -- Cabal owns the sidecar's unit, configuration, dependencies and native compiler
 -- invocations. The source is the real runtime library; no rewritten package or
@@ -564,7 +579,7 @@ exceptionBridgeModules units = fmap concat $ forM units $ \unit -> do
 linkForeignExceptionRuntime :: ExportContext -> [(String, String)] -> String -> Maybe FilePath ->
   FilePath -> [Value] -> IO (String, [Value])
 linkForeignExceptionRuntime context environment installedPolicy ghcSource registeredLibrary described = do
-  existing <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules described
+  existing <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules (contextVerifyArtifacts context) described
   case existing of
     Just unit -> pure (unit, described)
     Nothing -> do
@@ -628,7 +643,7 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
             registrationUnit <- discoverInstalled helper (unitId unit)
             require (sort (unitDepends unit) == sort (installedDepends registrationUnit))
               "runtime sidecar installed dependencies differ from its plan"
-            result <- prepareInstalledBundle (contextCache context) (native </> "cache/thc/staging")
+            result <- prepareInstalledBundleWithVerification (contextVerifyArtifacts context) (contextCache context) (native </> "cache/thc/staging")
               (root </> "compiler/target-layout.c") (contextDriverHash context) helper registrationUnit
             bundle <- either (\failure -> fail ("runtime sidecar lacks complete Core: " ++ show failure)) pure result
             pure (installedRecords registrationUnit bundle)
@@ -639,7 +654,7 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           linked = described ++ dependencies ++ [record]
           identities = [identifier | item <- linked, Just identifier <- [jsonField item "id" :: Maybe String]]
       require (length identities == length (nub identities)) "runtime sidecar collides with an existing Core owner"
-      selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules linked
+      selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules (contextVerifyArtifacts context) linked
       require (selected == Just (unitId runtime)) "runtime sidecar did not export its genuine exception bridge"
       pure (unitId runtime, linked)
 
@@ -664,12 +679,16 @@ prepareInterfaceHelper context root = do
     ["id" .= contextCompiler context, "abi" .= contextAbi context,
      "platform" .= contextPlatform context, "way" .= (exportInterfaceWay ++ "-nonprofiling")])
 
--- The optional index avoids hydration on proven hits, but never replaces the
--- existing JSON-derived bundle identity or its complete archive validation.
--- Registered IDs/ABI/mtime alone cannot identify mutable installed payloads.
+-- The probe retains complete installed source/native identities. A successful
+-- selection receipt can then avoid reopening an unchanged archive; explicit
+-- verification and misses still run the complete original validation.
 prepareInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
                           IO (Either MissingCore InstalledBundle)
-prepareInstalledBundle cache staging recipe driverHash context registrationUnit = do
+prepareInstalledBundle = prepareInstalledBundleWithVerification True
+
+prepareInstalledBundleWithVerification :: Bool -> FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+                          IO (Either MissingCore InstalledBundle)
+prepareInstalledBundleWithVerification verify cache staging recipe driverHash context registrationUnit = do
   probeCurrent <- prepareInstalledProbe context registrationUnit
   evidence <- optionalIO $ do
     helperHash <- digestFile (installedHelper context)
@@ -683,7 +702,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
         index = cache </> "installed-probes/v1" </> shaHex (BL.toStrict (encode identity)) ++ ".json"
     pure (identity, probe, index)
   case evidence of
-    Nothing -> acquireInstalledBundle cache staging recipe driverHash context registrationUnit (\_ _ _ -> pure ())
+    Nothing -> acquireInstalledBundle verify cache staging recipe driverHash context registrationUnit (\_ _ _ -> pure ())
     Just (identity, probe, index) -> do
       hit <- optionalIO $ do
         envelope <- readJson index
@@ -708,7 +727,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
         partition <- installedPartition context
         require (length exportKey == 64 && all isHexDigit exportKey) "invalid installed export key"
         let destination = cache </> "core-bundles/v1" </> partition </> exportKey </> registeredId registrationUnit ++ ".zip"
-        loaded <- readBundle TargetLayoutBundle destination owner buildKey exportKey inputs
+        loaded <- readBundle verify TargetLayoutBundle destination owner buildKey exportKey inputs
           (map fst (installedInterfaces registrationUnit))
         bundle <- maybe (fail "invalid indexed installed bundle") pure loaded
         require (jsonField record "bundleSha256" == Just (bundleHash bundle)) "changed indexed installed bundle"
@@ -719,7 +738,7 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
         pure (InstalledBundle owner bundle)
       case hit of
         Just bundle -> pure (Right bundle)
-        Nothing -> acquireInstalledBundle cache staging recipe driverHash context registrationUnit $ \bundle inputs modules -> do
+        Nothing -> acquireInstalledBundle verify cache staging recipe driverHash context registrationUnit $ \bundle inputs modules -> do
           _ <- optionalIO $ do
             sources <- installedSourceObservations modules
             validateSourceObservations sources
@@ -735,6 +754,55 @@ prepareInstalledBundle cache staging recipe driverHash context registrationUnit 
 -- Cancellation remains observable; only ordinary IO/protocol failures fall back.
 optionalIO :: IO a -> IO (Maybe a)
 optionalIO action = either (const Nothing) Just <$> tryIOError action
+
+-- Replay only a successful selection for the exact current inputs and file
+-- observations. This is a disposable local cache, not artifact authentication:
+-- --verify-artifacts always executes the original validator. In particular a
+-- missing/malformed receipt, changed key, or changed file takes the cold path.
+rememberSelection :: (FromJSON a, ToJSON a) => Bool -> FilePath -> [FilePath] -> Value ->
+                     IO (Maybe a) -> IO (Maybe a)
+rememberSelection verify receipt paths request validate = do
+  before <- optionalIO observe
+  hit <- if verify then pure Nothing else optionalIO $ do
+    envelope <- readJson receipt
+    record <- field envelope "record"
+    require (jsonField envelope "sha256" == Just (shaHex (BL.toStrict (encode record))))
+      "invalid selection receipt"
+    require (jsonField record "format" == Just ("thc-core-selection-v1" :: String) &&
+      jsonField record "request" == Just request && jsonField record "files" == before && before /= Nothing)
+      "changed selection inputs"
+    field record "result"
+  case hit of
+    Just ready -> pure (Just ready)
+    Nothing -> do
+      result <- validate
+      case result of
+        Nothing -> pure ()
+        Just ready -> do
+          -- Caching must not make an otherwise valid read fail on a read-only
+          -- cache. Atomic replacement also tolerates concurrent equal readers.
+          _ <- optionalIO $ do
+            after <- observe
+            require (maybe True (== after) before) "archive changed while selecting Core"
+            let record = object ["format" .= ("thc-core-selection-v1" :: String),
+                  "request" .= request, "files" .= after, "result" .= ready]
+            atomicJson receipt (object ["record" .= record, "sha256" .= shaHex (BL.toStrict (encode record))])
+          pure ()
+      pure result
+  where
+    observe = Aeson.toJSON <$> forM paths (\path -> do
+      size <- Directory.getFileSize path
+      modified <- Directory.getModificationTime path
+      pure (path, size, show modified))
+
+rememberBundle :: Bool -> FilePath -> [FilePath] -> Value -> IO (Maybe Bundle) -> IO (Maybe Bundle)
+rememberBundle verify receipt paths request validate = do
+  result <- rememberSelection verify receipt paths request (fmap snapshot <$> validate)
+  pure (restore <$> result)
+  where
+    snapshot bundle = (bundlePath bundle, bundleHash bundle, bundleModules bundle,
+                       bundleBuildKey bundle, bundleReexports bundle)
+    restore (path, digest, modules, key, reexports) = Bundle path digest modules key reexports
 
 installedPartition :: InstalledContext -> IO FilePath
 installedPartition context = do
@@ -780,10 +848,10 @@ validateSourceObservations sources = forM_ sources $ \expected -> do
 
 -- Ordinary acquisition remains authoritative, including when the optional
 -- probe cannot establish complete evidence. Compiler binaries are not hashed.
-acquireInstalledBundle :: FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
+acquireInstalledBundle :: Bool -> FilePath -> FilePath -> FilePath -> String -> InstalledContext -> InstalledUnit ->
                           (InstalledBundle -> Value -> [(String, BS.ByteString)] -> IO ()) ->
                           IO (Either MissingCore InstalledBundle)
-acquireInstalledBundle cache staging recipe driverHash context registrationUnit remember = do
+acquireInstalledBundle verify cache staging recipe driverHash context registrationUnit remember = do
   acquired <- acquireInstalled context registrationUnit
   case acquired of
     Left missing -> pure (Left missing)
@@ -828,7 +896,7 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
       createDirectoryIfMissing True directory
       bundle <- withLock (destination ++ ".lock") $ do
         present <- doesFileExist destination
-        cached <- if present then readBundle TargetLayoutBundle destination unit buildKey exportKey inputs (map fst modules)
+        cached <- if present then readBundle verify TargetLayoutBundle destination unit buildKey exportKey inputs (map fst modules)
                   else pure Nothing
         case cached of
           Just hit -> pure hit
@@ -865,7 +933,8 @@ acquireInstalledBundle cache staging recipe driverHash context registrationUnit 
                  ("inplace-manifest.json", receiptBytes) : members))
               -- Keep an existing file intact until the complete replacement is ready.
               atomicBytes destination (BL.toStrict archive)
-              pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
+              rememberFreshBundle TargetLayoutBundle unit exportKey inputs (map fst modules)
+                (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
               `finally` removePathForcibly temporary
       let result = InstalledBundle unit bundle
       remember result inputs modules
@@ -947,7 +1016,7 @@ wiredGhcInternal context thcRoot = do
   createDirectoryIfMissing True directory
   bundle <- withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle PinnedSourceBundle destination unit buildKey exportKey buildInputs (sort names)
+    hit <- if cached then readBundle (contextVerifyArtifacts context) PinnedSourceBundle destination unit buildKey exportKey buildInputs (sort names)
            else pure Nothing
     case hit of
       Just value -> pure value
@@ -1011,9 +1080,10 @@ wiredGhcInternal context thcRoot = do
             (("manifest.json", BL.toStrict (encode inner)) :
              ("inplace-manifest.json", inputsBytes) : members))
           atomicBytes destination (BL.toStrict archive)
-          pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
+          rememberFreshBundle PinnedSourceBundle unit exportKey buildInputs (sort names)
+            (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
           `finally` cleanup
-  selected <- maybe (pure bundle) (projectWindowsWiredBundle directory bundle) windowsSpec
+  selected <- maybe (pure bundle) (projectWindowsWiredBundle (contextVerifyArtifacts context) directory bundle) windowsSpec
   pure (object ["id" .= unit, "depends" .= ([] :: [String]),
                 "modules" .= bundleModules selected,
                 "bundle" .= object ["path" .= bundlePath selected,
@@ -1024,8 +1094,10 @@ wiredGhcInternal context thcRoot = do
 -- support projection. No binding, branch, foreign artifact or audit is edited.
 -- Loading the excluded complete module still encounters its unsupported
 -- registration boundary; it is never advertised as a complete supplied module.
-projectWindowsWiredBundle :: FilePath -> Bundle -> Value -> IO Bundle
-projectWindowsWiredBundle directory full specification = do
+-- | Reuse or construct the explicitly selected Windows module projection.
+-- An unchanged successful projection is checked before opening the full ZIP.
+projectWindowsWiredBundle :: Bool -> FilePath -> Bundle -> Value -> IO Bundle
+projectWindowsWiredBundle verify directory full specification = do
   exclusions <- field specification "archiveOnlyModules" :: IO [Value]
   excluded <- mapM (`field` "module") exclusions :: IO [String]
   let refs = [ref | ref <- bundleModules full, (jsonField ref "name" :: Maybe String) `notElem` map Just excluded]
@@ -1036,6 +1108,14 @@ projectWindowsWiredBundle directory full specification = do
       path = directory </> "support.zip"
   require (length excluded == length (nub excluded) && all (`elem` fullNames) excluded)
     "Windows source projection has an invalid excluded-module inventory"
+  let request = object ["kind" .= ("windows-source-projection" :: String), "source" .= source,
+        "key" .= key, "modules" .= refs, "exclusions" .= exclusions]
+  selected <- rememberBundle verify (path ++ ".projection.json") [bundlePath full, path] request $
+    Just <$> projectWindowsWiredBundleCold verify path full refs names excluded key source exclusions
+  maybe (fail "Windows source projection unavailable") pure selected
+
+projectWindowsWiredBundleCold :: Bool -> FilePath -> Bundle -> [Value] -> [String] -> [String] -> String -> Value -> [Value] -> IO Bundle
+projectWindowsWiredBundleCold verify path full refs names excluded key source exclusions = do
   bytes <- BS.readFile (bundlePath full)
   require (shaHex bytes == bundleHash full) "Complete source bundle changed before projection"
   entries <- either fail pure =<< decodeZip bytes
@@ -1065,7 +1145,7 @@ projectWindowsWiredBundle directory full specification = do
     require (not (null initializers)) "Excluded Windows module lacks its recorded native registration obligation"
   withLock (path ++ ".lock") $ do
     cached <- doesFileExist path
-    hit <- if cached then readBundle PinnedSourceBundle path "ghc-internal" key key inputs (sort names) else pure Nothing
+    hit <- if cached then readBundle verify PinnedSourceBundle path "ghc-internal" key key inputs (sort names) else pure Nothing
     case hit of
       Just value -> pure value
       Nothing -> do
@@ -1257,7 +1337,7 @@ prepareGlobalBundles context project target planned locals units = do
   located <- forM units $ \unit -> do
     (buildKey, exportKey, path) <- globalLocation context planned inputs unit
     cached <- doesFileExist path
-    hit <- if cached then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+    hit <- if cached then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
            else pure Nothing
     pure (unit, buildKey, exportKey, path, hit)
   let missing = [(unit, buildKey, exportKey, path)
@@ -1275,7 +1355,7 @@ prepareGlobalBundles context project target planned locals units = do
     withLock (lockDir </> batch <.> "lock") $ do
       pending <- filterM (\(unit, buildKey, exportKey, path) -> do
         present <- doesFileExist path
-        ready <- if present then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+        ready <- if present then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
                  else pure Nothing
         pure (case ready of Nothing -> True; Just _ -> False)) missing
       when (not (null pending)) $
@@ -1286,7 +1366,7 @@ prepareGlobalBundles context project target planned locals units = do
     bundle <- case hit of
       Just value -> pure value
       Nothing -> do
-        ready <- readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+        ready <- readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
         maybe (fail ("Cabal store Core bundle was not published: " ++ unitId unit)) pure ready
     pure (unitId unit, bundle)
   pure (Map.fromList pairs)
@@ -1366,7 +1446,7 @@ captureGlobalUnits context project target planned requested missing validateInpu
         -- Keep the first valid publication byte-for-byte: a prior manifest may
         -- already refer to its hash, even if another capture is equivalent.
         present <- doesFileExist path
-        ready <- if present then readGlobalBundle path (unitId unit) (unitDepends unit) buildKey exportKey
+        ready <- if present then readGlobalBundle (contextVerifyArtifacts context) path (unitId unit) (unitDepends unit) buildKey exportKey
                  else pure Nothing
         case ready of
           Just _ -> pure ()
@@ -1416,8 +1496,16 @@ packGlobalBundle store dist capture unit buildKey exportKey destination = do
   archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode inner)) : members))
   atomicBytes destination (BL.toStrict archive)
 
-readGlobalBundle :: FilePath -> String -> [String] -> String -> String -> IO (Maybe Bundle)
-readGlobalBundle path unit dependencies buildKey exportKey = do
+-- | Read a source-store bundle under exact unit/dependency/build/export keys.
+-- True always verifies its archive; False can replay a successful selection.
+readGlobalBundle :: Bool -> FilePath -> String -> [String] -> String -> String -> IO (Maybe Bundle)
+readGlobalBundle verify path unit dependencies buildKey exportKey =
+  rememberBundle verify (path ++ ".selection.json") [path]
+    (Aeson.toJSON ("global" :: String, unit, dependencies, buildKey, exportKey)) $
+      readGlobalBundleCold path unit dependencies buildKey exportKey
+
+readGlobalBundleCold :: FilePath -> String -> [String] -> String -> String -> IO (Maybe Bundle)
+readGlobalBundleCold path unit dependencies buildKey exportKey = do
   bytes <- BS.readFile path
   decoded <- decodeZip bytes
   pure $ do
@@ -1533,7 +1621,7 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
   createDirectoryIfMissing True directory
   withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
-    hit <- if cached then readBundle PlainBundle destination (unitId unit) buildKey exportKey buildInputs expected
+    hit <- if cached then readBundle (contextVerifyArtifacts context) PlainBundle destination (unitId unit) buildKey exportKey buildInputs expected
            else pure Nothing
     case hit of
       Just bundle -> pure bundle
@@ -1638,7 +1726,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
     archive <- either fail pure (encodeZip
       (("manifest.json", BL.toStrict (encode inner)) : ("inplace-manifest.json", inputsBytes) : members))
     atomicBytes destination (BL.toStrict archive)
-    pure (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
+    rememberFreshBundle PlainBundle (unitId unit) exportKey buildInputs expected
+      (Bundle destination (shaHex (BL.toStrict archive)) modules buildKey [])) `finally` cleanup
 
 -- Source late-plugin JSON has no typed annotations. Recover the exact emitted
 -- full-Core interfaces through the selected GHC helper and Cabal's actual
@@ -1667,8 +1756,26 @@ scalarInterfaceModules helper component unit objects names = do
       "scalar cbits interface identity or boundary mismatch"
     pure (name,BL.toStrict (encode value))
 
-readBundle :: BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
-readBundle receipt path unit buildKey exportKey buildInputs expected = do
+-- | Read a configured bundle under its complete expected inputs and inventory.
+-- True retains exhaustive archive, layout, provenance and module validation.
+readBundle :: Bool -> BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
+readBundle verify receipt path unit buildKey exportKey buildInputs expected =
+  rememberBundle verify (path ++ ".selection.json") [path]
+    (Aeson.toJSON (show receipt, unit, buildKey, exportKey, buildInputs, expected)) $
+      readBundleCold receipt path unit buildKey exportKey buildInputs expected
+
+-- Source acquisition has just validated/emitted these exact modules and
+-- receipts. Seed that successful result without reopening its ZIP while the
+-- emission buffers are still live. Existing artifacts never enter this path.
+rememberFreshBundle :: BundleReceipt -> String -> String -> Value -> [String] -> Bundle -> IO Bundle
+rememberFreshBundle receipt unit exportKey buildInputs expected bundle = do
+  let path = bundlePath bundle
+      request = Aeson.toJSON (show receipt, unit, bundleBuildKey bundle, exportKey, buildInputs, expected)
+  _ <- rememberBundle True (path ++ ".selection.json") [path] request (pure (Just bundle))
+  pure bundle
+
+readBundleCold :: BundleReceipt -> FilePath -> String -> String -> String -> Value -> [String] -> IO (Maybe Bundle)
+readBundleCold receipt path unit buildKey exportKey buildInputs expected = do
   bytes <- BS.readFile path
   decoded <- decodeZip bytes
   pure $ do
