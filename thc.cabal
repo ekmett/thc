@@ -641,6 +641,7 @@ executable thc
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
     THC.Driver.NativeCache
+    THC.Driver.NativeDependencies
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
@@ -717,6 +718,7 @@ test-suite driver-tests
     THC.Driver.InstalledForeign
     THC.Driver.Lock
     THC.Driver.NativeCache
+    THC.Driver.NativeDependencies
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources
@@ -1068,6 +1070,7 @@ executable thc-fixtures
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
     THC.Driver.NativeCache
+    THC.Driver.NativeDependencies
     THC.Driver.NativeRecipe
     THC.Driver.PackageNative
     THC.Driver.NativeLibrarySources

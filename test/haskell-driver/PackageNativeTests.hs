@@ -22,12 +22,45 @@ import Data.List (isInfixOf, isPrefixOf)
 import Test.HUnit
 import THC.Driver.PackageNative
 import THC.Driver.NativeLibrarySources (validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
-  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR)
+  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR,
+  validateNativeLibcIR)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
+import THC.Driver.NativeDependencies (selectCOnlyPieces)
 
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      let validate = validateNativeLibcIR "x86_64-unknown-linux-gnu" ["realloc"]
+      assertEqual "original libc allocation declaration" (Right ())
+        (validate "declare noalias noundef ptr @realloc(ptr allocptr nocapture noundef, i64 noundef) local_unnamed_addr #5")
+      forM_ ["declare ptr @realloc(ptr, i32)","declare fastcc ptr @realloc(ptr, i64)",
+          "declare ptr @realloc(ptr addrspace(1), i64)","declare ptr @realloc(ptr, ...)",
+          "declare ptr @realloc(ptr byval(i64), i64)","", "declare ptr @realloc(ptr, i64)\ndeclare ptr @realloc(ptr, i64)"] $ \source ->
+        assertBool "unsupported native ABI stays rejected" (isLeft (validate source))
+      assertBool "LP64 assumptions do not leak to Windows" (isLeft
+        (validateNativeLibcIR "x86_64-pc-windows-msvc" ["realloc"] "declare ptr @realloc(ptr, i64)"))
+      assertBool "unlisted libc entry stays unsupported" (isLeft
+        (validateNativeLibcIR "x86_64-unknown-linux-gnu" ["system"] "declare i32 @system(ptr)"))
+  , TestCase $ do
+      let piece root name hash target = object ["root" .= (root :: String),
+            "object" .= (root ++ "/" ++ name),"objectSha256" .= (hash :: String),
+            "target" .= (target :: String)]
+          first = piece "/selected" "a.o" "first" "target"
+          second = piece "/selected" "b.o" "second" "target"
+          sibling = piece "/sibling" "a.o" "different" "target"
+      assertEqual "archive content selects only owned products" (Right [first,second])
+        (selectCOnlyPieces [("a.o","first"),("b.o","second")] [sibling,second,first])
+      assertBool "matching basename cannot bless different native object" (isLeft
+        (selectCOnlyPieces [("a.o","other")] [first]))
+      assertBool "unrecorded member is not silently omitted" (isLeft
+        (selectCOnlyPieces [("a.o","first"),("b.o","second")] [first]))
+      assertBool "different recipes for one native object remain ambiguous" (isLeft
+        (selectCOnlyPieces [("a.o","first")] [first,piece "/sibling" "a.o" "first" "other"]))
+      assertBool "duplicate archive members cannot expand authority" (isLeft
+        (selectCOnlyPieces [("a.o","first"),("a.o","first")] [first]))
+      forM_ ["../a.o","/a.o",".","","-N","@response","a b.o","a\nb.o"] $ \name ->
+        assertBool "archive member paths cannot escape selection" (isLeft (selectCOnlyPieces [(name,"first")] [first]))
+  , TestCase $ do
       let source = unlines ["define i64 @caller(ptr %0, i64 %1, i64 %2) {",
             "  %3 = call i64 @callee(ptr %0, i64 %1, i64 %2)", "  ret i64 %3", "}",
             "define i64 @callee(ptr nocapture readonly %0, i8 zeroext %1, i32 %2) {"]

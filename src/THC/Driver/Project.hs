@@ -16,6 +16,7 @@ module THC.Driver.Project
   ( runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..)
   , prepareInstalledBundle, installedRecords
   , BundleReceipt(..), readGlobalBundle, readBundle, exceptionBridgeModules, projectWindowsWiredBundle
+  , publishCapturedStoreUnit
   ) where
 
 import Control.Exception (evaluate, finally)
@@ -63,7 +64,9 @@ import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativ
   readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
 import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
-import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative)
+import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative,
+  finishPackageNativeWithDependencies)
+import THC.Driver.NativeDependencies (readCOnlyProduct)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
 import THC.Driver.InstalledForeign
@@ -1450,11 +1453,42 @@ captureGlobalUnits context project target planned requested missing validateInpu
                  else pure Nothing
         case ready of
           Just _ -> pure ()
-          Nothing -> packGlobalBundle store dist capture unit buildKey exportKey path
+          Nothing -> packGlobalBundle store dist capture byId unit buildKey exportKey path
     ) `finally` cleanup
 
-packGlobalBundle :: FilePath -> FilePath -> FilePath -> Unit -> String -> String -> FilePath -> IO ()
-packGlobalBundle store dist capture unit buildKey exportKey destination = do
+-- | Publish exactly one already captured store unit using its genuine Cabal
+-- plan, interfaces/Core and native products. No package solve, compiler replay
+-- or acquisition of unrelated units is performed here. The output must be new.
+publishCapturedStoreUnit :: FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> IO Bundle
+publishCapturedStoreUnit planPath store dist capture identifier destination = do
+  selectedStore <- makeAbsolute store
+  selectedDist <- makeAbsolute dist
+  selectedCapture <- makeAbsolute capture
+  selectedDestination <- makeAbsolute destination
+  present <- doesFileExist destination
+  require (not present) "captured store publication refuses an existing output"
+  plan <- readJson planPath
+  compiler <- field plan "compiler-id" :: IO String
+  abi <- field plan "compiler-abi" :: IO String
+  platform <- (,) <$> (field plan "arch" :: IO String) <*> (field plan "os" :: IO String)
+  units <- mapM readUnit =<< field plan "install-plan"
+  let planned = Map.fromList [(unitId unit,unit) | unit <- units]
+  require (Map.size planned == length units) "captured Cabal plan contains duplicate units"
+  unit <- maybe (fail "captured Cabal plan lacks requested unit") pure (Map.lookup identifier planned)
+  closure <- dependencyClosure planned identifier
+  kind <- field (unitValue unit) "type" :: IO String
+  require (kind == "configured" && not (unitLocal unit)) "captured publication requires a store unit"
+  producer <- digestFile =<< getExecutablePath
+  let buildKey = shaHex (BL.toStrict (encode
+        ("thc-captured-store-native-build-v1" :: String,compiler,abi,platform,map sourceIdentity closure)))
+      exportKey = shaHex (BL.toStrict (encode (buildKey,producer)))
+  createDirectoryIfMissing True (takeDirectory destination)
+  packGlobalBundle selectedStore selectedDist selectedCapture planned unit buildKey exportKey selectedDestination
+  result <- readGlobalBundle True selectedDestination identifier (unitDepends unit) buildKey exportKey
+  maybe (fail "new captured unit failed its ordinary bundle validation") pure result
+
+packGlobalBundle :: FilePath -> FilePath -> FilePath -> Map.Map String Unit -> Unit -> String -> String -> FilePath -> IO ()
+packGlobalBundle store dist capture planned unit buildKey exportKey destination = do
   let core = capture </> unitId unit </> "core"
   exported <- filter ((== ".json") . takeExtension) <$> recursiveFiles core
   empty <- if not (null exported) then pure [] else do
@@ -1482,7 +1516,20 @@ packGlobalBundle store dist capture unit buildKey exportKey destination = do
       ("store Core artifact has wrong owner or boundary: " ++ path)
     bytes <- BS.readFile path
     pure (name, bytes)
-  linked <- finishPackageNative (takeDirectory capture </> "native-pieces") (capture </> unitId unit) (unitId unit) Nothing checked
+  let pieces = takeDirectory capture </> "native-pieces"
+  dependencies <- fmap concat $ forM (unitDepends unit) $ \identifier -> do
+    dependency <- maybe (fail "native dependency is absent from resolved plan") pure (Map.lookup identifier planned)
+    -- Only registrations in this acquisition's private store can add products.
+    -- Installed boot libraries and Haskell-bearing dependencies remain outside
+    -- this C-only path; their runtime/provider contracts are separate.
+    partitions <- listDirectory store
+    registrations <- filterM doesFileExist
+      [store </> partition </> "package.db" </> identifier <.> "conf" | partition <- partitions]
+    case registrations of
+      [] -> pure []
+      [path] -> maybe [] (:[]) <$> readCOnlyProduct (unitValue dependency) path pieces
+      _ -> fail "C-only dependency has ambiguous private-store registration"
+  linked <- finishPackageNativeWithDependencies dependencies pieces (capture </> unitId unit) (unitId unit) Nothing checked
   let sorted = sortOn fst linked
       names = map fst sorted
   require (length names == length (nub names))

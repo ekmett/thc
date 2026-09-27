@@ -12,7 +12,8 @@
 -- Validate exact native-library source and LLVM inputs for supported acquisition profiles.
 module THC.Driver.NativeLibrarySources
   ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR,
-    validateNativeWidthIR, nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR ) where
+    validateNativeWidthIR, nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR
+  , nativeLibcSymbols, validateNativeLibcIR ) where
 
 import Control.Monad (forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -23,6 +24,49 @@ import System.FilePath ((</>))
 
 nativeMathSymbols :: [String]
 nativeMathSymbols = ["erf", "erfc", "erff", "erfcf"]
+
+-- Exact Linux LP64 declarations observed in the original libyaml closure.
+-- LLVM/Sulong retain the C implementation and libc provider; none of these
+-- entries is replaced by a JVM model or inferred from its name alone.
+nativeLibcSignatures :: [(String,String,[String])]
+nativeLibcSignatures =
+  [ ("fclose","i32",["ptr"]), ("fdopen","ptr",["i32","ptr"])
+  , ("realloc","ptr",["ptr","i64"]), ("malloc","ptr",["i64"])
+  , ("free","void",["ptr"]), ("strdup","ptr",["ptr"])
+  , ("strcmp","i32",["ptr","ptr"]), ("strncmp","i32",["ptr","ptr","i64"])
+  , ("strlen","i64",["ptr"]), ("ferror","i32",["ptr"])
+  , ("fread","i64",["ptr","i64","i64","ptr"])
+  , ("fwrite","i64",["ptr","i64","i64","ptr"])
+  , ("__assert_fail","void",["ptr","ptr","i32","ptr"])
+  ]
+
+nativeLibcSymbols :: [String]
+nativeLibcSymbols = [name | (name,_,_) <- nativeLibcSignatures]
+
+-- | Check actual linked IR before constructing its native libc dependency.
+-- Only ordinary ABI-neutral parameter attributes are discarded. Calling
+-- conventions, address spaces, varargs, by-value aggregates and width changes
+-- remain rejected, as do missing or duplicate declarations.
+validateNativeLibcIR :: String -> [String] -> String -> Either String ()
+validateNativeLibcIR target symbols source = do
+  unless (target == "x86_64-unknown-linux-gnu")
+    (Left "native libc package provider currently requires Linux x86_64")
+  forM_ symbols $ \symbol -> do
+    (result,parameters) <- case [(value,arguments) | (name,value,arguments) <- nativeLibcSignatures, name == symbol] of
+      [signature] -> Right signature
+      _ -> Left "unsupported native libc symbol"
+    let declarations = [(before,drop (length symbol + 2) after) |
+          line <- lines source, "declare " `isPrefixOf` line,
+          let (before,after) = break (== '@') line, ("@" ++ symbol ++ "(") `isPrefixOf` after]
+        clean = filter (`notElem` ["noundef","noalias","nocapture","readonly","writeonly","allocptr"]) . words
+        valid (before,after) = clean before == ["declare",result] &&
+          map clean (split (takeWhile (/= ')') after)) == map (:[]) parameters
+    unless (length declarations == 1 && all valid declarations)
+      (Left ("native libc declaration has unsupported ABI: " ++ symbol))
+  where
+    split text = case break (== ',') text of
+      (first,[]) -> [first]
+      (first,_:rest) -> first : split rest
 
 -- The configured Linux libstdc++ header emits these exact iostream lifetime
 -- calls even for otherwise freestanding users such as original simdutf.

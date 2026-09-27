@@ -15,6 +15,7 @@
 -- about native object layouts, into the immutable Core bundle.
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
+  , finishPackageNativeWithDependencies
   , nativeSignatures, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
   ) where
 
@@ -37,8 +38,10 @@ import System.FilePath
 import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR, validateNativeWidthIR,
-  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR)
+  nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR,
+  nativeLibcSymbols, validateNativeLibcIR)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
+import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -492,7 +495,13 @@ stubSource value = case member value "foreign" of
         get stubs "source"
 
 finishPackageNative :: FilePath -> FilePath -> String -> Maybe [FilePath] -> [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
-finishPackageNative pieces directory unit currentObjects modules = do
+finishPackageNative = finishPackageNativeWithDependencies []
+
+-- | Additional products must belong to exact resolved C-only dependencies;
+-- ordinary component/root selection remains unchanged for the requesting unit.
+finishPackageNativeWithDependencies :: [COnlyProduct] -> FilePath -> FilePath -> String -> Maybe [FilePath] ->
+  [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
+finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentObjects modules = do
   let receipt = directory </> "native.json"
   exists <- doesFileExist receipt
   if not exists then pure modules else do
@@ -512,7 +521,7 @@ finishPackageNative pieces directory unit currentObjects modules = do
     allRoots <- concat <$> mapM (\value -> get value "roots")
       [value | value <- components, member value "root" == Just (toJSON (root::String))]
     candidates <- filter ((== "piece.json") . takeFileName) <$> files pieces
-    native <- filterM (\value -> do
+    ownedNative <- filterM (\value -> do
       objectPath <- get value "object"
       pure (member value "root" == Just (toJSON (root::String)) &&
         maybe (nativeObjectOwned roots allRoots objectPath) (objectPath `elem`) currentObjects)) =<< mapM readJson candidates
@@ -521,10 +530,26 @@ finishPackageNative pieces directory unit currentObjects modules = do
     -- instead belong to this fresh acquisition, after unpacked objects vanish.
     case currentObjects of
       Nothing -> pure ()
-      Just _ -> forM_ native $ \value -> do
+      Just _ -> forM_ ownedNative $ \value -> do
         path <- get value "object"
         digest <- sha <$> BS.readFile path
         check (member value "objectSha256" == Just (toJSON digest)) "package native object receipt is stale"
+    compilerArguments <- if null cOnlyProducts then pure [] else
+      get record "sourceIdentity" >>= (`get` "arguments") :: IO [String]
+    let declaredDependencies = [dependency | (flag,dependency) <- zip compilerArguments (drop 1 compilerArguments), flag == "-package-id"]
+    forM_ cOnlyProducts $ \dependency -> do
+      let proof = cOnlyProductProof dependency
+      owner <- get proof "unit"
+      check (owner /= unit && owner `elem` declaredDependencies)
+        "native C-only product is not a declared direct dependency"
+      products <- get proof "translationUnits" :: IO [Value]
+      forM_ products $ \captured -> do
+        piece <- get captured "receipt"
+        path <- get piece "bitcode"
+        observed <- sha <$> BS.readFile path
+        check (member captured "bitcodeSha256" == Just (toJSON observed))
+          "native C-only dependency bitcode changed after selection"
+    let native = ownedNative ++ concatMap cOnlyProductPieces cOnlyProducts
     forM_ native $ \value -> check (member value "target" == Just (toJSON (target::String))) "package C object target differs"
     sourceInputs <- mapM (\value -> get value "inputs" :: IO Value) (record:native)
     bitcodes <- mapM (\value -> get value "bitcode") native
@@ -586,13 +611,14 @@ finishPackageNative pieces directory unit currentObjects modules = do
     -- Other unresolved symbols retain this component as a non-executable archive.
     let unsupported = [name | name <- externals,
           name `notElem` (["memcpy","memmove","memset","memcmp","bcmp","getentropy","wcwidth"] ++
-            nativeMathSymbols ++ nativeCxxInitSymbols ++ nativeLifecycleSymbols),
+            nativeMathSymbols ++ nativeCxxInitSymbols ++ nativeLifecycleSymbols ++ nativeLibcSymbols),
           not ("llvm." `isPrefixOf` name)]
     let math = filter (`elem` nativeMathSymbols) externals
         entropy = "getentropy" `elem` externals
         width = "wcwidth" `elem` externals
         cxx = filter (`elem` nativeCxxInitSymbols) externals
         lifecycle = filter (`elem` nativeLifecycleSymbols) externals
+        libc = filter (`elem` nativeLibcSymbols) externals
         finalIR = directory </> "native/final.ll"
     _ <- command directory opt ["-S","-passes=verify",final,"-o",finalIR]
     ir <- readFile finalIR
@@ -603,12 +629,13 @@ finishPackageNative pieces directory unit currentObjects modules = do
     when entropy (either fail pure (validateNativeEntropyIR target ir))
     when width (either fail pure (validateNativeWidthIR target ir))
     unless (null (cxx ++ lifecycle)) (either fail pure (validateNativeLifecycleIR target (cxx ++ lifecycle) ir))
-    (artifact,format,libraries) <- if (null math && not entropy && not width && null cxx) || not (null unsupported)
+    unless (null libc) (either fail pure (validateNativeLibcIR target libc ir))
+    (artifact,format,libraries) <- if (null math && not entropy && not width && null cxx && null libc) || not (null unsupported)
       then pure (final,"llvm-bitcode",[]) else do
       clang <- tool "THC_CLANG" "clang"
       let container = directory </> "native/final.so"
           arguments = ["--target=" ++ target,"-fembed-bitcode","-shared","-fPIC",final] ++
-            ["-lm" | not (null math)] ++ ["-lc" | entropy || width] ++
+            ["-lm" | not (null math)] ++ ["-lc" | entropy || width || not (null libc)] ++
             ["-lstdc++" | not (null cxx)] ++ ["-o",container]
       _ <- command directory clang arguments
       compilerHash <- sha <$> BS.readFile clang
@@ -617,6 +644,7 @@ finishPackageNative pieces directory unit currentObjects modules = do
         (provider,symbols) <- [("native-libm-scalars-v1"::String,math) | not (null math)] ++
           [("native-libc-getentropy-v1",["getentropy"]) | entropy] ++
           [("native-libc-wcwidth-v1",["wcwidth"]) | width] ++
+          [("native-libc-package-lp64-v1",libc) | not (null libc)] ++
           [("native-libstdcxx-ios-init-v1",cxx) | not (null cxx)]])
     bytes <- BS.readFile artifact
     component <- get record "componentSha256" :: IO String
@@ -626,6 +654,7 @@ finishPackageNative pieces directory unit currentObjects modules = do
           "profile" .= ("thc-package-c-ffi-v1"::String),"unit" .= unit,"target" .= target,
           "componentSha256" .= component,"bitcodeSha256" .= sha bytes,"bitcodeHex" .= hex bytes,"abi" .= abi,
           "buildInputs" .= object ["translationUnits" .= inputs,"providers" .= providers,
+            "dependencies" .= map cOnlyProductProof cOnlyProducts,
             "nativeLibraries" .= libraries,"unresolved" .= externals,"argumentBridges" .= bridgeInputs]]
     -- Keep the complete failed link as evidence. LLVM, rather than a textual
     -- call-graph guess, computes each adapter's closure including global
