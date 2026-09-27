@@ -13,7 +13,7 @@
 module RunTests (tests) where
 
 import Control.Monad (forM_)
-import System.Directory (canonicalizePath, doesDirectoryExist)
+import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist, getModificationTime)
 import System.FilePath ((</>), takeDirectory)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import TestSupport
@@ -27,13 +27,13 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
         source = package </> "app/Main.hs"
         -- Native compilation is independent of the THC backend. Keep the first
         -- build cold, then let Cabal reuse unchanged objects while every run
-        -- still re-exports/audits Core and executes both THC and the native oracle.
+        -- still exports Core and audited controls explicitly request verification.
         -- Later edits use this same directory, exercising actual invalidation.
         output = base </> "output"
         invokeFfi backend ffi = run env base backend 180
           (["run", "--project-dir", package, "completed", "--dist-dir", output,
             "--thc-root", thcRoot env, "--runtime", runtime env] ++ ffi)
-        invoke backend = invokeFfi backend ["--ffi", "native"]
+        invoke backend = invokeFfi backend ["--verify-artifacts", "--ffi", "native"]
         exported = output
         executable = do
           plan <- readJson (output </> "native/cache/plan.json")
@@ -41,6 +41,11 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
             (objects plan "install-plan")) "bin-file"
     cold <- doesDirectoryExist output
     assertBool "fixture starts with a cold native dist directory" (not cold)
+    ordinary <- invokeFfi Nothing []
+    assertSuccess ordinary
+    assertNoStdout ordinary
+    audited <- doesFileExist (exported </> "audit.json")
+    assertBool "default run does not invoke the auditor" (not audited)
     forM_ ["bytecode", "ast"] $ \backend -> do
       result <- invoke (Just backend)
       assertSuccess result
@@ -84,10 +89,16 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
       assertSuccess nativeResult
       assertEqual "native stdout" (out nativeResult) (out result)
 
+    previousAudit <- readText (exported </> "audit.json")
+    previousAuditTime <- getModificationTime (exported </> "audit.json")
     managed <- invokeFfi Nothing ["--ffi", "managed"]
     assertFailure managed
     assertNoStdout managed
     assertContains "--ffi managed is unavailable" (err managed)
+    assertEqual "unverified run leaves previous audit bytes untouched" previousAudit
+      =<< readText (exported </> "audit.json")
+    assertEqual "unverified run does not refresh an old audit" previousAuditTime
+      =<< getModificationTime (exported </> "audit.json")
 
     original <- readText source
     assertContains "answer ==# 42#" original

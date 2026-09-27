@@ -107,13 +107,13 @@ data ExportContext = ExportContext
 boundary :: String
 boundary = "optimized-Core-after-Tidy-before-CorePrep"
 
--- | Resolve the selected runnable component, acquire and audit its Core, then
+-- | Resolve the selected runnable component, acquire its Core, optionally audit, then
 -- launch the guest. The path is the working directory for project selection;
 -- Windows uses the restricted simple-package backend.
 runProject :: RunOptions -> FilePath -> IO ()
 runProject
   | Host.os == "mingw32" = runWindowsProject
-  | otherwise = buildProject AuditAndRun
+  | otherwise = buildProject RunGuest
 
 -- Preserve the existing PowerShell-backed simple-package implementation.
 -- Both platforms use Cabal's positional target resolver, not a legacy CLI.
@@ -254,7 +254,7 @@ cabalProjectOptions opts =
 acquireProject :: RunOptions -> FilePath -> IO ()
 acquireProject = buildProject AcquireOnly
 
-data ProjectAction = AcquireOnly | AuditAndRun deriving Eq
+data ProjectAction = AcquireOnly | RunGuest deriving Eq
 
 buildProject :: ProjectAction -> RunOptions -> FilePath -> IO ()
 buildProject action opts target = do
@@ -272,9 +272,9 @@ buildProject action opts target = do
       projectOptions = cabalProjectOptions opts
   thcRoot <- canonicalizePath (runThcRoot opts)
   runtime <- maybe (pure (thcRoot </> "build/install/thc/bin/thc")) makeAbsolute (runRuntime opts)
-  when (action == AuditAndRun) $ do
+  when (action == RunGuest) $ do
     requireFile runtime
-    requireFile (thcRoot </> "scripts/audit-core.py")
+    when (runVerifyArtifacts opts) $ requireFile (thcRoot </> "scripts/audit-core.py")
   let buildPlugin = thcRoot </> "compiler/build.sh"
       overrides = maybe [] (\path -> [("GHC", path)]) (ghcPath flags) ++
                   maybe [] (\path -> [("GHC_PKG", path)]) (ghcPkgPath flags)
@@ -306,7 +306,7 @@ buildProject action opts target = do
   withProjectLock output $
     runBuiltProject action project working thcRoot runtime output native (runTarget opts) projectOptions
                     pluginDb pluginUnit pluginLibrary compiler packageTool (runInstalledCore opts)
-                    source registeredLibrary (runFfiMode opts) (runArguments opts)
+                    source registeredLibrary (runVerifyArtifacts opts) (runFfiMode opts) (runArguments opts)
 
 resolveRunnable :: FilePath -> String -> [String] -> [(String, String)] -> FilePath -> IO Unit
 resolveRunnable working target configuration environment native = do
@@ -362,9 +362,9 @@ selectedPackageTool ghc requested = do
 
 runBuiltProject :: ProjectAction -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> FilePath ->
                    String -> [String] -> FilePath -> String -> FilePath -> FilePath ->
-                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Maybe FfiMode -> [String] -> IO ()
+                   Maybe FilePath -> String -> Maybe FilePath -> FilePath -> Bool -> Maybe FfiMode -> [String] -> IO ()
 runBuiltProject action project working thcRoot runtime output native target projectOptions
-                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary ffiMode guestArguments = do
+                pluginDb pluginUnit pluginLibrary ghc ghcPkg installedPolicy ghcSource registeredLibrary verifyArtifacts ffiMode guestArguments = do
   driver <- getExecutablePath
   let proxy = native </> "cache/thc/native-ghc"
       receipts = native </> "cache/thc/native-recipes-v1"
@@ -518,15 +518,16 @@ runBuiltProject action project working thcRoot runtime output native target proj
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
                                "foreignExceptionBridgeUnit" .= bridgeUnit,
                                "units" .= linked])
-  when (action == AuditAndRun) $ do
-    runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
+  when (action == RunGuest) $ do
+    when verifyArtifacts $
+      runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
                                 "--entry", entry] ++
                                (if lifecycle then ["--entry", shutdown] else []) ++
                                ["--io-main", "--output", audit]) thcRoot
     -- Full-Core main and shutdown share one program and its Handle CAFs.
     -- Like cabal run, preserve the caller's cwd even with --project-dir.
     let programName = reverse (takeWhile (/= ':') (reverse (snd selection)))
-    runCommand False runtime (runtimeLaunchArguments ffiMode (if lifecycle
+    runCommand False runtime (runtimeLaunchArguments verifyArtifacts ffiMode (if lifecycle
         then ["--run-executable", '@' : manifest, entry, shutdown]
         else ["--run-io", '@' : manifest, entry]) programName guestArguments) working
 

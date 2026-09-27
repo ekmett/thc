@@ -22,8 +22,12 @@ projects, flags, disabled components and dependencies. There is no separate
 selector flag or positional project-directory argument. THC asks `cabal list-bin`
 to resolve the target, identifies its exact local unit from `plan.json`, and
 builds that component and its required closure. This does not run the native
-binary. The resolved build information drives `THC.Plugin` export, strict
-reachable-Core audit, and execution in the THC JVM runtime.
+binary. The resolved build information drives `THC.Plugin` export and execution
+in the THC JVM runtime. Ordinary runs do not invoke the reachable-Core auditor.
+Use `thc run --verify-artifacts ...` to request a strict pre-launch audit and
+forward artifact verification to the JVM. The flag belongs before the guest
+`--` separator; it does not change FFI permissions or host access. Without it,
+an existing `audit.json` is neither refreshed nor evidence of the current run.
 
 Project acquisition also acquires and selects the genuine
 `THC.Internal.Exception` dictionary. The
@@ -106,10 +110,9 @@ shows the mixed-input syntax. A neighboring `.idx` file is not discovered
 automatically.
 
 Indexed loading defers eligible binding-body decoding and backend preparation.
-It still hashes the complete source, validates its structure and discovers
-dependencies; `run` also performs the reachable-Core audit. Indexes do not
-eliminate these full-source scans or establish that every supplied binding is
-executable. See the [package format](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+An index does not establish that every supplied binding is executable.
+`run --verify-artifacts` requests a pre-launch reachable-Core audit as well as
+runtime artifact verification. See the [package format](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
 for the validation and lazy-loading boundary.
 
 IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
@@ -429,9 +432,9 @@ artifacts and dependency build identities. Unchanged native artifacts reuse
 the ZIP without another GHC export; a changed artifact or exporter refreshes it.
 Local `-inplace` IDs are GHC linking names, so the native artifact hash supplies
 the immutable cache identity. Native files from a different build directory may
-have different bytes and then correctly produce a new ZIP. The strict audit and
-THC loader both consume the manifest. Source-built store dependencies use their
-actual Cabal store ID as the ZIP basename in the OS cache, partitioned by GHC
+have different bytes and then correctly produce a new ZIP. The THC loader and,
+when requested, the strict audit consume the manifest. Source-built store
+dependencies use their actual Cabal store ID as the ZIP basename in the OS cache, partitioned by GHC
 version, ABI and platform. On a missing ZIP, Cabal rebuilds the source package
 in a temporary private store. A transparent compiler wrapper first runs native
 GHC unchanged, then exports Core with the same Cabal arguments while its unpacked
@@ -482,9 +485,9 @@ build: its unit and dependencies must
 match, with no exposed/hidden modules or reexports. Cabal can list a C-only
 archive in `hs-libraries`; that field alone does not imply a Haskell module.
 The empty Core bundle retains the complete registration, including native library
-metadata, and revalidates it on cache reads. Referenced foreign calls still pass
-the normal strict audit. A missing capture for a library with Haskell modules
-still fails; no replacement Core is invented.
+metadata, and revalidates it on cache reads. Referenced foreign calls are included
+when `--verify-artifacts` requests the strict audit. A missing capture for a
+library with Haskell modules still fails; no replacement Core is invented.
 
 A reexport-only store library, such as the top-level `happy-lib` component,
 also owns no Core. Its bundle retains the original registration separately as

@@ -32,7 +32,7 @@ fixture environment = TestLabel "original System.Environment native comparison" 
     installedPkg <- lookupEnv "THC_INSTALLED_CORE_GHC_PKG"
     ghcSource <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
     let output = scratch environment </> "environment-full-core"
-        command = ["run", "--project-dir", project, "run-environment:exe:environment", "--installed-core", "required",
+        command = ["run", "--verify-artifacts", "--project-dir", project, "run-environment:exe:environment", "--installed-core", "required",
           "--thc-root", thcRoot environment, "--runtime", runtime environment, "--dist-dir", output] ++
           maybe [] (\path -> ["--with-ghc", path]) installedGhc ++
           maybe [] (\path -> ["--with-ghc-pkg", path]) installedPkg ++
