@@ -577,7 +577,10 @@ MEMORY_SEARCH_OUTPUTS = frozenset("build/original-memory-search/" + name for nam
 
 RTS_DIAGNOSTIC_OUTPUTS = frozenset("build/rts-diagnostics/" + name for name in (
     "manifest.json", "oracle.json",
-    *(f"logs/{label}.{suffix}" for label in ("version", "native-build", "ascii", "empty", "bytes", "nul", "newline", "stack", "heap")
+    *(f"logs/{label}.{suffix}" for label in (
+        "version", "native-build", "ascii", "empty", "bytes", "nul", "newline",
+        "debug-ascii", "debug-empty", "debug-bytes", "debug-nul", "debug-newline",
+        "trace-nul", "stack", "heap")
       for suffix in ("stdout", "stderr", "command.json")),
 ))
 

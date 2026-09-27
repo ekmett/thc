@@ -981,14 +981,21 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('"$fixture_bin" rts-diagnostics', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         outputs = fast_fixtures.fast_inputs.RTS_DIAGNOSTIC_OUTPUTS
-        self.assertEqual(29, len(outputs))
+        self.assertEqual(47, len(outputs))
+        for label in ('debug-ascii', 'debug-empty', 'debug-bytes', 'debug-nul',
+                      'debug-newline', 'trace-nul'):
+            for suffix in ('stdout', 'stderr', 'command.json'):
+                self.assertIn(f'build/rts-diagnostics/logs/{label}.{suffix}', outputs)
         self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
         self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rts-diagnostics/native/oracle', {}))
         artifacts = {path: '0' * 64 for path in outputs if not path.endswith('/manifest.json')}
         proof = dict(schema=1, artifactHashes=artifacts)
         self.assertEqual(artifacts, fast_fixtures.fast_inputs.rts_diagnostic_artifact_hashes(proof))
-        for invalid in (dict(artifacts, **{'build/rts-diagnostics/extra.json': '0'*64}), {}):
+        legacy = {path: digest for path, digest in artifacts.items()
+                  if '/logs/debug-' not in path and '/logs/trace-nul.' not in path}
+        for invalid in (dict(artifacts, **{'build/rts-diagnostics/extra.json': '0'*64}),
+                        legacy, {}):
             with self.assertRaises(RuntimeError):
                 fast_fixtures.fast_inputs.rts_diagnostic_artifact_hashes(dict(proof, artifactHashes=invalid))
 
