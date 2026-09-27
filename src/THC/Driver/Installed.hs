@@ -17,12 +17,12 @@ module THC.Driver.Installed
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
   , emptyRegistration, modulelessRegistration
-  , boundedInterfaceProcess
+  , boundedInterfaceProcess, boundedInterfaceProcessInput
   ) where
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)
 import Control.Concurrent.MVar (MVar, newEmptyMVar, putMVar, readMVar)
-import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, throwIO, try)
+import Control.Exception (SomeException, bracket, evaluate, finally, mask, mask_, onException, throwIO, try)
 import Control.Monad (filterM, foldM, forM, forM_, unless, void)
 import Data.Aeson (Value(..), FromJSON, eitherDecodeStrict', encode, fromJSON, Result(..), object, (.=))
 import qualified Data.Aeson.Key as Key
@@ -47,7 +47,7 @@ import System.Exit (ExitCode(..))
 import System.FilePath ((</>), pathSeparator)
 import System.IO (IOMode(ReadMode), hClose, hSetBinaryMode, withBinaryFile)
 import System.Process (proc, CreateProcess(..), StdStream(..), readCreateProcessWithExitCode,
-                       waitForProcess, withCreateProcess)
+                       terminateProcess, waitForProcess, withCreateProcess)
 import System.Timeout (timeout)
 import Text.Read (readMaybe)
 import qualified Data.Text as Text
@@ -439,10 +439,14 @@ required value name = maybe (fail ("missing/invalid helper field " ++ name)) pur
 
 -- Full Core stdout can be tens of megabytes. Keep its UTF-8 bytes instead of
 -- building a linked-list String and encoding it back to bytes for Aeson. Drain
--- stderr concurrently even when a helper emits more than a pipe buffer, and
--- retain the existing empty-stdin, timeout, UTF-8 rejection and child cleanup.
+-- both outputs concurrently even while sending a request larger than a pipe
+-- buffer. Preserve timeout, UTF-8 rejection and child cleanup. JSON requests
+-- are bytes too: a locale-encoded String pipe cannot carry every Windows path.
 boundedInterfaceProcess :: FilePath -> [String] -> IO (ExitCode, BS.ByteString, BS.ByteString)
-boundedInterfaceProcess executable arguments = do
+boundedInterfaceProcess executable arguments = boundedInterfaceProcessInput executable arguments BS.empty
+
+boundedInterfaceProcessInput :: FilePath -> [String] -> BS.ByteString -> IO (ExitCode, BS.ByteString, BS.ByteString)
+boundedInterfaceProcessInput executable arguments request = do
   inherited <- getEnvironment
   let clean = filter (\(key, _) -> key `notElem` ["GHC_PACKAGE_PATH", "GHC_ENVIRONMENT"]) inherited
       commandLine = (proc executable arguments)
@@ -450,23 +454,33 @@ boundedInterfaceProcess executable arguments = do
       execute = withCreateProcess commandLine $ \input output diagnostic child ->
         case (input, output, diagnostic) of
           (Just stdinPipe, Just stdoutPipe, Just stderrPipe) -> do
-            hClose stdinPipe
+            hSetBinaryMode stdinPipe True
             hSetBinaryMode stdoutPipe True
             hSetBinaryMode stderrPipe True
-            let startReader = mask_ $ do
-                  result <- newEmptyMVar :: IO (MVar (Either SomeException BS.ByteString))
+            let startWorker :: IO a -> IO (ThreadId, MVar (Either SomeException a))
+                startWorker action = mask_ $ do
+                  result <- newEmptyMVar
                   thread <- forkIOWithUnmask $ \unmask ->
-                    try (unmask (BS.hGetContents stderrPipe)) >>= putMVar result
+                    try (unmask action) >>= putMVar result
                   pure (thread, result)
-                stopReader (thread, result) = killThread thread >> void (readMVar result)
-            bracket startReader stopReader $ \(_, result) -> do
-              out <- BS.hGetContents stdoutPipe
-              err <- readMVar result >>= either throwIO pure
-              status <- waitForProcess child
-              -- The previous text Handle rejected invalid UTF-8 even on
-              -- otherwise successful output. Do not relax that protocol.
-              forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
-              pure (status, out, err)
+                stopWorker (thread, result) = killThread thread >> void (readMVar result)
+                await result = readMVar result >>= either throwIO pure
+            bracket (startWorker (BS.hGetContents stdoutPipe)) stopWorker $ \(_, outputResult) ->
+              bracket (startWorker (BS.hGetContents stderrPipe)) stopWorker $ \(_, diagnosticResult) ->
+                bracket (startWorker (BS.hPut stdinPipe request `finally` hClose stdinPipe)) stopWorker $ \(_, inputResult) ->
+                  (do
+                    await inputResult
+                    out <- await outputResult
+                    err <- await diagnosticResult
+                    status <- waitForProcess child
+                    -- The previous text Handle rejected invalid UTF-8 even on
+                    -- otherwise successful output. Do not relax that protocol.
+                    forM_ [out, err] $ \bytes -> either (fail . show) (const (pure ())) (Text.decodeUtf8' bytes)
+                    pure (status, out, err))
+                  -- Windows pipe IO can defer a worker's asynchronous exception.
+                  -- Terminate the child before joining blocked readers/writers;
+                  -- withCreateProcess then closes the handles and reaps it.
+                  `onException` terminateProcess child
           _ -> fail "installed-Core helper pipes were unavailable"
   result <- timeout (180 * 1000000) execute
   maybe (fail ("installed-Core subprocess timed out: " ++ executable)) pure result
