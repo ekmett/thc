@@ -38,7 +38,7 @@ internal class FrameLayout private constructor(
     fun scope(): FrameLayout = FrameLayout(builder, locals.toMutableMap())
 
     /** Each binder owns a fresh slot, including a binder shadowing an existing name. */
-    fun bind(name: String): Int = builder.addSlot(FrameSlotKind.Illegal, name, null).also {
+    fun bind(name: String, kind: FrameSlotKind = FrameSlotKind.Illegal): Int = builder.addSlot(kind, name, null).also {
         locals[name] = it
     }
 

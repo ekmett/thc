@@ -2200,7 +2200,18 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 bindings += LocalBinding(-1, value, false, slots)
                 return if (proof.isVector) VectorLocalRead(shape, slots) else TupleLocalRead(shape, slots)
             }
-            val slot = layout.bind("<async operand ${bindings.size}>")
+            // This fresh scratch slot has exactly the writer below, including
+            // its resumed value. Establish its known carrier before compilation;
+            // unknown values keep ordinary first-write profiling and widening.
+            val kind = when {
+                proof.isInt -> FrameSlotKind.Int
+                proof.isLong -> FrameSlotKind.Long
+                proof.isFloat -> FrameSlotKind.Float
+                proof.isDouble -> FrameSlotKind.Double
+                proof.isEvaluatedReference -> FrameSlotKind.Object
+                else -> FrameSlotKind.Illegal
+            }
+            val slot = layout.bind("<async operand ${bindings.size}>", kind)
             temporaries += slot
             bindings += LocalBinding(slot, value, proof.isLong)
             return LocalRead(slot, false).proven(proof)

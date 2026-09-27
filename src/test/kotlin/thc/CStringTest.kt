@@ -12,14 +12,38 @@ import org.junit.jupiter.params.provider.CsvSource
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import thc.runtime.BytecodeProgram
+import thc.runtime.BytecodeRoot
 import thc.runtime.Calls
 import thc.runtime.ExecutableProgram
 import thc.runtime.Program
 import thc.runtime.ManagedAddress
+import thc.runtime.ManagedAddressRead
 import thc.runtime.RuntimeFault
 import java.io.File
 
 class CStringTest {
+    @Test fun statelessAddressReadsPreserveCarriersAndRejectCoercions() {
+        val address = ManagedAddress.fromHex("0000")
+        assertEquals(0L, BytecodeRoot.AddressIndexManagedScalar.index(ManagedAddressRead.CHAR, address, 0L))
+        for (operation in listOf(ManagedAddressRead.INT16, ManagedAddressRead.WORD16))
+            assertEquals(0, BytecodeRoot.AddressIndexManagedScalar.index(operation, address, 0L))
+        for (signed in listOf(false, true)) {
+            assertEquals(0, BytecodeRoot.AddressIndexByte.index(signed, address, 0L))
+            for (invalid in listOf(0, 0.0, null)) assertThrows(RuntimeFault::class.java) {
+                BytecodeRoot.AddressIndexByte.index(signed, address, invalid)
+            }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.AddressIndexByte.index(signed, 0L, 0L) }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.AddressIndexByte.index(signed, address, -1L) }
+        }
+        for (operation in listOf(ManagedAddressRead.CHAR, ManagedAddressRead.INT16, ManagedAddressRead.WORD16)) {
+            for (invalid in listOf(0, 0.0, null)) assertThrows(RuntimeFault::class.java) {
+                BytecodeRoot.AddressIndexManagedScalar.index(operation, address, invalid)
+            }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.AddressIndexManagedScalar.index(operation, 0L, 0L) }
+            assertThrows(RuntimeFault::class.java) { BytecodeRoot.AddressIndexManagedScalar.index(operation, address, -1L) }
+        }
+    }
+
     @ParameterizedTest
     @CsvSource("ast,false", "ast,true", "bytecode,false", "bytecode,true")
     fun characterAddressReadsKeepMachineCarriersDistinctFromNarrowBytes(backend: String, async: Boolean) {
