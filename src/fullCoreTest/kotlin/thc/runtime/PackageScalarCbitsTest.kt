@@ -33,7 +33,7 @@ class PackageScalarCbitsTest {
     private val names = setOf("scalarInt32", "scalarInt64", "scalarFloat", "scalarDouble", "scalarMixed", "repeatInt32")
     private fun json(path: String) = Json.parse(File(root, path).readText()) as Map<String, Any?>
     private data class Fixture(val merged: Map<String, Any?>, val records: List<Map<String, Any?>>,
-                               val links: List<PackageScalarLink>)
+                               val links: List<PackageScalarLink>, val programManifest: File)
 
     private fun fixture(): Fixture {
         val manifest = json("$prefix/manifest.json")
@@ -56,8 +56,17 @@ class PackageScalarCbitsTest {
             (listOf("first", "second").flatMap { listOf("$prefix/$it/packages.json", "$prefix/$it/audit.json") } +
                 retainedPaths).toSet(), "$prefix/")
         val modules = mutableListOf<Map<String, Any?>>()
+        var programDocument: Map<String, Any?>? = null
+        val programUnits = linkedMapOf<String, Map<String, Any?>>()
         for (record in records) {
             val packages = json(record["packages"] as String)
+            if (programDocument == null) {
+                programDocument = packages
+                for (original in packages["units"] as List<Map<String, Any?>>)
+                    programUnits[original["id"] as String] = original
+            }
+            assertEquals(programDocument["foreignExceptionBridgeUnit"], packages["foreignExceptionBridgeUnit"],
+                "both acquisitions use the same actual runtime exception unit")
             val unit = (packages["units"] as List<Map<String, Any?>>).single { it["id"] == record["unit"] }
             val keys = if (unit.containsKey("json")) {
                 assertFalse(unit.containsKey("bundle"), "pair and legacy ZIP cannot both be selected")
@@ -74,11 +83,37 @@ class PackageScalarCbitsTest {
                     File(retained.getValue("path")).canonicalPath, "retained $key path")
                 relocated[key] = original + ("path" to File(retained.getValue("path")).canonicalPath)
             }
+            programUnits[record["unit"] as String] = relocated
             // Select an unchanged, hashed unit from the ordinary acquisition result.
             // No test Core, synthetic provider or rewritten payload is substituted.
             val selected = temporary.resolve("${record["name"]}-packages.json").toFile()
-            selected.writeText(Json.stringify(packages + ("units" to listOf(relocated))))
-            CorePackageManifest.visitModules(selected.path) { module, _ -> modules.add(module) }
+            val selection = packages + ("units" to listOf(relocated))
+            selected.writeText(Json.stringify(selection))
+            val directory = CoreUnitDirectory.read(selection)
+            if (directory == null) {
+                CorePackageManifest.visitModules(selected.path) { module, _ -> modules.add(module) }
+            } else {
+                val originalUnit = directory.units.single()
+                val source = requireNotNull(originalUnit.json)
+                val symbols = requireNotNull(originalUnit.symbols)
+                // This explicit oracle test needs whole original modules, not
+                // the demand loader's filtered admission metadata.
+                CoreJsonSymbols(source.path, symbols.path, true, source.sha256, symbols.sha256).use { reader ->
+                    for (module in originalUnit.modules) reader.verifyModule(module.span, module.sha256) { original ->
+                        assertEquals("9.14.1", original["ghc"])
+                        assertEquals(originalUnit.id, original["unit"])
+                        assertEquals(module.name, original["module"])
+                        assertEquals("optimized-Core-after-Tidy-before-CorePrep", original["boundary"])
+                        CoreForeignArtifacts.validateArchive(original)
+                        for (binding in original["bindings"] as List<Map<String, Any?>>) {
+                            val id = binding["id"] as String
+                            assertTrue(id.startsWith(module.prefix) || id == "main::${module.name}.main",
+                                "original binding remains owned by selected unit/module")
+                        }
+                        modules.add(original)
+                    }
+                }
+            }
             val rows = record["observations"] as List<Map<String, Any?>>
             assertEquals(30, rows.size)
             assertEquals(names, rows.map { it["entry"] }.toSet())
@@ -97,8 +132,13 @@ class PackageScalarCbitsTest {
         assertTrue(links[0].abi.map { it.entry }.intersect(links[1].abi.map { it.entry }.toSet()).isEmpty(), "separate component entry names")
         assertEquals(setOf("Int32Rep", "Int64Rep", "FloatRep", "DoubleRep"),
             links.flatMap { link -> link.abi.flatMap { it.arguments + it.result } }.toSet())
-        assertEquals(4, modules.count { it.containsKey("packageScalarLink") }, "two typed importing modules in each component")
-        return Fixture(merged, records, links)
+        assertEquals(4, modules.count { it.containsKey("packageScalarLink") || it.containsKey("packageNativeLink") },
+            "two typed importing modules in each component")
+        // Retain actual dependencies and the declared exception bridge. The
+        // scalar-only inspection above is not a complete executable program.
+        val programManifest = temporary.resolve("scalar-program-packages.json").toFile()
+        programManifest.writeText(Json.stringify(requireNotNull(programDocument) + ("units" to programUnits.values.toList())))
+        return Fixture(merged, records, links, programManifest)
     }
 
     private fun context(native: Boolean = true): Context = Context.newBuilder("thc").allowNativeAccess(native)
@@ -162,12 +202,13 @@ class PackageScalarCbitsTest {
         val fixture = fixture()
         val rows = fixture.records.flatMap { record -> (record["observations"] as List<Map<String, Any?>>).map { record to it } }
         for (backend in listOf("ast", "bytecode")) context().use { context ->
-            context.initialize("thc"); context.enter()
+            context.eval("thc", CoreModules.request(listOf("@${fixture.programManifest}"),
+                identity(rows.first().first, rows.first().second), backend = backend,
+                asyncExceptions = false, verifyArtifacts = true))
+            context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                fixture.links.forEach { Language.currentState().packageCbits.link(it) }
-                val source = CoreModules.reachable(fixture.merged, rows.map { identity(it.first, it.second) }.distinct(), true) + ("instrument" to true)
-                val program: ExecutableProgram = if (backend == "ast") Program(language, source) else BytecodeProgram(language, source)
+                val program = Language.currentState().coreUnitPrograms.single()
                 val entries = rows.map { identity(it.first, it.second) }.distinct().associateWith(program::entryTarget)
                 fun check(record: Map<String, Any?>, row: Map<String, Any?>) {
                     val entry = identity(record, row)
