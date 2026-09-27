@@ -396,6 +396,87 @@ val testBytecodeHandlerPreparation = tasks.register("testBytecodeHandlerPreparat
     }
 }
 
+/** The explicit unprofiled condition already requires a Boolean. Its cold
+ * opcode need not deoptimize merely to choose primitive/object quickening. */
+class BytecodeUnprofiledBranchPreparation {
+    val version = "25.3.4.1"
+    private val marker = "THC stateless unprofiled Boolean branch v1"
+    private val original = """
+        @EarlyInline
+        private long handleBranchFalseUnprofiled(FrameWithoutBoxing frame, byte[] bc, long bci, long sp) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            boolean condition_ = handleBranchFalseUnprofiled${'$'}slow(frame, bc, bci, sp, null);
+            if (condition_) {
+                return bci + 8;
+            } else {
+                return BYTES.getIntUnaligned(bc, bci + 2 /* imm branch_target */);
+            }
+        }
+    """.trimIndent().prependIndent("        ") + "\n"
+    private val changed = original.replace(
+        "            CompilerDirectives.transferToInterpreterAndInvalidate();\n" +
+            "            boolean condition_ = handleBranchFalseUnprofiled${'$'}slow(frame, bc, bci, sp, null);\n",
+        "            // $marker\n" +
+            "            boolean condition_ = (boolean) FRAMES.getValue(frame, sp - 1);\n" +
+            "            if (CompilerDirectives.inCompiledCode()) {\n" +
+            "                FRAMES.clear(frame, sp - 1);\n" +
+            "            }\n")
+
+    fun transform(source: String, processorVersion: String): String {
+        require(processorVersion == version) { "Review unprofiled branch preparation before changing Truffle $version." }
+        fun shape(ok: Boolean) { require(ok) { "Unexpected Truffle unprofiled Boolean branch shape." } }
+        val unix = source.replace("\r\n", "\n")
+        val crlf = source.contains("\r\n")
+        shape(!unix.contains('\r') && (!crlf || source == unix.replace("\n", "\r\n")))
+        fun replaceOnce(value: String, from: String, to: String): String {
+            val at = value.indexOf(from)
+            shape(at >= 0 && value.indexOf(from, at + from.length) < 0)
+            return value.replaceRange(at, at + from.length, to)
+        }
+        shape(changed != original)
+        var result = unix
+        if (result.contains(marker)) result = replaceOnce(result, changed, original)
+        shape(!result.contains(marker))
+        val signature = "private long handleBranchFalseUnprofiled(FrameWithoutBoxing frame, byte[] bc, long bci, long sp)"
+        val at = result.indexOf(signature)
+        shape(at >= 0 && result.indexOf(signature, at + signature.length) < 0)
+        result = replaceOnce(result, original, changed)
+        return if (crlf) result.replace("\n", "\r\n") else result
+    }
+
+    fun fixture() = "// Ordinary and quickened handlers stay untouched.\n" + original +
+        "// End of exact initial unprofiled handler.\n"
+}
+
+val testBytecodeUnprofiledBranchPreparation = tasks.register("testBytecodeUnprofiledBranchPreparation") {
+    group = "verification"
+    inputs.file("gradle/bytecode-metadata.gradle.kts")
+    doLast {
+        val patch = BytecodeUnprofiledBranchPreparation()
+        val before = patch.fixture()
+        val after = patch.transform(before, patch.version)
+        check(before != after)
+        check(patch.transform(after, patch.version) == after)
+        check(patch.transform(before.replace("\n", "\r\n"), patch.version) == after.replace("\n", "\r\n"))
+        check(before.substringBefore("        @EarlyInline") == after.substringBefore("        @EarlyInline"))
+        check(before.substringAfter("            if (condition_)") == after.substringAfter("            if (condition_)"))
+        fun reject(source: String, version: String = patch.version) {
+            check(runCatching { patch.transform(source, version) }.exceptionOrNull() is IllegalArgumentException)
+        }
+        reject(before, "changed-version")
+        reject(before + before)
+        reject(before.replace("bci + 8", "bci + 10"))
+        reject(before.replace("bci + 2", "bci + 4"))
+        reject(before.replace("long sp", "int sp"))
+        reject(before.replace("sp, null", "sp, other"))
+        reject(after.replace("(boolean) FRAMES", "(Boolean) FRAMES"))
+        reject(after.replace("sp - 1", "sp - 2"))
+        reject(after.replace("FRAMES.clear(frame, sp - 1);", ""))
+        reject(before.replaceFirst("\n", "\r\n"))
+        logger.lifecycle("Stateless unprofiled Boolean branch: exact method/cast/clear/jump, version, CRLF and idempotence controls passed.")
+    }
+}
+
 val testBytecodeSourceModeAccessor = tasks.register("testBytecodeSourceModeAccessor") {
     group = "verification"
     description = "Check the pinned generated builder's read-only lazy source-mode accessor."
@@ -487,7 +568,7 @@ val testBytecodeMetadataSplit = tasks.register("testBytecodeMetadataSplit") {
 }
 
 tasks.named("check") { dependsOn(testBytecodeMetadataSplit, testBytecodeSourceModeAccessor, testBytecodeStaticPreparation,
-    testBytecodeHandlerPreparation) }
+    testBytecodeHandlerPreparation, testBytecodeUnprofiledBranchPreparation) }
 tasks.matching { it.name == "kaptKotlin" }.configureEach {
     inputs.file("gradle/bytecode-metadata.gradle.kts")
     doLast {
@@ -497,8 +578,9 @@ tasks.matching { it.name == "kaptKotlin" }.configureEach {
         val source = layout.buildDirectory.file("generated/source/kapt/main/thc/runtime/BytecodeRootGen.java").get().asFile
         val before = source.readText()
         val version = checkNotNull(dependency.version)
-        val after = BytecodeHandlerPreparation().transform(BytecodeStaticPreparation().transform(
-            BytecodeSourceModeAccessor().transform(BytecodeMetadataSplitter().transform(before, version), version), version), version)
+        val after = BytecodeUnprofiledBranchPreparation().transform(BytecodeHandlerPreparation().transform(
+            BytecodeStaticPreparation().transform(BytecodeSourceModeAccessor().transform(
+                BytecodeMetadataSplitter().transform(before, version), version), version), version), version)
         if (before != after) source.writeText(after)
     }
 }
