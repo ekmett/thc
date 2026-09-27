@@ -78,8 +78,11 @@ class FourWayAggregateProtocolTest {
         assertThrows(RuntimeFault::class.java) { SumShape.validate(proof.copy(primReps = listOf("WordRep", "WordRep"))) }
         assertThrows(RuntimeFault::class.java) { SumShape.payload(alternatives[0], CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))) }
         assertThrows(RuntimeFault::class.java) { SumShape.payload(alternatives[0], alternatives[0], true) }
-        // A nested sum is legal inside a tuple, but never inside another sum's payload.
-        assertThrows(UnsupportedCore::class.java) { SumShape.validate(proof.copy(alternatives = listOf(proof) + alternatives.drop(1))) }
+        // A nested payload cannot reuse the original family's physical proof unchanged.
+        val forgedNested = assertThrows(RuntimeFault::class.java) {
+            SumShape.validate(proof.copy(alternatives = listOf(proof) + alternatives.drop(1)))
+        }
+        assertTrue(forgedNested.message.orEmpty().contains("Sum physical representation or tag slot mismatch"), forgedNested.message)
     }
 
     private class ResumeProbe(language: Language, proof: CoreRepresentation, private val mapping: IntArray,

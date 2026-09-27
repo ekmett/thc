@@ -118,8 +118,10 @@ jobs:
         run: |
           cabal run exe:thc-fixtures --offline -- aggregate-heap
           cabal run exe:thc-fixtures --offline -- fourway-aggregate
+          cabal run exe:thc-fixtures --offline -- generic-sum-transport
           ./gradlew aggregateHeapFullCoreTest aggregateHeapFullCoreDenseTest \
-            fourwayAggregateFullCoreTest fourwayAggregateFullCoreDenseTest
+            fourwayAggregateFullCoreTest fourwayAggregateFullCoreDenseTest \
+            genericSumTransportFullCoreTest genericSumTransportFullCoreDenseTest
       - name: Check tuple join arguments and bottoming tuple cases
         run: |
           cabal run exe:thc-fixtures --offline -- tuple-join --local

@@ -1,12 +1,22 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact scalar sum proofs and GHC slots; no width-only inference or coercions."""
+"""Exact logical sum proofs and original GHC slots, independent of JVM storage."""
+from core_vectors import proof_error as vector_proof_error
 LIFTED = 'BoxedRep (Just Lifted)'
 UNLIFTED = 'BoxedRep (Just Unlifted)'
 ORDER = (LIFTED, UNLIFTED, 'WordRep', 'Word64Rep', 'FloatRep', 'DoubleRep')
 WORD = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep'}
 WIDE = {'Int64Rep', 'Word64Rep'}
+ELEMENTS = ('Int8ElemRep', 'Int16ElemRep', 'Int32ElemRep', 'Int64ElemRep',
+            'Word8ElemRep', 'Word16ElemRep', 'Word32ElemRep', 'Word64ElemRep', 'FloatElemRep', 'DoubleElemRep')
+
+
+def slot_order(rep):
+    if rep in ORDER:
+        return (ORDER.index(rep),)
+    _, count, element = rep.split(' ')
+    return (len(ORDER), int(count), ELEMENTS.index(element))
 
 
 def is_sum(proof):
@@ -35,8 +45,17 @@ def payload_leaves(proof):
         if reps != leaves:
             raise ValueError('Tuple payload components disagree with physical representations')
         return leaves
-    if aggregate is not None or 'vector' in proof or kind == 'vector':
-        raise ValueError('Nested sum or vector payload is unsupported')
+    if is_sum(proof):
+        error = proof_error(proof)
+        if error:
+            raise ValueError(error)
+        return reps
+    if kind == 'vector':
+        if vector_proof_error(proof):
+            raise ValueError('Invalid exact sum vector payload')
+        return reps
+    if aggregate is not None or 'vector' in proof:
+        raise ValueError('Invalid sum payload aggregate')
     if kind == 'void' and reps == []:
         return []
     if not isinstance(reps, list) or len(reps) != 1:
@@ -44,6 +63,7 @@ def payload_leaves(proof):
     rep = reps[0]
     valid = (kind == 'long' and rep in WORD | WIDE or
              kind == 'float' and rep == 'FloatRep' or kind == 'double' and rep == 'DoubleRep' or
+             kind == 'address' and rep == 'AddrRep' and proof['evaluated'] or
              kind in ('data', 'closure', 'object') and rep in (LIFTED, UNLIFTED))
     if not valid:
         raise ValueError('Unsupported sum payload representation')
@@ -53,18 +73,18 @@ def payload_leaves(proof):
 def layout(alternatives):
     if not isinstance(alternatives, list) or len(alternatives) < 2:
         raise ValueError('Unboxed sum requires at least two exact alternatives')
-    fields = [[('WordRep' if r in WORD else 'Word64Rep' if r in WIDE else r)
+    fields = [[('WordRep' if r in WORD or r == 'AddrRep' else 'Word64Rep' if r in WIDE else r)
                for r in payload_leaves(alternative)] for alternative in alternatives]
     # Mirror GHC.Types.RepType.ubxSumRepType, including Word/Word64 sharing.
     slots = []
     for row in fields:
-        needed = sorted(row, key=ORDER.index)
+        needed = sorted(row, key=slot_order)
         merged, left, right = [], 0, 0
         while left < len(slots) and right < len(needed):
             common = fits(slots[left], needed[right])
             if common is not None:
                 merged.append(common); left += 1; right += 1
-            elif ORDER.index(needed[right]) < ORDER.index(slots[left]):
+            elif slot_order(needed[right]) < slot_order(slots[left]):
                 merged.append(needed[right]); right += 1
             else:
                 merged.append(slots[left]); left += 1

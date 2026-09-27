@@ -957,6 +957,7 @@ executable thc-fixtures
     AggregateFixtures
     AggregateHeapFixtures
     FourWayAggregateFixtures
+    GenericSumTransportFixtures
     GraphFixtures
     IntegerCompletionFixtures
     ContinuationFixtures

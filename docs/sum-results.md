@@ -10,13 +10,19 @@ ordinary one-reference representation; none becomes an unboxed sum by name,
 arity or liftedness.
 
 Supported leaves include machine and fixed-width integral representations,
-`FloatRep`, `DoubleRep`, known lifted or unlifted references, scalar void tokens
-such as `State#`, and
-exact recursive tuple payloads composed of those leaves. Int and Word share
+`FloatRep`, `DoubleRep`, evaluated managed `AddrRep`, supported exact vector
+species, known lifted or unlifted references, and scalar void tokens such as
+`State#`. Concrete tuple and sum payloads nest recursively. Int and Word share
 one machine-word storage class without changing bits. `Int64Rep`/`Word64Rep`
 use the same lowered Long carrier; GHC's Word/Word64 max-slot merge chooses the
 physical payload class rather than counting the two classes independently.
 Float and Double slots, and lifted and unlifted reference slots, remain separate.
+GHC also shares address and integral word slots. THC retains that original
+proof unchanged, but derives a separate storage projection: a collision gets
+one primitive integral field and one traced managed-address field. No pointer
+bits are invented and no address backing is discarded. Nested projections
+compose through the original GHC slot map. Vector fields retain their exact
+supported species and typed vector carrier, not scalar lane arrays.
 The runtime recomputes
 and checks the complete placement map before lowering. It also checks
 constructor family arity, one-based tags, payload shape and levity, case binder
@@ -54,9 +60,11 @@ sum value. [Sum join inputs and captures](sum-inputs.md) use the same typed
 frame slots, including parallel recursive transfers.
 
 Tuples may recursively contain supported sums, preserving logical nesting,
-zero-width State/empty-tuple distinctions and lazy lifted neighbours. Sums inside
-another sum's payload (including through a tuple payload), integer-width conversion,
-address/vector leaves, `BoxedRep Nothing` and unknown logical or physical layouts
+zero-width State/empty-tuple distinctions and lazy lifted neighbours. Inactive
+boxed reference fields use null; inactive address fields use the managed null
+address, and inactive vector fields use a zero of the exact species. These are
+THC padding values, never observations of native inactive registers.
+Unsupported vector species, integer-width conversion, `BoxedRep Nothing` and unknown logical or physical layouts
 remain unsupported. Partial sum constructors, ordinary sum let bindings and
 public host sum inputs/results also remain unsupported. Function values returning sums
 may still pass through existing scalar/reference closure paths, but a sum value
@@ -68,7 +76,7 @@ Exact sum fields in saturated boxed constructors are supported separately throug
 payload projections. Ordinary sum function parameters are described [separately](sum-inputs.md).
 
 `check-sum-layout.py --prepare` retains 17 layout families and 130 native/model
-rows. Eight retained-sum consumers plus a GHC-eliminated scalar control are accepted;
+rows. Nine retained-sum consumers plus a GHC-eliminated scalar control are accepted;
 all other roots remain explicit frontiers. `prepare-sum-result-audit.py` adds
 110 fresh native unary rows and seven independent input pairs, checks independent
 wraparound formulas, and strict-audits all 12 scalar entry roots before and after
@@ -87,6 +95,19 @@ check inactive reference clearing, release on a shape mismatch, lazy pointer
 identity and actual deopt materialization between completion and consumption.
 These correctness controls are distinct from generated-code evidence; typed
 storage alone does not establish register passing or eliminated allocations.
+
+The generic transport fixture additionally checks genuine native active values
+for address/integer sharing, nested sums, zero-width alternatives, exact vectors,
+lazy lifted leaves, neighbouring fields, heap storage, captures, PAP prefixes and
+recursive parallel swaps. It never compares inactive native registers. Runtime
+controls retain managed-address identity and validate nested reference activity.
+The supported vector set is the existing 30 species at 128, 256 and 512 bits;
+this does not admit every lane-count/element combination expressible by GHC.
+
+```sh
+cabal run exe:thc-fixtures --offline -- generic-sum-transport
+./gradlew genericSumTransportFullCoreTest genericSumTransportFullCoreDenseTest
+```
 
 The [four-way aggregate fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture)
 also checks the original GHC `VirtualRegWithFormat` Word64 sum, all four tags,

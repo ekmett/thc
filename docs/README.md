@@ -79,12 +79,13 @@ and [empty join inputs](empty-tuple-joins.md) have no physical payload fields.
 the original GHC floating-formatting worker. [Ordinary tuple captures](tuple-captures.md)
 retain owned typed properties.
 [Aggregate constructor fields](aggregate-heap-fields.md) flatten exact tuple and
-binary-sum layouts into owned typed heap properties.
+sum layouts into owned typed heap properties.
 
-[Binary sum results](sum-results.md) use typed destinations and explicit tags.
-Local sum join results use those same destinations. [Binary sum inputs](sum-inputs.md)
+[Sum results](sum-results.md) use typed destinations and explicit tags.
+Local sum join results use those same destinations. [Sum inputs](sum-inputs.md)
 support direct calls, PAPs, tail transfers, local join inputs/captures and owned
-closure captures. Ordinary sum lets, nested sums and unresolved layouts remain rejected.
+closure captures, including concrete nested sums, managed addresses and supported
+vector species. Ordinary sum lets and unresolved layouts remain rejected.
 These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 
 ### SIMD operations and guest transport

@@ -3360,7 +3360,7 @@ CoreStackForeign.validateHead(fn, defined)
                 if (args.size != 1) throw RuntimeFault("Sum constructor must be saturated")
                 val selected = tupleProof.alternatives!![tag - 1]
                 val lifted = flags.single() as? Boolean ?: throw UnsupportedCore("Unknown sum payload levity")
-                val payload = if (selected.isTuple) compile(args.single(), scope, false)
+                val payload = if (selected.isTypedTransport) compile(args.single(), scope, false)
                     else argument(args.single(), scope, lifted)
                 SumShape.payload(selected, payload.representation, lifted)
                 SumConstruct(TupleShape(tupleProof, language as thc.Language), tag, payload)
@@ -3638,8 +3638,8 @@ CoreStackForeign.validateHead(fn, defined)
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
                 val field = component.refine(actual).copy(evaluated = component.evaluated)
-                val projection = proof.alternativeSlots!![tag - 1].map { slots[it] }.toIntArray()
-                if (component.isTuple) child.bindTuple(ids[0], field, projection)
+                val projection = SumShape.projection(proof, tag - 1).map { slots[it] }.toIntArray()
+                if (component.isTypedTransport) child.bindTuple(ids[0], field, projection)
                 else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], field)
                 else child.bindSlot(ids[0], Local(projection[0], component.isLong, field, false))
             }
@@ -3652,7 +3652,6 @@ CoreStackForeign.validateHead(fn, defined)
         val result = arms.first().representation.refine(CoreRepresentations.expression(expr))
         arms.forEach { result.refine(it.representation) }
         CoreRepresentations.validateFloatingCaseResult(result, arms.map { it.representation })
-        CoreRepresentations.requireNoVector(result, "sum case result")
         return SumCase(scrutinee, slots, arms, IntArray(proof.alternatives!!.size) { selected(it + 1) },
             result.copy(evaluated = arms.all { it.representation.evaluated }))
     }

@@ -67,7 +67,7 @@ EXPECTED = {
 }
 ENTRIES = ['sumCase', 'directCase', 'nestedCase', 'lazyCase', 'zeroCase', 'unitCase',
            'boxedKindsCase', 'floatDoubleCase', 'narrowWideCase', 'threeWayCase']
-SUPPORTED = {'sumCase', 'directCase', 'lazyCase', 'zeroCase', 'unitCase', 'boxedKindsCase', 'floatDoubleCase',
+SUPPORTED = {'sumCase', 'directCase', 'nestedCase', 'lazyCase', 'zeroCase', 'unitCase', 'boxedKindsCase', 'floatDoubleCase',
              'narrowWideCase', 'threeWayCase'}
 INPUTS = [-(1 << 63), -2147483649, -2147483648, -5, -1, 0, 1, 7,
           2147483647, 2147483648, 4294967295, 4294967296, (1 << 63)-1]
