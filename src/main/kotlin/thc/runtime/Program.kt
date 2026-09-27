@@ -1751,7 +1751,9 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
                     }
                 })
             }
-            return shape.finish(frame, tupleSlots, AstControl.enabled(this))
+            // Both continuation protocols can retain a carrier in an owned frame.
+            return shape.finish(frame, tupleSlots,
+                AstControl.enabled(this) || DelimitedControl.enabled(this))
         }
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.

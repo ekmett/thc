@@ -36,6 +36,13 @@ nonmatching and same-tag nested prompts, captured catch/mask boundaries, an
 escaped continuation resumed twice, and ambient masking. These are synchronous
 IO examples, on both AST and bytecode backends.
 
+With `asyncExceptions: false`, direct `killThread#` self-delivery is handled by
+a live `catch#` even when the program uses prompts. The original request is
+acknowledged without forcing its payload, and handler exit restores the mask.
+This does not extend to a self-delivery crossing an already-saved multi-shot
+continuation: it propagates as async-origin delivery instead of entering that
+image's saved catch frames. External asynchronous capture remains separate.
+
 Strict scalar-returning workers preserve their pending case caller, including
 its result destination. Capturing a resumed segment again freezes the mask
 return's already-rebased prior state: if another mask frame becomes outermost,

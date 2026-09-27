@@ -33,8 +33,10 @@ main = do
       uncaught <- evaluate (I# (Audit.killUncaught 0#))
       self <- evaluate (I# (Audit.selfThrow 0#))
       masked <- evaluate (I# (Audit.maskedUnmaskSelf 0#))
-      case (uncaught, self, masked) of
-        (5, -1, -1) -> putStr "5\n-1\n-1\n"
+      prompted <- evaluate (I# (Audit.promptSelfThrow 0#))
+      promptedMasked <- evaluate (I# (Audit.promptMaskedUnmaskSelf 0#))
+      case (uncaught, self, masked, prompted, promptedMasked) of
+        (5, -1, -1, -1, -1) -> putStr "5\n-1\n-1\n-1\n-1\n"
         other -> error ("public thread extra delivery failed: " ++ show other)
     ["yield"] -> do
       ordinary <- evaluate (I# (Audit.yieldProbe 0#))

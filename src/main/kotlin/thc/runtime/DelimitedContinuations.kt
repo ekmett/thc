@@ -272,10 +272,21 @@ internal class DelimitedActionSite(private val language: Language, private val m
             else throw cut.append(frame, DelimitedPromptStep(identity, this, shape))
         }
     }
-    fun handleException(frame: VirtualFrame, handler: Any?, failure: GuestException, shape: TupleShape): Any? {
+    fun handleException(frame: VirtualFrame, handler: Any?, failure: AbstractTruffleException, shape: TupleShape): Any? {
+        val payload = when (failure) {
+            is GuestException -> failure.payload
+            is AsyncDelivery -> {
+                // Direct self delivery needs no saved asynchronous continuation.
+                // External async capture remains a separate protocol.
+                if (!failure.request.forceSelf) throw failure
+                failure.request.acknowledge()
+                failure.request.payload
+            }
+            else -> throw failure
+        }
         val prior = SynchronousMasking.current(this)
         if (prior == MaskingState.UNMASKED) SynchronousMasking.set(this, MaskingState.MASKED_INTERRUPTIBLE)
-        return try { invoke(frame, handler, arrayOf(failure.payload, Unit), shape) }
+        return try { invoke(frame, handler, arrayOf(payload, Unit), shape) }
         catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedMaskStep(this, prior)) }
         finally { SynchronousMasking.set(this, prior) }
     }
@@ -283,6 +294,7 @@ internal class DelimitedActionSite(private val language: Language, private val m
         requireVoidCarrier(state)
         return try { invoke(frame, action, arrayOf(Unit), shape) }
         catch (failure: GuestException) { handleException(frame, handler, failure, shape) }
+        catch (delivered: AsyncDelivery) { handleException(frame, handler, delivered, shape) }
         catch (cut: DelimitedCut) { throw cut.append(frame, DelimitedCatchStep(this, handler, shape)) }
     }
     fun masked(frame: VirtualFrame, action: Any?, state: Any?, shape: TupleShape, target: MaskingState): Any? {
