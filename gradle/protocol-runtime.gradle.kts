@@ -22,7 +22,7 @@ val prepareProtocolRuntime = tasks.register<Sync>("prepareProtocolRuntime") {
     from(provider { zipTree(protocolRuntimeSource.singleFile) })
     include("com/oracle/truffle/runtime/OptimizedCallTarget.java")
     into(layout.buildDirectory.dir("protocol-runtime/source"))
-    inputs.file("tools/truffle-protocol/declared-return-runtime.patch")
+    inputs.files("tools/truffle-protocol/declared-return-runtime.patch", "tools/truffle-protocol/graph-budget-runtime.patch")
     doFirst {
         requireRuntimeArchive(protocolRuntimeSource.singleFile,
             "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519")
@@ -32,6 +32,11 @@ val prepareProtocolRuntime = tasks.register<Sync>("prepareProtocolRuntime") {
             workingDir(destinationDir)
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/declared-return-runtime.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/graph-budget-runtime.patch").absolutePath)
         }.result.get().assertNormalExitValue()
         check(destinationDir.resolve("com/oracle/truffle/runtime/OptimizedCallTarget.java").readText()
             .contains("declaredReturnPolicyVersion")) { "Declared return runtime patch was not applied" }
@@ -52,7 +57,7 @@ val protocolRuntimeJar = tasks.register<Jar>("protocolRuntimeJar") {
     group = "build"
     description = "Build the pinned runtime with an explicit per-root polymorphic completion declaration."
     archiveBaseName.set("thc-truffle-runtime")
-    archiveVersion.set("$protocolRuntimeVersion-return1")
+    archiveVersion.set("$protocolRuntimeVersion-return1-budget1")
     destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime"))
     isPreserveFileTimestamps = false
     isReproducibleFileOrder = true
@@ -70,7 +75,7 @@ val protocolRuntimeJar = tasks.register<Jar>("protocolRuntimeJar") {
             manifest.attributes(jar.manifest.mainAttributes.entries.associate { it.key.toString() to it.value.toString() })
         }
         manifest.attributes("Implementation-Title" to "THC declared root completion Truffle runtime",
-            "Implementation-Version" to "$protocolRuntimeVersion-return1",
+            "Implementation-Version" to "$protocolRuntimeVersion-return1-budget1",
             "Upstream-Source-SHA256" to "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519")
     }
 }
@@ -110,6 +115,7 @@ tasks.register("verifyProtocolRuntimeSelection") {
                 layout.buildDirectory.file("protocol-runtime/verified-artifact.sha256").get().asFile.writeText(
                     protocolRuntimeDigest(overlay.readBytes()) + "  " + overlay.name + "\n" +
                     protocolRuntimeDigest(file("tools/truffle-protocol/declared-return-runtime.patch").readBytes()) + "  declared-return-runtime.patch\n" +
+                    protocolRuntimeDigest(file("tools/truffle-protocol/graph-budget-runtime.patch").readBytes()) + "  graph-budget-runtime.patch\n" +
                     "Preserved upstream nonreplacement entries: " + original.count { !replaced(it.name) } + "\n")
             }
         }
@@ -169,6 +175,25 @@ tasks.register<JavaExec>("testReturnContinuations") {
     maxHeapSize = "1g"
 }
 tasks.named("check") { dependsOn("testReturnContinuations") }
+
+val compileGraphBudgetControl = tasks.register<JavaCompile>("compileGraphBudgetControl") {
+    source("tools/truffle-protocol/tests/GraphBudgetProbe.java")
+    classpath = returnPolicyRuntime
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/graph-budget"))
+}
+tasks.register<JavaExec>("testGraphBudgetRecovery") {
+    group = "verification"
+    description = "Check actual graph-budget failure, structural extraction, task completion and first compiled call."
+    dependsOn("verifyProtocolRuntimeSelection")
+    classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    mainClass.set("protocolprobe.GraphBudgetProbe")
+    enableAssertions = true
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+    maxHeapSize = "1g"
+}
+tasks.named("check") { dependsOn("testGraphBudgetRecovery") }
 
 val compileRuntimeLinkageControl = tasks.register<JavaCompile>("compileRuntimeLinkageControl") {
     source("tools/truffle-protocol/tests/RuntimeLinkageProbe.java")

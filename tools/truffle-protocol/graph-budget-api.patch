@@ -1,0 +1,32 @@
+diff --git a/com/oracle/truffle/api/nodes/RootNode.java b/com/oracle/truffle/api/nodes/RootNode.java
+--- a/com/oracle/truffle/api/nodes/RootNode.java
++++ b/com/oracle/truffle/api/nodes/RootNode.java
+@@ -519,3 +519,28 @@
++    /** Current logical boundary generation, sampled for each compilation task. */
++    public long getGraphBudgetGeneration() {
++        return 0;
++    }
++
++    /**
++     * Called only after an actual graph-size bailout, before permanent failure.
++     * A language may return a strictly newer generation only after changing a
++     * real compilation boundary. No guest execution, context access, profiling
++     * or synchronous compilation is permitted here. Concurrent clones may
++     * share a monotone logical boundary policy. The default does not recover.
++     *
++     * The runtime retries an explicit synchronous request after its failed
++     * task finishes; ordinary background requests remain eligible on a later
++     * request. Returning a counter without a changed boundary is invalid.
++     */
++    public long prepareGraphBudgetRetry(long failedGeneration) {
++        return failedGeneration;
++    }
++
++    /** Versioned linkage check for the additive graph-budget recovery contract. */
++    public static int graphBudgetPolicyVersion() {
++        return 1;
++    }
++
+     /**
+      * Prepares this {@link RootNode} for compilation. This method is guaranteed to be called at
+      * least once before any code paths are executed as compiled code (see

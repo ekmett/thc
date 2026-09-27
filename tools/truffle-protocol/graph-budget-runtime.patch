@@ -1,0 +1,49 @@
+diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+--- a/com/oracle/truffle/runtime/OptimizedCallTarget.java
++++ b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+@@ -149,3 +149,10 @@
+     private final RootNode rootNode;
++    private volatile long graphBudgetGeneration;
++    private volatile long graphBudgetRecoveries;
++
++    /** Exact pinned counterpart of RootNode.graphBudgetPolicyVersion(). */
++    public static int graphBudgetPolicyVersion() {
++        return 1;
++    }
+     private final boolean declaredUnprofiledReturn;
+ 
+@@ -952,3 +958,13 @@
+     public final boolean compile(boolean lastTierCompilation) {
+-        return compile(lastTierCompilation, CompilationTask.SubmissionReason.EXPLICIT);
++        while (true) {
++            long recovery = graphBudgetRecoveries;
++            boolean installed = compile(lastTierCompilation, CompilationTask.SubmissionReason.EXPLICIT);
++            // A compiler callback cannot submit or wait on its own unfinished
++            // task. Only a completed synchronous request can retry here.
++            // Every iteration requires a newly changed language boundary.
++            if (installed || engine.backgroundCompilation || isSubmittedForCompilation() ||
++                            graphBudgetRecoveries == recovery) {
++                return installed;
++            }
++        }
+     }
+@@ -1012,3 +1029,4 @@
+ 
++                        this.graphBudgetGeneration = rootNode.getGraphBudgetGeneration();
+                         this.compilationTask = task = runtime().submitForCompilation(this, lastTier, submissionReason);
+                     } catch (RejectedExecutionException e) {
+@@ -1194,6 +1212,14 @@
+         if (graphTooBig) {
+             if (computeBlockCompilations()) {
+                 // retry compilation
+                 return;
+             }
++            long next = rootNode.prepareGraphBudgetRetry(graphBudgetGeneration);
++            if (next > graphBudgetGeneration) {
++                graphBudgetGeneration = next;
++                graphBudgetRecoveries++;
++                // Preserve normal inlining eligibility. This is not terminal
++                // failure, and no installed guest code or execution is replayed.
++                return;
++            }
+         }
