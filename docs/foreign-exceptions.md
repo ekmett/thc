@@ -28,7 +28,10 @@ cancellation, VM-fatal failures, runtime invariant failures, and internal contro
 transfers retain their existing meaning. Eligibility uses Truffle's exception
 classification protocol, never foreign display/message/cause/stack accessors.
 A broken ordinary classifier preserves the original failure; a classifier's own
-cancellation or internal transfer is not swallowed.
+cancellation or internal transfer is not swallowed. Errors thrown by the
+classification protocol itself propagate as infrastructure failures; an
+application AssertionError transported as an ordinary host runtime exception
+remains eligible for Haskell handling.
 
 Checked interop argument/dispatch errors are a separate ABI policy and are not
 claimed as original foreign language throwables. Native error-code/errno APIs

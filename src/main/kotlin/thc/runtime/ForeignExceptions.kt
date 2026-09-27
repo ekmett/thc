@@ -162,7 +162,7 @@ internal class ForeignExceptionAccess : Node() {
             // field inspected until that operation successfully returns. Concurrent
             // first readers may query independently; first successful publication
             // wins, and no monitor is held while foreign code executes.
-            val previous = owner.threads.enterForeign()
+            val previous = owner.threads.enterForeign(ForeignSafety.SAFE)
             val result = try {
                 try {
                     when (field) {

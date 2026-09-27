@@ -117,6 +117,7 @@ internal class ExceptionTextExpression(@field:Child private var handle: Expr,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val value = access.text(handle.executeAddress(frame), selector.executeLong(frame), index.executeLong(frame), state.execute(frame))
         FrameAccess.writeLong(frame, slots[offset], value)
+        AstForeignCompleted.poll(this)
         return null
     }
 }

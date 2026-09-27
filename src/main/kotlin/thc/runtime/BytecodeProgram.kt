@@ -1554,6 +1554,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         RuntimeServiceCall.TRACE -> e.builder.endRuntimeServiceTrace()
                         RuntimeServiceCall.EXCEPTION_TEXT -> e.builder.endExceptionText()
                     }
+                    if (enableAsync && runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) emitAsyncPoll(e)
                 }
             } else if (cpuAffinity != null) {
                 val state = compile(args.single(), scope, false)

@@ -140,7 +140,7 @@ class ForeignExceptionTest {
                 fun entry(name: String): org.graalvm.polyglot.Value {
                     val id = "main:ForeignExceptionAudit.$name"
                     val linked = CoreModules.reachable(source, id, true)
-                    val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, linked, true) else BytecodeProgram(language, linked, true)
                     return context.asValue(EntryValue(program, id, 1))
                 }
                 val callback = entry("ordinary")

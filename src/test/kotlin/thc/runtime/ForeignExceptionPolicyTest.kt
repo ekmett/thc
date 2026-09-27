@@ -51,7 +51,7 @@ class ForeignExceptionPolicyTest {
                 assertEquals(false, classifier.call(invalid), "Failed classification must preserve the original foreign failure")
                 assertEquals(0, invalid.metadataReads)
                 for (control in listOf(InterruptedException(), java.util.concurrent.CancellationException(),
-                        RuntimeFault("classifier invariant"),
+                        RuntimeFault("classifier invariant"), AssertionError("classifier infrastructure"),
                         object : AbstractTruffleException("private transfer"), InternalGuestControl {})) {
                     val error = ForeignProtocolFailure(ExceptionType.RUNTIME_ERROR, classifierFailure = control)
                     assertSame(control, assertThrows(Throwable::class.java) { classifier.call(error) })
