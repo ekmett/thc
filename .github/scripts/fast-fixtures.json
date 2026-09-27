@@ -57,6 +57,8 @@
     "thc.runtime.CompilerHeapHintTest",
     "thc.runtime.NarrowIntegerCarrierTest",
     "thc.runtime.NarrowIntegerContinuationTest",
+    "thc.NarrowPublicEntryTest",
+    "thc.runtime.NarrowReturnedPointerTest",
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",
