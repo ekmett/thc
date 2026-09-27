@@ -217,6 +217,19 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
     }
 
+    /** Preserve native mode and umask semantics; never change the process umask. */
+    @Synchronized fun pathModeRaw(path: ByteArray, mode: Long, createDirectory: Boolean): Long {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val bytes = absoluteRawPath(anchor, path)
+        return NativeLimbScope().use { scope ->
+            val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+            name.copyFrom(bytes, 0, bytes.size)
+            result(if (createDirectory) "mkdir" else "chmod", name, mode.toInt())
+        }
+    }
+
     /** Preserve the fixed filesystem's CWD and raw pathname bytes. The staging
      * image is published only after the selected native stat call succeeds. */
     @Synchronized fun statRaw(path: ByteArray, followLinks: Boolean): ByteArray {

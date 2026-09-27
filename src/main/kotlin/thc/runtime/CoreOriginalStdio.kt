@@ -88,6 +88,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     IO_WAKEUP_FD("setIOManagerWakeupFd", "ccall", "unsafe", listOf("Int32Rep", null), null),
     IO_CONTROL_FD("setIOManagerControlFd", "ccall", "unsafe", listOf("Word32Rep", "Int32Rep", null), null),
     TIMER_CONTROL_FD("setTimerManagerControlFd", "ccall", "unsafe", listOf("Int32Rep", null), null),
+    MKDIR("mkdir", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    CHMOD("chmod", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), "Int32Rep"),
     UNLINK("unlink", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep"),
     OPEN("__hscore_open", "ccall", "unsafe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
     OPEN_SAFE("__hscore_open", "ccall", "safe", listOf("AddrRep", "Int32Rep", "Word32Rep", null), "Int32Rep"),
@@ -150,6 +152,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val stat: Boolean get() = this == SIZEOF_STAT || statField ||
         this == IS_REG || this == IS_CHR || this == IS_BLK || this == IS_DIR || this == IS_FIFO || this == IS_SOCK
     val statField: Boolean get() = this == ST_DEV || this == ST_INO || this == ST_MODE || this == ST_SIZE
+    val pathMode: Boolean get() = this == MKDIR || this == CHMOD
     val pathStat: Boolean get() = this == STAT || this == LSTAT || this == UNIX_LSTAT
     val readImage: Boolean get() = this == FSTAT || this == TCGETATTR
     val iconv: Boolean get() = this == LOCALE || this == ICONV_OPEN || this == ICONV_CLOSE || this == ICONV
@@ -190,7 +193,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
