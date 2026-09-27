@@ -125,18 +125,25 @@ integer. Calls can fail if a language is unavailable, a member is missing,
 or an interop operation rejects the value.
 
 The next useful API steps are ordinary `Text` or byte-buffer inputs, more
-typed conversions, multiple arguments and member invocation, and explicit
-handling of foreign errors, callbacks, and value lifetimes. The module would
+typed conversions, multiple arguments and member invocation, and richer
+value-lifetime controls. The module would
 then move from `examples/THC` into a Cabal package. Loading another language
 in one Polyglot Context also brings that language's thread-access rules:
 JavaScript may require serialized or isolated access even when Haskell code
 runs concurrently. An admitted callback stays on its carrier and obeys the
 other language's access rules; safety is not permission for concurrent entry.
 
-Foreign exceptions currently escape to the polyglot host. Catching them with
-Haskell's exception machinery needs an explicit translation, including a policy
-for asynchronous exceptions during a foreign call. Callbacks need the reverse
-bridge: expose a Haskell closure as an executable Truffle object and marshal its
-arguments and result according to a declared signature. Arbitrary records and
-collections also need deliberate lazy/strict conversion rules; blindly forcing
+With the genuine runtime bridge linked, admitted foreign runtime and parse
+failures are automatically catchable as `THC.Exception.ForeignException`, including
+through `SomeException`. Compatible Polyglot and managed-export exits restore the
+original foreign object after an ordinary rethrow. Missing or ambiguous bridge
+support is a load/link error. Cancellation, internal control transfers and fatal
+host failures are not converted; ABI errors and native errno APIs retain their
+own handling. See [foreign exceptions](foreign-exceptions.md) for exact eligibility
+and stored-rethrow provenance. This is not exception unwinding across a plain C ABI.
+
+[Managed exports](site/embedding.md#call-a-declared-haskell-export) expose declared
+scalar Haskell functions through Truffle interop, subject to the call-safety and
+context rules above. Arbitrary closures, records and collections still need
+deliberate argument/result and lazy/strict conversion rules; blindly forcing
 their contents would change Haskell evaluation and space behavior.
