@@ -210,7 +210,7 @@ class BytecodeTypedTupleInputTest {
         loan.inputMode = 1
         entry.packet.setLong(loan, 0, 0L); entry.packet.setObject(loan, entry.header, "not a constructor")
         assertThrows(RuntimeFault::class.java) {
-            invokeTypedInput(target, loan) { packet -> Calls.target(target, packet) }
+            TypedInputsKt.invokeTypedInput(target, loan) { packet -> Calls.target(target, packet) }
         }
         assertNull(state.pending); assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
         assertEquals(1, state.results.depth); assertSame(sentinel, resultShape.layout.getObject(result, 0))

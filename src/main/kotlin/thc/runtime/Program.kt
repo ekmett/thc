@@ -1985,7 +1985,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             else {
                 val value = source.reference(frame, node, null, from)
                 val expected = argumentReferences.getOrNull(i)
-                writeInputReference(frame, to, if (expected == null) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
+                TypedInputsKt.writeInputReference(frame, to, if (expected == null) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
             }
         }
         if (captureLayout != null) restoreCaptured(frame, function.environment ?: fault("Invalid captured frame"))
@@ -2006,7 +2006,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else {
                     val value = entry.packet.getObject(input, from)
                     val expected = if (i < argumentReferences.size) argumentReferences[i] else null
-                    writeInputReference(frame, to, if (expected == null || strictArguments[i]) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
+                    TypedInputsKt.writeInputReference(frame, to, if (expected == null || strictArguments[i]) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) {
@@ -3504,7 +3504,7 @@ CoreStackForeign.validateHead(fn, defined)
                     if (input?.requiresTyped == true)
                         AstTypedApplication(function, nodes, scope.layout, tail, metrics,
                             if (tupleProof.isTypedTransport) TupleShape(tupleProof, language as thc.Language) else null,
-                            tail && !capturesContinuations && scope.self?.let { supportsTypedSelf(it.inputLayout, it.entryStrict, input) } == true)
+                            tail && !capturesContinuations && scope.self?.let { TypedInputsKt.supportsTypedSelf(it.inputLayout, it.entryStrict, input) } == true)
                     else if (tupleProof.isTypedTransport) {
                         val shape = TupleShape(tupleProof, language as thc.Language)
                         val vectorSlots = if (tupleProof.isVector) IntArray(shape.width) { scope.layout.bind("<vector call result $it>") } else null

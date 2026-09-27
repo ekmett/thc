@@ -98,7 +98,7 @@ class TypedSelfCallTest {
         }
         val reentries = count(program, "selfTailReentries")
         val bounces = count(program, "tailBounces")
-        val value = invokeTypedInput(entry, input) { Calls.target(target, it) }
+        val value = TypedInputsKt.invokeTypedInput(entry, input) { Calls.target(target, it) }
         val label = "$backend/depth=$depth/vectorResult=$vectorResult"
         if (vectorResult) {
             val shape = requireNotNull(root.tupleResult)
@@ -133,9 +133,9 @@ class TypedSelfCallTest {
         val vectorProof = CoreRepresentations.parse(vector)
         val cold = CoreRepresentations.parse(mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false))
         val formal = ArgumentLayout.fromProofs(listOf(vectorProof, cold))!!
-        assertFalse(supportsTypedSelf(formal, booleanArrayOf(false, true), formal))
-        assertTrue(supportsTypedSelf(formal, booleanArrayOf(false, true),
+        assertFalse(TypedInputsKt.supportsTypedSelf(formal, booleanArrayOf(false, true), formal))
+        assertTrue(TypedInputsKt.supportsTypedSelf(formal, booleanArrayOf(false, true),
             ArgumentLayout.fromProofs(listOf(vectorProof, cold.copy(evaluated = true)))!!))
-        assertFalse(supportsTypedSelf(formal, booleanArrayOf(false, false), ArgumentLayout.fromProofs(listOf(vectorProof))!!))
+        assertFalse(TypedInputsKt.supportsTypedSelf(formal, booleanArrayOf(false, false), ArgumentLayout.fromProofs(listOf(vectorProof))!!))
     }
 }

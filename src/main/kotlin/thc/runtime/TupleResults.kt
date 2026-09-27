@@ -357,12 +357,12 @@ internal class TupleBounce(private val destination: TupleDestination, private va
         while (true) {
             try { TruffleSafepoint.poll(this) }
             catch (failure: Throwable) {
-                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                next.input?.let { TypedInputsKt.discardTypedInput(destination.shape.language, it) }
                 throw failure
             }
             val root = next.target.rootNode as? GuestRoot
             if (root == null || root.tupleResult?.matches(destination.shape) != true) {
-                next.input?.let { discardTypedInput(destination.shape.language, it) }
+                next.input?.let { TypedInputsKt.discardTypedInput(destination.shape.language, it) }
                 fault("Tuple tail target result shape mismatch")
             }
             try {
@@ -370,7 +370,12 @@ internal class TupleBounce(private val destination: TupleDestination, private va
                 val input = next.input
                 val result = if (input != null) {
                     input.layout.setLong(input, 0, 0L)
-                    invokeTypedInput(next.target, input) { packet -> Calls.indirect(call, next.target, packet) }
+                    val targetRoot = next.target.rootNode
+                    if (targetRoot == null) CompilerDirectives.transferToInterpreter()
+                    val inputLayout = (targetRoot as GuestRoot).typedInput ?: fault("Target has no typed input entry")
+                    val generation = input.generation
+                    try { Calls.indirect(call, next.target, arrayOf(input)) }
+                    finally { GenericTypedInputsKt.releaseGenericInput(inputLayout, input, generation) }
                 } else {
                     next.args[0] = 0L
                     Calls.indirect(call, next.target, next.args)

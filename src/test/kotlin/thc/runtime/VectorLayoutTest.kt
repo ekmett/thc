@@ -103,7 +103,7 @@ class VectorLayoutTest {
             val closure = Closure(null, 3, target)
             fun append(function: Closure) = if (generic)
                 GenericTypedInputsKt.genericTypedPap(function, input, source, original.frame, node, null, 1, 0, 1)
-            else typedPap(function, input, source, original.frame, node, null, 0, 1,
+            else TypedInputsKt.typedPap(function, input, source, original.frame, node, null, 0, 1,
                 function.suppliedCount, function.arity)
             val first = append(closure)
             val second = append(first)

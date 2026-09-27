@@ -153,6 +153,6 @@ internal fun callScalarTestTarget(target: com.oracle.truffle.api.RootCallTarget,
                 else -> shape.setObject(storage, index, value)
             }
         }
-        return invokeTypedInput(entry, storage) { Calls.target(target, it) }
+        return TypedInputsKt.invokeTypedInput(entry, storage) { Calls.target(target, it) }
     } finally { entry.releaseChecked(storage) }
 }

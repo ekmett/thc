@@ -159,7 +159,7 @@ class GenericInputCallInvariantTest {
                 val slots = intArrayOf(layout.bind("number"), layout.bind("reference"))
                 val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
                 FrameAccess.writeLong(frame, slots[0], 23L)
-                writeInputReference(frame, slots[1], marker)
+                TypedInputsKt.writeInputReference(frame, slots[1], marker)
                 val source = AstInputSource(input.logical, slots)
                 val node = object : Node() {}
                 val failure = assertThrows(type) {
@@ -221,7 +221,7 @@ class GenericInputCallInvariantTest {
                     layout.packet.setObject(input, layout.header, marker)
                     layout.packet.setObject(output, layout.header, outputMarker)
                     val failure = assertThrows(type) {
-                        invokeTypedInput(target, input) { error("Invalid target reached the action") }
+                        TypedInputsKt.invokeTypedInput(target, input) { error("Invalid target reached the action") }
                     }
                     if (root == null)
                         assertEquals("null cannot be cast to non-null type thc.runtime.GuestRoot", failure.message)

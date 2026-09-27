@@ -88,7 +88,7 @@ class TypedInputOwnershipTest {
         @Child private var dispatch = InputDispatch(AstInputSource(input.logical, slots.fields), 1, false, Metrics(false))
         override fun execute(frame: VirtualFrame): Any? {
             FrameAccess.writeLong(frame, slots.fields[0], frame.arguments[0] as Long)
-            writeInputReference(frame, slots.fields[1], frame.arguments[1])
+            TypedInputsKt.writeInputReference(frame, slots.fields[1], frame.arguments[1])
             return dispatch.execute(frame, function)
         }
     }
