@@ -424,7 +424,9 @@ internal class GenericInputCall(private val source: InputSource, private val cou
         while (true) {
             val remaining = count + start - offset
             val target = function.target
-            val root = target.rootNode as GuestRoot
+            val rootValue = target.rootNode
+            if (rootValue == null) CompilerDirectives.transferToInterpreter()
+            val root = rootValue as GuestRoot
             val input = root.typedInput
             val used = minOf(function.arity, remaining)
             validateGenericInput(root, function.suppliedCount, source.layout, offset, used, destination, function.arity == remaining, function.arity > remaining)
