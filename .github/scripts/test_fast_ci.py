@@ -131,7 +131,8 @@ class FastRunnerTest(unittest.TestCase):
 
     def test_native_windows_suites_are_platform_skips_only_on_linux(self):
         self.suite()
-        for windows in ("thc.runtime.WindowsDirectoryStreamsTest", "thc.runtime.WindowsCodePagesTest"):
+        for windows in ("thc.runtime.WindowsDirectoryStreamsTest", "thc.runtime.WindowsCodePagesTest",
+                        "thc.runtime.WindowsAbiInitializationTest"):
             with self.subTest(suite=windows):
                 self.suite(windows, body=f'<testcase name="native" classname="{windows}"><skipped/></testcase>')
                 path = self.root / f"TEST-{windows}.xml"

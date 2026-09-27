@@ -30,7 +30,7 @@ final class WindowsMalloc {
     static {
         try {
             var linker = Linker.nativeLinker();
-            check(WindowsDirectoryStreams.Companion.supportedHost());
+            check(WindowsDirectoryStreams.supportedHost());
             Object parsed;
             try (var stream = WindowsMalloc.class.getResourceAsStream("/thc/cbits/windows-malloc-abi.json")) {
                 if (stream == null) ProgramKt.fault("Missing Windows malloc ABI receipt");
