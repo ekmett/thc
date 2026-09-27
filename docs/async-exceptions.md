@@ -22,9 +22,10 @@ With async enabled, AST captures ordinary and typed calls, strict entry forcing,
 cases, lets, local joins, masks and handlers. Shared thunks retain unfinished
 work, and `killThread#` supports external delivery as well as self-delivery.
 Forked children inherit the parent's mask and evaluate lazy action heads on
-their own threads. With async disabled, AST supports self-delivery but rejects
-external sends and delivery to its children before enqueueing; bytecode rejects
-`killThread#` during lowering. Nested entry does not upgrade a thread lifetime
+their own threads. With async disabled, both backends support self-delivery to
+the current logical guest and acknowledge it through `catch#`, but reject
+external sends and delivery to non-resumable children before enqueueing.
+Nested entry does not upgrade a thread lifetime
 that was registered without external delivery support.
 
 Managed foreign reverse entries create fresh bound guest identities on the same

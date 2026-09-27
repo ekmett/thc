@@ -5,6 +5,8 @@ package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.NodeUtil
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -41,6 +43,111 @@ class AstKillThreadTest {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
         while (threads.status(id) != wanted && System.nanoTime() < deadline) Thread.sleep(1)
         assertEquals(wanted, threads.status(id))
+    }
+
+    @Test fun nonresumableSelfDeliveryPreservesLazyPayloadAndRejectsExternalTargetsBeforeEnqueue() {
+        for (backend in listOf("ast", "bytecode")) {
+            Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
+                .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+                .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw")
+                .build().use { context ->
+                context.initialize("thc"); context.enter()
+                val threads: GuestThreads
+                val target: RootCallTarget
+                val payload: Thunk
+                val forced = AtomicInteger()
+                try {
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    threads = Language.currentState().threads
+                    val program = if (backend == "ast") Program(language, directKillModule(), false)
+                        else BytecodeProgram(language, directKillModule(), false)
+                    target = program.entryTarget("direct")
+                    payload = Thunk(object : GuestRoot(language, FrameLayout().build()) {
+                        override fun bloom(frame: VirtualFrame): Long = 0L
+                        override fun execute(frame: VirtualFrame): Any {
+                            forced.incrementAndGet()
+                            throw AssertionError("killThread# forced its lifted payload")
+                        }
+                    }.callTarget, null)
+                } finally { context.leave() }
+                val ready = CompletableFuture<GuestThreadId>()
+                val finished = CompletableFuture<Unit>()
+                val release = CountDownLatch(1)
+                val receiver = Thread {
+                    context.enter()
+                    try {
+                        // This target accepts external delivery. Rejection must
+                        // come from the uncaptured sender before any enqueue.
+                        threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, externalAsync = true)
+                        try {
+                            ready.complete(threads.currentIdentity())
+                            assertTrue(release.await(60, TimeUnit.SECONDS))
+                            SynchronousMasking.set(target.rootNode, MaskingState.UNMASKED)
+                            assertNull(threads.poll(target.rootNode), "$backend rejected send was queued")
+                            finished.complete(Unit)
+                        } finally { threads.leaveCurrent() }
+                    } catch (failure: Throwable) { finished.completeExceptionally(failure) }
+                    finally { context.leave() }
+                }.apply { isDaemon = true; start() }
+                try {
+                    val external = ready.get(10, TimeUnit.SECONDS)
+                    context.enter()
+                    try {
+                        threads.enterCurrent(externalAsync = false)
+                        try {
+                            val self = threads.currentIdentity()
+                            for (compiled in listOf(false, true)) {
+                                if (compiled) {
+                                    target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                                    // Restore the shared call-entry stub, without
+                                    // executing a settling call (EntryValue.compile does the same).
+                                    val runtime = Truffle.getRuntime()
+                                    runtime.javaClass.getMethod("bypassedInstalledCode",
+                                        Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                                        .invoke(runtime, target)
+                                }
+                                for (mask in MaskingState.entries) {
+                                    SynchronousMasking.set(target.rootNode, mask)
+                                    val delivered = assertThrows(AsyncDelivery::class.java) {
+                                        Calls.target(target, arrayOf(0L, self, payload, Unit))
+                                    }
+                                    val request = delivered.request
+                                    assertSame(Thread.currentThread(), request.target)
+                                    assertEquals(self.logicalId, request.targetId)
+                                    assertTrue(request.forceSelf)
+                                    assertSame(payload, request.payload)
+                                    assertEquals(AsyncRequestState.CLAIMED, request.state)
+                                    if (compiled) assertTrue(request.compiledCapture, "$backend first installed self-delivery")
+                                    assertSame(payload, BytecodeRoot.RequireCaughtIOFailure.payload(delivered))
+                                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                                    assertNull(threads.poll(target.rootNode))
+                                    assertEquals(mask, SynchronousMasking.current(target.rootNode))
+                                    assertEquals(0, payload.state)
+                                    assertEquals(0, forced.get())
+                                }
+                                SynchronousMasking.set(target.rootNode, MaskingState.UNMASKED)
+                                val rejected = assertThrows(UnsupportedCore::class.java) {
+                                    Calls.target(target, arrayOf(0L, external, payload, Unit))
+                                }
+                                assertTrue(rejected.message!!.contains("captured sender continuation"))
+                                assertEquals(0, payload.state)
+                                assertEquals(0, forced.get())
+                            }
+                        } finally {
+                            SynchronousMasking.set(target.rootNode, MaskingState.UNMASKED)
+                            threads.leaveCurrent()
+                        }
+                    } finally { context.leave() }
+                    release.countDown()
+                    finished.get(10, TimeUnit.SECONDS)
+                } finally {
+                    release.countDown()
+                    receiver.join(5000)
+                    assertFalse(receiver.isAlive)
+                }
+            }
+        }
     }
 
     @Test fun completedExternalSendCapturesAnIncomingRequestWithoutResending() {

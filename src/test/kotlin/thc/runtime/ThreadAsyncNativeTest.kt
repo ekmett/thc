@@ -108,7 +108,7 @@ class ThreadAsyncNativeTest {
     }
 
     private fun exercise(name: String, expected: List<Long>, module: String = "ThreadAsyncAudit",
-                         backend: String = "bytecode") {
+                         backend: String = "bytecode", asyncExceptions: Boolean = true) {
         checkReceipt()
         for (stage in listOf("pre", "post")) {
             val context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
@@ -120,11 +120,15 @@ class ThreadAsyncNativeTest {
             try {
                 val core = File(root, "build/thread-async/$stage/core/$module.json")
                 val entry = context.eval("thc", CoreModules.request(listOf(core.path), name,
-                    backend = backend, asyncExceptions = true))
+                    backend = backend, asyncExceptions = asyncExceptions))
                 val result = executor.submit<List<Long>> {
                     val interpreted = entry.execute(0L).asLong()
                     assertTrue(entry.invokeMember("compile").asBoolean())
-                    listOf(interpreted, entry.execute(1L).asLong())
+                    val before = (Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>)["compiledEntries"] as Number
+                    val installed = entry.execute(1L).asLong()
+                    val after = (Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>)["compiledEntries"] as Number
+                    assertTrue(after.toLong() > before.toLong(), "$stage $backend $name first installed call")
+                    listOf(interpreted, installed)
                 }
                 assertEquals(expected, result.get(30, TimeUnit.SECONDS), "$stage $backend $name")
                 val diagnostics = Json.parse(entry.getMember("diagnostics").asString()) as Map<*, *>
@@ -147,6 +151,14 @@ class ThreadAsyncNativeTest {
         exercise("selfThrow", listOf(-1, 0), backend = "ast")
     @Test fun astSelfDirectedThrowBypassesTheOuterUninterruptibleMask() =
         exercise("maskedUnmaskSelf", listOf(-1, 0), backend = "ast")
+    @Test fun synchronousSelfDeliveryReachesTheOriginalHandler() =
+        exercise("selfThrow", listOf(-1, 0), asyncExceptions = false)
+    @Test fun synchronousSelfDeliveryRestoresTheOuterMask() =
+        exercise("maskedUnmaskSelf", listOf(-1, 0), asyncExceptions = false)
+    @Test fun astSynchronousSelfDeliveryReachesTheOriginalHandler() =
+        exercise("selfThrow", listOf(-1, 0), backend = "ast", asyncExceptions = false)
+    @Test fun astSynchronousSelfDeliveryRestoresTheOuterMask() =
+        exercise("maskedUnmaskSelf", listOf(-1, 0), backend = "ast", asyncExceptions = false)
     @Test fun forkedChildOwnsAndResumesTheSharedLazyActionHead() =
         exercise("lazyFork", listOf(52, 53), "LazyForkAudit")
     @Test fun astForkedChildOwnsAndResumesTheSharedLazyActionHead() =
