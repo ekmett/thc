@@ -15,7 +15,7 @@ public final class VectorDouble4Fused extends Expr {
     public VectorDouble4Fused(String name, Expr[] arguments) {
         this.operation = CoreVectors.INSTANCE.getFusedDouble4().indexOf(name);
         this.arguments = arguments;
-        setRepresentation(GeneratedVectors.INSTANCE.getProofDoubleX4());
+        setRepresentation(GeneratedVectors.proofDoubleX4);
     }
 
     @Override public DoubleVector execute(VirtualFrame frame) {

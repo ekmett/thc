@@ -15,7 +15,7 @@ public final class VectorDouble8Fused extends Expr {
     public VectorDouble8Fused(String name, Expr[] arguments) {
         this.operation = CoreVectors.INSTANCE.getFusedDouble8().indexOf(name);
         this.arguments = arguments;
-        setRepresentation(GeneratedVectors.INSTANCE.getProofDoubleX8());
+        setRepresentation(GeneratedVectors.proofDoubleX8);
     }
 
     @Override public DoubleVector execute(VirtualFrame frame) {

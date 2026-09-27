@@ -15,7 +15,7 @@ public final class VectorFloat16Fused extends Expr {
     public VectorFloat16Fused(String name, Expr[] arguments) {
         this.operation = CoreVectors.INSTANCE.getFusedFloat16().indexOf(name);
         this.arguments = arguments;
-        setRepresentation(GeneratedVectors.INSTANCE.getProofFloatX16());
+        setRepresentation(GeneratedVectors.proofFloatX16);
     }
 
     @Override public FloatVector execute(VirtualFrame frame) {
