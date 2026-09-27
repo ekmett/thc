@@ -23,17 +23,22 @@ import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
 import System.Environment (getArgs)
 import System.Exit (ExitCode(..), exitWith)
 import System.IO (hSetEncoding, stdout, utf8)
+import Numeric (showHex)
 import THC.Interface
+import qualified THC.CoreStore.Binary as Store
+import qualified THC.CoreStore.Inspect as Inspect
 
 data Options = Options
   { libdir :: FilePath, unit :: String, moduleName :: String, interface :: FilePath
   , way :: String, databases :: [FilePath], sourceNotes :: Bool, inventoryProbe :: Bool
   , homeInterfaces :: Maybe FilePath
+  , coreStore :: Maybe FilePath, inspectStore :: Maybe FilePath
   }
 
 usage :: String
 usage = "thc-interface --libdir DIR --unit UNIT --module MODULE --interface FILE " ++
-  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes] [--home-interfaces DIR]"
+  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes] [--home-interfaces DIR] " ++
+  "[--core-store FILE [--inspect-core-store JSONFILE]]"
 
 parseOptions :: [String] -> Either String Options
 parseOptions = go Map.empty [] False False
@@ -50,13 +55,19 @@ parseOptions = go Map.empty [] False False
       unless (w `elem` ["vanilla", "dynamic", "profiling"]) (Left "Unsupported --way")
       let home = Map.lookup "--home-interfaces" values
       unless (not probe || home == Nothing) (Left "Inventory probe requires registered packages")
-      pure (Options l u m i w (reverse dbs) notes probe home)
+      let store = Map.lookup "--core-store" values
+          inspection = Map.lookup "--inspect-core-store" values
+      unless (not probe || store == Nothing && inspection == Nothing)
+        (Left "Inventory probe does not produce Core storage")
+      unless (inspection == Nothing || store /= Nothing)
+        (Left "--inspect-core-store requires --core-store")
+      pure (Options l u m i w (reverse dbs) notes probe home store inspection)
     go values dbs False probe ("--source-notes":rest) = go values dbs True probe rest
     go values dbs notes False ("--probe-inventory":rest) = go values dbs notes True rest
     go values dbs notes probe ("--package-db":value:rest)
       | not (null value || "--" `isPrefixOf` value) = go values (value:dbs) notes probe rest
     go values dbs notes probe (key:value:rest)
-      | key `elem` ["--libdir", "--unit", "--module", "--interface", "--way", "--home-interfaces"]
+      | key `elem` ["--libdir", "--unit", "--module", "--interface", "--way", "--home-interfaces", "--core-store", "--inspect-core-store"]
       , not (null value || "--" `isPrefixOf` value)
       , Map.notMember key values = go (Map.insert key value values) dbs notes probe rest
     go _ _ _ _ (argument:_) = Left ("Invalid, duplicate, or incomplete option: " ++ argument)
@@ -104,10 +115,27 @@ loadSelected options = withSelected options $ \environment -> do
   loaded <- loadInterfaceCore environment expected (interface options)
   case loaded of
     Nothing -> pure Nothing
-    Just core -> do
-      rendered <- interfaceCoreJSONBytes (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
-      output <- Exception.evaluate (BS.concat ["{\"schema\":1,\"status\":\"loaded\",\"core\":", rendered, "}\n"])
-      pure (Just output)
+    Just core -> case coreStore options of
+      Nothing -> do
+        rendered <- interfaceCoreJSONBytes selected core
+        output <- Exception.evaluate (BS.concat ["{\"schema\":1,\"status\":\"loaded\",\"core\":", rendered, "}\n"])
+        pure (Just output)
+      Just path -> do
+        arena <- interfaceCoreStore selected core
+        encoded <- either fail pure (Store.encodeStore arena)
+        Store.writeEncoded path encoded
+        case inspectStore options of
+          Nothing -> pure ()
+          Just outputPath -> either fail (BS.writeFile outputPath) (Inspect.inspectBytes Nothing arena)
+        pure $ Just $ BL.toStrict $ encode $ object
+          ["schema" .= (1::Int),"status" .= ("loaded"::String),"storage" .= object
+            ["format" .= ("thc-core-store"::String),"schema" .= (1::Int),"path" .= path,
+             "bytes" .= Store.encodedLength encoded,
+             "indexBytes" .= BS.length (Store.encodedHeaderIndex encoded),
+             "indexSha256" .= concatMap hex (BS.unpack (Store.encodedIndexSHA256 encoded))]]
+  where
+    selected = ["unit-qualified"] ++ ["source-notes" | sourceNotes options]
+    hex byte = let value = showHex byte "" in replicate (2 - length value) '0' ++ value
 
 -- Private, versioned batch protocol used by the installed-bundle cache. Each
 -- entry is checked using the same selected package state as ordinary loading.

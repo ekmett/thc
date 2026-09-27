@@ -10,7 +10,7 @@
 -- serialization do not link native foreign products or authorize execution.
 module THC.Interface
   ( InterfaceCore, interfaceModule, interfaceDetails, interfaceBindings, interfaceForeign
-  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, interfaceCoreJSONBytes, probeInterface
+  , InterfaceError(..), loadInterfaceCore, interfaceCoreJSON, interfaceCoreJSONBytes, interfaceCoreStore, probeInterface
   ) where
 
 import Control.Exception (Exception, throwIO)
@@ -38,7 +38,8 @@ import GHC.Utils.Binary (openBinMem, putFullBinData, put_, putFS, setWriterUserD
                         mkWriterUserData, mkSomeBinaryWriter, mkWriter, simpleBindingNameWriter)
 import GHC.Utils.Fingerprint (Fingerprint)
 import System.FilePath (replaceExtension)
-import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes)
+import THC.Plugin (serializePostTidyCoreWithAnnotations, serializePostTidyCoreWithAnnotationsBytes, serializePostTidyCoreStore)
+import qualified THC.CoreStore.Model as Store
 
 -- | Original GHC identities, declarations, recursive groups and foreign
 -- metadata. Loading is archival: accompanying foreign build products are
@@ -201,5 +202,12 @@ interfaceCoreJSON options core = serializePostTidyCoreWithAnnotations (interface
 -- subprocess responses if serialization fails.
 interfaceCoreJSONBytes :: [CommandLineOption] -> InterfaceCore -> IO BS.ByteString
 interfaceCoreJSONBytes options core = serializePostTidyCoreWithAnnotationsBytes (interfaceFlags core) options
+  (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
+  (interfaceForeign core) (md_anns (interfaceDetails core))
+
+-- | Construct shared typed records directly from this genuine interface Core.
+-- Existing JSON remains available independently for compatibility comparison.
+interfaceCoreStore :: [CommandLineOption] -> InterfaceCore -> IO Store.Store
+interfaceCoreStore options core = serializePostTidyCoreStore (interfaceFlags core) options
   (interfaceModule core) (typeEnvTyCons (md_types (interfaceDetails core))) (interfaceBindings core)
   (interfaceForeign core) (md_anns (interfaceDetails core))

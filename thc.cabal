@@ -12,6 +12,8 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  docs/core-storage.md
+  docs/core-storage-format.md
   docs/foreign-exceptions.md
   compiler/test-fixtures/ForeignExceptionNative.hs
   compiler/test-fixtures/ForeignExceptionSafe.hs
@@ -463,7 +465,7 @@ test-suite runtime-services-api
 
 library
   hs-source-dirs: compiler
-  exposed-modules: THC.Plugin, THC.Interface
+  exposed-modules: THC.Plugin, THC.Interface, THC.CoreStore.Model, THC.CoreStore.Binary, THC.CoreStore.Inspect, THC.CoreStore.Decode, THC.CoreStore.Validate
   other-modules:
     THC.CBV
     THC.Demands
@@ -475,13 +477,36 @@ library
     THC.Wired
   build-depends:
     base >= 4.22 && < 4.23,
+    array >= 0.5 && < 0.6,
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
+    cryptohash-sha256 >= 0.11 && < 0.12,
+    text >= 2.1 && < 2.2,
     directory >= 1.3.10 && < 1.4,
     filepath >= 1.5.4 && < 1.6,
     ghc == 9.14.1,
     ghc-boot == 9.14.1
   default-language: Haskell2010
+  if flag(development)
+    ghc-options: -Werror
+
+test-suite core-store
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test/core-store, compiler
+  other-modules: THC.CoreStore.Model, THC.CoreStore.Binary, THC.CoreStore.Inspect, THC.CoreStore.Decode, THC.CoreStore.Validate, THC.JSON
+  build-depends:
+    base >= 4.22 && < 4.23,
+    array >= 0.5 && < 0.6,
+    bytestring >= 0.12.2 && < 0.13,
+    containers >= 0.8 && < 0.9,
+    cryptohash-sha256 >= 0.11 && < 0.12,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6,
+    HUnit >= 1.6 && < 1.7,
+    text >= 2.1 && < 2.2
+  default-language: Haskell2010
+  ghc-options: -Wall
   if flag(development)
     ghc-options: -Werror
 
@@ -495,6 +520,18 @@ test-suite interface-json
     bytestring >= 0.12.2 && < 0.13,
     HUnit >= 1.6 && < 1.7,
     text >= 2.1 && < 2.2
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
+executable thc-core-store
+  main-is: Main.hs
+  hs-source-dirs: compiler/core-store
+  build-depends:
+    base >= 4.22 && < 4.23,
+    bytestring >= 0.12.2 && < 0.13,
+    thc
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)

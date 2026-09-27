@@ -10,7 +10,7 @@
 -- consume genuine GHC Core and do not establish runtime support or link native
 -- foreign products. This library is tied to the selected GHC API version.
 module THC.Plugin (plugin, serializeOptimizedCore, serializePostTidyCore, serializePostTidyCoreWithAnnotations,
-                   serializePostTidyCoreWithAnnotationsBytes) where
+                   serializePostTidyCoreWithAnnotationsBytes, serializePostTidyCoreStore) where
 
 import GHC.Plugins
 import GHC.Iface.Env (lookupOrig)
@@ -40,6 +40,7 @@ import qualified THC.ForeignExportProvenance as ExportProvenance
 import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
 import THC.JSON (J(..), json, jsonBytes)
+import qualified THC.CoreStore.Model as Store
 import GHC.Types.Tickish (CoreTickish, tickishFloatable)
 import GHC.Types.Literal
 import qualified GHC.Types.ForeignCall as Foreign
@@ -724,6 +725,205 @@ exprRaw d original = case original of
         DataAlt c -> A [S "data",S (nameKey (dataConName c)),ids,expr bodyCtx body,metadata]
         LitAlt l -> let (k,v) = literal d l in A [S "lit",A [S k,S v],ids,expr bodyCtx body,metadata]
 
+-- The shared producer walks GHC Core directly. Small auxiliary evidence values
+-- use the existing evidence functions; no expanded executable JSON tree is
+-- constructed and compressed afterward. Logical scope/binder IDs remain
+-- separate from the arena's backwards structural references.
+data StoreContext = StoreContext Ctx Store.Scope (VarEnv Store.Binder)
+
+storeEvidence :: [(String,J)] -> Store.Build Store.Ref
+storeEvidence = Store.internMetadata . O
+
+storeDeclare :: Ctx -> Store.Scope -> Bool -> Var -> Store.Build Store.Binder
+storeDeclare d scope evaluated v = do
+  name <- Store.internString (varKey d v)
+  metadata <- Store.internMetadata (binderWithState d evaluated v)
+  Store.newBinder scope name metadata
+
+storeModifyMetadata :: (Store.Ref -> Store.Build Store.Ref) -> Store.Ref -> Store.Build Store.Ref
+storeModifyMetadata change ref = Store.getNode ref >>= \case
+  Store.Variable scope metadata target -> change metadata >>= \m -> Store.intern (Store.Variable scope m target)
+  Store.Primitive scope metadata name -> change metadata >>= \m -> Store.intern (Store.Primitive scope m name)
+  Store.Constructor scope metadata name arity -> change metadata >>= \m -> Store.intern (Store.Constructor scope m name arity)
+  Store.Literal scope metadata kind value -> change metadata >>= \m -> Store.intern (Store.Literal scope m kind value)
+  Store.Application scope metadata function arguments lifted hnf spec -> change metadata >>= \m ->
+    Store.intern (Store.Application scope m function arguments lifted hnf spec)
+  Store.Lambda scope metadata bodyScope parameters body -> change metadata >>= \m ->
+    Store.intern (Store.Lambda scope m bodyScope parameters body)
+  Store.Let scope metadata recursive bodyScope bindings body -> change metadata >>= \m ->
+    Store.intern (Store.Let scope m recursive bodyScope bindings body)
+  Store.Case scope metadata branchScope binder scrutinee alternatives -> change metadata >>= \m ->
+    Store.intern (Store.Case scope m branchScope binder scrutinee alternatives)
+  Store.Void scope metadata -> change metadata >>= \m -> Store.intern (Store.Void scope m)
+  _ -> pure ref
+
+storeWithRep :: J -> Store.Ref -> Store.Build Store.Ref
+storeWithRep representation ref = do
+  proof <- Store.internMetadata representation
+  storeModifyMetadata (Store.amendObject [("rep",proof)] []) ref
+
+storeUncertified :: Store.Ref -> Store.Build Store.Ref
+storeUncertified ref = do
+  changed <- storeWithRep unknownRep ref
+  Store.getNode changed >>= \case
+    Store.Application scope metadata function arguments lifted _ _ -> do
+      clean <- Store.amendObject [] ["callDemand"] metadata
+      Store.intern (Store.Application scope clean function arguments lifted False False)
+    _ -> pure changed
+
+storeAppendFields :: [(String,J)] -> Store.Ref -> Store.Build Store.Ref
+storeAppendFields additions original = do
+  old <- Store.objectFields original
+  new <- mapM (\(key,value) -> (,) <$> Store.internString key <*> Store.internMetadata value) additions
+  keys <- Store.internVector (map fst (old ++ new))
+  values <- Store.internVector (map snd (old ++ new))
+  Store.intern (Store.Object keys values)
+
+storeBinding :: StoreContext -> Store.Binder -> (Id,CoreExpr) -> Store.Build Store.Ref
+storeBinding context@(StoreContext d _ _) identity (v,e) = do
+  exported <- storeExpr context e
+  exportedNode <- Store.getNode exported
+  let (marks,origin) = if canCertify d then CBV.entryContract (deriveCBVContracts d) v e else ([],"none")
+  aligned <- case exportedNode of
+    Store.Lambda _ _ _ parameters _ -> Store.getNode parameters >>= \case
+      Store.BinderVector values | length marks <= length values -> pure (take (length values) (marks ++ repeat False))
+      _ -> pure marks
+    _ -> pure marks
+  annotated <- case exportedNode of
+    Store.Lambda{} -> storeModifyMetadata (storeAppendFields
+      [("entryStrict",A (map B aligned)),("entryStrictSource",S origin)]) exported
+    _ -> pure exported
+  metadata <- storeEvidence $
+    [("id",S (varKey d v)),("name",S (occNameString (nameOccName (varName v)))),
+     ("type",S (pretty d (varType v))),("lifted",lifted v),("arity",num (idArity v)),
+     ("rep",exprRep d e),("info",idMetadata d v),("entryStrict",A (map B aligned)),
+     ("entryStrictSource",S origin)] ++ joinMetadata d v e ++ binderSource d v
+  Store.intern (Store.Definition identity annotated metadata 5)
+
+storeExpr :: StoreContext -> CoreExpr -> Store.Build Store.Ref
+storeExpr context@(StoreContext d scope locals) original
+  | Just lowered <- wiredCase original = do
+      child <- storeExpr context lowered
+      mark <- Store.internString "GHC.Core.Utils.isUnsafeEqualityCase/CoreToStg"
+      marked <- storeModifyMetadata (Store.amendObject [("unsafeEqualityCase",mark)] []) child
+      storeWithRep (exprRep d original) marked
+  | Just lowered <- wiredApplication original = do
+      child <- storeExpr context lowered
+      if canCertify d && preservesWiredTypes original lowered then pure child else storeUncertified child
+  | Var v <- original, isWiredVoid v = do
+      metadata <- storeEvidence (("rep",voidRep) : sourceFields d)
+      Store.intern (Store.Void scope metadata)
+  | Var v <- original, Just lowered <- wiredRhs v = storeExpr
+      (StoreContext (d { canCertify = canCertify d && preservesWiredTypes original lowered }) scope locals) lowered
+  | canCertify d, Just saturated <- saturateMask original = storeExpr context saturated
+  | otherwise = storeExprRaw context original
+
+storeExprRaw :: StoreContext -> CoreExpr -> Store.Build Store.Ref
+storeExprRaw context@(StoreContext d scope locals) original = case original of
+  Var v | Just p <- isPrimOpId_maybe v -> do
+            name <- Store.internString (occNameString (primOpOcc p))
+            node (\metadata -> Store.Primitive scope metadata name) []
+        | Just con <- isDataConWorkId_maybe v -> do
+            name <- Store.internString (nameKey (dataConName con))
+            node (\metadata -> Store.Constructor scope metadata name (dataConRepArity con)) []
+        | otherwise -> do
+            target <- case lookupVarEnv locals v of
+              Just identity -> pure (Store.Local identity)
+              Nothing -> Store.Global <$> Store.internString (varKey d v)
+            node (\metadata -> Store.Variable scope metadata target) []
+  Lit value -> do
+    let (kind,payload) = literal d value
+    k <- Store.internString kind
+    p <- Store.internString payload
+    node (\metadata -> Store.Literal scope metadata k p) []
+  application@App{} -> do
+    let (function,args) = collectArgs application
+        values = filter (not . isTypeArg) args
+        demand = case if canCertify d then Demands.callDemand function args else Nothing of
+          Just (arity,strict) -> [("callDemand",O [("arity",num arity),("strictArgs",A (map B strict))])]
+          Nothing -> []
+    if null values then storeExpr context function >>= storeWithRep (exprRep d application) else do
+      callee <- case function of
+        Var v | Just _ <- isPrimOpId_maybe v -> storeExprRaw context function
+        _ -> storeExpr context function
+      operands <- mapM (storeExpr context) values >>= Store.internVector
+      argumentLifted <- Store.internMetadata (A (map argLifted values))
+      node (\metadata -> Store.Application scope metadata callee operands argumentLifted
+        (canCertify d && exprIsHNF application)
+        (canCertify d && exprOkForSpecEval (\v -> not (v `elemVarSet` recursiveIds d)) application))
+        (demand ++ [("enumFamily",enumFamily tc) | Just tc <- [tagToEnumFamily application]] ++
+          [("dataToTagFamily",dataToTagFamily d tc) | Just tc <- [dataToTagApplication application]] ++
+          someExceptionPayload function values ++ foreignCallFields d function args)
+  lambda@Lam{} -> do
+    let (parameters,body) = collectBinders lambda
+        values = filter (not . isTyVar) parameters
+    if null values then storeExpr context body >>= storeWithRep (exprRep d lambda) else do
+      bodyScope <- Store.newScope scope
+      identities <- mapM (storeDeclare d bodyScope False) values
+      declarations <- Store.intern (Store.BinderVector identities)
+      bodyRef <- storeExpr (StoreContext d bodyScope (extendVarEnvList locals (zip values identities))) body
+      node (\metadata -> Store.Lambda scope metadata bodyScope declarations bodyRef) [("resultRep",exprRep d body)]
+  Let bindingGroupValue body -> do
+    let values = flattenBind bindingGroupValue
+        recursive = case bindingGroupValue of Rec{} -> True; _ -> False
+        rhsCtx = if recursive then d { recursiveIds = extendVarSetList (recursiveIds d) (map fst values) } else d
+    bodyScope <- Store.newScope scope
+    identities <- mapM (storeDeclare d bodyScope False . fst) values
+    let bodyLocals = extendVarEnvList locals (zip (map fst values) identities)
+        rhsContext = if recursive then StoreContext rhsCtx bodyScope bodyLocals else StoreContext rhsCtx scope locals
+    definitions <- sequence [storeBinding rhsContext identity value | (identity,value) <- zip identities values]
+      >>= Store.internVector
+    bodyRef <- storeExpr (StoreContext d bodyScope bodyLocals) body
+    node (\metadata -> Store.Let scope metadata recursive bodyScope definitions bodyRef) []
+  Case scrutinee binder _ alternatives -> do
+    scrutineeRef <- storeExpr context scrutinee
+    branchScope <- Store.newScope scope
+    identity <- storeDeclare d branchScope True binder
+    let branchCtx = d { evaluatedIds = extendVarSetList (evaluatedIds d) (binder : scrutineeVars scrutinee) }
+        branchLocals = extendVarEnv locals binder identity
+    alternativeRefs <- mapM (storeAlternative branchCtx branchScope branchLocals) alternatives >>= Store.internVector
+    node (\metadata -> Store.Case scope metadata branchScope identity scrutineeRef alternativeRefs)
+      [("binder",binderWithState d True binder)]
+  Cast child _ -> storeExpr context child >>= storeWithRep (exprRep d original)
+  Tick tick child -> storeExpr (StoreContext (underTick d tick) scope locals) child
+  Type _ -> Store.internString "type-as-value" >>= Store.intern . Store.Unsupported scope
+  Coercion _ -> node (Store.Void scope) []
+  where
+    node construct extra = do
+      metadata <- storeEvidence (("rep",exprRep d original) : extra ++ sourceFields d)
+      -- This preserves occurrence order and duplicates in expectedCalls, even
+      -- when equal descriptors and expressions common to one physical record.
+      mapM_ (\value -> Store.internMetadata value >>= Store.recordForeignCall)
+        [value | (key,value) <- extra, key == "foreignCall"]
+      Store.intern (construct metadata)
+    isTypeArg Type{} = True
+    isTypeArg _ = False
+    argLifted Coercion{} = B False
+    argLifted value = liftedType (exprType value)
+    scrutineeVars (Var v) = [v]
+    scrutineeVars (Cast child _) = scrutineeVars child
+    scrutineeVars (Tick _ child) = scrutineeVars child
+    scrutineeVars _ = []
+    storeAlternative branchCtx branchScope branchLocals (Alt constructorValue parameters body) = do
+      let values = filter (not . isTyVar) parameters
+          strictFields = case constructorValue of
+            DataAlt con | canCertify d
+                        , let marks = dataConRepStrictness con
+                        , length marks == length values -> [v | (v,mark) <- zip values marks, isMarkedStrict mark]
+            _ -> []
+          bodyCtx = branchCtx { evaluatedIds = extendVarSetList (evaluatedIds branchCtx) strictFields }
+      bodyScope <- Store.newScope branchScope
+      identities <- mapM (storeDeclare bodyCtx bodyScope False) values
+      declarations <- Store.intern (Store.BinderVector identities)
+      bodyRef <- storeExpr (StoreContext bodyCtx bodyScope (extendVarEnvList branchLocals (zip values identities))) body
+      metadata <- storeEvidence [("binders",A (map (binder bodyCtx) values))]
+      (kind,discriminator) <- case constructorValue of
+        DEFAULT -> (,) Store.DefaultAlt <$> Store.intern Store.Null
+        DataAlt con -> (,) Store.DataAlt <$> Store.internString (nameKey (dataConName con))
+        LitAlt value -> let (k,p) = literal d value in
+          (,) Store.LiteralAlt <$> Store.internMetadata (A [S k,S p])
+      Store.intern (Store.Alternative bodyScope kind discriminator declarations bodyRef metadata)
+
 literal :: Ctx -> Literal -> (String,String)
 literal d = \case
   LitNumber n i -> (numKind n,show i)
@@ -934,6 +1134,81 @@ serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifact
 serializePostTidyCoreWithAnnotationsBytes :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
 serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations =
   (\value -> BS.snoc (jsonBytes value) 10) <$> postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+
+-- | Direct immutable-record serialization of the same genuine post-Tidy Core.
+-- The compatibility JSON is produced only when explicitly inspecting the
+-- resulting store. Independent modules retain their original qualified names.
+serializePostTidyCoreStore :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO Store.Store
+serializePostTidyCoreStore flags opts m tycons program foreignArtifacts annotations = do
+  associations <- either (ioError . userError . ("THC: " ++)) pure
+    (Exports.readStaticExports m annotations program)
+  let exported = case associations of
+        Nothing -> []
+        Just (Exports.StaticExports _ _ _ records) -> map (exportKey . Exports.exportBinder) records
+      signatureTycons = concat [foreignSignatureTycons (idType value)
+        | (value, _) <- flattenBinds program, nameKey (varName value) `elem` exported]
+      bindings = concatMap flattenBind program
+  sources <- loadSources ("source-notes" `elem` opts) bindings
+  exports <- staticExportFields m annotations program
+  provenance <- exportProvenanceFields m annotations program foreignArtifacts
+  -- Classification does not need an expanded Core tree. The record builder
+  -- supplies the same ordered FCallId occurrence list after walking the bodies.
+  imports <- importProvenanceFields m annotations foreignArtifacts Z
+  let unit = unitString (moduleUnit m)
+      modName = moduleNameString (moduleName m)
+      d = Ctx flags (unit ++ ":" ++ modName) (if "unit-qualified" `elem` opts then Just unit else Nothing)
+        emptyVarSet emptyVarSet True False sources []
+      constructors = nubBy (\a b -> dataConName a == dataConName b)
+        (concatMap tyConDataCons (tycons ++ signatureTycons) ++ concatMap (exprCons . snd) bindings)
+      initialFields = [("schema",num (1::Int)),("ghc",S "9.14.1"),("module",S modName),("unit",S unit),
+        ("boundary",S "optimized-Core-after-Tidy-before-CorePrep"),("sourceCore",S (pretty d program))]
+      trailingFields = [("constructors",A (map (constructor d) constructors)),
+        ("groups",A [O [("recursive",B (case group of Rec{} -> True; _ -> False)),
+          ("ids",A [S (varKey d value) | (value,_) <- flattenBind group])] | group <- program])] ++
+        sourceTableFields d ++ foreignExceptionBridgeFields d unit modName bindings ++ exports ++ provenance
+      foreignFields = case withForeignArtifacts foreignArtifacts (O []) of O fields -> fields; _ -> []
+  either (ioError . userError . ("THC Core store: " ++)) pure $ Store.runBuild $ do
+    -- Preserve the legacy producer's source-document forcing order. Installed
+    -- interface hydration can allocate local GHC uniques when first demanded.
+    before <- mapM field initialFields
+    identities <- mapM (storeDeclare d (Store.Scope 0) False . fst) bindings
+    let identityEnv = mkVarEnv (zip (map fst bindings) identities)
+    definitionGroups <- mapM (storeTopGroup d identityEnv) program
+    let definitions = concat definitionGroups
+    mapM_ (\((value,_),definition) -> Store.internString (varKey d value) >>= \name -> Store.addSymbol name definition)
+      (zip bindings definitions)
+    definitionsRef <- Store.internVector definitions
+    after <- mapM field trailingFields
+    calls <- Store.foreignCalls >>= Store.internVector
+    importFields <- mapM (\(key,value) -> do
+      encoded <- Store.internMetadata value
+      changed <- storeReplaceField "expectedCalls" calls encoded
+      pure (key,changed)) imports
+    foreignRefs <- mapM field foreignFields
+    let ordinary = before ++ [("bindings",definitionsRef)] ++ after ++ importFields
+        selected = if null foreignFields then ordinary
+          else foreignRefs ++ filter ((/= "schema") . fst) ordinary
+    Store.internObject selected
+  where
+    exportKey (Exports.ExportName unit modName occurrence _) = unit ++ ":" ++ modName ++ "." ++ occurrence
+    field (key,value) = (,) key <$> Store.internMetadata value
+    storeTopGroup d identities group = do
+      let rhsCtx = case group of
+            NonRec{} -> d
+            Rec values -> d { recursiveIds = extendVarSetList (recursiveIds d) (map fst values) }
+      mapM (\value@(binderValue,_) -> case lookupVarEnv identities binderValue of
+        Nothing -> Store.abort "Top-level declaration disappeared"
+        Just identity -> storeBinding (StoreContext rhsCtx (Store.Scope 0) emptyVarEnv) identity value)
+        (flattenBind group)
+
+storeReplaceField :: String -> Store.Ref -> Store.Ref -> Store.Build Store.Ref
+storeReplaceField key replacement original = do
+  wanted <- Store.internString key
+  old <- Store.objectFields original
+  let values = [(name,if name == wanted then replacement else value) | (name,value) <- old]
+  keys <- Store.internVector (map fst values)
+  contents <- Store.internVector (map snd values)
+  Store.intern (Store.Object keys contents)
 
 postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
 postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
