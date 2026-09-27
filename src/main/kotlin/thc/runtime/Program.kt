@@ -4,6 +4,9 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.BitPrimitives.scalarBitPrimitiveShift
+import thc.runtime.FloatingPrimitives.floatingPrimitive
+
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.RootCallTarget
