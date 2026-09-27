@@ -195,8 +195,14 @@ class OriginalPosixStatTest {
                     val operation = validate(call)!!
                     val program = load(rawModule(call))
                     val target = program.entryTarget("entry")
-                    val args = operation.arguments.dropLast(1).map { if (it == "AddrRep") ManagedAddress.nullAddress() else 0L }
-                    val failure = assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, *args.toTypedArray(), 9L)) }
+                    val args: List<Any?> = operation.arguments.dropLast(1).map { rep ->
+                        when {
+                            rep == "AddrRep" -> ManagedAddress.nullAddress()
+                            NarrowInteger.fromRep(rep) != null -> 0
+                            else -> 0L
+                        }
+                    }
+                    val failure = assertThrows(RuntimeFault::class.java) { callScalarTestTarget(target, arrayOf(0L, *args.toTypedArray(), 9L)) }
                     assertTrue(failure.message.orEmpty().contains("zero-width scalar carrier"), failure.message)
                     for (index in operation.arguments.indices) {
                         // IntRep is not any stat argument, including the zero-width state.
@@ -208,7 +214,7 @@ class OriginalPosixStatTest {
                     val badHead = assertThrows(RuntimeFault::class.java) { load(malformed) }
                     assertTrue(badHead.message.orEmpty().startsWith("Invalid original stdio call:"))
                     if (operation.statField) assertThrows(RuntimeFault::class.java) {
-                        Calls.target(target, arrayOf(0L, ManagedAddress.nullAddress(), Unit))
+                        callScalarTestTarget(target, arrayOf(0L, ManagedAddress.nullAddress(), Unit))
                     }
                     val handoff = language.handoffState.get()
                     assertEquals(0, handoff.arguments.depth); assertEquals(0, handoff.results.depth)
