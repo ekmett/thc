@@ -16,7 +16,8 @@ import java.io.IOException
 import java.io.OutputStream
 
 class RtsDiagnosticsTest {
-    private fun context(output: OutputStream, native: Boolean = false) = Context.newBuilder("thc").err(output)
+    private fun context(output: OutputStream, native: Boolean = false,
+                        stdout: OutputStream = ByteArrayOutputStream()) = Context.newBuilder("thc").err(output).out(stdout)
         .allowNativeAccess(native).allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
         .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()
     private fun <T> entered(context: Context, action: (Language) -> T): T {
@@ -46,8 +47,11 @@ class RtsDiagnosticsTest {
     }
     private fun program(language: Language, backend: String, call: List<Any?>): ExecutableProgram {
         val module = OriginalStdioChecks.rawModule(call, mapOf("sourceFiles" to emptyList<Any>(), "sourceSpans" to emptyList<Any>()))
-        return if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+        return program(language, backend, module)
     }
+    private fun program(language: Language, backend: String, module: Map<String, Any?>): ExecutableProgram =
+        if (backend == "ast") Program(language, module) else BytecodeProgram(language, module)
+    private fun format(operation: String) = cstring((if (operation == "debugBelch2") "%s\n" else "%s").toByteArray())
     private fun bytes(values: List<Long>) = values.map { it.toByte() }.toByteArray()
     private fun cstring(bytes: ByteArray) = ManagedAddress.fromByteArray(bytes + byteArrayOf(0))
     private fun fixture(): Map<String, Any?> {
@@ -56,32 +60,38 @@ class RtsDiagnosticsTest {
         val manifest = Json.parse(File(root, "$prefix/manifest.json").readText()) as Map<String, Any?>
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/RtsDiagnosticsNative.hs",
             "test/haskell-fixtures/RtsDiagnosticFixtures.hs"))
+        val cases = listOf("ascii", "empty", "bytes", "nul", "newline")
+        val nativeCases = cases + cases.map { "debug-$it" } + listOf("trace-nul", "stack", "heap")
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +
-            listOf("ascii", "empty", "bytes", "nul", "newline", "stack", "heap").map { "$prefix/logs/$it.stderr" }, "$prefix/")
+            nativeCases.flatMap { listOf("$prefix/logs/$it.stderr", "$prefix/logs/$it.stdout") }, "$prefix/")
         return (Json.parse(File(root, "$prefix/oracle.json").readText()) as Map<String, Any?>).also {
             assertEquals(true, it["nativeCallsReturned"])
+            assertEquals(true, it["nativeStdoutOnlyHarnessMarkers"])
             assertEquals(true, it["overflowSizesAreBackendSpecific"])
         }
     }
 
     @Test fun nativeCStringBytesMatchBothBackendsAndFirstInstalledCallsReturn() {
-        val rows = fixture()["cases"] as List<Map<String, Any?>>
+        val fixture = fixture()
+        val rows = fixture["cases"] as List<Map<String, Any?>>
+        val nativeOutput = (fixture["nativeOutput"] as List<Map<String, Any?>>).associateBy { it["name"] }
         assertEquals(listOf("ascii", "empty", "bytes", "nul", "newline"), rows.map { it["name"] })
         for (backend in listOf("ast", "bytecode")) {
             val output = ByteArrayOutputStream()
-            context(output).use { context -> entered(context) { language ->
+            val stdout = ByteArrayOutputStream()
+            context(output, stdout = stdout).use { context -> entered(context) { language ->
                 val threads = Language.currentState().threads
                 threads.enterCurrent()
                 try {
-                    for (operation in listOf("errorBelch2", "reportStackOverflow", "reportHeapOverflow")) {
+                    for (operation in listOf("errorBelch2", "debugBelch2", "reportStackOverflow", "reportHeapOverflow")) {
                         val program = program(language, backend, call(operation))
                         val target = program.entryTarget("entry")
                         fun exercise(compiled: Boolean) {
-                            val selected = if (operation == "errorBelch2") rows else listOf(emptyMap())
+                            val selected = if (operation.endsWith("Belch2")) rows else listOf(emptyMap())
                             for (row in selected) {
                                 output.reset()
                                 val arguments: Array<Any?> = when (operation) {
-                                    "errorBelch2" -> arrayOf(0L, cstring("%s".toByteArray()),
+                                    "errorBelch2", "debugBelch2" -> arrayOf(0L, format(operation),
                                         cstring(bytes(row["bytes"] as List<Long>)).plus(row["offset"] as Long), Unit)
                                     "reportStackOverflow" -> arrayOf(0L, threads.currentIdentity(), Unit)
                                     else -> arrayOf(0L, Unit)
@@ -90,10 +100,12 @@ class RtsDiagnosticsTest {
                                 assertEquals(0L, Calls.target(target, arguments))
                                 val expected = when (operation) {
                                     "errorBelch2" -> bytes(row["message"] as List<Long>) + byteArrayOf(10)
+                                    "debugBelch2" -> bytes(nativeOutput.getValue("debug-${row["name"]}")["stderr"] as List<Long>)
                                     "reportStackOverflow" -> "Stack space overflow (THC guest Java thread ${Thread.currentThread().threadId()}; JVM stack limit unavailable).\n".toByteArray()
                                     else -> "Heap exhausted; JVM maximum heap size is ${Runtime.getRuntime().maxMemory()} bytes.\n".toByteArray()
                                 }
                                 assertArrayEquals(expected, output.toByteArray(), "$backend/$operation/${row["name"]}")
+                                assertEquals(0, stdout.size(), "Native diagnostics write no stdout bytes")
                                 if (compiled) {
                                     assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                                     assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
@@ -107,6 +119,19 @@ class RtsDiagnosticsTest {
                         target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                         assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                         exercise(true)
+                        if (operation == "debugBelch2") {
+                            // Native traceIO filters NULs in Haskell, then makes
+                            // these two leaf calls. The leaf itself only truncates.
+                            output.reset()
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            for (message in listOf("leftright", "WARNING: previous trace message had null bytes"))
+                                assertEquals(0L, Calls.target(target, arrayOf(0L, format(operation),
+                                    cstring(message.toByteArray()), Unit)))
+                            assertArrayEquals(bytes(nativeOutput.getValue("trace-nul")["stderr"] as List<Long>), output.toByteArray())
+                            assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                            assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                            assertEquals(0, stdout.size())
+                        }
                     }
                 } finally { threads.leaveCurrent() }
             } }
@@ -116,24 +141,57 @@ class RtsDiagnosticsTest {
     @Test fun malformedDescriptorsAndInvalidCarriersRejectBeforeOutput() {
         for (backend in listOf("ast", "bytecode")) {
             val output = ByteArrayOutputStream()
-            context(output).use { context -> entered(context) { language ->
-                val target = program(language, backend, call("errorBelch2")).entryTarget("entry")
-                val text = cstring("ok".toByteArray())
-                val format = cstring("%s".toByteArray())
-                for (args in listOf<Array<Any?>>(arrayOf(0L, format, text, 1L), arrayOf(0L, cstring("%d".toByteArray()), text, Unit),
-                    arrayOf(0L, format, ManagedAddress.fromByteArray(byteArrayOf(1, 2)), Unit),
-                    arrayOf(0L, format, ManagedAddress.nullAddress(), Unit))) {
-                    assertThrows(RuntimeFault::class.java) { Calls.target(target, args) }
-                    assertEquals(0, output.size())
+            val stdout = ByteArrayOutputStream()
+            context(output, stdout = stdout).use { context -> entered(context) { language ->
+                for (operation in listOf("errorBelch2", "debugBelch2")) {
+                    val target = program(language, backend, call(operation)).entryTarget("entry")
+                    val text = cstring("ok".toByteArray())
+                    val validFormat = format(operation)
+                    val otherFormat = format(if (operation == "debugBelch2") "errorBelch2" else "debugBelch2")
+                    for (args in listOf<Array<Any?>>(arrayOf(0L, validFormat, text, 1L),
+                        arrayOf(0L, 1L, text, Unit), arrayOf(0L, validFormat, 1L, Unit),
+                        arrayOf(0L, otherFormat, text, Unit),
+                        arrayOf(0L, cstring("%d".toByteArray()), text, Unit),
+                        arrayOf(0L, ManagedAddress.fromByteArray(byteArrayOf(37, 115)), text, Unit),
+                        arrayOf(0L, validFormat, ManagedAddress.fromByteArray(byteArrayOf(1, 2)), Unit),
+                        arrayOf(0L, ManagedAddress.nullAddress(), text, Unit),
+                        arrayOf(0L, validFormat, ManagedAddress.nullAddress(), Unit))) {
+                        assertThrows(RuntimeFault::class.java) { Calls.target(target, args) }
+                        assertEquals(0, output.size()); assertEquals(0, stdout.size())
+                    }
+                    for ((key, value) in listOf("safety" to "safe", "arity" to 4L,
+                        "suppliedArity" to 2L, "convention" to "capi", "schema" to 2L)) {
+                        val broken = Json.parse(Json.stringify(call(operation))) as MutableList<Any?>
+                        (((broken[6] as MutableMap<String, Any?>)["foreignCall"]) as MutableMap<String, Any?>)[key] = value
+                        assertThrows(RuntimeFault::class.java) { program(language, backend, broken) }
+                    }
+                    for (unit in listOf("main", "ghc-internal-9.1401.0-inplace")) {
+                        val broken = Json.parse(Json.stringify(call(operation))) as MutableList<Any?>
+                        val descriptor = (broken[6] as Map<*, *>)["foreignCall"] as Map<*, *>
+                        (descriptor["target"] as MutableMap<String, Any?>)["unit"] = unit
+                        assertThrows(RuntimeFault::class.java) { program(language, backend, broken) }
+                    }
+                    val source = mapOf("sourceFiles" to emptyList<Any>(), "sourceSpans" to emptyList<Any>())
+                    assertThrows(RuntimeFault::class.java) {
+                        program(language, backend, OriginalStdioChecks.rawModule(call(operation), source, storedMutation = 2))
+                    }
+                    for (mutation in listOf("state-producer", "bound-head", "singleton-state-result")) {
+                        val module = Json.parse(Json.stringify(OriginalStdioChecks.rawModule(call(operation), source))) as Map<String, Any?>
+                        val binding = (module["bindings"] as List<Map<String, Any?>>).single()
+                        val body = (binding["expr"] as List<*>)[2] as List<*>
+                        val call = body[1] as MutableList<Any?>
+                        when (mutation) {
+                            "state-producer" -> (call[2] as MutableList<Any?>)[2] =
+                                listOf("lit", "int", "0", mapOf("rep" to scalar(null)))
+                            "bound-head" -> (call[1] as MutableList<Any?>)[1] = "p0"
+                            else -> ((call[6] as Map<*, *>)["foreignCall"] as MutableMap<String, Any?>)["resultRep"] = scalar(null, false)
+                        }
+                        assertThrows(RuntimeFault::class.java) { program(language, backend, module) }
+                    }
                 }
                 val stack = program(language, backend, call("reportStackOverflow")).entryTarget("entry")
                 assertThrows(RuntimeFault::class.java) { Calls.target(stack, arrayOf(0L, Any(), Unit)) }
-                for ((key, value) in listOf("safety" to "safe", "arity" to 4L, "convention" to "capi")) {
-                    val broken = Json.parse(Json.stringify(call("errorBelch2"))) as MutableList<Any?>
-                    (((broken[6] as MutableMap<String, Any?>)["foreignCall"]) as MutableMap<String, Any?>)[key] = value
-                    assertThrows(RuntimeFault::class.java) { program(language, backend, broken) }
-                }
-                assertEquals(0, output.size())
+                assertEquals(0, output.size()); assertEquals(0, stdout.size())
             } }
         }
     }
@@ -154,6 +212,8 @@ class RtsDiagnosticsTest {
         val broken = object : OutputStream() { override fun write(value: Int) { throw IOException("closed") } }
         context(broken).use { context -> entered(context) {
             assertDoesNotThrow { RtsDiagnostics.report(null, RtsDiagnosticOp.HEAP, null, null) }
+            assertDoesNotThrow { RtsDiagnostics.report(null, RtsDiagnosticOp.DEBUG,
+                format("debugBelch2"), cstring("message".toByteArray())) }
         } }
     }
 
@@ -167,14 +227,17 @@ class RtsDiagnosticsTest {
             val alias = address.plus(1)
             try {
                 alias.writeWord8(0, 120); alias.writeWord8(1, 0)
-                RtsDiagnostics.report(null, RtsDiagnosticOp.ERROR, cstring("%s".toByteArray()), alias)
-                assertArrayEquals(byteArrayOf(120, 10), output.toByteArray()); output.reset()
-                context(output).use { second -> entered(second) {
-                    assertThrows(RuntimeFault::class.java) { RtsDiagnostics.report(null, RtsDiagnosticOp.ERROR, cstring("%s".toByteArray()), alias) }
-                    assertEquals(0, output.size())
-                } }
+                for (operation in listOf(RtsDiagnosticOp.ERROR, RtsDiagnosticOp.DEBUG)) {
+                    RtsDiagnostics.report(null, operation, format(operation.symbol), alias)
+                    assertArrayEquals(byteArrayOf(120, 10), output.toByteArray()); output.reset()
+                    context(output).use { second -> entered(second) {
+                        assertThrows(RuntimeFault::class.java) { RtsDiagnostics.report(null, operation, format(operation.symbol), alias) }
+                        assertEquals(0, output.size())
+                    } }
+                }
             } finally { state.nativeAllocations.free(address) }
-            assertThrows(RuntimeFault::class.java) { RtsDiagnostics.report(null, RtsDiagnosticOp.ERROR, cstring("%s".toByteArray()), alias) }
+            for (operation in listOf(RtsDiagnosticOp.ERROR, RtsDiagnosticOp.DEBUG))
+                assertThrows(RuntimeFault::class.java) { RtsDiagnostics.report(null, operation, format(operation.symbol), alias) }
             assertEquals(0, output.size())
         } }
     }

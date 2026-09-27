@@ -5,11 +5,12 @@ package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
 
-/** Exact original GHC 9.14.1 Conc.Sync and TopHandler diagnostic declarations. */
+/** Exact original GHC 9.14.1 Conc.Sync, TopHandler and Debug.Trace declarations. */
 internal enum class RtsDiagnosticOp(val symbol: String, val arguments: List<String?>) {
     STACK("reportStackOverflow", listOf("BoxedRep (Just Unlifted)", null)),
     HEAP("reportHeapOverflow", listOf(null)),
-    ERROR("errorBelch2", listOf("AddrRep", "AddrRep", null));
+    ERROR("errorBelch2", listOf("AddrRep", "AddrRep", null)),
+    DEBUG("debugBelch2", listOf("AddrRep", "AddrRep", null));
 }
 
 internal class RtsDiagnosticExpression(private val operation: RtsDiagnosticOp,

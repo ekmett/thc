@@ -63,23 +63,25 @@ internal object RtsDiagnostics {
                 RtsDiagnosticOp.HEAP ->
                     "Heap exhausted; JVM maximum heap size is ${Runtime.getRuntime().maxMemory()} bytes."
                         .toByteArray(Charsets.US_ASCII)
-                RtsDiagnosticOp.ERROR -> {
-                    val format = first as? ManagedAddress ?: fault("errorBelch2 requires a format Addr#")
-                    val text = second as? ManagedAddress ?: fault("errorBelch2 requires a message Addr#")
+                RtsDiagnosticOp.ERROR, RtsDiagnosticOp.DEBUG -> {
+                    val format = first as? ManagedAddress ?: fault("${operation.symbol} requires a format Addr#")
+                    val text = second as? ManagedAddress ?: fault("${operation.symbol} requires a message Addr#")
                     format.withNativeBorrows(text) {
-                        // Both original Conc.Sync and TopHandler sites supply this
-                        // format. Other varargs formats need a separate checked ABI.
-                        if (!cstring(format).contentEquals(byteArrayOf(37, 115)))
-                            fault("errorBelch2 supports the original %s CString format")
+                        // Debug.Trace supplies "%s\n"; Conc.Sync and TopHandler
+                        // supply "%s". Other printf formats need a separate ABI.
+                        val expected = if (operation == RtsDiagnosticOp.DEBUG) byteArrayOf(37, 115, 10)
+                            else byteArrayOf(37, 115)
+                        if (!cstring(format).contentEquals(expected))
+                            fault("${operation.symbol} supports only its original CString format")
                         cstring(text)
                     }
                 }
             }
-            // No program name is registered by the managed embedding. Like the
-            // native null prog_name case, omit a fabricated prefix. The RTS appends
-            // a newline even if the message already ends with one. Publish the line
-            // to the embedding stream as native unbuffered stderr would; stream
-            // errors are not reported by the original void diagnostic hook.
+            // debugBelch2 has no prefix or implicit newline: its admitted format
+            // supplies one LF. errorBelch2 appends one LF itself and has no prefix
+            // when the embedding has not registered a program name. In both cases
+            // preserve message bytes and emit exactly that one trailing LF.
+            // Stream errors are not reported by the original void hooks.
             val output = context.env.err()
             synchronized(output) {
                 try { output.write(message); output.write(10) }
