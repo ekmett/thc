@@ -58,7 +58,7 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
     }
 
     init {
-        if (!NativeIO.supportedHost()) throw UnsupportedOperationException("Native processes require Linux x86_64")
+        if (!NativeIO.supportedPosixHost()) throw UnsupportedOperationException("Native processes require Linux x86_64")
         if (!context.env.isNativeAccessAllowed || !context.env.isCreateProcessAllowed)
             throw SecurityException("Native processes require explicit native access and process creation permission")
         context.env.registerOnDispose(this)
