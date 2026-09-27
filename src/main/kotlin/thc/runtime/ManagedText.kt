@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
 import java.util.function.LongSupplier
 import thc.Language
 
-/** Read-only, synchronous views of the existing ByteArray# storage. No staging
+/** Synchronous borrowed views of the existing ByteArray# storage. No staging
  * copy, native address projection, pinning, or substitution of the C algorithm. */
 internal object ManagedText {
     /** Original text promises valid UTF-8 and allocates a distinct output array.

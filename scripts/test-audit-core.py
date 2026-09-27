@@ -2095,6 +2095,32 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
             self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'])
 
 
+class OriginalByteStringUtf8DeclarationTest(unittest.TestCase):
+    def test_safe_and_unsafe_pointer_contracts_stay_closed(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        output = dict(kind='unknown', primReps=['Int32Rep'], evaluated=False, aggregate='unboxed-tuple',
+                      components=[scalar(None, True), scalar('Int32Rep', True)])
+        for safety in ('safe', 'unsafe'):
+            declaration = dict(schema=1, target=dict(kind='static', symbol='bytestring_is_valid_utf8',
+                unit='bytestring-0.12.2.0-inplace', isFunction=True), convention='ccall', safety=safety,
+                arity=3, suppliedArity=3, argumentReps=list(map(scalar, ['AddrRep', 'Word64Rep', None])), resultRep=output)
+            self.assertTrue(fixture.audit(fixture.fixture(declaration))['accepted'])
+            disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'bytestring_is_valid_utf8'])
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+            for key, value in [('safety', 'interruptible'), ('convention', 'capi'), ('arity', 4), ('schema', True)]:
+                bad = copy.deepcopy(declaration); bad[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'], (safety, key))
+            for unit in ['ghc-internal', 'text-2.1.3-inplace', 'bytestring-0.12.1.0-inplace', None]:
+                bad = copy.deepcopy(declaration); bad['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'], (safety, unit))
+            for index, rep in [(0, 'BoxedRep (Just Unlifted)'), (1, 'WordRep')]:
+                bad = copy.deepcopy(declaration); bad['argumentReps'][index] = scalar(rep)
+                self.assertFalse(fixture.audit(fixture.fixture(bad))['accepted'], (safety, index))
+
+
 class OriginalGcStatsDeclarationTest(unittest.TestCase):
     """Synthetic ABI negatives; real declarations execute in GcStatsNativeTest."""
     def test_closed_original_gc_stats_and_clock_abis(self):

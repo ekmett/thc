@@ -356,6 +356,15 @@
         "test/haskell-fixtures/Main.hs", "thc.cabal"
       ]
     },
+    "bytestring-utf8": {
+      "junit": ["thc.runtime.ByteStringUtf8Test"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bytestring-utf8"]}],
+      "outputs": ["build/bytestring-utf8"],
+      "sources": ["compiler/test-fixtures/ByteStringUtf8Audit.hs", "compiler/test-fixtures/ByteStringUtf8Native.hs",
+        "test/haskell-fixtures/ByteStringUtf8Fixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
+        "compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c", "src/main/c/bytestring-utf8-api.c", "scripts/build-cbits.py",
+        "test/haskell-fixtures/Main.hs", "thc.cabal"]
+    },
     "original-memory-search": {
       "junit": ["thc.runtime.OriginalMemorySearchTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-memory-search"]}],

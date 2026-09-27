@@ -63,6 +63,20 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/proxy-void/baseline-audit.json', {}))
 
+    def test_original_bytestring_utf8_registration_and_closed_cache(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual('bytestring-utf8', owners['thc.runtime.ByteStringUtf8Test'])
+        group = manifest['groups']['bytestring-utf8']
+        self.assertEqual(['build/bytestring-utf8'], group['outputs'])
+        self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'bytestring-utf8']}], group['commands'])
+        self.assertTrue(all((project / path).is_file() for path in group['sources']))
+        self.assertIn('"$fixture_bin" bytestring-utf8', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertTrue(fast_fixtures.fast_inputs.BYTESTRING_UTF8_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/bytestring-utf8', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('"bytestring-utf8/**/*.json"', (project / 'build.gradle.kts').read_text())
+
     def test_original_memory_search_registration_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

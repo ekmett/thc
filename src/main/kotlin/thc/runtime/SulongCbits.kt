@@ -92,6 +92,25 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
     internal fun textReverse(function: Any, destination: CbitsBuffer, source: CbitsBuffer, offset: Long, length: Long) {
         executeWithOwners(function, destination, source, offset, length)
     }
+    private val utf8Task = FutureTask { load(env, "bytestring-utf8") }
+    internal fun utf8Function(): Any {
+        if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
+            fault("Original ByteString UTF-8 cbits currently require Linux x86_64")
+        utf8Task.run()
+        val library = try {
+            if (utf8Task.isDone) utf8Task.get()
+            else TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
+                TruffleSafepoint.InterruptibleFunction<FutureTask<Any>, Any> { it.get() }, utf8Task)
+        } catch (failure: ExecutionException) { throw (failure.cause ?: failure) }
+        return interop.readMember(library, "bytestring_is_valid_utf8")
+    }
+    internal fun utf8Validate(function: Any, bytes: Any, length: Long): Long {
+        val result = executeWithOwners(function, bytes, length)
+        if (!interop.fitsInInt(result)) fault("Original ByteString UTF-8 result is not CInt")
+        val value = interop.asInt(result)
+        if (value !in 0..1) fault("Original ByteString UTF-8 result is not boolean")
+        return value.toLong()
+    }
     private val finalizerTask = FutureTask {
         val original = load(env, "libdw-unavailable")
         listOf("libdwPoolRelease", "backtraceFree").associateWith { symbol ->

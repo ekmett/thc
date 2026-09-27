@@ -224,6 +224,8 @@ tasks.withType<Test>().configureEach {
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
+            "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",
             "original-memory-search/**/*.json", "original-memory-search/native/oracle",
             "original-memory-search/logs/*.stdout", "original-memory-search/logs/*.stderr",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
@@ -926,6 +928,8 @@ val compileCbits by tasks.registering(Exec::class) {
         "bench/experiments/pinned-addresses/reference/md5.h")
     inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
     inputs.files("src/main/c/text-api.c", "src/main/c/wait-status-api.c")
+    inputs.files("src/main/c/bytestring-utf8-api.c")
+    inputs.files(fileTree("compiler/pinned-bytestring/0.12.2.0"))
     inputs.files(fileTree("compiler/pinned-text/2.1.3"))
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }

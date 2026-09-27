@@ -34,11 +34,12 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                  "src/main/c/bytestring-utf8-api.c",
                   "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                   "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+bytestring-utf8 original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -456,6 +457,7 @@ NATIVE_EXECUTABLES = frozenset({"build/proxy-void/native/oracle", "build/proxy-v
     "build/original-handle-readiness/native/oracle",
     "build/original-posix-stat/native/oracle",
     "build/original-gmp/native/oracle",
+    "build/bytestring-utf8/native/oracle",
     "build/original-memory-search/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
@@ -523,6 +525,16 @@ ORIGINAL_GMP_OUTPUTS = frozenset("build/original-gmp/" + name for name in (
         "core/OriginalGmpAudit.json", "core/THC.InterfaceClosure.json",
         *(f"{entry}.audit.json" for entry in ORIGINAL_GMP_ENTRIES))),
 ))
+
+BYTESTRING_UTF8_OUTPUTS = frozenset("build/bytestring-utf8/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle", "exposed-bytestring.conf",
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/ByteStringUtf8Audit.json", "core/THC.InterfaceClosure.json",
+        "validateUnsafe.audit.json", "validateSafe.audit.json")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "version", "original-registration", "package-init", "package-register", "native-build", "native-observations", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("validateUnsafe", "validateSafe")))
+      for suffix in ("stdout", "stderr", "command.json"))))
 
 MEMORY_SEARCH_OUTPUTS = frozenset("build/original-memory-search/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
@@ -1102,6 +1114,20 @@ def gmp_artifact_hashes(manifest):
     return artifacts
 
 
+def bytestring_utf8_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
+            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
+            manifest.get("nativeRows") == 800 and manifest.get("entries") == ["validateUnsafe", "validateSafe"],
+            "Invalid original UTF-8 validation fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            BYTESTRING_UTF8_OUTPUTS - {"build/bytestring-utf8/manifest.json"},
+            "Incomplete/unreviewed UTF-8 validation artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid UTF-8 validation artifact hash")
+    return artifacts
+
+
 def memory_search_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
             manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
@@ -1380,6 +1406,8 @@ def allowed_payload(name, pins):
             bool(re.fullmatch(r"libHSthc-[\w.-]+\.(so|dylib)", parts[2])))
     if parts[1] == "original-stdio":
         return name in ORIGINAL_STDIO_OUTPUTS
+    if parts[1] == "bytestring-utf8":
+        return name in BYTESTRING_UTF8_OUTPUTS
     if parts[1] == "original-memory-search":
         return name in MEMORY_SEARCH_OUTPUTS
     if parts[1] == "thread-inventory":
@@ -1617,6 +1645,8 @@ def inventory(root, current, read, core_files, verified=None):
             formatter_artifact_hashes(root, doc)
         if name == "build/original-gmp/manifest.json":
             gmp_artifact_hashes(doc)
+        if name == "build/bytestring-utf8/manifest.json":
+            bytestring_utf8_artifact_hashes(doc)
         if name == "build/original-memory-search/manifest.json":
             memory_search_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":

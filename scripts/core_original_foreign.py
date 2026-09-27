@@ -113,6 +113,7 @@ OPERATIONS = {
     'memmove': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'memcpy': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'memcmp': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
+    'bytestring_is_valid_utf8': ('ccall', ('safe', 'unsafe'), ('AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'memchr': ('ccall', 'unsafe', ('AddrRep', 'Int32Rep', 'Word64Rep', None), (None, 'AddrRep')),
     'strlen': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
     'getenv': ('ccall', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
@@ -367,7 +368,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
-    if symbol == 'memchr':
+    if symbol in ('memchr', 'bytestring_is_valid_utf8'):
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
         require(target.get('unit') == 'text-2.1.3-inplace', 'exact text unit')
@@ -381,7 +382,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
-                 symbol in ('memcmp', 'memchr', 'strlen') and bytestring_unit(target.get('unit')) or
+                 symbol in ('memcmp', 'memchr', 'strlen', 'bytestring_is_valid_utf8') and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
