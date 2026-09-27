@@ -330,7 +330,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces,
         "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
         "papAllocations" to metrics.papAllocations,
-        "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
+        "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps"
+            else if (bindings.any { it["expr"] is thc.CoreBindingBody }) "reject-at-binding-admission" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "Bytecode DSL primitive locals; selective StaticShape captures",
         "stackPolicy" to "tail-safe; non-tail calls and nested thunk forcing use host stack", "threadPolicy" to "context-owned Java threads; resumable asynchronous delivery") +

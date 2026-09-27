@@ -2319,7 +2319,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
         "localJoinTransfers" to metrics.localJoinTransfers,
         "selfTailReentries" to metrics.selfTailReentries, "trampolineIterations" to metrics.trampolineIterations,
-        "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps" else "reject-at-load"),
+        "unsupportedPolicy" to (if (diagnosticUnsupported) "diagnostic-traps"
+            else if (bindings.any { it["expr"] is thc.CoreBindingBody }) "reject-at-binding-admission" else "reject-at-load"),
         "deferredUnsupported" to deferredUnsupported.toList(), "unsupportedTraps" to metrics.unsupportedTraps,
         "frames" to "indexed primitive slots; selective StaticShape captures",
         "stackPolicy" to (if (enableAsync) "tail-safe; bounded AST activation chains; active STM spilling unsupported"
