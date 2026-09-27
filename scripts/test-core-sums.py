@@ -2,13 +2,14 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Binary sum proof and auditor boundaries, without changing the capability file."""
+"""Scalar sum proof and auditor boundaries, without changing the capability file."""
 import copy
 import importlib.util
 import json
 from pathlib import Path
 import unittest
 import core_sums as sums
+from core_tuple_inputs import proof_error as tuple_proof_error
 
 ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location('sum_audit', ROOT/'scripts/audit-core.py')
@@ -94,6 +95,25 @@ def run(module,entry='root',cap=ENABLED):
 
 
 class SumProofTest(unittest.TestCase):
+    @unittest.skipUnless((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').exists(),
+                         'Prepare genuine original and nested four-way fixtures')
+    def test_genuine_fourway_word64_and_nested_tuple_proofs(self):
+        module=json.loads((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').read_text())
+        constructors={con['name']: con for con in module['constructors']}
+        original=constructors['VirtualRegWithFormat']
+        proof=original['fieldTypes'][0]
+        self.assertEqual(2,original['arity'])
+        self.assertEqual(['WordRep','Word64Rep'],proof['primReps'])
+        self.assertEqual([[1],[1],[1],[1]],proof['alternativeSlots'])
+        self.assertIsNone(sums.proof_error(proof))
+        for name,index,width in [('NestedBox',1,5),('MixedBox',0,6)]:
+            nested=constructors[name]['fieldTypes'][index]
+            self.assertEqual(width,len(nested['primReps']))
+            self.assertIsNone(tuple_proof_error(nested,allow_sums=True))
+            self.assertIsNotNone(tuple_proof_error(nested))
+        family=[con for con in module['constructors'] if con.get('sumArity')==4]
+        self.assertEqual([1,2,3,4],sorted(sums.constructor_tag(con,1,proof) for con in family))
+
     def test_exact_storage_and_ordered_projection(self):
         proof=summ(tup(DOUBLE,INT,INT,BOX),tup(UNLIFTED,FLOAT,WORD))
         self.assertIsNone(sums.proof_error(proof))
@@ -108,8 +128,7 @@ class SumProofTest(unittest.TestCase):
         self.assertNotEqual(audit.Audit.shape(VOID),audit.Audit.shape(tup()))
 
     def test_unknown_nested_sum_and_unsupported_leaf_families_reject(self):
-        invalid=[dict(INT,primReps=['Int32Rep']),dict(WORD,primReps=['Word64Rep']),
-                 dict(BOX,primReps=['BoxedRep Nothing']),dict(INT,kind='unknown'),
+        invalid=[dict(FLOAT,primReps=['Word64Rep']),dict(BOX,primReps=['BoxedRep Nothing']),dict(INT,kind='unknown'),
                  dict(INT,kind='address',primReps=['AddrRep']),dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],evaluated=True),
                  dict(kind='unknown',primReps=None,evaluated=False),dict(tup(),components=None),summ(),tup(summ())]
         for field in invalid:
@@ -136,6 +155,19 @@ class SumAuditTest(unittest.TestCase):
 
     def rejected(self,module,entry='root'):
         report=run(module,entry);self.assertFalse(report['accepted']);return report
+
+    @unittest.skipUnless((ROOT/'build/fourway-aggregate/pre/core/FourWayAggregateFields.json').exists(),
+                         'Prepare genuine original and nested four-way fixtures')
+    def test_genuine_nested_sum_tuple_constructors_require_sum_result_capability(self):
+        modules=[(str(path),json.loads(path.read_text())) for path in
+                 sorted((ROOT/'build/fourway-aggregate/pre/core').glob('*.json'))]
+        disabled=copy.deepcopy(CAP)
+        disabled['aggregateResults']=[kind for kind in disabled['aggregateResults'] if kind!='unboxed-sum']
+        for entry in ('nestedRoundtrip','mixedNested'):
+            name='main:FourWayAggregateFields.'+entry
+            report=audit.Audit(modules,CAP).run([name])
+            self.assertTrue(report['accepted'],report['issues'])
+            self.assertFalse(audit.Audit(modules,disabled).run([name])['accepted'])
 
     def test_capability_and_constructor_saturation(self):
         module=fixture();self.accepted(module)
@@ -339,8 +371,9 @@ class SumAuditTest(unittest.TestCase):
 
     @unittest.skipUnless((ROOT/'build/sum-layout/pre-core/SumLayoutAudit.json').exists(),'Prepare genuine sum metadata fixtures')
     def test_genuine_pre_and_post_core_accept_only_bounded_consumers(self):
-        positive=['sumCase','directCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase']
-        negative=['nestedCase','narrowWideCase','threeWayCase','returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
+        positive=['sumCase','directCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase',
+                  'narrowWideCase','threeWayCase']
+        negative=['nestedCase','returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
                   'floatDoubleSum','aliasIdentity','runtimePolymorphic','levityPolymorphic','abstractSumIdentity','abstractRuntimeSum',
                   'abstractAlternative','addressResult','vectorResult']
         for stage in ('pre','post'):

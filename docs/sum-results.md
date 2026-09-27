@@ -1,19 +1,24 @@
-# Typed binary unboxed sum results
+# Typed unboxed sum results
 
-Both backends execute saturated binary unboxed sum constructors, guest function
-results, local join results, forwarding and immediate cases. [Ordinary inputs and
+Both backends execute saturated unboxed sum constructors with two or more
+alternatives, guest function results, local join results, forwarding and immediate
+cases. [Ordinary inputs and
 captures](sum-inputs.md) share the same layout. The exact logical alternatives remain
 separate from GHC's physical `primReps`, `tagSlot` and `alternativeSlots` evidence.
 Boxed `Either`, ordinary boxed tuples and unlifted boxed references keep their
 ordinary one-reference representation; none becomes an unboxed sum by name,
 arity or liftedness.
 
-The first slice accepts machine `IntRep`/`WordRep`, `FloatRep`, `DoubleRep`, known
-lifted or unlifted reference leaves, scalar void tokens such as `State#`, and
+Supported leaves include machine and fixed-width integral representations,
+`FloatRep`, `DoubleRep`, known lifted or unlifted references, scalar void tokens
+such as `State#`, and
 exact recursive tuple payloads composed of those leaves. Int and Word share
-one machine-word storage class without changing bits. Float and Double slots,
-and lifted and unlifted reference slots, remain separate. The runtime recomputes
-and checks the complete binary placement map before lowering. It also checks
+one machine-word storage class without changing bits. `Int64Rep`/`Word64Rep`
+use the same lowered Long carrier; GHC's Word/Word64 max-slot merge chooses the
+physical payload class rather than counting the two classes independently.
+Float and Double slots, and lifted and unlifted reference slots, remain separate.
+The runtime recomputes
+and checks the complete placement map before lowering. It also checks
 constructor family arity, one-based tags, payload shape and levity, case binder
 shape, alternative binders and retained result proofs in every arm, including
 cold arms. Scalar `State#`, `(# #)` and `(# State# #)` stay distinct logical types
@@ -24,8 +29,10 @@ is stored without forcing it, including when the payload itself is bottom.
 Constructors clear every inactive destination slot before evaluating the selected
 payload and write the tag only after successful evaluation. Cases check the tag
 and project typed caller-frame slots according to the selected alternative.
-AST cases retain branch profiles and explicit primitive execution overrides;
-bytecode uses typed locals and conditional control flow.
+The raw Long tag is validated against the exact family arity before selecting
+an explicit arm or DEFAULT. AST cases retain an immutable tag-to-arm map,
+branch profiles and explicit primitive execution overrides; bytecode uses an
+immutable arity operand, typed locals and conditional control flow.
 
 Results use the existing [typed tuple completion protocol](tuple-results.md).
 A callee first computes its result in typed local slots. An inlined callee may
@@ -46,7 +53,9 @@ loans. An outer sum-returning join is a lexical control target, not a captured
 sum value. [Sum join inputs and captures](sum-inputs.md) use the same typed
 frame slots, including parallel recursive transfers.
 
-Nested sums, tuples containing sums, nonbinary sums, integer-width conversion,
+Tuples may recursively contain supported sums, preserving logical nesting,
+zero-width State/empty-tuple distinctions and lazy lifted neighbours. Sums inside
+another sum's payload (including through a tuple payload), integer-width conversion,
 address/vector leaves, `BoxedRep Nothing` and unknown logical or physical layouts
 remain unsupported. Partial sum constructors, ordinary sum let bindings and
 public host sum inputs/results also remain unsupported. Function values returning sums
@@ -59,7 +68,7 @@ Exact sum fields in saturated boxed constructors are supported separately throug
 payload projections. Ordinary sum function parameters are described [separately](sum-inputs.md).
 
 `check-sum-layout.py --prepare` retains 17 layout families and 130 native/model
-rows. Six retained-sum consumers plus a GHC-eliminated scalar control are accepted;
+rows. Eight retained-sum consumers plus a GHC-eliminated scalar control are accepted;
 all other roots remain explicit frontiers. `prepare-sum-result-audit.py` adds
 110 fresh native unary rows and seven independent input pairs, checks independent
 wraparound formulas, and strict-audits all 12 scalar entry roots before and after
@@ -78,6 +87,12 @@ check inactive reference clearing, release on a shape mismatch, lazy pointer
 identity and actual deopt materialization between completion and consumption.
 These correctness controls are distinct from generated-code evidence; typed
 storage alone does not establish register passing or eliminated allocations.
+
+The [four-way aggregate fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture)
+also checks the original GHC `VirtualRegWithFormat` Word64 sum, all four tags,
+high-bit payloads, nested tuple transport, lazy neighbours and inactive reference
+slots. Malformed-tag controls include DEFAULT, and AST continuation controls
+resume third/fourth arms without replaying the scrutinee or a second branch cut.
 
 `cabal run thc-fixtures -- sum-join` adds genuine pre/post-Tidy GHC sum joins,
 30 native observations, strict audits and source/artifact hashes. The focused
