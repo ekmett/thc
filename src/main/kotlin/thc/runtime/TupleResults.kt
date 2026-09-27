@@ -129,7 +129,10 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
             if (fields.any { it.kind == CoreKind.ADDRESS && !it.evaluated })
                 throw UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier")
-            val reps = fields.map { it.primReps!!.single() }
+            // Sum storage can split a native word register into integral and
+            // managed-address carriers. Authenticate the original GHC tree,
+            // not that runtime-only adaptation.
+            val reps = logicalLeaves(proof).flatMap { it.primReps!! }
             if (proof.primReps != reps) throw RuntimeFault("Tuple components disagree with primitive representations")
         }
     }

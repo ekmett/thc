@@ -19,6 +19,7 @@ import AggregateFixtures (prepareAggregate)
 import AggregateHeapFixtures (prepareAggregateHeap)
 import FourWayAggregateFixtures (prepareFourWayAggregate)
 import NarrowIntegerTransportFixtures (prepareNarrowIntegerTransport)
+import GenericSumTransportFixtures (prepareGenericSumTransport)
 import CompactRegionsFixtures (prepareCompactRegions, prepareCompactSerialization)
 import GraphFixtures (prepareGraph)
 import IntegerCompletionFixtures (prepareIntegerCompletion)
@@ -1067,6 +1068,7 @@ main = do
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["fourway-aggregate"] -> prepareFourWayAggregate root
     ["narrow-integer-transport"] -> prepareNarrowIntegerTransport root
+    ["generic-sum-transport"] -> prepareGenericSumTransport root
     ["aggregate-heap", "--export-only"] -> prepareAggregateHeap root True
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root

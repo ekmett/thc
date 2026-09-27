@@ -18,8 +18,7 @@ internal class ArgumentLayout private constructor(
     val physicalArity: Int get() = offsets.last()
     val requiresTyped: Boolean = proofs.any { it.isInt || it.isTypedTransport && !it.isEmptyTuple }
     val physicalStorageReps: List<String> = proofs.flatMap { proof ->
-        if (proof.isSum) proof.primReps!!
-        else if (proof.isTuple || proof.isVector) VectorLayout.storageReps(proof)
+        if (proof.isTypedTransport) VectorLayout.storageReps(proof)
         else listOf(when {
             proof.isInt -> proof.narrowInteger!!.rep
             proof.isLong -> "IntRep"

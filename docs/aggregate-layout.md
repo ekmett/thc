@@ -142,8 +142,11 @@ The exporter calls pinned GHC 9.14.1 `ubxSumRepType`, `primRepSlot`, and
 It checks the resulting `slotPrimRep` vector against `typePrimRep_maybe` before
 publishing projections. Narrow/machine integral leaves use Word slots, while
 explicit Int64/Word64 leaves use Word64 slots; merging Word and Word64 selects
-Word64. Address and fixed vector slots remain valid metadata outside THC sum
-execution support. The only partial `primRepSlot` case in this pinned API is
+Word64. Addresses share GHC word slots; vector slots share only the exact
+GHC lane-count/element pair. THC derives separate runtime storage when a GHC word
+slot can contain both integral bits and a traced managed address. This does not
+rewrite `primReps` or `alternativeSlots`; recursive nested-sum projections map
+the logical active payload into that storage. The only partial `primRepSlot` case in this pinned API is
 `BoxedRep Nothing`; it is rejected before calling either placement API.
 Unknown physical representations, and abstract sum types with unknown logical
 alternatives, retain `alternativeSlots: null`. A nested abstract tuple may have
@@ -166,7 +169,7 @@ Normal test preparation and CI include these checks.
 [Sum lowering](sum-results.md) validates the complete logical
 alternatives, family arity, physical storage classes and projection before using
 typed destinations for exact families with at least two alternatives. The metadata
-suite accepts eight retained-sum consumers and the optimized scalar direct-case
+suite accepts nine retained-sum consumers and the optimized scalar direct-case
 control; all unsupported families and boundaries
 still reject before execution on both backends and both export stages. This
 metadata does not define a hardware call-register ABI or permit generic

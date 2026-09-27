@@ -2537,9 +2537,10 @@ class Audit:
                         actual = self.effective_rep(argument, bound)
                         join = isinstance(target, dict) and '_join_arity' in target
                         boxed_constructor = function[0] == 'con' and self.constructors.get(function[1], {}).get('kind', 'boxed') == 'boxed'
-                        boundary = ('tuple-fields' if tuple_constructor else 'heap-fields' if boxed_constructor else
+                        sum_payload = sum_constructor and self.supported_sum(proof, 'aggregateResults')
+                        boundary = ('tuple-fields' if tuple_constructor or sum_payload else 'heap-fields' if boxed_constructor else
                                     'join-arguments' if join else 'arguments')
-                        if not ((tuple_constructor or boxed_constructor or function[0] != 'prim' and function[0] != 'con')
+                        if not ((tuple_constructor or sum_payload or boxed_constructor or function[0] != 'prim' and function[0] != 'con')
                                 and self.supported_vector(actual, boundary)):
                             self.issue('vector-boundary', owner, f'{path}/arguments/{index}', 'vector argument')
                         if not isinstance(flags, list) or index >= len(flags) or flags[index] is not False:

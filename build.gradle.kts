@@ -620,6 +620,21 @@ for ((taskName, dense) in listOf("narrowIntegerTransportFullCoreTest" to false, 
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
+for ((taskName, dense) in listOf("genericSumTransportFullCoreTest" to false, "genericSumTransportFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests managed-address, nested and vector sum transport against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GenericSumTransportTest") }
+        inputs.files(fileTree("build/generic-sum-transport") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Generic sum native/first-installed checks require a fresh process") { true }
+        doFirst { check(file("build/generic-sum-transport/manifest.json").isFile) { "Run thc-fixtures generic-sum-transport" } }
+    }
+}
 for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

@@ -71,7 +71,7 @@ their scrutinee and propagate its exception/retry/bottom; a normal return traps
 as a non-exhaustive case instead of inventing an alternative.
 [Sum results](sum-results.md) reuse this completion protocol with exact tag
 and projection validation. Supported sums may occur inside recursive tuple
-components. Sums inside sum payloads, unknown/null aggregate layouts and
+components, and concrete sums may themselves contain tuples or sums. Unknown/null aggregate layouts and
 unsupported physical leaves remain rejected. Host entries must return a
 scalar/reference result; diagnostic mode defers an unsupported host result to a
 trap without executing a tuple producer.

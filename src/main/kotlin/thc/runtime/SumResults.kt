@@ -15,11 +15,24 @@ internal object SumShape {
     private const val lifted = "BoxedRep (Just Lifted)"
     private const val unlifted = "BoxedRep (Just Unlifted)"
     private val order = listOf(lifted, unlifted, "WordRep", "Word64Rep", "FloatRep", "DoubleRep")
+    // The deriving Ord order in GHC.Core.TyCon.PrimElemRep, not lexical order.
+    private val elements = listOf("Int8ElemRep", "Int16ElemRep", "Int32ElemRep", "Int64ElemRep",
+        "Word8ElemRep", "Word16ElemRep", "Word32ElemRep", "Word64ElemRep", "FloatElemRep", "DoubleElemRep")
+    private val slotOrder = Comparator<String> { left, right ->
+        val l = order.indexOf(left).let { if (it < 0) order.size else it }
+        val r = order.indexOf(right).let { if (it < 0) order.size else it }
+        if (l != r) l.compareTo(r) else if (l < order.size) 0 else {
+            val a = left.split(' '); val b = right.split(' ')
+            val count = a[1].toInt().compareTo(b[1].toInt())
+            if (count != 0) count else elements.indexOf(a[2]).compareTo(elements.indexOf(b[2]))
+        }
+    }
     private fun slot(rep: String): String = when (rep) {
-        "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" -> "WordRep"
+        "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "AddrRep" -> "WordRep"
         "Int64Rep", "Word64Rep" -> "Word64Rep"
         lifted, unlifted, "FloatRep", "DoubleRep" -> rep
-        else -> throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum field $rep")
+        else -> if (rep.startsWith("VecRep ")) rep
+            else throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum field $rep")
     }
     private fun fits(left: String, right: String): String? = when {
         left == right -> left
@@ -36,7 +49,7 @@ internal object SumShape {
             val common = fits(existing[left], needed[right])
             when {
                 common != null -> { result += common; left++; right++ }
-                order.indexOf(needed[right]) < order.indexOf(existing[left]) -> result += needed[right++]
+                slotOrder.compare(needed[right], existing[left]) < 0 -> result += needed[right++]
                 else -> result += existing[left++]
             }
         }
@@ -50,16 +63,9 @@ internal object SumShape {
             fault("Sum proof must retain its aggregate kind")
         if (alternatives.size < 2)
             throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum requires at least two alternatives")
-        val fields = alternatives.map { alternative ->
-            val leaves = TupleShape.logicalLeaves(alternative)
-            if (leaves.any { it.isSum || it.isVector || it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT,
-                    CoreKind.DOUBLE, CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) })
-                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum payload")
-            leaves.map { slot(it.primReps?.singleOrNull()
-                ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum unresolved field")) }
-        }
+        val fields = alternatives.map { nativePayload(it).map(::slot) }
         val physical = listOf("WordRep") + fields.fold(emptyList<String>()) { slots, row ->
-            merge(slots, row.sortedBy(order::indexOf))
+            merge(slots, row.sortedWith(slotOrder))
         }
         if (proof.primReps != physical || proof.tagSlot != 0) fault("Sum physical representation or tag slot mismatch")
         val expected = fields.map { row ->
@@ -70,17 +76,74 @@ internal object SumShape {
         }
         if (proof.alternativeSlots != expected) fault("Sum alternative projection mismatch")
     }
-    fun storage(proof: CoreRepresentation): List<CoreRepresentation> {
-        validate(proof)
-        return proof.primReps!!.map { rep ->
-            CoreRepresentation(when (rep) {
-                "WordRep", "Int64Rep", "Word64Rep" -> CoreKind.LONG
-                "FloatRep" -> CoreKind.FLOAT
-                "DoubleRep" -> CoreKind.DOUBLE
-                else -> CoreKind.OBJECT
-            }, true, true, listOf(rep))
+    /** GHC's original physical proof is never rewritten to describe JVM storage. */
+    private fun nativePayload(proof: CoreRepresentation): List<String> {
+        when {
+            proof.isSum -> validate(proof)
+            proof.isTuple -> {
+                if (proof.kind != CoreKind.UNKNOWN || proof.primReps != proof.components!!.flatMap(::nativePayload))
+                    fault("Sum tuple payload components disagree with physical representations")
+            }
+            proof.isVector -> VectorLayout.validate(proof)
+            proof.kind == CoreKind.VOID -> if (proof.primReps != emptyList<String>()) fault("Sum void payload has registers")
+            proof.kind == CoreKind.ADDRESS -> if (proof.primReps != listOf("AddrRep") || !proof.evaluated)
+                fault("Sum address payload requires an evaluated managed carrier")
+            proof.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE, CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) ->
+                throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum payload")
         }
+        return proof.primReps ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum unresolved field")
     }
+
+    internal class Transport(val fields: List<CoreRepresentation>, val nativeSlots: List<Int>,
+        val projections: List<List<Int>> = emptyList())
+    private data class Register(val native: Int, val address: Boolean)
+
+    /** One native WordSlot may hold either integral bits or Addr#. The latter is
+     * a traced managed reference here, so only that collision needs a second
+     * field. Nested projections compose through the unchanged native slot map. */
+    fun transport(proof: CoreRepresentation): Transport {
+        validate(proof)
+        val registers = linkedMapOf(Register(0, false) to scalarStorage("WordRep"))
+        val alternatives = proof.alternatives!!.mapIndexed { index, alternative ->
+            val payload = payloadTransport(alternative)
+            payload.fields.mapIndexed { field, leaf ->
+                val native = proof.alternativeSlots!![index][payload.nativeSlots[field]]
+                val key = Register(native, leaf.kind == CoreKind.ADDRESS)
+                registers.putIfAbsent(key, if (key.address) leaf else scalarStorage(proof.primReps!![native]))
+                key
+            }
+        }
+        val keys = registers.keys.sortedWith(compareBy<Register> { it.native }.thenBy { it.address })
+        return Transport(keys.map { registers.getValue(it) }, keys.map { it.native },
+            alternatives.map { row -> row.map(keys::indexOf) })
+    }
+    private fun payloadTransport(proof: CoreRepresentation): Transport = when {
+        proof.isSum -> transport(proof)
+        proof.isTuple -> {
+            val fields = ArrayList<CoreRepresentation>(); val native = ArrayList<Int>()
+            var offset = 0
+            for (component in proof.components!!) {
+                val child = payloadTransport(component)
+                fields.addAll(child.fields); native.addAll(child.nativeSlots.map { it + offset })
+                offset += component.primReps!!.size
+            }
+            Transport(fields, native)
+        }
+        proof.kind == CoreKind.VOID -> Transport(emptyList(), emptyList())
+        else -> Transport(listOf(proof), listOf(0))
+    }
+    private fun scalarStorage(rep: String): CoreRepresentation {
+        val vector = if (rep.startsWith("VecRep ")) rep.split(' ').let { CoreVector(it[1].toInt(), it[2]) } else null
+        return CoreRepresentation(when {
+            vector != null -> CoreKind.VECTOR
+            rep == "WordRep" || rep == "Word64Rep" -> CoreKind.LONG
+            rep == "FloatRep" -> CoreKind.FLOAT
+            rep == "DoubleRep" -> CoreKind.DOUBLE
+            else -> CoreKind.OBJECT
+        }, true, true, listOf(rep), vector = vector)
+    }
+    fun storage(proof: CoreRepresentation): List<CoreRepresentation> = transport(proof).fields
+    fun projection(proof: CoreRepresentation, alternative: Int): List<Int> = transport(proof).projections[alternative]
     fun constructor(proof: CoreRepresentation, info: Map<String, Any?>?, arity: Any?): Int {
         fun exact(value: Any?, expected: Int) = (value is Long || value is Int) && (value as Number).toLong() == expected.toLong()
         if (info?.get("kind") != "unboxed-sum" || !exact(info["arity"], 1) || !exact(arity, 1) ||
@@ -107,7 +170,12 @@ internal object SumShape {
 internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
     @Child private var payload: Expr) : Expr() {
     private val proof = shape.proof.alternatives!![tag - 1]
-    @field:CompilationFinal(dimensions = 1) private val projection = shape.proof.alternativeSlots!![tag - 1].toIntArray()
+    @field:CompilationFinal(dimensions = 1) private val projection = SumShape.projection(shape.proof, tag - 1).toIntArray()
+    @field:CompilationFinal(dimensions = 1) private val emptyReferences = shape.leaves.map { field -> when {
+        field.kind == CoreKind.ADDRESS -> ManagedAddress.nullAddress()
+        field.isVector -> VectorLayout(field).species.zero()
+        else -> null
+    } }.toTypedArray()
     private class Mapping(val destination: IntArray, val offset: Int,
         @field:CompilationFinal(dimensions = 1) val fields: IntArray)
     @field:CompilationFinal @Volatile private var mapping: Mapping? = null
@@ -129,11 +197,11 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
             if (shape.layout.isLong(index)) FrameAccess.writeLong(frame, target, 0L)
             else if (shape.layout.isFloat(index)) FrameAccess.writeFloat(frame, target, 0.0f)
             else if (shape.layout.isDouble(index)) FrameAccess.writeDouble(frame, target, 0.0)
-            else FrameAccess.write(frame, target, null)
+            else FrameAccess.write(frame, target, emptyReferences[index])
         }
         val fields = selected.fields
         when {
-            proof.isTuple -> payload.executeTuple(frame, fields, 0)
+            proof.isTypedTransport -> payload.executeTuple(frame, fields, 0)
             proof.kind == CoreKind.VOID -> requireVoidCarrier(payload.execute(frame))
             proof.isLong -> FrameAccess.writeLong(frame, fields[0], payload.executeRequiredLong(frame))
             proof.isFloat -> FrameAccess.writeFloat(frame, fields[0], payload.executeRequiredFloat(frame))

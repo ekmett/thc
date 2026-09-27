@@ -290,11 +290,29 @@ class DataLayout private constructor(
     /** Inactive sum reference registers are null padding, never guest roots. */
     internal fun inactiveSumReference(value: DataValue, index: Int): Boolean {
         if (!compactPointer(index)) return false
+        fun active(proof: CoreRepresentation, slots: List<Int>): Boolean {
+            if (proof.isSum) {
+                val tag = SumShape.checkedTag(readLong(value, slots[0]), proof.alternatives!!.size)
+                val selected = SumShape.projection(proof, tag - 1).map { slots[it] }
+                return index in selected && active(proof.alternatives[tag - 1], selected)
+            }
+            if (proof.components != null) {
+                var offset = 0
+                for (component in proof.components) {
+                    val width = TupleShape.flatten(component).size
+                    val selected = slots.subList(offset, offset + width)
+                    if (index in selected) return active(component, selected)
+                    offset += width
+                }
+                return false
+            }
+            return index in slots
+        }
         for (field in sumFields) {
             val proof = field.proof
-            if (index < field.offset || index >= field.offset + proof.primReps!!.size) continue
-            val tag = SumShape.checkedTag(readLong(value, field.offset), proof.alternatives!!.size)
-            return index - field.offset !in proof.alternativeSlots!![tag - 1]
+            val width = SumShape.storage(proof).size
+            if (index < field.offset || index >= field.offset + width) continue
+            return !active(proof, List(width) { field.offset + it })
         }
         return false
     }
