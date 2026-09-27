@@ -13,6 +13,7 @@ import jdk.incubator.vector.VectorShape
 
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.CompilerDirectives.transferToInterpreter
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.lang.invoke.MethodHandles
@@ -29,8 +30,10 @@ internal object ManagedByteArray {
     private val doubles = MethodHandles.byteArrayViewVarHandle(DoubleArray::class.java, ByteOrder.nativeOrder())
 
     private fun elementOffset(bytes: ByteArray, index: Long, width: Int, representation: String): Int {
-        if (index < 0 || index >= bytes.size / width)
+        if (index < 0 || index >= bytes.size / width) {
+            transferToInterpreter()
             fault("ByteArray# $representation index outside its backing storage")
+        }
         return index.toInt() * width
     }
     // Word8ArrayAs* counts bytes and permits unaligned starts.
