@@ -85,6 +85,8 @@ internal class CoreCompactCursor(private val bytes: MemorySegment, start: Long =
         return bytes.asSlice(at, length.toLong()).toArray(ValueLayout.JAVA_BYTE)
     }
 
+    fun text(length: Int): String = utf8(bytes, take(length.toLong()), length.toLong())
+
     fun expectEnd() { require(position == end) { "Trailing bytes in compact Core record" } }
 
     companion object {

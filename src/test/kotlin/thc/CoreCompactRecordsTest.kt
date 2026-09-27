@@ -82,4 +82,30 @@ class CoreCompactRecordsTest {
             module(binding(expression)) { records, _ -> assertThrows(RuntimeException::class.java) { records.binding(0) } }
         }
     }
+
+    @Test fun sharedManualNestedShapesKeepEveryChildOccurrenceEvaluationDistinct() {
+        val hex = Files.readString(Path.of("test/compact-core/golden/nested-shared-rep-v1.hex"))
+        val bytes = hex.filterNot(Char::isWhitespace).chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+        assertEquals(62, bytes.size)
+        fun leaf(evaluated: Boolean) = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to evaluated)
+        fun tuple(evaluated: Boolean, vararg children: Map<String, Any?>): Map<String, Any?> = mapOf(
+            "kind" to "unknown", "primReps" to List(children.size) { "IntRep" }, "aggregate" to "unboxed-tuple",
+            "components" to children.toList(), "evaluated" to evaluated)
+        val firstExpected = tuple(false, tuple(true, leaf(false)), tuple(false, leaf(true)))
+        val secondExpected = tuple(true, tuple(false, leaf(true)), tuple(true, leaf(false)))
+        module(bytes) { records, file ->
+            val first = records.representation(0)
+            assertEquals(firstExpected, first)
+            assertEquals(50L, file.counters.statistics().dataBytesRead)
+            val second = records.representation(50)
+            assertEquals(secondExpected, second)
+            assertEquals(62L, file.counters.statistics().dataBytesRead, "The prior shape must be reused, not decoded again")
+            assertSame(first["primReps"], second["primReps"])
+            assertNotSame(first["components"], second["components"])
+            val children = first["components"] as List<*>
+            assertNotSame(children[0], children[1])
+            assertEquals(firstExpected, first, "Decoding the second occurrence must not alter the first tree")
+            assertEquals(0L, file.counters.statistics().debugBytesRead)
+        }
+    }
 }

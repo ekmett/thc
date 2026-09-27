@@ -169,8 +169,10 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         override fun emit(emission: Emission) = emitSource(emission) { expression.emit(emission) }
         override fun emitTuple(emission: Emission, destination: List<BytecodeLocal>) = emitSource(emission) { expression.emitTuple(emission, destination) }
         private fun emitSource(emission: Emission, action: () -> Unit) {
+            if (!emission.builder.isParsingSources()) { action(); return }
             val sections = source.notes.map { it.section }.distinct().let {
-                if (it.lastOrNull() == source.section) it else it + source.section
+                val primary = source.section
+                if (primary == null || it.lastOrNull() == primary) it else it + primary
             }
             sections.forEach { BytecodeSources.begin(emission.builder, it) }
             action()
@@ -460,7 +462,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val config = if (sources.enabled && sources.spanCount > 0) BytecodeConfig.WITH_SOURCE else BytecodeConfig.DEFAULT
         var typedBloom: LocalAccessor? = null
         val root = BytecodeRootGen.create(language, config) { b ->
-            source?.let { BytecodeSources.begin(b, it.section) }
+            val section = if (b.isParsingSources()) source?.section else null
+            section?.let { BytecodeSources.begin(b, it) }
             b.beginRoot()
             val e = Emission(b)
             b.emitEnterRoot(metrics)
@@ -544,7 +547,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.endReturn()
             }
             b.endRoot()
-            source?.let { BytecodeSources.end(b) }
+            section?.let { BytecodeSources.end(b) }
         }.getNode(0)
         root.setLabel(label)
         root.configureForeignExceptionBridge(foreignExceptionBridge)

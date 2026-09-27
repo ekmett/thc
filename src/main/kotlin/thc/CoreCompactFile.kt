@@ -163,11 +163,17 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
     }
 
     fun <T> debug(segment: CoreCompactFormat.Segment, decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
+        debugAt(segment, 0, mapping().header[segment].length, decode)
+    }
+
+    fun <T> debugAt(segment: CoreCompactFormat.Segment, offset: Long, length: Long,
+                    decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
         require(segment in setOf(CoreCompactFormat.Segment.NAMES, CoreCompactFormat.Segment.FILENAMES,
             CoreCompactFormat.Segment.LINE_COLUMNS)) { "Not a compact Core debug segment" }
         val current = mapping()
         val span = current.header[segment]
-        val cursor = CoreCompactCursor(CoreCompactCursor.slice(current.bytes, span.offset, span.length))
+        val selected = CoreCompactCursor.slice(current.bytes, span.offset, span.length)
+        val cursor = CoreCompactCursor(CoreCompactCursor.slice(selected, offset, length))
         try { decode(cursor) } finally { counters.debugBytesRead += cursor.position }
     }
 

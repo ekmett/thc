@@ -155,6 +155,19 @@ class CoreCompactLoadTest {
         }
     }
 
+    @Test fun sourceEnabledOrdinaryLoadAndExecutionDoNotReadOptionalDebugTables() {
+        val path = fixture()
+        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+            val entry = context.eval("thc", CoreModules.request(listOf("@$path"), "unit:A.entry",
+                backend = backend, sourceNotesEnabled = true, asyncExceptions = false))
+            assertEquals(0L, count(entry, "coreCompactDebugBytesRead"))
+            assertEquals(7L, entry.execute(0).asLong())
+            assertEquals(6L, entry.execute(5).asLong())
+            assertEquals(0L, count(entry, "coreCompactDebugBytesRead"))
+            assertEquals(2L, count(entry, "coreCompactModuleOpens"))
+        }
+    }
+
     @Test fun malformedSelectedBodyIdentityAndUnsupportedProvenanceRejectOnDemand() {
         for (variant in 0..2) {
             CoreFileMappings.shared.evictIdleBelow(directory)

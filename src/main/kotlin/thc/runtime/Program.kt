@@ -277,7 +277,9 @@ internal abstract class Expr : Node() {
     protected val typedVectorLayout: VectorLayout? get() = vectorLayout
     @CompilationFinal var coreSourceLocation: CoreSourceLocation? = null
     fun located(location: CoreSourceLocation?): Expr { coreSourceLocation = location; return this }
-    override fun getSourceSection(): SourceSection? = coreSourceLocation?.section ?: parent?.encapsulatingSourceSection
+    override fun getSourceSection(): SourceSection? = coreSourceLocation.let {
+        if (it == null) parent?.encapsulatingSourceSection else it.section
+    }
     fun proven(proof: CoreRepresentation): Expr { representation = proof; return this }
     open fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int = 0): Any? {
         val layout = vectorLayout
@@ -2241,7 +2243,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return try { action() } finally { currentSource = previous }
     }
     private fun rootSource(body: Expr): CoreSourceLocation? = (body.coreSourceLocation ?: currentSource).also {
-        if (it != null) attachedRootCount++
+        if (it != null && sources.enabled) attachedRootCount++
     }
     private val diagnosticUnsupported = moduleData["diagnosticUnsupported"] == true
     private val deferredUnsupported = linkedSetOf<String>()

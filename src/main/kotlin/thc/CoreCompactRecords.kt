@@ -10,7 +10,11 @@ import thc.runtime.CoreFloatingLiteral
 /** Decodes only selected typed records into the existing lowering input. The
  * wire has Core-specific records, not a second generic object serialization. */
 internal class CoreCompactRecords(private val file: CoreCompactFile, private val identity: String) {
-    data class Origin(val container: String, val dataOffset: Long)
+    data class Origin(val container: String, val dataOffset: Long,
+        val bindingOffset: Long = dataOffset, internal val debug: CoreCompactDebug? = null)
+    private val debug = CoreCompactDebug(file)
+    private var bindingOffset = 0L
+    private fun origin(offset: Long) = Origin(identity, offset, bindingOffset, debug)
     private object Missing
     private data class Shape(val fields: Map<String, Any?>)
     private val shapes = HashMap<Long, Shape>()
@@ -110,6 +114,8 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private fun rep(cursor: CoreCompactCursor, inline: Boolean = false) =
         evaluation(cursor, if (inline) shape(cursor, true) else shapeUse(cursor))
 
+    internal fun representation(offset: Long): Map<String, Any?> = file.data(offset) { rep(it) }
+
     private fun info(cursor: CoreCompactCursor): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>()
         field(cursor, result, "joinArity") { cursor.unsigned() }
@@ -118,8 +124,9 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return result
     }
     private fun binder(cursor: CoreCompactCursor): Map<String, Any?> {
+        val origin = origin(cursor.position)
         val id = ordinal(cursor)
-        val result = linkedMapOf<String, Any?>("id" to id, "name" to id)
+        val result = linkedMapOf<String, Any?>("id" to id, "name" to id, "compactOrigin" to origin)
         entry(cursor, result)
         field(cursor, result, "lifted") { cursor.boolean() }
         field(cursor, result, "coercion") { cursor.boolean() }
@@ -128,14 +135,18 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return result
     }
     fun binding(offset: Long): Map<String, Any?> = file.data(offset) {
-        binding(it).also { binding ->
-            require(!(binding["id"] as String).startsWith("\u0000compact-local:")) {
-                "Compact top-level binding has local identity"
+        val previous = bindingOffset
+        bindingOffset = offset
+        try {
+            binding(it).also { binding ->
+                require(!(binding["id"] as String).startsWith("\u0000compact-local:")) {
+                    "Compact top-level binding has local identity"
+                }
             }
-        }
+        } finally { bindingOffset = previous }
     }
     private fun binding(cursor: CoreCompactCursor): Map<String, Any?> {
-        val origin = Origin(identity, cursor.position)
+        val origin = origin(cursor.position)
         val id = id(cursor)
         val result = linkedMapOf<String, Any?>("id" to id, "name" to id, "compactOrigin" to origin)
         entry(cursor, result)
@@ -191,7 +202,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return result
     }
     private fun expression(cursor: CoreCompactCursor): List<Any?> {
-        val origin = Origin(identity, cursor.position)
+        val origin = origin(cursor.position)
         val tag = cursor.byte()
         require(tag in 0..8) { "Invalid compact Core expression tag: $tag" }
         val metadata = meta(cursor, origin)
