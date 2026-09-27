@@ -570,6 +570,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$THC_FULL_CORE_ENVIRONMENT" && test -f "$THC_FULL_CORE_ENVIRONMENT"
+          # shellcheck source=/dev/null
           source "$THC_FULL_CORE_ENVIRONMENT"
           test -n "${THC_FOREIGN_EXCEPTION_GHC_SOURCE:-}" && test -d "$THC_FOREIGN_EXCEPTION_GHC_SOURCE"
           test "$("$GHC" --numeric-version)" = 9.14.1

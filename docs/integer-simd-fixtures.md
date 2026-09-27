@@ -38,5 +38,6 @@ back to that mode after a native failure. Both modes fingerprint their actual
 source inputs, exports, audit reports, requests, model rows, and command receipts;
 full mode additionally retains native output and the executable.
 
-Historical experiment receipts remain tied to their original revisions and
-Python producer paths. They are not regenerated or rehashed by this migration.
+Experiment receipts belong to the exact source revisions and producer commands
+that created them. Changing the current producer does not validate or rehash an
+older artifact.
