@@ -19,6 +19,19 @@ spec.loader.exec_module(build)
 
 
 class CompilerTargetTest(unittest.TestCase):
+    def test_emitted_target_is_read_without_recompiling_or_relabeling(self):
+        expected = "x86_64-pc-windows-msvc19.33.0"
+        artifact = Path("pointer with spaces.bc")
+        with patch.object(build.subprocess, "check_output", return_value=f'target triple = "{expected}"\n') as query:
+            self.assertEqual(expected, build.bitcode_target("llvm-dis", artifact, expected))
+        query.assert_called_once_with(["llvm-dis", str(artifact), "-o", "-"], text=True)
+
+    def test_emitted_incompatible_or_missing_target_is_rejected(self):
+        for ir in ('target triple = "x86_64-w64-windows-gnu"\n', ""):
+            with self.subTest(ir=ir), patch.object(build.subprocess, "check_output", return_value=ir):
+                with self.assertRaisesRegex(SystemExit, "Compiled bitcode target mismatch"):
+                    build.bitcode_target("llvm-dis", Path("pointer.bc"), "x86_64-pc-windows-msvc19.33.0")
+
     def test_linux_vendor_is_explicitly_normalized_and_requeried(self):
         for vendor in ("pc", "unknown", "redhat"):
             for arch in ("x86_64", "AMD64"):
@@ -157,7 +170,7 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(12, len(manifest["commands"]))
             self.assertEqual(27, len(manifest["sources"]))
             self.assertEqual(10, len(manifest["artifacts"]))
-            utf8_command = next(c for c in manifest["commands"] if "src/main/c/bytestring-utf8-api.c" in c)
+            utf8_command = next(c for c in manifest["commands"] if str(Path("src/main/c/bytestring-utf8-api.c")) in c)
             self.assertIn("-D__STDC_NO_ATOMICS__=1", utf8_command)
             self.assertEqual(build.BYTESTRING_UTF8_SHA256, hashlib.sha256(
                 (output / "thc/cbits/bytestring-utf8-LICENSE").read_bytes()).hexdigest())
