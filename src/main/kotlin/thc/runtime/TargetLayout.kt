@@ -5,6 +5,7 @@ package thc.runtime
 
 import java.nio.ByteOrder
 import java.util.Collections
+import thc.Json
 
 /** Target-derived ABI of the original GHC stack and InfoProv sources. */
 class TargetLayout private constructor(
@@ -50,6 +51,16 @@ class TargetLayout private constructor(
             "GHC/Internal/Stack/CCS.hsc",
             "GHC/Internal/ExecutionStack/Internal.hsc",
         )
+        private val windowsGeneratedSourcePaths: Set<String> by lazy {
+            val catalog = TargetLayout::class.java.getResourceAsStream("/thc/windows-ghc-internal.json")
+                ?.reader(Charsets.UTF_8)?.use { Json.parse(it.readText()) as Map<*, *> }
+                ?: error("Missing pinned Windows GHC source catalog")
+            require(catalog["schema"] == 1L && catalog["ghc"] == "9.14.1") { "Invalid Windows GHC source catalog" }
+            val paths = (catalog["files"] as List<*>).map { (it as Map<*, *>)["path"] as String }
+                .filter { it.endsWith(".hsc") }
+            require(paths.isNotEmpty() && paths.distinct().size == paths.size) { "Invalid Windows HSC inventory" }
+            paths.toSet()
+        }
         private val numbers = setOf(
             "infoTableBytes", "infoTablePtrsOffset", "infoTablePtrsBytes",
             "infoTableNptrsOffset", "infoTableNptrsBytes", "infoTableTypeOffset",
@@ -91,6 +102,7 @@ class TargetLayout private constructor(
             val os = when {
                 System.getProperty("os.name").startsWith("Mac") -> "osx"
                 System.getProperty("os.name").startsWith("Linux") -> "linux"
+                System.getProperty("os.name").startsWith("Windows") -> "windows"
                 else -> error("Unsupported GHC target OS: ${System.getProperty("os.name")}")
             }
             return "$arch-$os"
@@ -113,7 +125,9 @@ class TargetLayout private constructor(
             val way = compiler["way"] as? String
             require(id == "ghc-9.14.1" && !abi.isNullOrBlank() &&
                 abi.matches(Regex("[A-Za-z0-9._+-]+")) && platform == hostPlatform() &&
-                way == "dynamic-nonprofiling") { "GHC target identity or way differs from this runtime" }
+                way == (if (platform.endsWith("-windows")) "vanilla-nonprofiling" else "dynamic-nonprofiling")) {
+                "GHC target identity or way differs from this runtime"
+            }
             require(layout.keys == numbers + setOf("schema", "profiled", "wordBytes", "endianness",
                 "targetPlatform", "tablesNextToCode") && int(layout["schema"], "schema") == 1 &&
                 layout["profiled"] == false && layout["targetPlatform"] == platform) {
@@ -189,6 +203,8 @@ class TargetLayout private constructor(
                 index["generatedSources"] == inputs["generatedSources"]) {
                 "GHC target layout receipts differ"
             }
+            val target = fromParts(inputs["compiler"] as? Map<*, *> ?: error("Missing target compiler"),
+                layout as? Map<*, *> ?: error("Invalid GHC target layout"))
             val component = inputs["component"] as? Map<*, *>
             if (component?.get("kind") == "installed-interface") {
                 require(index["generatedSources"] == null &&
@@ -200,20 +216,21 @@ class TargetLayout private constructor(
                             (recipe["sha256"] as? String)?.matches(Regex("[0-9a-f]{64}")) == true
                     }) { "Invalid selected-GHC layout provenance" }
             } else {
+                val expected = if (target.platform == "x86_64-windows")
+                    windowsGeneratedSourcePaths else generatedSourcePaths
                 val generated = index["generatedSources"] as? List<*>
                     ?: error("Missing generated GHC source receipts")
-                require(generated.size == generatedSourcePaths.size && generated.all { item ->
+                require(generated.size == expected.size && generated.all { item ->
                     val source = item as? Map<*, *> ?: return@all false
                     val path = source["path"] as? String
                     val sha = source["sha256"] as? String
-                    source.keys == setOf("path", "sha256") && path in generatedSourcePaths &&
+                    source.keys == setOf("path", "sha256") && path in expected &&
                         sha?.matches(Regex("[0-9a-f]{64}")) == true
-                } && generated.map { (it as Map<*, *>)["path"] }.toSet() == generatedSourcePaths) {
+                } && generated.map { (it as Map<*, *>)["path"] }.toSet() == expected) {
                     "Invalid generated GHC source receipts"
                 }
             }
-            return fromParts(inputs["compiler"] as? Map<*, *> ?: error("Missing target compiler"),
-                layout as? Map<*, *> ?: error("Invalid GHC target layout"))
+            return target
         }
     }
 }

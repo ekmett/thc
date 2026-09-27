@@ -9,6 +9,7 @@ module THC.Driver.Installed
   , installedContext, discoverInstalled, validateReexports, acquireInstalled, acquireInstalledWithJobs
   , installedProvenance, installedLayoutHeaders, helperCommand, probeInstalled, prepareInstalledProbe
   , emptyRegistration, modulelessRegistration
+  , boundedInterfaceProcess
   ) where
 
 import Control.Concurrent (ThreadId, forkIOWithUnmask, killThread)

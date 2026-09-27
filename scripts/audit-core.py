@@ -35,9 +35,9 @@ from core_vector_memory import OPERATIONS as VECTOR_MEMORY_OPERATIONS, read_case
 
 # The identical checked-in resource is packaged in the JVM runtime jar.
 SCALAR_SIGNATURES = json.loads((Path(__file__).resolve().parent.parent /
-    'src/main/resources/thc/scalar-primop-signatures.json').read_text())['primitives']
+    'src/main/resources/thc/scalar-primop-signatures.json').read_text(encoding='utf-8'))['primitives']
 POLYGLOT_ABI = json.loads((Path(__file__).resolve().parent.parent /
-    'src/test/resources/thc/polyglot-abi.json').read_text())
+    'src/test/resources/thc/polyglot-abi.json').read_text(encoding='utf-8'))
 
 # Closed scalar PrimRep identities emitted from GHC's LitRubbish RuntimeRep.
 # Do not infer singleton aggregates, vectors, or unknown levity as scalars.
@@ -649,11 +649,16 @@ class Audit:
         self.retained_exports = _EventList(store, 'retained-exports') if store is not None else []
         self.exception_bridges = _InputRecords(store, 'exception-bridges') if store is not None else {}
         self.exception_bridge_unit = foreign_exception_bridge_unit
+        self.provided_modules = store.members('provided-modules', '') if store is not None else set()
+        self.complete_modules = store.members('complete-modules', '') if store is not None else set()
         if foreign_exception_bridge_unit is not None and (not isinstance(foreign_exception_bridge_unit, str) or not foreign_exception_bridge_unit):
             self.issue('foreign-exception-bridge', None, 'manifest', 'Invalid foreignExceptionBridgeUnit')
         for source, module in modules:
             self._register_module(source, module)
             del module  # Drop the full AST before parsing the next module.
+        for name in self.provided_modules if store is not None else sorted(self.provided_modules):
+            if name not in self.complete_modules:
+                self.issue('module-format', None, name, 'Interface closure lacks its exact complete provided module')
         for unit, link in self.package_scalar_links.items():
             if self.package_scalar_proofs[unit] != {entry['entry'] for entry in link['abi']}:
                 self.issue('module-format', None, unit, 'Package C ABI lacks complete typed import provenance')
@@ -661,6 +666,16 @@ class Audit:
             store.seal(validation_complete=getattr(modules, 'complete', True))
 
     def _register_module(self, source, module):
+        if module.get('boundary') == 'optimized-Core-after-Tidy-before-CorePrep':
+            self.complete_modules.add(str(module.get('unit')) + ':' + str(module.get('module')))
+        if 'providedModules' in module:
+            supplied = module['providedModules']
+            if (module.get('unit') != 'dependency-closure' or module.get('module') != 'THC.InterfaceClosure'
+                    or module.get('boundary') != 'actual-interface-unfoldings' or not isinstance(supplied, list)
+                    or any(not isinstance(name, str) or not name.strip() for name in supplied)):
+                self.issue('module-format', None, source, 'Invalid provided-module interface closure')
+            else:
+                self.provided_modules.update(supplied)
         if self.store is not None:
             self.store.put_record('modules', source,
                 {key: value for key, value in module.items() if key not in ('bindings', 'constructors')})
