@@ -150,7 +150,7 @@ prepareOriginalStackFormatter root = do
   sourceExport <- runLogged 600 root logs "original-source-export" [] executable
     ["original-stack-source-export", directory </> "originals"]
   let coreRoot = directory </> "originals/core"
-  originals <- map (coreRoot </>) . sort <$> listDirectory (root </> coreRoot)
+  originals <- map (coreRoot </>) . sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> coreRoot)
   let source = "compiler/test-fixtures/OriginalStackFormatter.hs"
       native = "compiler/test-fixtures/OriginalStackFormatterNative.hs"
   stages <- forM ["pre", "post"] $ \stage -> do
