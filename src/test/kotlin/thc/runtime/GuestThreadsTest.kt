@@ -192,6 +192,113 @@ class GuestThreadsTest {
         assertEquals(MaskingState.UNMASKED, masks.get())
     }
 
+    @Test fun crossContextSendKeepsCallerMaskAndFifoAcrossOrdinaryAndCallbackEntries() {
+        for (callback in listOf(false, true)) for (mask in MaskingState.entries) {
+            val callerMasks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+            val callbackMasks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+            val wakes = AtomicInteger()
+            val caller = GuestThreads(callerMasks) { wakes.incrementAndGet() }
+            val other = GuestThreads(callbackMasks) { }
+            caller.enterCurrent(mask)
+            val callerId = caller.currentIdentity()
+            lateinit var first: AsyncRequest
+            lateinit var second: AsyncRequest
+            try {
+                val foreign = if (callback) caller.enterForeign() else null
+                try {
+                    other.enterCurrent()
+                    try {
+                        val otherId = other.currentIdentity()
+                        assertNotSame(callerId, otherId)
+                        assertEquals(callerId.javaId, otherId.javaId)
+                        first = caller.send(callerId, "first")
+                        second = caller.send(callerId, "second")
+                        assertFalse(first.forceSelf, "A suspended context's slot is not the active sender")
+                        assertFalse(second.forceSelf)
+                        assertEquals(2, wakes.get(), "Cross-context requests use external delivery")
+                        assertNull(caller.poll(node, true), "Only the active guest may claim a request")
+                        callbackMasks.set(MaskingState.MASKED_UNINTERRUPTIBLE)
+                        val self = other.send(otherId, "actual self")
+                        assertTrue(self.forceSelf)
+                        assertSame(self, other.poll(node), "The actual sender still has self delivery")
+                        self.acknowledge()
+                    } finally { other.leaveCurrent() }
+                } finally { if (foreign != null) caller.leaveForeign(foreign) }
+                assertSame(callerId, caller.currentIdentity())
+                assertEquals(mask, callerMasks.get())
+                assertEquals(AsyncRequestState.PENDING, first.state)
+                assertEquals(AsyncRequestState.PENDING, second.state)
+                val claimed = when (mask) {
+                    MaskingState.UNMASKED -> caller.poll(node)
+                    MaskingState.MASKED_INTERRUPTIBLE -> {
+                        assertNull(caller.poll(node))
+                        caller.poll(node, true)
+                    }
+                    MaskingState.MASKED_UNINTERRUPTIBLE -> {
+                        assertNull(caller.poll(node)); assertNull(caller.poll(node, true))
+                        callerMasks.set(MaskingState.UNMASKED)
+                        caller.poll(node)
+                    }
+                }
+                assertSame(first, claimed, "Cross-context sends retain FIFO order")
+                assertNull(caller.poll(node, true), "A claimed request excludes the next request")
+                first.acknowledge()
+                assertSame(second, caller.poll(node, true))
+                second.acknowledge()
+                assertNull(caller.poll(node, true))
+            } finally { caller.leaveCurrent(); other.close(); caller.close() }
+        }
+    }
+
+    @Test fun inactiveContextCannotClaimItsMailboxOnAnotherGuestsCarrier() {
+        val caller = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        val other = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        caller.enterCurrent()
+        val callerId = caller.currentIdentity()
+        val submitted = AtomicReference<AsyncRequest>()
+        try {
+            val sender = Thread { submitted.set(caller.send(callerId, "external")) }
+            sender.start(); sender.join(5000)
+            assertFalse(sender.isAlive)
+            val request = submitted.get()
+            assertFalse(request.forceSelf)
+            other.enterCurrent()
+            try {
+                assertNull(caller.poll(node, true), "A retained context slot cannot claim for an inactive guest")
+                assertEquals(AsyncRequestState.PENDING, request.state)
+                val self = other.send(other.currentIdentity(), "active self")
+                assertSame(self, other.poll(node)); self.acknowledge()
+            } finally { other.leaveCurrent() }
+            assertSame(callerId, caller.currentIdentity())
+            assertSame(request, caller.poll(node))
+            request.acknowledge()
+        } finally { caller.leaveCurrent(); other.close(); caller.close() }
+    }
+
+    @Test fun crossContextSendCannotBypassNonresumableTargetAdmission() {
+        for (callback in listOf(false, true)) {
+            val wakes = AtomicInteger()
+            val caller = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { wakes.incrementAndGet() }
+            val other = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+            caller.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, forked = true, externalAsync = false)
+            val callerId = caller.currentIdentity()
+            try {
+                val foreign = if (callback) caller.enterForeign() else null
+                try {
+                    other.enterCurrent()
+                    try {
+                        assertThrows(UnsupportedCore::class.java) { caller.send(callerId, "external") }
+                        assertEquals(0, wakes.get())
+                    } finally { other.leaveCurrent() }
+                } finally { if (foreign != null) caller.leaveForeign(foreign) }
+                assertNull(caller.poll(node, true), "Rejected sends never entered the caller mailbox")
+                val self = caller.send(callerId, "actual self")
+                assertTrue(self.forceSelf)
+                assertSame(self, caller.poll(node)); self.acknowledge()
+            } finally { caller.leaveCurrent(); other.close(); caller.close() }
+        }
+    }
+
     @Test fun callbackIdentityMailboxAndMaskAreIsolatedOnTheSameCarrier() {
         for (mask in MaskingState.entries) {
             val masks = ThreadLocal.withInitial { MaskingState.UNMASKED }
