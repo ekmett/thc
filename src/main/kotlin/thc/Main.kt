@@ -76,14 +76,17 @@ internal fun executionContext(fileIO: Boolean, ffiMode: FfiMode): Context {
  * only valid with [ioMain].
  * @param asyncExceptions explicit asynchronous mode, or the optional strict Boolean
  * `thc.asyncExceptions` launcher property. When absent, AST defaults to false and bytecode to true.
+ * @param jsonSidecars explicit index paths for every listed loose Core JSON input;
+ * an optional package manifest keeps its own module/index inventory.
  */
 @JvmOverloads
 fun loadEntry(context: Context, modules: List<String>, entry: String, instrument: Boolean = true,
               backend: String = defaultBackend(), ioMain: Boolean = false, shutdownEntry: String? = null,
-              asyncExceptions: Boolean? = System.getProperty("thc.asyncExceptions")?.toBooleanStrict()): Value =
+              asyncExceptions: Boolean? = System.getProperty("thc.asyncExceptions")?.toBooleanStrict(),
+              jsonSidecars: Map<String, String>? = null): Value =
     context.eval("thc", CoreModules.request(modules, entry, instrument,
         !ioMain && java.lang.Boolean.getBoolean("thc.diagnosticUnsupported"), backend,
-        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry, asyncExceptions))
+        System.getProperty("thc.sourceNotesEnabled", "true").toBooleanStrict(), ioMain, shutdownEntry, asyncExceptions, jsonSidecars))
 
 /**
  * Load one verified managed export bundle into [context]. The result has read-only
@@ -129,7 +132,37 @@ private fun initializeArguments(context: Context, arguments: Pair<String, Array<
     finally { context.leave() }
 }
 
-internal fun launch(rawArgs: Array<String>) {
+/** Extract only explicit host pairs; anything after the guest separator is opaque. */
+internal fun launcherJsonSidecars(rawArgs: Array<String>): Pair<Array<String>, Map<String, String>?> {
+    val arguments = ArrayList<String>()
+    val sidecars = linkedMapOf<String, String>()
+    var position = 0
+    while (position < rawArgs.size) {
+        val argument = rawArgs[position]
+        if (argument == "--") {
+            arguments.addAll(rawArgs.asList().subList(position, rawArgs.size))
+            break
+        }
+        if (argument == "--json-sidecar") {
+            require(position + 2 < rawArgs.size && rawArgs[position + 1] != "--" && rawArgs[position + 2] != "--") {
+                "--json-sidecar requires JSON_PATH INDEX_PATH before guest arguments"
+            }
+            val json = rawArgs[position + 1]
+            val index = rawArgs[position + 2]
+            require(json.isNotBlank() && index.isNotBlank() && !json.startsWith("@") && sidecars.putIfAbsent(json, index) == null) {
+                "Invalid or duplicate --json-sidecar source: $json"
+            }
+            position += 3
+        } else {
+            arguments += argument
+            position++
+        }
+    }
+    return arguments.toTypedArray() to sidecars.takeIf { it.isNotEmpty() }
+}
+
+internal fun launch(arguments: Array<String>) {
+    val (rawArgs, sidecars) = launcherJsonSidecars(arguments)
     var prefix = 0
     var selected: FfiMode? = null
     while (prefix < rawArgs.size) {
@@ -151,7 +184,7 @@ internal fun launch(rawArgs: Array<String>) {
         val arguments = launcherArguments(args, 4)
         executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
-            val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3])
+            val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3], jsonSidecars = sidecars)
             check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))
                 System.err.println(action.getMember("diagnostics").asString())
@@ -164,7 +197,7 @@ internal fun launch(rawArgs: Array<String>) {
         val modules = args[1].split(',')
         executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
-            val action = loadEntry(context, modules, args[2], ioMain = true)
+            val action = loadEntry(context, modules, args[2], ioMain = true, jsonSidecars = sidecars)
             check(action.invokeMember("runIO").asBoolean()) { "IO main did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))
                 System.err.println(action.getMember("diagnostics").asString())
@@ -176,7 +209,7 @@ internal fun launch(rawArgs: Array<String>) {
     val entry = args[1]
     val input = args[2].toLong()
     executionContext(fileIO = false, ffiMode = ffiMode).use { context ->
-        val function = loadEntry(context, modules, entry)
+        val function = loadEntry(context, modules, entry, jsonSidecars = sidecars)
         if (args.drop(3).contains("--compile")) {
             repeat(40) { function.execute(input + (it and 3)).asLong() }
             function.invokeMember("compile")

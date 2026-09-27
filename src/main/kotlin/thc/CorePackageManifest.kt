@@ -175,10 +175,11 @@ object CorePackageManifest {
     internal data class VisitResult(val targetLayout: TargetLayout?, val manifestSha256: String,
                                     val manifestPath: String, val foreignExceptionBridgeUnit: String?)
 
-    /** Read only the package directory when an index is declared. Module JSON,
-     * ZIP members and sidecars are authenticated at replay before admission.
+    /** Read only the package directory when an index is declared, or when a
+     * mixed indexed-consumer request requires a descriptor. Module JSON, ZIP
+     * members and sidecars are authenticated at replay before admission.
      */
-    internal fun indexedRequestIdentity(manifestPath: String): VisitResult? {
+    internal fun indexedRequestIdentity(manifestPath: String, forceDescriptor: Boolean = false): VisitResult? {
         val path = Path.of(manifestPath).toRealPath()
         val bytes = Files.readAllBytes(path)
         val document = Json.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *>
@@ -188,7 +189,7 @@ object CorePackageManifest {
         val units = document["units"] as? List<*> ?: error("Missing package units: $path")
         val indexed = units.any { unit -> ((unit as? Map<*, *>)?.get("modules") as? List<*>)
             ?.any { (it as? Map<*, *>)?.containsKey("index") == true } == true }
-        if (!indexed) return null
+        if (!indexed && !forceDescriptor) return null
         val bridge = document["foreignExceptionBridgeUnit"]
         require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }
         return VisitResult(null, digest(bytes), path.toString(), bridge as String?)

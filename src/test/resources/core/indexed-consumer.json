@@ -1,0 +1,11 @@
+{
+  "schema": 1, "ghc": "9.14.1", "unit": "main", "module": "Main",
+  "boundary": "optimized-Core-after-Tidy-before-CorePrep",
+  "bindings": [{
+    "id": "main:Main.entry", "name": "entry", "type": "Int# -> Int#", "lifted": true, "arity": 1,
+    "expr": ["lam", [{"id": "x", "name": "x", "type": "Int#", "lifted": false, "coercion": false}],
+      ["app", ["var", "dependency:Hidden.cold"], [["var", "x"]], [false]]]
+  }],
+  "constructors": [],
+  "sourceCore": "Synthetic consumer ownership control; not a GHC export or native performance oracle."
+}

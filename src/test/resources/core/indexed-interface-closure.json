@@ -1,0 +1,11 @@
+{
+  "schema": 1, "ghc": "9.14.1", "unit": "dependency-closure", "module": "THC.InterfaceClosure",
+  "boundary": "actual-interface-unfoldings", "providedModules": ["synthetic:LazyJson"],
+  "bindings": [{
+    "id": "dependency:Hidden.cold", "name": "cold", "type": "Int# -> Int#", "lifted": true, "arity": 1,
+    "expr": ["lam", [{"id": "x", "name": "x", "type": "Int#", "lifted": false, "coercion": false}],
+      ["app", ["prim", "+#"], [["var", "x"], ["lit", "int", "3"]], [false, false]]]
+  }],
+  "constructors": [],
+  "sourceCore": "Synthetic actual-interface-unfoldings shape; original binding owner intentionally differs from fragment unit."
+}
