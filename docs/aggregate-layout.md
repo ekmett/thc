@@ -1,15 +1,26 @@
 # Recursive aggregate representation evidence
 
 The exporter preserves logical unboxed tuple components and sum alternatives in
-addition to GHC 9.14.1's physical `primReps` vector. Both runtime backends support
-[exact tuple results](tuple-results.md) and [typed tuple inputs](tuple-inputs.md).
-Sum arguments, aggregate join arguments/captures, ordinary aggregate captures and
-unresolved layouts remain explicit boundaries. [Binary sum results](sum-results.md)
-use the placement evidence below. Exact tuple join results use local destination
-slots within the same root.
-Saturated boxed constructors also support [aggregate fields](aggregate-heap-fields.md),
-including the original compiler's unpacked `BoxedRep` payload.
-The metadata fixtures below test these boundaries independently of execution.
+addition to GHC 9.14.1's physical `primReps` vector. Both runtime backends consume
+that evidence at the following boundaries; the linked contracts define the exact
+supported leaves, shapes and ownership rules.
+
+| Boundary | Unboxed tuples | Binary unboxed sums |
+| --- | --- | --- |
+| Guest function results | [Typed result completion](tuple-results.md) | [Tag/payload completion](sum-results.md) |
+| Guest inputs and PAP prefixes | [Logical arguments, typed fields](tuple-inputs.md) | [Typed inputs and prefixes](sum-inputs.md) |
+| Owned closure/thunk captures | [Flattened owned fields](tuple-captures.md) | [Owned tag/payload fields](sum-inputs.md) |
+| Local join inputs and lexical captures | [Parallel same-frame moves](tuple-joins.md) | [Parallel tag/payload moves](sum-inputs.md) |
+| Local join results | [Local typed destinations](tuple-results.md) | [Local tag/payload destinations](sum-results.md) |
+| Saturated boxed-constructor fields | [Owned aggregate fields](aggregate-heap-fields.md) | [Owned aggregate fields](aggregate-heap-fields.md) |
+
+Ordinary aggregate let/global storage and public host aggregate parameters/results
+remain unsupported. Unresolved layouts, nested/nonbinary sums and tuples containing
+sums also remain unsupported; sum payloads have narrower leaf support than tuples.
+Aggregate-field constructor workers require direct saturated applications.
+Boxed-constructor support includes the original compiler's unpacked `BoxedRep`
+payload, not arbitrary aggregate heap storage. The metadata fixtures below test
+shape evidence independently of these execution contracts.
 
 Boxed tuples such as `(Int, Int)`, boxed unit `()`, and `Solo Box` retain one
 `BoxedRep (Just Lifted)` carrier with ordinary `data` evidence. They have no
@@ -112,7 +123,7 @@ These generated records are included in CI artifacts.
 
 ## Sum storage projections
 
-A sum now records `tagSlot: 0` and `alternativeSlots` alongside its ordered logical
+A sum records `tagSlot: 0` and `alternativeSlots` alongside its ordered logical
 `alternatives` and exact physical `primReps`. The outer list follows constructor
 order; each inner list maps that alternative's ordered physical leaves to
 zero-based slots in the enclosing sum, excluding the tag from the payload.
