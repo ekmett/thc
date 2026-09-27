@@ -61,10 +61,15 @@ the cleanup must re-enter LLVM; this path is not host-cancellation safe.
 ## Original process identity
 
 The exact `ghc-internal` `getpid` declaration returns signed Int32. The separate
-`unix-2.8.8.0-inplace` `geteuid` declaration returns unsigned Word32; it queries the
+`unix-2.8.8.0` `geteuid` declaration returns unsigned Word32; it queries the
 effective user ID, not the real user ID or a username. Both are unsafe ccalls
 with only State as input and an unboxed State/result tuple. Both backends validate
 State before a live libc query and preserve the context's sticky errno.
+
+The reviewed Unix pathname and effective-UID declarations retain their original
+installed unit, with either an `inplace` or lowercase hexadecimal suffix. The
+`lstat` CAPI wrapper must encode that same owner, wrapper index, module and function;
+other package versions, wrapper identities and foreign signatures remain rejected.
 
 These read-only queries use the existing FFM downcall pattern with explicit native
 access, independently of filesystem permission. The supported Linux GNU and Darwin

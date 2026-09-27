@@ -941,7 +941,7 @@ class FixturePreparationTest(unittest.TestCase):
                            entries=list(cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES), artifactHashes=artifacts)
             path = self.root / name; path.write_text(json.dumps(receipt))
             self.assertEqual(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
-            for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(nativeRows=2), dict(unixUnit="unix-2.8.8.0-deadbeef"),
+            for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(nativeRows=2), dict(unixUnit="unix-2.8.7.0-deadbeef"),
                             dict(entries=[]), dict(strictAccepted=False), dict(runtimeVerified=True),
                             dict(installedArtifactsHashed=True),
                             dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
@@ -1044,6 +1044,25 @@ class FixturePreparationTest(unittest.TestCase):
         producer = (project / 'test/haskell-fixtures/OriginalPosixStatFixtures.hs').read_text()
         self.assertIn('os /= "linux"', producer)
         self.assertIn('"supported" .= False', producer)
+
+    def test_original_unix_receipts_accept_only_pinned_installed_units(self):
+        cache = fast_fixtures.fast_inputs
+        for stem, entries, outputs, validate in (
+                ('original-path-stat', cache.ORIGINAL_PATH_STAT_ENTRIES, cache.ORIGINAL_PATH_STAT_OUTPUTS, cache.original_path_stat_artifact_hashes),
+                ('original-path-mode', cache.ORIGINAL_PATH_MODE_ENTRIES, cache.ORIGINAL_PATH_MODE_OUTPUTS, cache.original_path_mode_artifact_hashes),
+                ('original-path-link', cache.ORIGINAL_PATH_LINK_ENTRIES, cache.ORIGINAL_PATH_LINK_OUTPUTS, cache.original_path_link_artifact_hashes),
+                ('original-process-identity', cache.ORIGINAL_PROCESS_IDENTITY_ENTRIES, cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS, cache.process_identity_artifact_hashes)):
+            artifacts = {name: 'a' * 64 for name in outputs if name != 'build/' + stem + '/manifest.json'}
+            receipt = dict(schema=1, ghc='9.14.1', entries=list(entries), supported=True,
+                strictAccepted=True, runtimeVerified=False, nativeRows=1, installedArtifactsHashed=False,
+                artifactHashes=artifacts)
+            for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'unix-2.8.8.0-deadbeef'):
+                self.assertEqual(artifacts, validate(dict(receipt, unixUnit=unit)), (stem, unit))
+            for unit in (None, 42, 'unix-2.8.8.0', 'unix-2.8.8.0-', 'unix-2.8.8.0-ABCD',
+                         'unix-2.8.8.0-xyz', 'unix-2.8.7.0-460b', 'base-2.8.8.0-460b',
+                         'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-460b:forged'):
+                with self.assertRaises(cache.CacheMiss, msg=(stem, unit)):
+                    validate(dict(receipt, unixUnit=unit))
 
     def test_path_stat_receipt_excludes_scratch_and_checks_every_artifact(self):
         cache = fast_fixtures.fast_inputs

@@ -29,6 +29,7 @@ SCHEMA = 1
 GMP_NATIVE_HOST = platform.system() == "Linux" and platform.machine() == "x86_64"
 ERRNO_NATIVE_HOST = platform.system() in ("Linux", "Darwin") and sys.maxsize > 2**32
 HEX = re.compile(r"[0-9a-f]{64}\Z")
+ORIGINAL_UNIX_UNIT = re.compile(r"unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)\Z")
 SELF = ".github/scripts/fast_inputs.py"
 COMPILER_BUILD_INPUTS = ("thc.cabal", "cabal.project", "Setup.hs", "Makefile")
 WIRED_SOURCE = "src/THC/Driver/Wired.hs"
@@ -1140,7 +1141,7 @@ def process_identity_artifact_hashes(manifest):
     if not ERRNO_NATIVE_HOST:
         require(manifest.get("supported") is False and manifest.get("artifactHashes") == {}, "Unsupported process identity host")
         return {}
-    require(manifest.get("ghc") == "9.14.1" and manifest.get("unixUnit") == "unix-2.8.8.0-inplace" and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_PROCESS_IDENTITY_ENTRIES) and
+    require(manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and manifest.get("supported") is True and manifest.get("entries") == list(ORIGINAL_PROCESS_IDENTITY_ENTRIES) and
             manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
             manifest.get("installedArtifactsHashed") is False and
             type(manifest.get("nativeRows")) is int and manifest.get("nativeRows") == 1,
@@ -1276,7 +1277,7 @@ def memory_search_artifact_hashes(manifest):
 
 def original_path_stat_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
-            manifest.get("ghc") == "9.14.1" and manifest.get("unixUnit") == "unix-2.8.8.0-inplace" and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
             manifest.get("entries") == list(ORIGINAL_PATH_STAT_ENTRIES) and
             manifest.get("installedArtifactsHashed") is False,
             "Invalid original path stat fixture receipt")
@@ -1291,7 +1292,7 @@ def original_path_stat_artifact_hashes(manifest):
 
 def original_path_mode_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
-            manifest.get("ghc") == "9.14.1" and manifest.get("unixUnit") == "unix-2.8.8.0-inplace" and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
             manifest.get("entries") == list(ORIGINAL_PATH_MODE_ENTRIES) and
             manifest.get("installedArtifactsHashed") is False,
             "Invalid original path mode fixture receipt")
@@ -1306,7 +1307,7 @@ def original_path_mode_artifact_hashes(manifest):
 
 def original_path_link_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
-            manifest.get("ghc") == "9.14.1" and manifest.get("unixUnit") == "unix-2.8.8.0-inplace" and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
             manifest.get("entries") == list(ORIGINAL_PATH_LINK_ENTRIES) and
             manifest.get("installedArtifactsHashed") is False,
             "Invalid original path link fixture receipt")

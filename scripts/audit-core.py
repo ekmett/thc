@@ -770,7 +770,7 @@ class Audit:
                 self.issue('foreign-call', owner, path, str(error))
             return True
 
-        if isinstance(symbol, str) and symbol in core_original_foreign.OPERATIONS:
+        if isinstance(symbol, str) and core_original_foreign.operation_symbol(target) in core_original_foreign.OPERATIONS:
             try:
                 core_original_foreign.validate(metadata, [core_original_foreign.raw_rep(arg) for arg in arguments],
                                                expr[3], core_original_foreign.raw_rep(expr))
@@ -794,7 +794,7 @@ class Audit:
                 # Select the validated unit-specific ABI (e.g. array's memcpy).
                 for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.operation(target)[2])):
                     self.original_stack_operand(argument, primitive, bound, index)
-                if symbol not in self.cap.get('managedForeignCalls', []):
+                if core_original_foreign.operation_symbol(target) not in self.cap.get('managedForeignCalls', []):
                     raise ValueError('Original foreign-call capability disabled')
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
             except ValueError as error:

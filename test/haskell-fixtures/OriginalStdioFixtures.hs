@@ -459,7 +459,10 @@ prepareOriginalProcessIdentity root = do
       unless (commandStdout version == "9.14.1\n") (die "Original process identity requires GHC 9.14.1")
       pkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
       unit <- execute "unix-unit" [] pkg ["field", "unix", "id", "--simple-output"]
-      unless (commandStdout unit == "unix-2.8.8.0-inplace\n")
+      owner <- case BSC.lines (commandStdout unit) of
+        [value] -> pure (BSC.unpack value)
+        _ -> die "Expected one installed Unix unit"
+      unless (isOriginalUnixUnit owner)
         (die "Original process identity requires the pinned Unix unit")
       info <- execute "ghc-info" [] ghc ["--info"]
       case readMaybe (BSC.unpack (commandStdout info)) :: Maybe [(String, String)] of
@@ -503,7 +506,7 @@ prepareOriginalProcessIdentity root = do
       artifactHashes <- hashes root artifacts
       writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "entries" .= names,
         "platform" .= Host.os, "supported" .= True, "installedArtifactsHashed" .= False,
-        "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= (1 :: Int), "unixUnit" .= ("unix-2.8.8.0-inplace" :: String),
+        "strictAccepted" .= True, "runtimeVerified" .= False, "nativeRows" .= (1 :: Int), "unixUnit" .= owner,
         "stages" .= Map.fromList [(stage, modules) | (stage, modules, _, _, _) <- exports],
         "audits" .= Map.fromList [(stage, reports) | (stage, _, reports, _, _) <- exports],
         "inputHashes" .= inputHashes, "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]

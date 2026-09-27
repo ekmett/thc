@@ -22,7 +22,7 @@ import qualified System.Posix.Env as Env
 import System.Posix.Types (Fd(..))
 import qualified Data.ByteString.Char8 as BS
 import Data.Char (toUpper)
-import Data.List (nubBy, stripPrefix)
+import Data.List (nubBy)
 import Data.IORef (newIORef, writeIORef)
 import FixtureSupport
 import GHC hiding (entry, exprType)
@@ -52,16 +52,10 @@ import Unsafe.Coerce (unsafeCoerce)
 operations :: [(String, String)]
 operations = [("unixClose","close"),("unixDup","dup"),("unixIsatty","isatty"),("unixGetenv","getenv")]
 
-unixUnit :: String -> Bool
-unixUnit value = case stripPrefix "unix-2.8.8.0-" value of
-  Just "inplace" -> True
-  Just suffix -> not (null suffix) && all (`elem` ("0123456789abcdef" :: String)) suffix
-  Nothing -> False
-
 symbol :: Id -> Maybe String
 symbol value = case isFCallId_maybe value of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) F.CCallConv F.PlayRisky))
-    | unixUnit (unitString unit), unpackFS name `elem` map snd operations ->
+    | isOriginalUnixUnit (unitString unit), unpackFS name `elem` map snd operations ->
         Just (unpackFS name)
   _ -> Nothing
 
@@ -95,7 +89,7 @@ prepareUnixLibc root = do
   library <- execute "libdir" [] ghc ["--print-libdir"]
   imports <- execute "imports" [] pkg ["field", "unix", "import-dirs", "--simple-output"]
   owner <- execute "unit" [] pkg ["field", "unix", "id", "--simple-output"]
-  unless (unixUnit (oneLine owner)) (die "Expected the pinned installed unix 2.8.8.0 owner")
+  unless (isOriginalUnixUnit (oneLine owner)) (die "Expected the pinned installed unix 2.8.8.0 owner")
   let interfaces = map (oneLine imports </>)
         ["System/Posix/IO/Common.hi", "System/Posix/Terminal/Common.hi", "System/Posix/Env/PosixString.hi"]
       entries = map fst operations

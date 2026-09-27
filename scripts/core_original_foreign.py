@@ -295,6 +295,18 @@ def unix_libc_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
+UNIX_LSTAT = 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat'
+
+
+def operation_symbol(target):
+    """Identify the closed operation without rewriting its captured symbol."""
+    symbol = target.get('symbol')
+    if isinstance(symbol, str) and re.fullmatch(
+            r'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zm(?:inplace|[0-9a-f]+)ZCSystemziPosixziFilesziPosixStringZClstat', symbol):
+        return UNIX_LSTAT
+    return symbol
+
+
 def bytestring_unit(unit):
     # Match the installed-unit rule in prepare-short-bytes-slices.py without
     # rewriting the original FCall's provenance to a source-build unit.
@@ -310,7 +322,7 @@ def text_unit(unit):
 
 
 def operation(target):
-    unit, symbol = target.get('unit'), target['symbol']
+    unit, symbol = target.get('unit'), operation_symbol(target)
     if symbol == 'strlen' and bytestring_unit(unit):
         return LIBRARY_OPERATIONS['bytestring-0.12.2.0-inplace', symbol]
     return (LIBRARY_OPERATIONS.get((unit, symbol), OPERATIONS[symbol])
@@ -393,7 +405,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     target = descriptor.get('target')
     if not isinstance(target, dict) or not isinstance(target.get('symbol'), str):
         return None
-    symbol = target['symbol']
+    symbol = operation_symbol(target)
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
@@ -403,14 +415,17 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
         require(text_unit(target.get('unit')), 'supported installed text unit')
-    if symbol == 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat':
-        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix path-stat unit')
+    if symbol == UNIX_LSTAT:
+        unit = target.get('unit')
+        require(unix_libc_unit(unit) and target['symbol'] ==
+                'ghczuwrapperZC2ZC' + unit.replace('-', 'zm').replace('.', 'zi') +
+                'ZCSystemziPosixziFilesziPosixStringZClstat', 'matching installed unix path-stat unit and symbol')
     if symbol in ('symlink', 'readlink'):
-        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix pathname link unit')
+        require(unix_libc_unit(target.get('unit')), 'supported installed unix pathname link unit')
     if symbol == 'geteuid':
-        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix effective UID unit')
+        require(unix_libc_unit(target.get('unit')), 'supported installed unix effective UID unit')
     if symbol == 'mkdir':
-        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix mkdir unit')
+        require(unix_libc_unit(target.get('unit')), 'supported installed unix mkdir unit')
     if symbol in WAIT_STATUS_OPERATIONS:
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix wait-status unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
@@ -423,7 +438,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
-                 symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
+                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'geteuid', 'mkdir', UNIX_LSTAT) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
             'static supported installed-library function target')
@@ -439,4 +454,4 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(isinstance(flags, list) and len(flags) == len(expected) and all(f is False for f in flags), 'unlifted argument flags')
     require(result(descriptor.get('resultRep'), output, True) and result(metadata.get('rep'), output) and result(result_rep, output),
             'exact scalar/tuple result representations')
-    return symbol
+    return target['symbol']
