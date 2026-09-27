@@ -12,7 +12,7 @@ import thc.runtime.*
 /** One context's admitted definitions. A compiled reference to another module
  * holds a cold GlobalBinding, not that module's parsed body or header. */
 internal class CoreUnitProgram(private val language: Language, private val directory: CoreUnitDirectory,
-    private val input: Map<String, Any?>, private val entry: String, private val backend: String,
+    private val input: Map<String, Any?>, private val entry: String?, private val backend: String,
     private val async: Boolean, private val owner: Language.State) : ExecutableProgram, AutoCloseable {
     override val asynchronousExceptions get() = async
     override val hasBytecode get() = backend == "bytecode"
@@ -191,11 +191,13 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         follow(binding["expr"] as List<Any?>)
         return selected.values.toList()
     }
-    override fun hostEntryTarget(arity: Int): RootCallTarget = demand.program(entry).hostEntryTarget(arity)
+    private fun hostProgram(): ExecutableProgram = entry?.let(demand::program)
+        ?: demand.preparedPrograms().firstOrNull() ?: error("No admitted managed export")
+    override fun hostEntryTarget(arity: Int): RootCallTarget = hostProgram().hostEntryTarget(arity)
     override fun entryValue(name: String): Any? = (demand.cell(name)
         ?: throw UnsupportedCore("Unresolved external binding $name")).read()
     override fun entryTarget(name: String): RootCallTarget = demand.program(name).entryTarget(name)
-    override fun constructorLayout(id: String): DataLayout = demand.program(entry).constructorLayout(id)
+    override fun constructorLayout(id: String): DataLayout = hostProgram().constructorLayout(id)
     override fun diagnostics(): Map<String, Any> {
         val programs = demand.preparedPrograms().map { it.diagnostics() }
         val result = programs.first().toMutableMap()

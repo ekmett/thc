@@ -29,20 +29,44 @@ internal class ManagedExportRegistry(private val owner: Language.State, private 
     }
 
     @CompilerDirectives.TruffleBoundary
-    fun load(plan: ManagedExportPlan): ManagedExportNamespace {
+    fun load(plan: ManagedExportPlan): ManagedExportNamespace = load {
+        (plan.linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
+        val program: ExecutableProgram = when (plan.backend) {
+            "ast" -> Program(language, plan.linked)
+            "bytecode" -> BytecodeProgram(language, plan.linked, true)
+            else -> error("Invalid managed backend")
+        }
+        Loaded(program, plan.exports, plan.linked["managedRegistrations"] as List<ManagedExportAdmission>)
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    fun load(input: Map<String, Any?>, directory: CoreUnitDirectory, backend: String): ManagedExportNamespace = load {
+        require(directory.targetLayout == null || directory.targetLayout.wordBytes * 8 == 64) {
+            "Managed export target word width differs"
+        }
+        val program = CoreUnitProgram(language, directory, input, null, backend, backend == "bytecode", owner)
+        try {
+            val registrations = program.registerStartup()
+            val exports = registrations.flatMap { it.exports }
+            require(exports.isNotEmpty()) { "No verified static foreign exports supplied" }
+            Loaded(program, ManagedExportPlan.checked(exports, program::signatureBindings), registrations)
+        } catch (failure: Throwable) { program.close(); throw failure }
+    }
+
+    private data class Loaded(val program: ExecutableProgram, val exports: List<ManagedExportSignature>,
+                              val registrations: List<ManagedExportAdmission>)
+
+    private fun load(prepare: () -> Loaded): ManagedExportNamespace {
         checkOwner()
         synchronized(this) {
             if (loading || loaded) throw RuntimeFault("This THC context already has a managed export bundle")
             loading = true
         }
+        var prepared: Loaded? = null
         try {
-            (plan.linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
-            val program: ExecutableProgram = when (plan.backend) {
-                "ast" -> Program(language, plan.linked)
-                "bytecode" -> BytecodeProgram(language, plan.linked, true)
-                else -> error("Invalid managed backend")
-            }
-            val namespace = plan.exports.groupBy { it.unit }.mapValues { (unit, unitExports) ->
+            val bundle = prepare().also { prepared = it }
+            val program = bundle.program
+            val namespace = bundle.exports.groupBy { it.unit }.mapValues { (unit, unitExports) ->
                 val modules = unitExports.groupBy { it.module }.mapValues { (module, exports) ->
                     val symbols = exports.associate { signature -> signature.symbol to
                         ManagedExportValue(this, owner, language, program, signature) }
@@ -53,12 +77,15 @@ internal class ManagedExportRegistry(private val owner: Language.State, private 
             synchronized(this) {
                 checkOwner()
                 @Suppress("UNCHECKED_CAST")
-                owner.foreignRoots.retain(program,
-                    plan.linked["managedRegistrations"] as List<ManagedExportAdmission>)
+                owner.foreignRoots.retain(program, bundle.registrations)
+                if (program is CoreUnitProgram) owner.coreUnitPrograms += program
                 units = namespace
                 loaded = true
             }
             return scope
+        } catch (failure: Throwable) {
+            (prepared?.program as? CoreUnitProgram)?.close()
+            throw failure
         } finally { synchronized(this) { loading = false } }
     }
 
@@ -120,7 +147,7 @@ internal class ManagedExportValue(private val registry: ManagedExportRegistry, p
             }
         } catch (failure: RuntimeFault) { throw UnsupportedTypeException.create(values, failure.message) }
         val threads = owner.threads
-        threads.enterCurrent()
+        threads.enterCurrent(externalAsync = program.asynchronousExceptions)
         var outcome = GuestThreadStatus.FINISHED
         try {
             try {

@@ -48,6 +48,12 @@ through `context.getBindings("thc")`. Aliases share their Haskell function and
 CAF state. Calling an `IO` export runs the action and returns its scalar result;
 argument validation finishes before the action starts.
 
+The same API accepts `listOf("@/absolute/path/to/packages.json")` for direct
+unit artifacts. Registration-bearing modules supply the exported roots and
+their checked signatures; unrelated units remain unopened. The parsed load
+request can be shared by an Engine, but registrations, decoded code and CAFs
+belong to each executing context. A failed load publishes no namespace.
+
 Accepted signatures use boxed `Int`, `Word`, their fixed-width variants,
 `Float`, `Double`, `Bool` and `Char`, with `()` additionally allowed as a result.
 Integral arguments are range-checked. Use `BigInteger` and `Value.asBigInteger()`
@@ -87,9 +93,10 @@ contract matches the supplied argument. `backend` selects `bytecode` or `ast`
 when loading; the default comes from `thc.backend`, then `THC_BACKEND`, then
 `bytecode`.
 
-For a checked package closure, pass a singleton list containing
-`"@/absolute/path/to/packages.json"`. The loader verifies package identities,
-hashes, boundaries, and reachable references. See the [manifest guide](../core-package-manifest.md).
+For a package closure, pass a singleton list containing
+`"@/absolute/path/to/packages.json"`. Artifact hashes are checked only with
+`verifyArtifacts = true`; identity, ownership and calling-convention checks
+still apply when code is admitted. See the [manifest guide](../core-package-manifest.md).
 Individual JSON paths are a lower-level development input; assembling a list
 does not establish package support.
 

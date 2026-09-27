@@ -126,10 +126,18 @@ internal class ManagedExportAdmission private constructor(val module: Map<String
 /** Contains immutable code/metadata only. Programs and CAFs are created in State at execution. */
 internal class ManagedExportPlan(val linked: Map<String, Any?>, val exports: List<ManagedExportSignature>, val backend: String) {
     companion object {
-        fun read(input: Map<String, Any?>): ManagedExportPlan {
-            require(input.keys.all { it in setOf("mode", "modules", "backend", "instrument", "sourceNotesEnabled", "strictLink", "targetLayout",
+        fun backend(input: Map<String, Any?>): String {
+            require(input.keys.all { it in setOf("mode", "modules", "consumerModules", "indexedModuleFiles", "backend",
+                "instrument", "sourceNotesEnabled", "strictLink", "targetLayout", "verifyArtifacts",
                 "packageManifest", "packageManifestSha256", "packageCapability", "foreignExceptionBridgeUnit") } &&
                 input["mode"] == "managed-exports" && input["strictLink"] == true) { "Managed export loading requires its explicit strict request" }
+            require(input["verifyArtifacts"] == null || input["verifyArtifacts"] is Boolean) { "verifyArtifacts must be a Boolean" }
+            return (input["backend"] as? String ?: defaultBackend()).also {
+                require(it == "ast" || it == "bytecode") { "Unknown THC backend: $it" }
+            }
+        }
+        fun read(input: Map<String, Any?>): ManagedExportPlan {
+            val backend = backend(input)
             val merger = CoreModules.Merger()
             val admissions = arrayListOf<ManagedExportAdmission>()
             val layout = CoreModules.visitRequestModules(input) { original ->
@@ -147,7 +155,13 @@ internal class ManagedExportPlan(val linked: Map<String, Any?>, val exports: Lis
                 "diagnosticUnsupported" to false, "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
                 (if (layout == null) emptyMap() else mapOf("targetLayout" to layout))
             val bindings = linked["bindings"] as List<Map<String, Any?>>
-            val checked = exports.map { export ->
+            return ManagedExportPlan(linked, checked(exports) { bindings }, backend)
+        }
+        /** Check only the exported binder's actual signature/alias spine. The
+         * declaration never supplies a guessed Core calling convention. */
+        fun checked(exports: List<ManagedExportSignature>,
+                    definitions: (String) -> List<Map<String, Any?>>): List<ManagedExportSignature> = exports.map { export ->
+                val bindings = definitions(export.binder)
                 val binding = bindings.single { it["id"] == export.binder }
                 val expression = binding["expr"] as List<Any?>
                 val (inputs, result) = CoreRepresentations.knownFunctionSignature(expression, bindings)
@@ -169,10 +183,6 @@ internal class ManagedExportPlan(val linked: Map<String, Any?>, val exports: Lis
                     export.copy(ioResult = result)
                 } else { require(boxed(result)) { "Managed export result must retain boxed scalar representation" }; export }
             }
-            val backend = input["backend"] as? String ?: defaultBackend()
-            require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
-            return ManagedExportPlan(linked, checked, backend)
-        }
         private fun immutable(value: Any?): Any? = when (value) {
             is Map<*, *> -> Collections.unmodifiableMap(value.entries.associate { it.key to immutable(it.value) })
             is List<*> -> Collections.unmodifiableList(value.map(::immutable))
