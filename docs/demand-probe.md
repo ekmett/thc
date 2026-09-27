@@ -57,7 +57,3 @@ operand's execution path can also change inlining and compiled graph shape.
 Measure those outcomes independently. Typed transport across residual calls
 has its own [ownership and ABI contract](handoff-slabs.md), independent of
 caller-demand lowering.
-
-The [demand and inlining investigation](../research/demand-probe-checkpoint.md)
-retains the manual metadata probe, policy comparisons, frozen measurements and
-test counts as historical evidence, not current runtime guidance.

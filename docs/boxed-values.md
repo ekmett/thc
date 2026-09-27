@@ -44,8 +44,3 @@ A dynamic cache hit can avoid a constructor allocation, but the range check and
 table load have their own cost. Source inspection alone does not establish that
 the compiled path allocates less or runs faster. Keep the runtime, exported Core,
 JVM configuration and inputs fixed when comparing the option.
-
-The [boxed-value investigation](../research/boxed-values-checkpoint.md) retains
-its original measurements, graphs, rejected follow-ups and validation counts.
-Those results belong to the frozen binary identified there; they are not a
-current workload-performance or test-count claim.
