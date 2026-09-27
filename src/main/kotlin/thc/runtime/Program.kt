@@ -1836,7 +1836,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         val offset = if (captureLayout == null) 1 else 2
         for (i in argumentSlots.indices) {
             val value = arguments[argumentIndices[i] + offset]
-            val reference = argumentReferences.getOrNull(i)
+            val reference = if (i < argumentReferences.size) argumentReferences[i] else null
             if (strictArguments[i]) FrameAccess.write(frame, argumentSlots[i], value)
             else if (reference != null)
                 FrameAccess.write(frame, argumentSlots[i], requireReferenceCarrier(value, reference))
@@ -1944,7 +1944,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else if (entry.packet.isDouble(from)) FrameAccess.writeDouble(frame, to, entry.packet.getDouble(input, from))
                 else {
                     val value = entry.packet.getObject(input, from)
-                    val expected = argumentReferences.getOrNull(i)
+                    val expected = if (i < argumentReferences.size) argumentReferences[i] else null
                     writeInputReference(frame, to, if (expected == null || strictArguments[i]) value else requireReferenceCarrier(value, expected))
                 }
             }

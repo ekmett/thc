@@ -41,7 +41,7 @@ internal class AstSelfLayout(
         if (captureLayout != null) {
             val environment = function.environment ?: fault("Invalid captured frame")
             for (i in environmentSlots.indices) {
-                val lanes = environmentVectorSlots.getOrNull(i)
+                val lanes = if (i < environmentVectorSlots.size) environmentVectorSlots[i] else null
                 if (lanes == null) captureLayout.restore(environment, i, frame, environmentSlots[i])
                 else captureLayout.restoreVector(environment, i, frame, lanes, 0)
             }

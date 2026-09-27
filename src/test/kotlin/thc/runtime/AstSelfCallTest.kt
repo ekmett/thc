@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -44,6 +45,59 @@ class AstSelfCallTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 action(Program(language, mapOf("bindings" to bindings, "instrument" to true)))
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun optionalCaptureAndArgumentMetadataRetainShortAndNullEntries() {
+        executionContext(false).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val target = object : RootNode(language) {
+                    override fun execute(frame: VirtualFrame): Any = error("Frame restoration must not invoke a target")
+                }.callTarget
+                val first = Closure(null, arity = 0, target = target)
+                val second = Any()
+                val captures = CaptureLayout(language, booleanArrayOf(false, false))
+                val environment = captures.captureValues(arrayOf(first, second))
+                val function = Closure(environment, arity = 0, target = target)
+                for (size in 0..2) {
+                    val layout = FrameLayout()
+                    val slots = intArrayOf(layout.bind("first"), layout.bind("second"))
+                    val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
+                    val self = AstSelfLayout(captures, slots, intArrayOf(), emptyArray(), booleanArrayOf(),
+                        environmentVectorSlots = arrayOfNulls<IntArray>(size))
+                    assertSame(AstSelfCall, assertThrows(AstSelfCall::class.java) {
+                        self.transfer(frame, function, intArrayOf())
+                    })
+                    assertSame(first, FrameAccess.read(frame, slots[0]))
+                    assertSame(second, FrameAccess.read(frame, slots[1]))
+                }
+                val reference = CoreRepresentation(CoreKind.CLOSURE, evaluated = true)
+                for (proofs in listOf(emptyArray(), arrayOf(CoreRepresentation.UNKNOWN),
+                    arrayOf(reference), arrayOf(reference, CoreRepresentation.UNKNOWN))) {
+                    val layout = FrameLayout()
+                    val slots = intArrayOf(layout.bind("first"), layout.bind("second"))
+                    val descriptor = layout.build()
+                    val body = object : Expr() {
+                        override fun execute(frame: VirtualFrame): Any = error("Frame restoration must not execute its body")
+                    }
+                    val root = FunctionRoot(language, descriptor, "optional references", null, intArrayOf(),
+                        slots, intArrayOf(0, 1), body, Metrics(false), argumentProofs = proofs)
+                    val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
+                    root.buildFrame(arrayOf(0L, first, second), frame)
+                    assertSame(first, FrameAccess.read(frame, slots[0]))
+                    assertSame(second, FrameAccess.read(frame, slots[1]))
+                    if (proofs.firstOrNull() == reference) {
+                        val failure = assertThrows(RuntimeFault::class.java) {
+                            root.buildFrame(arrayOf(0L, second, first), frame)
+                        }
+                        assertEquals("Expected proven reference value", failure.message)
+                        assertSame(first, FrameAccess.read(frame, slots[0]))
+                        assertSame(second, FrameAccess.read(frame, slots[1]))
+                    }
+                }
             } finally { context.leave() }
         }
     }
