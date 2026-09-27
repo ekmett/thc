@@ -1,83 +1,73 @@
-# Generated SIMD families
+# SIMD families and guest transport
 
-The initial generated-family checkpoint in
-[PR #90](https://github.com/ekmett/thc/pull/90) admitted 47 local vector operations
-and used a 48-row finite smoke on interpreted and compiled AST/bytecode paths.
-The counts and measurements below describe that checkpoint. Current operations
-and transport limits are recorded in the [capability contract](../scripts/core-capabilities.json)
-and [generated checklist](primops.md#current-aggregate-and-address-limits).
-The large native/model corpus remains an explicit experiment rather than work
-repeated on every pull request.
+The [capability contract](../scripts/core-capabilities.json) admits 30 exact
+`VecRep` shapes. Their fixed-species raw JDK representation is described in
+[SIMD execution and storage](simd.md).
 
-The declarative table is `scripts/simd-families.json`. At that checkpoint it described
-local pack, unpack, broadcast and arithmetic for Word64X2, Word32X8, Int32X8 and Int32X16,
-plus Int64X2 multiplication, FloatX4/DoubleX2 negation and division, and
-FloatX8/DoubleX4 pack, unpack, broadcast, add, subtract, multiply, negate and divide. Existing
-carrier class names and memory operations were unchanged. Current transport
-supports 30 exact `VecRep` shapes through arguments/results, PAP prefixes, joins,
-tuple fields, owned closure/thunk captures and boxed constructor fields.
-Recursive or lifted vector let bindings, sum fields and public host vector
-arguments/results remain outside that contract.
+| Lane family | Supported lane counts | Vector widths |
+|---|---|---|
+| Signed/unsigned 8-bit | 16, 32, 64 | 128, 256, 512 bits |
+| Signed/unsigned 16-bit | 8, 16, 32 | 128, 256, 512 bits |
+| Signed/unsigned 32-bit | 4, 8, 16 | 128, 256, 512 bits |
+| Signed/unsigned 64-bit | 2, 4, 8 | 128, 256, 512 bits |
+| Float | 4, 8, 16 | 128, 256, 512 bits |
+| Double | 2, 4, 8 | 128, 256, 512 bits |
 
-The six wide byte/short shapes (`Int8X32`, `Word8X32`, `Int8X64`, `Word8X64`,
-`Int16X32`, `Word16X32`) add 75 pack, unpack, broadcast, arithmetic, insertion,
-extrema and shuffle operations, plus 72 ByteArray/Addr memory operations.
-The existing native scalar smoke now observes all 64
-possible lanes, using separate selector fields for the operation, insertion
-lane and observed lane.
-Pack/unpack instructions with 16 or more lanes group their immutable local-slot metadata into
-one bytecode operand; lane values still use typed primitive reads/writes. This
-avoids exceeding the JVM method-size limit in generated instruction metadata.
-All six shapes also support packed and scalar-offset ByteArray and address
-index/read/write operations through the shared exact-width memory paths. The
-existing [array](simd-wide-array-memory.md) and
-[address](simd-address-families.md) corpora include their native scalar models
-and full-width storage checks.
+Both backends support exact guest arguments/results, PAP prefixes, tail
+transfers, local calls, join arguments/results and same-frame captures, unboxed
+tuple fields, nonrecursive unlifted lets, owned closure/thunk captures and boxed
+constructor fields. Recursive or lifted vector lets, sum fields and public host
+vector arguments/results remain unsupported. Transport does not add an operation
+merely because its representation is admitted.
 
-The current generator emits typed AST nodes and exact proof checks under
-`build/generated/simd`. It emits no nominal vector carrier classes: each
-operation uses the appropriate raw Vector API type and
-fixed species directly at its primop site. Two marked regions in the existing
-bytecode loader/root contain the corresponding concrete specializations;
-normal builds check these regions without rewriting source files. Pack emits a
-broadcast/withLane construction, unpack reads lanes, and ordinary arithmetic
-returns the raw vector result. Integer quotient/remainder use shared typed
-scalar-lane helpers because the pinned target has no integer SIMD division.
-Species validation uses the existing vector
-metadata owner. Activation transport stores one raw vector reference; dense
-primitive fields remain the explicit heap-storage boundary.
+## Generated operations
 
-These representation changes require fresh compiled tests and chain/loop graph
-inspection. The retained historical captures do not establish vector continuity
-for the new implementation; see the [graph evidence limits](simd.md).
+[`scripts/simd-families.json`](../scripts/simd-families.json) declares generated
+arithmetic, pack/unpack, broadcast, insertion, extrema, division and shuffle
+families, complementing handwritten foundations. The
+[primop checklist](primops.md) records implemented names. Individual
+[array](simd-wide-array-memory.md) and [address](simd-address-families.md) guides
+state their own memory-operation scope.
 
-Refresh the checked regions and validate the pinned GHC machine contracts:
+The generator emits typed AST nodes and proof checks under
+`build/generated/simd`, using raw Vector API values of the fixed species.
+Two marked bytecode regions contain corresponding concrete specializations;
+normal builds verify them without rewriting source. Pack uses scalar lanes,
+unpack writes typed locals, and ordinary arithmetic returns its raw vector
+result. Integer quotient/remainder use typed scalar-lane helpers; this is not
+an integer SIMD-divide instruction claim.
+
+Pack/unpack with at least sixteen lanes groups immutable local-slot metadata
+into one bytecode operand. Lane values still use typed primitive reads/writes.
+Activation transport owns a raw reference; durable heap storage owns primitive
+lane fields.
+
+Refresh checked regions and verify pinned GHC machine contracts with:
 
 ```sh
 python3 scripts/generate-simd-families.py --write --verify-ghc
 python3 scripts/test-simd-families.py
 ```
 
-The GHC check uses `primOpSig`, `typePrimRep_maybe` and the tuple TyCon API on the
-selected fixed signatures. It compares exact vector/lane PrimReps and logical
-tuple positions, rather than interpreting printed Haskell types. Unsupported
-runtime-polymorphic signatures are never passed to a partial placement API.
+`--write` changes the marked source regions deliberately; ordinary Gradle
+builds use `--check`. The GHC verification compares exact PrimReps and logical
+tuple positions through `primOpSig`, `typePrimRep_maybe` and the tuple TyCon
+API, not printed Haskell types.
 
-Prepare the ordinary compact smoke with a native scalar oracle, without native
-vector code generation:
+## Compact smoke and full experiment
+
+The compact smoke derives its operations from the family table and compares
+composite contracts with the canonical capability declaration. Its default
+native oracle uses scalar lanes and does not require native AVX512 code:
 
 ```sh
 python3 scripts/prepare-simd-capability-smoke.py
 ./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --rerun
 ```
 
-At the initial checkpoint the preparer verified 47 GHC 9.14.1 machine signatures
-and 25 reachable scalar entries; the JVM test used six representative entries.
-The current preparer derives the operations and corpus from the declarative
-table and checks every composite against the canonical capability contract.
-Its native scalar oracle does not require AVX512. The JVM test verifies the actual compiled
-target graph and exact guest-entry counts; its finite rows do not replace the
-separate native edge corpus.
+The JVM checker requires actual compiled target identity/validity and exact
+entry counts. Floating extrema also have separate Java NaN/signed-zero controls.
+This finite smoke does not replace the larger edge corpus or graph inspection.
 
 Prepare the larger scalar-entry experiment without native code generation:
 
@@ -85,24 +75,22 @@ Prepare the larger scalar-entry experiment without native code generation:
 python3 scripts/prepare-simd-families.py --export-only
 ```
 
-The initial experiment produced pre-Tidy Core and 84,162 independent model rows. Integer arithmetic uses mathematical modular
-arithmetic. Floating arithmetic uses rational arithmetic with ties-to-even
-rounding for this fixed corpus; arithmetic NaNs are normalized. JVM behavior
-follows Java Vector API semantics, without a general GHC bit-equivalence claim
-for NaN payloads or platform-specific edge cases. Every selected lane is
-observed separately. At that checkpoint, one dynamic scalar selector per new
-floating shape kept all six operations and every lane in the same compiled entry
-graph. OPAQUE workers provided real residual calls through scalar entries; those measurements
-do not establish the separate vector transport contract.
+Its independent model uses modular integer arithmetic and rational floating
+arithmetic with ties-to-even rounding. Arithmetic NaNs are normalized; no
+universal GHC bit-equivalence is claimed for NaN payloads or platform-specific
+edges. Each selected lane is observed separately.
 
-A full native preparation omits `--export-only` on a suitable GHC9.14.1 x86 host.
-Target flags may be passed explicitly as `--ghc-option=...`; the manifest records
-them, toolchain identity, generated sources, exact inputs, oracle and exported
-Core. Run the prepared experiment explicitly with
-`./gradlew --no-daemon simdFamiliesExperimentTest --rerun` after full
-native preparation. Ordinary `test` keeps the fixture-free Vector API and proof
-checks; it excludes the four prepared experiment methods. The native JVM gates
-require both pre/post Core and byte-identical native/model TSVs. Early wider-shape
-gates use the prepared model and are named separately. Both preserve exact
-guest-entry, actual-target identity/validity and
-input/result-pool cleanup checks.
+For native evidence, omit `--export-only` on a suitable pinned GHC host. Explicit
+`--ghc-option=...` flags are recorded with toolchain identity, generated source,
+inputs, native oracle and exported Core. Then run:
+
+```sh
+./gradlew --no-daemon simdFamiliesExperimentTest --rerun
+```
+
+Ordinary tests retain fixture-free vector/proof checks and exclude the four
+tagged prepared experiment methods. The native gates require both Core stages
+and byte-identical native/model TSVs. Separately named wider-shape controls use
+the prepared model. Both retain exact guest-entry, active-target and handoff
+cleanup checks. Use `python3 scripts/prepare-simd-families.py --check-only`
+to verify an existing manifest's input/artifact hashes without regenerating it.
