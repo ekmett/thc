@@ -21,7 +21,7 @@ class NarrowIntegerCarrierTest {
     private fun proof(integer: NarrowInteger) = CoreRepresentation(CoreKind.LONG, true, true, listOf(integer.rep))
 
     @Test fun exactLoweredProofSeparatesIntComputationFromMachineAnd64BitLong() {
-        for (integer in NarrowInteger.entries) {
+        for (integer in NarrowInteger.values()) {
             val proof = proof(integer)
             assertTrue(proof.isInt); assertFalse(proof.isLong)
             assertEquals(listOf(integer.rep), proof.primReps)
@@ -55,7 +55,7 @@ class NarrowIntegerCarrierTest {
     }
 
     @Test fun capturesHandoffsAndConstructorsKeepNarrowStoredWidthsAndIntCarriers() = entered { language ->
-        for (integer in NarrowInteger.entries) {
+        for (integer in NarrowInteger.values()) {
             val proof = proof(integer)
             val capture = CaptureLayout.withVectors(language, arrayOf(null), booleanArrayOf(true),
                 exactInt = arrayOf(integer))
@@ -81,7 +81,7 @@ class NarrowIntegerCarrierTest {
     }
 
     @Test fun scalarOperationsUseIntAndOnlyDeclaredWideningsProduceLong() {
-        for (integer in NarrowInteger.entries) {
+        for (integer in NarrowInteger.values()) {
             val family = integer.rep.removeSuffix("Rep")
             val op = NarrowScalarOp.named("plus$family#")!!
             assertEquals(integer.narrow(Int.MAX_VALUE + 1), op.intResult(Int.MAX_VALUE, 1))
@@ -101,7 +101,7 @@ class NarrowIntegerCarrierTest {
             listOf("app", listOf("prim", name), operands.toList(), List(operands.size) { false })
         val cases = listOf(Long.MIN_VALUE, -4294967297L, -65537L, -129L, -1L, 0L, 1L,
             127L, 65535L, 2147483648L, 4294967295L, Long.MAX_VALUE)
-        for (backend in listOf("ast", "bytecode")) for (integer in NarrowInteger.entries) {
+        for (backend in listOf("ast", "bytecode")) for (integer in NarrowInteger.values()) {
             val family = integer.rep.removeSuffix("Rep")
             val lower = family.replaceFirstChar(Char::lowercaseChar)
             val machine = if (integer.unsigned) "word" else "int"

@@ -246,7 +246,7 @@ class TupleArithmeticTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in TupleArithmeticOp.entries.filter { it.isInt }) for (field in 0..1) {
+                for (operation in TupleArithmeticOp.values().filter { it.isInt }) for (field in 0..1) {
                     val root = object : RootNode(language) {
                         var compiledEntries = 0L
                         override fun execute(frame: VirtualFrame): Any {

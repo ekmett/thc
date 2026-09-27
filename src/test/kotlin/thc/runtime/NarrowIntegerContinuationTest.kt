@@ -49,11 +49,11 @@ class NarrowIntegerContinuationTest {
     private val stateRep = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
     private val mvarRep = mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true)
     private val dataRep = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false)
-    private val ints = NarrowInteger.entries.map { mapOf("kind" to "long", "primReps" to listOf(it.rep), "evaluated" to true) }
+    private val ints = NarrowInteger.values().map { mapOf("kind" to "long", "primReps" to listOf(it.rep), "evaluated" to true) }
     private val pair = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
         "primReps" to listOf("BoxedRep (Just Lifted)"), "components" to listOf(stateRep, dataRep), "evaluated" to false)
     private val resultRep = mapOf("kind" to "unknown", "aggregate" to "unboxed-tuple",
-        "primReps" to NarrowInteger.entries.map { it.rep }, "components" to listOf(stateRep) + ints, "evaluated" to false)
+        "primReps" to NarrowInteger.values().map { it.rep }, "components" to listOf(stateRep) + ints, "evaluated" to false)
     private val values = arrayOf<Any?>(-128, 255, -32768, 65535, Int.MIN_VALUE, -1)
     private fun variable(name: String, rep: Map<String, Any?>) = listOf("var", name, mapOf("rep" to rep))
     private fun module(): Map<String, Any?> {
@@ -85,12 +85,12 @@ class NarrowIntegerContinuationTest {
         val backend = mode.substringBefore('-')
         val narrow = !mode.endsWith("long-control")
         val actualValues = if (narrow) values else Array<Any?>(values.size) { index ->
-            NarrowInteger.entries[index].widen(values[index] as Int)
+            NarrowInteger.values()[index].widen(values[index] as Int)
         }
         fun wideControl(value: Any?): Any? = when (value) {
             is Map<*, *> -> value.mapValues { wideControl(it.value) }
             is List<*> -> value.map(::wideControl)
-            is String -> if (NarrowInteger.entries.any { it.rep == value }) "IntRep" else value
+            is String -> if (NarrowInteger.values().any { it.rep == value }) "IntRep" else value
             else -> value
         }
         @Suppress("UNCHECKED_CAST")
@@ -113,7 +113,7 @@ class NarrowIntegerContinuationTest {
                     for (i in actualValues.indices) {
                         assertEquals(narrow, shape.layout.isInt(i)); assertEquals(!narrow, shape.layout.isLong(i))
                         assertEquals(actualValues[i], if (narrow) shape.layout.getInt(tuple, i) else shape.layout.getLong(tuple, i))
-                        assertEquals(listOf(if (narrow) NarrowInteger.entries[i].rep else "IntRep"), shape.leaves[i].primReps)
+                        assertEquals(listOf(if (narrow) NarrowInteger.values()[i].rep else "IntRep"), shape.leaves[i].primReps)
                     }
                 }
                 try {

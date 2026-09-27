@@ -903,7 +903,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class DoubleWordDivision {
         @Specialization public static void execute(VirtualFrame frame, LocalAccessor quotient,
                 LocalAccessor remainder, long high, long low, long divisor, @Bind("$node") Node node) {
-            long q = Scalar64PrimitivesKt.unsignedDoubleWordQuotient(high, low, divisor);
+            long q = Scalar64Primitives.unsignedDoubleWordQuotient(high, low, divisor);
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             quotient.setLong(bytecode, frame, q);
             remainder.setLong(bytecode, frame, low - q * divisor);
