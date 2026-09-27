@@ -3,17 +3,55 @@
 {-# LANGUAGE OverloadedStrings #-}
 module RuntimeShimTests (tests) where
 
+import Control.Monad (forM_)
 import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.KeyMap as KM
 import Data.Either (isLeft)
 import Test.HUnit
-import THC.Driver.RuntimeShim (validateRuntimeShimModule, validateRuntimeShimInventory)
+import THC.Driver.RuntimeShim (validateRuntimeShimModule, validateRuntimeShimInventory, foreignExceptionBridgeUnit)
 
 tests :: Test
 tests = TestLabel "exact runtime shim native fallback profile" $ TestList
   [ TestCase $ assertEqual "exact runtime query declaration is admitted"
       (Right (["thc_runtime_v1_query"], ["thc_runtime_v1_query"]))
       (validateRuntimeShimModule owner (moduleValue [declaration] [descriptor]))
+  , TestCase $ do
+      let textCall = alter "symbol" (String "thc_exception_v1_text") $
+            alter "arguments" (strings ["AddrRep", "Int32Rep", "Int64Rep", "void"]) call
+          textDescriptor = alter "target" (alter "symbol" (String "thc_exception_v1_text") target) $
+            alter "argumentReps" (toJSON [rep ["AddrRep"], rep ["Int32Rep"], rep ["Int64Rep"], rep []]) descriptor
+          textDeclaration = alter "emitted" textCall declaration
+      assertEqual "exception metadata has one exact target-defined ABI"
+        (Right (["thc_exception_v1_text"], ["thc_exception_v1_text"]))
+        (validateRuntimeShimModule owner (moduleValue [textDeclaration] [textDescriptor]))
+      forM_ [alter "arguments" (strings ["Int64Rep", "Int32Rep", "Int64Rep", "void"]) textCall,
+             alter "safety" (String "safe") textCall,
+             alter "unit" (String "other-unit") textCall,
+             alter "symbol" (String "thc_exception_v1_text_extra") textCall] $ \wrong ->
+        assertBool "exception shim rejects changed owner, pointer ABI, safety and suffix"
+          (isLeft (validateRuntimeShimModule owner (moduleValue [alter "emitted" wrong declaration] [])))
+  , TestCase $ do
+      let bridge unit = object ["schema" .= (1 :: Int), "unit" .= unit,
+            "module" .= ("THC.Internal.Exception" :: String),
+            "box" .= (unit ++ ":THC.Internal.Exception.boxForeign"),
+            "project" .= (unit ++ ":THC.Internal.Exception.projectForeign"),
+            "payloadType" .= (unit ++ ":THC.Internal.Exception.ForeignException"),
+            "exceptionType" .= ("ghc-internal:GHC.Internal.Exception.Type.SomeException" :: String)]
+          internal unit = object ["unit" .= unit, "module" .= ("THC.Internal.Exception" :: String),
+            "foreignExceptionBridge" .= bridge unit]
+          public :: String -> Value
+          public unit = object ["unit" .= unit, "module" .= ("THC.Exception" :: String)]
+      assertEqual "missing bridge requests the private runtime sidecar" (Right Nothing)
+        (foreignExceptionBridgeUnit [object ["unit" .= owner, "module" .= ("Main" :: String)]])
+      assertEqual "reuse the application's exact dictionary unit" (Right (Just owner))
+        (foreignExceptionBridgeUnit [internal owner, public owner])
+      forM_ [[internal owner, internal "other-unit"], [public owner],
+             [internal owner, public "other-unit"],
+             [alter "foreignExceptionBridge" (alter "unit" (String "other-unit") (bridge owner)) (internal owner)],
+             [alter "foreignExceptionBridge" (alter "box" (String "invented.box") (bridge owner)) (internal owner)],
+             [alter "foreignExceptionBridge" (alter "schema" (Number 2) (bridge owner)) (internal owner)]] $ \values ->
+        assertBool "missing, ambiguous and inconsistent dictionary identities are rejected"
+          (isLeft (foreignExceptionBridgeUnit values))
   , TestCase $ assertEqual "a pure module may carry no declarations"
       (Right ([], [])) (validateRuntimeShimModule owner (moduleValue [] []))
   , TestCase $ assertEqual "exporter omits Verified [] metadata for a pure module"
