@@ -80,8 +80,9 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
     @Synchronized @TruffleBoundary fun malloc(size: Long): ManagedAddress {
         current()
         if (closed) fault("Native allocation registry is closed")
-        if (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64"))
-            fault("Native malloc currently requires the verified Linux x86_64 LP64 ABI")
+        val windows = WindowsDirectoryStreams.supportedHost()
+        if (!windows && (System.getProperty("os.name") != "Linux" || System.getProperty("os.arch") !in setOf("amd64", "x86_64")))
+            fault("Native malloc requires verified Linux x86_64 LP64 or Windows x86_64 LLP64")
         val threads = Language.currentState().threads
         val previous = threads.enterForeign()
         try {
@@ -89,10 +90,11 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
             var errno = 0L
             val owner = try {
                 Arena.ofConfined().use { call ->
-                    val errors = call.allocate(Libc.capture)
-                    val pointer = Libc.malloc.invokeExact(errors, size) as MemorySegment
+                    val errors = call.allocate(if (windows) ValueLayout.JAVA_INT else Libc.capture)
+                    val pointer = if (windows) WindowsMalloc.malloc.invokeExact(size, errors) as MemorySegment
+                        else Libc.malloc.invokeExact(errors, size) as MemorySegment
                     if (pointer.address() == 0L) {
-                        errno = errors.get(ValueLayout.JAVA_INT, Libc.errno).toLong()
+                        errno = errors.get(ValueLayout.JAVA_INT, if (windows) 0L else Libc.errno).toLong()
                         null
                     } else try { Owner(pointer, size) }
                         catch (failure: Throwable) { releaseNative(pointer); throw failure }
@@ -238,7 +240,10 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
     companion object {
         @JvmStatic fun current(node: Node?): ManagedNativeAllocations = Language.currentState(node).nativeAllocations
         private fun releaseNative(pointer: MemorySegment) {
-            try { Libc.free.invokeExact(pointer) }
+            try {
+                if (WindowsDirectoryStreams.supportedHost()) WindowsMalloc.free.invokeExact(pointer)
+                else Libc.free.invokeExact(pointer)
+            }
             catch (failure: Throwable) { nativeFailure("Native free invocation failed", failure) }
         }
         private fun nativeFailure(message: String, failure: Throwable): Nothing {

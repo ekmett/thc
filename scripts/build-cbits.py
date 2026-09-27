@@ -194,6 +194,30 @@ def main():
     source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
     if system == "Windows":
+        source = ROOT / "src/main/c/windows-malloc.c"
+        artifact = output / "windows-malloc.dll"
+        # Keep the calls real in both the DLL and native probe; the compiler
+        # must not elide malloc/free and thereby change the observed errno.
+        options = [*compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-fno-builtin"]
+        command = [*options, "-shared", str(source), "-o", str(artifact)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        probe = output / "windows-malloc-probe.exe"
+        command = [*options, "-DTHC_MALLOC_PROBE", str(source), "-o", str(probe)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        command = [str(probe)]
+        layout = json.loads(subprocess.check_output(command, cwd=ROOT, text=True))
+        commands.append(command)
+        if (layout["abi"] != 0x0808080404 or layout["enomem"] <= 0 or
+                layout["failureErrno"] != layout["enomem"] or
+                len({layout[k].lower() for k in ("mallocModule", "freeModule", "errnoModule")}) != 1):
+            raise SystemExit("Windows malloc/free/errno probe did not establish one LLP64 CRT")
+        receipt = output / "windows-malloc-abi.json"
+        receipt.write_text(json.dumps({"schema": 1, "target": target, "layout": layout,
+            "dllSha256": hashlib.sha256(artifact.read_bytes()).hexdigest()}, indent=2) + "\n")
+        source_files.append(source)
+        artifacts.extend([artifact, receipt])
         # Sulong's PE dependency locator probes the guest filesystem even for
         # system DLLs. This stateless native bridge preserves IOAccess.NONE.
         artifact = output / "md5.dll"

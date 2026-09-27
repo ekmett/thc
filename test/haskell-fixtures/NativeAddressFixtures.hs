@@ -21,15 +21,16 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
+import System.Info (os)
 import Text.Read (readMaybe)
 
 prepareNativeAddress :: FilePath -> IO ()
 prepareNativeAddress root = do
   let directory = "build/native-addresses"
       native = directory </> "native"
-      binary = native </> "oracle"
+      binary = native </> ("oracle" ++ if os == "mingw32" then ".exe" else "")
       source = "compiler/test-fixtures/NativeAddressNative.hs"
-      oracle = directory </> "oracle.json"
+      oracle = "build/native-addresses/oracle.json"
       manifest = directory </> "manifest.json"
       execute = runLogged 120 root (directory </> "logs")
   createDirectoryIfMissing True (root </> native)
@@ -37,10 +38,11 @@ prepareNativeAddress root = do
   when present (removeFile (root </> manifest))
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- execute "ghc-version" [] ghc ["--numeric-version"]
-  unless (commandStdout version == "9.14.1\n") (die "Native address oracle requires GHC 9.14.1")
-  _ <- execute "native-build" [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-Wall", "-Werror",
+  unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Native address oracle requires GHC 9.14.1")
+  let linking = ["-dynamic" | os /= "mingw32"]
+  _ <- execute "native-build" [] ghc (linking ++ ["--make", "-O2", "-fforce-recomp", "-Wall", "-Werror",
     "-dcore-lint", "-dstg-lint", "-package", "ghc-internal", "-odir", root </> native,
-    "-hidir", root </> native, source, "-o", root </> binary]
+    "-hidir", root </> native, source, "-o", root </> binary])
   observed <- execute "native-oracle" [] (root </> binary) []
   let parsed = case lines (BS.unpack (commandStdout observed)) of
         [observations] -> readMaybe observations :: Maybe [Bool]
@@ -58,16 +60,16 @@ prepareNativeAddress root = do
   let mallocDirectory = "build/native-malloc"
       mallocNative = mallocDirectory </> "native"
       mallocSource = "compiler/test-fixtures/NativeMallocNative.hs"
-      mallocBinary = mallocNative </> "oracle"
-      mallocOracle = mallocDirectory </> "oracle.txt"
+      mallocBinary = mallocNative </> ("oracle" ++ if os == "mingw32" then ".exe" else "")
+      mallocOracle = "build/native-malloc/oracle.txt"
       mallocManifest = mallocDirectory </> "manifest.json"
       mallocExecute = runLogged 120 root (mallocDirectory </> "logs")
   createDirectoryIfMissing True (root </> mallocNative)
   mallocPresent <- doesFileExist (root </> mallocManifest)
   when mallocPresent (removeFile (root </> mallocManifest))
-  _ <- mallocExecute "native-build" [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-Wall", "-Werror",
+  _ <- mallocExecute "native-build" [] ghc (linking ++ ["--make", "-O2", "-fforce-recomp", "-Wall", "-Werror",
     "-dcore-lint", "-dstg-lint", "-odir", root </> mallocNative,
-    "-hidir", root </> mallocNative, mallocSource, "-o", root </> mallocBinary]
+    "-hidir", root </> mallocNative, mallocSource, "-o", root </> mallocBinary])
   mallocObserved <- mallocExecute "native-oracle" [] (root </> mallocBinary) []
   unless (commandStdout mallocObserved == "0 0 0 0\n1 1 257 1\n2 2 514 2\n197 197 50629 197\n" &&
     BS.null (commandStderr mallocObserved)) (die "Native malloc/free alias oracle mismatch")

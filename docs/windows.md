@@ -366,6 +366,38 @@ exporter parity.
 
 ## Current boundaries
 
+Native allocation uses a small Windows DLL compiled by the selected native
+Clang. Its `malloc` and `free` bind to one CRT, and it copies C `errno` into a
+call-local output before returning to the JVM. The producer runs a real native
+probe for pointer/size_t (64-bit), int/long (32-bit), CRT module identity, and
+allocation failure; the runtime checks the packaged DLL hash and exported ABI.
+This does not use `GetLastError` for C allocation failures. The existing context
+ownership, ordered borrows, bounds, allocate/copy/retire realloc and disposal
+rules are shared with Linux; LocalFree allocations keep their own deallocator.
+
+Run `./scripts/windows.ps1 -Action MallocTest -Jobs 2` to build the pinned native
+GHC oracle and distribution and run the allocation/returned-pointer/descriptor
+checks in `testDefault` and `testDense` together. The full Windows Test action
+includes this slice too. To acquire only the native oracle, use
+`cabal run thc-fixtures --disable-shared -- native-addresses`.
+Both runtime backends and first-installed-entry checks are exercised by that
+class. Its two termios tests still require the POSIX provider. These allocation
+checks do not establish Windows POSIX stdio or complete installed-library Core.
+
+Address bulk copies retain their complete range, overlap, pointer-cell and
+ordered-borrow checks behind a shared compilation boundary. Expanding these
+storage and cleanup paths exceeded the pinned Windows JIT's native code
+installation limit, including a control using pinned storage without malloc.
+The regression checks require successful first compilation and the first
+installed entry on both backends; compiler limits and assertions stay unchanged.
+
+The generated stdio receipt has a separate Windows descriptor profile. It
+records real CRT errno/seek constants and LLP64 widths for transfers through
+context-owned streams. `_read`/`_write` have 32-bit counts and results; this profile
+does not admit them as the existing POSIX size_t/ssize_t foreign declarations.
+There are no fabricated fcntl, *at or siginfo fields: requests for those POSIX
+capabilities reject explicitly. Native file/Handle IO remains a separate limit.
+
 This is a bounded native Windows gate, not full parity with Linux/macOS or the
 repository's entire fixture/test suite.
 

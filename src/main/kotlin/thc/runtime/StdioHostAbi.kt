@@ -5,16 +5,23 @@ package thc.runtime
 
 /** Actual C errno constants from the build host, not the private service categories. */
 internal class StdioHostAbi private constructor(private val errors: Map<String, Long>, private val seek: Map<String, Long>,
-    private val open: Map<String, Long>, val atFdcwd: Long, val atRemoveDir: Long, val atSymlinkNoFollow: Long, val atEmptyPath: Long, val siginfoBytes: Long) {
-    fun requireOpenAbi() { if (open.getValue("modeBytes") != 4L) fault("Original open requires the Linux Word32 mode_t ABI") }
-    fun openReadable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
+    private val open: Map<String, Long>, private val atFdcwdValue: Long?, private val atRemoveDirValue: Long?,
+    private val atSymlinkNoFollowValue: Long?, private val atEmptyPathValue: Long?, private val siginfoBytesValue: Long?) {
+    private fun posix(value: Long?): Long = value ?: fault("Original POSIX ABI is unavailable on Windows")
+    val atFdcwd get() = posix(atFdcwdValue)
+    val atRemoveDir get() = posix(atRemoveDirValue)
+    val atSymlinkNoFollow get() = posix(atSymlinkNoFollowValue)
+    val atEmptyPath get() = posix(atEmptyPathValue)
+    val siginfoBytes get() = posix(siginfoBytesValue)
+    fun requireOpenAbi() { if (posix(open["modeBytes"]) != 4L) fault("Original open requires the Linux Word32 mode_t ABI") }
+    fun openReadable(flags: Long): Boolean = (flags and posix(open["O_ACCMODE"])).let {
         it == open.getValue("O_RDONLY") || it == open.getValue("O_RDWR") }
-    fun openWritable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
+    fun openWritable(flags: Long): Boolean = (flags and posix(open["O_ACCMODE"])).let {
         it == open.getValue("O_WRONLY") || it == open.getValue("O_RDWR") }
-    fun openAppend(flags: Long): Boolean = flags and open.getValue("O_APPEND") != 0L
+    fun openAppend(flags: Long): Boolean = flags and posix(open["O_APPEND"]) != 0L
     fun flagConstant(operation: OriginalStdioOp): Long {
         if (!operation.flagConstant) fault("Invalid original file flag constant operation")
-        return open.getValue(operation.name)
+        return posix(open[operation.name])
     }
     fun notTerminal(): Long = errors.getValue("ENOTTY")
     fun notSeekable(): Long = errors.getValue("ESPIPE")
@@ -51,6 +58,8 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
 
     companion object {
         private val widths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "bool" to 1L, "size" to 8L, "ssize" to 8L)
+        private val windowsWidths = mapOf("charBits" to 8L, "pointer" to 8L, "int" to 4L, "long" to 4L,
+            "bool" to 1L, "size" to 8L, "crtReadResult" to 4L, "crtReadCount" to 4L)
         private val errorNames = setOf("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE")
         private val seekNames = setOf("SEEK_SET", "SEEK_CUR", "SEEK_END")
         private val openNames = setOf("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND",
@@ -66,15 +75,20 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
                 if (!condition) throw RuntimeFault("Invalid original stdio host ABI: $detail")
             }
             val manifest = value as? Map<*, *> ?: throw RuntimeFault("Missing original stdio host ABI")
-            requireAbi(exactInteger(manifest["schema"]) == 1L, "schema")
+            val windows = system == "Windows"
+            requireAbi(exactInteger(manifest["schema"]) == (if (windows) 2L else 1L), "schema")
             val hostArch = architecture(arch)
-            requireAbi(system in setOf("Linux", "Darwin") && hostArch in setOf("x86_64", "aarch64"), "unsupported runtime platform")
+            requireAbi(system in setOf("Linux", "Darwin", "Windows") &&
+                hostArch in (if (windows) setOf("x86_64") else setOf("x86_64", "aarch64")), "unsupported runtime platform")
             requireAbi(manifest["system"] == system && (manifest["architecture"] as? String)?.let(::architecture) == hostArch, "platform mismatch")
             val target = (manifest["target"] as? String)?.split('-') ?: emptyList()
             requireAbi(target.size >= 3 && architecture(target[0]) == hostArch &&
-                (if (system == "Linux") target.drop(2) == listOf("linux", "gnu") else target[2].startsWith("darwin")), "compiler target")
+                (if (system == "Linux") target.drop(2) == listOf("linux", "gnu")
+                 else if (windows) target.drop(2) == listOf("windows", "gnu") else target[2].startsWith("darwin")), "compiler target")
             val sizes = manifest["widths"] as? Map<*, *>
-            requireAbi(sizes != null && sizes.keys == widths.keys && widths.all { (key, size) -> exactInteger(sizes[key]) == size }, "LP64 widths")
+            val expectedWidths = if (windows) windowsWidths else widths
+            requireAbi(sizes != null && sizes.keys == expectedWidths.keys &&
+                expectedWidths.all { (key, size) -> exactInteger(sizes[key]) == size }, "native C widths")
             val rawErrors = manifest["errno"] as? Map<*, *>
             requireAbi(rawErrors != null && rawErrors.keys == errorNames, "errno fields")
             val errors = errorNames.associateWith { name ->
@@ -90,6 +104,16 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
                 number!!
             }
             requireAbi(seek.values.toSet().size == seekNames.size, "distinct seek constants")
+            if (windows) {
+                // This receipt supplies constants for context-owned descriptor
+                // transfers. It does not authorize POSIX FCalls or equate CRT
+                // _read/_write's CInt/CUInt signature with ssize_t/size_t.
+                requireAbi(manifest["profile"] == "windows-managed-descriptors" &&
+                    manifest.keys == setOf("schema", "profile", "system", "architecture", "target",
+                        "compilerDefaultTarget", "compilerVersion", "sourceSha256", "widths", "errno", "seek"),
+                    "Windows descriptor profile without POSIX fields")
+                return StdioHostAbi(errors, seek, emptyMap(), null, null, null, null, null)
+            }
             val rawOpen = manifest["open"] as? Map<*, *>
             requireAbi(rawOpen != null && rawOpen.keys == openNames, "open fields")
             val open = openNames.associateWith { name ->
@@ -122,7 +146,8 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
             val document = StdioHostAbi::class.java.getResourceAsStream("/thc/native/stdio-host-abi.json")?.use {
                 thc.Json.parse(it.reader().readText())
             } ?: throw RuntimeFault("Missing generated original stdio host ABI")
-            val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else it }
+            val system = System.getProperty("os.name").let {
+                if (it.startsWith("Mac")) "Darwin" else if (it.startsWith("Windows")) "Windows" else it }
             return parse(document, system, System.getProperty("os.arch"))
         }
     }

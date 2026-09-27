@@ -19,9 +19,11 @@ import Foreign.Marshal.Alloc (mallocBytes, free)
 import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (nullPtr)
 import Foreign.Storable (peekByteOff, pokeByteOff)
+import System.IO (hSetBinaryMode, stdout)
 
 main :: IO ()
 main = do
+  hSetBinaryMode stdout True
   free nullPtr
   forM_ ([0, 1, 2, 197] :: [Word64]) $ \seed ->
     bracket (mallocBytes 24) free $ \base ->

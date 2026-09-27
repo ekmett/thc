@@ -53,6 +53,9 @@ jobs:
             build/windows-directory/*.json
             build/windows-directory/logs/
             build/generated/windows-directory-abi/
+            build/generated/stdio-abi/
+            build/native-addresses/
+            build/native-malloc/
             build/test-results/testDefault/
             build/test-results/testDense/
             build/managed-md5-native*/

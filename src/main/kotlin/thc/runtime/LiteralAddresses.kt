@@ -747,6 +747,10 @@ internal class ManagedAddress private constructor(
         }
     }
 
+    // Keep the complete ordered-borrow and FFM/Sulong bulk transfer outside
+    // partial evaluation. Expanding all storage/cleanup paths can exceed the
+    // native code installation limit even for a pinned-to-pinned copy.
+    @TruffleBoundary
     private fun copyTo(destination: ManagedAddress, count: Long, allowOverlap: Boolean) = withNativeBorrows(destination) copy@ {
         requireRange(0, count)
         destination.requireRange(0, count, writable = true)

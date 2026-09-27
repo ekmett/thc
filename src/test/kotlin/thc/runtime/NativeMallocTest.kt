@@ -97,7 +97,7 @@ class NativeMallocTest {
         assertEquals(0, handoff.arguments.retainedReferences()); assertEquals(0, handoff.results.retainedReferences())
     }
 
-    private fun supported() = assumeTrue(System.getProperty("os.name") == "Linux" &&
+    private fun supported() = assumeTrue((System.getProperty("os.name") == "Linux" || WindowsDirectoryStreams.supportedHost()) &&
         System.getProperty("os.arch") in setOf("amd64", "x86_64"))
     private fun <T> inside(body: (Language) -> T): T {
         supported()
@@ -209,7 +209,11 @@ class NativeMallocTest {
                 assertEquals(0, registry.liveCount())
             }
             repeat(3) { exercise(it.toLong()) }
-            targets.values.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
+            targets.forEach { (name, target) ->
+                assertDoesNotThrow({ target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true) },
+                    "First compilation of $backend/$name")
+                valid(target)
+            }
             compiled = true
             exercise(197)
             assertEquals(23L, call("free", ManagedAddress.nullAddress(), Unit))
@@ -217,6 +221,33 @@ class NativeMallocTest {
             assertThrows(RuntimeFault::class.java) { Calls.target(targets.getValue("malloc"), arrayOf(0L, 8L, 7L)) }
             assertEquals(0, registry.liveCount())
         }
+    }
+
+    @Test fun pinnedStorageCopyInstallsOnFirstAstCompilation() = pinnedStorageCopy("ast")
+    @Test fun pinnedStorageCopyInstallsOnFirstBytecodeCompilation() = pinnedStorageCopy("bytecode")
+
+    /** Exercise the existing bulk-copy path without malloc declarations, the
+     * native allocation registry, or the platform allocator DLL. */
+    private fun pinnedStorageCopy(backend: String) = inside { language ->
+        val program = load(language, backend, module(emptyList()))
+        val target = program.entryTarget("copy")
+        val source = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, pinned = true))
+        val destination = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, pinned = true))
+        fun exercise(seed: Long, compiled: Boolean) {
+            for (offset in 0L until 24L) source.writeWord8(offset, seed + offset)
+            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            assertEquals(23L, Calls.target(target, arrayOf(0L, source, destination, 24L, Unit)))
+            assertEquals(before + if (compiled) 1 else 0,
+                (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+            assertEquals((0L until 24L).map { (seed + it) and 255 }, (0L until 24L).map(destination::readWord8))
+            if (compiled) valid(target)
+            released(language)
+        }
+        exercise(17, false)
+        assertDoesNotThrow({ target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true) },
+            "First compilation of $backend/copy with pinned storage")
+        valid(target)
+        exercise(197, true)
     }
 
     @Test fun nativeWritesAndAllAliasesShareLiveStorageWithCheckedOwnership() = inside { _ ->
@@ -270,6 +301,38 @@ class NativeMallocTest {
         assertSame(ManagedAddress.nullAddress(), registry.malloc(Long.MAX_VALUE))
         assertTrue(Language.currentState().stdio.errno() > 0, "Actual libc allocation failure must preserve errno")
         assertEquals(0, registry.liveCount())
+    }
+
+    @Test fun windowsCrtErrnoIsCapturedOnTheCallingThreadWithoutChangingLastError() {
+        assumeTrue(WindowsDirectoryStreams.supportedHost())
+        inside { _ ->
+            val state = Language.currentState()
+            state.stdio.setErrno(73)
+            state.windowsCodePages.lastError.set(0x12345678L)
+            val allocation = state.nativeAllocations.malloc(16)
+            state.nativeAllocations.free(allocation)
+            assertEquals(73L, state.stdio.errno(), "Successful allocation preserves sticky errno")
+            assertSame(ManagedAddress.nullAddress(), state.nativeAllocations.malloc(Long.MAX_VALUE))
+            assertEquals(WindowsCodePages.Abi.errno.getValue("ENOMEM"), state.stdio.errno())
+            assertEquals(0x12345678L, state.windowsCodePages.lastError.get())
+            // The second guest carrier has its own errno slot, even though the
+            // process-wide bridge pairs allocations with the same native CRT.
+            val executor = Executors.newSingleThreadExecutor()
+            try {
+                executor.submit {
+                    inside { _ ->
+                        val other = Language.currentState()
+                        assertEquals(0L, other.stdio.errno())
+                        other.stdio.setErrno(91)
+                        val owned = other.nativeAllocations.malloc(32)
+                        other.nativeAllocations.free(owned)
+                        assertEquals(91L, other.stdio.errno())
+                    }
+                }.get(10, TimeUnit.SECONDS)
+            } finally { executor.shutdownNow() }
+            assertEquals(WindowsCodePages.Abi.errno.getValue("ENOMEM"), state.stdio.errno())
+            assertEquals(0, state.nativeAllocations.liveCount())
+        }
     }
 
     @Test fun freeWaitsForBorrowAndDisposalInvalidatesSavedAliases() {
@@ -470,15 +533,17 @@ class NativeMallocTest {
                 val program = load(language, backend, module(emptyList()))
                 val target = program.entryTarget("loadByte")
                 val alias = base.plus(8)
-                alias.writeWord8(0, 128)
-                assertEquals(128L, Calls.target(target, arrayOf(0L, alias, 0L)))
+                // Word8Rep retains an Int computational carrier after lowering.
+                // Assert that exact carrier, not a widened Number conversion.
+                alias.writeWord8Int(0, 128)
+                assertEquals(128, Calls.target(target, arrayOf(0L, alias, 0L)))
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                 valid(target)
                 val runtime = Truffle.getRuntime()
                 runtime.javaClass.getMethod("bypassedInstalledCode",
                     Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
-                for (value in listOf(255L, 0L, 129L)) {
-                    base.writeWord8(8, value)
+                for (value in listOf(255, 0, 129)) {
+                    base.writeWord8Int(8, value)
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     assertEquals(value, Calls.target(target, arrayOf(0L, alias, 0L)))
                     assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
@@ -490,6 +555,7 @@ class NativeMallocTest {
     }
 
     @Test fun termiosTransferCopiesBackWholeImagesOnSuccessAndNativeError(): Unit = inside { _ ->
+        assumeTrue(System.getProperty("os.name") == "Linux", "termios requires the native POSIX provider")
         val registry = Language.currentState().nativeAllocations
         val size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0).toInt()
         val base = registry.malloc(size.toLong() + 16)
@@ -520,6 +586,7 @@ class NativeMallocTest {
 
     @Test fun tcgetattrTransferHoldsNativeOwnerUntilErrorOrSuccessCopybackCompletes() {
         supported()
+        assumeTrue(System.getProperty("os.name") == "Linux", "termios requires the native POSIX provider")
         context(false).use { context ->
             val executor = Executors.newSingleThreadExecutor()
             context.initialize("thc"); context.enter()

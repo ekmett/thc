@@ -6,7 +6,8 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.nodes.Node
 
-/** Original LP64 read/write/close/isatty/get_errno protocol over context descriptors, never host fds.
+/** Original stdio protocol over context descriptors, never host fds. The Windows
+ * descriptor receipt supplies CRT constants without admitting POSIX FCalls.
  * The current guest model runs each synchronous call on one host thread. This
  * error slot must migrate with guest-thread state before resumable scheduling. */
 internal class ManagedStdio(private val files: ManagedFiles) {
@@ -16,7 +17,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
     /** Native adapters capture errno in C immediately, before any other call.
      * Zero means success and must preserve the guest's sticky error slot. */
     internal fun nativeError(error: Long) {
-        hostAbi
+        if (WindowsDirectoryStreams.supportedHost()) WindowsCodePages.Abi.requireLayout() else hostAbi
         if (error < 0 || error > Int.MAX_VALUE) fault("Invalid native errno")
         if (error != 0L) lastError.set(error)
     }
