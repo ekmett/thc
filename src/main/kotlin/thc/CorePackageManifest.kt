@@ -39,7 +39,7 @@ object CorePackageManifest {
     }
 
     private fun bundleLayout(id: String, modules: List<*>, centralNames: List<String>, entryNames: List<String>,
-                             indexBytes: ByteArray, inputBytes: ByteArray?): TargetLayout? {
+                             indexBytes: ByteArray, inputBytes: ByteArray?, verifyArtifacts: Boolean): TargetLayout? {
         val index = Json.parse(indexBytes.toString(Charsets.UTF_8)) as? Map<*, *>
             ?: error("Invalid ZIP manifest in $id")
         require(index["format"] == "thc-core-bundle" && index["schema"] == 1L && index["unit"] == id &&
@@ -57,7 +57,7 @@ object CorePackageManifest {
             }
             val supplied = inputBytes ?: error("Missing build inputs in ZIP bundle for $id")
             inputRecord = Json.parse(supplied.toString(Charsets.UTF_8)) as? Map<*, *>
-            require(digest(supplied) == reference["sha256"] && inputRecord?.get("format") == "thc-core-build-inputs" &&
+            require((!verifyArtifacts || digest(supplied) == reference["sha256"]) && inputRecord?.get("format") == "thc-core-build-inputs" &&
                 inputRecord["schema"] == 1L && inputRecord["unit"] == id &&
                 inputRecord["buildKey"] == index["buildKey"] && inputRecord["exportKey"] == index["exportKey"]) {
                 "Invalid build inputs record in ZIP bundle for $id"
@@ -92,7 +92,7 @@ object CorePackageManifest {
         return Files.readAllBytes(file)
     }
 
-    private fun verifiedBundle(id: String, record: Map<String, Any?>): VerifiedBundle {
+    private fun verifiedBundle(id: String, record: Map<String, Any?>, verifyArtifacts: Boolean): VerifiedBundle {
         val location = record["path"] as? String ?: error("Missing ZIP bundle path for $id")
         val expected = record["sha256"] as? String ?: error("Missing ZIP bundle SHA-256 for $id")
         require(record.keys == setOf("path", "sha256") && expected.matches(sha256)) {
@@ -101,10 +101,10 @@ object CorePackageManifest {
         val path = Path.of(location)
         require(path.isAbsolute) { "ZIP bundle path must be absolute for $id: $location" }
         val file = path.toRealPath()
-        // Verify and unzip the same bytes. No race with a concurrent cache rewrite
-        // can substitute documents after the archive hash has been checked.
+        // Pin bytes for this load; explicit verification hashes that same snapshot.
+        // Normal loading does not scan it separately to authenticate the archive.
         val bytes = Files.readAllBytes(file)
-        require(digest(bytes) == expected) { "Core ZIP bundle hash mismatch: $id at $location" }
+        if (verifyArtifacts) require(digest(bytes) == expected) { "Core ZIP bundle hash mismatch: $id at $location" }
         val centralNames = try {
             ZipFile(file.toFile()).use { archive -> archive.entries().asSequence().map { it.name }.toList() }
         } catch (failure: IOException) {
@@ -113,7 +113,7 @@ object CorePackageManifest {
         return VerifiedBundle(bytes, centralNames)
     }
 
-    private fun bundle(id: String, verified: VerifiedBundle, modules: List<*>): BundleContents {
+    private fun bundle(id: String, verified: VerifiedBundle, modules: List<*>, verifyArtifacts: Boolean): BundleContents {
         val entries = linkedMapOf<String, ByteArray>()
         // ZipInputStream validates each member's CRC, but does not inspect the
         // central directory. Check it too so truncated indexes fail closed.
@@ -131,10 +131,10 @@ object CorePackageManifest {
             throw IllegalArgumentException("Invalid ZIP bundle for $id", failure)
         }
         return BundleContents(entries, bundleLayout(id, modules, verified.centralNames, entries.keys.toList(),
-            entries.getValue("manifest.json"), entries["inplace-manifest.json"]))
+            entries.getValue("manifest.json"), entries["inplace-manifest.json"], verifyArtifacts))
     }
 
-    private fun orderedBundle(id: String, verified: VerifiedBundle, modules: List<*>,
+    private fun orderedBundle(id: String, verified: VerifiedBundle, modules: List<*>, verifyArtifacts: Boolean,
                               accept: (Any?, ByteArray, ByteArray?) -> Unit): OrderedVisit? {
         val paths = inventory(id, modules)
         val withoutInputs = listOf("manifest.json") + paths
@@ -157,7 +157,7 @@ object CorePackageManifest {
                 }
                 val index = member("manifest.json")
                 val inputs = if (hasInputs) member("inplace-manifest.json") else null
-                val layout = bundleLayout(id, modules, verified.centralNames, verified.centralNames, index, inputs)
+                val layout = bundleLayout(id, modules, verified.centralNames, verified.centralNames, index, inputs, verifyArtifacts)
                 modules.forEach { item ->
                     val module = item as Map<*, *>
                     val bytes = member(module["path"] as String)
@@ -176,10 +176,11 @@ object CorePackageManifest {
                                     val manifestPath: String, val foreignExceptionBridgeUnit: String?)
 
     /** Read only the package directory when an index is declared, or when a
-     * mixed indexed-consumer request requires a descriptor. Module JSON, ZIP
-     * members and sidecars are authenticated at replay before admission.
+     * mixed indexed-consumer request requires a descriptor. Artifact hashes and
+     * source/index agreement are checked at replay only with explicit verification.
      */
-    internal fun indexedRequestIdentity(manifestPath: String, forceDescriptor: Boolean = false): VisitResult? {
+    internal fun indexedRequestIdentity(manifestPath: String, forceDescriptor: Boolean = false,
+                                       verifyArtifacts: Boolean = false): VisitResult? {
         val path = Path.of(manifestPath).toRealPath()
         val bytes = Files.readAllBytes(path)
         val document = Json.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *>
@@ -192,27 +193,27 @@ object CorePackageManifest {
         if (!indexed && !forceDescriptor) return null
         val bridge = document["foreignExceptionBridgeUnit"]
         require(bridge == null || bridge is String && bridge.isNotBlank()) { "Invalid foreign exception bridge unit" }
-        return VisitResult(null, digest(bytes), path.toString(), bridge as String?)
+        return VisitResult(null, if (verifyArtifacts) digest(bytes) else "", path.toString(), bridge as String?)
     }
 
-    internal fun visitModules(manifestPath: String, expectedSha256: String? = null,
+    internal fun visitModules(manifestPath: String, expectedSha256: String? = null, verifyArtifacts: Boolean = true,
                               accept: (Map<String, Any?>, String) -> Unit): VisitResult =
-        visitModules(manifestPath, expectedSha256, true, true, { _, _ -> }, accept)
+        visitModules(manifestPath, expectedSha256, true, true, verifyArtifacts, { _, _ -> }, accept)
 
     internal fun visitRuntimeModules(manifestPath: String, expectedSha256: String,
-        sourceNotesEnabled: Boolean, indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
+        sourceNotesEnabled: Boolean, verifyArtifacts: Boolean, indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
         accept: (Map<String, Any?>) -> Unit): VisitResult =
-        visitModules(manifestPath, expectedSha256, sourceNotesEnabled, false, indexed) { module, _ -> accept(module) }
+        visitModules(manifestPath, expectedSha256, sourceNotesEnabled, false, verifyArtifacts, indexed) { module, _ -> accept(module) }
 
     @Suppress("UNCHECKED_CAST")
     private fun visitModules(manifestPath: String, expectedSha256: String?, sourceNotesEnabled: Boolean,
-                              materializeText: Boolean, indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
+                              materializeText: Boolean, verifyArtifacts: Boolean, indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit,
                               accept: (Map<String, Any?>, String) -> Unit): VisitResult {
         val manifest = Path.of(manifestPath).toRealPath()
         val root = manifest.parent
         val manifestBytes = Files.readAllBytes(manifest)
-        val manifestSha256 = digest(manifestBytes)
-        require(expectedSha256 == null || expectedSha256.matches(sha256) && expectedSha256 == manifestSha256) {
+        val manifestSha256 = if (verifyArtifacts) digest(manifestBytes) else ""
+        require(!verifyArtifacts || expectedSha256 == null || expectedSha256.matches(sha256) && expectedSha256 == manifestSha256) {
             "Core package manifest changed after request: $manifest"
         }
         val document = Json.parse(manifestBytes.toString(Charsets.UTF_8)) as? Map<String, Any?>
@@ -254,16 +255,15 @@ object CorePackageManifest {
                     if (bundled) require(safeRelative(relative)) { "Invalid ZIP module path: $relative" }
                     val expected = module["sha256"] as? String ?: error("Missing SHA-256 for $id:$name")
                     require(expected.matches(sha256)) { "Invalid SHA-256 for $id:$name" }
-                    // Hash and embed the same bytes: a concurrent rewrite cannot
-                    // substitute an unchecked module between validation and load.
-                    val actual = digest(bytes)
-                    require(actual == expected) { "Core package artifact hash mismatch: $id:$name at $relative" }
+                    // Admission owns these bytes. When verification is requested,
+                    // hash this snapshot, not a second read of a mutable pathname.
+                    if (verifyArtifacts) require(digest(bytes) == expected) { "Core package artifact hash mismatch: $id:$name at $relative" }
                     val reference = moduleIndex(id, module)
                     val sourceIndex = reference?.let {
-                        require(indexBytes != null && digest(indexBytes) == it["sha256"]) {
+                        require(indexBytes != null && (!verifyArtifacts || digest(indexBytes) == it["sha256"])) {
                             "Core JSON index hash mismatch: $id:$name at ${it["path"]}"
                         }
-                        indexBytes.inputStream().use { stream -> CoreJsonIndex.loadSidecar(bytes, stream) }.also(opened::add)
+                        indexBytes.inputStream().use { stream -> CoreJsonIndex.loadSidecar(bytes, stream, verifyArtifacts) }.also(opened::add)
                     }
                     val text = if (sourceIndex == null || materializeText) bytes.toString(Charsets.UTF_8) else ""
                     val source = if (sourceIndex != null && !materializeText) adapter.module(sourceIndex.root)
@@ -288,10 +288,10 @@ object CorePackageManifest {
                 }
                 val unitLayout = if (unit.containsKey("bundle")) {
                     val record = unit["bundle"] as? Map<String, Any?> ?: error("Invalid ZIP bundle for $id")
-                    val verified = verifiedBundle(id, record)
-                    val ordered = orderedBundle(id, verified, modules) { item, bytes, sidecar -> consume(item, bytes, sidecar, true) }
+                    val verified = verifiedBundle(id, record, verifyArtifacts)
+                    val ordered = orderedBundle(id, verified, modules, verifyArtifacts) { item, bytes, sidecar -> consume(item, bytes, sidecar, true) }
                     if (ordered != null) ordered.targetLayout else {
-                        val fallback = bundle(id, verified, modules)
+                        val fallback = bundle(id, verified, modules, verifyArtifacts)
                         for (item in modules) {
                             val relative = (item as? Map<*, *>)?.get("path") as? String
                                 ?: error("Missing module path in $id")

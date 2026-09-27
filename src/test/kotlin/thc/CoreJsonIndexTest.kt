@@ -277,7 +277,7 @@ class CoreJsonIndexTest {
         for (text in listOf("0", "  \"λ😀\" ", "[]", "{}", "{\"x\":[1,{\"y\":true}],\"z\":null}")) {
             val source = text.toByteArray(Charsets.UTF_8)
             val binary = sidecar(text)
-            CoreJsonIndex.loadSidecar(source, ByteArrayInputStream(binary)).use { loaded ->
+            CoreJsonIndex.loadSidecar(source, ByteArrayInputStream(binary), verifyArtifacts = true).use { loaded ->
                 val initial = loaded.statistics()
                 assertEquals(binary.size.toLong(), initial.serializedByteSize)
                 assertEquals(source.size.toLong(), initial.structuralBytesScanned)
@@ -293,6 +293,46 @@ class CoreJsonIndexTest {
                 assertEquals(source.size.toLong(), loaded.statistics().sourceHashBytesScanned)
                 assertEquals(Json.parse(text), loaded.validateDocument())
             }
+        }
+    }
+
+    @Test fun normalSidecarLoadDoesNotHashOrRegenerateUntouchedSource() {
+        val text = "{\"answer\":7,\"unused\":[\"" + "x".repeat(262144) + "\"]}"
+        val binary = sidecar(text)
+        CoreJsonIndex.loadSidecar(text.toByteArray(), ByteArrayInputStream(binary)).use { loaded ->
+            val before = loaded.statistics()
+            assertEquals(0L, before.sourceHashBytesScanned)
+            assertEquals(0L, before.indexSourceBytesScanned)
+            assertEquals(0L, before.structuralBytesScanned)
+            assertEquals(0L, before.regeneratedSourceBytes)
+            assertEquals(0L, before.decodedSpanCount)
+            assertEquals(7L, loaded.root.member("answer")!!.decode())
+            val after = loaded.statistics()
+            assertEquals(0L, after.sourceHashBytesScanned)
+            assertEquals(0L, after.indexSourceBytesScanned)
+            assertEquals(0L, after.structuralBytesScanned)
+            assertTrue(after.regeneratedSourceBytes < 8192, "only demanded navigation blocks are regenerated")
+            assertEquals(1L, after.decodedSpanCount)
+            assertEquals(1L, after.decodedByteCount)
+        }
+    }
+
+    @Test fun wholeFileIdentityChecksAreExplicitWhileLocalBoundsRemainMandatory() {
+        val binary = sidecar("[1]")
+        CoreJsonIndex.loadSidecar("[2]".toByteArray(), ByteArrayInputStream(binary)).use { source ->
+            assertEquals(2L, source.root.elements().single().decode())
+            assertEquals(0L, source.statistics().sourceHashBytesScanned)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreJsonIndex.loadSidecar("[2]".toByteArray(), ByteArrayInputStream(binary), verifyArtifacts = true)
+        }
+        // The ordinary path still consumes the exact envelope and rejects an
+        // extent that cannot describe this snapshot, before using its offsets.
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreJsonIndex.loadSidecar("[20]".toByteArray(), ByteArrayInputStream(binary))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreJsonIndex.loadSidecar("[1]".toByteArray(), ByteArrayInputStream(binary.copyOf(binary.size - 1)))
         }
     }
 
@@ -334,7 +374,7 @@ class CoreJsonIndexTest {
                 val corrupt = binary.copyOf()
                 corrupt[corrupt.lastIndex] = (corrupt.last().toInt() xor 1).toByte()
                 val integrity = assertThrows(IllegalArgumentException::class.java) {
-                    CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(corrupt)).close()
+                    CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(corrupt), verifyArtifacts = true).close()
                 }
                 assertEquals("JSON index integrity mismatch", integrity.message,
                     "empty input must not bypass sidecar verification")
@@ -344,7 +384,9 @@ class CoreJsonIndexTest {
                 val initial = source.statistics()
                 assertEquals(0L, initial.decodedSpanCount, name)
                 assertEquals(binary.size.toLong(), initial.serializedByteSize, name)
-                assertEquals(bytes.size.toLong(), initial.indexSourceBytesScanned, name)
+                assertEquals(0L, initial.indexSourceBytesScanned, name)
+                assertEquals(0L, initial.sourceHashBytesScanned, name)
+                assertEquals(0L, initial.structuralBytesScanned, name)
                 val expected = Json.parse(bytes.toString(Charsets.UTF_8))
                 verify(source.root, expected, name)
                 assertEquals(expected, source.validateDocument(), name)
@@ -354,7 +396,9 @@ class CoreJsonIndexTest {
 
     @Test fun matchingSelfHashesDoNotAuthorizeWrongTopologyOrCounts() {
         fun rejected(text: String, binary: ByteArray = sidecar(text)) {
-            assertThrows(Exception::class.java) { CoreJsonIndex.loadSidecar(text.toByteArray(), ByteArrayInputStream(binary)).close() }
+            assertThrows(Exception::class.java) {
+                CoreJsonIndex.loadSidecar(text.toByteArray(), ByteArrayInputStream(binary), verifyArtifacts = true).close()
+            }
         }
         for (text in listOf("[}", "{]", "[] []", "[1,]", "[true{}]", "[\"unterminated]", "{\"x\":1]")) rejected(text)
         val text = "[[1],2,{}]"
@@ -374,7 +418,9 @@ class CoreJsonIndexTest {
         val bytes = text.toByteArray()
         val original = sidecar(text)
         fun rejected(binary: ByteArray) {
-            assertThrows(Exception::class.java) { CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(binary)).close() }
+            assertThrows(Exception::class.java) {
+                CoreJsonIndex.loadSidecar(bytes, ByteArrayInputStream(binary), verifyArtifacts = true).close()
+            }
         }
         for (length in original.indices) rejected(original.copyOf(length))
         rejected(original + 0)

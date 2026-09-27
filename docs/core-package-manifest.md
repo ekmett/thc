@@ -40,11 +40,13 @@ closure, using GHC unit IDs and dependencies from Cabal's plan. Its format is:
 
 Paths are relative to the manifest and cannot escape its directory. Installed
 or native-only dependency units may have no Core modules, but a reachable guest
-global must still have an exported definition. Both the static auditor and JVM
-loader check module hashes, units, module names, boundaries and binding owners;
-they reject missing reachable globals. The auditor accepts
+global must still have an exported definition. The JVM loader checks units,
+module names, boundaries and binding owners, and rejects missing reachable
+globals. File-hash verification is opt-in. The separate auditor accepts
 `--package-manifest packages.json`. The JVM command-line module argument accepts
-`@packages.json`, including with `--run-io`.
+`@packages.json`, including with `--run-io`. Add `--verify-artifacts` before the
+guest `--` separator to check artifact hashes and complete source/index agreement.
+The JVM `loadEntry` and `loadManagedExports` APIs expose `verifyArtifacts = false`.
 
 `scripts/test-core-package-link.py` builds an independently registered library
 and importer with GHC 9.14.1, compares native output with compiled AST and
@@ -77,16 +79,17 @@ For a ZIP bundle, they name members of that bundle. JSON and index member paths
 must be distinct, and the inner `manifest.json` must contain the same module
 records as the outer package manifest. The ZIP inventory includes every declared
 JSON and index, plus its required manifests; missing, duplicate and undeclared
-members are rejected. The loader checks both artifact hashes and verifies the
-sidecar's source identity, layout, integrity and navigation metadata against the
-JSON. A stale or invalid declared sidecar fails loading rather than silently
-falling back to the unindexed path.
+members are rejected. Normal loading trusts the supplied files and sidecars,
+checking their framing, extents and accessed value/ABI shapes without hashing or
+rescanning the complete source. Explicit verification additionally checks artifact
+and sidecar hashes, source identity, grammar and navigation metadata. Errors do
+not silently fall back to the unindexed path.
 
-Indexed loading retains an owned immutable JSON snapshot. Authentication and
-structural validation still scan source bytes, binding headers are indexed,
-and strict dependency discovery still visits reachable expressions. Foreign
-admission may inspect additional fields. This work is not eliminated by leaving
-unused function bodies unprepared.
+Indexed loading still reads and retains an owned immutable JSON snapshot, builds
+navigation over the complete topology, reads ZIP members and enumerates binding
+headers eagerly. Control summaries and strict dependency discovery still visit
+expressions; foreign admission may inspect additional fields. Skipping optional
+verification does not make these remaining stages demand-driven.
 
 For both backends, eligible lifted top-level functions and thunks decode body
 fields and lower executable roots on demand. Entry selection prepares the entry;

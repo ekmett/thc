@@ -63,8 +63,8 @@ See the [bytecode guide](bytecode.md) and
 
 An optional [JSON sidecar](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
 lets either backend project fields from retained JSON bytes and prepare eligible
-top-level functions and thunks on demand. Source authentication, structural
-validation and dependency discovery still do eager work. The selected entry is
+top-level functions and thunks on demand. File verification is opt-in; source
+snapshotting, header indexing and dependency discovery still do eager work. The selected entry is
 prepared when loaded; cold callees need not have executable roots yet. Immutable
 source projections may be shared, but each Context owns its executable program.
 
