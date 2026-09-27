@@ -12,6 +12,12 @@ This avoids the source's host-CPUID/AVX-512 dispatch in Sulong; no algorithm
 is rewritten and no AVX acceleration claim is made. The independent native
 oracle calls the installed original text library with its own build choices.
 
+The same text 2.1.3 ABI is admitted for the source-build unit suffix `inplace`
+and installed hexadecimal suffixes such as `text-2.1.3-e182`. The complete
+original unit is retained in Core and fixture receipts; other releases and
+unrecognized suffix spellings reject. The fixture verifies the selected
+package release and records its actual installed registration identity.
+
 `openbsd-memchr.c` is the unchanged portable implementation from OpenBSD
 `lib/libc/string/memchr.c`, revision 1.8 (2015-08-31), retrieved from
 https://raw.githubusercontent.com/openbsd/src/master/lib/libc/string/memchr.c .

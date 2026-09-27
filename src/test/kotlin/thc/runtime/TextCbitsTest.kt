@@ -116,7 +116,10 @@ class TextCbitsTest {
     @Test fun originalProvenanceAndNativeCorpusRemainExact() {
         val manifest = json("manifest.json")
         assertEquals(520L, manifest["nativeRows"])
-        assertEquals("text-2.1.3-inplace", manifest["unit"])
+        assertTrue(CoreTextForeign.supportedUnit(manifest["unit"]))
+        val recordedUnit = File(directory, "logs/original-registration.stdout").readLines()
+            .single { it.startsWith("id:") }.substringAfter(':').trim()
+        assertEquals(recordedUnit, manifest["unit"], "Preserve the original installed package registration")
         assertEquals(setOf("compiler/test-fixtures/TextCbitsAudit.hs", "compiler/test-fixtures/TextCbitsNative.hs",
             "test/haskell-fixtures/TextCbitsFixtures.hs", "scripts/core_original_foreign.py", "scripts/audit-core.py",
             "scripts/core-capabilities.json", "compiler/pinned-text/2.1.3/cbits/utils.c",
@@ -136,6 +139,8 @@ class TextCbitsTest {
             assertEquals(emptyList<Any>(), audit["issues"])
             assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val calls = foreignApps(module(stage))
+            assertEquals(setOf(recordedUnit), calls.map {
+                (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["unit"] }.toSet())
             assertEquals(setOf("_hs_text_memchr", "_hs_text_measure_off", "_hs_text_reverse"), calls.map {
                 (((it[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as Map<*, *>)["symbol"] }.toSet())
         }
@@ -145,6 +150,27 @@ class TextCbitsTest {
         is List<*> -> (if (value.firstOrNull() == "app" && (value.getOrNull(6) as? Map<*, *>)?.containsKey("foreignCall") == true)
             listOf(value as MutableList<Any?>) else emptyList()) + value.flatMap(::foreignApps)
         else -> emptyList()
+    }
+
+    @Test fun installedTextReleaseIdentityHasABoundedSuffixGrammar() {
+        val accepted = listOf("text-2.1.3-inplace", "text-2.1.3-e182", "text-2.1.3-119b")
+        val rejected = listOf(null, "text-2.1.3", "text-2.1.3-", "text-2.1.2-e182", "text-2.1.4-e182",
+            "text-2.1.3-e182-extra", "text-2.1.3-e182\n", "text-2.1.3-e182 ", "other-text-2.1.3-e182",
+            "text-2.1.3-foreign", "text-2.1.3-e182:forged")
+        accepted.forEach { assertTrue(CoreTextForeign.supportedUnit(it), it) }
+        rejected.forEach { assertFalse(CoreTextForeign.supportedUnit(it), it) }
+        for (unit in accepted + rejected) for (backend in listOf("ast", "bytecode")) context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val source = module("pre")
+                foreignApps(source).forEach { app ->
+                    (((app[6] as Map<*, *>)["foreignCall"] as Map<*, *>)["target"] as MutableMap<String, Any?>)["unit"] = unit
+                }
+                if (unit in accepted) program(language, source, backend)
+                else assertThrows(RuntimeFault::class.java) { program(language, source, backend) }
+            } finally { context.leave() }
+        }
     }
 
     @Test fun exactInstalledIdentityStateAndArrayProofsAreRequired() {

@@ -12,6 +12,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Distribution.InstalledPackageInfo as Package
 import qualified Distribution.ModuleName as ModuleName
+import Distribution.Pretty (prettyShow)
 import FixtureSupport
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist)
 import System.Environment (lookupEnv)
@@ -42,6 +43,9 @@ prepareTextCbits root = do
   original <- case Package.parseInstalledPackageInfo (commandStdout registration) of
     Left errors -> fail (show errors)
     Right (_,package) -> pure package
+  unless (prettyShow (Package.sourcePackageId original) == "text-2.1.3")
+    (fail "Original text cbits require installed text 2.1.3")
+  let installedUnit = prettyShow (Package.installedUnitId original)
   let names = map ModuleName.fromString ["Data.Text.Internal.Measure", "Data.Text.Internal.Reverse"]
       exposed = Package.exposedModules original
       hidden = Package.hiddenModules original
@@ -94,5 +98,5 @@ prepareTextCbits root = do
     "logs/original-registration.stdout","logs/native-oracle.command.json","logs/native-build.command.json",
     "native/text-cbits-oracle"]]
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"nativeRows" .= length cases,
-    "unit" .= ("text-2.1.3-inplace"::String),"inputHashes" .= inputs,"artifactHashes" .= artifacts])
+    "unit" .= installedUnit,"inputHashes" .= inputs,"artifactHashes" .= artifacts])
   putStrLn ("text-cbits: " ++ show (length cases) ++ " original installed text native rows and strict pre/post Core")
