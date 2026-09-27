@@ -39,13 +39,20 @@ internal class AstCapture(val yielded: Any?, val logicalMask: MaskingState) : Co
         else -> null
     }
 
-    @TruffleBoundary fun freeze(sourceRoot: GuestRoot, frame: MaterializedFrame): AstContinuation =
-        AstContinuation(sourceRoot, yielded, logicalMask, frame, steps.toList(), annotations)
+    @TruffleBoundary fun freeze(sourceRoot: GuestRoot, frame: MaterializedFrame,
+                               rootEntrySpill: Boolean = false): AstContinuation =
+        AstContinuation(sourceRoot, (yielded as? AstPendingTail)?.publish() ?: yielded,
+            logicalMask, frame, steps.toList(), annotations, rootEntrySpill, yielded is AstPendingTail)
 
     @TruffleBoundary fun appendRemaining(old: List<AstResumeStep>, first: Int): AstCapture {
         for (i in first until old.size) steps.add(old[i])
         return this
     }
+
+    /** Only an untouched, compiler-certified identity return may forward this
+     * child. Any appended/enclosing cleanup keeps the ordinary caller frame. */
+    fun pendingTail(): AstPendingTail? =
+        (yielded as? AstPendingTail)?.takeIf { steps.size == 1 && steps[0] === it }
 }
 
 /** A consumed prefix is never retained after a second interruption. Scope steps
@@ -66,10 +73,28 @@ internal class AstContinuation(
     private val logicalMask: MaskingState,
     private val frame: MaterializedFrame,
     private val steps: List<AstResumeStep>,
-    private val annotations: StackAnnotationState
+    private val annotations: StackAnnotationState,
+    val rootEntrySpill: Boolean = false,
+    tailSpill: Boolean = false
 ) : SavedGuestContinuation {
     override val identity: Any get() = this
     private val claimed = AtomicBoolean()
+    var tailSpill = tailSpill
+        private set
+
+    /** Called only at a proved tail edge, before its result is published. */
+    fun certifyTailEntry() {
+        check(rootEntrySpill && !claimed.get())
+        tailSpill = true
+    }
+
+    /** Only our unpublished tail cut may discard omitted ancestry; arbitrary
+     * parked continuations do not acquire a new owner from their source root. */
+    fun rebaseTailBloom(liveOwners: Long) {
+        check(tailSpill && !claimed.get())
+        val root = sourceRoot as FunctionRoot
+        frame.setLong(FrameLayout.BLOOM_FILTER, root.entryBloom(liveOwners))
+    }
 
     @TruffleBoundary override fun continueWith(input: Any?): Any? {
         if (!claimed.compareAndSet(false, true)) fault("AST continuation was already resumed")
@@ -81,7 +106,10 @@ internal class AstContinuation(
             SynchronousMasking.set(sourceRoot, logicalMask)
             StackAnnotations.set(sourceRoot, annotations)
             return try { resumeAstSteps(frame, steps, input) }
-            catch (cut: AstCapture) { cut.freeze(sourceRoot, frame) }
+            catch (cut: AstCapture) {
+                if (sourceRoot is FunctionRoot) sourceRoot.finishCapture(cut, frame)
+                else cut.freeze(sourceRoot, frame)
+            }
         } finally {
             stack.depth--
             SynchronousMasking.set(sourceRoot, ambient)
