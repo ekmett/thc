@@ -10,6 +10,12 @@ These declarations alone do not enable complete decoding or remote capture.
 import re
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+WINDOWS_DIRECTORY_OPERATIONS = {
+    'FindFirstFileW': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'AddrRep')),
+    'FindNextFileW': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'IntRep')),
+    'FindClose': ('ccall', 'unsafe', ('AddrRep', None), (None, 'IntRep')),
+    'GetLastError': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
+}
 DIRECTORY_STREAM_OPERATIONS = {
     'ghczuwrapperZC0ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziDirectoryziPosixPathZCopendir':
         ('capi', 'unsafe', ('AddrRep', None), (None, 'AddrRep')),
@@ -105,6 +111,7 @@ TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosi
 
 OPERATIONS = {
     **DIRECTORY_STREAM_OPERATIONS,
+    **WINDOWS_DIRECTORY_OPERATIONS,
     **TEXT_OPERATIONS,
     **BYTESTRING_DECIMAL_OPERATIONS,
     'fps_sort': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None,)),
@@ -351,6 +358,10 @@ def text_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'text-2\.1\.3-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
+def win32_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'Win32-2\.14\.2\.1-(?:inplace|[0-9a-f]+)', unit) is not None
+
+
 def operation(target):
     unit, symbol = target.get('unit'), operation_symbol(target)
     if symbol == 'strlen' and bytestring_unit(unit):
@@ -476,6 +487,8 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(unix_libc_unit(unit) and target['symbol'] == symbol.replace(
                 'unixzm2zi8zi8zi0zminplace', unit.replace('-', 'zm').replace('.', 'zi')),
                 'matching installed unix directory-stream unit and symbol')
+    if symbol in WINDOWS_DIRECTORY_OPERATIONS:
+        require(win32_unit(target.get('unit')), 'pinned original Win32 directory unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
                   'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
@@ -485,6 +498,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
+                 symbol in WINDOWS_DIRECTORY_OPERATIONS and win32_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'rmdir', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS, *DIRECTORY_STREAM_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
