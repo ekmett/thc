@@ -7,7 +7,9 @@ cleanup. It requires both native access and explicit process-creation permission
 File access alone does not grant subprocess authority.
 
 This service is not yet connected to original process-package declaration
-admission. `NativeIO` has not acquired a new default process grant. The remaining
+admission. The dedicated `CoreProcessForeign` validator and `ManagedProcessForeign`
+ABI adapter are present, but interpreter admission/activation hooks remain separate.
+`NativeIO` has not acquired a new default process grant. The remaining
 adapter must preserve the original declarations and use the existing foreign-call
 activation and completion machinery; no capability counts change with this service.
 
@@ -63,6 +65,23 @@ Returned pipe leases can transfer once to the existing managed descriptor
 registry; until transfer, the process service closes them on context disposal.
 No unregistered JVM descriptors pass through to children, including when the
 original `close_fds` option is false.
+
+`ManagedFiles.launchProcess` reserves guest descriptors before launch, pins
+authenticated inherited resources, and adopts returned pipe leases through its
+native provider. Failed publication aborts only that launch and releases adopted
+resources. Numeric original CPids retain the actual native PID: published numbers
+are never reassigned within the context. A reused PID colliding with a retained
+identity rejects and cleans the new child through its own pidfd, not the old
+numeric PID. This conservative policy preserves stale-handle isolation at the
+cost of rejecting a launch if the host eventually reuses a retained PID.
+
+The native creation result carries a checked failure-stage code. Ordinary
+flags-zero missing-command and missing-CWD failures retain the original
+`posix_spawnp` label and errno. With `close_fds`, the original package falls back
+to fork/exec and can instead report `chdir`, `execvp`, or `execvpe`. This transport
+still reports its actual spawn-stage label; it does not fabricate fork diagnostics.
+The ABI adapter allocates context-lifetime failure strings, writes null on success,
+preserves non-pipe output cells, and validates all output cells before launch.
 
 Waiting blocks on a private duplicated pidfd through `NativeEventWait`.
 Safepoint retries only repeat readiness observation. Reaping takes place after

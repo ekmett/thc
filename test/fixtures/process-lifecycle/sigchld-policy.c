@@ -13,7 +13,7 @@
 #include <unistd.h>
 
 int thc_process_spawn(char *const[], char *const[], int, const char *, const int[3], int,
-                      const char *, int[5]);
+                      const char *, int[6]);
 int thc_process_poll(int, int[2]);
 int thc_process_dispose(int);
 
@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
 
     int directory = open(".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     require(directory >= 0, "open directory");
-    int streams[3] = {-2, -2, -2}, result[5];
+    int streams[3] = {-2, -2, -2}, result[6];
     int before = spawns;
     int error = thc_process_spawn(command, environment, directory, NULL, streams, 0, NULL, result);
     close(directory);
@@ -75,11 +75,12 @@ int main(int argc, char **argv) {
         require(error == ENOTSUP, "transport rejects automatic reaping");
         require(spawns == before, "rejection precedes actual libc launch");
         for (int i = 0; i < 5; ++i) require(result[i] == -1, "rejected launch publishes nothing");
+        require(result[5] == 2, "rejected launch identifies SIGCHLD policy stage");
         puts(!strcmp(argv[1], "ignore") ? "ignore baseline=ECHILD transport=ENOTSUP spawns=0" :
              !strcmp(argv[1], "no-cld-wait") ? "no-cld-wait baseline=ECHILD transport=ENOTSUP spawns=0" :
              "handler-no-cld-wait baseline=ECHILD transport=ENOTSUP spawns=0");
     } else {
-        require(error == 0 && spawns == before + 1, "transport launches under default policy");
+        require(error == 0 && result[5] == 0 && spawns == before + 1, "transport launches under default policy");
         struct pollfd ready = {.fd = result[1], .events = POLLIN};
         int polled;
         do { polled = poll(&ready, 1, 5000); } while (polled < 0 && errno == EINTR);

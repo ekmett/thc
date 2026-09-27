@@ -225,6 +225,8 @@ tasks.withType<Test>().configureEach {
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
+            "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
             "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",

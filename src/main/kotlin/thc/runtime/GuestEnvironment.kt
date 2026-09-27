@@ -124,6 +124,19 @@ internal class GuestEnvironment(private val env: TruffleLanguage.Env) {
         // or the context closes. Caller-owned putenv strings are never freed here.
     }
 
+    internal class ProcessSnapshot(val entries: List<ByteArray>, val searchPath: ByteArray?)
+
+    /** One raw-byte snapshot of this context's environment and executable PATH.
+     * An explicit child environment must not replace this parent PATH. */
+    @Synchronized @TruffleBoundary
+    internal fun snapshotForProcess(): ProcessSnapshot {
+        val values = contents().map(::snapshot)
+        val prefix = byteArrayOf(80, 65, 84, 72, 61) // PATH=
+        val path = values.firstOrNull { bytes -> bytes.size >= prefix.size &&
+            prefix.indices.all { bytes[it] == prefix[it] } }?.let { it.copyOfRange(prefix.size, it.size) }
+        return ProcessSnapshot(values, path)
+    }
+
     companion object {
         @JvmStatic fun current(node: Node?): GuestEnvironment = Language.currentState(node).environment
     }
