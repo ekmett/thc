@@ -298,6 +298,52 @@ remain semantic/provenance content, not optional display-name debug data.
 `ForeignExceptionBridge` is `u schema, str unit, str module, str box, str project,
 str payloadType, str exceptionType`; its unit reference remains semantic too.
 
+### Optional debug tables
+
+The following table grammar is agreed for the optional-debug implementation.
+A nonempty debug segment ends with a 16-byte local directory: `u64LE indexStart,
+u64LE rowCount`. Payload bytes precede the fixed-width rows; the rows end exactly
+at that directory. Offsets in a debug table address that same debug segment,
+except for explicitly identified DATA positions and common-string spans. There
+is no auxiliary string-ID table. An absent debug segment has length zero and no
+directory. Reading semantic header or executable records never reads these tables.
+
+The name table has 32-byte rows: `u64LE topBindingDataOffset, u64LE ordinalSlot,
+u64LE nameStart, u64LE nameLength`. Rows are sorted by the unsigned numeric key
+pair, with no duplicate keys. Slot 0 names the top-level binding; local ordinal
+`n` uses slot `n + 1`. Lookup is exact, not predecessor-based. Name payloads are
+raw UTF-8 bytes in this segment, independent of the common-string segment.
+The enclosing binding's immutable DATA offset scopes local ordinals. Original
+names are display data; no loader or linker resolution depends on their presence.
+
+Each source table has 24-byte rows: `u64LE dataStart, u64LE dataEndExclusive,
+u64LE payloadOffset`. Rows are ordered by DATA start and have nonempty,
+nonoverlapping ranges. Lookup finds the predecessor start, then requires the
+requested position to be below its end. A position outside every range has no
+location. A payload starts with one byte: tag 0 is explicitly no source; tag 1
+has the typed location payload below. Producers record entry, no-source and
+restoration transitions; equal adjacent states can coalesce independently in
+the two tables. An inherited source cannot bleed past its actual range.
+
+Filename tag 1 is `list(File)`; `File` is `str originalFileId, str path,
+p(str content)`. These are common UTF-8 spans, read only for an explicit source
+request. Missing/null content keeps location-only source behavior. Line/column
+tag 1 is `u primaryIndex, list(Note)`. `Note` is `text originalSpanId,
+p(text label), u startLine, u startColumn, u endLine, u endColumn,
+p(u charIndex), p(u charLength)`, where `text` means `u UTF8ByteLength` followed
+by that many inline UTF-8 bytes in this source segment. All counts, indices,
+coordinates and optional payload integers here use the canonical ULEB64 and
+`p(T)` grammar above, not fixed-width integers. Coordinates are one-based and
+end-exclusive; character offsets retain the original exporter values.
+
+The filename and coordinate lists have equal count and corresponding order for
+the selected location. They retain ordered, distinct effective source-note
+provenance, including inherited notes; `primaryIndex` selects the debugger
+location and must be within that list. The independently coalesced tables need
+not have matching range boundaries. Readers check selected rows/payloads and
+matching lists locally, without a debug-table prescan. Binder/expression origins
+retain immutable container identity and DATA position through cloning/inlining.
+
 ## Explicit conversion and inspection
 
 Build the native tool with `cabal build exe:thc-compact --offline -fdevelopment`.
@@ -342,6 +388,20 @@ They are not a valid typed Core module. The integer vectors cover canonical
 thresholds and signed/unsigned endpoints. The native Haskell tests also reject
 truncation, overlong integers, overflow, invalid versions/reserved fields and
 inconsistent segment extents. Kotlin consumes the same byte contract independently.
+
+`nested-shared-rep-v1.hex` is a manually specified 62-byte executable-segment
+fragment, not encoder-generated expected output. Its first Rep starts at 0:
+an outer tuple shape definition at 0 contains an inner singleton tuple definition
+at 11, whose IntRep/long leaf definition is at 21. The outer tuple's second
+component is a direct reference to the same inner shape at 11. Outer and inner
+tuple `primReps` are respectively `[IntRep,IntRep]` and `[IntRep]`; all unused
+shape fields are missing, not null. The first occurrence's evaluation tree is
+`false[true[false], false[true]]`. A second Rep at offset 50 references the outer
+shape at 0 and carries `true[false[true], true[false]]`, ending at 62. Every
+evaluation flag is known. This independently fixes both recursive layout sharing
+and distinct evaluatedness at every child occurrence. Native and JVM controls
+decode the manual bytes against those explicit trees; the producer is also
+checked against the same bytes, not against its own round-trip output.
 
 Run the focused native checks with `cabal test compact-core-tests --offline
 -fdevelopment --test-show-details=direct` using the repository's pinned GHC.

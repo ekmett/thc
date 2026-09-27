@@ -513,6 +513,7 @@ library compact-core
     THC.Compact.Inspect
     THC.Compact.Encode
     THC.Compact.Decode
+    THC.Compact.Debug
   build-depends:
     thc:core-json-index,
     aeson >= 2.3 && < 2.4,
@@ -547,7 +548,7 @@ test-suite compact-core-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   hs-source-dirs: test/compact-core
-  other-modules: SemanticTests
+  other-modules: SemanticTests DebugTests
   build-depends:
     thc:compact-core,
     thc:core-json-index,

@@ -27,6 +27,7 @@ import Data.List (sort)
 import qualified Data.Text.Encoding as Text
 import qualified Data.Text as Text
 import Data.Word (Word64)
+import Numeric (readHex)
 import System.FilePath ((</>))
 import System.IO.Temp (withSystemTempDirectory)
 import Test.HUnit hiding (Label)
@@ -43,7 +44,28 @@ import THC.Compact.Writer
 
 semanticTests :: Test
 semanticTests = TestList
-  [ TestLabel "all literal kinds retain exact semantic payloads" $ TestCase $
+  [ TestLabel "independent nested shared-shape wire golden" $ TestCase $ do
+      tokens <- words <$> readFile "test/compact-core/golden/nested-shared-rep-v1.hex"
+      golden <- BS.pack <$> mapM (\token -> case readHex token of
+        [(value,"")] | value <= (255::Integer) -> pure (fromInteger value)
+        _ -> fail "Invalid manual nested representation golden") tokens
+      let leaf = scalar LongKind [IntRep]
+          inner = Shape UnknownKind (Known [IntRep]) Missing (Known TupleAggregate)
+            (Known [leaf]) Missing Missing Missing
+          outer = Shape UnknownKind (Known [IntRep,IntRep]) Missing (Known TupleAggregate)
+            (Known [inner,inner]) Missing Missing Missing
+          state root left leftChild right rightChild = Evaluation (Known root)
+            [Evaluation (Known left) [Evaluation (Known leftChild) []],
+             Evaluation (Known right) [Evaluation (Known rightChild) []]]
+          first = Rep outer (state False True False False True)
+          second = Rep outer (state True False True True False)
+      assertEqual "manually specified length" 62 (BS.length golden)
+      assertEqual "independent first tree" (Right (first,50)) (decodeRepAt golden BS.empty 0)
+      assertEqual "direct shared outer shape, different recursive states" (Right (second,62))
+        (decodeRepAt golden BS.empty 50)
+      withEncoded (\_ encoder -> encodeRep encoder first >> encodeRep encoder second) $ \bytes _ _ ->
+        assertEqual "encoder matches independently specified bytes" golden bytes
+  , TestLabel "all literal kinds retain exact semantic payloads" $ TestCase $
       withEncoded (\streams encoder -> forM literals $ \value -> do
         offset <- streamOffset streams ExecutableData
         encodeExpr encoder (Lit emptyMeta value)
