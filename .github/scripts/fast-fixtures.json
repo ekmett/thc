@@ -52,6 +52,8 @@
     "thc.CoreZipBundleTest",
     "thc.CoreLinkerTest",
     "thc.CoreForeignArtifactsTest",
+    "thc.CoreLoweringRootsTest",
+    "thc.runtime.CoreFreeVariablesTest",
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",
