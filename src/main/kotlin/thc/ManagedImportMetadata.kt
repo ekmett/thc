@@ -31,20 +31,6 @@ internal class ManagedImportAdmission private constructor(val module: Map<*, *>,
             it.values.forEach(::text)
             requireProof(it["namespace"] in setOf("value", "type", "data"), "name namespace")
         }
-        private fun type(value: Any?) {
-            requireProof(value is Map<*, *>, "type record")
-            val raw = value as Map<*, *>
-            when (raw["kind"]) {
-                "tycon" -> {
-                    record(raw, "kind name arguments"); identity(raw["name"])
-                    requireProof(raw["arguments"] is List<*>, "type arguments")
-                    (raw["arguments"] as List<*>).forEach(::type)
-                }
-                "application" -> { record(raw, "kind function argument"); type(raw["function"]); type(raw["argument"]) }
-                "function" -> { record(raw, "kind multiplicity argument result"); type(raw["multiplicity"]); type(raw["argument"]); type(raw["result"]) }
-                else -> requireProof(false, "unknown type")
-            }
-        }
         private val primitives = setOf("void", "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
             "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep", "AddrRep", "FloatRep", "DoubleRep")
         private fun scalars(value: Any?): List<*> {
@@ -110,7 +96,10 @@ internal class ManagedImportAdmission private constructor(val module: Map<*, *>,
                 requireProof(item["convention"] in setOf("ccall", "capi") && item["safety"] in setOf("safe", "unsafe", "interruptible") &&
                     item["isFunction"] is Boolean && (item["isFunction"] == true || item["convention"] == "capi") &&
                     item["normalizationRole"] == "representational", "static import declaration")
-                type(item["declaredType"]); type(item["normalizedType"])
+                // Managed and native archives retain the same GHC type schema,
+                // including scoped forall variables in ordinary Ptr imports.
+                PackageScalarLinks.archiveType(item["declaredType"])
+                PackageScalarLinks.archiveType(item["normalizedType"])
                 val emitted = record(item["emitted"], "symbol unit convention safety arguments result")
                 text(emitted["symbol"]); nullableText(emitted["unit"])
                 requireProof(emitted["convention"] == item["convention"] && emitted["safety"] == item["safety"] &&
