@@ -51,7 +51,8 @@ class ByteStringSortTest {
         assertTrue((manifest["interface"] as String).endsWith("/Data/ByteString/Internal/Type.hi"))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf(
             "compiler/test-fixtures/ByteStringSortAudit.hs", "test/haskell-fixtures/ByteStringSortFixtures.hs",
-            "src/test/resources/core/original-bytestring-sort-descriptor.json", "src/main/kotlin/thc/runtime/CoreByteStringSort.kt"))
+            "src/test/resources/core/original-bytestring-sort-descriptor.json", "src/main/java/thc/runtime/CoreByteStringSort.java",
+            "src/main/java/thc/runtime/ByteStringSort.java", "src/main/java/thc/runtime/ByteStringSortExpression.java"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/pre.json", "$prefix/post.json", "$prefix/oracle.json",
             "$prefix/pre-sortBytes.audit.json", "$prefix/post-sortBytes.audit.json"), "$prefix/")
         val retained = (Json.parse(File(root, "src/test/resources/core/original-bytestring-sort-descriptor.json").readText()) as Map<*, *>)["fps_sort"] as Map<*, *>

@@ -192,7 +192,9 @@ prepareByteStringDecimal root = do
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "src/test/resources/core/original-bytestring-decimal-descriptors.json", "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
     "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt"]
+    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java",
+    "src/main/java/thc/runtime/ByteStringDecimal.java", "src/main/java/thc/runtime/ByteStringDecimalOp.java",
+    "src/main/java/thc/runtime/ByteStringDecimalExpression.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++
     concatMap commandArtifacts commands)

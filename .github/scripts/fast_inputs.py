@@ -37,8 +37,13 @@ WIRED_SOURCE = "src/THC/Driver/Wired.hs"
 # These are the runtime files actually fingerprinted by prepare-tests.sh's
 # preparers. An additional recorded runtime source fails closed until reviewed.
 RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
-                  "src/main/kotlin/thc/runtime/CoreByteStringSort.kt",
-                  "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
+                  "src/main/java/thc/runtime/CoreByteStringSort.java",
+                  "src/main/java/thc/runtime/ByteStringSort.java",
+                  "src/main/java/thc/runtime/ByteStringSortExpression.java",
+                  "src/main/java/thc/runtime/CoreByteStringDecimal.java",
+                  "src/main/java/thc/runtime/ByteStringDecimal.java",
+                  "src/main/java/thc/runtime/ByteStringDecimalOp.java",
+                  "src/main/java/thc/runtime/ByteStringDecimalExpression.java",
                   "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
                   "src/main/kotlin/thc/runtime/ProcessIdentity.kt",
                   "src/main/c/bytestring-utf8-api.c",
