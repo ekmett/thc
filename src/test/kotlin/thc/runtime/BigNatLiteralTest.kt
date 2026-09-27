@@ -410,7 +410,7 @@ class BigNatLiteralTest {
             listOf("default", null, emptyList<String>(), listOf("lit", "int", "0"))))
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             val failure = assertThrows(PolyglotException::class.java) { context.eval("thc", request(backend, body)) }
-            assertTrue(failure.message.orEmpty().contains("BigNat literal alternatives are invalid GHC Core"), failure.message)
+            assertTrue(failure.message.orEmpty().contains("BigNat/rubbish literal alternatives are invalid GHC Core"), failure.message)
         }
     }
 }
