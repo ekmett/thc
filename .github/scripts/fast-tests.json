@@ -1127,7 +1127,8 @@
       "python": []
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
-      "junit": ["thc.runtime.AddressIdentityNativeTest",
+      "junit": [
+        "thc.runtime.ManagedWeakTest","thc.runtime.AddressIdentityNativeTest",
         "thc.runtime.Explicit64ArrayTest",
         "thc.runtime.OriginalHandleReadinessNativeTest",
         "thc.runtime.OriginalTermiosTest",
