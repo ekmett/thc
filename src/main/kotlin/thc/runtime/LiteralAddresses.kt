@@ -161,6 +161,7 @@ internal class ManagedAddress private constructor(
         compiler?.requireCurrent(); other.compiler?.requireCurrent()
         if (rtsFlags != null || other.rtsFlags != null) {
             rtsFlags?.requireCurrent(); other.rtsFlags?.requireCurrent()
+            native?.requireLive(); other.native?.requireLive()
             return rtsFlags != null && rtsFlags === other.rtsFlags && offset == other.offset
         }
         foreign?.requireCurrent(); other.foreign?.requireCurrent()
