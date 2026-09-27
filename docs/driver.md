@@ -75,6 +75,30 @@ Acquisition accepts the build/provider options shared with `run`, including
 suffix. Acquisition is not equivalent to a successful application or benchmark
 run.
 
+`run` and `acquire` automatically produce JSON navigation indexes for their
+package modules. Each module retains its JSON bytes and hash; its optional
+`index` record names and hashes the adjacent `.json.idx` payload. The driver
+indexes the final JSON after native-artifact linking, so the sidecar describes
+the bytes actually stored in the package ZIP. Export cache identities include
+the index format and producer inputs; existing immutable bundles are not
+rewritten. JSON-only packages remain supported. A malformed or stale declared
+index is rejected rather than treated as an absent index.
+
+Simple-package runs also produce sidecars for their loose consumer modules.
+The driver passes those pairs explicitly alongside the support package
+manifest. Manual JVM launches use repeatable `--json-sidecar JSON INDEX`
+options; they must cover every loose JSON input and precede the guest `--`
+boundary. The [embedding guide](site/embedding.md#indexed-packages-and-loose-inputs)
+shows the mixed-input syntax. A neighboring `.idx` file is not discovered
+automatically.
+
+Indexed loading defers eligible binding-body decoding and backend preparation.
+It still hashes the complete source, validates its structure and discovers
+dependencies; `run` also performs the reachable-Core audit. Indexes do not
+eliminate these full-source scans or establish that every supplied binding is
+executable. See the [package format](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+for the validation and lazy-loading boundary.
+
 IO launchers (`--run-io` and `--run-executable`) do not append runtime metrics to
 stderr by default. Guest output and failure reports are unchanged. To append the runtime metrics JSON after a successful action, set
 `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.diagnostics=true"` when invoking `thc run`.

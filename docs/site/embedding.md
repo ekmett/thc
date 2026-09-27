@@ -93,10 +93,14 @@ hashes, boundaries, and reachable references. See the [manifest guide](../core-p
 Individual JSON paths are a lower-level development input; assembling a list
 does not establish package support.
 
-Package records with a declared `index` select
+### Indexed packages and loose inputs
+
+The Cabal driver's `run` and `acquire` paths automatically write navigation
+sidecars for the final package JSON. Package records with a declared `index` select
 [indexed JSON loading](../core-package-manifest.md#optional-json-indexes-and-lazy-loading)
 through the same `loadEntry` call. Existing records without an index remain
-supported. For an explicit loose JSON/sidecar pair, use the request builder:
+supported; a malformed declared index is rejected. For an explicit loose
+JSON/sidecar pair with a support manifest, use the request builder:
 
 ```kotlin
 import thc.CoreModules
@@ -104,18 +108,41 @@ import thc.executionContext
 
 executionContext().use { context ->
     val json = "/absolute/path/to/Module.json"
-    val request = CoreModules.request(listOf(json), "sumLoop",
+    val request = CoreModules.request(
+        listOf(json, "@/absolute/path/to/support.json"), "sumLoop",
         backend = "bytecode", jsonSidecars = mapOf(json to "$json.idx"))
     val function = context.eval("thc", request)
     println(function.execute(100_000L).asLong())
 }
 ```
 
+When explicit sidecars are supplied, their keys must cover exactly the listed
+loose JSON paths, with no duplicates or extra pairs. The request accepts at most
+one `@` package manifest; its module indexes come from its own checked records.
+The manifest supplies dependencies without also supplying the same consumer
+module. Omit that input when no support package is needed.
+
+The JVM launcher exposes the same association as repeatable
+`--json-sidecar JSON_PATH INDEX_PATH` options. For an accepted standalone
+`IO ()` entry, the mixed form is:
+
+```sh
+build/install/thc/bin/thc \
+  --json-sidecar /absolute/path/to/Main.json /absolute/path/to/Main.json.idx \
+  --run-io /absolute/path/to/Main.json,@/absolute/path/to/support.json \
+  app-unit:Main.main -- app --help
+```
+
+Use the actual qualified entry from the exported module. Every pair must appear
+before the literal `--`. The suffix is `PROGRAM_NAME ARG...`; even an argument
+spelled `--json-sidecar` there belongs to the guest. The launcher does not
+discover sibling sidecars automatically.
+
 The sidecar must already exist and match the exact JSON bytes. Loading still
-authenticates and structurally scans the source and discovers dependencies;
-eligible body fields and executable roots are prepared on demand. Loading an
-entry does not establish support for every cold binding. Keep the separate
-execution audit for that claim.
+hashes the complete source, validates its structure and discovers dependencies;
+eligible body fields and executable roots are prepared on demand. Indexing does
+not eliminate full-source validation scans. Loading an entry does not establish
+support for every cold binding. Keep the separate execution audit for that claim.
 
 ## Execute `IO ()`
 
