@@ -374,7 +374,10 @@ interfaceTests = TestLabel "compiler-discovered home interface identity" $ TestC
         success label (status, _, diagnostic) = assertEqual (label ++ ": " ++ diagnostic) ExitSuccess status
     createDirectory dist
     writeFile "Unlisted.hs" "module Unlisted where\nvalue :: Int\nvalue = 37\n"
-    call ghc ["-c","Unlisted.hs","-this-unit-id","home-proof","-outputdir",dist] "" >>= success "native module build"
+    -- Keep the native compiler argv relative to this Unicode cwd: the Windows
+    -- GHC launcher can replace characters outside its code page in argv. The
+    -- interface inventory below still checks the full canonical Unicode path.
+    call ghc ["-c","Unlisted.hs","-this-unit-id","home-proof","-outputdir","dist"] "" >>= success "native module build"
     (libStatus, libOutput, libDiagnostic) <- call ghc ["--print-libdir"] ""
     assertEqual libDiagnostic ExitSuccess libStatus
     libdir <- case lines libOutput of
