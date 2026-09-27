@@ -1,11 +1,12 @@
 # Compact Core container
 
-This is the shared version 1 wire contract under implementation. Framing,
-integer primitives, scoped assembly, typed executable/header records and explicit
-flat-JSON conversion and optional name/source maps have native controls. All eight
-module-level foreign provenance families have typed codecs. Complete runtime
-integration remains in progress.
-Existing JSON and unit-directory routes remain available and unchanged.
+Version 1 containers support opt-in loading through both runtime backends.
+The native converter writes typed executable and header records, shared strings,
+and optional name/source maps. The runtime decodes selected bindings on demand,
+including all eight module-level foreign provenance families. Source locations
+resolve when requested; original display names are available through explicit
+lookup APIs. General runtime labels do not yet use the name map.
+The project driver still publishes JSON unit artifacts by default.
 
 ## Assembly and addressing
 
@@ -491,8 +492,17 @@ The opt-in manifest representation retains the original module `sha256`, name,
 boundary and four actual summary booleans. Its `compact` field contains `path`,
 the container `sha256`, and `format: "thc-compact-core-v1"`. Original unit identity,
 dependencies and any real canonical `targetLayout` remain in the unit descriptor.
-No JSON or symbol-pair artifact is required for an all-compact unit. Checksums
-remain explicit verification inputs, not default startup scans.
+Compact paths are absolute. Each nonempty unit selects either compact containers
+for all its modules or the JSON/symbol pair; units with different storage formats
+may share one manifest. Compact module records contain no JSON extents or index.
+
+The runtime shares immutable mappings while each Context owns its decoded
+bindings and CAF state. Ordinary cold references do not open their modules;
+constructor, foreign registration and exception-bridge requirements can demand
+module metadata. Normal loads check framing and accessed records without a
+whole-file hash or body scan. Explicit artifact verification hashes a fresh
+mapping, retains that same mapping, and enumerates the selected module's bindings
+for admission checks. It does not open unrelated modules.
 
 ## Shared controls
 

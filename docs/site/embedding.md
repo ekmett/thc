@@ -145,11 +145,12 @@ before the literal `--`. The suffix is `PROGRAM_NAME ARG...`; even an argument
 spelled `--json-sidecar` there belongs to the guest. The launcher does not
 discover sibling sidecars automatically.
 
-The sidecar must already exist and match the exact JSON bytes. Loading still
-hashes the complete source, validates its structure and discovers dependencies;
-eligible body fields and executable roots are prepared on demand. Indexing does
-not eliminate full-source validation scans. Loading an entry does not establish
-support for every cold binding. Keep the separate execution audit for that claim.
+The sidecar must already exist and match the exact JSON bytes. Ordinary loading
+trusts the supplied artifact identity and prepares eligible body fields and
+executable roots on demand. Whole-source hashing and full source/index agreement
+checks require explicit artifact verification. Header indexing and dependency
+discovery still do work during loading. Loading an entry does not establish
+support for every cold binding; the separate execution audit checks that scope.
 
 ## Execute `IO ()`
 

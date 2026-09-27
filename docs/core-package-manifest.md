@@ -56,7 +56,7 @@ preservation of nested expression SourceNote ticks.
 
 ## Direct unit artifacts
 
-The project driver publishes a nonempty unit as two absolute artifact references:
+By default, the project driver publishes a nonempty unit as two absolute artifact references:
 `json: {path, sha256}` and `symbols: {path, sha256, format}`. Both must be present, and
 the unit must not also select `bundle`. `core.jsons` contains original module
 JSON bytes plus LF separators and small metadata projections. With
@@ -67,6 +67,10 @@ little-endian absolute JSON byte offset. Records are sorted by unsigned digest
 bytes, with no header, name table or auxiliary search index. MD5 collisions are
 assumed absent; lookup does not compare stored names or use collision buckets.
 For example, `main:M.é😀` has digest `23415231b60de428eeaf32979e1cb8ce`.
+
+An opt-in unit can instead select one [compact container](compact-core-format.md)
+per module. This route uses the container's fixed fingerprint table and decodes
+selected typed records directly, without a JSON or symbol-pair artifact.
 
 Omitting `symbols.format` selects the compatible text directory, not binary
 auto-detection. Its rows are:

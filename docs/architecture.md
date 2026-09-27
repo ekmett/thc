@@ -68,6 +68,12 @@ snapshotting, header indexing and dependency discovery still do eager work. The 
 prepared when loaded; cold callees need not have executable roots yet. Immutable
 source projections may be shared, but each Context owns its executable program.
 
+Opt-in [compact containers](compact-core-format.md) provide another demand-loading
+route. Both backends search a fixed fingerprint table and decode only the selected
+typed binding and its required metadata. Immutable file mappings are shared;
+decoded bindings, CAFs and executable roots belong to each Context. Source maps
+and original-name tables are consulted only for explicit diagnostic requests.
+
 A guest value is distinct from the executable node that manipulates it:
 
 - A closure owns its call target, captured values and any partially supplied
