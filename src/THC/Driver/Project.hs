@@ -53,6 +53,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.CoreIndex (indexedModules, modulePaths, moduleEntries, indexFormat)
+import THC.Driver.CoreSymbols (publishCoreUnit)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
 import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
@@ -212,10 +213,11 @@ prepareWindowsRuntime repository selectedCompiler selectedPkg selectedDriver out
     wired <- wiredGhcInternal context root
     (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive [wired]
     let manifest = output </> "runtime-support/packages.json"
-    atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
-      "schema" .= (1::Int),"ghc" .= ("9.14.1" :: String),"foreignExceptionBridgeUnit" .= owner,"units" .= records])
     selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules records
     require (selected == Just owner) "Windows runtime dictionary identity differs from its manifest"
+    published <- mapM (publishCoreUnit cache False) records
+    atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
+      "schema" .= (1::Int),"ghc" .= ("9.14.1" :: String),"foreignExceptionBridgeUnit" .= owner,"units" .= published])
     -- These exact module owners come from bundles validated above, never from
     -- app-supplied names. Retain the checked manifest through audit and launch;
     -- a long list of cache filenames would exceed cmd.exe's argument limit.
@@ -514,10 +516,11 @@ runBuiltProject action project working thcRoot runtime output native target proj
       entry = if lifecycle then "main::Main.main" else unitId selected ++ ":Main.main"
       shutdown = "ghc-internal:GHC.Internal.TopHandler.flushStdHandles"
       audit = output </> "audit.json"
+  published <- mapM (publishCoreUnit cacheRoot verifyArtifacts) linked
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
                                "foreignExceptionBridgeUnit" .= bridgeUnit,
-                               "units" .= linked])
+                               "units" .= published])
   when (action == RunGuest) $ do
     when verifyArtifacts $
       runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,

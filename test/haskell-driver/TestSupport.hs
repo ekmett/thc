@@ -12,6 +12,7 @@
 -- Temporary-project, subprocess and bundle-inspection helpers for driver tests.
 module TestSupport
   ( Env(..), Result(..), setup, withFixture, withFixtureNamed, copyTree, run, runExe, checked, json, readJson, readCore
+  , readSourceManifest, readPublishedCore
   , field, array, string, strings, bool, number, objects, named
   , assertContains, assertSuccess, assertFailure, assertNoStdout
   , writeText, readText, replaceText, findFiles, requireFile
@@ -20,7 +21,7 @@ module TestSupport
 import Codec.Archive.Zip (findEntryByPath, fromEntry, toArchiveOrFail)
 import Control.Exception (bracket, onException)
 import Control.Monad (forM, forM_, void)
-import Data.Aeson (Value(..), eitherDecode', eitherDecodeStrict')
+import Data.Aeson (Value(..), eitherDecode', eitherDecodeStrict', toJSON)
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
@@ -36,7 +37,7 @@ import System.Directory
   )
 import System.Environment (getEnvironment, lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
 import System.IO (hClose, hPutStrLn, openTempFile)
 import qualified System.IO as IO
 import System.IO.Error (tryIOError)
@@ -203,6 +204,40 @@ readCore bundle member = do
   entry <- maybe (fail ("missing ZIP member " ++ member)) pure
            (findEntryByPath member archive)
   either fail pure (eitherDecode' $ fromEntry entry)
+
+-- | Inspect acquisition provenance, not a runtime manifest. Cache tests need
+-- the original ZIP build receipts even when publication selects an uncompressed
+-- pair. This projection is only returned to assertions; never written back or
+-- supplied to the guest/auditor. Direct publication is tested separately.
+readSourceManifest :: FilePath -> IO Value
+readSourceManifest path = do
+  manifest <- readJson path
+  units <- forM (objects manifest "units") $ \unit -> case field unit "json" of
+    Null -> pure unit
+    ref -> do
+      receipt <- readJson (takeDirectory (string (field ref "path")) </> "publication.json")
+      let source = field receipt "source"
+      inner <- readCore (string (field source "path")) "manifest.json"
+      pure (update "bundle" source $ update "modules" (field inner "modules") $
+        remove "json" $ remove "symbols" unit)
+  pure (update "units" (toJSON units) manifest)
+  where
+    update key value (Object fields) = Object (KeyMap.insert (Key.fromString key) value fields)
+    update _ _ value = value
+    remove key (Object fields) = Object (KeyMap.delete (Key.fromString key) fields)
+    remove _ value = value
+
+-- | Read exactly one published module through its byte span, or through the
+-- legacy bundle when selected. This checks the artifact actually given to THC.
+readPublishedCore :: Value -> Value -> IO Value
+readPublishedCore unit ref = case field unit "json" of
+  Null -> readCore (string (field (field unit "bundle") "path")) (string (field ref "path"))
+  direct -> IO.withBinaryFile (string (field direct "path")) IO.ReadMode $ \handle -> do
+    let start = number (field ref "start")
+        size = number (field ref "end") - start
+    IO.hSeek handle IO.AbsoluteSeek (fromIntegral start)
+    bytes <- BS.hGet handle size
+    either fail pure (eitherDecodeStrict' bytes)
 
 field :: Value -> String -> Value
 field (Object object) name = maybe Null id (KeyMap.lookup (Key.fromString name) object)

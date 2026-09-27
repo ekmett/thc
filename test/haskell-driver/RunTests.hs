@@ -58,14 +58,13 @@ tests env = TestLabel "implicit Cabal project native versus THC run" $ TestCase 
       manifest <- readJson (output </> "packages.json")
       let entry = one (any ((== "Main") . string . (`field` "name")) . (`objects` "modules"))
                       (objects manifest "units")
-          bundle = string $ field (field entry "bundle") "path"
       assertEqual "IO root" [string (field entry "id") ++ ":Main.main"] (strings $ field audit "roots")
       let primitives = map (string . (`field` "name")) (objects audit "primitives")
       forM_ ["newMutVar#", "writeMutVar#", "readMutVar#", "raise#"] $ \primitive ->
         assertBool ("missing " ++ primitive) (primitive `elem` primitives)
       forM_ ["Main", "Answer"] $ \moduleName -> do
         let moduleEntry = one ((== moduleName) . string . (`field` "name")) (objects entry "modules")
-        core <- readCore bundle (string $ field moduleEntry "path")
+        core <- readPublishedCore entry moduleEntry
         -- Project bundles use the post-Tidy schema, whose actual source tables
         -- replace the older simplifier schema's lowering/ticks marker.
         assertEqual "post-Tidy Core" "optimized-Core-after-Tidy-before-CorePrep"

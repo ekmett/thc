@@ -13,7 +13,7 @@
 -- Fixture acquisition support for hashable ffi.
 module HashableFfiFixtures (prepareHashableFfi) where
 
-import Control.Monad (forM, unless, when)
+import Control.Monad (unless, when)
 import Data.Aeson (Value(..), object, toJSON, (.=))
 import qualified Data.Aeson.Key as Key
 import qualified Data.Aeson.KeyMap as KM
@@ -53,7 +53,7 @@ prepareHashableFfi root = do
     [path] -> pure (BS.unpack path)
     _ -> die "hashable-ffi: expected one selected-GHC driver"
   managed <- execute "thc-run" [("THC_BACKEND", "bytecode")] driver
-    (["run", "--project-dir", root </> fixture, "run-hashable-ffi:exe:oracle", "--thc-root", root,
+    (["run", "--verify-artifacts", "--project-dir", root </> fixture, "run-hashable-ffi:exe:oracle", "--thc-root", root,
       "--runtime", runtime, "--dist-dir", root </> acquired, "--installed-core", "required",
       "--with-ghc", ghc, "--with-ghc-pkg", ghcPkg] ++
       maybe [] (\path -> ["--ghc-source", path]) sourceRoot)
@@ -81,22 +81,9 @@ prepareHashableFfi root = do
   unless accepted (die "hashable-ffi: production audit did not accept original executable")
   packages <- readJson (root </> acquired </> "packages.json")
   records <- field packages "units" :: IO [Value]
-  createDirectoryIfMissing True (root </> directory </> "bundles")
-  -- Rehome unchanged, hash-checked bundles, never replace exported Core. This
+  -- Rehome unchanged, hash-checked artifacts, never replace exported Core. This
   -- makes the fixture independent of later eviction from acquisition caches.
-  retained <- forM records $ \record -> case lookupKey record "bundle" of
-    Nothing -> pure (record, [])
-    Just bundle -> do
-      path <- field bundle "path"
-      expected <- field bundle "sha256" :: IO String
-      identifier <- field record "id" :: IO String
-      unless (takeFileName identifier == identifier && identifier `notElem` [".", ".."])
-        (die "hashable-ffi: invalid bundle unit path")
-      let destination = directory </> "bundles" </> identifier <.> "zip"
-      copyFile path (root </> destination)
-      actual <- hashFile (root </> destination)
-      unless (actual == expected) (die "hashable-ffi: acquired bundle hash changed")
-      pure (replace "bundle" (replace "path" (toJSON (root </> destination)) bundle) record, [destination])
+  retained <- mapM (retainUnitArtifacts root (directory </> "bundles")) records
   let packagePath = directory </> "packages.json"
   writeJson (root </> packagePath) (replace "units" (toJSON (map fst retained)) packages)
   plugin <- listDirectory (root </> "compiler/THC")
@@ -128,8 +115,6 @@ prepareHashableFfi root = do
       KM.lookup (Key.fromString key) fields == Just (String (T.pack expected))]
     unique _ [value] = pure value
     unique label _ = die ("hashable-ffi: expected one " ++ label)
-    lookupKey (Object fields) key = KM.lookup (Key.fromString key) fields
-    lookupKey _ _ = Nothing
     replace key value (Object fields) = Object (KM.insert (Key.fromString key) value fields)
     replace _ _ _ = error "hashable-ffi: expected JSON object"
     observation line = case splitTab (BS.unpack line) of

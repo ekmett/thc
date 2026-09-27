@@ -114,8 +114,8 @@ prepareWindowsBridge root = do
         ["src/THC/Driver" </> path | path <- drivers,takeExtension path == ".hs"]
   inputHashes <- hashes root sources
   supportUnits <- field "units" support :: IO [Value]
-  bundles <- forM [bundle | Object fields <- supportUnits, Just bundle <- [KeyMap.lookup "bundle" fields]] (field "path")
-  artifactHashes <- hashes root (modules ++ bundles ++ [native </> "oracle.exe"] ++ concatMap commandArtifacts commands ++
+  supportArtifacts <- mapM (field "path") (concatMap unitArtifactReferences supportUnits)
+  artifactHashes <- hashes root (modules ++ supportArtifacts ++ [native </> "oracle.exe"] ++ concatMap commandArtifacts commands ++
     [logs </> entry ++ ".audit.json" | entry <- entries] ++
     [logs </> "missing-support.audit.json",logs </> "runtime-support/packages.json"])
   writeJson (root </> directory </> "provenance.json") (object

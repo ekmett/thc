@@ -591,6 +591,7 @@ executable thc
   hs-source-dirs: app, src
   other-modules:
     THC.Driver.CoreIndex
+    THC.Driver.CoreSymbols
     THC.Driver.Cabal
     THC.Driver.Cache
     THC.Driver.ForeignBitcode
@@ -637,7 +638,9 @@ test-suite driver-tests
   hs-source-dirs: test/haskell-driver, src
   other-modules:
     THC.Driver.CoreIndex
+    THC.Driver.CoreSymbols
     CoreIndexTests
+    CoreSymbolsTests
     THC.Driver.Zip
     TestSupport
     TestSupportTests
@@ -871,6 +874,7 @@ executable thc-fixtures
   main-is: Main.hs
   other-modules:
     THC.Driver.CoreIndex
+    THC.Driver.CoreSymbols
     AggregateFixtures
     AggregateHeapFixtures
     FourWayAggregateFixtures

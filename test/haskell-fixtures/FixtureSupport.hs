@@ -15,21 +15,24 @@
 module FixtureSupport
   ( run, runWithTimeout, CommandResult(..), runLogged, runLoggedExpect, runLoggedWithInput
   , writeJson, hashFile, hashes, hexBytes, splitTab, readInteger, isOriginalUnixUnit
+  , unitArtifactReferences, retainUnitArtifacts
   ) where
 
 import Control.Monad (forM, unless)
 import qualified Crypto.Hash.SHA256 as SHA256
-import Data.Aeson (Value, object, (.=), encode)
+import Data.Aeson (Value(..), object, (.=), encode)
+import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map.Strict as Map
 import Data.List (stripPrefix)
+import qualified Data.Text as Text
 import Numeric (showHex)
-import System.Directory (createDirectoryIfMissing)
+import System.Directory (copyFile, createDirectoryIfMissing)
 import System.Environment (getEnvironment)
 import System.Exit (ExitCode(..), die)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeFileName)
 import System.IO (IOMode(ReadMode, WriteMode), withBinaryFile)
 import System.Process (CreateProcess(..), StdStream(..), proc, readCreateProcessWithExitCode,
                        waitForProcess, withCreateProcess)
@@ -41,6 +44,44 @@ isOriginalUnixUnit value = case stripPrefix "unix-2.8.8.0-" value of
   Just "inplace" -> True
   Just suffix -> not (null suffix) && all (`elem` ("0123456789abcdef" :: String)) suffix
   Nothing -> False
+
+-- | Artifacts actually selected by a unit, whether a legacy ZIP or a plain
+-- JSON/symbol pair. Moduleless compatibility units can select no artifacts.
+unitArtifactReferences :: Value -> [Value]
+unitArtifactReferences (Object fields) = [value | key <- ["bundle", "json", "symbols"],
+  Just value <- [KeyMap.lookup key fields]]
+unitArtifactReferences _ = []
+
+-- | Retain immutable selected artifacts with checked hashes and updated paths.
+-- This copies bytes, never re-exports modules or changes their symbol offsets.
+retainUnitArtifacts :: FilePath -> FilePath -> Value -> IO (Value, [FilePath])
+retainUnitArtifacts root directory (Object fields) = do
+  identifier <- text "id" fields
+  unless (takeFileName identifier == identifier && identifier `notElem` ["", ".", ".."])
+    (die "Invalid retained unit artifact path")
+  let present key = KeyMap.member key fields
+  unless ((present "json" == present "symbols") && not (present "bundle" && present "json"))
+    (die "Unit must select a bundle or one complete JSON/symbol pair")
+  createDirectoryIfMissing True (root </> directory)
+  retained <- forM [(key, suffix) | (key, suffix) <-
+    [("bundle", ".zip"), ("json", ".jsons"), ("symbols", ".symbols")], present key] $ \(key, suffix) ->
+      case KeyMap.lookup key fields of
+        Just (Object ref) -> do
+          source <- text "path" ref
+          expected <- text "sha256" ref
+          let relative = directory </> identifier ++ suffix
+              destination = root </> relative
+          copyFile source destination
+          actual <- hashFile destination
+          unless (actual == expected) (die "Retained unit artifact hash differs")
+          pure (key, Object (KeyMap.insert "path" (String (Text.pack destination)) ref), relative)
+        _ -> die "Invalid unit artifact reference"
+  pure (Object (foldr (\(key, ref, _) -> KeyMap.insert key ref) fields retained),
+        [relative | (_, _, relative) <- retained])
+  where text key record = case KeyMap.lookup key record of
+          Just (String value) -> pure (Text.unpack value)
+          _ -> die "Missing unit artifact field"
+retainUnitArtifacts _ _ _ = die "Invalid unit artifact record"
 
 environmentWith :: [(String,String)] -> IO [(String,String)]
 environmentWith overrides = do
