@@ -112,6 +112,17 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
                 else operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[operands.lastIndex].execute(frame))
             PosixStat.execute(operation, address, mode)
+        } else if (operation == OriginalStdioOp.SYMLINK) {
+            val target = operands[0].executeRequiredAddress(frame)
+            val path = operands[1].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            CoreOriginalStdio.current(this).symlink(target, path)
+        } else if (operation == OriginalStdioOp.READLINK) {
+            val path = operands[0].executeRequiredAddress(frame)
+            val output = operands[1].executeRequiredAddress(frame)
+            val capacity = operands[2].executeRequiredLong(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            CoreOriginalStdio.current(this).readlink(path, output, capacity)
         } else if (operation.pathMode) {
             val path = operands[0].executeRequiredAddress(frame)
             val mode = operands[1].executeRequiredLong(frame)

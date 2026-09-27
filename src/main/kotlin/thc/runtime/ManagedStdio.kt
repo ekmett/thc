@@ -177,6 +177,18 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
+    @TruffleBoundary fun symlink(target: ManagedAddress, path: ManagedAddress): Long {
+        val result = files.symlinkOriginal(target, path)
+        if (result < 0) lastError.set(fileError(hostAbi))
+        return result
+    }
+
+    @TruffleBoundary fun readlink(path: ManagedAddress, output: ManagedAddress, capacity: Long): Long {
+        val result = files.readlinkOriginal(path, output, capacity)
+        if (result < 0) lastError.set(fileError(hostAbi))
+        return result
+    }
+
     @TruffleBoundary fun pathMode(operation: OriginalStdioOp, path: ManagedAddress, mode: Long): Long {
         check(operation.pathMode)
         if (mode !in 0L..0xffff_ffffL) fault("Original pathname mode requires a canonical CMode")

@@ -156,6 +156,8 @@ OPERATIONS = {
     **{symbol: ('ccall', 'unsafe', arguments, output)
        for symbol, (arguments, output) in GMP_OPERATIONS.items()},
     '__hscore_sizeof_stat': ('ccall', 'unsafe', (None,), (None, 'IntRep')),
+    'symlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'readlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'mkdir': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
     'chmod': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
     '__hscore_stat': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
@@ -263,6 +265,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # Same libc symbols, but different physical operands or result ABI from the
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
+    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink')},
     ('unix-2.8.8.0-inplace', 'mkdir'): OPERATIONS['mkdir'],
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol]
        for symbol in ('close', 'dup', 'isatty', 'getenv')},
@@ -399,6 +402,8 @@ def validate(metadata, argument_reps, flags, result_rep):
         require(text_unit(target.get('unit')), 'supported installed text unit')
     if symbol == 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat':
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix path-stat unit')
+    if symbol in ('symlink', 'readlink'):
+        require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix pathname link unit')
     if symbol == 'mkdir':
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix mkdir unit')
     if symbol in WAIT_STATUS_OPERATIONS:

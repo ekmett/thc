@@ -1620,7 +1620,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
+                        if (originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio.pathLink || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1678,6 +1678,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                             b.beginStoreLocal(it); operands[0].emit(e); b.endStoreLocal()
                         } else null
                     if (originalStdio == OriginalStdioOp.LOCALE) b.beginOriginalLocale(result)
+                    else if (originalStdio == OriginalStdioOp.SYMLINK) b.beginOriginalSymlink(result)
+                    else if (originalStdio == OriginalStdioOp.READLINK) b.beginOriginalReadlink(result)
                     else if (originalStdio.pathMode) b.beginOriginalPathMode(result, originalStdio)
                     else if (originalStdio.pathStat) b.beginOriginalPathStat(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
@@ -1748,6 +1750,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         b.endBlock()
                     } else operands.forEach { it.emit(e) }
                     if (originalStdio == OriginalStdioOp.LOCALE) b.endOriginalLocale()
+                    else if (originalStdio == OriginalStdioOp.SYMLINK) b.endOriginalSymlink()
+                    else if (originalStdio == OriginalStdioOp.READLINK) b.endOriginalReadlink()
                     else if (originalStdio.pathMode) b.endOriginalPathMode()
                     else if (originalStdio.pathStat) b.endOriginalPathStat()
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen()

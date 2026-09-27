@@ -80,6 +80,19 @@ int64_t thc_file_open_raw(int *lease, const char *path, int flags, uint32_t mode
   return fd < 0 ? -1 : 0;
 }
 
+int64_t thc_file_symlink(const char *target, const char *path, int64_t *error) {
+  int result = symlink(target, path);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_readlink(const char *path, void *output, uint64_t capacity, int64_t *error) {
+  ssize_t result = readlink(path, output, (size_t)capacity);
+  *error = result < 0 ? errno : 0;
+  // The genuine pinned Unix declaration returns CInt; validated capacity fits it.
+  return (int32_t)result;
+}
+
 int64_t thc_file_mkdir(const char *path, uint32_t mode, int64_t *error) {
   int result = mkdir(path, (mode_t)mode);
   *error = result < 0 ? errno : 0;
