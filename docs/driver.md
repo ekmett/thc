@@ -25,11 +25,13 @@ builds that component and its required closure. This does not run the native
 binary. The resolved build information drives `THC.Plugin` export, strict
 reachable-Core audit, and execution in the THC JVM runtime.
 
-Project acquisition also links the genuine `THC.Internal.Exception` dictionary
-used to wrap foreign-language exceptions automatically at supported import
-boundaries. An application can use ordinary `catch` with `SomeException` or
-`bracket` without importing `THC.Exception`. If its dependency closure already
-contains that API, THC reuses the exact runtime unit and its `Typeable` identity.
+Project acquisition also acquires and selects the genuine
+`THC.Internal.Exception` dictionary. This is
+[foreign-exception bridge groundwork](foreign-exceptions.md): automatic boundary
+conversion and auditor/runtime consumption of the bridge are separate, upcoming
+changes. Acquiring this library alone does not make foreign failures catchable.
+If the application's dependency closure already contains that API, THC reuses
+the exact runtime unit and its `Typeable` identity.
 Multiple bridge units, or an API without a matching typed bridge proof, are
 reported as link errors.
 
@@ -38,16 +40,19 @@ Otherwise Cabal builds the original `thc:runtime` library from `--thc-root` in
 proxy. Its own plan, build information, native objects and typed Core determine
 the exported unit; the application's project files are unchanged. Runtime
 source and native artifact changes invalidate the ordinary content-keyed export.
-The package manifest records the exact `foreignExceptionBridgeUnit`, and both
-the auditor and runtime retain that bridge's compiled box/project helpers.
+The package manifest records the exact `foreignExceptionBridgeUnit`. The upcoming
+consumer change will retain its compiled box/project helpers and use the selected
+dictionary for ordinary `catch` with `SomeException` and `bracket`, including
+applications that do not import `THC.Exception`.
 
-Compiler-free embedding with raw Core must supply the same genuine bridge bundle
-and its dependency closure. A sole bridge is unambiguous; otherwise the package
-manifest must select its exact unit. Programs requiring automatic foreign
-conversion fail to link when that support is missing or ambiguous. There is no
-process-global default dictionary or explicit `liftForeign` scope.
+The planned automatic-conversion contract for compiler-free embedding requires
+the same genuine bridge bundle and its dependency closure. A sole bridge will be
+unambiguous; otherwise the package manifest must select its exact unit. The
+consumer change must reject missing or ambiguous support when conversion is
+required, without a process-global default dictionary or explicit `liftForeign`
+scope.
 The legacy Windows simple-package backend does not yet generate this sidecar;
-the compiler-free linking requirement applies there too.
+automatic support there also requires a genuine bundle-linking path.
 
 The default pinned provider runs a raw `Main.main :: IO ()` action.
 The complete installed-Core provider instead runs GHC's generated
