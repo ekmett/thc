@@ -32,7 +32,7 @@ import System.Environment (lookupEnv)
 import System.FilePath ((</>), isAbsolute, takeExtension)
 import System.IO (IOMode(ReadMode), withBinaryFile)
 
--- Missing LLVM tools remain explicit inputs, not an error for pure-Haskell
+-- | Missing LLVM tools remain explicit inputs, not an error for pure-Haskell
 -- projects. Acquisition itself diagnoses a missing tool when C is needed.
 -- Hash the selected executable rather than trusting a mutable version label.
 nativeToolIdentity :: IO Value
@@ -57,7 +57,7 @@ nativeToolIdentity = do
       pure (Key.fromString name .= value)
   pure (object ["schema" .= (1 :: Int), "tools" .= object tools, "environment" .= object environment])
 
--- The caller supplies the exact currently owned object list; never discover
+-- | The caller supplies the exact currently owned object list; never discover
 -- component membership by scanning the persistent piece cache. Dynamic twins
 -- share the vanilla C recipe and do not contribute a second translation unit.
 nativePieceIdentity :: FilePath -> [FilePath] -> IO Value

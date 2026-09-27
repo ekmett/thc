@@ -17,6 +17,9 @@ import System.Environment (lookupEnv)
 import System.FilePath ((</>), isAbsolute)
 import System.Info (os)
 
+-- | Resolve the cache location: absolute @THC_CACHE_HOME@ when set, otherwise
+-- @Library/Caches/thc@ on macOS or the platform XDG cache directory.
+-- A relative override is rejected, and this query does not create directories.
 -- Cache files are disposable and shared between projects. Keep them out of
 -- both the source checkout and the directories used for persistent app data.
 coreCacheDirectory :: IO FilePath

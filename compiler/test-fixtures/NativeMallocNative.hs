@@ -7,7 +7,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell with the imported library dependencies
+-- Portability : Native GHC; base foreign allocation and Storable APIs
 --
 -- Native GHC observer for the native malloc fixture.
 module Main (main) where

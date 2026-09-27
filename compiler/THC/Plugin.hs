@@ -80,6 +80,14 @@ import System.FilePath ((</>), takeDirectory)
 -- interfaces. The first option is the destination directory (default
 -- @build/core@). GHC compilations using the plugin are forced to recompile so
 -- the export is not silently skipped by native recompilation checks.
+--
+-- For example, after making the plugin package visible to the selected GHC:
+--
+-- @
+-- ghc -O2 -fplugin=THC.Plugin -fplugin-opt=THC.Plugin:build/core \\
+--   -fplugin-opt=THC.Plugin:post-tidy -fplugin-opt=THC.Plugin:unit-qualified \\
+--   -fplugin-opt=THC.Plugin:source-notes -c Example.hs
+-- @
 plugin :: Plugin
 plugin = defaultPlugin
   { parsedResultAction = rewriteJavaScriptImports

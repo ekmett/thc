@@ -8,7 +8,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : GHC with the declared language extensions
+-- Portability : Native GHC; primitive and foreign memory APIs
 --
 -- Native GHC observer for the original primitive fixture.
 module Main (main) where

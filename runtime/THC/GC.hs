@@ -18,6 +18,8 @@ import Data.Int (Int64)
 import Data.Word (Word64)
 import THC.Internal.RuntimeABI
 
+-- | One JVM collector's name and cumulative counters, each independently
+-- available. A collector can disappear or decline to expose a counter.
 data CollectorStats = CollectorStats
   { collectorName :: Available String
   , collectionCount :: Available Word64

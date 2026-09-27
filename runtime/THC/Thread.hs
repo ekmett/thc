@@ -25,9 +25,12 @@ import Data.Word (Word64)
 import Foreign.C.Types (CInt(..))
 import THC.Internal.RuntimeABI
 
+-- | Kind of thread observed by the service, not a handle to its host carrier.
 data ThreadKind = NativeHaskellThread | PlatformThread | VirtualThread
   deriving (Eq, Ord, Show)
 
+-- | Strength of the runtime's affinity mechanism. Even pinned support does
+-- not prove that a particular thread's request was accepted.
 data CpuAffinitySupport = NoCpuAffinity | AdvisoryCpuAffinity | PinnedCpuAffinity
   deriving (Eq, Ord, Show)
 
@@ -56,6 +59,8 @@ data CpuCoordinate = CpuCoordinate
   , cpuProcessor :: Int
   } deriving (Eq, Ord, Show)
 
+-- | Inspect the caller's thread and logical capability without changing its
+-- scheduling or affinity. Fields are independently sampled.
 currentThreadInfo :: IO ThreadInfo
 currentThreadInfo = ThreadInfo
   <$> queryEnum 100 [(0, NativeHaskellThread), (1, PlatformThread), (2, VirtualThread)]
@@ -64,6 +69,8 @@ currentThreadInfo = ThreadInfo
   <*> queryEnum 103 [(0, NoCpuAffinity), (1, AdvisoryCpuAffinity), (2, PinnedCpuAffinity)]
   <*> queryEnum 104 [(0, False), (1, True)]
 
+-- | Sample the executing JVM thread's cumulative counters. This neither
+-- enables monitoring nor isolates this guest's work from other carrier work.
 currentThreadAccounting :: IO ThreadAccounting
 currentThreadAccounting = ThreadAccounting <$> queryWord64 105 0 0 <*> queryWord64 106 0 0 <*> queryWord64 107 0 0
 

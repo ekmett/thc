@@ -8,7 +8,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : GHC with the declared language extensions
+-- Portability : Native GHC; driver acquisition and host process services
 --
 -- Probe installed Core bundle publication and content-addressed cache integrity.
 module Main (main) where

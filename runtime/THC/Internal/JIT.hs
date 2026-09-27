@@ -38,6 +38,7 @@ data JitSnapshot = JitSnapshot
   , compilationsQueued :: Available Word64
   } deriving (Eq, Show)
 
+-- | Query whether this context has opted into telemetry callbacks.
 jitTelemetryEnabled :: IO (Available Bool)
 jitTelemetryEnabled = queryEnum 400 [(0, False), (1, True)]
 
@@ -46,6 +47,8 @@ jitTelemetryEnabled = queryEnum 400 [(0, False), (1, True)]
 setJitTelemetryEnabled :: Bool -> IO (Available ())
 setJitTelemetryEnabled enabled = control 400 (if enabled then 1 else 0)
 
+-- | Sample the context-attributed counters without enabling telemetry or
+-- requesting compilation. Each counter retains its own availability status.
 jitSnapshot :: IO JitSnapshot
 jitSnapshot = JitSnapshot
   <$> queryWord64 401 0 0 <*> queryWord64 402 0 0 <*> queryWord64 403 0 0

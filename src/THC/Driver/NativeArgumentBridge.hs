@@ -16,12 +16,16 @@ import Control.Monad (guard)
 import Data.Char (isSpace)
 import Data.List (isPrefixOf, nub)
 
--- LLVM permits a direct call whose integer argument widths differ from the
+-- | LLVM permits a direct call whose integer argument widths differ from the
 -- definition. GHC's x86_64 ccall ABI uses the low bits of each integer slot,
 -- whereas Sulong requires matching Java scalar carriers. Recognize only
 -- ordinary C functions in verified LLVM and make those truncations explicit.
 -- Return ABI, pointer types, varargs and non-C calling conventions never adapt.
 -- Both signatures come from the actual linked compiler output, not symbol names.
+-- Unsupported targets and unrecognized input return 'Nothing', not a guessed ABI:
+--
+-- >>> nativeArgumentBridge "aarch64-unknown-linux-gnu" "callee" "entry" ""
+-- Nothing
 nativeArgumentBridge :: String -> String -> String -> String -> Maybe (String,String,[String])
 nativeArgumentBridge target symbol entry source = do
   guard (target == "x86_64-unknown-linux-gnu")

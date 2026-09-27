@@ -21,7 +21,9 @@ import Data.Version (showVersion)
 import qualified System.Info as System
 import THC.Internal.RuntimeABI
 
+-- | Runtime supplying the service ABI, independently of its selected backend.
 data RuntimeKind = NativeGHC | TruffleHaskell deriving (Eq, Ord, Show)
+-- | Execution backend reported by the current runtime context.
 data Backend = NativeBackend | ASTBackend | BytecodeBackend deriving (Eq, Ord, Show)
 
 -- | Version strings are informational, not feature-detection interfaces.
@@ -41,6 +43,15 @@ data RuntimeCapabilities = RuntimeCapabilities
   , cpuCapacity :: Available Int
   } deriving (Eq, Show)
 
+-- | Query runtime identity and informational version strings. Each field keeps
+-- its own @Available@ status; native GHC has no JVM identity to report.
+--
+-- A client can inspect one field without assuming the others are available:
+--
+-- > info <- runtimeInfo
+-- > case runtimeKind info of
+-- >   Available kind -> print kind
+-- >   status -> print status
 runtimeInfo :: IO RuntimeInfo
 runtimeInfo = do
   kind <- queryEnum 0 [(0, NativeGHC), (1, TruffleHaskell)]
@@ -50,6 +61,8 @@ runtimeInfo = do
     _ -> queryText 5 0
   RuntimeInfo kind backend version <$> queryText 6 0 <*> queryText 7 0
 
+-- | Query context permissions and initial CPU capacity without changing them.
+-- Permission to use a service is distinct from the service being available.
 runtimeCapabilities :: IO RuntimeCapabilities
 runtimeCapabilities = RuntimeCapabilities
   <$> queryEnum 2 [(0, False), (1, True)]

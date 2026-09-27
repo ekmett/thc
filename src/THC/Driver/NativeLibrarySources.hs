@@ -7,7 +7,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell with the imported library dependencies
+-- Portability : Haskell; bytestring, cryptohash-sha256 and target-specific native profiles
 --
 -- Validate exact native-library source and LLVM inputs for supported acquisition profiles.
 module THC.Driver.NativeLibrarySources

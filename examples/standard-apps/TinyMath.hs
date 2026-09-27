@@ -7,7 +7,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell with the imported library dependencies
+-- Portability : Haskell 2010; base only
 --
 -- Small arithmetic dependency for the standard application examples.
 module TinyMath (twice) where

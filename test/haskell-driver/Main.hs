@@ -7,7 +7,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell with the imported library dependencies
+-- Portability : Native GHC; HUnit and driver test dependencies
 --
 -- Select and run the Haskell driver test groups.
 module Main (main) where

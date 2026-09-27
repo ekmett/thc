@@ -7,7 +7,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell with the imported library dependencies
+-- Portability : Haskell 2010; base only
 --
 -- Native GHC infers Safe here; capture must preserve the inferred property.
 module SafeDependency (stableValue) where

@@ -8,7 +8,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : GHC with the declared language extensions
+-- Portability : Safe Haskell; public THC exception API
 --
 -- Compiler fixture for foreign exception safe Core and metadata.
 module ForeignExceptionSafe where

@@ -100,6 +100,9 @@ modulelessRegistration identifier dependencies bytes = do
         Just (prettyShow (exposedName entry), prettyShow owner, prettyShow name)
       _ -> Nothing
 
+-- | Check the selected GHC version and matching package database before
+-- constructing an acquisition context. Arguments select GHC, ghc-pkg, the
+-- interface helper, additional databases and recorded compiler identity.
 installedContext :: FilePath -> FilePath -> FilePath -> [FilePath] -> Value -> IO InstalledContext
 installedContext ghc pkg helper databases compiler = do
   version <- command ghc ["--numeric-version"]
@@ -116,7 +119,7 @@ installedContext ghc pkg helper databases compiler = do
     (fail "duplicate selected installed-Core package database")
   pure (InstalledContext helper libdir pkg global dbs compiler)
 
--- Cabal's parsed registration is authoritative, including hidden modules and
+-- | Cabal's parsed registration is authoritative, including hidden modules and
 -- exact reexport providers. Do not invent bodies for native-only/facade units.
 discoverInstalled :: InstalledContext -> String -> IO InstalledUnit
 discoverInstalled context identifier = do
@@ -320,6 +323,9 @@ probeInstalledUnits context requested units = do
       (fail "inconsistent interface probe identity/payload")
   pure (object ["registrations" .= map (installedProvenance context) units, "interfaces" .= rows])
 
+-- | Hydrate genuine complete Core for a discovered unit. Missing payloads are
+-- returned separately from corrupt or inconsistent evidence, which fails in IO.
+-- @THC_INSTALLED_CORE_JOBS@ bounds helper concurrency (default 2, range 1–64).
 acquireInstalled :: InstalledContext -> InstalledUnit -> IO (Either MissingCore InstalledCore)
 acquireInstalled context unit = do
   selected <- lookupEnv "THC_INSTALLED_CORE_JOBS"

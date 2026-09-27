@@ -21,7 +21,7 @@ import Foreign.StablePtr (StablePtr, freeStablePtr, newStablePtr)
 import GHC.Exts (Any)
 import Unsafe.Coerce (unsafeCoerce)
 
--- The runtime owns the opaque foreign object; this newtype gives it a genuine
+-- | The runtime owns the opaque foreign object; this newtype gives it a genuine
 -- compiled Haskell Exception dictionary without exposing its representation.
 newtype ForeignException = ForeignException Any
 
@@ -32,19 +32,24 @@ instance Exception ForeignException
 foreign import ccall safe "thc_exception_v1_text"
   queryText :: StablePtr Any -> CInt -> CLLong -> IO CLLong
 
+-- | Wrap a runtime-owned foreign object with its compiled exception dictionary.
+-- Supplying an arbitrary Haskell value does not make it a valid foreign object.
 -- These helpers are compiled by GHC, including the actual existential dictionary
 -- and Typeable projection. Neither the runtime nor its tests forge SomeException.
 boxForeign :: Any -> SomeException
 boxForeign raw = toException (ForeignException raw)
 {-# OPAQUE boxForeign #-}
 
+-- | Recover the opaque object from a foreign exception, or return the internal
+-- unit-shaped sentinel for another exception. Only the runtime boundary may
+-- interpret this untyped result.
 projectForeign :: SomeException -> Any
 projectForeign value = case fromException value of
   Just (ForeignException raw) -> raw
   Nothing -> unsafeCoerce ()
 {-# OPAQUE projectForeign #-}
 
--- Metadata inspection is effectful and may itself fail in the foreign language.
+-- | Metadata inspection is effectful and may itself fail in the foreign language.
 -- The runtime publishes an immutable snapshot before indexing its codepoints.
 -- Concurrent first queries may inspect independently; the first published value wins.
 exceptionText :: Int -> ForeignException -> IO (Maybe String)

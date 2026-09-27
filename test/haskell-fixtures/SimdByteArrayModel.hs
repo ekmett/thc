@@ -9,7 +9,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : GHC with the declared language extensions
+-- Portability : GHC OverloadedStrings; aeson and unbounded Integer arithmetic
 --
 -- Independent integer byte-assembly model for 128-bit SIMD memory fixtures.
 module SimdByteArrayModel

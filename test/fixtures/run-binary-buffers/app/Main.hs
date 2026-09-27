@@ -7,7 +7,7 @@
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
--- Portability : Haskell with the imported library dependencies
+-- Portability : Haskell base; foreign buffers and binary handles
 --
 -- Executable for the @run-binary-buffers@ integration fixture.
 module Main (main) where
