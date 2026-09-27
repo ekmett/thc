@@ -13,6 +13,7 @@ import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.TruffleSafepoint
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameDescriptor
+import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.frame.MaterializedFrame
 import com.oracle.truffle.api.nodes.*
@@ -1814,7 +1815,36 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
                             internal val enableDelimited: Boolean = false) : GuestRoot(language, descriptor) {
-    init { configureEntry(entryStrict, captureLayout != null); configureInput(inputLayout); configureTupleResult(tuple) }
+    init {
+        configureEntry(entryStrict, captureLayout != null)
+        configureInput(inputLayout)
+        configureTupleResult(tuple)
+        fun initialize(slot: Int, kind: FrameSlotKind) {
+            if (descriptor.getSlotKind(slot) == FrameSlotKind.Illegal) descriptor.setSlotKind(slot, kind)
+        }
+        // These carriers are already required by buildFrame. Establish their
+        // slot kinds before publishing the root, not on its first compiled call.
+        // An asynchronously forced argument may still contain a thunk here.
+        for (i in argumentSlots.indices) {
+            if (enableAsync && argumentIndices[i] + entryArgumentOffset in strictArgumentPositions) continue
+            val proof = argumentProofs.getOrNull(i) ?: continue
+            val kind = when {
+                proof.referenceCarrier() != null -> FrameSlotKind.Object
+                proof.isLong -> FrameSlotKind.Long
+                proof.isFloat -> FrameSlotKind.Float
+                proof.isDouble -> FrameSlotKind.Double
+                else -> continue
+            }
+            initialize(argumentSlots[i], kind)
+        }
+        // Dense entry first snapshots its owned packet, independently of the
+        // formal slots. Its immutable physical layout fixes these carriers too.
+        handoff?.let { entry ->
+            for (i in entry.snapshotSlots.indices)
+                initialize(entry.snapshotSlots[i], if (entry.arguments.isLong(i)) FrameSlotKind.Long else FrameSlotKind.Object)
+            initialize(entry.destinationSlot, FrameSlotKind.Long)
+        }
+    }
     @field:CompilationFinal(dimensions = 1)
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
     @field:CompilationFinal(dimensions = 1)
