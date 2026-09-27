@@ -99,17 +99,18 @@ object CoreModules {
             mac.doFinal((verifyArtifacts.toString() + ":" + path.length + ":" + path + ":" + sha256).toByteArray(Charsets.UTF_8)))
     }
 
-    private fun admission(module: Map<String, Any?>): ManagedExportAdmission? =
+    internal fun admission(module: Map<String, Any?>,
+                           binding: ((String) -> Map<String, Any?>)? = null): ManagedExportAdmission? =
         if ((module["schema"] == 2L || module["schema"] == 2) &&
             module.containsKey("staticForeignExportRegistration") &&
-            CoreForeignArtifacts.hasRegistrationObligations(module)) ManagedExportAdmission.read(module) else null
+            CoreForeignArtifacts.hasRegistrationObligations(module)) ManagedExportAdmission.read(module, binding) else null
 
     fun merge(modules: List<Map<String, Any?>>): Map<String, Any?> = Merger().also { merger ->
         modules.forEach { merger.add(it) }
     }.finish()
 
     /** Retain only linked definitions, never the complete raw package request. */
-    internal class Merger {
+    internal class Merger(private val availableModules: Set<String> = emptySet()) {
         private var count = 0
         private val admissions = arrayListOf<ManagedExportAdmission>()
         private val bindings = linkedMapOf<String, Map<String, Any?>>()
@@ -127,35 +128,51 @@ object CoreModules {
         private val providedModules = hashSetOf<String>()
         private val completeModules = hashSetOf<String>()
         @Suppress("UNCHECKED_CAST")
-        fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
-            require(admission == null || admission.module === module) {
+        fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) =
+            append(module, admission, null)
+
+        fun addSelected(admission: CoreModuleAdmission, bindings: List<Map<String, Any?>>) =
+            append(admission.selected(bindings), admission.exports, admission)
+
+        /** Declaration-only modules contribute their original typed ABI
+         * provenance, not bindings, constructors, or registration roots. */
+        fun addPackageProvenance(admission: PackageScalarAdmission) = packageProvenance(admission)
+
+        private fun packageProvenance(admission: PackageScalarAdmission) {
+            val link = admission.link
+            require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
+                "Package C entry namespace belongs to another unit: ${link.componentSha256}"
+            }
+            val previous = packageScalarLinks.putIfAbsent(link.unit, link)
+            require(previous == null || previous.same(link)) { "Conflicting package C component: ${link.unit}" }
+            packageScalarProofs.getOrPut(link.unit) { linkedSetOf() }.addAll(admission.proved)
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        private fun append(module: Map<String, Any?>, admission: ManagedExportAdmission?, prepared: CoreModuleAdmission?) {
+            require(admission == null || admission.module === (prepared?.module ?: module)) {
                 "Managed export admission belongs to a different Core module"
             }
             count++
-            thc.runtime.CoreForeignExceptionBridge.read(module)?.let { proof ->
+            (if (prepared == null) thc.runtime.CoreForeignExceptionBridge.read(module) else prepared.bridge)?.let { proof ->
                 require(exceptionBridges.putIfAbsent(proof["unit"] as String, proof) == null) { "Duplicate foreign exception bridge unit" }
             }
             (module["foreignExceptionBridgeUnit"] as? String)?.let { unit ->
                 require(exceptionBridgeUnit == null || exceptionBridgeUnit == unit) { "Conflicting foreign exception bridge selection" }
                 exceptionBridgeUnit = unit
             }
-            if (admission != null) admissions.add(admission)
-            CoreForeignArtifacts.validateArchive(module)
-            val nativeArchive = PackageNativeArchives.read(module)
-            val packageLink = PackageScalarLinks.read(module)
-            packageLink?.let { admission ->
-                val link = admission.link
-                require(packageScalarLinks.values.none { it.unit != link.unit && it.componentSha256 == link.componentSha256 }) {
-                    "Package C entry namespace belongs to another unit: ${link.componentSha256}"
-                }
-                val previous = packageScalarLinks.putIfAbsent(link.unit, link)
-                require(previous == null || previous.same(link)) { "Conflicting package C component: ${link.unit}" }
-                packageScalarProofs.getOrPut(link.unit) { linkedSetOf() }.addAll(admission.proved)
-            }
-            val link = CoreForeignArtifacts.linked(module)
+            // Direct-unit startup registration is owned by CoreUnitProgram,
+            // not repeated in every selected binding's program.
+            if (admission != null && prepared == null) admissions.add(admission)
+            if (prepared == null) CoreForeignArtifacts.validateArchive(module)
+            val nativeArchive = if (prepared == null) PackageNativeArchives.read(module) else prepared.archive
+            val packageLink = if (prepared == null) PackageScalarLinks.read(module) else prepared.packageLink
+            packageLink?.let(::packageProvenance)
+            val link = if (prepared == null) CoreForeignArtifacts.linked(module) else prepared.foreignLink
             val archiveOnly = module["schema"] == 2L || module["schema"] == 2
             val managedExport = admission != null
-            val managedImports = packageLink == null && ManagedImportAdmission.read(module) != null
+            val managedImports = if (prepared == null) packageLink == null && ManagedImportAdmission.read(module) != null
+                else prepared.imports != null
             if (archiveOnly && link == null && packageLink == null && !managedExport && !managedImports && CoreForeignArtifacts.hasRegistrationObligations(module))
                 CoreForeignArtifacts.requireExecutable(module)
             link?.let {
@@ -215,8 +232,8 @@ object CoreModules {
         }
         fun finish(): Map<String, Any?> {
             require(count != 0) { "No Core modules supplied" }
-            require(completeModules.containsAll(providedModules)) {
-                "Interface closure lacks its exact complete provided modules: ${providedModules - completeModules}"
+            require((completeModules + availableModules).containsAll(providedModules)) {
+                "Interface closure lacks its exact complete provided modules: ${providedModules - completeModules - availableModules}"
             }
             packageScalarLinks.forEach { (unit, link) ->
                 require(packageScalarProofs[unit] == link.abi.map { it.entry }.toSet()) {
@@ -241,7 +258,16 @@ object CoreModules {
         reachable(module, listOf(entry), strictLink)
 
     @Suppress("UNCHECKED_CAST")
-    fun reachable(module: Map<String, Any?>, entries: List<String>, strictLink: Boolean = false): Map<String, Any?> {
+    fun reachable(module: Map<String, Any?>, entries: List<String>, strictLink: Boolean = false): Map<String, Any?> =
+        linkedBindings(module, entries, strictLink, null, null)
+
+    internal fun demanded(module: Map<String, Any?>, entry: String, demand: thc.runtime.CoreDemandBindings,
+                          bridge: () -> Map<String, Any?>): Map<String, Any?> =
+        linkedBindings(module, listOf(entry), true, demand, bridge)
+
+    @Suppress("UNCHECKED_CAST")
+    private fun linkedBindings(module: Map<String, Any?>, entries: List<String>, strictLink: Boolean,
+                               demand: thc.runtime.CoreDemandBindings?, bridge: (() -> Map<String, Any?>)?): Map<String, Any?> {
         if (module.containsKey("archiveBindings")) CoreForeignArtifacts.validateArchive(module)
         else CoreForeignArtifacts.requireExecutableInput(module)
         val bindings = module["bindings"] as List<Map<String, Any?>>
@@ -256,14 +282,15 @@ object CoreModules {
         var owner = ""
         var exceptionBridge: Map<String, Any?>? = null
         fun constructor(id: String) {
-            if (strictLink && id !in constructorIds)
+            if (strictLink && id !in constructorIds && demand?.constructors(emptyMap())?.containsKey(id) != true)
                 missingConstructors.getOrPut(id) { linkedSetOf() }.add(owner)
         }
         fun reference(id: String, bound: Set<String>) {
             if (id in bound) return
             if (id in byId) {
                 if (reachable.add(id)) pending.addLast(id)
-            } else if (strictLink) missing.getOrPut(id) { linkedSetOf() }.add(owner)
+            } else if (demand?.contains(id) == true) demand.cell(id)
+            else if (strictLink) missing.getOrPut(id) { linkedSetOf() }.add(owner)
         }
         fun visit(expr: List<Any?>, bound: Set<String>) {
             when (expr[0]) {
@@ -283,12 +310,17 @@ object CoreModules {
                 "app" -> {
                     val function = expr[1] as List<Any?>
                     thc.runtime.CoreExceptionPayload.validate(expr)
-                    if (thc.runtime.CoreForeignExceptionBridge.executes(expr,
-                        function.firstOrNull() == "var" && (function.getOrNull(1) in bound || function.getOrNull(1) in byId),
+                    val foreignDescriptor = CoreRepresentations.metadata(expr)?.get("foreignCall") is Map<*, *>
+                    val defined = function.firstOrNull() == "var" && (function.getOrNull(1) in bound ||
+                        function.getOrNull(1) in byId || (function.getOrNull(1) as? String)?.let {
+                            if (foreignDescriptor) demand?.isDefined(it) else demand?.contains(it)
+                        } == true)
+                    if (thc.runtime.CoreForeignExceptionBridge.executes(expr, defined,
                         module["packageScalarLinks"] as? List<PackageScalarLink> ?: emptyList())) {
-                        val bridge = exceptionBridge ?: thc.runtime.CoreForeignExceptionBridge.select(module).also { exceptionBridge = it }
-                        reference(bridge["box"] as String, emptySet())
-                        reference(bridge["project"] as String, emptySet())
+                        val selectedBridge = exceptionBridge ?: (bridge?.invoke() ?: thc.runtime.CoreForeignExceptionBridge.select(module))
+                            .also { exceptionBridge = it }
+                        reference(selectedBridge["box"] as String, emptySet())
+                        reference(selectedBridge["project"] as String, emptySet())
                     }
                     if (thc.runtime.CoreSignalForeign.named(CoreRepresentations.metadata(expr)))
                         reference(thc.runtime.CoreSignalForeign.dispatcher, emptySet())
@@ -296,9 +328,9 @@ object CoreModules {
                     // Lowering validates the complete ABI and rejects unsupported
                     // targets. Defined heads and all operands still participate
                     // in linking; metadata cannot hide their dependencies.
-                    val foreignHead = CoreRepresentations.metadata(expr)?.get("foreignCall") is Map<*, *> &&
+                    val foreignHead = foreignDescriptor &&
                         function.firstOrNull() == "var" && function.getOrNull(1) is String &&
-                        function[1] !in bound && function[1] !in byId
+                        !defined
                     if (!foreignHead) visit(function, bound)
                     (expr[2] as List<List<Any?>>).forEach { visit(it, bound) }
                 }
@@ -503,6 +535,38 @@ object CoreModules {
                                   verifyArtifacts: Boolean): String =
         packageCapability("indexed-json:" + Json.stringify(listOf(path, sidecar, sidecarSha)), sha, verifyArtifacts)
 
+    internal fun unitDirectory(input: Map<String, Any?>): CoreUnitDirectory? {
+        val manifest = input["packageManifest"] as? String ?: return null
+        require(input["modules"] == null && input["targetLayout"] == null) { "Package request must not mix input protocols" }
+        require(input["verifyArtifacts"] == null || input["verifyArtifacts"] is Boolean) { "verifyArtifacts must be a Boolean" }
+        val verify = input["verifyArtifacts"] == true
+        val expected = input["packageManifestSha256"] as? String ?: error("Missing package manifest identity")
+        val supplied = input["packageCapability"] as? String ?: error("Missing package request capability")
+        require(MessageDigest.isEqual(supplied.toByteArray(Charsets.US_ASCII),
+            packageCapability(manifest, expected, verify).toByteArray(Charsets.US_ASCII))) { "Invalid package request capability" }
+        val bytes = Files.readAllBytes(Path.of(manifest))
+        if (verify) require(sha256(bytes) == expected) { "Core package manifest changed after request: $manifest" }
+        val document = Json.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *> ?: error("Invalid Core package manifest")
+        val directory = CoreUnitDirectory.read(document) ?: return null
+        require(input["foreignExceptionBridgeUnit"] == directory.foreignExceptionBridgeUnit) { "Package bridge selection changed after request" }
+        return directory
+    }
+
+    /** Replay only explicitly supplied consumers. Package definitions stay in
+     * their unit directory; an interface closure never becomes a package unit. */
+    internal fun visitUnitConsumers(input: Map<String, Any?>,
+        indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit, accept: (Map<String, Any?>) -> Unit) {
+        val files = input["indexedModuleFiles"]
+        val consumers = input["consumerModules"]
+        require(files == null || consumers == null) { "Mixed loose consumer protocols" }
+        val loose = input - setOf("packageManifest", "packageManifestSha256", "packageCapability", "consumerModules")
+        if (files != null) visitRequestModules(loose, indexed, accept)
+        else if (consumers != null) {
+            require(consumers is List<*> && consumers.all { it is Map<*, *> }) { "Invalid loose package consumers" }
+            visitRequestModules(loose + ("modules" to consumers), indexed, accept)
+        }
+    }
+
     /** Opt-in host path: exact loose JSON and explicit producer sidecars, without
      * embedding or parsing a module body while assembling the load request.
      * An optional package manifest retains its independently checked identity.
@@ -647,6 +711,7 @@ class Language : TruffleLanguage<Language.State>() {
         internal val capturedAsyncRequests = thc.runtime.CapturedAsyncRequests()
         internal val foreignExceptionRegistry = thc.runtime.ForeignExceptionRegistry()
         internal val foreignExceptionNormalization = ThreadLocal.withInitial { false }
+        internal val coreUnitPrograms = java.util.concurrent.CopyOnWriteArrayList<CoreUnitProgram>()
         internal val stablePointers = thc.runtime.StablePointers()
         internal val compilerRts = thc.runtime.CompilerRts()
         internal val stableNames = thc.runtime.StableNames()
@@ -757,7 +822,12 @@ class Language : TruffleLanguage<Language.State>() {
         } finally {
             try { try { context.weaks.close() } finally { context.stableNames.close() } } finally {
                 try { context.stablePointers.close() } finally {
-                    try { context.nativeAddresses.close() } finally { context.nativeAllocations.close() }
+                    try { context.nativeAddresses.close() } finally {
+                        try { context.nativeAllocations.close() } finally {
+                            try { context.coreUnitPrograms.forEach { it.close() } }
+                            finally { context.coreUnitPrograms.clear() }
+                        }
+                    }
                 }
             }
         }
@@ -777,6 +847,9 @@ class Language : TruffleLanguage<Language.State>() {
                 override fun execute(frame: VirtualFrame): Any = currentState(this).managedExports.load(plan)
                 override fun getName() = "THC load managed exports"
             }.callTarget
+        }
+        CoreModules.unitDirectory(input)?.let { directory ->
+            return unitRoot(input, directory)
         }
         val merger = CoreModules.Merger()
         val entry = input["entry"] as? String ?: error("Expected entry name")
@@ -847,6 +920,47 @@ class Language : TruffleLanguage<Language.State>() {
             override fun getName(): String = "THC load $entry"
         }.callTarget
     }
+
+    private fun unitRoot(input: Map<String, Any?>, directory: CoreUnitDirectory): CallTarget {
+        val entry = input["entry"] as? String ?: error("Expected entry name")
+        val shutdown = input["shutdownEntry"] as? String
+        require(shutdown == null || input["ioMain"] == true && shutdown.isNotBlank() && shutdown != entry) {
+            "Executable shutdown requires a distinct IO entry"
+        }
+        val backend = input["backend"] ?: defaultBackend()
+        require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
+        require(input["asyncExceptions"] == null || input["asyncExceptions"] is Boolean) { "asyncExceptions must be a Boolean" }
+        val async = input["asyncExceptions"] as? Boolean ?: (backend == "bytecode")
+        require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) { "IO main requires strict unsupported-Core rejection" }
+        return object : RootNode(this) {
+            override fun execute(frame: VirtualFrame): Any {
+                val owner = currentState(this)
+                val program = CoreUnitProgram(this@Language, directory, input, entry, backend as String, async, owner)
+                try {
+                    val bindings = program.signatureBindings(entry)
+                    val selected = bindings.single { it["id"] == entry }
+                    val expression = selected["expr"] as List<Any?>
+                    val io = if (input["ioMain"] == true) CoreRepresentations.ioUnitMainResult(selected, bindings) else null
+                    val shutdownResult = shutdown?.let { id ->
+                        val definitions = program.signatureBindings(id)
+                        CoreRepresentations.ioUnitMainResult(definitions.single { it["id"] == id }, definitions)
+                    }
+                    if (io == null) CoreRepresentations.knownFunctionSignature(expression, bindings)?.let { (inputs, result) ->
+                        inputs.forEach { CoreRepresentations.requireScalar(it, "host argument") }
+                        CoreRepresentations.requireScalar(result, "host result")
+                    }
+                    val registrations = program.registerStartup()
+                    val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), null,
+                        io, this@Language, shutdown, shutdownResult,
+                        async && program.contains(thc.runtime.CoreSignalForeign.dispatcher))
+                    owner.coreUnitPrograms += program
+                    owner.foreignRoots.retain(program, registrations)
+                    return value
+                } catch (failure: Throwable) { program.close(); throw failure }
+            }
+            override fun getName() = "THC load $entry from unit directory"
+        }.callTarget
+    }
 }
 
 @ExportLibrary(InteropLibrary::class)
@@ -883,11 +997,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             }
         }
         val threads = Language.currentState(dispatch).threads
-        threads.enterCurrent(externalAsync = when (program) {
-            is Program -> program.enableAsync
-            is BytecodeProgram -> program.enableAsync
-            else -> true
-        })
+        threads.enterCurrent(externalAsync = program.asynchronousExceptions)
         var outcome = thc.runtime.GuestThreadStatus.FINISHED
         try {
             try {
@@ -909,14 +1019,14 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
     @ExportMessage fun hasMembers() = true
     @ExportMessage fun getMembers(includeInternal: Boolean): Any = MemberNames(
         if (ioTarget != null) {
-            if (program is BytecodeProgram) arrayOf("diagnostics", "runIO", "bytecode") else arrayOf("diagnostics", "runIO")
-        } else if (program is BytecodeProgram) arrayOf("diagnostics", "compile", "bytecode") else arrayOf("diagnostics", "compile"))
-    @ExportMessage fun isMemberReadable(member: String) = member == "diagnostics" || (member == "bytecode" && program is BytecodeProgram)
+            if (program.hasBytecode) arrayOf("diagnostics", "runIO", "bytecode") else arrayOf("diagnostics", "runIO")
+        } else if (program.hasBytecode) arrayOf("diagnostics", "compile", "bytecode") else arrayOf("diagnostics", "compile"))
+    @ExportMessage fun isMemberReadable(member: String) = member == "diagnostics" || (member == "bytecode" && program.hasBytecode)
     @ExportMessage @CompilerDirectives.TruffleBoundary
     fun readMember(member: String): Any {
         return when {
             member == "diagnostics" -> Json.stringify(program.diagnostics())
-            member == "bytecode" && program is BytecodeProgram -> program.bytecodeDump()
+            member == "bytecode" && program.hasBytecode -> program.bytecodeDump()
             else -> throw UnknownIdentifierException.create(member)
         }
     }
@@ -930,11 +1040,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                 throw thc.runtime.RuntimeFault("Executable IO lifecycle already started")
             val owner = Language.currentState(dispatch)
             val threads = owner.threads
-            threads.enterCurrent(externalAsync = when (program) {
-                is Program -> program.enableAsync
-                is BytecodeProgram -> program.enableAsync
-                else -> true
-            })
+            threads.enterCurrent(externalAsync = program.asynchronousExceptions)
             var outcome = thc.runtime.GuestThreadStatus.FINISHED
             try {
                 if (processSignals) owner.signals.bind(program)

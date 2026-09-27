@@ -106,7 +106,7 @@ internal object PackageNativeArchives {
         return available.toSet()
     }
 
-    fun read(module: Map<*, *>): PackageNativeArchive? {
+    fun read(module: Map<*, *>, completeBindings: Boolean = true): PackageNativeArchive? {
         val raw = module["packageNativeArchive"] ?: return null
         val conflictField = raw is Map<*, *> && raw.containsKey("conflictingImports")
         val resolution = raw is Map<*, *> && raw.containsKey("entryResolution")
@@ -140,7 +140,7 @@ internal object PackageNativeArchives {
                 check(module.containsKey("foreign") || stubs["source"] == "", "missing retained stubs")
             }
             if (module.containsKey("foreign")) check(module["foreign"] == product, "retained product differs")
-            check(p["expectedCalls"] == PackageNativeArchive.calls(module["bindings"]), "retained Core inventory differs")
+            CoreCallInventory.check(p["expectedCalls"], PackageNativeArchive.calls(module["bindings"]), completeBindings)
             val binders = hashSetOf<Any?>()
             list(p["imports"]).map { item ->
                 val entry = record(item, "binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted")
@@ -179,10 +179,11 @@ internal object PackageNativeArchives {
             // Validate the actual compiled bytes and complete typed ABI, but do
             // not hand this admission to the merger or load it into Sulong.
             @Suppress("UNCHECKED_CAST")
-            PackageScalarLinks.read((module as Map<String, Any?>) + ("packageNativeLink" to artifact), validateArchive = false)
+            PackageScalarLinks.read((module as Map<String, Any?>) + ("packageNativeLink" to artifact),
+                validateArchive = false, completeBindings = completeBindings)
         }
         val available = if (resolution) available(module) else null
-        if (available != null) PackageScalarLinks.read(module, validateArchive = false)
+        if (available != null) PackageScalarLinks.read(module, validateArchive = false, completeBindings = completeBindings)
         val unavailable = if (available == null) emptyList() else list((artifact as Map<*, *>)["abi"])
             .map { it as Map<*, *> }.filter { it["entry"] !in available }
         return PackageNativeArchive("${unit}:${module["module"]} has archive-only native obligations" +

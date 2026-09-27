@@ -4,7 +4,16 @@ package thc
 
 /** Retained stock wrappers may be replaced only by separately validated managed
  * call adapters. This token grants no native symbol or callback capability. */
-internal class ManagedImportAdmission private constructor(val module: Map<*, *>) {
+internal class ManagedImportAdmission private constructor(val module: Map<*, *>,
+    private val generated: Map<Pair<Any?, Any?>, Map<String, Any?>>) {
+    fun validateCalls(actual: List<*>) {
+        for (call in actual) {
+            val target = (call as? Map<*, *>)?.get("target") as? Map<*, *> ?: continue
+            generated[target["unit"] to target["symbol"]]?.let { expected ->
+                require(expected == call) { "Generated CAPI call ABI differs" }
+            }
+        }
+    }
     companion object {
         private fun requireProof(value: Boolean, detail: String) {
             require(value) { "Invalid managed static-import provenance: $detail" }
@@ -61,7 +70,7 @@ internal class ManagedImportAdmission private constructor(val module: Map<*, *>)
                     "components" to result.map { scalar(it, true) }, "evaluated" to false))
         }
 
-        fun read(module: Map<*, *>): ManagedImportAdmission? {
+        fun read(module: Map<*, *>, completeBindings: Boolean = true): ManagedImportAdmission? {
             if (!module.containsKey("staticForeignImportStubs")) return null
             val raw = module["staticForeignImportStubs"]
             requireProof(module["schema"] == 2L || module["schema"] == 2, "archive schema")
@@ -114,14 +123,8 @@ internal class ManagedImportAdmission private constructor(val module: Map<*, *>)
             }
             requireProof(generated.isNotEmpty(), "no generated CAPI products")
             val actual = calls(module["bindings"])
-            requireProof(proof["expectedCalls"] is List<*> && proof["expectedCalls"] == actual, "Core foreign-call inventory differs")
-            for (call in actual) {
-                val target = (call as? Map<*, *>)?.get("target") as? Map<*, *> ?: continue
-                generated[target["unit"] to target["symbol"]]?.let { expected ->
-                    requireProof(expected == call, "generated CAPI call ABI differs")
-                }
-            }
-            return ManagedImportAdmission(module)
+            CoreCallInventory.check(proof["expectedCalls"], actual, completeBindings)
+            return ManagedImportAdmission(module, generated).also { it.validateCalls(actual) }
         }
     }
 }

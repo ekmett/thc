@@ -2161,19 +2161,22 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
  */
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false) : ExecutableProgram {
+    override val asynchronousExceptions get() = enableAsync
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val demand = moduleData["demandBindings"] as? CoreDemandBindings
     private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
     private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
-    private val metrics = Metrics(moduleData["instrument"] != false)
+    private val metrics = demand?.metrics ?: Metrics(moduleData["instrument"] != false)
     private val loadingStatistics = moduleData["coreLoadingStatistics"] as? (() -> Map<String, Any>)
-    private val delimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
+    private val containsDelimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
         val body = (binding as? Map<*, *>)?.get("expr")
         if (body is thc.CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(binding)
     } ?: DelimitedControl.contains(moduleData["bindings"])
+    private val delimited = containsDelimited || demand != null && moduleData["captureDelimited"] == true
     private val sources = CoreSources(moduleData)
     private var currentSource: CoreSourceLocation? = null
     private var operandBuilder: OperandBuilder? = null
@@ -2212,28 +2215,31 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val deferredUnsupported = linkedSetOf<String>()
     private val bindings = moduleData["bindings"] as? List<Map<String, Any?>> ?: throw RuntimeFault("Missing bindings")
     private val constructors = (moduleData["constructors"] as? List<Map<String, Any?>> ?: emptyList()).associateBy { it["id"] as String }
-    private val dataLayouts = mutableMapOf<String, DataLayout>()
+        .let { demand?.constructors(it) ?: it }
+    private val dataLayouts = demand?.layouts ?: mutableMapOf<String, DataLayout>()
     private val globals = bindings.associate { it["id"] as String to GlobalBinding(it["name"] as String) }
+        .let { demand?.globals(it) ?: it }
     private val globalProofs = bindings.associate { binding ->
         val expression = binding["expr"] as List<Any?>
         val delayed = representation(binding) && expression[0] !in listOf("lam", "lit", "con", "void")
         (binding["id"] as String) to if (diagnosticUnsupported) CoreRepresentation.UNKNOWN
-            else CoreRepresentations.binder(binding).copy(evaluated = !delayed && expression[0] in listOf("lam", "lit", "con", "void"))
+            else CoreRepresentations.binder(binding).copy(evaluated = demand == null && !delayed && expression[0] in listOf("lam", "lit", "con", "void"))
     }
     private val indices = bindings.withIndex().associate { it.value["id"] as String to it.index }
     private val names = bindings.withIndex().groupBy({ it.value["name"] as String }, { it.index })
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
-    private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors)
+    private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors, demand)
     init {
-        if (enableAsync && delimited)
+        if (enableAsync && containsDelimited)
             throw UnsupportedCore("Delimited continuations do not yet preserve AST async captures")
         val eager = ArrayList<Map<String, Any?>>()
         for (binding in bindings) {
             // Strict global initialization retains its original scheduling.
             val source = binding["expr"] as? thc.CoreBindingBody
-            if (source == null || !representation(binding) || source.header.tag in listOf("lit", "con", "void")) {
+            if ((source == null && demand == null) || !representation(binding) ||
+                demand == null && source?.header?.tag in listOf("lit", "con", "void")) {
                 eager += binding
                 continue
             }
@@ -2295,7 +2301,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         return withSource(sources.binding(binding)) {
             val expr = binding["expr"] as List<Any?>
             CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
-            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
+            if (demand != null && !representation(binding) && expr[0] !in listOf("lit", "void"))
+                throw UnsupportedCore("Demand loading does not yet support effectful strict global initialization")
+            if (representation(binding) && (expr[0] !in listOf("lam", "lit", "con", "void") || demand != null && expr[0] != "lam")) delay(expr, scope, binding["name"] as String)
             else argument(expr, scope, representation(binding), binding["name"] as String)
         }
     }
@@ -2304,7 +2312,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         ?: throw RuntimeFault("Unknown or ambiguous entry $name")
     @Synchronized override fun hostEntryTarget(arity: Int): RootCallTarget =
         hostEntries.getOrPut(arity) { EntryRoot(language, arity, metrics).callTarget }
-    override fun entryValue(name: String): Any? = globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
+    override fun entryValue(name: String): Any? = if (name !in indices && demand?.contains(name) == true)
+        globals.getValue(name).read() else globals.getValue(bindings[bindingIndex(name)]["id"] as String).read()
     override fun constructorLayout(id: String): DataLayout = dataLayout(id)
     override fun entryTarget(name: String): RootCallTarget {
         var value = entryValue(name)
@@ -2491,7 +2500,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val arityCertificate = headId?.let { id ->
             if (id in scope.locals) scope.locals.getValue(id).arityCertificate else globalArityCertificates[id]
         }
-        if (CoreApplicationCertificates.eagerApplication(expr, arityCertificate))
+        val unopenedHead = headId != null && headId !in scope.locals && headId !in globalArityCertificates && demand?.contains(headId) == true
+        if (!unopenedHead && CoreApplicationCertificates.eagerApplication(expr, arityCertificate))
             return compile(expr, scope, false).also { check(it.representation) }
         return when (expr[0]) { "var", "lit", "lam", "con", "prim", "void" -> compile(expr, scope, false); else -> delay(expr, scope, label) }.also { check(it.representation) }
     }
@@ -2552,7 +2562,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
         "var" -> {
             val id = expr[1] as String
-            CoreVectors.requireVariableProof(scope.locals[id]?.proof ?: globalProofs[id], CoreRepresentations.expression(expr))
+            val occurrence = CoreRepresentations.expression(expr)
+            val proof = scope.locals[id]?.proof ?: globalProofs[id] ?: demand?.occurrence(id, occurrence)
+            CoreVectors.requireVariableProof(proof, occurrence)
             scope.joins[id]?.let { joinJump(it, emptyList(), emptyList<Boolean>(), scope) }
                 ?: scope.locals[id]?.let {
                     if (it.tupleSlots != null) {
@@ -2563,7 +2575,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     else if (it.slot < 0 && it.proof.kind == CoreKind.VOID) Literal(Unit).proven(it.proof)
                     else LocalRead(it.slot, it.cell).proven(it.proof)
                 }
-                ?: globals[id]?.let { GlobalRead(it).proven(globalProofs.getValue(id)) }
+                ?: globals[id]?.let { GlobalRead(it).proven(proof ?: globalProofs.getValue(id)) }
                 ?: throw UnsupportedCore("Unresolved external binding $id")
         }
         "lit" -> Literal(literal(expr[1] as String, expr[2] as String, CoreRepresentations.expression(expr))).let {
@@ -2589,7 +2601,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             // Join heads are lexically owned too: foreign metadata cannot turn
             // a local jump into an unresolved external declaration.
             val defined = fn[0] == "var" &&
-                (fn[1] in globals || fn[1] in scope.locals || fn[1] in scope.joins)
+                (fn[1] in scope.locals || fn[1] in scope.joins ||
+                    if (demand != null && CoreRepresentations.metadata(expr)?.containsKey("foreignCall") == true)
+                        demand.isDefined(fn[1] as String) else fn[1] in globals)
             val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val runtimeService = CoreRuntimeServices.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val packageScalar = if (cpuAffinity == null && runtimeService == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
@@ -2687,7 +2701,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     if (args.single()[0] == "var") scope.locals[args.single()[1]]?.proof ?: globalProofs[args.single()[1]] else null)
                 CpuAffinityQuery(cpuAffinity, state).proven(tupleProof.copy(evaluated = true))
             } else if (stackClone) {
-                CoreStackForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+CoreStackForeign.validateHead(fn, defined)
                 val state = args.single()
                 CoreStackForeign.validateBinding(if (state[0] == "var")
                     scope.locals[state[1]]?.proof ?: globalProofs[state[1]] else null)
@@ -2696,7 +2710,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CloneStackExpression(operand, tupleProof)
             } else if (stackInfo != null) {
                 val layout = CoreStackInfoForeign.requireLayout(stackTargetLayout)
-                CoreStackInfoForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreStackInfoForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreStackInfoForeign.validateOperand(stackInfo, index, operand.representation,
@@ -2714,7 +2728,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 ProcessForeignExpression(originalProcess, operands.toTypedArray(), tupleProof)
             } else if (originalStdio != null) {
-                CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreOriginalStdio.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio.pathRemoval || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio == OriginalStdioOp.FSTATAT || originalStdio.pathLink || originalStdio.currentDirectory || originalStdio.directoryStream || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
@@ -2744,7 +2758,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 PackageScalarExpression(packageScalar, operands.toTypedArray(), tupleProof)
             } else if (stableFree) {
-                CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreStablePointers.validateHead(fn, defined)
                 FreeStablePointer(compile(args[0], scope, false), compile(args[1], scope, false))
                     .proven(tupleProof.copy(evaluated = true))
             } else if (sharedCAF != null) {
@@ -2767,7 +2781,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 RtsArgumentsExpression(rtsArguments, operands.toTypedArray(), tupleProof)
             } else if (rtsDiagnostic != null) {
-                CoreRtsDiagnosticForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreRtsDiagnosticForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreRtsDiagnosticForeign.validateOperand(rtsDiagnostic, index, operand.representation,
@@ -2856,7 +2870,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 RegisterMainThread(operands[0], operands[1]).proven(tupleProof.copy(evaluated = true))
             } else if (managedFile != null) {
-                CoreManagedFiles.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreManagedFiles.validateHead(fn, defined)
                 ManagedFileExpression(managedFile, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (processSignal != null) {
                 CoreSignalForeign.validateHead(fn, defined)
@@ -2868,7 +2882,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 InstallProcessSignal(operands.toTypedArray(), tupleProof)
             } else if (nativeAllocation != null) {
-                CoreNativeAllocationForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreNativeAllocationForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreNativeAllocationForeign.validateOperand(nativeAllocation, index, operand.representation,
@@ -2931,7 +2945,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 MemmoveExpression(operands.toTypedArray(), tupleProof)
             } else if (memcpy) {
-                CoreMemcpyForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMemcpyForeign.validateHead(fn, defined)
                 val byteArrays = CoreMemcpyForeign.byteArrays(foreignMetadata)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
@@ -2941,7 +2955,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 MemcpyExpression(operands.toTypedArray(), tupleProof, byteArrays)
             } else if (libdw != null) {
-                CoreLibdwForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreLibdwForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreLibdwForeign.validateOperand(libdw, index, operand.representation,
@@ -2950,7 +2964,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 OriginalLibdwExpression(libdw, operands.toTypedArray(), tupleProof)
             } else if (gmp != null) {
-                CoreGmpForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreGmpForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
                         CoreGmpForeign.validateOperand(gmp, index, operand.representation,
@@ -2959,7 +2973,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 }
                 GmpForeignExpression(gmp, operands.toTypedArray(), tupleProof)
             } else if (md5 != null) {
-                CoreMd5Foreign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
+                CoreMd5Foreign.validateHead(fn, defined)
                 Md5ForeignExpression(md5, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
             } else if (javascript != null) {
                 JavaScriptExpression(javascript, args.map { argument(it, scope, false) }.toTypedArray())
@@ -3134,7 +3148,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)
             } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
                 val operation = STMOp.named(fn[1] as String)!!
-                if (delimited && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                if (containsDelimited && operation != STMOp.NEW && operation != STMOp.READ_IO)
                     throw UnsupportedCore("STM transaction frames do not support explicit delimited capture")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }

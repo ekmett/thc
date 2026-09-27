@@ -79,8 +79,8 @@ internal object PackageScalarLinks {
             (system.startsWith("Mac") && ("-darwin" in target || "-apple-macosx" in target))), "target differs from runtime")
     }
 
-    fun read(module: Map<*, *>, validateArchive: Boolean = true): PackageScalarAdmission? {
-        if (validateArchive) PackageNativeArchives.read(module)
+    fun read(module: Map<*, *>, validateArchive: Boolean = true, completeBindings: Boolean = true): PackageScalarAdmission? {
+        if (validateArchive) PackageNativeArchives.read(module, completeBindings)
         val native = module.containsKey("packageNativeLink")
         val raw = module[if (native) "packageNativeLink" else "packageScalarLink"] ?: return null
         check(!native || !module.containsKey("packageScalarLink"), "two package link profiles")
@@ -210,7 +210,7 @@ internal object PackageScalarLinks {
                 emitted["result"] == (if (signature.result == "void") listOf("void") else listOf("void", signature.result)), "emitted ABI differs from compiled C")
             proved.add(signature.entry)
         }
-        check(proof["expectedCalls"] == calls(module["bindings"]), "retained Core foreign inventory differs")
+        CoreCallInventory.check(proof["expectedCalls"], calls(module["bindings"]), completeBindings)
         return PackageScalarAdmission(link, proved.intersect(link.abi.map { it.entry }.toSet()))
     }
 }

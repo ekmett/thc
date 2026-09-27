@@ -10,6 +10,46 @@ import java.util.HexFormat
 
 /** Structural controls only: these bytes are never parsed as LLVM or called. */
 class PackageScalarLinksTest {
+    @Test fun demandedBindingsUseOriginalInventoriesWithoutClaimingCompleteness() {
+        val base = module()
+        val proof = base["staticForeignImports"] as Map<String, Any?>
+        val call = mapOf("target" to mapOf("unit" to base["unit"], "symbol" to "scalar_value"))
+        fun binding(id: String, calls: List<Any?>) = mapOf("id" to "scalar-fixture:Scalar.$id",
+            "expr" to listOf("lit", "int", "7", calls.map { mapOf("foreignCall" to it) }))
+        val first = binding("first", listOf(call))
+        val second = binding("second", listOf(call))
+        val original = base + mapOf("bindings" to listOf(first, second),
+            "staticForeignImports" to (proof + ("expectedCalls" to listOf(call, call))))
+        CoreModules.merge(listOf(original))
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(original + ("bindings" to listOf(first))))
+        }
+        val admission = CoreModuleAdmission(original + ("bindings" to emptyList<Any>())) { error("No exports") }
+        val merged = CoreModules.Merger().also { it.addSelected(admission, listOf(first)) }.finish()
+        assertEquals(listOf(first), merged["bindings"])
+        for (bad in listOf(binding("altered", listOf(call + ("safety" to "safe"))),
+            binding("duplicated", listOf(call, call, call))))
+            assertThrows(IllegalArgumentException::class.java) { admission.selected(listOf(bad)) }
+
+        // Inlined-only modules still need the unit's original declaration
+        // providers; no selected body can invent that missing ABI evidence.
+        val scalar = original["packageScalarLink"] as Map<String, Any?>
+        val entry = (scalar["abi"] as List<Map<String, Any?>>).single()
+        val nativeLink = scalar + mapOf("profile" to "thc-package-c-ffi-v1", "abi" to listOf(entry + mapOf(
+            "entry" to "thc_native_${"a".repeat(64)}_0", "convention" to "ccall", "safety" to "unsafe")))
+        val native = (original - "packageScalarLink") + ("packageNativeLink" to nativeLink)
+        val declaration = CoreModuleAdmission(native + ("bindings" to emptyList<Any>())) { error("No exports") }
+        val inlined = (native - "staticForeignImports") + mapOf("module" to "Inline", "bindings" to emptyList<Any>())
+        val inlineAdmission = CoreModuleAdmission(inlined) { error("No exports") }
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.Merger().also { it.addSelected(inlineAdmission, emptyList()) }.finish()
+        }
+        CoreModules.Merger().also {
+            it.addSelected(inlineAdmission, emptyList())
+            it.addPackageProvenance(declaration.packageLink!!)
+        }.finish()
+    }
+
     @Test fun partialNativeLinkKeepsOriginalIndicesAndRequiresCompleteDependencyReceipt() {
         val base = module()
         val scalar = base["packageScalarLink"] as Map<String, Any?>

@@ -97,6 +97,9 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
  * their context's lifetime and the checked host calling convention.
  */
 interface ExecutableProgram {
+    val asynchronousExceptions: Boolean
+    val hasBytecode: Boolean get() = false
+    fun bytecodeDump(): String = throw UnsupportedOperationException("Program has no bytecode backend")
     fun hostEntryTarget(arity: Int = 0): RootCallTarget
     fun entryValue(name: String): Any?
     fun entryTarget(name: String): RootCallTarget
