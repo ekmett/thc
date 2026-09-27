@@ -39,10 +39,10 @@ run: all
 check-ghc-core:
 	@$(CORE_PREFLIGHT) check $(CORE_PACKAGES)
 
-# HLint reads .hlint.yaml; --git excludes build products and downloaded packages.
+# HLint reads .hlint.yaml; the runner selects tracked Haskell sources.
 # Hints retain HLint's nonzero exit status. No compiler or JVM build is needed.
 lint-haskell:
-	$(HLINT) --git -j2 $(HLINT_FLAGS)
+	HLINT='$(HLINT)' bash scripts/lint-haskell.sh $(HLINT_FLAGS)
 
 # These deliberately have no fixture, test, native library, or installDist dependency.
 # Run sequentially even when the caller uses make -j; both compilers are bounded.

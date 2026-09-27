@@ -43,17 +43,20 @@ jobs:
           CPP_PROFILE: ${{ matrix.cpp }}
         run: |
           mkdir -p build/hlint
-          flags='--json'
+          flags=(--json)
           if [ "$CPP_PROFILE" = windows ]; then
-            flags="$flags --cpp-define=mingw32_HOST_OS"
+            flags+=(--cpp-define=mingw32_HOST_OS)
           fi
           status=0
-          make --silent lint-haskell HLINT="$RUNNER_TEMP/hlint-3.10/hlint" \
-            HLINT_FLAGS="$flags" > build/hlint/report.json || status=$?
-          # Make reports a failed HLint recipe as exit 2. Parse the report to
-          # distinguish advisory style hints from parsing/configuration failure.
-          test "$status" -eq 0 || test "$status" -eq 2
-          jq -e 'type == "array" and all(.[]; .severity != "Error")' build/hlint/report.json
+          HLINT="$RUNNER_TEMP/hlint-3.10/hlint" bash scripts/lint-haskell.sh \
+            "${flags[@]}" > build/hlint/report.json || status=$?
+          # Preserve the tool's exit status: 1 denotes findings, while launch or
+          # configuration failures must not be folded into Make's exit status.
+          test "$status" -eq 0 || test "$status" -eq 1
+          jq -e 'type == "array" and all(.[];
+            type == "object" and (.severity == "Warning" or .severity == "Suggestion")
+            and (.file | type == "string") and (.hint | type == "string")
+            and (.startLine | type == "number"))' build/hlint/report.json
           hints=$(jq length build/hlint/report.json)
           echo "HLint ($CPP_PROFILE): $hints advisory hints; see the report artifact." >> "$GITHUB_STEP_SUMMARY"
           if [ "$hints" -gt 0 ]; then
