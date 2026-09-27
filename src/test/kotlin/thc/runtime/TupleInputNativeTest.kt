@@ -38,7 +38,7 @@ class TupleInputNativeTest {
         val checks = Json.parse(File(folder, "checks.json").readText()) as Map<String, Any?>
         for (coverage in checks["coverage"] as List<Map<String, Any?>>)
             assertEquals(entries, (coverage["expectedGuestEntries"] as Map<String, Number>).mapValues { it.value.toLong() },
-                "Retained source paths must support the measured guest-entry expectations")
+                "Preserve the original exported source paths, including the immediate State# lambda")
     }
     private fun context(inlining: Boolean) = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -71,8 +71,9 @@ class TupleInputNativeTest {
         assertEquals(0, state.arguments.depth, label); assertEquals(0, state.arguments.retainedReferences(), label)
         assertEquals(0, state.results.depth, label); assertEquals(0, state.results.retainedReferences(), label)
     }
-    // These count retained guest roots, not logical self calls: recur's matching
-    // self transfers reuse its frame. The public fixture/preparer pins the paths.
+    // The producer pins exported paths, including stateCase's immediate lambda.
+    // Independently prove its in-frame lowering below before counting executable
+    // roots. Recur's matching self transfers already reuse its frame.
     private val entries = mapOf("pairCase" to 2L, "mixedCase" to 2L, "indirectCase" to 3L,
         "prefixCase" to 2L, "papCase" to 4L, "overCase" to 4L, "lazyCase" to 2L,
         "roundTripCase" to 4L, "selfCase" to 2L, "stateCase" to 3L,
@@ -92,6 +93,9 @@ class TupleInputNativeTest {
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val linked = CoreModules.reachable(module, name) + ("instrument" to true)
+                    val retainedPath = if (name == "stateCase")
+                        ArrayCoreEvidence(module, name).loweredStateFunctionPath("consumeState") else null
+                    val expectedEntries = retainedPath?.size?.toLong() ?: entries.getValue(name)
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val host = program.hostEntryTarget(arity)
                     val original = program.entryTarget(name)
@@ -105,6 +109,11 @@ class TupleInputNativeTest {
                     cases.forEach { assertEquals(it.last().toLong(), invoke(it), "$label/interpreted/$it"); released(language, label) }
                     val active = targets(host)
                     assertTrue(active.size > 1, "$label missing observed guest call target")
+                    if (retainedPath != null) {
+                        val guestIds = active.filter { it !== host }.map { (it.rootNode as GuestRoot).coreIdentity?.bindingId }
+                        assertEquals(retainedPath.size, guestIds.size, "$label retained guest roots")
+                        assertEquals(retainedPath.toSet(), guestIds.toSet(), "$label source root identities")
+                    }
                     (listOf(original) + active).distinct().forEach(::compile)
                     // Repair the existing host entry prerequisite without invoking
                     // guest code, exactly as the production compile operation does.
@@ -114,7 +123,7 @@ class TupleInputNativeTest {
                     for (row in cases.asReversed()) {
                         val before = program.diagnostics()["compiledEntries"] as Long
                         assertEquals(row.last().toLong(), invoke(row), "$label/compiled/$row")
-                        assertEquals(entries.getValue(name), (program.diagnostics()["compiledEntries"] as Long) - before,
+                        assertEquals(expectedEntries, (program.diagnostics()["compiledEntries"] as Long) - before,
                             "$label/$row compiled guest entries: ${program.diagnostics()}")
                         valid(original, "$label original"); valid(host, "$label host")
                         assertEquals(active, targets(host), "$label active target identities")

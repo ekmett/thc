@@ -78,7 +78,7 @@ emptyProjectTest env = TestLabel "empty, C-only and reexport-only Cabal store li
         facade = base </> "facade-source"
         output = base </> "output"
         invoke backend = run env base (Just backend) 240
-          ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+          ["run", "--verify-artifacts", "--project-dir", project, "completed", "--thc-root", thcRoot env,
            "--runtime", runtime env, "--dist-dir", output]
         sourceDist path = runExe env path Nothing 60 "cabal" ["sdist", "--output-dir", project] >>= assertSuccess
     copyTree (project </> "dep-data") dependency

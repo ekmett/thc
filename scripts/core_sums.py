@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-"""Exact binary sum result proofs; no width-only inference or payload coercions."""
+"""Exact scalar sum proofs and GHC slots; no width-only inference or coercions."""
 LIFTED = 'BoxedRep (Just Lifted)'
 UNLIFTED = 'BoxedRep (Just Unlifted)'
-ORDER = (LIFTED, UNLIFTED, 'WordRep', 'FloatRep', 'DoubleRep')
+ORDER = (LIFTED, UNLIFTED, 'WordRep', 'Word64Rep', 'FloatRep', 'DoubleRep')
+WORD = {'IntRep', 'WordRep', 'Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep'}
+WIDE = {'Int64Rep', 'Word64Rep'}
 
 
 def is_sum(proof):
@@ -40,7 +42,7 @@ def payload_leaves(proof):
     if not isinstance(reps, list) or len(reps) != 1:
         raise ValueError('Unresolved sum payload representation')
     rep = reps[0]
-    valid = (kind == 'long' and rep in ('IntRep', 'WordRep') or
+    valid = (kind == 'long' and rep in WORD | WIDE or
              kind == 'float' and rep == 'FloatRep' or kind == 'double' and rep == 'DoubleRep' or
              kind in ('data', 'closure', 'object') and rep in (LIFTED, UNLIFTED))
     if not valid:
@@ -49,19 +51,42 @@ def payload_leaves(proof):
 
 
 def layout(alternatives):
-    if not isinstance(alternatives, list) or len(alternatives) != 2:
-        raise ValueError('Unboxed sum requires two exact alternatives')
-    fields = [[('WordRep' if r in ('IntRep', 'WordRep') else r)
+    if not isinstance(alternatives, list) or len(alternatives) < 2:
+        raise ValueError('Unboxed sum requires at least two exact alternatives')
+    fields = [[('WordRep' if r in WORD else 'Word64Rep' if r in WIDE else r)
                for r in payload_leaves(alternative)] for alternative in alternatives]
-    physical = ['WordRep'] + [rep for rep in ORDER for _ in range(max(row.count(rep) for row in fields))]
+    # Mirror GHC.Types.RepType.ubxSumRepType, including Word/Word64 sharing.
+    slots = []
+    for row in fields:
+        needed = sorted(row, key=ORDER.index)
+        merged, left, right = [], 0, 0
+        while left < len(slots) and right < len(needed):
+            common = fits(slots[left], needed[right])
+            if common is not None:
+                merged.append(common); left += 1; right += 1
+            elif ORDER.index(needed[right]) < ORDER.index(slots[left]):
+                merged.append(needed[right]); right += 1
+            else:
+                merged.append(slots[left]); left += 1
+        slots = merged + slots[left:] + needed[right:]
+    physical = ['WordRep'] + slots
     projections = []
     for row in fields:
         used, projected = set(), []
         for rep in row:
-            index = next(i for i, target in enumerate(physical) if i > 0 and i not in used and target == rep)
+            index = next(i for i, target in enumerate(physical)
+                         if i > 0 and i not in used and fits(rep, target) == target)
             used.add(index); projected.append(index)
         projections.append(projected)
     return physical, projections
+
+
+def fits(left, right):
+    if left == right:
+        return left
+    if left in ('WordRep', 'Word64Rep') and right in ('WordRep', 'Word64Rep'):
+        return 'Word64Rep'
+    return None
 
 
 def proof_error(proof):
@@ -82,12 +107,15 @@ def proof_error(proof):
     return None
 
 
-def constructor_tag(info, arity):
+def constructor_tag(info, arity, proof=None):
     if (not isinstance(info, dict) or info.get('kind') != 'unboxed-sum' or type(arity) is not int or arity != 1 or
             type(info.get('arity')) is not int or info['arity'] != 1 or
-            type(info.get('sumArity')) is not int or info['sumArity'] != 2):
+            type(info.get('sumArity')) is not int or info['sumArity'] < 2):
+        raise ValueError('Sum constructor family or payload arity mismatch')
+    if proof is not None and (not is_sum(proof) or not isinstance(proof.get('alternatives'), list) or
+                              len(proof['alternatives']) != info['sumArity']):
         raise ValueError('Sum constructor family or payload arity mismatch')
     tag = info.get('tag')
-    if type(tag) is not int or tag not in (1, 2):
+    if type(tag) is not int or not 1 <= tag <= info['sumArity']:
         raise ValueError('Invalid sum constructor tag')
     return tag

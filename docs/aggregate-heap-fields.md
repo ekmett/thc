@@ -1,6 +1,6 @@
 # Aggregate fields in boxed constructors
 
-Both backends construct and match boxed values with exact unboxed tuple or binary
+Both backends construct and match boxed values with exact unboxed tuple or scalar
 sum fields. This includes GHC 9.14.1's real `GHC.Core.TyCon.BoxedRep`: its source
 field `{-# UNPACK #-} !(Maybe Levity)` becomes one logical worker field
 `(# (# #) | Levity #)`, stored as a tag and one lifted reference.
@@ -19,11 +19,12 @@ closure inspection omits them from its pointer list, compact copying ignores
 them, and compact images preserve their inactive state. Active references retain
 ordinary reachability, sharing and existing compact-region evaluation semantics.
 
-The supported tuple leaves and binary-sum payloads are the existing
+The supported tuple leaves and sum payloads are the existing
 [tuple](tuple-results.md) and [sum](sum-results.md) layouts. Logical shape, arity,
 sum tags/projections, scalar carriers, vector species and heap ownership remain
-checked. This does not add nested/nonbinary sums or ordinary aggregate lets.
-[Tuple captures](tuple-captures.md), [binary sum inputs and captures](sum-inputs.md) and [tuple join inputs](tuple-joins.md)
+checked. Families with two or more alternatives and sums inside recursive tuples
+are supported; sums inside sum payloads and ordinary aggregate lets are not.
+[Tuple captures](tuple-captures.md), [sum inputs and captures](sum-inputs.md) and [tuple join inputs](tuple-joins.md)
 are supported separately. Constructors with aggregate fields currently require direct saturated
 applications; their unsaturated/PAP workers remain an explicit boundary.
 
@@ -53,3 +54,30 @@ inactive references, compact copying/image roundtrips and malformed input.
 `--export-only` is available for investigating a new runtime frontier, but writes
 only `export-manifest.json`, never a successful strict execution receipt. No
 full compiler acquisition or compiler rebuild is needed for this fixture.
+
+## Four-way and nested aggregate fixture
+
+The original `GHC.CmmToAsm.Format.VirtualRegWithFormat` contains an unpacked
+`GHC.Platform.Reg.VirtualReg`: its I/Hi/D/V128 alternatives each contain an
+evaluated Word64 Unique. The worker has logical arity 2 and physical fields
+`[WordRep, Word64Rep, BoxedRep (Just Lifted)]`; Format stays at offset 2, after
+the tag and shared payload. The fixture imports those original GHC definitions.
+
+```sh
+cabal run exe:thc-fixtures --offline -fdevelopment -- fourway-aggregate
+./gradlew fourwayAggregateFullCoreTest fourwayAggregateFullCoreDenseTest
+```
+
+This producer requires full installed GHC 9.14.1 Core. OPAQUE makers/consumers
+retain the original worker and producer/consumer partial applications. The
+1,536 native rows cover all tags, repeated alternatives, unsigned high-bit values,
+retention and DEFAULT, plus nested tuples with scalar sentinels, erased State#,
+empty tuples and lazy lifted neighbours. A mixed four-way sum adds reference,
+Word64, empty and Int alternatives. Both genuine export stages must strict-audit
+successfully before the manifest permits interpreted/first-compiled comparisons.
+
+Storage controls exercise field-/array-based layouts, PAP prefixes, inactive
+references, compact copies and image roundtrips. Negative controls retain exact
+arity, tags, projections, carrier, levity and logical-shape boundaries. Source,
+toolchain and artifact hashes preserve the origin of the evidence; positive Core
+proofs are never rewritten to make them acceptable.

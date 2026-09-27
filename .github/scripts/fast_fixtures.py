@@ -24,7 +24,8 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "8a2edf0f56c0bcc8f07731adc618db696accbcac21f8f395049652a2fe843e95"
+# The metadata export requests pretty diagnostics in the same required Core files.
+FULL_PREPARATION_PLAN = "55a0a13f88e3b3da1f02064adc46cd302351691e949ed41c07e5462a255ee0f1"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in

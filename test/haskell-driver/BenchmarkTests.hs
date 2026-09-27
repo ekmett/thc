@@ -25,7 +25,7 @@ tests env = TestLabel "Cabal runnable targets" $ TestCase $
         output = base </> "output"
         common = ["--thc-root", thcRoot env, "--dist-dir", output]
         invoke backend target = run env project (Just backend) 240
-          (["run"] ++ target ++ common ++ ["--runtime", runtime env])
+          (["run", "--verify-artifacts"] ++ target ++ common ++ ["--runtime", runtime env])
         entry component plan = case filter
           ((== component) . string . (`field` "component-name")) (objects plan "install-plan") of
             [value] -> value

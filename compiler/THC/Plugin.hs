@@ -84,6 +84,8 @@ import System.FilePath ((</>), takeDirectory)
 -- interfaces. The first option is the destination directory (default
 -- @build/core@). GHC compilations using the plugin are forced to recompile so
 -- the export is not silently skipped by native recompilation checks.
+-- @pretty-diagnostics@ includes readable Core and Id-info dumps; it is off by
+-- default and independent of @source-notes@ and executable representation facts.
 --
 -- For example, after making the plugin package visible to the selected GHC:
 --
@@ -235,6 +237,8 @@ data Ctx = Ctx
   , canCertify :: Bool
   -- Current-module CBV requirements are selected only during native Tidy.
   , deriveCBVContracts :: Bool
+  -- Optional human-readable dumps, never executable representation evidence.
+  , prettyDiagnostics :: Bool
   , sourceTable :: Maybe Sources.SourceTable
   , activeSources :: [String]
   }
@@ -510,15 +514,16 @@ joinMetadata d v e
          ,("joinResultRep",exprRep d result)]
 
 idMetadata :: Ctx -> Id -> J
-idMetadata d v = O
+idMetadata d v = O $
+  [ ("joinArity",if isJoinId v then num (idJoinArity v) else Z)
+  , ("cbvEligible",B (CBV.eligible v))
+  , ("cbvMarks",maybe Z (A . map B) (CBV.existingMarks v))
+  ] ++ if prettyDiagnostics d then
   [ ("callArity",num (idCallArity v)), ("demand",S (pretty d (idDemandInfo v)))
   , ("strictness",S (pretty d (idDmdSig v))), ("cpr",S (pretty d (idCprSig v)))
   , ("occurrence",S (pretty d (idOccInfo v))), ("oneShot",S (pretty d (idOneShotInfo v)))
-  , ("joinArity",if isJoinId v then num (idJoinArity v) else Z)
   , ("inline",S (pretty d (idInlinePragma v)))
-  , ("cbvEligible",B (CBV.eligible v))
-  , ("cbvMarks",maybe Z (A . map B) (CBV.existingMarks v))
-  ]
+  ] else []
 
 flattenBind :: CoreBind -> [(Id,CoreExpr)]
 flattenBind (NonRec v e) = [(v,e)]
@@ -907,7 +912,7 @@ optimizedModule flags opts guts = do
   sources <- loadSources ("source-notes" `elem` opts) (concatMap flattenBind (mg_binds guts))
   exports <- staticExportFields (mg_module guts) (mg_anns guts) (mg_binds guts)
   let unit = unitString (moduleUnit (mg_module guts))
-      d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True sources []
+      d = Ctx flags (unit ++ ":" ++ moduleNameString (moduleName (mg_module guts))) (if "unit-qualified" `elem` opts then Just unit else Nothing) emptyVarSet emptyVarSet True True ("pretty-diagnostics" `elem` opts) sources []
       modName = moduleNameString (moduleName (mg_module guts))
       binds = concatMap flattenBind (mg_binds guts)
       cons = nubBy (\a b -> dataConName a == dataConName b) $ concatMap tyConDataCons (mg_tcs guts) ++ concatMap (exprCons . snd) binds
@@ -915,12 +920,12 @@ optimizedModule flags opts guts = do
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName)
         , ("unit",S (unitString (moduleUnit (mg_module guts))))
         , ("boundary",S "optimized-Core-before-Tidy")
-        , ("sourceCore",S (pretty d (mg_binds guts)))
         , ("bindings",A (concatMap (bindingGroup d) (mg_binds guts))), ("constructors",A (map (constructor d) cons))
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- mg_binds guts])
-        , ("rules",S (pretty d (mg_rules guts)))
         , ("lowering",O [("typeArguments",S "erased"),("coercionArguments",S "void-value"),("casts",S "erased"),("ticks",S (if "source-notes" `elem` opts then "source-notes-metadata" else "erased"))])
-        ] ++ sourceTableFields d ++ exports ++ foreignExceptionBridgeFields d unit modName binds
+        ] ++ (if prettyDiagnostics d then
+          [("sourceCore",S (pretty d (mg_binds guts))), ("rules",S (pretty d (mg_rules guts)))] else []) ++
+        sourceTableFields d ++ exports ++ foreignExceptionBridgeFields d unit modName binds
   pure (d,result)
 
 -- Package rebuilding needs identities that agree with the newly emitted
@@ -1131,16 +1136,16 @@ postTidyModule flags opts m tycons program = do
   let unit = unitString (moduleUnit m)
       modName = moduleNameString (moduleName m)
       d = Ctx flags (unit ++ ":" ++ modName) (if "unit-qualified" `elem` opts then Just unit else Nothing)
-            emptyVarSet emptyVarSet True False sources []
+            emptyVarSet emptyVarSet True False ("pretty-diagnostics" `elem` opts) sources []
       cons = nubBy (\a b -> dataConName a == dataConName b)
         (concatMap tyConDataCons tycons ++ concatMap (exprCons . snd) binds)
       result = O $
         [ ("schema",num (1::Int)), ("ghc",S "9.14.1"), ("module",S modName), ("unit",S unit)
         , ("boundary",S "optimized-Core-after-Tidy-before-CorePrep")
-        , ("sourceCore",S (pretty d program))
         , ("bindings",A (concatMap (bindingGroup d) program)), ("constructors",A (map (constructor d) cons))
         , ("groups",A [O [("recursive",B (case b of Rec{} -> True; _ -> False)),("ids",A [S (varKey d v) | (v,_) <- flattenBind b])] | b <- program])
-        ] ++ sourceTableFields d ++ foreignExceptionBridgeFields d unit modName binds
+        ] ++ [("sourceCore",S (pretty d program)) | prettyDiagnostics d] ++
+        sourceTableFields d ++ foreignExceptionBridgeFields d unit modName binds
   pure (d,result)
   where binds = concatMap flattenBind program
 
@@ -1274,8 +1279,8 @@ exportInterfaceClosure hsc opts dir rootCtx roots = do
         , ("bindings",A (map importedBinding imports)), ("constructors",A (map (constructor rootCtx) cons))
         , ("groups",A [O [("recursive",B True),("ids",A [S (varKey d v) | (d,v,_,_) <- imports])]])
         , ("missingDefinitions",A [O [("id",S (varKey d v)),("type",S (pretty d (varType v))), ("reason",S "No executable interface unfolding; source export required")] | (d,v) <- missing])
-        , ("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports]))
-        ] ++ [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
+        ] ++ [("sourceCore",S (pretty rootCtx [(v,e) | (_,v,e,_) <- imports])) | prettyDiagnostics rootCtx] ++
+        [("providedModules", A (map S provided)) | not (null provided)] ++ sourceTableFields closureCtx
   let path = coreOutputPath opts dir "dependency-closure" "THC.InterfaceClosure"
   createDirectoryIfMissing True (takeDirectory path)
   writeCoreOutput opts path result

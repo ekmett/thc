@@ -19,7 +19,12 @@ Closure inspection sees primitive/vector bytes and the actual lazy references,
 not an additional tuple pointer. Existing exact shape, scalar carrier, vector
 species and ownership checks still apply.
 
-Ordinary aggregate let/global storage, tuples containing sums, unresolved
+Tuples containing supported sums retain their exact logical tree and flattened
+tag/payload fields, including lazy references and inactive null padding. The
+[four-way native fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture)
+checks nested producer/consumer captures and heap storage.
+
+Ordinary aggregate let/global storage, sums inside sum payloads, unresolved
 layouts and public host aggregate parameters/results remain unsupported. Sum
 captures are described [separately](sum-inputs.md); local tuple joins keep using
 their [same-frame capture path](tuple-joins.md).

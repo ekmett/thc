@@ -259,7 +259,7 @@ prepareBigNatLiterals root checkOnly = do
       _ -> die "BigNat requires native-order 64-bit GHC"
     _ <- runLogged 300 root logs "plugin-build" [] "compiler/build.sh" []
     _ <- runLogged 600 root logs "boot-export" [] "python3"
-      ["compiler/export-boot.py","--frontier","bignum","--build-dir",root </> directory </> "boot"]
+      ["compiler/export-boot.py","--pretty-diagnostics","--frontier","bignum","--build-dir",root </> directory </> "boot"]
     forM_ ["pre","post"] $ \stage -> do
       _ <- runLogged 300 root logs (stage ++ "-export")
         [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]

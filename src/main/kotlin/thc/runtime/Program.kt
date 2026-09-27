@@ -3330,7 +3330,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     throw RuntimeFault("Tuple constructor arity mismatch")
                 TupleConstruct(shape, args.mapIndexed { index, arg ->
                     TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
-                    if (shape.components[index].isTuple) compile(arg, scope, false)
+                    if (shape.components[index].isTypedTransport && flags[index] != false)
+                        throw RuntimeFault("Typed tuple field cannot be lifted")
+                    if (shape.components[index].isTypedTransport) compile(arg, scope, false)
                     else argument(arg, scope, flags[index] as? Boolean ?: throw UnsupportedCore("Unknown tuple field levity"))
                 }.toTypedArray())
             } else if (fn[0] == "var" && fn[1] in scope.joins) {
@@ -3610,7 +3612,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         arms.forEach { result.refine(it.representation) }
         CoreRepresentations.validateFloatingCaseResult(result, arms.map { it.representation })
         CoreRepresentations.requireNoVector(result, "sum case result")
-        return SumCase(scrutinee, slots, arms, selected(1), selected(2),
+        return SumCase(scrutinee, slots, arms, IntArray(proof.alternatives!!.size) { selected(it + 1) },
             result.copy(evaluated = arms.all { it.representation.evaluated }))
     }
     private fun compileVectorReadCase(read: VectorReadCase, scope: Scope, tail: Boolean): Expr {

@@ -13,7 +13,7 @@ import java.io.File
 class AggregateLayoutTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val boundaries = mapOf(
-        // The inner binary sum has a known layout; its enclosing tuple-of-sum remains unsupported.
+        // Nested tuple/sum guest transport is supported, not a public host aggregate ABI.
         "nestedIdentity" to "unboxed-tuple", "lazyIdentity" to "unboxed-tuple",
         "alternativesIdentity" to "unboxed-sum", "polymorphicTuple" to "unboxed-tuple",
         "polymorphicSum" to "unboxed-sum", "polymorphicNested" to "unboxed-tuple",

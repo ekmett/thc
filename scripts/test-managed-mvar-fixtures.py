@@ -38,6 +38,48 @@ def application(name, lifted):
 
 
 class ManagedMVarFixtureTests(unittest.TestCase):
+    def test_plugin_uses_cabal_identity_dependency_registry_and_owned_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            build = root / 'build/fixture'
+            build.mkdir(parents=True)
+            library = root / 'build/compiler/actual-cabal-plugin.so'
+            library.parent.mkdir()
+            library.write_bytes(b'unit-test plugin, not executable')
+            database = root / 'build/compiler/dependency-registry'
+            database.mkdir()
+            metadata = dict(schema=1, unitId='actual-cabal-unit', sharedLibrary=str(library), packageDb=str(database))
+            commands = []
+            def run(command, label):
+                commands.append((command, label))
+                return json.dumps(metadata) if label == 'plugin-metadata' else ''
+            result = recipe.prepare_plugin(build, run, root)
+            self.assertEqual(commands, [(['compiler/build.sh'], 'plugin-build'),
+                ([recipe.sys.executable, 'compiler/plugin.py'], 'plugin-metadata')])
+            self.assertEqual(result['unitId'], metadata['unitId'])
+            self.assertEqual(result['packageDb'], str(database))
+            self.assertEqual(Path(result['sharedLibrary']), recipe.plugin_snapshot(build))
+            self.assertEqual(Path(result['sharedLibrary']).read_bytes(), library.read_bytes())
+            self.assertNotEqual(Path(result['sharedLibrary']), library)
+
+    def test_plugin_build_failure_does_not_publish_a_snapshot(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            build = root / 'build/fixture'
+            build.mkdir(parents=True)
+            def failed(command, label):
+                self.assertEqual((command, label), (['compiler/build.sh'], 'plugin-build'))
+                raise ValueError('Cabal dependency build failed')
+            with self.assertRaisesRegex(ValueError, 'Cabal dependency build failed'):
+                recipe.prepare_plugin(build, failed, root)
+            self.assertFalse(recipe.plugin_snapshot(build).exists())
+
+    def test_source_inventory_includes_plugin_build_and_index_dependency(self):
+        inputs = set(recipe.source_inputs())
+        self.assertTrue({'thc.cabal', 'cabal.project', 'compiler/build.sh', 'compiler/plugin.py',
+            'compiler/toolchain.sh', 'json-index/THC/JsonIndex.hs', 'json-index/THC/JsonIndex/Scanner.hs',
+            'compiler/json-index/json_index.c', 'compiler/json-index/json_index.h'} <= inputs)
+
     def test_exact_contracts_at_both_boxed_levities(self):
         for name in recipe.CONTRACTS:
             for lifted in (False, True):
@@ -133,7 +175,7 @@ class PreparationReuseTests(unittest.TestCase):
                 (self.build / stage / (name + '.audit.json')).write_text(json.dumps(report))
                 statuses[stage + '/' + name] = 'accepted'
                 reachable[stage + '/' + name] = []
-        manifest = {'schema': 1, 'recipeVersion': 2, 'ghc': '9.14.1', 'entries': recipe.ENTRIES, 'entryNames': recipe.ENTRIES,
+        manifest = {'schema': 1, 'recipeVersion': 3, 'ghc': '9.14.1', 'entries': recipe.ENTRIES, 'entryNames': recipe.ENTRIES,
                     'contextEntryNames': recipe.CONTEXT_ENTRIES, 'stages': stages, 'inputs': values,
                     'contextEntries': {stage: {name: {} for name in recipe.CONTEXT_ENTRIES} for stage in stages},
                     'inputHashes': recipe.hash_files(recipe.source_inputs(self.root), self.root),

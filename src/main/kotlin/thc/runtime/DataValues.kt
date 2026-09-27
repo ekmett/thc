@@ -65,6 +65,27 @@ class DataLayout private constructor(
     internal fun logicalProof(index: Int): CoreRepresentation? = logicalFields?.logicalProofs?.get(index)
     internal fun logicalWidth(index: Int): Int = fieldOffset(index + 1) - fieldOffset(index)
     internal val hasAggregateFields: Boolean = logicalFields?.hasAggregates == true
+    private class SumField(val offset: Int, val proof: CoreRepresentation)
+    @CompilationFinal(dimensions = 1)
+    private val sumFields: Array<SumField> = buildList {
+        // Inspect the immutable logical tree once, never infer roots from width.
+        fun visit(proof: CoreRepresentation, offset: Int): Int {
+            if (proof.isSum) {
+                add(SumField(offset, proof))
+                return SumShape.storage(proof).size
+            }
+            val components = proof.components
+            if (components != null) {
+                var width = 0
+                for (component in components) width += visit(component, offset + width)
+                return width
+            }
+            return if (proof.kind == CoreKind.VOID) 0 else 1
+        }
+        logicalFields?.let { logical ->
+            for (index in logical.logicalProofs.indices) visit(logical.logicalProofs[index], logical.offsets[index])
+        }
+    }.toTypedArray()
     private val exactFieldReps = fieldReps.copyOf()
     internal fun hasFieldRepresentation(index: Int, rep: String): Boolean =
         index in exactFieldReps.indices && exactFieldReps[index] == rep
@@ -257,12 +278,11 @@ class DataLayout private constructor(
     /** Inactive sum reference registers are null padding, never guest roots. */
     internal fun inactiveSumReference(value: DataValue, index: Int): Boolean {
         if (!compactPointer(index)) return false
-        val logical = logicalFields ?: return false
-        for (field in logical.logicalProofs.indices) {
-            val proof = logical.logicalProofs[field]
-            if (!proof.isSum || index < logical.offsets[field] || index >= logical.offsets[field + 1]) continue
-            val tag = SumShape.checkedTag(readLong(value, logical.offsets[field]))
-            return index - logical.offsets[field] !in proof.alternativeSlots!![tag - 1]
+        for (field in sumFields) {
+            val proof = field.proof
+            if (index < field.offset || index >= field.offset + proof.primReps!!.size) continue
+            val tag = SumShape.checkedTag(readLong(value, field.offset), proof.alternatives!!.size)
+            return index - field.offset !in proof.alternativeSlots!![tag - 1]
         }
         return false
     }

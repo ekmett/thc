@@ -21,8 +21,8 @@ class ArrayCoreEvidenceTest {
             listOf("lam", listOf(state), body), listOf(listOf("void", mapOf("rep" to voidRep))),
             listOf(false), false, false)))
     }
-    private fun changedCall(change: (MutableList<Any?>) -> Unit): Map<String, Any?> {
-        val root = root().toMutableMap()
+    private fun changedCall(body: Any? = leaf, change: (MutableList<Any?>) -> Unit): Map<String, Any?> {
+        val root = root(body).toMutableMap()
         val expr = (root["expr"] as List<Any?>).toMutableList()
         val call = (expr[2] as List<Any?>).toMutableList()
         change(call); expr[2] = call; root["expr"] = expr
@@ -94,6 +94,45 @@ class ArrayCoreEvidenceTest {
             val rejected = ArrayCoreEvidence(module(bad), "root")
             assertThrows(IllegalArgumentException::class.java) { rejected.loweredGuestLambdas(bad["expr"]) }
         }
+    }
+
+    @Test fun namedStatePathRequiresTheExactRedexAndPreservesCallbacksAndMultiplicity() {
+        val call = listOf("app", listOf("var", "helper"), listOf(listOf("var", "x")))
+        val helper = binding("helper", listOf("lam", listOf(formal("h")), leaf))
+        fun proof(entry: Map<String, Any?>) = ArrayCoreEvidence(module(entry, helper), "root")
+        val good = proof(root(call))
+        assertEquals(listOf("root", "helper"), good.loweredStateFunctionPath("helper"))
+        assertEquals(3, good.bindings.sumOf { good.guestLambdas(it["expr"]).size })
+        assertThrows(IllegalArgumentException::class.java) { good.loweredStateFunctionPath("root") }
+        assertThrows(IllegalArgumentException::class.java) { good.loweredStateFunctionPath("helper", "helper") }
+
+        val direct = binding("root", listOf("lam", listOf(formal("x")), call))
+        val stateHelper = root() + mapOf("id" to "helper", "name" to "helper")
+        assertEquals(listOf("root", "helper"), ArrayCoreEvidence(module(direct, stateHelper), "root")
+            .loweredStateFunctionPath("helper", "helper"))
+
+        val bad = listOf(
+            changedCall(call) { it[3] = listOf(true) },
+            changedCall(call) { it[3] = listOf("false") },
+            changedCall(call) { it[2] = listOf(listOf("var", "x", mapOf("rep" to voidRep))) },
+            changedCall(call) { it[2] = listOf(listOf("app", listOf("prim", "effect#"), emptyList<Any?>())) },
+            changedCall(call) { node ->
+                val lambda = (node[1] as List<Any?>).toMutableList()
+                val arg = ((lambda[1] as List<Map<String, Any?>>).single()).toMutableMap()
+                arg["rep"] = voidRep + mapOf("aggregate" to "unboxed-tuple", "components" to emptyList<Any?>())
+                lambda[1] = listOf(arg); node[1] = lambda
+            },
+            root(listOf("lam", listOf(formal("callback")), call)),
+            root(listOf("case", call, "v", listOf(listOf("default", null, emptyList<String>(), call)))))
+        for ((index, entry) in bad.withIndex()) assertThrows(IllegalArgumentException::class.java,
+            { proof(entry).loweredStateFunctionPath("helper") }, "source path mutation $index")
+
+        // A genuine callback with the same State# proof is not an immediate call.
+        val outer = root(call)["expr"] as List<Any?>
+        val stateCall = outer[2] as List<Any?>
+        val callback = binding("root", listOf("lam", outer[1],
+            listOf("app", listOf("prim", "keepAlive#"), listOf(leaf, stateCall[1]))))
+        assertThrows(IllegalArgumentException::class.java) { proof(callback).loweredStateFunctionPath("helper") }
     }
 
     @Test fun onlyCompleteProvenJoinPrefixesAreExcludedAndTheirBodiesRemainVisible() {

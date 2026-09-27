@@ -55,8 +55,11 @@ class SumResultTest {
     @Test fun extendedNativeResultsResidual() = native(false, true)
     @Test fun originalFrontierResultsInline() = native(true, frontier = true)
     @Test fun originalFrontierResultsResidual() = native(false, frontier = true)
-    private fun native(inlining: Boolean, extended: Boolean = false, frontier: Boolean = false) {
-        val supported = setOf("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase")
+    @Test fun expandedLayoutResultsInline() = native(true, expanded = true)
+    @Test fun expandedLayoutResultsResidual() = native(false, expanded = true)
+    private fun native(inlining: Boolean, extended: Boolean = false, frontier: Boolean = false, expanded: Boolean = false) {
+        val supported = if (expanded) setOf("narrowWideCase", "threeWayCase") else
+            setOf("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase")
         val rows = File(root, "build/${if (frontier) "aggregate-native" else if (extended) "sum-result" else "sum-layout"}/oracle.tsv").readLines().map { it.split('\t') }.filter { if (frontier) it[0] in setOf("sumPayload", "sumZeroLazy", "coldSum") else extended || it[0] in supported }.groupBy { it[0] }
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()
@@ -66,6 +69,15 @@ class SumResultTest {
                     val source = if (frontier) Json.parse(File(root, "build/${if (stage == "pre") "aggregate-core" else "aggregate-post-core"}/AggregateFrontier.json").readText()) as Map<String, Any?> else module(stage, extended)
                     val linked = CoreModules.reachable(source, name)
                     val bindings = linked["bindings"] as List<Map<String, Any?>>
+                    val retainedPath = when (name) {
+                        "zeroCase" -> ArrayCoreEvidence(source, name).loweredStateFunctionPath("zeroSum")
+                        "mixedCase" -> ArrayCoreEvidence(source, name).loweredStateFunctionPath("mixed")
+                        // Only the nonnegative source arm contains runRW, but its
+                        // exact State# lambda is in-frame on both lowered paths.
+                        "boxedKindsCase" -> ArrayCoreEvidence(source, name).loweredStateFunctionPath(
+                            "boxedKindsSum", "boxedKindsSum", listOf(2, 3, 0, 3))
+                        else -> null
+                    }
                     val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                     val target = program.entryTarget(bindings.single { it["name"] == name }["id"] as String)
                     val host = program.hostEntryTarget(1)
@@ -85,13 +97,12 @@ class SumResultTest {
                                 valid(target, label); valid(host, label)
                                 assertEquals(active, activeTargets(host), "$label active target identity")
                                 active.forEach { valid(it, label) }
-                                val expected = when (name) {
+                                val expected = retainedPath?.size?.toLong() ?: when (name) {
                                     "directCase", "coldSum" -> 1L
                                     "sumPayload" -> 2L // The strict Box Int# is constructed in the producer root.
-                                    "zeroCase", "forwardCase", "pairedCase", "mixedCase", "selfCase", "effectStateCase", "effectEmptyCase", "throwCase" -> 3L
+                                    "forwardCase", "pairedCase", "selfCase", "effectStateCase", "effectEmptyCase", "throwCase" -> 3L
                                     "outstandingCase" -> 5L
                                     "mutualCase" -> 6L // Two A reentries reuse its frame; B enters three times.
-                                    "boxedKindsCase" -> if (row[1].toLong() < 0) 2L else 3L
                                     else -> 2L
                                 }
                                 assertEquals(expected, count(program) - before, "$label ${program.diagnostics()}")
@@ -109,6 +120,11 @@ class SumResultTest {
                     check(false)
                     active = activeTargets(host)
                     assertTrue(active.size > 1, "Missing observed host guest-call target")
+                    if (retainedPath != null) {
+                        val guestIds = active.filter { it !== host }.map { (it.rootNode as GuestRoot).coreIdentity?.bindingId }
+                        assertEquals(retainedPath.size, guestIds.size, "$stage/$backend/$name retained guest roots")
+                        assertEquals(retainedPath.toSet(), guestIds.toSet(), "$stage/$backend/$name source root identities")
+                    }
                     (listOf(target) + active).distinct().forEach(::compile)
                     check(true)
                     inputs.firstOrNull { it[2] == "throws" }?.let { row ->
