@@ -114,8 +114,10 @@ vector-result issue. Both must have no missing globals.
 
 ## Preparation and provenance
 
-Run `python3 scripts/test-word16x8-model.py`, then
-`python3 scripts/prepare-word16x8-audit.py` with the pinned environment and the
+The shared [integer SIMD fixture guide](integer-simd-fixtures.md) provides the
+independent Kotlin model and both-handoff recipe.
+
+Run `cabal run exe:thc-fixtures --offline -- word16x8` with the pinned environment and the
 shared resource gate. Preparation builds the real exporter, exports pre/post
 Core, requires all sixteen positive audits to have zero issues and zero missing
 globals, checks the exact negatives and root counts, and compiles/runs the real
@@ -124,9 +126,11 @@ the independent integer model, including duplicate/arity rejection.
 
 `build/simd-word16x8/provenance.json` records stages, original Core structure,
 entry arities and inputs, actual root counts, strict audits, separately labeled
-signedness controls, commands, toolchain identity, seventeen source hashes and
-seven artifact hashes. Artifacts cover expected rows, both original Core files,
-both audit reports, native oracle rows and the actual native executable.
+signedness controls, commands, toolchain identity, and complete source/artifact
+hashes. Artifacts cover expected rows, both original Core files, audit reports,
+negative copies, native rows/executable, and command output/status. Kotlin's
+`IntegerSimdModelTest` independently checks the lane model; the existing
+`SimdWord16VectorTest` retains exact compiled-entry checks in both handoff modes.
 
 `--export-only` exports only pre-Tidy Core and model rows for environments such
 as AArch64 where the pinned native backend is not the validation path. It removes

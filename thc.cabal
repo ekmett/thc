@@ -833,6 +833,7 @@ executable thc-fixtures
     SimdWideArrayFixtures
     SimdAddressFixtures
     SimdArithmeticFixtures
+    IntegerSimdFixtures
     SimdFloatFmaFixtures
     SimdWideFloatFmaFixtures
     SqrtFixtures

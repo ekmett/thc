@@ -18,6 +18,7 @@ import Simd128ArrayFixtures (prepareSimd128Arrays)
 import SimdWideArrayFixtures (prepareSimdWideArrays)
 import SimdAddressFixtures (prepareSimdAddresses)
 import SimdArithmeticFixtures (prepareSimdArithmetic)
+import IntegerSimdFixtures (prepareIntegerSimd)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
@@ -949,6 +950,7 @@ main = do
     ["simd-wide-arrays"] -> prepareSimdWideArrays root
     ["simd-address-families"] -> prepareSimdAddresses root
     ["simd-arithmetic"] -> prepareSimdArithmetic root
+    family:options | family `elem` ["int8x16", "int16x8", "word16x8", "word32x4"] -> prepareIntegerSimd root family options
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["rubbish-literals"] -> prepareRubbishLiterals root
     ["bignat-literals", "--check-only"] -> prepareBigNatLiterals root True

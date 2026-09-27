@@ -44,7 +44,8 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/c/bytestring-utf8-api.c",
                   "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                   "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
-                  "src/main/kotlin/thc/runtime/VectorMemory.kt")
+                  "src/main/kotlin/thc/runtime/VectorMemory.kt",
+                  "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt")
 MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
@@ -455,6 +456,48 @@ SIMD_SMOKE_SOURCES = frozenset("build/generated/simd/fixtures/" + name for name 
     "GeneratedSimdSmokeScalarNative.hs", "GeneratedSimdSmokeVectorNative.hs"))
 SIMD_SMOKE_OUTPUTS = SIMD_SMOKE_SOURCES | frozenset("build/simd-capability-smoke/" + name for name in (
     "manifest.json", "pre-core/GeneratedSimdSmoke.json", "audits.json", "cases.tsv", "native/simd-smoke-oracle"))
+INTEGER_SIMD_FAMILIES = {
+    "simd-int8x16": ("Int8X16", 9168), "simd-int16x8": ("Int16X8", 6032),
+    "simd-word16x8": ("Word16X8", 5116), "simd-word32x4": ("Word32X4", 4882),
+}
+
+
+def integer_simd_outputs(family, native):
+    shape, _ = INTEGER_SIMD_FAMILIES[family]
+    stages = ("pre", "post") if native else ("pre",)
+    entries = ("plusCase", "minusCase", "timesCase", *(("negateCase",) if shape.startswith("Int") else ()),
+               "packCase", "broadcastCase", "laneCase", "scalarHelperCase", "tupleHelperCase", "vectorArgument")
+    negatives = ("signedLaneTuple", "signedVectorOperand") if shape.startswith("Word") else ()
+    commands = ("ghc-version", "ghc-info", "plugin-build", *(f"{s}-export" for s in stages),
+                *(f"{s}-audit-{e}" for s in stages for e in entries),
+                *(f"{s}-{n}" for s in stages for n in negatives),
+                *(("native-build", "native-oracle") if native else ()))
+    return frozenset(f"build/{family}/{name}" for name in (
+        "provenance.json", "expected.tsv", "requests.tsv",
+        *(f"{s}-core/Simd{shape}.json" for s in stages), *(f"{s}-audit.json" for s in stages),
+        *(f"{s}-{e}-audit.json" for s in stages for e in entries),
+        *(f"{s}-MUTATED-{n}{suffix}.json" for s in stages for n in negatives for suffix in ("", "-audit")),
+        *(f"commands/{c}.{suffix}" for c in commands for suffix in ("stdout", "stderr", "command.json")),
+        *(("oracle.tsv", f"native/{family.removeprefix('simd-')}-oracle") if native else ())))
+
+
+def integer_simd_artifact_hashes(family, manifest):
+    stages = manifest.get("stages")
+    require(stages in (["pre"], ["pre", "post"]), "Invalid integer SIMD stages")
+    native = len(stages) == 2
+    _, rows = INTEGER_SIMD_FAMILIES[family]
+    require(manifest.get("modelRows") == rows and manifest.get("nativeRows") == (rows if native else None)
+            and manifest.get("modelMatched") is (True if native else None)
+            and manifest.get("positiveAuditsAccepted") is True and manifest.get("proofNegativeControlsPassed") is True,
+            "Invalid integer SIMD evidence")
+    records = manifest.get("artifacts", [])
+    hashes = {record["path"]: record["sha256"] for record in records}
+    require(len(records) == len(hashes) and set(hashes) == integer_simd_outputs(family, native) - {f"build/{family}/provenance.json"},
+            "Incomplete/unreviewed integer SIMD artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in hashes.values()), "Invalid integer SIMD hash")
+    return hashes
+
+
 PROVENANCE_DIRS = """aggregate-layout empty-join-input empty-tuple-input
 floating-tuple state-tuple sum-layout sum-result tag-to-enum tuple-input
 tuple-join tuple-return unsafe-equality simd simd-int32x4 simd-floatx4
@@ -1812,6 +1855,8 @@ def allowed_payload(name, pins):
             return True
         attempt = "/".join(parts[:3]) if parts[2].startswith("prepare-run-") else f"build/{parts[1]}/prepare-run-placeholder"
         return name in simd_bytearray_outputs(parts[1], attempt, True)
+    if parts[1] in INTEGER_SIMD_FAMILIES:
+        return name in integer_simd_outputs(parts[1], True)
     if parts[1] == "pinned-addresses":
         return name in PINNED_ADDRESS_OUTPUTS
     if parts[1] == "float-decode":
@@ -1989,6 +2034,8 @@ def inventory(root, current, read, core_files, verified=None):
         doc = json.loads(data)
         if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in SIMD_BYTEARRAY_FAMILIES:
             simd_bytearray_artifact_hashes(name.split("/")[1], doc)
+        if name.startswith("build/") and name.endswith("/provenance.json") and name.split("/")[1] in INTEGER_SIMD_FAMILIES:
+            integer_simd_artifact_hashes(name.split("/")[1], doc)
         if name == "build/thread-inventory/manifest.json":
             thread_inventory_artifact_hashes(doc)
         if name == "build/thread-scheduling/manifest.json":
