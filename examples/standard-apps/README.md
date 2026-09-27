@@ -207,20 +207,3 @@ THC running the generator from native GHC running the generated program.
 Doctest itself runs child GHC processes: a native child interpreter is expected,
 but its parent doctest main must really execute as THC Core before calling the
 workload a guest success.
-
-## Historical HsColour metadata overlay
-
-The unchanged HsColour 1.25 executable omits its sixteen automatically discovered
-home modules from `other-modules`. GHC builds it with missing-home-module warnings,
-but older THC drivers classified the undeclared objects as native products and
-required native compiler receipts. Current acquisition reads those extra modules'
-actual GHC interface identities in their owned component output directories,
-retaining unit/way validation and Haskell/native collision checks. The unchanged
-package no longer needs an inventory overlay.
-
-To reproduce the older metadata-only compatibility workaround, apply
-`hscolour-1.25-home-modules.patch` to a separate pristine package copy with
-`git apply`. It lists exactly those original modules in the executable stanza;
-no Haskell source, compiler result, interface or native receipt is changed.
-The historical workaround did not alter runtime or driver ownership guards.
-Keep those old receipts distinct from checks of the pristine package.

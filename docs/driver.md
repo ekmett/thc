@@ -323,8 +323,7 @@ THC_BACKEND=bytecode "$THC_DRIVER" run HsColour --project-dir "$THC_APPS/hscolou
 ```
 
 Open `build/real-programs/output/TinyMath.html` to see the highlighted file.
-No package metadata overlay or source rewrite is required. The old metadata-only
-patch remains a historical reproduction aid for earlier driver versions.
+No package metadata overlay or source rewrite is required.
 
 ### Alex: generate a lexer
 
