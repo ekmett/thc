@@ -500,7 +500,7 @@ library
 
 library core-json-index
   hs-source-dirs: json-index
-  exposed-modules: THC.JsonIndex, THC.JsonIndex.Scanner
+  exposed-modules: THC.JsonIndex, THC.JsonIndex.Scanner, THC.CoreSymbols
   c-sources: compiler/json-index/json_index.c
   include-dirs: compiler/json-index
   cc-options: -std=c11 -Wall -Wextra
@@ -558,6 +558,7 @@ test-suite interface-json
   hs-source-dirs: test/interface-json, compiler
   other-modules: THC.JSON
   build-depends:
+    thc:core-json-index,
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
     HUnit >= 1.6 && < 1.7,

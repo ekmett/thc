@@ -49,7 +49,8 @@ import qualified THC.ForeignExports as Exports
 import qualified THC.ForeignExportProvenance as ExportProvenance
 import qualified THC.ForeignImportProvenance as ImportProvenance
 import THC.Wired (wiredApplication, wiredCase, wiredRhs, preservesWiredTypes, isWiredVoid)
-import THC.JSON (J(..), json, jsonBytes)
+import THC.JSON (J(..), json, jsonBytesWithBindings)
+import THC.CoreSymbols (encodeSymbols)
 import qualified THC.JsonIndex as JsonIndex
 import THC.JsonIndex.Scanner (Backend(Automatic))
 import System.IO (IOMode(WriteMode), withBinaryFile)
@@ -295,13 +296,18 @@ nameKey n = case nameModule_maybe n of
     -- Use GHC's own symbol spelling, also shared by cross-module references.
     occurrence = unpackFS (occNameMangledFS (nameOccName n))
 
--- Preserve the existing text output byte-for-byte, including host encoding and
--- newline handling. The index binds the finished file, not a second rendering.
+-- Count positions in the emitted UTF-8 bytes, never in a pretty-printed String
+-- or locale/newline-translated text handle. The structural index is optional;
+-- the small text directory also works without one.
 writeCoreOutput :: [CommandLineOption] -> FilePath -> J -> IO ()
 writeCoreOutput opts path result = do
-  writeFile path (json result ++ "\n")
+  let (body, offsets, _) = jsonBytesWithBindings result
+      bytes = BS.snoc body 10
+  symbols <- either fail pure $ encodeSymbols
+    [(bytesFS (mkFastString key), fromIntegral offset) | (key, offset) <- offsets]
+  BS.writeFile path bytes
+  BS.writeFile (path ++ ".symbols") symbols
   when ("json-index" `elem` opts) $ do
-    bytes <- BS.readFile path
     withBinaryFile (path ++ ".idx") WriteMode $ \output ->
       JsonIndex.writeSidecar output Automatic bytes
 
@@ -969,7 +975,8 @@ serializePostTidyCoreWithAnnotations flags opts m tycons program foreignArtifact
 -- Callers must force the strict ByteString before emitting a success response.
 serializePostTidyCoreWithAnnotationsBytes :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO BS.ByteString
 serializePostTidyCoreWithAnnotationsBytes flags opts m tycons program foreignArtifacts annotations =
-  (\value -> BS.snoc (jsonBytes value) 10) <$> postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
+  (\value -> let (bytes, _, _) = jsonBytesWithBindings value in BS.snoc bytes 10) <$>
+    postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations
 
 postTidyCoreWithAnnotations :: DynFlags -> [CommandLineOption] -> Module -> [TyCon] -> CoreProgram -> ForeignCore.IfaceForeign -> [Annotation] -> IO J
 postTidyCoreWithAnnotations flags opts m tycons program foreignArtifacts annotations = do
