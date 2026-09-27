@@ -122,6 +122,25 @@ tests vectors headerGolden footerGolden = TestList
         assertEqual "all three independent debug flags" 7 (footerDebugFlags result)
         assertEqual "checked final extents" (Right ()) (validateContainer (fromIntegral (BS.length actual)) framedHeader result)
         assertEqual "only final container survives" ["module.thcc"] =<< listDirectory directory
+  , TestLabel "successful publication replaces existing destination and cleans temporary streams" $ TestCase $
+      withSystemTempDirectory "compact-writer-replacement" $ \directory -> do
+        let destination = directory </> "module.thcc"
+            facts = "replacement facts"
+            payloads = ["replacement body", "new strings", BS.replicate 24 0]
+        -- A longer old file detects any retained suffix as well as failure to
+        -- replace. Its handle is closed before publication, as callers require.
+        BS.writeFile destination (BS.replicate 4096 88)
+        result <- writeContainer destination facts 0 $ \streams -> do
+          forM_ (zip [ExecutableData, CommonStrings, Fingerprints] payloads) $ \(segment, bytes) -> do
+            start <- appendBytes streams segment bytes
+            assertEqual "replacement segment-relative offset" 0 start
+          pure 1
+        actual <- BS.readFile destination
+        let framedHeader = Header 1 0 (fromIntegral (BS.length facts))
+            expected = putBytes (putHeader framedHeader) <> facts <> BS.concat payloads <> putBytes (putFooter result)
+        assertEqual "old file replaced by exact complete container" expected actual
+        assertEqual "replacement extents" (Right ()) (validateContainer (fromIntegral (BS.length actual)) framedHeader result)
+        assertEqual "replacement leaves no owned temporary streams" ["module.thcc"] =<< listDirectory directory
   , TestLabel "producer failure preserves destination and cleans all temporary streams" $ TestCase $
       withSystemTempDirectory "compact-writer-failure" $ \directory -> do
         let destination = directory </> "module.thcc"
