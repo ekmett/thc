@@ -76,16 +76,36 @@ SIGKILL and does not promise a deadline for an uninterruptible kernel task.
 
 This transport requires Linux pidfd creation, signalling and wait support and
 glibc's `posix_spawn` directory/closefrom actions. It probes pidfd waiting before
-creating a child. Credential changes and Windows console flags are rejected
+creating a child. SIGCHLD set to `SIG_IGN`, or with `SA_NOCLDWAIT`, is rejected
+with `ENOTSUP` before pipes or a child are created. Credential changes and Windows console flags are rejected
 before creation. Process groups and new sessions can be requested at creation;
 group signalling, control-C delegation and original Handle/FFI integration are
-separate work. A context may not install an independent reaper for these children.
+separate work.
+
+The embedding host must keep SIGCHLD policy stable during creation and must not
+independently reap these children, including in signal handlers or other threads.
+The interval between `posix_spawn` and `pidfd_open`, including raw-PID cleanup if
+pidfd acquisition fails, relies on the unreaped child reserving its PID. These are
+the documented [Linux pidfd acquisition conditions](https://man7.org/linux/man-pages/man2/pidfd_open.2.html).
+The policy check observes current state; it does not lock out concurrent host
+changes or establish isolation from a hostile host. Once acquired, the owned pidfd
+prevents later PID reuse from redirecting signalling.
+
+The pinned build host has glibc 2.35, without the atomic `pidfd_spawn` interface
+introduced in [glibc 2.39](https://sourceware.org/pipermail/glibc-cvs/2024q1/084106.html).
+Supporting hosts that cannot maintain the creation invariant requires a separate
+atomic creation transport; this implementation does not claim that support.
 
 The focused JVM tests compare raw result/status/errno tuples with a Haskell
 executable linked against the genuine native process package. The fixture keeps
 the original unsafe/interruptible declarations. Other controls exercise pipe
 transport, environment and renamed-CWD isolation, denied permissions, foreign
-handles, creation failures, cancellation, and context cleanup.
+handles, creation failures, cancellation, and context cleanup. Standalone C
+subprocess controls establish real kernel auto-reaping under `SIG_IGN` and both
+default/handler `SA_NOCLDWAIT` dispositions, then verify transport rejection before
+any libc launch. A forwarding linker wrapper counts real `posix_spawn` calls;
+it does not replace their behavior. The default-policy positive control launches
+and reaps a real child. These controls never alter the JVM's signal policy.
 
 With the pinned GHC and GraalVM selected, run both handoff modes from one build:
 

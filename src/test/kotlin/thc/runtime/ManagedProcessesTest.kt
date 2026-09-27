@@ -54,6 +54,23 @@ class ManagedProcessesTest {
         return child
     }
 
+    @Test fun automaticReapingPoliciesAreRejectedBeforeSpawnInIsolatedNativeProcesses() {
+        val control = oracle.resolveSibling("sigchld-policy")
+        for (policy in listOf("default", "ignore", "no-cld-wait", "handler-no-cld-wait")) {
+            val native = ProcessBuilder(control.toString(), policy).redirectErrorStream(true).start()
+            try {
+                assertTrue(native.waitFor(10, TimeUnit.SECONDS), policy)
+                val output = native.inputStream.bufferedReader().readText()
+                assertEquals(0, native.exitValue(), "$policy: $output")
+                val expected = if (policy == "default") "baseline=23 transport=0 spawns=1 exit=23"
+                    else "baseline=ECHILD transport=ENOTSUP spawns=0"
+                assertEquals("$policy $expected\n", output)
+            } finally {
+                if (native.isAlive) { native.destroyForcibly(); native.waitFor(5, TimeUnit.SECONDS) }
+            }
+        }
+    }
+
     @Test fun rawLifecycleAndReapingMatchTheOriginalNativeProcessPackage() = service { processes, _, _ ->
         val native = ProcessBuilder(oracle.toString(), "oracle").redirectError(ProcessBuilder.Redirect.INHERIT).start()
         val expected = native.inputStream.bufferedReader().readLines().associate { line ->

@@ -82,6 +82,14 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     /* process-1.6 flags: close_fds, create_group, new_session, reset INT/QUIT.
      * Windows console flags and credential changes are not silently ignored. */
     if (flags & ~(0x1 | 0x2 | 0x8 | 0x20)) return ENOTSUP;
+    /* posix_spawn -> pidfd_open requires an unreaped child to reserve its PID.
+     * Reject automatic reaping before creating pipes or a child. This observes
+     * host policy; it cannot synchronize with an external reaper or concurrent
+     * sigaction changes. The embedding host must exclude both for our children. */
+    struct sigaction child_action;
+    if (sigaction(SIGCHLD, NULL, &child_action)) return errno;
+    if (child_action.sa_handler == SIG_IGN || (child_action.sa_flags & SA_NOCLDWAIT))
+        return ENOTSUP;
     int probe = (int) syscall(SYS_pidfd_open, getpid(), 0);
     if (probe < 0) return errno;
     siginfo_t probe_info;
@@ -143,8 +151,9 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     int pidfd = (int) syscall(SYS_pidfd_open, pid, 0);
     if (pidfd < 0) {
         error = errno;
-        /* The just-created unreaped child still owns this PID. This is the
-         * only pre-pidfd cleanup, and never receives a guest supplied PID. */
+        /* Under the stable host policy/no-external-reaper contract above, the
+         * unreaped child still owns this PID. This is the only pre-pidfd cleanup
+         * and never receives a guest supplied PID. */
         kill(pid, SIGKILL);
         while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {}
         goto done;

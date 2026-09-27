@@ -1040,9 +1040,13 @@ tasks.processResources { dependsOn(compileNativeProcesses) }
 
 val prepareProcessLifecycleOracle by tasks.registering {
     val source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
+    val policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
+    val transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
     val output = layout.buildDirectory.dir("process-lifecycle/native")
     val ghc = providers.environmentVariable("GHC").orElse("ghc")
+    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.property("ghc", ghc)
+    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang)
     outputs.dir(output)
     onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in listOf("amd64", "x86_64") }
     doLast {
@@ -1052,6 +1056,10 @@ val prepareProcessLifecycleOracle by tasks.registering {
         destination.mkdirs()
         providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
             "-outputdir", destination.path, source.asFile.path, "-o", destination.resolve("process-oracle").path) }.result.get()
+        // Signal dispositions belong to this standalone control, never the test JVM.
+        providers.exec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
+            "-o", destination.resolve("sigchld-policy").path) }.result.get()
     }
 }
 tasks.withType<Test>().configureEach { dependsOn(prepareProcessLifecycleOracle) }
