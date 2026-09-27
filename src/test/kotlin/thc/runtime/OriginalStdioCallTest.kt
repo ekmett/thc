@@ -37,7 +37,7 @@ class OriginalStdioCallTest {
                 var compiled = false
                 fun call(name: String, vararg fds: Long): Long {
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                    val result = Calls.target(targets.getValue(name), arrayOf(0L, *fds.toTypedArray(), Unit)) as Long
+                    val result = (callScalarTestTarget(targets.getValue(name), arrayOf(0L, *fds.map { it.toInt() }.toTypedArray(), Unit)) as Int).toLong()
                     if (compiled) {
                         assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                         targets.values.forEach(::valid)
@@ -61,8 +61,8 @@ class OriginalStdioCallTest {
                 exercise()
                 targets.values.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
                 compiled = true; exercise()
-                for ((name, args) in listOf("dup" to arrayOf<Any?>(0L, 1L, 9L), "dup2" to arrayOf<Any?>(0L, 1L, 0L, 9L))) {
-                    assertThrows(RuntimeFault::class.java) { Calls.target(targets.getValue(name), args) }
+                for ((name, args) in listOf("dup" to arrayOf<Any?>(0L, 1, 9L), "dup2" to arrayOf<Any?>(0L, 1, 0, 9L))) {
+                    assertThrows(RuntimeFault::class.java) { callScalarTestTarget(targets.getValue(name), args) }
                     assertEquals(3L, files.duplicate(1)); assertEquals(0L, files.close(3))
                     assertEquals(-1L, files.write(0, ManagedAddress.fromByteArray(byteArrayOf()), 0), "Malformed State cannot replace stdin")
                 }
@@ -91,7 +91,12 @@ class OriginalStdioCallTest {
                     fun call(name: String, vararg args: Any?): Any? {
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                         val target = targets.getValue(name)
-                        val result = Calls.target(target, arrayOf(0L, *args, Unit))
+                        val guest = args.mapIndexed { index, value ->
+                            if (OriginalStdioFixtures.signatures.getValue(name)[index] == "Int32Rep" &&
+                                value is Long && value in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) value.toInt() else value
+                        }.toTypedArray()
+                        val raw = callScalarTestTarget(target, arrayOf(0L, *guest, Unit))
+                        val result = if (OriginalStdioFixtures.output(name) == "Int32Rep") (raw as Int).toLong() else raw
                         if (compiled) {
                             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), name)
                             valid(target)
@@ -134,7 +139,7 @@ class OriginalStdioCallTest {
                         val address = ManagedAddress.fromByteArray(byteArrayOf(3, 4))
                         val before = out.toByteArray()
                         assertThrows(RuntimeFault::class.java) {
-                            Calls.target(targets.getValue(name), arrayOf(0L, 1L, address, 2L, 9L))
+                            callScalarTestTarget(targets.getValue(name), arrayOf(0L, 1, address, 2L, 9L))
                         }
                         assertArrayEquals(before, out.toByteArray())
                         assertEquals(ebadf, call("errno"))
@@ -146,7 +151,7 @@ class OriginalStdioCallTest {
                         released(language)
                     }
                     for (name in listOf("errno", "seek_set", "seek_cur", "seek_end"))
-                        assertThrows(RuntimeFault::class.java) { Calls.target(targets.getValue(name), arrayOf(0L, 9L)) }
+                        assertThrows(RuntimeFault::class.java) { callScalarTestTarget(targets.getValue(name), arrayOf(0L, 9L)) }
                     released(language)
                 } finally { context.leave() }
             }

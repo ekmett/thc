@@ -19,7 +19,7 @@ internal class Md5ForeignExpression(private val operation: Md5ForeignOp,
             }
             Md5ForeignOp.UPDATE -> {
                 val input = operands[1].executeRequiredAddress(frame)
-                val length = operands[2].executeRequiredLong(frame)
+                val length = operands[2].executeRequiredInt(frame).toLong()
                 ManagedByteArray.requireState(operands[3].execute(frame))
                 ManagedMd5.update(first, input, length)
             }

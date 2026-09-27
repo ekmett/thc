@@ -3,6 +3,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.TruffleSafepoint
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.Node
@@ -333,12 +334,22 @@ internal class SignalDispatchRoot(language: Language, program: ExecutableProgram
         if (!async || (target as? GuestRoot)?.tupleResult?.matches(shape) != true)
             fault("Signal dispatcher requires an async IO unit tuple")
         dispatch.execute(frame, closure, arrayOf(pointer.create(arrayOf(frame.arguments[0])),
-            signal.createLong(frame.arguments[1] as Long), Unit))
+            signal.createInt(run {
+                val number = frame.arguments[1]
+                if (number == null) CompilerDirectives.transferToInterpreter()
+                (number as Long).toInt()
+            }), Unit))
         val unit = unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) as? DataValue
             ?: fault("Signal dispatcher did not return boxed unit")
+        validateUnit(unit)
+        return Unit
+    }
+
+    /** Host result validation uses generic constructor metadata, not a guest layout assumption. */
+    @TruffleBoundary
+    private fun validateUnit(unit: DataValue) {
         if (unit.layout.id != "ghc-internal:GHC.Internal.Tuple.()" || unit.layout.arity != 0)
             fault("Signal dispatcher did not return boxed unit")
-        return Unit
     }
     override fun getName() = "THC original process signal dispatcher"
 }

@@ -130,3 +130,29 @@ class NarrowIntegerCarrierTest {
         }
     }
 }
+
+/** Internal scalar tests supply exact JVM carriers and still call the original
+ * compiled target. Narrow formals now use the typed packet convention; this is
+ * not the public numeric conversion boundary and performs no guest warmup. */
+internal fun callScalarTestTarget(target: com.oracle.truffle.api.RootCallTarget, arguments: Array<Any?>): Any? {
+    val entry = (target.rootNode as? GuestRoot)?.typedInput ?: return Calls.target(target, arguments)
+    if (entry.logical.physicalArity != entry.logical.logicalArity ||
+        (0 until entry.logical.logicalArity).any { entry.logical.isTyped(it) })
+        fault("Scalar test caller cannot flatten aggregate inputs")
+    if (arguments.size != entry.header + entry.logical.physicalArity) fault("Wrong scalar test argument count")
+    val shape = entry.packet
+    val storage = entry.state().arguments.acquire(shape).also { it.inputMode = 1 }
+    try {
+        for (index in arguments.indices) {
+            val value = arguments[index]
+            when {
+                shape.isInt(index) -> shape.setInt(storage, index, value as? Int ?: fault("Expected Int test argument"))
+                shape.isLong(index) -> shape.setLong(storage, index, value as? Long ?: fault("Expected Long test argument"))
+                shape.isFloat(index) -> shape.setFloat(storage, index, value as? Float ?: fault("Expected Float test argument"))
+                shape.isDouble(index) -> shape.setDouble(storage, index, value as? Double ?: fault("Expected Double test argument"))
+                else -> shape.setObject(storage, index, value)
+            }
+        }
+        return invokeTypedInput(entry, storage) { Calls.target(target, it) }
+    } finally { entry.releaseChecked(storage) }
+}

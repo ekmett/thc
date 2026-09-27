@@ -16,13 +16,13 @@ internal class ProcessForeignExpression(private val operation: ProcessOp,
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val values = arrayOfNulls<Any>(operands.size)
         for (index in values.indices) values[index] = when (operation.arguments[index]) {
-            "Int32Rep" -> operands[index].executeRequiredLong(frame)
+            "Int32Rep" -> operands[index].executeRequiredInt(frame).toLong()
             "AddrRep" -> operands[index].executeRequiredAddress(frame)
             else -> operands[index].execute(frame)
         }
         val result = ManagedProcessForeign.current(this).invoke(operation, values, this)
         val errno = Language.currentState(this).stdio.errno()
-        FrameAccess.writeLong(frame, slots[offset], result)
+        FrameAccess.writeInt(frame, slots[offset], result.toInt())
         if (operation == ProcessOp.WAIT) AstForeignCompleted.poll(this, errno, result == -1L && errno == 4L)
         return null
     }
@@ -34,6 +34,6 @@ internal class BytecodeProcessArguments(val operation: ProcessOp,
     @ExplodeLoop fun read(bytecode: BytecodeNode, frame: VirtualFrame): Array<Any?> =
         arrayOfNulls<Any>(slots.size).also { values ->
             for (index in values.indices) values[index] = if ("Int32Rep" == operation.arguments[index])
-                slots[index].getLong(bytecode, frame) else slots[index].getObject(bytecode, frame)
+                slots[index].getInt(bytecode, frame).toLong() else slots[index].getObject(bytecode, frame)
         }
 }

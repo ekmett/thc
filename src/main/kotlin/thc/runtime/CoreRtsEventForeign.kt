@@ -92,10 +92,11 @@ internal class RtsEventForeignExpression(private val op: RtsEventForeignOp,
     }
     override fun execute(frame: VirtualFrame): Nothing = fault("RTS event call requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val count = if (op == RtsEventForeignOp.CAPABILITIES) operands[0].executeRequiredLong(frame) else 0L
+        val count = if (op == RtsEventForeignOp.CAPABILITIES) Integer.toUnsignedLong(operands[0].executeRequiredInt(frame)) else 0L
         requireVoidCarrier(operands.last().execute(frame))
         val value = op.invoke(this, count)
-        if (op.result != null) FrameAccess.writeLong(frame, slots[offset], value)
+        if (op == RtsEventForeignOp.PROCESSORS) FrameAccess.writeInt(frame, slots[offset], value.toInt())
+        else if (op.result != null) FrameAccess.writeLong(frame, slots[offset], value)
         if (op.safety == "safe" && AstControl.enabled(this)) {
             val compiled = CompilerDirectives.inCompiledCode()
             GuestThreads.pollCurrent(this, false)?.let { request ->

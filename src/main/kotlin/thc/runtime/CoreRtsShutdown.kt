@@ -126,8 +126,8 @@ internal class ShutdownRuntime(private val operation: RtsShutdownOp,
     @field:Child private var state: Expr) : Expr() {
     override fun execute(frame: VirtualFrame): Nothing = fault("Shutdown requires its declared tuple convention")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing {
-        val status = code.executeRequiredLong(frame)
-        val mode = fast.executeRequiredLong(frame)
+        val status = code.executeRequiredInt(frame).toLong()
+        val mode = fast.executeRequiredInt(frame).toLong()
         CoreRtsShutdown.shutdown(this, operation, status, mode, state.execute(frame))
     }
 }

@@ -13,14 +13,19 @@ internal class OriginalStackInfoExpression(private val operation: OriginalStackI
 
     override fun execute(frame: VirtualFrame): Any {
         if (operation == OriginalStackInfoOp.STACK_INFO) return executeAddress(frame)
-        if (operation == OriginalStackInfoOp.STACK_FIELDS || operation == OriginalStackInfoOp.WORD) return executeLong(frame)
+        if (operation == OriginalStackInfoOp.STACK_FIELDS) return executeInt(frame)
+        if (operation == OriginalStackInfoOp.WORD) return executeLong(frame)
         if (operation.tupleResult) fault("Original stack info tuple requires a destination")
         return incompatible(frame)
     }
 
-    override fun executeLong(frame: VirtualFrame): Long {
+    override fun executeInt(frame: VirtualFrame): Int {
         if (operation == OriginalStackInfoOp.STACK_FIELDS)
-            return ManagedStackRuntime.stackFields(operands[0].execute(frame), layout)
+            return ManagedStackRuntime.stackFields(operands[0].execute(frame), layout).toInt()
+        return super.executeInt(frame)
+    }
+
+    override fun executeLong(frame: VirtualFrame): Long {
         if (operation == OriginalStackInfoOp.WORD)
             return ManagedStackRuntime.word(operands[0].execute(frame), operands[1].executeRequiredLong(frame), layout)
         return super.executeLong(frame)
@@ -57,7 +62,7 @@ internal class OriginalStackInfoExpression(private val operation: OriginalStackI
             val key = operands[0].executeRequiredAddress(frame)
             val destination = operands[1].executeRequiredAddress(frame)
             requireVoidCarrier(operands[2].execute(frame))
-            FrameAccess.writeLong(frame, slots[offset], ManagedStackRuntime.lookupIpe(key, destination, layout))
+            FrameAccess.writeInt(frame, slots[offset], ManagedStackRuntime.lookupIpe(key, destination, layout).toInt())
         } else if (operation.tupleResult) incompatible(frame)
         else fault("Original stack info scalar cannot write a tuple")
         return null

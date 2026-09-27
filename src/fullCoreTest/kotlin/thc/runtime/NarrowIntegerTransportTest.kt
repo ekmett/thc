@@ -71,7 +71,7 @@ class NarrowIntegerTransportTest {
     @TestFactory fun genuineActiveValuesMatchNativeOnFirstInstalledCall(): List<DynamicTest> {
         val manifest = evidence()
         val rows = File(directory, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
-        assertEquals(manifest["entries"], rows.keys.toList()); assertEquals(200, rows.values.sumOf { it.size })
+        assertEquals(manifest["entries"], rows.keys.toList()); assertEquals(460, rows.values.sumOf { it.size })
         return listOf("pre", "post").flatMap { stage ->
             assertEquals(true, json(File(directory, "$stage/audit.json"))["accepted"])
             listOf("ast", "bytecode").flatMap { backend -> rows.flatMap { (entry, cases) ->
@@ -97,6 +97,38 @@ class NarrowIntegerTransportTest {
                 } }
             } }
         }
+    }
+
+
+    @TestFactory fun genuinePublicNarrowInputsAndOutputsKeepSignednessAndRejectOutOfRange(): List<DynamicTest> {
+        evidence()
+        val rows = File(directory, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
+        return listOf("pre", "post").flatMap { stage -> listOf("ast", "bytecode").flatMap { backend ->
+            NarrowInteger.entries.map { integer -> DynamicTest.dynamicTest("$stage/$backend/public/${integer.rep}") {
+                entered { context, language ->
+                    val entry = "public" + integer.rep.removeSuffix("Rep")
+                    val program = program(language, stage, backend, entry)
+                    val name = "main:NarrowIntegerTransport.$entry"
+                    val callable = context.asValue(EntryValue(program, name, 1))
+                    val minimum = if (integer.unsigned) 0L else -(1L shl (integer.bits - 1))
+                    val maximum = if (integer.unsigned) (1L shl integer.bits) - 1 else (1L shl (integer.bits - 1)) - 1
+                    val cases = rows.getValue(entry + "Case").filter { it[1].toLong() in minimum..maximum }
+                    assertTrue(cases.isNotEmpty())
+                    for (row in cases) assertEquals(row[2].toLong(), callable.execute(row[1].toLong()).asLong())
+                    assertTrue(callable.invokeMember("compile").asBoolean())
+                    for (row in cases.reversed()) {
+                        val before = program.diagnostics()["compiledEntries"] as Long
+                        assertEquals(row[2].toLong(), callable.execute(row[1].toLong()).asLong())
+                        assertTrue((program.diagnostics()["compiledEntries"] as Long) > before)
+                        valid(program.entryTarget(name)); valid(program.hostEntryTarget(1)); released(language)
+                    }
+                    for (bad in listOf(minimum - 1, maximum + 1)) {
+                        assertThrows(org.graalvm.polyglot.PolyglotException::class.java) { callable.execute(bad) }
+                        released(language)
+                    }
+                }
+            } }
+        } }
     }
 
 }

@@ -28,7 +28,8 @@ import System.FilePath ((</>), takeExtension)
 
 entries :: [String]
 entries = ["fieldsCase","tupleCase","captureCase","papCase","retainedPapCase","sumCase",
-  "arithmeticCase","maskedCase","byteArrayCase","vectorCase"]
+  "arithmeticCase","maskedCase","byteArrayCase","vectorCase",
+  "loopCase","literalCase","divisionCase","bitcastCase","pinnedCase","atomicCase","nestedCase","publicInt8Case","publicWord8Case","publicInt16Case","publicWord16Case","publicInt32Case","publicWord32Case"]
 payloads :: [Integer]
 payloads = [-9223372036854775808,-4294967297,-2147483649,-65537,-32769,-129,-1,0,1,127,
   128,255,256,32767,65535,2147483647,2147483648,4294967295,4294967296,9223372036854775807]

@@ -55,9 +55,9 @@ internal class CpuAffinityQuery(private val applied: Boolean, @field:Child priva
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         requireVoidCarrier(state.execute(frame))
         val threads = GuestThreads.current(this)
-        FrameAccess.writeLong(frame, slots[offset], if (applied) {
-            if (threads.currentIdentity().affinityApplied) 1L else 0L
-        } else threads.cpuAffinity.mode.ordinal.toLong())
+        FrameAccess.writeInt(frame, slots[offset], if (applied) {
+            if (threads.currentIdentity().affinityApplied) 1 else 0
+        } else threads.cpuAffinity.mode.ordinal)
         return null
     }
 }

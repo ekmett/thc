@@ -100,7 +100,7 @@ class NarrowLiteralProofTest {
     private fun native(inlining: Boolean) {
         val rows = File(directory, "oracle.tsv").readLines().map { it.split('\t') }
         assertEquals(54, rows.size)
-        val integral = listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
+        val integral = kinds.map { it + "Rep" }
         for (stage in listOf("pre", "post")) for (variant in listOf("exact", "absent", "unknown") + integral) {
             val projected = if (variant in integral) project(stage, "bad",
                 mapOf("kind" to "long", "primReps" to listOf(variant), "evaluated" to true)) else project(stage, variant)
@@ -151,7 +151,10 @@ class NarrowLiteralProofTest {
             mapOf("kind" to "object", "primReps" to listOf("BoxedRep (Just Unlifted)"), "evaluated" to true),
             mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true),
             mapOf("kind" to "unknown", "primReps" to emptyList<String>(), "evaluated" to true,
-                "aggregate" to "unboxed-tuple", "components" to emptyList<Any>()))
+                "aggregate" to "unboxed-tuple", "components" to emptyList<Any>())) +
+            listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep").map {
+                mapOf("kind" to "long", "primReps" to listOf(it), "evaluated" to true)
+            }
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
             try {

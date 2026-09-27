@@ -88,9 +88,9 @@ internal class MemorySearchExpression(private val operation: MemorySearchOp,
             val second = operands[1].executeRequiredAddress(frame)
             val count = operands[2].executeRequiredLong(frame)
             requireVoidCarrier(operands[3].execute(frame))
-            FrameAccess.writeLong(frame, slots[offset], first.compareBytes(second, count))
+            FrameAccess.writeInt(frame, slots[offset], first.compareBytes(second, count).toInt())
         } else {
-            val needle = operands[1].executeRequiredLong(frame)
+            val needle = operands[1].executeRequiredInt(frame).toLong()
             val count = operands[2].executeRequiredLong(frame)
             requireVoidCarrier(operands[3].execute(frame))
             FrameAccess.writeObject(frame, slots[offset], first.findByte(needle, count))

@@ -63,10 +63,11 @@ class Md5ForeignCallTest {
                 fun call(first: ManagedAddress, second: ManagedAddress, size: Long, token: Any? = Unit): Any? {
                     val arguments = when (operation) {
                         Md5ForeignOp.INIT -> arrayOf<Any?>(0L, first, token)
-                        Md5ForeignOp.UPDATE -> arrayOf<Any?>(0L, first, second, size, token)
+                        Md5ForeignOp.UPDATE -> arrayOf<Any?>(0L, first, second,
+                            if (size in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong()) size.toInt() else size, token)
                         Md5ForeignOp.FINAL -> arrayOf<Any?>(0L, first, second, token)
                     }
-                    return Calls.target(entry, arguments)
+                    return callScalarTestTarget(entry, arguments)
                 }
                 fun positive(compiled: Boolean) {
                     for (size in listOf(0, 1, 15, 55, 56, 63, 64, 65, 129)) {
@@ -97,7 +98,7 @@ class Md5ForeignCallTest {
                 val beforeBytes = bytes.copyOf(); val beforeOutput = output.copyOf()
                 val badState = assertThrows(RuntimeFault::class.java) {
                     call(ManagedAddress.fromByteArray(if (operation == Md5ForeignOp.FINAL) output else bytes),
-                        ManagedAddress.fromByteArray(bytes), Long.MAX_VALUE, 7L)
+                        ManagedAddress.fromByteArray(bytes), Int.MAX_VALUE.toLong(), 7L)
                 }
                 assertTrue(badState.message.orEmpty().contains("zero-width scalar carrier"), badState.message)
                 assertArrayEquals(beforeBytes, bytes); assertArrayEquals(beforeOutput, output); released(language)

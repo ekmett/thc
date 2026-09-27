@@ -1776,6 +1776,13 @@ CoreStackForeign.validateHead(fn, defined)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }.let { operand ->
+                        val integer = NarrowInteger.fromRep(originalStdio.arguments[index])
+                        if (integer == null) operand else Expression { e ->
+                            e.builder.beginForeignIntegerToHost(integer)
+                            operand.emit(e)
+                            e.builder.endForeignIntegerToHost()
+                        }
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
@@ -2431,7 +2438,7 @@ CoreStackForeign.validateHead(fn, defined)
                     b.beginRequireIOState(); operands.last().emit(e); b.endRequireIOState()
                     if (libdw != LibdwForeignOp.CLEAR) {
                         b.beginStoreLocal(destination.single())
-                        if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1L)
+                        if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         b.endStoreLocal()
                     }

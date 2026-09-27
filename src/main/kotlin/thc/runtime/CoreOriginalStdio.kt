@@ -165,6 +165,8 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     ICONV("hs_iconv", "ccall", "unsafe", listOf("Int64Rep", "AddrRep", "AddrRep", "AddrRep", "AddrRep", null), "Word64Rep"),
     STRERROR("base_strerror_r", "ccall", "safe", listOf("Int32Rep", "AddrRep", "Word64Rep", null), "Int32Rep");
 
+    val narrowResult: NarrowInteger? = NarrowInteger.fromRep(result)
+
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
         this == LAST_ERROR && (value == "ghc-internal" || value is String && win32Unit.matches(value)) ||

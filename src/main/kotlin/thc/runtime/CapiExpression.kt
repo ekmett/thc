@@ -15,12 +15,14 @@ internal class CapiExpression(private val call: CapiCall,
             requireVoidCarrier(operands[0].execute(frame))
             CoreCapiForeign.zero(this, call)
         } else {
-            val clock = operands[0].executeRequiredLong(frame)
+            val clock = if (call.timeClock) operands[0].executeRequiredInt(frame).toLong()
+                else operands[0].executeRequiredLong(frame)
             val output = operands[1].executeRequiredAddress(frame)
             requireVoidCarrier(operands[2].execute(frame))
             CoreCapiForeign.wordAddress(this, call, clock, output)
         }
-        FrameAccess.writeLong(frame, slots[offset], result)
+        if (call.zeroArgument && !call.timeClock) FrameAccess.writeLong(frame, slots[offset], result)
+        else FrameAccess.writeInt(frame, slots[offset], result.toInt())
         return null
     }
 }

@@ -573,9 +573,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "request")
     public static final class PollProcessCompleted {
         @Specialization public static boolean poll(VirtualFrame frame, LocalAccessor request,
-                long result, long errno, @Bind Node node) {
+                int result, long errno, @Bind Node node) {
             boolean compiled = CompilerDirectives.inCompiledCode();
-            AsyncRequest pending = GuestThreads.pollCurrent(node, result == -1L && errno == 4L);
+            AsyncRequest pending = GuestThreads.pollCurrent(node, result == -1 && errno == 4L);
             request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
             if (pending == null) return false;
             pending.compiledCapture = compiled;
@@ -785,6 +785,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             checkpoint.getVisits().incrementAndGet();
             return true;
         }
+    }
+
+    /** Explicit original-foreign ABI widening; never an implicit guest scalar cast. */
+    @Operation
+    @ConstantOperand(type = NarrowInteger.class, name = "integer")
+    public static final class ForeignIntegerToHost {
+        @Specialization public static long widen(NarrowInteger integer, int value) { return integer.widen(value); }
     }
 
     @Operation
@@ -1240,7 +1247,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 LocalAccessor destination, LocalAccessor errno, @Bind Node node) {
             BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
             long result = ManagedProcessForeign.current(node).invoke(arguments.getOperation(), arguments.read(bytecode, frame), node);
-            destination.setLong(bytecode, frame, result);
+            destination.setInt(bytecode, frame, (int) result);
             errno.setLong(bytecode, frame, CoreOriginalStdio.current(node).errno());
         }
     }
@@ -1271,8 +1278,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = TargetLayout.class, name = "layout")
     public static final class OriginalStackFields {
-        @Specialization public static long apply(TargetLayout layout, Object snapshot) {
-            return ManagedStackRuntime.stackFields(snapshot, layout);
+        @Specialization public static int apply(TargetLayout layout, Object snapshot) {
+            return (int) ManagedStackRuntime.stackFields(snapshot, layout);
         }
     }
 
@@ -1345,7 +1352,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = ManagedStackRuntime.lookupIpe(key, output, layout);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1377,7 +1384,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 CapiCall call, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.zero(node, call);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            if (call.getTimeClock()) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 
@@ -1538,8 +1546,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress left, ManagedAddress right, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    left.compareBytes(right, count));
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    (int) left.compareBytes(right, count));
         }
     }
 
@@ -1547,7 +1555,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalMemchr {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress source, long needle, long count, Object state, @Bind("$node") Node node) {
+                ManagedAddress source, int needle, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     source.findByte(needle, count));
@@ -1560,8 +1568,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress source, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    ManagedByteStringUtf8.validate(source, count));
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    (int) ManagedByteStringUtf8.validate(source, count));
         }
     }
 
@@ -1580,7 +1588,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalMemset {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress target, long value, long count, Object state, @Bind("$node") Node node) {
+                ManagedAddress target, int value, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             target.fill(count, value);
             destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, target);
@@ -1602,11 +1610,18 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = CapiCall.class, name = "call")
     public static final class LinkedCapiWordAddress {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization(guards = "!call.getTimeClock()") public static void apply(VirtualFrame frame, LocalAccessor destination,
                 CapiCall call, long word, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.wordAddress(node, call, word, address);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+        }
+
+        @Specialization(guards = "call.getTimeClock()") public static void narrow(VirtualFrame frame, LocalAccessor destination,
+                CapiCall call, int word, ManagedAddress address, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            int result = (int) CoreCapiForeign.wordAddress(node, call, word, address);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 
@@ -1635,7 +1650,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 } else {
                     long value = TermiosImage.scalar(operation, address, fd);
                     if (operation.getResult() != null)
-                        destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
+                        if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) value);
+                        else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, value);
                 }
                 return;
             }
@@ -1657,7 +1673,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation == OriginalStdioOp.PIPE) result = CoreOriginalStdio.current(node).pipe(address);
             else if (operation == OriginalStdioOp.DUP) result = CoreOriginalStdio.current(node).duplicate(fd);
             else throw new RuntimeFault("Invalid original stdio status operation");
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 
@@ -1676,7 +1693,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 operation == OriginalStdioOp.FCNTL_WRITE);
             else if (operation.getReadiness()) result = CoreOriginalStdio.current(node).ready(fd, writing, milliseconds, socket, node);
             else throw new RuntimeFault("Invalid original four-scalar operation");
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1695,7 +1712,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (operation == OriginalStdioOp.EPOLL_CTL) result = stdio.epollControl(first, second, third, address);
             else if (operation == OriginalStdioOp.EPOLL_CREATE) result = stdio.epollCreate(first);
             else { stdio.controlFd(operation, first, second); return; }
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1815,7 +1832,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 TupleResultsKt.requireVoidCarrier(state);
                 result = CoreManagedFiles.current(node).setSize(fd, length, ForeignSafety.SAFE);
             }
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            if (state == OriginalStdioOp.TRUNCATE || state == OriginalStdioOp.DUP2)
+                destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 
@@ -1867,7 +1886,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress path, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).changeDirectory(path);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1891,7 +1910,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                     : operation == OriginalStdioOp.DBCS_LEAD_BYTE ? windows.leadByte(number, value)
                     : operation == OriginalStdioOp.MAP_ERRNO_VALUE ? windows.mapErrno(number)
                     : windows.codePage(operation == OriginalStdioOp.CONSOLE_CODE_PAGE);
-                destination.setLong(bytecode, frame, result);
+                if (operation.getNarrowResult() != null) destination.setInt(bytecode, frame, (int) result);
+                else destination.setLong(bytecode, frame, result);
             }
         }
     }
@@ -1905,7 +1925,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = WindowsCodePages.current(node).multiByte(codePage, flags, input, count, output, capacity);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1917,7 +1937,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress defaultChar, ManagedAddress usedDefault, Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = WindowsCodePages.current(node).wideChar(codePage, flags, input, count, output, capacity, defaultChar, usedDefault);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1935,7 +1955,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             } else {
                 long result = operation == OriginalStdioOp.FIND_NEXT ? streams.next(first, output)
                     : operation == OriginalStdioOp.FIND_CLOSE ? streams.closeSearch(first) : streams.error();
-                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+                if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+                else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
             }
         }
     }
@@ -1972,7 +1993,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress stream, ManagedAddress output, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.directories(node).read(stream, output);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -1985,7 +2006,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             if (operation == OriginalStdioOp.CLOSEDIR) {
                 long result = CoreOriginalStdio.directories(node).closeStream(address);
-                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+                destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             } else CoreOriginalStdio.directories(node).freeEntry(address);
         }
     }
@@ -2008,7 +2029,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress target, ManagedAddress path, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).symlink(target, path);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2019,7 +2040,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress path, ManagedAddress output, long capacity, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).readlink(path, output, capacity);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2030,7 +2051,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long fd, ManagedAddress path, ManagedAddress image, long flags, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).statAt(fd, path, image, flags);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2041,7 +2062,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long fd, ManagedAddress path, long flags, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).unlinkAt(fd, path, flags);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2052,7 +2073,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).access(path, mode);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2064,7 +2085,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).pathMode(operation, path, mode);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2076,7 +2097,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 ManagedAddress path, ManagedAddress image, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.current(node).pathStat(operation, path, image);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2098,7 +2119,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long handle, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.iconv(node).close(handle);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2115,7 +2136,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             long result = operation == OriginalStdioOp.SIGPROCMASK
                 ? ManagedSignalMask.execute(node, handle, input, inputCount)
                 : CoreOriginalStdio.iconv(node).convert(handle, input, inputCount, output, outputCount);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            if (operation.getNarrowResult() != null) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
 
@@ -2126,7 +2148,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 long error, ManagedAddress output, long length, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreOriginalStdio.strerror(node).call(error, output, length);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }
 
@@ -2151,7 +2173,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class Md5Update {
-        @Specialization public static void apply(ManagedAddress context, ManagedAddress input, long length, Object state) {
+        @Specialization public static void apply(ManagedAddress context, ManagedAddress input, int length, Object state) {
             ManagedByteArray.requireState(state);
             ManagedMd5.INSTANCE.update(context, input, length);
         }
@@ -3780,11 +3802,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = TextForeignOp.class, name = "operation")
     public static final class OriginalTextCall {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization(guards = "!operation.getByteNeedle()") public static void apply(VirtualFrame frame, LocalAccessor destination,
                 TextForeignOp operation, Object bytes, long offset, long length, long count, Object state,
                 @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = ManagedText.invoke(operation, bytes, offset, length, count);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+
+        @Specialization(guards = "operation.getByteNeedle()")
+        public static void byteNeedle(VirtualFrame frame, LocalAccessor destination,
+                TextForeignOp operation, Object bytes, long offset, long length, int needle, Object state,
+                @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = ManagedText.invoke(operation, bytes, offset, length, needle);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -3842,8 +3873,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             GuestThreads threads = GuestThreads.current(node);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    applied ? (threads.currentIdentity().getAffinityApplied() ? 1L : 0L)
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    applied ? (threads.currentIdentity().getAffinityApplied() ? 1 : 0)
                             : threads.getCpuAffinity().getMode().ordinal());
         }
     }
@@ -3851,27 +3882,27 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class RuntimeServiceQuery {
         @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
-                long selector, long index, long detail, Object state, @Bind("$node") Node node) {
+                int selector, long index, long detail, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    RuntimeServices.query(node, 2, (int) selector, index, detail));
+                    RuntimeServices.query(node, 2, selector, index, detail));
         }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class RuntimeServiceControl {
         @Specialization public static void control(VirtualFrame frame, LocalAccessor destination,
-                long selector, long setting, Object state, @Bind("$node") Node node) {
+                int selector, long setting, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    RuntimeServices.control(node, (int) selector, setting));
+                    RuntimeServices.control(node, selector, setting));
         }
     }
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class ExceptionText {
         @Specialization public static void text(VirtualFrame frame, LocalAccessor destination,
-                ManagedAddress handle, long selector, long index, Object state,
+                ManagedAddress handle, int selector, long index, Object state,
                 @Cached(value = "new()", neverDefault = true) ForeignExceptionAccess access,
                 @Bind("$node") Node node) {
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
@@ -3882,11 +3913,11 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class RuntimeServiceTrace {
         @Specialization public static void trace(VirtualFrame frame, LocalAccessor destination,
-                long operation, long token, ManagedAddress address, long length, Object state,
+                int operation, long token, ManagedAddress address, long length, Object state,
                 @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    RuntimeServices.trace(node, (int) operation, token, address, length));
+                    RuntimeServices.trace(node, operation, token, address, length));
         }
     }
     @Operation
@@ -3921,14 +3952,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void query(VirtualFrame frame, LocalAccessor destination,
                 RtsEventForeignOp operation, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, operation.invoke(node, 0L));
+            long result = operation.invoke(node, 0L);
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            if (operation == RtsEventForeignOp.PROCESSORS) destination.setInt(bytecode, frame, (int) result);
+            else destination.setLong(bytecode, frame, result);
         }
     }
     @Operation
     public static final class SetNumCapabilities {
-        @Specialization public static void set(long count, Object state, @Bind("$node") Node node) {
+        @Specialization public static void set(int count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            RtsEventForeignOp.CAPABILITIES.invoke(node, count);
+            RtsEventForeignOp.CAPABILITIES.invoke(node, Integer.toUnsignedLong(count));
         }
     }
     /** Original thread queries. Neither capability support nor accounting enforces a limit. */
@@ -3975,8 +4009,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 LocalAccessor destination, ManagedAddress name, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             GuestEnvironment environment = GuestEnvironment.current(node);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
-                    operation == EnvironmentOp.PUT ? environment.put(name) : environment.unset(name));
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    (int) (operation == EnvironmentOp.PUT ? environment.put(name) : environment.unset(name)));
         }
     }
     @Operation
@@ -4013,7 +4047,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = RtsShutdownOp.class, name = "operation")
     public static final class ShutdownRuntime {
-        @Specialization public static void shutdown(RtsShutdownOp operation, long code, long fast, Object state,
+        @Specialization public static void shutdown(RtsShutdownOp operation, int code, int fast, Object state,
                 @Bind("$node") Node node) {
             CoreRtsShutdown.shutdown(node, operation, code, fast, state);
         }
@@ -4030,7 +4064,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     public static final class SetProgramArguments {
-        @Specialization public static void set(long argc, ManagedAddress argv,
+        @Specialization public static void set(int argc, ManagedAddress argv,
                 Object state, @Bind Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             GuestArguments.current(node).set(argc, argv);
@@ -4041,10 +4075,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class InstallProcessSignal {
         @Specialization public static void install(VirtualFrame frame, LocalAccessor destination,
-                long signal, long action, ManagedAddress mask, Object state, @Bind("$node") Node node) {
+                int signal, int action, ManagedAddress mask, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = ManagedSignals.install(node, signal, action, mask);
-            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
         @Fallback public static void invalid(VirtualFrame frame, LocalAccessor destination,
                 Object signal, Object action, Object mask, Object state) {
