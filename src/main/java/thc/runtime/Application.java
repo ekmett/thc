@@ -22,8 +22,8 @@ final class Application extends Expr {
             proofs.add(proof);
             evaluated[i] = proof.getEvaluated();
         }
-        inputLayout = ArgumentLayout.Companion.fromProofs(proofs);
-        dispatch = Dispatch.Companion.create(arguments.length, tail, metrics, evaluated, inputLayout);
+        inputLayout = ArgumentLayout.fromProofs(proofs);
+        dispatch = Dispatch.create(arguments.length, tail, metrics, evaluated, inputLayout);
     }
     @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
         Closure fn;
@@ -32,23 +32,23 @@ final class Application extends Expr {
             throw cut.append(new AstResumeStep() {
                 @Override public Object resume(VirtualFrame frame, Object input) {
                     return applyArguments(frame, ApplicationKt.requireClosure(input),
-                        new Object[ArgumentLayout.Companion.width(inputLayout, arguments.length)], 0);
+                        new Object[ArgumentLayout.width(inputLayout, arguments.length)], 0);
                 }
             });
         }
-        Object[] values = new Object[ArgumentLayout.Companion.width(inputLayout, arguments.length)];
+        Object[] values = new Object[ArgumentLayout.width(inputLayout, arguments.length)];
         return applyArguments(frame, fn, values, 0);
     }
     @ExplodeLoop private Object applyArguments(VirtualFrame frame, Closure fn, Object[] values, int start) {
         for (int i = start; i < arguments.length; i++) {
             try {
-                if (inputLayout != null && inputLayout.isEmpty(i)) arguments[i].executeTuple(frame, ArgumentLayoutKt.getEMPTY_TUPLE_SLOTS(), 0);
-                else values[ArgumentLayout.Companion.offset(inputLayout, i)] = arguments[i].execute(frame);
+                if (inputLayout != null && inputLayout.isEmpty(i)) arguments[i].executeTuple(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS, 0);
+                else values[ArgumentLayout.offset(inputLayout, i)] = arguments[i].execute(frame);
             } catch (AstCapture cut) {
                 int index = i;
                 throw cut.append(new AstResumeStep() {
                     @Override public Object resume(VirtualFrame frame, Object input) {
-                        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.Companion.offset(inputLayout, index)] = input;
+                        if (inputLayout == null || !inputLayout.isEmpty(index)) values[ArgumentLayout.offset(inputLayout, index)] = input;
                         return applyArguments(frame, fn, values, index + 1);
                     }
                 });

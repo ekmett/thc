@@ -12,7 +12,7 @@ public final class EntryRoot extends RootNode {
     @Child private Force force;
     public EntryRoot(TruffleLanguage<?> language, int arity, Metrics metrics) {
         super(language, new FrameLayout().build());
-        this.arity = arity; dispatch = Dispatch.Companion.create(arity, false, metrics); force = new Force(metrics);
+        this.arity = arity; dispatch = Dispatch.create(arity, false, metrics); force = new Force(metrics);
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);
