@@ -44,6 +44,11 @@ hash-pinned builder source family into an isolated module patch and runs its
 focused controls before image construction; the installed toolchain remains
 unchanged. This experiment is separate from initialization inventory preparation.
 
+The independent [runtime snippet-provider overlay](runtime-snippet-providers/README.md)
+uses `THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1` to bind runtime parsing to its existing
+runtime replacement cache. It preserves complete option sets and other providers.
+Both opt-ins can be combined; neither changes the pure-interpreter recipe.
+
 ## Inventory contract
 
 The script combines the existing

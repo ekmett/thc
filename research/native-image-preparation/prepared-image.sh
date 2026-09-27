@@ -48,13 +48,24 @@ done < "$recipe_dir/prepared-initialization.txt"
 initialization_args="$inventory_dir/prepared-initialization.args"
 printf '%s\n' "--initialize-at-build-time=$initialization" > "$initialization_args"
 [[ "$mode" == prepare-only ]] && exit 0
-builder_patch=()
+builder_overlays=
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
     overlay_dir="$repo_dir/build/native-image/deopt-loop-stamps"
     bash "$recipe_dir/deopt-loop-stamps/prepare.sh" "$overlay_dir"
     bash "$recipe_dir/deopt-loop-stamps/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-deopt-loop-stamps.jar"
-    builder_patch=("-J--patch-module=org.graalvm.nativeimage.builder=$overlay_dir/thc-svm-deopt-loop-stamps.jar")
+    builder_overlays="$overlay_dir/thc-svm-deopt-loop-stamps.jar"
+fi
+if [[ -n "${THC_NATIVE_IMAGE_RUNTIME_SNIPPETS:-}" ]]; then
+    [[ "$THC_NATIVE_IMAGE_RUNTIME_SNIPPETS" == 1 ]] || exit 2
+    overlay_dir="$repo_dir/build/native-image/runtime-snippet-providers"
+    bash "$recipe_dir/runtime-snippet-providers/prepare.sh" "$overlay_dir"
+    bash "$recipe_dir/runtime-snippet-providers/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-runtime-snippet-providers.jar"
+    builder_overlays="${builder_overlays:+$builder_overlays:}$overlay_dir/thc-svm-runtime-snippet-providers.jar"
+fi
+builder_patch=()
+if [[ -n "$builder_overlays" ]]; then
+    builder_patch=("-J--patch-module=org.graalvm.nativeimage.builder=$builder_overlays")
 fi
 diagnostics=()
 if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then

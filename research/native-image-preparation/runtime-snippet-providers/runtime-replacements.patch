@@ -1,0 +1,16 @@
+diff --git a/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompilationFeature.java b/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompilationFeature.java
+--- a/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompilationFeature.java
++++ b/com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompilationFeature.java
+@@ -350,5 +350,11 @@ public class RuntimeCompilationFeature implements InternalFeature {
+         HostedProviders defaultProviders = bb.getProviders(ORIGINAL_METHOD);
+-        HostedProviders customHostedProviders = defaultProviders.copyWith(generator.apply(defaultProviders.getConstantFieldProvider()));
++        /*
++         * Runtime invocation plugins must retain the runtime snippet templates, not
++         * templates whose options belong to the image builder. Keep the remaining
++         * analysis providers, including the caller's constant-field wrapper.
++         */
++        HostedProviders customHostedProviders = defaultProviders.copyWith(generator.apply(defaultProviders.getConstantFieldProvider()))
++                        .copyWith(hostedProviders.getReplacements());
+         constantFieldProviderWrapper = generator;
+         customHostedProviders.setGraphBuilderPlugins(hostedProviders.getGraphBuilderPlugins());
+         analysisProviders = customHostedProviders;
