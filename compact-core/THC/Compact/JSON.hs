@@ -505,7 +505,7 @@ sourceIdentity = withObject "resolved native source identity" $ \fields -> do
     <*> optional fields "pkg-version" bytes <*> optional fields "flags" flags
     <*> optional fields "component-name" bytes <*> optional fields "pkg-src-sha256" bytes <*> optional fields "pkg-cabal-sha256" bytes
   where flags = withObject "Cabal configuration flags" $ \values ->
-          mapM (\(key,value) -> (,) (Text.encodeUtf8 (Key.toText key)) <$> parseJSON value) (KM.toList values)
+          mapM (\(key,value) -> (,) (Text.encodeUtf8 (Key.toText key)) <$> parseJSON value) (KM.toAscList values)
 
 nativeArchive :: Value -> Parser NativeArchive
 nativeArchive = withObject "unlinked native archive" $ \fields -> do

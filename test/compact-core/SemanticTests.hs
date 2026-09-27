@@ -12,7 +12,7 @@
 --
 -- Typed round trips and malformed selected-record controls. Synthetic controls
 -- are not GHC capture evidence or claims of compact runtime execution.
-module SemanticTests (semanticTests) where
+module SemanticTests (semanticTests, nativeProvenanceFacts) where
 
 import Control.Exception (IOException, try)
 import Control.Monad (forM, forM_)
@@ -221,10 +221,7 @@ semanticTests = TestList
         withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings bytes ->
           assertEqual "status/reason survive typed bytes" (Right facts) (decodeFacts bytes strings)
   , TestLabel "native link and partial archive records preserve exact typed provenance" $ TestCase $ do
-      let facts = completeFacts {factsPendingProvenance =
-            [Known (ForeignLinkRecord completeForeignLink),Missing,Missing,Missing,Missing,
-             Known (ScalarLinkRecord completeScalarLink),Known (NativeLinkRecord completeNativeLink),
-             Known (NativeArchiveRecord completeNativeArchive)]}
+      let facts = nativeProvenanceFacts
       assertEqual "all original link inputs and rejected closure evidence survive JSON inspection"
         (Right (facts,[])) (parseModuleWithoutDebug (moduleJSON facts []))
       withEncoded (\_ encoder -> encodeFacts encoder facts) $ \payload strings bytes -> do
@@ -232,6 +229,11 @@ semanticTests = TestList
         assertEqual "native blob and every nested original recipe survive typed bytes" (Right facts) (decodeFacts bytes strings)
         forM_ [0,BS.length bytes-1] $ \size ->
           assertBool "truncated native record rejects" (isLeft (decodeFacts (BS.take size bytes) strings))
+  , TestLabel "native source flags have explicit ascending name order" $ TestCase $ do
+      let reversed = nativeFactsWithFlags [("z-config",False),("a-config",True)]
+          ordered = nativeFactsWithFlags [("a-config",True),("z-config",False)]
+      assertEqual "Cabal flag object order does not leak into typed records" (Right (ordered,[]))
+        (parseModuleWithoutDebug (moduleJSON reversed []))
   , TestLabel "native artifact conversion rejects malformed hex and unknown nested facts" $ TestCase $ do
       let original = moduleJSON completeFacts {factsPendingProvenance =
             [Missing,Missing,Missing,Missing,Missing,Known (ScalarLinkRecord completeScalarLink),Missing,Missing]} []
@@ -405,6 +407,27 @@ completeForeignLink :: ForeignLink
 completeForeignLink = ForeignLink 3 "llvm-bitcode" "main" "Typed" "source-hash" "bitcode-hash"
   (BS.pack [0,255,66,67,192]) "actual-target" ["clock","errno"] [("clock","time-clock-time"),("errno","errno")]
   (Known [("HsTime.h","selected-header-hash")])
+
+-- | Synthetic codec model for independent readers, not an executable native
+-- artifact or proof of any machine observation. All eight header slots occur.
+nativeProvenanceFacts :: Facts
+nativeProvenanceFacts = completeFacts {factsPendingProvenance =
+  [Known (ForeignLinkRecord completeForeignLink),Known (ImportsRecord completeImports),
+   Known (ImportsRecord completeImports),Known (ExportsRecord completeExports),
+   Known (RegistrationRecord completeRegistration),Known (ScalarLinkRecord completeScalarLink),
+   Known (NativeLinkRecord completeNativeLink),Known (NativeArchiveRecord completeNativeArchive)]}
+
+nativeFactsWithFlags :: [(BS.ByteString,Bool)] -> Facts
+nativeFactsWithFlags flags = nativeProvenanceFacts
+  {factsPendingProvenance=map replace (factsPendingProvenance nativeProvenanceFacts)}
+  where
+    replace (Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known dependencies) libraries unresolved bridges)) entries))) =
+      Known (NativeLinkRecord (NativeLink payload abi (Known (NativeBuildInputs units providers (Known (map dependency dependencies)) libraries unresolved bridges)) entries))
+    replace value = value
+    dependency (NativeDependency profile unit (SourceIdentity identifier depends kind style name version _ component sourceSha cabalSha)
+        registrationText digest archives products) = NativeDependency profile unit
+          (SourceIdentity identifier depends kind style name version (Known flags) component sourceSha cabalSha)
+          registrationText digest archives products
 
 completeLinkPayload :: LinkPayload
 completeLinkPayload = LinkPayload 1 "llvm-bitcode" "thc-package-c-ffi-v1" "main" "actual-target"
