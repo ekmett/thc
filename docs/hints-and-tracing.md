@@ -15,6 +15,16 @@ Text events and markers read NUL-terminated byte strings. Binary events read
 exactly the supplied nonnegative byte count, including embedded NUL bytes.
 Zero-length binary events do not read their address.
 
+The original `GHC.Internal.RTS.Flags.Test.getUserEventTracingEnabled` getter is
+supported for the pinned GHC 9.14.1 `inplace`, x86_64 Linux, non-profiling dynamic
+layout. Its `RtsFlags.TraceFlags.user` CBool at byte offset 403 reports true,
+reflecting the always-enabled JVM trace sink above, not native GHC eventlog
+status. It does not follow the separate `thc.diagnostics` counter-report switch.
+The context-owned address supports composed pointer offsets and only this
+one-byte field read; other fields, widths, writes and numeric pointer projection
+are rejected. It is not a zero-filled native RTS structure. Other producing
+platform/configuration layouts remain unsupported until checked independently.
+
 ```text
 [thc trace event] starting
 [thc trace marker] finished
