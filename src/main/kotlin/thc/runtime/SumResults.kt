@@ -9,8 +9,8 @@ import com.oracle.truffle.api.nodes.ExplodeLoop
 import java.util.concurrent.Callable
 
 /** Logical alternatives stay distinct from GHC's shared physical slots.
- * Integral leaves already have their lowered Long carrier; no boxing or width
- * conversion is introduced when WordSlot and Word64Slot share storage. */
+ * Native WordSlot/Word64Slot storage stays Long. Narrow Int payloads convert
+ * explicitly at projection boundaries; the original GHC proof is unchanged. */
 internal object SumShape {
     private const val lifted = "BoxedRep (Just Lifted)"
     private const val unlifted = "BoxedRep (Just Unlifted)"
@@ -168,8 +168,10 @@ internal object SumShape {
 }
 
 internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
-    @Child private var payload: Expr) : Expr() {
+    @Child private var payload: Expr,
+    @field:CompilationFinal(dimensions = 1) private val intSlots: IntArray = IntArray(0)) : Expr() {
     private val proof = shape.proof.alternatives!![tag - 1]
+    @field:CompilationFinal(dimensions = 1) private val integers = TupleShape.flatten(proof).map { it.narrowInteger }.toTypedArray()
     @field:CompilationFinal(dimensions = 1) private val projection = SumShape.projection(shape.proof, tag - 1).toIntArray()
     @field:CompilationFinal(dimensions = 1) private val emptyReferences = shape.leaves.map { field -> when {
         field.kind == CoreKind.ADDRESS -> ManagedAddress.nullAddress()
@@ -179,13 +181,20 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
     private class Mapping(val destination: IntArray, val offset: Int,
         @field:CompilationFinal(dimensions = 1) val fields: IntArray)
     @field:CompilationFinal @Volatile private var mapping: Mapping? = null
-    init { representation = shape.proof.copy(evaluated = true) }
+    init {
+        if (proof.isTypedTransport && integers.any { it != null } &&
+            (intSlots.size != integers.size || integers.indices.any { integers[it] != null && intSlots[it] < 0 }))
+            fault("Missing narrow sum payload scratch slots")
+        representation = shape.proof.copy(evaluated = true)
+    }
     override fun execute(frame: VirtualFrame): Nothing = fault("Sum value requires a typed destination")
     @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val selected = mapping ?: run {
             com.oracle.truffle.api.CompilerDirectives.transferToInterpreterAndInvalidate()
             atomic(Callable {
-                mapping ?: Mapping(slots, offset, IntArray(projection.size) { slots[offset + projection[it]] })
+                mapping ?: Mapping(slots, offset, IntArray(projection.size) {
+                    if (proof.isTypedTransport && integers[it] != null) intSlots[it] else slots[offset + projection[it]]
+                })
                     .also { mapping = it }
             })
         }
@@ -203,10 +212,15 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
         when {
             proof.isTypedTransport -> payload.executeTuple(frame, fields, 0)
             proof.kind == CoreKind.VOID -> requireVoidCarrier(payload.execute(frame))
+            proof.isInt -> FrameAccess.writeLong(frame, fields[0], proof.narrowInteger!!.widen(payload.executeRequiredInt(frame)))
             proof.isLong -> FrameAccess.writeLong(frame, fields[0], payload.executeRequiredLong(frame))
             proof.isFloat -> FrameAccess.writeFloat(frame, fields[0], payload.executeRequiredFloat(frame))
             proof.isDouble -> FrameAccess.writeDouble(frame, fields[0], payload.executeRequiredDouble(frame))
             else -> FrameAccess.write(frame, fields[0], payload.execute(frame))
+        }
+        if (proof.isTypedTransport) for (index in integers.indices) {
+            val integer = integers[index] ?: continue
+            FrameAccess.writeLong(frame, slots[offset + projection[index]], integer.widen(frame.getInt(fields[index])))
         }
         FrameAccess.writeLong(frame, slots[offset], tag.toLong())
         return null
@@ -224,7 +238,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
     @field:CompilationFinal(dimensions = 1)
     private val armProfiles = Array(alternatives.size) { com.oracle.truffle.api.profiles.CountingConditionProfile.create() }
 
-    private enum class Route { GENERIC, LONG, FLOAT, DOUBLE, CLOSURE, DATA, ADDRESS, TUPLE }
+    private enum class Route { GENERIC, INT, LONG, FLOAT, DOUBLE, CLOSURE, DATA, ADDRESS, TUPLE }
 
     private class ResumeBranch(private val node: SumCase, private val route: Route,
                                private val destination: IntArray?, private val offset: Int) : AstResumeStep {
@@ -253,6 +267,7 @@ internal class SumCase(@Child private var scrutinee: Expr,
         val branch = alternatives[selected]
         return when (route) {
             Route.GENERIC -> branch.execute(frame)
+            Route.INT -> branch.executeInt(frame)
             Route.LONG -> branch.executeLong(frame)
             Route.FLOAT -> branch.executeFloat(frame)
             Route.DOUBLE -> branch.executeDouble(frame)
@@ -265,6 +280,11 @@ internal class SumCase(@Child private var scrutinee: Expr,
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
         val selected = prepare(frame, Route.GENERIC)
         for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].execute(frame)
+        fault("Non-exhaustive unboxed sum case")
+    }
+    @ExplodeLoop override fun executeInt(frame: VirtualFrame): Int {
+        val selected = prepare(frame, Route.INT)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeInt(frame)
         fault("Non-exhaustive unboxed sum case")
     }
     @ExplodeLoop override fun executeLong(frame: VirtualFrame): Long {

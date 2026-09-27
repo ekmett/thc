@@ -52,27 +52,27 @@ class NarrowByteOffsetTest {
 
     @Test fun unalignedSignedUnsignedStorageChecksBoundsPointerCellsAndState() {
         val bytes = ByteArray(12)
-        ManagedByteArray.writeInt16ByteOffsetGuest(bytes, 1, -32768)
-        ManagedByteArray.writeInt16ByteOffsetGuest(bytes, 5, 0x8001)
-        assertEquals(-32768L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 1, false))
-        assertEquals(0x8001L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 5, true))
+        ManagedByteArray.writeInt16ByteOffsetGuest(bytes, 1, (-32768).toInt())
+        ManagedByteArray.writeInt16ByteOffsetGuest(bytes, 5, (0x8001).toInt())
+        assertEquals(-32768L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 1, false).toLong())
+        assertEquals(0x8001L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 5, true).toLong())
         val model = ByteBuffer.allocate(12).order(ByteOrder.nativeOrder())
             .putShort(1, (-32768).toShort()).putShort(5, 0x8001.toShort()).array()
         assertArrayEquals(model, bytes)
-        ManagedByteArray.writeInt16ByteOffsetGuest(bytes, 10, -1)
-        assertEquals(65535L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 10, true))
+        ManagedByteArray.writeInt16ByteOffsetGuest(bytes, 10, (-1).toInt())
+        assertEquals(65535L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 10, true).toLong())
         for (offset in listOf(-1L, 11L, Long.MAX_VALUE)) {
-            assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt16ByteOffsetGuest(bytes, offset, false) }
-            assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt16ByteOffsetGuest(bytes, offset, 1) }
+            assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt16ByteOffsetGuest(bytes, offset, false).toLong() }
+            assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt16ByteOffsetGuest(bytes, offset, (1).toInt()) }
         }
 
         val owner = ManagedAllocation.mutable(24, 8)
         val target = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8))
         owner.writeAddressByteOffset(8, target)
-        ManagedByteArray.writeInt16ByteOffsetGuest(owner, 1, -1)
-        assertEquals(-1L, ManagedByteArray.readInt16ByteOffsetGuest(owner, 1, false))
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt16ByteOffsetGuest(owner, 9, true) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt16ByteOffsetGuest(owner, 9, 1) }
+        ManagedByteArray.writeInt16ByteOffsetGuest(owner, 1, (-1).toInt())
+        assertEquals(-1L, ManagedByteArray.readInt16ByteOffsetGuest(owner, 1, false).toLong())
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt16ByteOffsetGuest(owner, 9, true).toLong() }
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt16ByteOffsetGuest(owner, 9, (1).toInt()) }
         assertSame(target, owner.readAddressByteOffset(8))
 
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
@@ -80,9 +80,9 @@ class NarrowByteOffsetTest {
         val write = byteArrayExpression(ByteArrayOp.WRITE_WORD8_AS_INT16, CoreRepresentation.UNKNOWN,
             arrayOf(operand(bytes), operand(1L), operand(7L), operand("invalid state")))
         assertThrows(RuntimeFault::class.java) { write.execute(frame) }
-        assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt16Array.write(true, bytes, 5L, 7L, "invalid state") }
-        assertEquals(-32768L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 1, false))
-        assertEquals(0x8001L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 5, true))
+        assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt16Array.write(true, bytes, 5L, 7, "invalid state") }
+        assertEquals(-32768L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 1, false).toLong())
+        assertEquals(0x8001L, ManagedByteArray.readInt16ByteOffsetGuest(bytes, 5, true).toLong())
     }
 
     @Test fun metadataRequiresScalarCarriersAndByteOffsets() {

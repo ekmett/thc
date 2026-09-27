@@ -113,7 +113,7 @@ private fun forceActuals(frame: VirtualFrame, node: Node, function: Closure, sou
         val proof = source.layout?.proof(i)
         // Tuple WHNF says nothing about its lifted leaves; primitive scalars
         // also need no force even if a less precise formal uses a reference slot.
-        if (proof?.isTuple == true || proof?.isVector == true || proof?.isLong == true || proof?.isFloat == true || proof?.isDouble == true) continue
+        if (proof?.isTypedTransport == true || proof?.isInt == true || proof?.isLong == true || proof?.isFloat == true || proof?.isDouble == true) continue
         if (strict.contains(function.suppliedCount + i - offset)) {
             val physical = ArgumentLayout.offset(source.layout, i)
             source.setReference(frame, node, values, physical, force.execute(frame, source.reference(frame, node, values, physical)))

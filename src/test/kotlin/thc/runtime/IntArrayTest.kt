@@ -48,14 +48,14 @@ class IntArrayTest {
             assertEquals(value, ManagedByteArray.readInt(frozen, index.toLong()))
             for (byte in 0..7) {
                 val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7 - byte) * 8
-                assertEquals((value ushr shift) and 255, ManagedByteArray.read(frozen, index * 8L + byte))
+                assertEquals((value ushr shift) and 255, ManagedByteArray.read(frozen, index * 8L + byte).toLong())
             }
         }
-        for (byte in values.size * 8 until bytes.size) assertEquals(91L, ManagedByteArray.read(bytes, byte.toLong()))
+        for (byte in values.size * 8 until bytes.size) assertEquals(91L, ManagedByteArray.read(bytes, byte.toLong()).toLong())
         val separate = ManagedByteArray.allocate(8)
         ManagedByteArray.writeInt(separate, 0, 73)
         // Use mutable storage only: no mutation through an unsafe-frozen alias.
-        for (byte in 0..7) ManagedByteArray.write(separate, byte.toLong(), 128L + byte)
+        for (byte in 0..7) ManagedByteArray.write(separate, byte.toLong(), (128L + byte).toInt())
         var expected = 0L
         for (byte in 0..7) {
             val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7 - byte) * 8

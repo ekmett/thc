@@ -130,7 +130,7 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     }
     fun validate(arguments: List<CoreRepresentation>, lifted: List<*>, result: CoreRepresentation) {
         if (arguments.size != argumentArity) throw RuntimeFault("Primitive arity mismatch: $primitive")
-        fun scalar(rep: CoreRepresentation): Boolean = !rep.isAggregate && !rep.isVector && rep.kind == CoreKind.LONG
+        fun scalar(rep: CoreRepresentation): Boolean = !rep.isTypedTransport && if (isInt) rep.isInt else rep.isLong
         if (lifted.size != argumentArity || lifted.any { it != false } || arguments.any { !scalar(it) })
             throw RuntimeFault("Tuple primitive argument representation mismatch: $primitive")
         if (!result.isTuple || result.components!!.size != resultArity ||

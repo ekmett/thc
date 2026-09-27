@@ -3787,6 +3787,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val payload = if (selected.isTypedTransport) compile(args.single(), scope, false) else argument(args.single(), scope, lifted)
                 SumShape.payload(selected, payload.proof, lifted)
                 val shape = TupleShape(tupleProof, language)
+                val leaves = TupleShape.flatten(selected)
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     b.beginBlock()
@@ -3800,9 +3801,26 @@ CoreStackForeign.validateHead(fn, defined)
                         b.endStoreLocal()
                     }
                     val mapped = SumShape.projection(tupleProof, tag - 1).map { destination[it] }
-                    if (selected.isTypedTransport) payload.emitTuple(e, mapped)
-                    else if (selected.kind == CoreKind.VOID) { b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid() }
-                    else { b.beginStoreLocal(mapped.single()); payload.emit(e); b.endStoreLocal() }
+                    if (selected.isTypedTransport) {
+                        val logical = mapped.mapIndexed { index, slot ->
+                            if (leaves[index].isInt) b.createLocal("narrow sum payload $index", null) else slot
+                        }
+                        payload.emitTuple(e, logical)
+                        leaves.forEachIndexed { index, leaf ->
+                            if (leaf.isInt) {
+                                b.beginStoreLocal(mapped[index]); b.beginSumNarrowToWord(leaf.narrowInteger!!)
+                                b.beginToInt(); b.emitLoadLocal(logical[index]); b.endToInt()
+                                b.endSumNarrowToWord(); b.endStoreLocal()
+                            }
+                        }
+                    } else if (selected.kind == CoreKind.VOID) { b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid() }
+                    else {
+                        b.beginStoreLocal(mapped.single())
+                        if (selected.isInt) b.beginSumNarrowToWord(selected.narrowInteger!!)
+                        payload.emit(e)
+                        if (selected.isInt) b.endSumNarrowToWord()
+                        b.endStoreLocal()
+                    }
                     b.beginStoreLocal(destination[0]); b.emitLoadConstant(tag.toLong()); b.endStoreLocal()
                     b.endBlock()
                 }
@@ -4672,10 +4690,11 @@ CoreStackForeign.validateHead(fn, defined)
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "sum field $index", field.isLong, field) }
         scope.bindTuple(expr[2] as String, proof, fields)
-        data class Arm(val tag: Int?, val body: Expression)
+        data class Arm(val tag: Int?, val body: Expression, val conversions: List<Pair<Local, Local>>)
         val seen = mutableSetOf<Int?>()
         val arms = (expr[3] as List<List<Any?>>).map { alt ->
             val child = scope.child()
+            val conversions = ArrayList<Pair<Local, Local>>()
             val ids = alt[2] as List<String>
             val tag = if (alt[0] == "default") {
                 if (ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
@@ -4691,7 +4710,13 @@ CoreStackForeign.validateHead(fn, defined)
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
                 val logical = component.refine(actual).copy(evaluated = component.evaluated)
-                val projected = SumShape.projection(proof, selected - 1).map { fields[it] }
+                val leaves = TupleShape.flatten(logical)
+                val projected = SumShape.projection(proof, selected - 1).mapIndexed { index, physical ->
+                    val leaf = leaves[index]
+                    if (!leaf.isInt) fields[physical] else Local(nextLocal++, "narrow sum arm $index", false, leaf).also {
+                        conversions += it to fields[physical]
+                    }
+                }
                 if (component.isTypedTransport) {
                     val leaves = TupleShape.flatten(logical)
                     child.bindTuple(ids[0], logical, projected.mapIndexed { i, field -> field.copy(proof = leaves[i]) })
@@ -4700,7 +4725,7 @@ CoreStackForeign.validateHead(fn, defined)
                 selected
             }
             if (!seen.add(tag)) throw RuntimeFault("Duplicate sum alternative")
-            Arm(tag, compile(alt[3] as List<Any?>, child, tail))
+            Arm(tag, compile(alt[3] as List<Any?>, child, tail), conversions)
         }
         if (arms.isEmpty()) throw RuntimeFault("Empty sum case")
         val result = arms.first().body.proof.refine(CoreRepresentations.expression(expr))
@@ -4715,9 +4740,20 @@ CoreStackForeign.validateHead(fn, defined)
             read(fields[0]).emit(e); b.endCheckSumTag(); b.endStoreLocal()
             val explicit = arms.filter { it.tag != null }
             val fallback = arms.singleOrNull { it.tag == null }
+            fun emitArm(arm: Arm) {
+                b.beginBlock()
+                arm.conversions.forEach { (local, physical) ->
+                    e.locals[local.id] = b.createLocal(local.name, null)
+                    b.beginStoreLocal(e.locals.getValue(local.id)); b.beginSumWordToNarrow(local.proof.narrowInteger!!)
+                    read(physical).emit(e); b.endSumWordToNarrow(); b.endStoreLocal()
+                }
+                emitResult(arm.body, e, destination)
+                arm.conversions.forEach { e.locals.remove(it.first.id) }
+                b.endBlock()
+            }
             fun choice(index: Int) {
                 if (index == explicit.size) {
-                    if (fallback == null) b.emitFailCase() else emitResult(fallback.body, e, destination)
+                    if (fallback == null) b.emitFailCase() else emitArm(fallback)
                     return
                 }
                 val arm = explicit[index]
@@ -4725,7 +4761,7 @@ CoreStackForeign.validateHead(fn, defined)
                 b.beginMatchLiteral(arm.tag!!.toLong()); read(fields[0]).emit(e); b.endMatchLiteral()
                 // Aggregate arms emit one store per physical result slot. Each
                 // branch must still be one builder child (including zero slots).
-                b.beginBlock(); emitResult(arm.body, e, destination); b.endBlock()
+                emitArm(arm)
                 b.beginBlock(); choice(index + 1); b.endBlock()
                 if (destination == null) b.endConditional() else b.endIfThenElse()
             }

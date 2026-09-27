@@ -227,7 +227,7 @@ class PackageNativeOriginalsTest {
                         val signature = setters.single { it.arguments.first() == carrier && it.arguments.last() == rep }
                         val value = row[4].toBigInteger().toLong()
                         val argument = if (rep in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")) value
-                            else packageCInteger(rep, value)
+                            else packageCInteger(rep, value.toInt())
                         entries.getValue(signature).call(pointer, row[2].toLong(), row[3].toLong(), argument)
                         assertArrayEquals(expected, bytes, row.take(5).toString())
                     }

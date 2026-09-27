@@ -131,11 +131,11 @@ class ByteArrayTest {
             assertEquals(size, ManagedByteArray.size(array))
             assertSame(array, ManagedByteArray.freeze(array))
             assertNotSame(array, ManagedByteArray.allocate(size))
-            for (index in 0 until size) ManagedByteArray.write(array, index, index - 128)
-            for (index in 0 until size) assertEquals((index - 128) and 255, ManagedByteArray.read(array, index))
+            for (index in 0 until size) ManagedByteArray.write(array, index, (index - 128).toInt())
+            for (index in 0 until size) assertEquals((index - 128) and 255, ManagedByteArray.read(array, index).toLong())
             for (index in listOf(Long.MIN_VALUE, -1L, size, Long.MAX_VALUE)) {
-                assertThrows(RuntimeFault::class.java) { ManagedByteArray.read(array, index) }
-                assertThrows(RuntimeFault::class.java) { ManagedByteArray.write(array, index, 1) }
+                assertThrows(RuntimeFault::class.java) { ManagedByteArray.read(array, index).toLong() }
+                assertThrows(RuntimeFault::class.java) { ManagedByteArray.write(array, index, (1).toInt()) }
             }
         }
         for (size in listOf(Long.MIN_VALUE, -1L, Int.MAX_VALUE.toLong() + 1, Long.MAX_VALUE))
@@ -153,15 +153,15 @@ class ByteArrayTest {
         }
         for (size in listOf(0L, 1L, 3L)) {
             val array = ManagedByteArray.allocateGuest(size)
-            for (index in 0 until size) ManagedByteArray.writeGuest(array, index, 129 + index)
+            for (index in 0 until size) ManagedByteArray.writeGuest(array, index, (129 + index).toInt())
             val expected = (0 until size).map { 129 + it }
             for (index in listOf(Long.MIN_VALUE, -1L, size, 1L shl 32, Long.MAX_VALUE)) {
-                val read = assertThrows(RuntimeFault::class.java) { ManagedByteArray.readGuest(array, index, true) }
-                val write = assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeGuest(array, index, 7) }
+                val read = assertThrows(RuntimeFault::class.java) { ManagedByteArray.readGuest(array, index, true).toLong() }
+                val write = assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeGuest(array, index, (7).toInt()) }
                 for (failure in listOf(read, write))
                     assertEquals("Managed allocation range outside its backing storage", failure.message, "size=$size/index=$index")
                 assertEquals(size, ManagedByteArray.sizeGuest(array))
-                assertEquals(expected, (0 until size).map { ManagedByteArray.readGuest(array, it, true) })
+                assertEquals(expected, (0 until size).map { ManagedByteArray.readGuest(array, it, true).toLong() })
             }
         }
     }
@@ -175,13 +175,13 @@ class ByteArrayTest {
             override fun execute(frame: VirtualFrame): Any? { events.add(name); return action() }
         }
         val array = ManagedByteArray.allocate(1)
-        ManagedByteArray.write(array, 0, 7)
+        ManagedByteArray.write(array, 0, (7).toInt())
         val write = byteArrayExpression(ByteArrayOp.WRITE, CoreRepresentation.UNKNOWN, arrayOf(
             operand("array") { array }, operand("index") { 0L }, operand("byte") { 129L },
-            operand("state") { assertEquals(7L, ManagedByteArray.read(array, 0)); Unit }))
+            operand("state") { assertEquals(7L, ManagedByteArray.read(array, 0).toLong()); Unit }))
         assertSame(Unit, write.execute(frame))
         assertEquals(listOf("array", "index", "byte", "state"), events)
-        assertEquals(129L, ManagedByteArray.read(array, 0))
+        assertEquals(129L, ManagedByteArray.read(array, 0).toLong())
         val marker = Any()
         frame.setObject(slot, marker)
         val failing = byteArrayExpression(ByteArrayOp.NEW, CoreRepresentation.UNKNOWN, arrayOf(
@@ -220,13 +220,13 @@ class ByteArrayTest {
             ManagedByteArray.copy(source, 0, ManagedByteArray.freeze(source), 2, count)
         }
         val owned = ManagedByteArray.allocateGuest(4)
-        for (index in 0L..3L) ManagedByteArray.writeGuest(owned, index, 17L + index)
+        for (index in 0L..3L) ManagedByteArray.writeGuest(owned, index, (17L + index).toInt())
         for (count in listOf(0L, 1L)) {
             val failure = assertThrows(RuntimeFault::class.java) {
                 ManagedByteArray.copyGuest(owned, 0, ManagedByteArray.freezeGuest(owned), 2, count, false)
             }
             assertEquals("copyByteArray# requires distinct source and destination arrays", failure.message)
-            assertEquals(listOf(17L, 18L, 19L, 20L), (0L..3L).map { ManagedByteArray.readGuest(owned, it, true) })
+            assertEquals(listOf(17L, 18L, 19L, 20L), (0L..3L).map { ManagedByteArray.readGuest(owned, it, true).toLong() })
         }
     }
 

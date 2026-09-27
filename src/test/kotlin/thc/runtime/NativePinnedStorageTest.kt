@@ -70,9 +70,9 @@ class NativePinnedStorageTest {
         assertSame(bytes, storage.rawBytesIfPointerFree())
         assertTrue(storage.ownsStorage(bytes))
         bytes[3] = 91
-        assertEquals(91L, ManagedByteArray.readGuest(storage, 3, true))
-        ManagedByteArray.writeInt32ByteOffsetGuest(storage, 5, 0x12345678)
-        assertEquals(0x12345678L, ManagedByteArray.readInt32ByteOffset(bytes, 5))
+        assertEquals(91L, ManagedByteArray.readGuest(storage, 3, true).toLong())
+        ManagedByteArray.writeInt32ByteOffsetGuest(storage, 5, (0x12345678).toInt())
+        assertEquals(0x12345678L, ManagedByteArray.readInt32ByteOffset(bytes, 5).toLong())
         assertSame(storage, ManagedByteArray.freezeGuest(storage))
         assertFalse(storage.isPinned)
         assertNull(storage.nativeSegment())
@@ -114,8 +114,8 @@ class NativePinnedStorageTest {
                 assertEquals(alias.toNativeBits(), recovered.toNativeBits())
             }
         }
-        ManagedByteArray.writeGuest(storage, 7, 93)
-        assertEquals(93L, ManagedByteArray.readGuest(frozen, 7, true))
+        ManagedByteArray.writeGuest(storage, 7, (93).toInt())
+        assertEquals(93L, ManagedByteArray.readGuest(frozen, 7, true).toLong())
         assertEquals(93L, registry.recover(segment.address() + 7).readWord8(0))
         assertThrows(RuntimeFault::class.java) { base.plus(32).readWord8(0) }
         Reference.reachabilityFence(storage)
@@ -143,8 +143,8 @@ class NativePinnedStorageTest {
         }
         interop.writeBufferInt(pointer, ByteOrder.nativeOrder(), 1, 0x12345678)
         assertEquals(0x12345678, interop.readBufferInt(buffer, ByteOrder.nativeOrder(), 8))
-        assertEquals(0x12345678L, ManagedByteArray.readInt32Guest(storage, 2, false))
-        ManagedByteArray.writeGuest(storage, 7, 0xe7)
+        assertEquals(0x12345678L, ManagedByteArray.readInt32Guest(storage, 2, false).toLong())
+        ManagedByteArray.writeGuest(storage, 7, (0xe7).toInt())
         assertEquals(0xe7.toByte(), interop.readBufferByte(pointer, 0))
         assertThrows(InvalidBufferOffsetException::class.java) { interop.readBufferByte(pointer, 25) }
         Reference.reachabilityFence(pointer)
@@ -166,13 +166,13 @@ class NativePinnedStorageTest {
         assertEquals(bits + 9, result.address())
         for (offset in 0L until 64L) {
             val expected = if (offset in 9L until 22L) 0xa5L else 0x11L
-            assertEquals(expected, ManagedByteArray.readGuest(storage, offset, true))
+            assertEquals(expected, ManagedByteArray.readGuest(storage, offset, true).toLong())
             assertEquals(expected.toByte(), interop.readBufferByte(buffer, offset))
             assertEquals(expected, base.readWord8(offset))
         }
         interop.writeBufferLong(buffer, ByteOrder.nativeOrder(), 3, 0x0102030405060708L)
         assertEquals(0x0102030405060708L, segment.get(ValueLayout.JAVA_LONG_UNALIGNED, 3))
-        ManagedByteArray.writeInt32ByteOffsetGuest(storage, 27, 0x89abcdefL)
+        ManagedByteArray.writeInt32ByteOffsetGuest(storage, 27, (0x89abcdefL).toInt())
         assertEquals(0x89abcdef.toInt(), segment.get(ValueLayout.JAVA_INT_UNALIGNED, 27))
         assertEquals(bits, base.toNativeBits())
         Reference.reachabilityFence(storage)
@@ -235,7 +235,7 @@ class NativePinnedStorageTest {
             cbits.finish(output, context)
             assertEquals(bits, addresses.map(ManagedAddress::toNativeBits))
             val expected = MessageDigest.getInstance("MD5").digest(payload)
-            assertArrayEquals(expected, ByteArray(16) { ManagedByteArray.readGuest(outputAlias, it.toLong(), true).toByte() })
+            assertArrayEquals(expected, ByteArray(16) { ManagedByteArray.readGuest(outputAlias, it.toLong(), true).toLong().toByte() })
             assertArrayEquals(expected, ByteArray(16) { interop.readBufferByte(outputBuffer, it.toLong()) })
             assertArrayEquals(expected, outputStorage.nativeSegment()!!.toArray(ValueLayout.JAVA_BYTE))
             assertEquals(0x5aL, inputStorage.readByte(6))
@@ -356,12 +356,12 @@ class NativePinnedStorageTest {
         ManagedByteArray.writeIntGuest(storage, 3, Long.MIN_VALUE + 19, true)
         assertEquals(Long.MIN_VALUE + 19, ManagedByteArray.readIntGuest(storage, 3, true))
         assertEquals(Long.MIN_VALUE + 19, segment.get(ValueLayout.JAVA_LONG_UNALIGNED, 3))
-        ManagedByteArray.writeInt16ByteOffsetGuest(storage, 1, 0xffff)
-        assertEquals(-1L, ManagedByteArray.readInt16ByteOffsetGuest(storage, 1, false))
-        assertEquals(65535L, ManagedByteArray.readInt16ByteOffsetGuest(storage, 1, true))
-        ManagedByteArray.writeInt32ByteOffsetGuest(storage, 5, 0xffffffffL)
-        assertEquals(-1L, ManagedByteArray.readInt32ByteOffsetGuest(storage, 5, false))
-        assertEquals(0xffffffffL, ManagedByteArray.readInt32ByteOffsetGuest(storage, 5, true))
+        ManagedByteArray.writeInt16ByteOffsetGuest(storage, 1, (0xffff).toInt())
+        assertEquals(-1L, ManagedByteArray.readInt16ByteOffsetGuest(storage, 1, false).toLong())
+        assertEquals(65535L, ManagedByteArray.readInt16ByteOffsetGuest(storage, 1, true).toLong())
+        ManagedByteArray.writeInt32ByteOffsetGuest(storage, 5, (0xffffffffL).toInt())
+        assertEquals(-1L, ManagedByteArray.readInt32ByteOffsetGuest(storage, 5, false).toLong())
+        assertEquals(0xffffffffL, Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(storage, 5, true)))
         ManagedByteArray.writeFloatByteOffsetGuest(storage, 9, -0.0f)
         assertEquals(Int.MIN_VALUE, ManagedByteArray.readFloatByteOffsetGuest(storage, 9).toRawBits())
         ManagedByteArray.writeDoubleByteOffsetGuest(storage, 15, -0.0)

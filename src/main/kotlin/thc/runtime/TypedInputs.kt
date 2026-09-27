@@ -275,7 +275,7 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
         } else {
             val position = ArgumentLayout.offset(source.layout, logicalOffset + i - prefixCount)
             val actual = source.physicalProofs?.get(position)
-            if (actual?.isLong == true || actual?.isFloat == true || actual?.isDouble == true) continue
+            if (actual?.isInt == true || actual?.isLong == true || actual?.isFloat == true || actual?.isDouble == true) continue
             source.setReference(frame, node, values, position, force.execute(frame, source.reference(frame, node, values, position)))
         }
     }
@@ -605,6 +605,7 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
             val offset = layout.offset(i)
             try {
                 if (proof.isTypedTransport) arguments[i].executeTuple(frame, source.slots, offset)
+                else if (proof.isInt) FrameAccess.writeInt(frame, source.slots[offset], arguments[i].executeRequiredInt(frame))
                 else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
                 else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
                 else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
@@ -613,7 +614,8 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
                         if (!proof.isTypedTransport) {
-                            if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], input as Long)
+                            if (proof.isInt) FrameAccess.writeInt(frame, source.slots[offset], input as Int)
+                            else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], input as Long)
                             else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], input as Float)
                             else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], input as Double)
                             else FrameAccess.write(frame, source.slots[offset], input)

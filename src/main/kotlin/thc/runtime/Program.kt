@@ -1356,7 +1356,9 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         }
         val aggregate = proofs.firstOrNull()?.takeIf { first -> first.isAggregate &&
             proofs.all { it.isAggregate && TupleShape.compatible(first, it) } }
+        val narrow = proofs.firstOrNull()?.takeIf { first -> first.isInt && proofs.all { it.primReps == first.primReps } }
         representation = aggregate?.copy(evaluated = proofs.all { it.evaluated }) ?: CoreVectors.caseResult(proofs)
+            ?: narrow?.copy(evaluated = proofs.all { it.evaluated })
             ?: CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
     }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
@@ -2522,7 +2524,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val body = compile(expression, scope, true)
         // Async AST has no caller capture around a typed handoff loan yet.
         // Keep admitted roots on the ordinary scalar call ABI.
-        val handoff = if (enableAsync) null else HandoffEntry.create(language, scope.layout,
+        // Mandatory typed ingress (including narrow scalars) owns its own packet.
+        // It must not also advertise the empty-argument scalar handoff protocol.
+        val handoff = if (enableAsync || inputLayout?.requiresTyped == true) null else HandoffEntry.create(language, scope.layout,
             args.map(CoreRepresentations::binder), resultProof, captures != null)
         if ((body.representation.isSum || resultProof.isSum) && (!body.representation.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
@@ -3405,7 +3409,10 @@ CoreStackForeign.validateHead(fn, defined)
                 val payload = if (selected.isTypedTransport) compile(args.single(), scope, false)
                     else argument(args.single(), scope, lifted)
                 SumShape.payload(selected, payload.representation, lifted)
-                SumConstruct(TupleShape(tupleProof, language as thc.Language), tag, payload)
+                val intSlots = if (selected.isTypedTransport) TupleShape.flatten(selected).mapIndexed { index, field ->
+                    if (field.isInt) scope.layout.bind("<narrow sum payload $index>") else -1
+                }.toIntArray() else IntArray(0)
+                SumConstruct(TupleShape(tupleProof, language as thc.Language), tag, payload, intSlots)
             } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language as thc.Language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
@@ -3664,6 +3671,7 @@ CoreStackForeign.validateHead(fn, defined)
         var fallback = -1
         val arms = (expr[3] as List<List<Any?>>).mapIndexed { index, alt ->
             val child = scope.child()
+            val conversions = ArrayList<Pair<Int, Expr>>()
             val ids = alt[2] as List<String>
             if (alt[0] == "default") {
                 if (fallback >= 0 || ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
@@ -3680,12 +3688,20 @@ CoreStackForeign.validateHead(fn, defined)
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
                 val field = component.refine(actual).copy(evaluated = component.evaluated)
-                val projection = SumShape.projection(proof, tag - 1).map { slots[it] }.toIntArray()
+                val leaves = TupleShape.flatten(field)
+                val projection = SumShape.projection(proof, tag - 1).mapIndexed { index, physical ->
+                    val leaf = leaves[index]
+                    if (!leaf.isInt) slots[physical] else child.layout.bind("<narrow sum arm $index>").also { destination ->
+                        conversions += destination to SumNarrowRead(slots[physical], leaf.narrowInteger!!, leaf)
+                    }
+                }.toIntArray()
                 if (component.isTypedTransport) child.bindTuple(ids[0], field, projection)
                 else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], field)
                 else child.bindSlot(ids[0], Local(projection[0], component.isLong, field, false))
             }
-            compile(alt[3] as List<Any?>, child, tail)
+            val body = compile(alt[3] as List<Any?>, child, tail)
+            if (conversions.isEmpty()) body else Let(conversions.map { it.first }.toIntArray(),
+                conversions.map { it.second }.toTypedArray(), BooleanArray(conversions.size), body, false)
         }.toTypedArray()
         if (arms.isEmpty()) throw RuntimeFault("Empty sum case")
         val alternatives = expr[3] as List<List<Any?>>

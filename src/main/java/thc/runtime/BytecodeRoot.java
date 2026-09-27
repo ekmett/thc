@@ -5478,6 +5478,15 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             return operation.longResult(x, y);
         }
     }
+    // Explicit canonical GHC WordSlot projection boundaries, not implicit casts.
+    @Operation @ConstantOperand(type = NarrowInteger.class, name = "integer")
+    public static final class SumNarrowToWord {
+        @Specialization public static long apply(NarrowInteger integer, int value) { return integer.widen(value); }
+    }
+    @Operation @ConstantOperand(type = NarrowInteger.class, name = "integer")
+    public static final class SumWordToNarrow {
+        @Specialization public static int apply(NarrowInteger integer, long value) { return integer.narrow((int) value); }
+    }
     @Operation public static final class Narrow8 { @Specialization public static long apply(long x) { return (byte) x; } }
     @Operation public static final class Narrow16 { @Specialization public static long apply(long x) { return (short) x; } }
     @Operation public static final class Narrow32 { @Specialization public static long apply(long x) { return (int) x; } }

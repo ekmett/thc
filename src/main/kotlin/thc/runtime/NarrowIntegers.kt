@@ -160,3 +160,12 @@ internal class NarrowScalarExpression(private val operation: NarrowScalarOp,
         return operation.longResult(left, right)
     }
 }
+
+/** Only a selected sum arm may reinterpret the canonical native WordSlot.
+ * No conversion is installed globally on Long-to-Int reads. */
+internal class SumNarrowRead(private val slot: Int, private val integer: NarrowInteger,
+    proof: CoreRepresentation) : Expr() {
+    init { representation = proof.copy(evaluated = true) }
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int = integer.narrow(frame.getLong(slot).toInt())
+}

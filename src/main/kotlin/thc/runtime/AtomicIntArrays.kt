@@ -7,7 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.VirtualFrame
 
 /** All offsets count elements of [width] bytes. Integral Core values have
- * carry Int for 8/16/32-bit CAS and Long for machine/64-bit operations. */
+ * Int carriers for 8/16/32-bit CAS and Long for machine/64-bit operations. */
 internal enum class AtomicIntArrayOp(val primitive: String, val width: Int = 8, val operands: Int = 1) {
     READ("atomicReadIntArray#", operands = 0),
     WRITE("atomicWriteIntArray#"),
@@ -24,11 +24,14 @@ internal enum class AtomicIntArrayOp(val primitive: String, val width: Int = 8, 
         fun scalar(proof: CoreRepresentation, kind: CoreKind) = !proof.isAggregate && !proof.isVector && proof.kind == kind
         if (arguments.size != operands + 3 || flags != List(arguments.size) { false } ||
             !scalar(arguments[0], CoreKind.OBJECT) || !scalar(arguments.last(), CoreKind.VOID) ||
-            arguments.subList(1, arguments.lastIndex).any { !scalar(it, CoreKind.LONG) })
+            !arguments[1].isLong || arguments.subList(2, arguments.lastIndex).any {
+                it.isTypedTransport || if (width < 8) !it.isInt else !it.isLong
+            })
             fault("Atomic byte-array primitive argument carrier mismatch: $primitive")
         val valid = if (tuple) result.isTuple && result.kind == CoreKind.UNKNOWN &&
             result.components?.size == 2 && result.primReps?.size == 1 &&
-            scalar(result.components[0], CoreKind.VOID) && scalar(result.components[1], CoreKind.LONG)
+            scalar(result.components[0], CoreKind.VOID) && !result.components[1].isTypedTransport &&
+            (if (width < 8) result.components[1].isInt else result.components[1].isLong)
         else scalar(result, CoreKind.VOID)
         if (!valid) fault("Atomic byte-array primitive result carrier mismatch: $primitive")
     }

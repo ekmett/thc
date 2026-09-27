@@ -177,13 +177,14 @@ internal object ManagedByteArray {
         is ByteArray -> size(value)
         else -> fault("Expected a managed ByteArray#")
     }
-    @JvmStatic fun writeGuest(value: Any?, offset: Long, byteValue: Int) =
-        withByteRange(value, offset, 1, writable = true) { it.set(ValueLayout.JAVA_BYTE, offset, byteValue.toByte()) }
-    @JvmStatic fun readGuest(value: Any?, offset: Long, unsigned: Boolean): Int =
-        withByteRange(value, offset, 1, writable = false) {
-            val byte = it.get(ValueLayout.JAVA_BYTE, offset).toInt()
-            if (unsigned) byte and 255 else byte
-        }
+    @JvmStatic fun writeGuest(value: Any?, offset: Long, byteValue: Int) {
+        if (value is ManagedAllocation) value.writeByteInt(offset, byteValue)
+        else write(require(value), offset, byteValue)
+    }
+    @JvmStatic fun readGuest(value: Any?, offset: Long, unsigned: Boolean): Int {
+        val byte = if (value is ManagedAllocation) value.readByteInt(offset) else read(require(value), offset)
+        return if (unsigned) byte else byte.toByte().toInt()
+    }
     private inline fun <T> withElement(value: Any?, index: Long, width: Int,
         writable: Boolean, action: (MemorySegment) -> T): T =
         if (value is ManagedAllocation) value.accessElement(index, width, writable, action)

@@ -31,15 +31,16 @@ internal enum class AtomicAddressOp(val primitive: String, val width: Int = 8,
     fun validate(arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         fun scalar(proof: CoreRepresentation, kind: CoreKind) =
             !proof.isAggregate && !proof.isVector && proof.kind == kind
-        val payload = if (pointer) CoreKind.ADDRESS else CoreKind.LONG
+        fun payload(proof: CoreRepresentation) = !proof.isTypedTransport &&
+            if (pointer) proof.kind == CoreKind.ADDRESS else if (width < 8) proof.isInt else proof.isLong
         if (arguments.size != arity || flags != List(arity) { false } ||
             !scalar(arguments[0], CoreKind.ADDRESS) || !scalar(arguments.last(), CoreKind.VOID) ||
-            arguments.subList(1, arguments.size - 1).any { !scalar(it, payload) })
+            arguments.subList(1, arguments.size - 1).any { !payload(it) })
             fault("Atomic Addr# argument carrier mismatch: $primitive")
         if (this == WRITE) {
             if (!scalar(result, CoreKind.VOID)) fault("Atomic Addr# write requires State#")
         } else if (!result.isTuple || result.isSum || result.isVector || result.components?.size != 2 ||
-            !scalar(result.components[0], CoreKind.VOID) || !scalar(result.components[1], payload))
+            !scalar(result.components[0], CoreKind.VOID) || !payload(result.components[1]))
             fault("Atomic Addr# requires a State#/value tuple: $primitive")
     }
 
