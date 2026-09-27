@@ -159,6 +159,5 @@ bounded AArch64 path without claiming native conformance there.
 
 Native agreement and static audits do not establish JVM compiled execution,
 allocation elimination, packed instructions, or performance. Those require
-separate runtime tests and retained graph/final-LIR evidence. In particular,
-unsigned low-byte multiplication may lower through wider lanes; no packed-byte
-multiply instruction is implied by the GHC primitive's name.
+separate runtime tests and retained graph/final-LIR evidence.
+Byte-lane multiplication uses `ByteVector.mul`, with results wrapping modulo 256.
