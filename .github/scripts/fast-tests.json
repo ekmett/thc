@@ -2432,7 +2432,7 @@
       ],
       "python": []
     },
-    "src/test/kotlin/thc/ScalarPrimopModel.kt": {
+    "src/test/java/thc/ScalarPrimopModel.java": {
       "junit": [
         "thc.ScalarPrimopModelTest",
         "thc.runtime.BitPrimopsTest",
@@ -2848,7 +2848,7 @@
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
-    "src/test/kotlin/thc/NumericPrimopCoreEvidence.kt": {
+    "src/test/java/thc/NumericPrimopCoreEvidence.java": {
       "junit": [
         "thc.runtime.BitPrimopsTest",
         "thc.IntegerPrimopsTest",
