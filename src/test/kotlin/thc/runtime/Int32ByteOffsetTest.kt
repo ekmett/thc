@@ -52,28 +52,28 @@ class Int32ByteOffsetTest {
 
     @Test fun unalignedSignedUnsignedStorageChecksBoundsPointerCellsAndState() {
         val bytes = ByteArray(16)
-        ManagedByteArray.writeInt32ByteOffsetGuest(bytes, 1, -2147483648)
-        ManagedByteArray.writeInt32ByteOffsetGuest(bytes, 9, 0x80000001L)
-        assertEquals(-2147483648L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 1, false))
-        assertEquals(0x80000001L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 9, true))
+        ManagedByteArray.writeInt32ByteOffsetGuest(bytes, 1, (-2147483648).toInt())
+        ManagedByteArray.writeInt32ByteOffsetGuest(bytes, 9, (0x80000001L).toInt())
+        assertEquals(-2147483648L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 1, false).toLong())
+        assertEquals(0x80000001L, Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(bytes, 9, true)))
         val model = ByteBuffer.allocate(16).order(ByteOrder.nativeOrder())
             .putInt(1, -2147483648).putInt(9, 0x80000001L.toInt()).array()
         assertArrayEquals(model, bytes)
         val tail = ByteArray(16)
-        ManagedByteArray.writeInt32ByteOffsetGuest(tail, 12, -1)
-        assertEquals(4294967295L, ManagedByteArray.readInt32ByteOffsetGuest(tail, 12, true))
+        ManagedByteArray.writeInt32ByteOffsetGuest(tail, 12, (-1).toInt())
+        assertEquals(4294967295L, Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(tail, 12, true)))
         for (offset in listOf(-1L, 13L, Long.MAX_VALUE)) {
-            assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32ByteOffsetGuest(bytes, offset, false) }
-            assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32ByteOffsetGuest(bytes, offset, 1) }
+            assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32ByteOffsetGuest(bytes, offset, false).toLong() }
+            assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32ByteOffsetGuest(bytes, offset, (1).toInt()) }
         }
 
         val owner = ManagedAllocation.mutable(24, 8)
         val target = ManagedAddress.fromAllocation(ManagedAllocation.mutable(8, 8))
         owner.writeAddressByteOffset(8, target)
-        ManagedByteArray.writeInt32ByteOffsetGuest(owner, 1, -1)
-        assertEquals(-1L, ManagedByteArray.readInt32ByteOffsetGuest(owner, 1, false))
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32ByteOffsetGuest(owner, 9, true) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32ByteOffsetGuest(owner, 9, 1) }
+        ManagedByteArray.writeInt32ByteOffsetGuest(owner, 1, (-1).toInt())
+        assertEquals(-1L, ManagedByteArray.readInt32ByteOffsetGuest(owner, 1, false).toLong())
+        assertThrows(RuntimeFault::class.java) { Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(owner, 9, true)) }
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32ByteOffsetGuest(owner, 9, (1).toInt()) }
         assertSame(target, owner.readAddressByteOffset(8))
 
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
@@ -81,9 +81,9 @@ class Int32ByteOffsetTest {
         val write = byteArrayExpression(ByteArrayOp.WRITE_WORD8_AS_INT32, CoreRepresentation.UNKNOWN,
             arrayOf(operand(bytes), operand(1L), operand(7L), operand("invalid state")))
         assertThrows(RuntimeFault::class.java) { write.execute(frame) }
-        assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt32Array.write(true, bytes, 9L, 7L, "invalid state") }
-        assertEquals(-2147483648L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 1, false))
-        assertEquals(0x80000001L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 9, true))
+        assertThrows(RuntimeFault::class.java) { BytecodeRoot.WriteInt32Array.write(true, bytes, 9L, 7, "invalid state") }
+        assertEquals(-2147483648L, ManagedByteArray.readInt32ByteOffsetGuest(bytes, 1, false).toLong())
+        assertEquals(0x80000001L, Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(bytes, 9, true)))
     }
 
     @Test fun metadataRequiresScalarCarriersAndByteOffsets() {

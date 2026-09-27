@@ -234,7 +234,8 @@ class Int8ArrayNativeTest {
                             for ((input, native) in cases) {
                                 val label = "$stage/$backend/$name/$input/inlining=$inlining"
                                 val before = count()
-                                assertEquals(native, Calls.target(entry, arrayOf(0L, input)), label)
+                                val expected = if ((entry.rootNode as GuestRoot).scalarResultProof.isInt) native.toInt() else native
+                                assertEquals(expected, Calls.target(entry, arrayOf(0L, input)), label)
                                 if (compiled) {
                                     assertEquals(expectedCalls, count()-before, "$label exact compiled entries")
                                     val active = activeTargets(entry)
@@ -269,7 +270,7 @@ class Int8ArrayNativeTest {
     private fun paths() = (manifest()["stages"] as Map<String, List<String>>).getValue("pre")
     private fun owner(@Suppress("UNUSED_PARAMETER") operation: ByteArrayOp) = "aliasBytes"
 
-    @Test fun longAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() {
+    @Test fun loweredAliasesExecuteWhileCarrierStateShapeAndSaturationGuardsRemain() {
         val paths = paths()
         for (backend in listOf("ast", "bytecode")) context(true).use { context ->
             context.initialize("thc"); context.enter()
@@ -320,9 +321,9 @@ class Int8ArrayNativeTest {
                             } else metadata["rep"] = payload
                         }
                     }
-                    // Scalar aliases share Long, but a unilateral tuple change
+                    // Narrow scalar aliases share Int; machine offsets stay Long. A unilateral tuple change
                     // still conflicts with the untouched case binder's ABI.
-                    val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 7 || mutation in 10..17))
+                    val sameCarrier = mutation == 6 || (!operation.tuple && (mutation == 10 || mutation in 14..17))
                     if (sameCarrier) {
                         val name = owner(operation)
                         val p = program(language, module + ("diagnosticUnsupported" to diagnostic), backend)

@@ -9,6 +9,7 @@ internal enum class TextForeignOp(val symbol: String, val lastRep: String) {
     MEMCHR("_hs_text_memchr", "Word8Rep"),
     MEASURE("_hs_text_measure_off", "Word64Rep"),
     REVERSE("_hs_text_reverse", "Word64Rep");
+    val byteNeedle: Boolean get() = this == MEMCHR
     val arguments: List<String?> get() = listOf("BoxedRep (Just Unlifted)",
         if (this == REVERSE) "BoxedRep (Just Unlifted)" else "Word64Rep", "Word64Rep", lastRep, null)
 }
@@ -95,7 +96,8 @@ internal class TextForeignExpression(private val operation: TextForeignOp,
         val bytes = operands[0].execute(frame)
         val start = operands[1].executeRequiredLong(frame)
         val length = operands[2].executeRequiredLong(frame)
-        val count = operands[3].executeRequiredLong(frame)
+        val count = if (operation == TextForeignOp.MEMCHR) operands[3].executeRequiredInt(frame).toLong()
+            else operands[3].executeRequiredLong(frame)
         requireVoidCarrier(operands[4].execute(frame))
         FrameAccess.writeLong(frame, slots[offset], ManagedText.invoke(operation, bytes, start, length, count))
         return null

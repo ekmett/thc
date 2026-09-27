@@ -91,6 +91,7 @@ internal object FrameAccess {
         // Consult the live frame's tags, not the shared descriptor: another
         // activation may have widened the descriptor while this frame retains
         // its primitive value. These are the only tags FrameAccess.write emits.
+        frame.isInt(slot) -> frame.getInt(slot)
         frame.isLong(slot) -> frame.getLong(slot)
         frame.isFloat(slot) -> frame.getFloat(slot)
         frame.isDouble(slot) -> frame.getDouble(slot)
@@ -100,6 +101,11 @@ internal object FrameAccess {
     }
 
     /** Keep a primitive producer unboxed until this slot actually requires object storage. */
+    fun writeInt(frame: Frame, slot: Int, value: Int) {
+        if (primitiveKind(frame.frameDescriptor, slot, FrameSlotKind.Int)) frame.setInt(slot, value)
+        else writeObject(frame, slot, value)
+    }
+
     fun writeLong(frame: Frame, slot: Int, value: Long) {
         val descriptor = frame.frameDescriptor
         if (primitiveKind(descriptor, slot, FrameSlotKind.Long)) {
@@ -143,6 +149,10 @@ internal object FrameAccess {
             writeDouble(frame, slot, value)
             return
         }
+        if (value is Int) {
+            writeInt(frame, slot, value)
+            return
+        }
         if (value is Long) {
             writeLong(frame, slot, value)
             return
@@ -171,14 +181,15 @@ abstract class ValidatedStorage protected constructor(@Suppress("UNUSED_PARAMETE
  */
 class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveEligible: BooleanArray,
     exactLong: BooleanArray, exactReference: Array<Class<*>?>, exactFloat: BooleanArray,
-    exactDouble: BooleanArray, vectorProofs: Array<CoreRepresentation?>) {
+    exactDouble: BooleanArray, vectorProofs: Array<CoreRepresentation?>,
+    exactInt: Array<NarrowInteger?>) {
     @JvmOverloads constructor(language: TruffleLanguage<*>, primitiveEligible: BooleanArray,
         exactLong: BooleanArray = BooleanArray(primitiveEligible.size),
         exactReference: Array<Class<*>?> = arrayOfNulls(primitiveEligible.size),
         exactFloat: BooleanArray = BooleanArray(primitiveEligible.size),
         exactDouble: BooleanArray = BooleanArray(primitiveEligible.size)) :
         this(language, primitiveEligible, exactLong, exactReference, exactFloat, exactDouble,
-            arrayOfNulls(primitiveEligible.size))
+            arrayOfNulls(primitiveEligible.size), arrayOfNulls(primitiveEligible.size))
 
     companion object {
         internal fun withVectors(language: TruffleLanguage<*>, vectorProofs: Array<CoreRepresentation?>,
@@ -186,27 +197,28 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
             exactLong: BooleanArray = BooleanArray(primitiveEligible.size),
             exactReference: Array<Class<*>?> = arrayOfNulls(primitiveEligible.size),
             exactFloat: BooleanArray = BooleanArray(primitiveEligible.size),
-            exactDouble: BooleanArray = BooleanArray(primitiveEligible.size)): CaptureLayout =
-            CaptureLayout(language, primitiveEligible, exactLong, exactReference, exactFloat, exactDouble, vectorProofs)
+            exactDouble: BooleanArray = BooleanArray(primitiveEligible.size),
+            exactInt: Array<NarrowInteger?> = arrayOfNulls(primitiveEligible.size)): CaptureLayout =
+            CaptureLayout(language, primitiveEligible, exactLong, exactReference, exactFloat, exactDouble, vectorProofs, exactInt)
     }
     init {
         require(exactLong.size == primitiveEligible.size && exactReference.size == primitiveEligible.size)
         require(exactLong.indices.all { !exactLong[it] || primitiveEligible[it] && exactReference[it] == null })
         require(exactReference.all { it == null || !it.isPrimitive })
         require(exactFloat.size == primitiveEligible.size && exactDouble.size == primitiveEligible.size)
-        require(vectorProofs.size == primitiveEligible.size)
+        require(vectorProofs.size == primitiveEligible.size && exactInt.size == primitiveEligible.size)
         require(exactLong.indices.all {
-            listOf(exactLong[it], exactFloat[it], exactDouble[it], exactReference[it] != null).count { flag -> flag } <= 1
+            listOf(exactLong[it], exactFloat[it], exactDouble[it], exactReference[it] != null, exactInt[it] != null).count { flag -> flag } <= 1
         })
         require(vectorProofs.indices.all { vectorProofs[it] == null ||
-            !primitiveEligible[it] && !exactLong[it] && !exactFloat[it] && !exactDouble[it] && exactReference[it] == null })
+            !primitiveEligible[it] && !exactLong[it] && !exactFloat[it] && !exactDouble[it] && exactReference[it] == null && exactInt[it] == null })
     }
     @CompilationFinal(dimensions = 1)
     private val fields = Array(primitiveEligible.size) {
         // Internally inferred WHNF kinds can refine a legacy adaptive capture.
         // A proven reference needs neither the primitive arm nor its tag.
-        CaptureField(it, primitiveEligible[it] && exactReference[it] == null && !exactFloat[it] && !exactDouble[it],
-            exactLong[it], exactReference[it], exactFloat[it], exactDouble[it], vectorProofs[it])
+        CaptureField(it, primitiveEligible[it] && exactReference[it] == null && !exactFloat[it] && !exactDouble[it] && exactInt[it] == null,
+            exactLong[it], exactReference[it], exactFloat[it], exactDouble[it], vectorProofs[it], exactInt[it])
     }
     @CompilationFinal(dimensions = 1)
     private val offsets = IntArray(fields.size + 1).also { offsets ->
@@ -240,7 +252,11 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
             // A shared descriptor may have widened before this activation wrote
             // its exact scalar. Keep the primitive fast path and accept only the
             // same boxed carrier; do not expose other primitive reads to PE.
-            if (fields[index].exactLong) fields[index].initializeLong(environment,
+            if (fields[index].exactInt != null) fields[index].initializeInt(environment,
+                if (frame.isInt(slot)) frame.getInt(slot)
+                else if (frame.isObject(slot)) frame.getObject(slot) as? Int ?: fault("Expected primitive Int capture")
+                else fault("Expected primitive Int capture"))
+            else if (fields[index].exactLong) fields[index].initializeLong(environment,
                 if (frame.isLong(slot)) frame.getLong(slot)
                 else if (frame.isObject(slot)) frame.getObject(slot) as? Long ?: fault("Expected primitive Long capture")
                 else fault("Expected primitive Long capture"))
@@ -277,6 +293,7 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
             val vector = field.vector
             val offset = offsets[index]
             if (vector != null) vector.initialize(environment, bytecode, frame, sourceSlots, offset)
+            else if (field.exactInt != null) field.initializeInt(environment, sourceSlots[offset].getInt(bytecode, frame))
             else if (field.exactLong) field.initializeLong(environment, sourceSlots[offset].getLong(bytecode, frame))
             else if (field.exactFloat) field.initializeFloat(environment, sourceSlots[offset].getFloat(bytecode, frame))
             else if (field.exactDouble) field.initializeDouble(environment, sourceSlots[offset].getDouble(bytecode, frame))
@@ -298,7 +315,8 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
 
     internal fun inspect(environment: CapturedFrame, index: Int): Any? {
         val field = checkedField(environment, index)
-        return field.vector?.restoreRaw(environment) ?: field.read(environment)
+        return field.exactInt?.widen(field.readInt(environment))
+            ?: field.vector?.restoreRaw(environment) ?: field.read(environment)
     }
 
     /** Primitive reads and writes stay together so temporary boxes can disappear. */
@@ -315,6 +333,8 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
             .restore(environment, bytecode, frame, slots, offset)
     }
 
+    fun isInt(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).exactInt != null
+    fun readInt(environment: CapturedFrame, index: Int): Int = checkedField(environment, index).readInt(environment)
     fun isLong(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).isLong(environment)
     fun isObject(environment: CapturedFrame, index: Int): Boolean = checkedField(environment, index).isObject(environment)
     fun readLong(environment: CapturedFrame, index: Int): Long = checkedField(environment, index).readLong(environment)
@@ -326,7 +346,7 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
 
     private class CaptureField(private val index: Int, private val primitiveEligible: Boolean, val exactLong: Boolean,
         private val exactReference: Class<*>?, val exactFloat: Boolean, val exactDouble: Boolean,
-        vectorProof: CoreRepresentation?) {
+        vectorProof: CoreRepresentation?, val exactInt: NarrowInteger?) {
         val vector = vectorProof?.let { OwnedVectorFields(it, "capture_$index") }
         private val objectValue = DefaultStaticProperty("capture_${index}_object")
         private val primitiveValue = DefaultStaticProperty("capture_${index}_primitive")
@@ -334,7 +354,8 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
 
         fun register(builder: StaticShape.Builder) {
             if (vector != null) { vector.register(builder); return }
-            if (exactFloat) builder.property(primitiveValue, Float::class.javaPrimitiveType, true)
+            if (exactInt != null) builder.property(primitiveValue, exactInt.storageClass, true)
+            else if (exactFloat) builder.property(primitiveValue, Float::class.javaPrimitiveType, true)
             else if (exactDouble) builder.property(primitiveValue, Double::class.javaPrimitiveType, true)
             else if (!exactLong) builder.property(objectValue, exactReference ?: Any::class.java, true)
             if (primitiveEligible) {
@@ -346,12 +367,14 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
         // Final properties are initialized once before escape. Retaining the object
         // arm also supports recursive indirections and values outside the Long subset.
         fun initializeLong(storage: CapturedFrame, value: Long) { primitiveValue.setLong(storage, value) }
+        fun initializeInt(storage: CapturedFrame, value: Int) { exactInt!!.write(primitiveValue, storage, value) }
         fun initializeFloat(storage: CapturedFrame, value: Float) { primitiveValue.setFloat(storage, value) }
         fun initializeDouble(storage: CapturedFrame, value: Double) { primitiveValue.setDouble(storage, value) }
 
         fun initialize(storage: CapturedFrame, value: Any?) {
             if (vector != null) fault("Vector capture requires vector-aware initialization")
-            if (exactFloat) initializeFloat(storage, value as? Float ?: fault("Expected primitive Float capture"))
+            if (exactInt != null) initializeInt(storage, value as? Int ?: fault("Expected primitive Int capture"))
+            else if (exactFloat) initializeFloat(storage, value as? Float ?: fault("Expected primitive Float capture"))
             else if (exactDouble) initializeDouble(storage, value as? Double ?: fault("Expected primitive Double capture"))
             else if (exactLong) {
                 initializeLong(storage, value as? Long ?: fault("Expected primitive Long capture"))
@@ -365,26 +388,34 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
         }
 
         fun isLong(storage: CapturedFrame): Boolean = exactLong || primitiveEligible && hasPrimitive.getBoolean(storage)
-        fun isObject(storage: CapturedFrame): Boolean = vector == null && !exactLong && !exactFloat && !exactDouble && (!primitiveEligible || !hasPrimitive.getBoolean(storage))
+        fun isObject(storage: CapturedFrame): Boolean = vector == null && exactInt == null && !exactLong && !exactFloat && !exactDouble && (!primitiveEligible || !hasPrimitive.getBoolean(storage))
         fun kind(storage: CapturedFrame): FrameSlotKind =
             if (vector != null) fault("Vector capture requires a typed destination")
+            else if (exactInt != null) FrameSlotKind.Int
             else if (exactFloat) FrameSlotKind.Float else if (exactDouble) FrameSlotKind.Double
             else if (isObject(storage)) FrameSlotKind.Object else FrameSlotKind.Long
 
         fun read(storage: CapturedFrame): Any? =
             if (vector != null) fault("Vector capture requires a typed destination")
+            else if (exactInt != null) exactInt.read(primitiveValue, storage)
             else if (exactFloat) primitiveValue.getFloat(storage) else if (exactDouble) primitiveValue.getDouble(storage)
             else if (isObject(storage)) objectValue.getObject(storage) else primitiveValue.getLong(storage)
 
         fun restore(storage: CapturedFrame, frame: Frame, slot: Int) {
             if (vector != null) fault("Vector capture requires a typed destination")
-            if (exactFloat) FrameAccess.writeFloat(frame, slot, primitiveValue.getFloat(storage))
+            if (exactInt != null) FrameAccess.writeInt(frame, slot, exactInt.read(primitiveValue, storage))
+            else if (exactFloat) FrameAccess.writeFloat(frame, slot, primitiveValue.getFloat(storage))
             else if (exactDouble) FrameAccess.writeDouble(frame, slot, primitiveValue.getDouble(storage))
             else if (isObject(storage)) {
                 FrameAccess.write(frame, slot, objectValue.getObject(storage))
             } else {
                 FrameAccess.writeLong(frame, slot, primitiveValue.getLong(storage))
             }
+        }
+
+        fun readInt(storage: CapturedFrame): Int {
+            if (exactInt == null) throw FrameSlotTypeException.create(index, FrameSlotKind.Int, kind(storage))
+            return exactInt.read(primitiveValue, storage)
         }
 
         fun readLong(storage: CapturedFrame): Long {
@@ -420,6 +451,8 @@ class CaptureLayout private constructor(language: TruffleLanguage<*>, primitiveE
 open class CapturedFrame(val layout: CaptureLayout, allocationKey: Any?) :
     ValidatedStorage(layout.checkAllocationKey(allocationKey)) {
     fun getValue(index: Int): Any? = layout.read(this, index)
+    fun getInt(index: Int): Int = layout.readInt(this, index)
+    fun isInt(index: Int): Boolean = layout.isInt(this, index)
     fun getLong(index: Int): Long = layout.readLong(this, index)
     fun isLong(index: Int): Boolean = layout.isLong(this, index)
     fun getObject(index: Int): Any? = layout.readObject(this, index)

@@ -7,7 +7,8 @@ The exact payloads are `Int32Rep` and `Word32Rep`, not machine `IntRep`/`WordRep
 or same-width floating representations. Reads return a genuine unboxed
 `(# State#, Int32# #)` or `(# State#, Word32# #)` tuple, with no physical slot for
 the state token. Writes return the state token; indexing returns the narrow
-scalar. Int32 reads/widening sign-extend, while Word32 reads/widening zero-extend.
+scalar. Reads retain raw `Int` bits; Int32 widening sign-extends and Word32
+widening zero-extends to machine `Long`.
 
 The runtime uses a plain native-order `int` VarHandle view of the existing JVM
 `byte[]`. It creates no separate `int[]`, boxed-element array or storage wrapper.
@@ -15,7 +16,7 @@ Both write operations keep the low 32 bits; only read/index widening differs.
 Full-width Long indices must be within `[0, byteCount / 4)` before narrowing and
 scaling, so incomplete final elements and overflowed indices cannot be accessed.
 State is evaluated and validated before memory access, and failed reads do not
-publish their primitive Long result. Accesses are not atomic/concurrent APIs.
+publish their primitive Int result. Accesses are not atomic/concurrent APIs.
 
 `examples/THC/Unboxed32Arrays.hs` uses installed, unmodified `array-0.5.8.0`
 public `accumArray`, `runSTUArray`, `newArray`, `readArray`, `writeArray`, and
@@ -30,7 +31,7 @@ machine-width literals.
 The new signed literal loader accepts only canonical decimal values in
 `[-2147483648, 2147483647]`, including case alternatives. Both signed and unsigned
 32-bit literal kinds determine their intrinsic range and signedness. Runtime
-lowering accepts integral metadata aliases sharing the Long carrier; strict
+lowering accepts narrow integral metadata aliases sharing the Int carrier; strict
 exporter auditing separately checks GHC's exact type identities. Missing legacy
 metadata and explicit unknown records with no register constraints refine from
 literal syntax. This includes genuine `noinline` erasure, where the exporter

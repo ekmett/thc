@@ -81,6 +81,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                              val arityCertificate: CoreApplicationCertificates.Arity? = null) {
         // The denoted value can be primitive while a pre-publication capture
         // still holds its recursive cell. Raw captures must retain that cell.
+        val directInt: Boolean get() = !cell && proof.isInt && proof.evaluated
         val directLong: Boolean get() = !cell && proof.isLong && proof.evaluated
         val directFloat: Boolean get() = !cell && proof.isFloat && proof.evaluated
         val directDouble: Boolean get() = !cell && proof.isDouble && proof.evaluated
@@ -202,16 +203,19 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 b.emitStaticLoadLong(emission.locals.getValue(local.id))
                 return
             }
+            val narrow = local.directInt || resolve && local.proof.isInt && local.proof.evaluated
             val integer = local.directLong || resolve && local.proof.isLong && local.proof.evaluated
             val floating = local.directFloat || resolve && local.proof.isFloat && local.proof.evaluated
             val double = local.directDouble || resolve && local.proof.isDouble && local.proof.evaluated
-            if (integer) b.beginToLong()
+            if (narrow) b.beginToInt()
+            else if (integer) b.beginToLong()
             else if (floating) b.beginToFloat()
             else if (double) b.beginToDouble()
             if (resolve && local.cell) b.beginReadCellIfNeeded()
             b.emitLoadLocal(emission.locals.getValue(local.id))
             if (resolve && local.cell) b.endReadCellIfNeeded()
-            if (integer) b.endToLong()
+            if (narrow) b.endToInt()
+            else if (integer) b.endToLong()
             else if (floating) b.endToFloat()
             else if (double) b.endToDouble()
         }
@@ -423,7 +427,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             (captureSources.map { it.directLong } + List(vectorCount) { false }).toBooleanArray(),
             (captureSources.map { if (it.cell) null else it.proof.referenceCarrier() } + List(vectorCount) { null }).toTypedArray(),
             (captureSources.map { it.directFloat } + List(vectorCount) { false }).toBooleanArray(),
-            (captureSources.map { it.directDouble } + List(vectorCount) { false }).toBooleanArray())
+            (captureSources.map { it.directDouble } + List(vectorCount) { false }).toBooleanArray(),
+            (captureSources.map { if (!it.cell && it.proof.evaluated) it.proof.narrowInteger else null } +
+                List(vectorCount) { null }).toTypedArray())
         context.typedInput = TypedInputLayout.create(language, context.inputLayout, context.captureLayout != null)
         val physicalArguments = arrayListOf<Pair<Int, Local>>()
         context.arguments = args.mapIndexed { index, arg ->
@@ -567,6 +573,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         root.configureTypedBloom(typedBloom)
         root.configureLeadingCaseReturn(context.leadingCaseReturn)
         root.configureTupleResult(context.tuple)
+        root.configureScalarResult(body.proof)
         roots += root
         return root.callTarget
     }
@@ -723,6 +730,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         val reference = if (local.cell || deferStrictDemand) null else local.proof.referenceCarrier()
         b.beginStoreLocal(e.locals.getValue(local.id))
         when {
+            local.directInt -> { b.beginToInt(); value(); b.endToInt() }
             local.directLong -> { b.beginToLong(); value(); b.endToLong() }
             local.directFloat -> { b.beginToFloat(); value(); b.endToFloat() }
             local.directDouble -> { b.beginToDouble(); value(); b.endToDouble() }
@@ -924,7 +932,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
     private fun constant(value: Any) = ProvenExpression(Expression { it.builder.emitLoadConstant(value) },
         CoreRepresentation(when (value) {
-            is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
+            is Int, is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
             is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
         }, evaluated = true))
     private fun compile(expr: List<Any?>, scope: Scope, tail: Boolean): Expression {
@@ -1761,6 +1769,13 @@ CoreStackForeign.validateHead(fn, defined)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
                                 scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }.let { operand ->
+                        val integer = NarrowInteger.fromRep(originalStdio.arguments[index])
+                        if (integer == null) operand else Expression { e ->
+                            e.builder.beginForeignIntegerToHost(integer)
+                            operand.emit(e)
+                            e.builder.endForeignIntegerToHost()
+                        }
                     }
                 }
                 tupleExpression(tupleProof) { e, destination ->
@@ -1990,7 +2005,9 @@ CoreStackForeign.validateHead(fn, defined)
                         val local = b.createLocal("Package C operand $index", null)
                         b.beginStoreLocal(local)
                         when (packageScalar.arguments.getOrNull(index)) {
-                            "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                            "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                                { b.beginToInt(); operand.emit(e); b.endToInt() }
+                            "IntRep", "WordRep", "Int64Rep", "Word64Rep" ->
                                 { b.beginToLong(); operand.emit(e); b.endToLong() }
                             "FloatRep" -> { b.beginToFloat(); operand.emit(e); b.endToFloat() }
                             "DoubleRep" -> { b.beginToDouble(); operand.emit(e); b.endToDouble() }
@@ -2002,7 +2019,9 @@ CoreStackForeign.validateHead(fn, defined)
                     val arguments = BytecodePackageScalarArguments(packageScalar,
                         locals.dropLast(1).toTypedArray(), locals.last())
                     when (packageScalar.result) {
-                        "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+                        "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                            b.emitLinkedPackageScalarInt(arguments, destination.single())
+                        "IntRep", "WordRep", "Int64Rep", "Word64Rep" ->
                             b.emitLinkedPackageScalarLong(arguments, destination.single())
                         "FloatRep" -> b.emitLinkedPackageScalarFloat(arguments, destination.single())
                         "DoubleRep" -> b.emitLinkedPackageScalarDouble(arguments, destination.single())
@@ -2417,7 +2436,7 @@ CoreStackForeign.validateHead(fn, defined)
                     b.beginRequireIOState(); operands.last().emit(e); b.endRequireIOState()
                     if (libdw != LibdwForeignOp.CLEAR) {
                         b.beginStoreLocal(destination.single())
-                        if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1L)
+                        if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1)
                         else b.emitLoadConstant(ManagedAddress.nullAddress())
                         b.endStoreLocal()
                     }
@@ -3533,7 +3552,8 @@ CoreStackForeign.validateHead(fn, defined)
                     when (operation) {
                         PinnedMemoryOp.NEW -> e.builder.beginNewPinnedByteArray(destination[0])
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.beginNewAlignedPinnedByteArray(destination[0])
-                        PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ -> e.builder.beginReadWord8OffAddr(destination[0])
+                        PinnedMemoryOp.READ_CHAR -> e.builder.beginReadCharOffAddr(destination[0])
                         PinnedMemoryOp.READ_INT8 -> e.builder.beginReadInt8OffAddr(destination[0])
                         PinnedMemoryOp.READ_ADDR -> e.builder.beginReadAddrOffAddr(byteOffset, destination[0])
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.beginReadAddrArray(byteOffset, destination[0])
@@ -3548,7 +3568,8 @@ CoreStackForeign.validateHead(fn, defined)
                     when (operation) {
                         PinnedMemoryOp.NEW -> e.builder.endNewPinnedByteArray()
                         PinnedMemoryOp.NEW_ALIGNED -> e.builder.endNewAlignedPinnedByteArray()
-                        PinnedMemoryOp.READ, PinnedMemoryOp.READ_CHAR -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ -> e.builder.endReadWord8OffAddr()
+                        PinnedMemoryOp.READ_CHAR -> e.builder.endReadCharOffAddr()
                         PinnedMemoryOp.READ_INT8 -> e.builder.endReadInt8OffAddr()
                         PinnedMemoryOp.READ_ADDR -> e.builder.endReadAddrOffAddr()
                         PinnedMemoryOp.READ_ADDR_ARRAY -> e.builder.endReadAddrArray()
@@ -3635,7 +3656,8 @@ CoreStackForeign.validateHead(fn, defined)
                             e.builder.beginReadDoubleArray(operation == ByteArrayOp.READ_WORD8_AS_DOUBLE, destination[0])
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT ->
                             e.builder.beginReadFloatArray(operation == ByteArrayOp.READ_WORD8_AS_FLOAT, destination[0])
-                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR ->
+                        ByteArrayOp.READ_CHAR -> e.builder.beginReadCharArray(destination[0])
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 ->
                             e.builder.beginReadByteArray(operation != ByteArrayOp.READ_INT8, destination[0])
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
                         ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 ->
@@ -3661,7 +3683,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.READ_INT64, ByteArrayOp.READ_WORD64 -> e.builder.endIntArrayAccess()
                         ByteArrayOp.READ_DOUBLE, ByteArrayOp.READ_WORD8_AS_DOUBLE -> e.builder.endReadDoubleArray()
                         ByteArrayOp.READ_FLOAT, ByteArrayOp.READ_WORD8_AS_FLOAT -> e.builder.endReadFloatArray()
-                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8, ByteArrayOp.READ_CHAR -> e.builder.endReadByteArray()
+                        ByteArrayOp.READ_CHAR -> e.builder.endReadCharArray()
+                        ByteArrayOp.READ_INT8, ByteArrayOp.READ_WORD8 -> e.builder.endReadByteArray()
                         ByteArrayOp.READ_INT16, ByteArrayOp.READ_WORD16,
                         ByteArrayOp.READ_WORD8_AS_INT16, ByteArrayOp.READ_WORD8_AS_WORD16 -> e.builder.endReadInt16Array()
                         ByteArrayOp.READ_INT32, ByteArrayOp.READ_WORD32,
@@ -3683,7 +3706,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.beginSizeByteArray()
                         ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
                         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.beginPinnedByteArray()
-                        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX -> e.builder.beginIndexByteArray()
+                        ByteArrayOp.INDEX_CHAR -> e.builder.beginIndexCharArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.beginIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
                         ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.beginWriteIntArray(byteOffset)
@@ -3732,7 +3756,8 @@ CoreStackForeign.validateHead(fn, defined)
                         ByteArrayOp.SIZE, ByteArrayOp.SIZE_MUTABLE -> e.builder.endSizeByteArray()
                         ByteArrayOp.IS_PINNED, ByteArrayOp.IS_MUTABLE_PINNED,
                         ByteArrayOp.IS_WEAKLY_PINNED, ByteArrayOp.IS_MUTABLE_WEAKLY_PINNED -> e.builder.endPinnedByteArray()
-                        ByteArrayOp.INDEX, ByteArrayOp.INDEX_CHAR -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX -> e.builder.endIndexByteArray()
+                        ByteArrayOp.INDEX_CHAR -> e.builder.endIndexCharArray()
                         ByteArrayOp.INDEX_INT8 -> e.builder.endIndexSignedByteArray()
                         ByteArrayOp.WRITE_INT, ByteArrayOp.WRITE_WORD,
                         ByteArrayOp.WRITE_INT64, ByteArrayOp.WRITE_WORD64 -> e.builder.endWriteIntArray()
@@ -3796,6 +3821,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val payload = if (selected.isTypedTransport) compile(args.single(), scope, false) else argument(args.single(), scope, lifted)
                 SumShape.payload(selected, payload.proof, lifted)
                 val shape = TupleShape(tupleProof, language)
+                val leaves = TupleShape.flatten(selected)
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     b.beginBlock()
@@ -3809,9 +3835,26 @@ CoreStackForeign.validateHead(fn, defined)
                         b.endStoreLocal()
                     }
                     val mapped = SumShape.projection(tupleProof, tag - 1).map { destination[it] }
-                    if (selected.isTypedTransport) payload.emitTuple(e, mapped)
-                    else if (selected.kind == CoreKind.VOID) { b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid() }
-                    else { b.beginStoreLocal(mapped.single()); payload.emit(e); b.endStoreLocal() }
+                    if (selected.isTypedTransport) {
+                        val logical = mapped.mapIndexed { index, slot ->
+                            if (leaves[index].isInt) b.createLocal("narrow sum payload $index", null) else slot
+                        }
+                        payload.emitTuple(e, logical)
+                        leaves.forEachIndexed { index, leaf ->
+                            if (leaf.isInt) {
+                                b.beginStoreLocal(mapped[index]); b.beginSumNarrowToWord(leaf.narrowInteger!!)
+                                b.beginToInt(); b.emitLoadLocal(logical[index]); b.endToInt()
+                                b.endSumNarrowToWord(); b.endStoreLocal()
+                            }
+                        }
+                    } else if (selected.kind == CoreKind.VOID) { b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid() }
+                    else {
+                        b.beginStoreLocal(mapped.single())
+                        if (selected.isInt) b.beginSumNarrowToWord(selected.narrowInteger!!)
+                        payload.emit(e)
+                        if (selected.isInt) b.endSumNarrowToWord()
+                        b.endStoreLocal()
+                    }
                     b.beginStoreLocal(destination[0]); b.emitLoadConstant(tag.toLong()); b.endStoreLocal()
                     b.endBlock()
                 }
@@ -4681,10 +4724,11 @@ CoreStackForeign.validateHead(fn, defined)
         val shape = TupleShape(proof, language)
         val fields = shape.leaves.mapIndexed { index, field -> Local(nextLocal++, "sum field $index", field.isLong, field) }
         scope.bindTuple(expr[2] as String, proof, fields)
-        data class Arm(val tag: Int?, val body: Expression)
+        data class Arm(val tag: Int?, val body: Expression, val conversions: List<Pair<Local, Local>>)
         val seen = mutableSetOf<Int?>()
         val arms = (expr[3] as List<List<Any?>>).map { alt ->
             val child = scope.child()
+            val conversions = ArrayList<Pair<Local, Local>>()
             val ids = alt[2] as List<String>
             val tag = if (alt[0] == "default") {
                 if (ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
@@ -4700,7 +4744,13 @@ CoreStackForeign.validateHead(fn, defined)
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
                 val logical = component.refine(actual).copy(evaluated = component.evaluated)
-                val projected = SumShape.projection(proof, selected - 1).map { fields[it] }
+                val leaves = TupleShape.flatten(logical)
+                val projected = SumShape.projection(proof, selected - 1).mapIndexed { index, physical ->
+                    val leaf = leaves[index]
+                    if (!leaf.isInt) fields[physical] else Local(nextLocal++, "narrow sum arm $index", false, leaf).also {
+                        conversions += it to fields[physical]
+                    }
+                }
                 if (component.isTypedTransport) {
                     val leaves = TupleShape.flatten(logical)
                     child.bindTuple(ids[0], logical, projected.mapIndexed { i, field -> field.copy(proof = leaves[i]) })
@@ -4709,7 +4759,7 @@ CoreStackForeign.validateHead(fn, defined)
                 selected
             }
             if (!seen.add(tag)) throw RuntimeFault("Duplicate sum alternative")
-            Arm(tag, compile(alt[3] as List<Any?>, child, tail))
+            Arm(tag, compile(alt[3] as List<Any?>, child, tail), conversions)
         }
         if (arms.isEmpty()) throw RuntimeFault("Empty sum case")
         val result = arms.first().body.proof.refine(CoreRepresentations.expression(expr))
@@ -4724,9 +4774,20 @@ CoreStackForeign.validateHead(fn, defined)
             read(fields[0]).emit(e); b.endCheckSumTag(); b.endStoreLocal()
             val explicit = arms.filter { it.tag != null }
             val fallback = arms.singleOrNull { it.tag == null }
+            fun emitArm(arm: Arm) {
+                b.beginBlock()
+                arm.conversions.forEach { (local, physical) ->
+                    e.locals[local.id] = b.createLocal(local.name, null)
+                    b.beginStoreLocal(e.locals.getValue(local.id)); b.beginSumWordToNarrow(local.proof.narrowInteger!!)
+                    read(physical).emit(e); b.endSumWordToNarrow(); b.endStoreLocal()
+                }
+                emitResult(arm.body, e, destination)
+                arm.conversions.forEach { e.locals.remove(it.first.id) }
+                b.endBlock()
+            }
             fun choice(index: Int) {
                 if (index == explicit.size) {
-                    if (fallback == null) b.emitFailCase() else emitResult(fallback.body, e, destination)
+                    if (fallback == null) b.emitFailCase() else emitArm(fallback)
                     return
                 }
                 val arm = explicit[index]
@@ -4734,7 +4795,7 @@ CoreStackForeign.validateHead(fn, defined)
                 b.beginMatchLiteral(arm.tag!!.toLong()); read(fields[0]).emit(e); b.endMatchLiteral()
                 // Aggregate arms emit one store per physical result slot. Each
                 // branch must still be one builder child (including zero slots).
-                b.beginBlock(); emitResult(arm.body, e, destination); b.endBlock()
+                emitArm(arm)
                 b.beginBlock(); choice(index + 1); b.endBlock()
                 if (destination == null) b.endConditional() else b.endIfThenElse()
             }
@@ -5273,9 +5334,29 @@ CoreStackForeign.validateHead(fn, defined)
         !proof.isTypedTransport && proof.primReps?.singleOrNull() in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
 
     private fun primitive(name: String, args: List<Expression>, someException: Boolean = false): Expression {
+        NarrowScalarOp.named(name)?.let { operation ->
+            if (args.size != if (operation.unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
+            args.forEachIndexed { index, argument -> operation.validateOperand(argument.proof, index) }
+            return ProvenExpression(Expression { e ->
+                val b = e.builder
+                when {
+                    operation.sourceLong -> b.beginNarrowFromLong(operation)
+                    operation.resultLong -> b.beginNarrowToLong(operation)
+                    operation.shift -> b.beginNarrowShift(operation)
+                    else -> b.beginNarrowInt(operation)
+                }
+                args.forEach { it.emit(e) }
+                if (operation.unary && !operation.sourceLong) b.emitLoadConstant(0)
+                when {
+                    operation.sourceLong -> b.endNarrowFromLong()
+                    operation.resultLong -> b.endNarrowToLong()
+                    operation.shift -> b.endNarrowShift()
+                    else -> b.endNarrowInt()
+                }
+            }, operation.result)
+        }
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
-        val intShift = narrowIntPrimitiveShift(name)
         val bitShift = scalarBitPrimitiveShift(name)
         val operation = when (scalar64PrimitiveOperation(name)) {
             "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> "PopulationCountWidth"
@@ -5286,45 +5367,17 @@ CoreStackForeign.validateHead(fn, defined)
             "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#" -> "BitDepositWidth"
             "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> "BitExtractWidth"
 
-            "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
-            "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
-            "subInt8#", "subInt16#", "subInt32#" -> "SubtractNarrowInt"
-            "timesInt8#", "timesInt16#", "timesInt32#" -> "MultiplyNarrowInt"
-            "quotInt8#", "quotInt16#", "quotInt32#" -> "QuotientNarrowInt"
-            "remInt8#", "remInt16#", "remInt32#" -> "RemainderNarrowInt"
-            "eqInt8#", "eqInt16#", "eqInt32#" -> "EqualNarrowInt"
-            "neInt8#", "neInt16#", "neInt32#" -> "NotEqualNarrowInt"
-            "ltInt8#", "ltInt16#", "ltInt32#" -> "LessThanNarrowInt"
-            "leInt8#", "leInt16#", "leInt32#" -> "LessEqualNarrowInt"
-            "gtInt8#", "gtInt16#", "gtInt32#" -> "GreaterThanNarrowInt"
-            "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
-            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" -> "ShiftLeftNarrowInt"
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> "ShiftRightNarrowInt"
-            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#" -> "ShiftRightLogicalNarrowInt"
             "mulIntMayOflo#" -> "MultiplyIntMayOverflow"
 
             "quotWord#" -> "QuotientUnsigned"
             "remWord#" -> "RemainderUnsigned"
             "gtWord#" -> "GreaterThanUnsigned"
             "geWord#" -> "GreaterEqualUnsigned"
-            "quotWord8#", "quotWord16#", "quotWord32#" -> "QuotientNarrowWord"
-            "remWord8#", "remWord16#", "remWord32#" -> "RemainderNarrowWord"
-            "eqWord8#", "eqWord16#", "eqWord32#" -> "EqualNarrowWord"
-            "neWord8#", "neWord16#", "neWord32#" -> "NotEqualNarrowWord"
-            "gtWord8#", "gtWord16#", "gtWord32#" -> "GreaterThanNarrowWord"
-            "geWord8#", "geWord16#", "geWord32#" -> "GreaterEqualNarrowWord"
-            "andWord8#", "andWord16#", "andWord32#" -> "BitAndNarrowWord"
-            "orWord8#", "orWord16#", "orWord32#" -> "BitOrNarrowWord"
-            "xorWord8#", "xorWord16#", "xorWord32#" -> "BitXorNarrowWord"
-            "notWord8#", "notWord16#", "notWord32#" -> "BitNotNarrowWord"
-            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> "ShiftLeftNarrowWord"
-            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> "ShiftRightNarrowWord"
+
             "+#", "plusWord#" -> "Add"
             "-#", "minusWord#" -> "Subtract"
             "*#", "timesWord#" -> "Multiply"
-            "plusWord8#", "plusWord16#", "plusWord32#" -> "AddNarrowWord"
-            "subWord8#", "subWord16#", "subWord32#" -> "SubtractNarrowWord"
-            "timesWord8#", "timesWord16#", "timesWord32#" -> "MultiplyNarrowWord"
+
             "negateInt#" -> "Negate"
             "quotInt#" -> "Quotient"
             "remInt#" -> "Remainder"
@@ -5335,8 +5388,7 @@ CoreStackForeign.validateHead(fn, defined)
             "ltWord#" -> "LessThanUnsigned"
             "<=#", "leChar#" -> "LessEqual"
             "leWord#" -> "LessEqualUnsigned"
-            "ltWord8#", "ltWord16#", "ltWord32#" -> "LessThanNarrowWord"
-            "leWord8#", "leWord16#", "leWord32#" -> "LessEqualNarrowWord"
+
             ">#", "gtChar#" -> "GreaterThan"
             ">=#", "geChar#" -> "GreaterEqual"
             "and#", "andI#" -> "BitAnd"
@@ -5349,12 +5401,10 @@ CoreStackForeign.validateHead(fn, defined)
             "uncheckedIShiftL#", "uncheckedShiftL#" -> "ShiftLeft"
             "uncheckedIShiftRA#" -> "ShiftRight"
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> "ShiftRightUnsigned"
-            // Match AST sign-normalized Long carriers in both conversion directions.
-            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> "Narrow8"
-            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> "Narrow16"
-            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> "Narrow32"
-            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
-            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            // Machine Int# narrowing preserves its Long computation carrier.
+            "narrow8Int#" -> "Narrow8"
+            "narrow16Int#" -> "Narrow16"
+            "narrow32Int#" -> "Narrow32"
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
@@ -5370,11 +5420,11 @@ CoreStackForeign.validateHead(fn, defined)
             "indexWord16OffAddr#", "indexInt16OffAddr#" -> "AddressIndexManagedScalar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
+        val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise", "AddressToInt", "IntToAddress")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
-        if (operation in setOf("ShiftRightLogicalNarrowInt", "MultiplyIntMayOverflow") &&
-            args.any { it.proof.kind != CoreKind.LONG || it.proof.isTypedTransport })
+        if (operation == "MultiplyIntMayOverflow" &&
+            args.any { !it.proof.isLong })
             throw RuntimeFault("Primitive requires Long operands: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         if (operation in setOf("Add", "Subtract", "Multiply") && args.all { staticWideLong(it.proof) })
@@ -5386,48 +5436,18 @@ CoreStackForeign.validateHead(fn, defined)
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
-                "NegateNarrowInt" -> b.beginNegateNarrowInt(intShift)
-                "AddNarrowInt" -> b.beginAddNarrowInt(intShift)
-                "SubtractNarrowInt" -> b.beginSubtractNarrowInt(intShift)
-                "MultiplyNarrowInt" -> b.beginMultiplyNarrowInt(intShift)
-                "QuotientNarrowInt" -> b.beginQuotientNarrowInt(intShift)
-                "RemainderNarrowInt" -> b.beginRemainderNarrowInt(intShift)
-                "EqualNarrowInt" -> b.beginEqualNarrowInt(intShift)
-                "NotEqualNarrowInt" -> b.beginNotEqualNarrowInt(intShift)
-                "LessThanNarrowInt" -> b.beginLessThanNarrowInt(intShift)
-                "LessEqualNarrowInt" -> b.beginLessEqualNarrowInt(intShift)
-                "GreaterThanNarrowInt" -> b.beginGreaterThanNarrowInt(intShift)
-                "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
-                "ShiftLeftNarrowInt" -> b.beginShiftLeftNarrowInt(intShift)
-                "ShiftRightNarrowInt" -> b.beginShiftRightNarrowInt(intShift)
-                "ShiftRightLogicalNarrowInt" -> b.beginShiftRightLogicalNarrowInt(intShift)
                 "MultiplyIntMayOverflow" -> b.beginMultiplyIntMayOverflow()
                 "QuotientUnsigned" -> b.beginQuotientUnsigned()
                 "RemainderUnsigned" -> b.beginRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
                 "GreaterEqualUnsigned" -> b.beginGreaterEqualUnsigned()
-                "QuotientNarrowWord" -> b.beginQuotientNarrowWord(wordMask)
-                "RemainderNarrowWord" -> b.beginRemainderNarrowWord(wordMask)
-                "EqualNarrowWord" -> b.beginEqualNarrowWord(wordMask)
-                "NotEqualNarrowWord" -> b.beginNotEqualNarrowWord(wordMask)
-                "GreaterThanNarrowWord" -> b.beginGreaterThanNarrowWord(wordMask)
-                "GreaterEqualNarrowWord" -> b.beginGreaterEqualNarrowWord(wordMask)
-                "BitAndNarrowWord" -> b.beginBitAndNarrowWord(wordMask)
-                "BitOrNarrowWord" -> b.beginBitOrNarrowWord(wordMask)
-                "BitXorNarrowWord" -> b.beginBitXorNarrowWord(wordMask)
-                "BitNotNarrowWord" -> b.beginBitNotNarrowWord(wordMask)
-                "ShiftLeftNarrowWord" -> b.beginShiftLeftNarrowWord(wordMask)
-                "ShiftRightNarrowWord" -> b.beginShiftRightNarrowWord(wordMask)
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
-                "AddNarrowWord" -> b.beginAddNarrowWord(wordMask); "SubtractNarrowWord" -> b.beginSubtractNarrowWord(wordMask)
-                "MultiplyNarrowWord" -> b.beginMultiplyNarrowWord(wordMask)
                 "Negate" -> b.beginNegate(); "Quotient" -> b.beginQuotient(); "Remainder" -> b.beginRemainder()
                 "Equal" -> b.beginEqual(); "NotEqual" -> b.beginNotEqual(); "LessThan" -> b.beginLessThan()
                 "PointerEqual" -> b.beginPointerEqual()
                 "LessThanUnsigned" -> b.beginLessThanUnsigned()
                 "LessEqual" -> b.beginLessEqual(); "GreaterThan" -> b.beginGreaterThan(); "GreaterEqual" -> b.beginGreaterEqual()
                 "LessEqualUnsigned" -> b.beginLessEqualUnsigned()
-                "LessThanNarrowWord" -> b.beginLessThanNarrowWord(wordMask); "LessEqualNarrowWord" -> b.beginLessEqualNarrowWord(wordMask)
                 "BitAnd" -> b.beginBitAnd(); "BitOr" -> b.beginBitOr(); "BitXor" -> b.beginBitXor(); "BitNot" -> b.beginBitNot()
                 "PopulationCountWidth" -> b.beginPopulationCountWidth(bitShift)
                 "CountLeadingZerosWidth" -> b.beginCountLeadingZerosWidth(bitShift)
@@ -5457,48 +5477,18 @@ CoreStackForeign.validateHead(fn, defined)
             }
             args.forEach { it.emit(e) }
             when (operation) {
-                "NegateNarrowInt" -> b.endNegateNarrowInt()
-                "AddNarrowInt" -> b.endAddNarrowInt()
-                "SubtractNarrowInt" -> b.endSubtractNarrowInt()
-                "MultiplyNarrowInt" -> b.endMultiplyNarrowInt()
-                "QuotientNarrowInt" -> b.endQuotientNarrowInt()
-                "RemainderNarrowInt" -> b.endRemainderNarrowInt()
-                "EqualNarrowInt" -> b.endEqualNarrowInt()
-                "NotEqualNarrowInt" -> b.endNotEqualNarrowInt()
-                "LessThanNarrowInt" -> b.endLessThanNarrowInt()
-                "LessEqualNarrowInt" -> b.endLessEqualNarrowInt()
-                "GreaterThanNarrowInt" -> b.endGreaterThanNarrowInt()
-                "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
-                "ShiftLeftNarrowInt" -> b.endShiftLeftNarrowInt()
-                "ShiftRightNarrowInt" -> b.endShiftRightNarrowInt()
-                "ShiftRightLogicalNarrowInt" -> b.endShiftRightLogicalNarrowInt()
                 "MultiplyIntMayOverflow" -> b.endMultiplyIntMayOverflow()
                 "QuotientUnsigned" -> b.endQuotientUnsigned()
                 "RemainderUnsigned" -> b.endRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()
                 "GreaterEqualUnsigned" -> b.endGreaterEqualUnsigned()
-                "QuotientNarrowWord" -> b.endQuotientNarrowWord()
-                "RemainderNarrowWord" -> b.endRemainderNarrowWord()
-                "EqualNarrowWord" -> b.endEqualNarrowWord()
-                "NotEqualNarrowWord" -> b.endNotEqualNarrowWord()
-                "GreaterThanNarrowWord" -> b.endGreaterThanNarrowWord()
-                "GreaterEqualNarrowWord" -> b.endGreaterEqualNarrowWord()
-                "BitAndNarrowWord" -> b.endBitAndNarrowWord()
-                "BitOrNarrowWord" -> b.endBitOrNarrowWord()
-                "BitXorNarrowWord" -> b.endBitXorNarrowWord()
-                "BitNotNarrowWord" -> b.endBitNotNarrowWord()
-                "ShiftLeftNarrowWord" -> b.endShiftLeftNarrowWord()
-                "ShiftRightNarrowWord" -> b.endShiftRightNarrowWord()
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
-                "AddNarrowWord" -> b.endAddNarrowWord(); "SubtractNarrowWord" -> b.endSubtractNarrowWord()
-                "MultiplyNarrowWord" -> b.endMultiplyNarrowWord()
                 "Negate" -> b.endNegate(); "Quotient" -> b.endQuotient(); "Remainder" -> b.endRemainder()
                 "Equal" -> b.endEqual(); "NotEqual" -> b.endNotEqual(); "LessThan" -> b.endLessThan()
                 "PointerEqual" -> b.endPointerEqual()
                 "LessThanUnsigned" -> b.endLessThanUnsigned()
                 "LessEqual" -> b.endLessEqual(); "GreaterThan" -> b.endGreaterThan(); "GreaterEqual" -> b.endGreaterEqual()
                 "LessEqualUnsigned" -> b.endLessEqualUnsigned()
-                "LessThanNarrowWord" -> b.endLessThanNarrowWord(); "LessEqualNarrowWord" -> b.endLessEqualNarrowWord()
                 "BitAnd" -> b.endBitAnd(); "BitOr" -> b.endBitOr(); "BitXor" -> b.endBitXor(); "BitNot" -> b.endBitNot()
                 "PopulationCountWidth" -> b.endPopulationCountWidth()
                 "CountLeadingZerosWidth" -> b.endCountLeadingZerosWidth()

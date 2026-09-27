@@ -49,7 +49,7 @@ class SimdInt16VectorTest {
         assertEquals(CoreVectors.proof16, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
         assertEquals(List(8) { "Int16Rep" }, CoreVectors.unpacked16.primReps)
-        assertTrue(CoreVectors.unpacked16.components!!.all { it.isLong })
+        assertTrue(CoreVectors.unpacked16.components!!.all { it.isInt })
         for (wrong in listOf(CoreVectors.proof, CoreVectors.proof32, CoreVectors.proofFloat, CoreVectors.proofDouble, CoreVectors.unpacked16)) {
             assertFalse(TupleShape.compatible(proof, wrong))
             assertThrows(RuntimeFault::class.java) { proof.refine(wrong) }
@@ -110,13 +110,14 @@ class SimdInt16VectorTest {
             for (flag in listOf(true, null, 0L, "false")) assertThrows(RuntimeFault::class.java) {
                 program(language, backend, broadcastModule(exact, flag), "root", diagnostic)
             }
-            // Lowering shares Long across integral reps; the literal tag supplies narrowing.
+            // Lowering shares Int across narrow integral reps; the literal tag supplies narrowing.
             for (shared in listOf("Word16Rep", "Int32Rep")) {
                 val operand = listOf("lit", "int16", "1", mapOf("rep" to (lane + ("primReps" to listOf(shared)))))
                 val p = program(language, backend, broadcastModule(operand), "root", diagnostic)
                 assertEquals(1L, Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("root"), arrayOf(0L))))
             }
             for (wrong in listOf(lane + ("kind" to "unknown"),
+                lane + ("primReps" to listOf("IntRep")), lane + ("primReps" to listOf("Word64Rep")),
                 lane + mapOf("kind" to "float", "primReps" to listOf("FloatRep")),
                 lane + mapOf("kind" to "double", "primReps" to listOf("DoubleRep")))) {
                 assertThrows(RuntimeFault::class.java) { program(language, backend,

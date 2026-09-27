@@ -48,7 +48,7 @@ class SimdWord32VectorTest {
         assertEquals(CoreVectors.proofWord32, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
         assertEquals(List(4) { "Word32Rep" }, CoreVectors.unpackedWord32.primReps)
-        assertTrue(CoreVectors.unpackedWord32.components!!.all { it.isLong })
+        assertTrue(CoreVectors.unpackedWord32.components!!.all { it.isInt })
         assertEquals(6, CoreVectors.operationsWord32.size)
         assertFalse("negateWord32X4#" in CoreVectors.operations)
         assertFalse(IntVector::class.java.declaredMethods.any { it.name == "negate" })
@@ -140,13 +140,14 @@ class SimdWord32VectorTest {
             for (flag in listOf(true, null, 0L, "false")) assertThrows(RuntimeFault::class.java) {
                 program(language, backend, broadcastModule(exact, flag), "root", diagnostic)
             }
-            // Lowering shares Long across integral reps; the literal tag supplies narrowing.
+            // Lowering shares Int across narrow integral reps; the literal tag supplies narrowing.
             for (shared in listOf("Int16Rep", "Int32Rep")) {
                 val operand = listOf("lit", "word32", "1", mapOf("rep" to (lane + ("primReps" to listOf(shared)))))
                 val p = program(language, backend, broadcastModule(operand), "root", diagnostic)
                 assertEquals(1L, Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("root"), arrayOf(0L))))
             }
             for (wrong in listOf(lane + ("kind" to "unknown"),
+                lane + ("primReps" to listOf("IntRep")), lane + ("primReps" to listOf("Word64Rep")),
                 lane + mapOf("kind" to "float", "primReps" to listOf("FloatRep")),
                 lane + mapOf("kind" to "double", "primReps" to listOf("DoubleRep")))) {
                 assertThrows(RuntimeFault::class.java) { program(language, backend,
@@ -208,7 +209,7 @@ class SimdWord32VectorTest {
         val malformed = listOf("-1", "-2147483648", "4294967296", "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")
         val values = (listOf(0L, 1L, 0x7fff_ffffL, 0x8000_0000L, 0xffff_ffffL) +
             (0 until 32).flatMap { bit -> listOf((1L shl bit) - 1, 1L shl bit, (1L shl bit) + 1) }).distinct()
-        for (value in values) assertEquals(value, narrowWordLiteral("word32", value.toString()))
+        for (value in values) assertEquals(value.toInt(), narrowWordLiteral("word32", value.toString()))
         for (text in malformed) assertThrows(RuntimeFault::class.java) { narrowWordLiteral("word32", text) }
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             for (text in malformed) for (input in listOf(broadcastModule(listOf("lit", "word32", text, mapOf("rep" to lane))), alternative(text)))

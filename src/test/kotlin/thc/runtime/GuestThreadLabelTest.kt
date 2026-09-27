@@ -22,13 +22,13 @@ class GuestThreadLabelTest {
             threads.label(id, raw)
             assertSame(raw, threads.label(id))
             val owned = ManagedByteArray.allocateGuest(8)
-            ManagedByteArray.writeGuest(owned, 0, 65)
+            ManagedByteArray.writeGuest(owned, 0, (65).toInt())
             ManagedByteArray.shrinkGuest(owned, 1)
             val frozen = ManagedByteArray.freezeGuest(owned)
             threads.label(id, frozen)
             assertSame(frozen, threads.label(id))
             assertEquals(1L, ManagedByteArray.sizeGuest(threads.label(id)))
-            assertEquals(65L, ManagedByteArray.readGuest(threads.label(id), 0, true))
+            assertEquals(65L, ManagedByteArray.readGuest(threads.label(id), 0, true).toLong())
             assertThrows(RuntimeFault::class.java) { threads.label(id, "wrong carrier") }
             assertSame(frozen, threads.label(id), "Failed labels leave the old value intact")
         } finally { threads.leaveCurrent() }

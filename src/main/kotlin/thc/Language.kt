@@ -992,8 +992,10 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             CompilerDirectives.transferToInterpreterAndInvalidate()
             throw IllegalArgumentException("Host kernel $entry expects $argumentCount arguments")
         }
+        val closure = guestEntry as? thc.runtime.Closure
+        val signature = closure?.target?.rootNode as? thc.runtime.GuestRoot
         val normalized = Array<Any?>(arguments.size) { index ->
-            when (val value = arguments[index]) {
+            val value = when (val value = arguments[index]) {
                 is Long -> value
                 is Int -> value.toLong()
                 is Short -> value.toLong()
@@ -1003,14 +1005,19 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                     error("The prototype host ABI accepts signed 64-bit integer arguments only")
                 }
             }
+            val narrow = signature?.inputLayout?.proof(index + (closure?.suppliedCount ?: 0))?.narrowInteger
+            if (narrow == null) value else narrow.fromHost(value)
         }
         val threads = Language.currentState(dispatch).threads
         threads.enterCurrent(externalAsync = program.asynchronousExceptions)
         var outcome = thc.runtime.GuestThreadStatus.FINISHED
         try {
             try {
-                return thc.runtime.AsyncContinuations.publicResult(
+                val result = thc.runtime.AsyncContinuations.publicResult(
                     dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
+                val narrow = signature?.scalarResultProof?.narrowInteger
+                return if (narrow == null) result else narrow.widen(result as? Int
+                    ?: throw thc.runtime.RuntimeFault("Expected narrow integer result at public boundary"))
             } catch (suspended: thc.runtime.ThunkSuspended) {
                 thc.runtime.AsyncContinuations.publicSuspension(suspended, dispatch)
             } catch (suspended: thc.runtime.CallSegmentSuspended) {

@@ -217,23 +217,23 @@ class AlignedScalarMemoryTest {
                 owner.fill(0, 32, 0xa5)
                 val raw = ByteArray(32) { 0xa5.toByte() }
                 val array: Any = if (allocationOwned) owner else raw
-                ManagedByteArray.writeInt32Guest(array, index, value)
+                ManagedByteArray.writeInt32Guest(array, index, (value).toInt())
                 val expected = ByteArray(32) { 0xa5.toByte() }
                 ByteBuffer.wrap(expected).order(ByteOrder.nativeOrder()).putInt(index.toInt() * 4, value.toInt())
                 assertArrayEquals(expected, if (allocationOwned) owner.copyBytesOut(0, 32) else raw)
-                assertEquals(value and 0xffffffffL, ManagedByteArray.readInt32Guest(array, index, true))
+                assertEquals(value and 0xffffffffL, Integer.toUnsignedLong(ManagedByteArray.readInt32Guest(array, index, true)))
                 val address = ManagedAddress.fromGuestByteArray(array)
                 assertEquals(value and 0xffffffffL, ManagedAddressRead.WIDE_CHAR.read(address.plus(32), index - 8))
                 address.plus(32).writeNativeScalar(index - 8, 4, value.inv())
-                assertEquals(value.inv() and 0xffffffffL, ManagedByteArray.readInt32Guest(array, index, true))
+                assertEquals(value.inv() and 0xffffffffL, Integer.toUnsignedLong(ManagedByteArray.readInt32Guest(array, index, true)))
                 for (invalid in listOf(-1L, 8L, Long.MIN_VALUE, Long.MAX_VALUE)) {
                     val before = if (allocationOwned) owner.copyBytesOut(0, 32) else raw.copyOf()
-                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32Guest(array, invalid, true) }
-                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32Guest(array, invalid, 3) }
+                    assertThrows(RuntimeFault::class.java) { Integer.toUnsignedLong(ManagedByteArray.readInt32Guest(array, invalid, true)) }
+                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32Guest(array, invalid, (3).toInt()) }
                     assertArrayEquals(before, if (allocationOwned) owner.copyBytesOut(0, 32) else raw)
                 }
             }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readInt32Guest(ByteArray(0), 0, true) }
+        assertThrows(RuntimeFault::class.java) { Integer.toUnsignedLong(ManagedByteArray.readInt32Guest(ByteArray(0), 0, true)) }
         val immutable = ManagedAddress.fromHex("00010203")
         assertThrows(RuntimeFault::class.java) { immutable.writeNativeScalar(0, 4, 1) }
     }
@@ -257,7 +257,7 @@ class AlignedScalarMemoryTest {
                     copy.copyFrom(cells, 0, 0, 24)
                     assertSame(retained, PinnedMemory.readAddressArray(copy, 1))
                     // Partial byte writes must not tear a retained pointer cell.
-                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32Guest(cells, 2, 7) }
+                    assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32Guest(cells, 2, (7).toInt()) }
                     assertThrows(RuntimeFault::class.java) { ManagedByteArray.readIntGuest(cells, 1) }
                     assertThrows(RuntimeFault::class.java) { cells.rawBytesIfPointerFree() }
                     assertThrows(RuntimeFault::class.java) { cells.exposeToNative() }

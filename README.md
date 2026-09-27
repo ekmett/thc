@@ -117,6 +117,9 @@ bindings, typed constructor fields, local joins, and unboxed tuple inputs and
 results. There is also bounded support for unboxed sum results, scalar arithmetic,
 SIMD calls and operations for [supported shapes](docs/simd-families.md), and
 managed arrays and mutable references.
+[Narrow integer carriers](docs/narrow-integer-carriers.md) use JVM Int computation
+with byte/short/int stored fields; machine integers and explicit 64-bit integers
+remain Long.
 All prefetch hints and the three user trace primops have
 [JVM target implementations](docs/hints-and-tracing.md): hints are no-ops,
 and trace records use the context's stderr diagnostic stream.

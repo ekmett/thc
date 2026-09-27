@@ -51,7 +51,7 @@ internal object ClosureInspection {
                 for (index in 0 until value.layout.arity)
                     if (value.layout.inactiveSumReference(value, index)) field(0L, false)
                     else if (value.layout.fieldWidth(index) != 0) field(value.layout.inspect(value, index),
-                        !value.layout.isLong(index) && !value.layout.isFloat(index) &&
+                        !value.layout.isInt(index) && !value.layout.isLong(index) && !value.layout.isFloat(index) &&
                             !value.layout.isDouble(index) && !value.layout.isVector(index))
             }
             is Closure -> {
@@ -61,6 +61,7 @@ internal object ClosureInspection {
                 val typed = value.typedSupplied
                 if (typed == null) for (index in 0 until value.suppliedCount) field(value.supplied[index], true)
                 else for (index in typed.layout.reps.indices) field(when {
+                    typed.layout.isInt(index) -> NarrowInteger.fromRep(typed.layout.reps[index])!!.widen(typed.layout.getInt(typed, index))
                     typed.layout.isLong(index) -> typed.layout.getLong(typed, index)
                     typed.layout.isFloat(index) -> typed.layout.getFloat(typed, index)
                     typed.layout.isDouble(index) -> typed.layout.getDouble(typed, index)
@@ -75,6 +76,7 @@ internal object ClosureInspection {
                 // not misreported as a guest pointer field.
                 if (value.state == 2) field(value.value, true) else captures(value.environment)
             }
+            is Int -> { descriptor = "boxed Int32"; tag = 4; field(value.toLong(), false) }
             is Long -> { descriptor = "boxed Int64"; tag = 4; field(value, false) }
             is Float -> { descriptor = "boxed Float32"; tag = 5; field(value, false) }
             is Double -> { descriptor = "boxed Float64"; tag = 6; field(value, false) }

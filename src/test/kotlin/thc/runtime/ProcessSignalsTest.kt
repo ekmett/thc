@@ -175,7 +175,7 @@ class ProcessSignalsTest {
         try {
             fun reject(token: Any = Unit) {
                 val failure = assertThrows(RuntimeFault::class.java) {
-                    Calls.target(target, arrayOf(0L, 2L, -5L, ManagedAddress.nullAddress(), token))
+                    callScalarTestTarget(target, arrayOf(0L, 2, -5, ManagedAddress.nullAddress(), token))
                 }
                 assertEquals(RuntimeFault::class.java, failure.javaClass)
                 if (token === Unit) assertTrue(failure.message!!.contains("launcher authority"))

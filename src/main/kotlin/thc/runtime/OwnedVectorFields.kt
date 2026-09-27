@@ -42,26 +42,11 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         properties.forEach { builder.property(it, type, true) }
     }
 
-    private fun putLong(owner: Any, index: Int, value: Long) {
-        val field = properties[index]
-        when (lane) {
-            "Int8Rep", "Word8Rep" -> field.setByte(owner, value.toByte())
-            "Int16Rep", "Word16Rep" -> field.setShort(owner, value.toShort())
-            "Int32Rep", "Word32Rep" -> field.setInt(owner, value.toInt())
-            "Int64Rep", "Word64Rep" -> field.setLong(owner, value)
-            else -> fault("Expected integral owned vector lane")
-        }
-    }
-    private fun getLong(owner: Any, index: Int): Long = when (lane) {
-        "Int8Rep" -> properties[index].getByte(owner).toLong()
-        "Word8Rep" -> properties[index].getByte(owner).toLong() and 255L
-        "Int16Rep" -> properties[index].getShort(owner).toLong()
-        "Word16Rep" -> properties[index].getShort(owner).toLong() and 65535L
-        "Int32Rep" -> properties[index].getInt(owner).toLong()
-        "Word32Rep" -> properties[index].getInt(owner).toLong() and 4294967295L
-        "Int64Rep", "Word64Rep" -> properties[index].getLong(owner)
-        else -> fault("Expected integral owned vector lane")
-    }
+    private val narrowLane = NarrowInteger.fromRep(lane)
+    private fun putInt(owner: Any, index: Int, value: Int) =
+        checkNotNull(narrowLane).write(properties[index], owner, value)
+    private fun getInt(owner: Any, index: Int): Int =
+        checkNotNull(narrowLane).read(properties[index], owner)
     private fun checkSlots(size: Int, offset: Int) {
         require(offset >= 0 && offset < size) { "Invalid owned vector transport slot" }
     }
@@ -69,10 +54,10 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         val value = transport.require(raw)
         for (index in 0 until lanes) {
             when (value) {
-                is ByteVector -> putLong(owner, index, value.lane(index).toLong())
-                is ShortVector -> putLong(owner, index, value.lane(index).toLong())
-                is IntVector -> putLong(owner, index, value.lane(index).toLong())
-                is LongVector -> putLong(owner, index, value.lane(index))
+                is ByteVector -> putInt(owner, index, value.lane(index).toInt())
+                is ShortVector -> putInt(owner, index, value.lane(index).toInt())
+                is IntVector -> putInt(owner, index, value.lane(index).toInt())
+                is LongVector -> properties[index].setLong(owner, value.lane(index))
                 is FloatVector -> properties[index].setFloat(owner, value.lane(index))
                 is DoubleVector -> properties[index].setDouble(owner, value.lane(index))
                 else -> fault("Unsupported raw vector carrier")
@@ -84,23 +69,23 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         // Return each public carrier directly; a value-producing when joins at the inaccessible AbstractVector.
         when (lane) {
             "Int8Rep", "Word8Rep" -> {
-                var value = ByteVector.broadcast(transport.species as VectorSpecies<Byte>, getLong(owner, 0).toByte())
-                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toByte())
+                var value = ByteVector.broadcast(transport.species as VectorSpecies<Byte>, getInt(owner, 0).toByte())
+                for (index in 1 until lanes) value = value.withLane(index, getInt(owner, index).toByte())
                 return value
             }
             "Int16Rep", "Word16Rep" -> {
-                var value = ShortVector.broadcast(transport.species as VectorSpecies<Short>, getLong(owner, 0).toShort())
-                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toShort())
+                var value = ShortVector.broadcast(transport.species as VectorSpecies<Short>, getInt(owner, 0).toShort())
+                for (index in 1 until lanes) value = value.withLane(index, getInt(owner, index).toShort())
                 return value
             }
             "Int32Rep", "Word32Rep" -> {
-                var value = IntVector.broadcast(transport.species as VectorSpecies<Int>, getLong(owner, 0).toInt())
-                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index).toInt())
+                var value = IntVector.broadcast(transport.species as VectorSpecies<Int>, getInt(owner, 0).toInt())
+                for (index in 1 until lanes) value = value.withLane(index, getInt(owner, index).toInt())
                 return value
             }
             "Int64Rep", "Word64Rep" -> {
-                var value = LongVector.broadcast(transport.species as VectorSpecies<Long>, getLong(owner, 0))
-                for (index in 1 until lanes) value = value.withLane(index, getLong(owner, index))
+                var value = LongVector.broadcast(transport.species as VectorSpecies<Long>, properties[0].getLong(owner))
+                for (index in 1 until lanes) value = value.withLane(index, properties[index].getLong(owner))
                 return value
             }
             "FloatRep" -> {
@@ -125,7 +110,8 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         for (index in 0 until lanes) when (lane) {
             "FloatRep" -> properties[index].setFloat(target, properties[index].getFloat(source))
             "DoubleRep" -> properties[index].setDouble(target, properties[index].getDouble(source))
-            else -> putLong(target, index, getLong(source, index))
+            "Int64Rep", "Word64Rep" -> properties[index].setLong(target, properties[index].getLong(source))
+            else -> putInt(target, index, getInt(source, index))
         }
     }
     /** Target image format stores exact lane bits, not Vector API objects. */
@@ -133,14 +119,17 @@ internal class OwnedVectorFields(val proof: CoreRepresentation, name: String) {
         for (index in 0 until lanes) when (lane) {
             "FloatRep" -> output.writeInt(properties[index].getFloat(owner).toRawBits())
             "DoubleRep" -> output.writeLong(properties[index].getDouble(owner).toRawBits())
-            else -> output.writeLong(getLong(owner, index))
+            "Int64Rep", "Word64Rep" -> output.writeLong(properties[index].getLong(owner))
+            // The image format is deliberately machine-word based.
+            else -> output.writeLong(checkNotNull(narrowLane).widen(getInt(owner, index)))
         }
     }
     internal fun readImage(owner: Any, input: java.io.DataInputStream) {
         for (index in 0 until lanes) when (lane) {
             "FloatRep" -> properties[index].setFloat(owner, Float.fromBits(input.readInt()))
             "DoubleRep" -> properties[index].setDouble(owner, Double.fromBits(input.readLong()))
-            else -> putLong(owner, index, input.readLong())
+            "Int64Rep", "Word64Rep" -> properties[index].setLong(owner, input.readLong())
+            else -> putInt(owner, index, input.readLong().toInt())
         }
     }
     fun restore(owner: Any, frame: Frame, slots: IntArray, offset: Int) {

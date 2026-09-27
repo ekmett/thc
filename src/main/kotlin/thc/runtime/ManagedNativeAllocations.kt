@@ -72,6 +72,8 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
         }
         @TruffleBoundary fun requireLive() { borrow().use {} }
         @TruffleBoundary fun <T> access(body: (MemorySegment) -> T): T = borrow().use { body(it.segment()) }
+        @TruffleBoundary fun accessInt(body: java.util.function.ToIntFunction<MemorySegment>): Int =
+            borrow().use { body.applyAsInt(it.segment()) }
         @TruffleBoundary fun accessLong(body: ToLongFunction<MemorySegment>): Long =
             borrow().use { body.applyAsLong(it.segment()) }
     }

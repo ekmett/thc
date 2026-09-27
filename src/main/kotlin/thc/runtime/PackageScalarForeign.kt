@@ -94,7 +94,7 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
         val values = arrayOfNulls<Any>(call.arguments.size)
         for (index in values.indices) values[index] = when (call.arguments[index]) {
             "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
-                packageCInteger(call.arguments[index], operands[index].executeRequiredLong(frame))
+                packageCInteger(call.arguments[index], operands[index].executeRequiredInt(frame))
             "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> operands[index].executeRequiredLong(frame)
             "FloatRep" -> operands[index].executeRequiredFloat(frame)
             "DoubleRep" -> operands[index].executeRequiredDouble(frame)
@@ -103,7 +103,9 @@ internal class PackageScalarExpression(private val call: PackageScalarCall,
         }
         val state = operands.last().execute(frame)
         when (call.result) {
-            "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" ->
+            "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
+                FrameAccess.writeInt(frame, slots[offset], access.executeInt(values, state))
+            "IntRep", "WordRep", "Int64Rep", "Word64Rep" ->
                 FrameAccess.writeLong(frame, slots[offset], access.executeLong(values, state))
             "FloatRep" -> FrameAccess.writeFloat(frame, slots[offset], access.executeFloat(values, state))
             "DoubleRep" -> FrameAccess.writeDouble(frame, slots[offset], access.executeDouble(values, state))
@@ -123,7 +125,7 @@ internal class BytecodePackageScalarArguments(val call: PackageScalarCall,
         val values = arrayOfNulls<Any>(slots.size)
         for (index in slots.indices) values[index] = when (call.arguments[index]) {
             "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" ->
-                packageCInteger(call.arguments[index], slots[index].getLong(bytecode, frame))
+                packageCInteger(call.arguments[index], slots[index].getInt(bytecode, frame))
             "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> slots[index].getLong(bytecode, frame)
             "FloatRep" -> slots[index].getFloat(bytecode, frame)
             "DoubleRep" -> slots[index].getDouble(bytecode, frame)

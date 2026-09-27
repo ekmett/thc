@@ -197,8 +197,8 @@ class ResizeByteArrayTest {
             if(size==old)assertSame(original,result)
             // Do not turn JVM-zeroed growth into a guest contract: initialize it.
             for(i in old until size)result[i]=(seed+91+17*i).toByte()
-            if(size>0) { ManagedByteArray.write(result,(size-1).toLong(),511);assertEquals(255L,ManagedByteArray.read(result,(size-1).toLong())) }
-            assertThrows(RuntimeFault::class.java) { ManagedByteArray.read(result,size.toLong()) }
+            if(size>0) { ManagedByteArray.write(result,(size-1).toLong(), (511).toInt());assertEquals(255L,ManagedByteArray.read(result,(size-1).toLong()).toLong()) }
+            assertThrows(RuntimeFault::class.java) { ManagedByteArray.read(result,size.toLong()).toLong() }
         }
         for(size in invalidSizes) {
             val original=byteArrayOf(1,2,3)

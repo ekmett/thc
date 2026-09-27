@@ -15,11 +15,11 @@ internal class InstallProcessSignal(@field:Children private var operands: Array<
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Signal installation requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        val signal = operands[0].executeRequiredLong(frame)
-        val action = operands[1].executeRequiredLong(frame)
+        val signal = operands[0].executeRequiredInt(frame).toLong()
+        val action = operands[1].executeRequiredInt(frame).toLong()
         val mask = operands[2].executeRequiredAddress(frame)
         requireVoidCarrier(operands[3].execute(frame))
-        FrameAccess.writeLong(frame, slots[offset], ManagedSignals.install(this, signal, action, mask))
+        FrameAccess.writeInt(frame, slots[offset], ManagedSignals.install(this, signal, action, mask).toInt())
         return null
     }
 }

@@ -60,6 +60,7 @@ internal class AstOperands(@field:Children private var operands: Array<LocalBind
     }
 
     override fun execute(frame: VirtualFrame): Any? = scoped(frame) { prepareBody(frame); body.execute(frame) }
+    override fun executeInt(frame: VirtualFrame): Int = scoped(frame) { prepareBody(frame); body.executeInt(frame) }
     override fun executeLong(frame: VirtualFrame): Long = scoped(frame) { prepareBody(frame); body.executeLong(frame) }
     override fun executeFloat(frame: VirtualFrame): Float = scoped(frame) { prepareBody(frame); body.executeFloat(frame) }
     override fun executeDouble(frame: VirtualFrame): Double = scoped(frame) { prepareBody(frame); body.executeDouble(frame) }

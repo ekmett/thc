@@ -43,7 +43,7 @@ class BytecodeProcessArgumentsTest {
                                 null -> state
                                 else -> error("Unexpected process argument metadata: $representation")
                             }.also { value ->
-                                if (value is Long) locals[index].setLong(bytecode, frame, value)
+                                if (value is Long) locals[index].setInt(bytecode, frame, value.toInt())
                                 else locals[index].setObject(bytecode, frame, value)
                             }
                         }

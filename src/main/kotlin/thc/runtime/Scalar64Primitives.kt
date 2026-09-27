@@ -61,25 +61,34 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     PLUS_WORD_2("plusWord2#"), TIMES_WORD_2("timesWord2#"),
     TIMES_INT_2("timesInt2#", resultArity = 3);
 
+    val isInt: Boolean = narrowBits < 64
+    private fun narrowInt(value: Int): Int = if (narrowBits == 32) value
+        else if (unsigned) value and ((1 shl narrowBits) - 1)
+        else (value shl (32 - narrowBits)) shr (32 - narrowBits)
+    fun firstInt(left: Int, right: Int): Int {
+        if (!isInt) fault("Expected narrow tuple arithmetic")
+        val x = narrowInt(left); val y = narrowInt(right)
+        if (y == 0) fault("Undefined input to $primitive")
+        return narrowInt(if (unsigned) Integer.divideUnsigned(x, y) else x / y)
+    }
+    fun secondInt(left: Int, right: Int): Int {
+        if (!isInt) fault("Expected narrow tuple arithmetic")
+        val x = narrowInt(left); val y = narrowInt(right)
+        if (y == 0) fault("Undefined input to $primitive")
+        return narrowInt(if (unsigned) Integer.remainderUnsigned(x, y) else x % y)
+    }
+
     private fun divisionDomain(left: Long, right: Long) {
         if (right == 0L || this == QUOT_REM_INT && left == Long.MIN_VALUE && right == -1L) {
             CompilerDirectives.transferToInterpreter()
             throw RuntimeFault("Undefined input to $primitive")
         }
     }
-    private fun narrow(value: Long): Long = if (unsigned) value and (-1L ushr (64 - narrowBits))
-        else (value shl (64 - narrowBits)) shr (64 - narrowBits)
     fun first(left: Long, right: Long): Long = when (this) {
         QUOT_REM_INT -> { divisionDomain(left, right); left / right }
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.divideUnsigned(left, right) }
-        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 -> {
-            val x = narrow(left); val y = narrow(right)
-            if (y == 0L) {
-                CompilerDirectives.transferToInterpreter()
-                throw RuntimeFault("Undefined input to $primitive")
-            }
-            narrow(x / y)
-        }
+        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 ->
+            fault("Narrow tuple arithmetic requires Int operands")
         QUOT_REM_WORD_2 -> error("Double-word division needs three operands")
         ADD_INT_C, ADD_WORD_C -> left + right
         SUB_INT_C, SUB_WORD_C -> left - right
@@ -90,14 +99,8 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     fun second(left: Long, right: Long): Long = when (this) {
         QUOT_REM_INT -> { divisionDomain(left, right); left % right }
         QUOT_REM_WORD -> { divisionDomain(left, right); java.lang.Long.remainderUnsigned(left, right) }
-        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 -> {
-            val x = narrow(left); val y = narrow(right)
-            if (y == 0L) {
-                CompilerDirectives.transferToInterpreter()
-                throw RuntimeFault("Undefined input to $primitive")
-            }
-            narrow(x % y)
-        }
+        QUOT_REM_INT8, QUOT_REM_INT16, QUOT_REM_INT32, QUOT_REM_WORD8, QUOT_REM_WORD16, QUOT_REM_WORD32 ->
+            fault("Narrow tuple arithmetic requires Int operands")
         QUOT_REM_WORD_2 -> error("Double-word division needs three operands")
         ADD_INT_C -> if (((left xor (left + right)) and (right xor (left + right))) < 0) 1L else 0L
         SUB_INT_C -> if (((left xor right) and (left xor (left - right))) < 0) 1L else 0L
@@ -113,7 +116,7 @@ internal enum class TupleArithmeticOp(val primitive: String, val resultArity: In
     }
     fun validate(arguments: List<CoreRepresentation>, lifted: List<*>, result: CoreRepresentation) {
         if (arguments.size != argumentArity) throw RuntimeFault("Primitive arity mismatch: $primitive")
-        fun scalar(rep: CoreRepresentation): Boolean = !rep.isAggregate && !rep.isVector && rep.kind == CoreKind.LONG
+        fun scalar(rep: CoreRepresentation): Boolean = !rep.isTypedTransport && if (isInt) rep.isInt else rep.isLong
         if (lifted.size != argumentArity || lifted.any { it != false } || arguments.any { !scalar(it) })
             throw RuntimeFault("Tuple primitive argument representation mismatch: $primitive")
         if (!result.isTuple || result.components!!.size != resultArity ||
@@ -170,6 +173,13 @@ internal class TupleArithmeticExpression(private val operation: TupleArithmeticO
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Tuple primitive requires a destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation.isInt) {
+            val x = left.executeRequiredInt(frame)
+            val y = right.executeRequiredInt(frame)
+            FrameAccess.writeInt(frame, slots[offset], operation.firstInt(x, y))
+            FrameAccess.writeInt(frame, slots[offset + 1], operation.secondInt(x, y))
+            return null
+        }
         val x = left.executeRequiredLong(frame)
         val y = right.executeRequiredLong(frame)
         val first = operation.first(x, y)

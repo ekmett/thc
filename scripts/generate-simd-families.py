@@ -18,18 +18,18 @@ ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / 'scripts/simd-families.json'
 # primitive scalar type, bit width, Java Vector type, Kotlin scalar accessor
 LANES = {
-    'Int8Rep': ('byte', 8, 'ByteVector', 'Long'),
-    'Word8Rep': ('byte', 8, 'ByteVector', 'Long'),
-    'Int16Rep': ('short', 16, 'ShortVector', 'Long'),
-    'Word16Rep': ('short', 16, 'ShortVector', 'Long'),
-    'Int32Rep': ('int', 32, 'IntVector', 'Long'),
-    'Word32Rep': ('int', 32, 'IntVector', 'Long'),
+    'Int8Rep': ('byte', 8, 'ByteVector', 'Int'),
+    'Word8Rep': ('byte', 8, 'ByteVector', 'Int'),
+    'Int16Rep': ('short', 16, 'ShortVector', 'Int'),
+    'Word16Rep': ('short', 16, 'ShortVector', 'Int'),
+    'Int32Rep': ('int', 32, 'IntVector', 'Int'),
+    'Word32Rep': ('int', 32, 'IntVector', 'Int'),
     'Word64Rep': ('long', 64, 'LongVector', 'Long'),
     'Int64Rep': ('long', 64, 'LongVector', 'Long'),
     'FloatRep': ('float', 32, 'FloatVector', 'Float'),
     'DoubleRep': ('double', 64, 'DoubleVector', 'Double'),
 }
-UNSIGNED_MASK = {'Word8Rep': '0xffL', 'Word16Rep': '0xffffL', 'Word32Rep': '0xffff_ffffL'}
+UNSIGNED_MASK = {'Word8Rep': '0xff', 'Word16Rep': '0xffff'}
 BINARY = {'plus': 'add', 'minus': 'subtract', 'times': 'multiply', 'divide': 'divide', 'min': 'min', 'max': 'max', 'quot': 'quot', 'rem': 'rem'}
 VECTOR_METHOD = {'add': 'add', 'subtract': 'sub', 'multiply': 'mul', 'divide': 'div', 'min': 'min', 'max': 'max'}
 LEGACY_INSERT = {'Int8X16', 'Word8X16', 'Int16X8', 'Word16X8', 'Int32X4', 'Word32X4', 'Int64X2', 'FloatX4', 'DoubleX2'}
@@ -133,7 +133,7 @@ def proof_code(fs):
     lines = [HEADER, 'package thc.runtime\n', 'internal object GeneratedVectors {',
              '    private val index = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))']
     for f in fs:
-        n=f['name']; kind=LANES[f['laneRep']][3].upper();count=f['lanes'];rep=f['laneRep']
+        n=f['name']; kind=LANES[f['laneRep']][3].upper();kind='LONG' if kind == 'INT' else kind;count=f['lanes'];rep=f['laneRep']
         lines += [f'    val vector{n} = CoreVector({count}, "{f["element"]}")',
                   f'    val proof{n} = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep {count} {f["element"]}"), vector = vector{n})',
                   f'    private val lane{n} = CoreRepresentation(CoreKind.{kind}, true, true, listOf("{rep}"))',
@@ -181,8 +181,8 @@ def ast_code(fs):
                       f'        val value = {checked(f, "argument.execute(frame)")}']
             mask = UNSIGNED_MASK.get(f['laneRep'])
             for i in range(count):
-                lane = (f'value.lane({i}).toLong() and {mask}' if mask
-                        else f'value.lane({i}).toLong()' if cast else f'value.lane({i})')
+                lane = (f'value.lane({i}).toInt() and {mask}' if mask
+                        else f'value.lane({i}).toInt()' if cast else f'value.lane({i})')
                 lines.append(f'        FrameAccess.write{access}(frame, slots[offset + {i}], {lane})')
             lines += ['        return null','    }','}']
         if 'shuffle' in f['operations']:

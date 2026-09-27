@@ -9,8 +9,9 @@ Both backends implement the remaining non-vector arithmetic operations:
 
 The narrow quotient/remainder operations return quotient first, remainder second,
 with signed truncation toward zero or unsigned division according to the operation.
-Narrow signed values retain sign-extended Long carriers; unsigned values retain
-zero-extended carriers. Logical right shifts zero-fill the selected narrow width,
+Narrow values compute in `Int`: signed 8/16-bit values are sign-extended,
+unsigned 8/16-bit values are zero-extended, and `Word32` retains raw bits.
+Logical right shifts zero-fill the selected narrow width,
 then restore its signed carrier (so a shift of zero preserves a negative input).
 Unchecked shift counts have the GHC domain `0 <= count < width`.
 

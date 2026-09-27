@@ -106,8 +106,8 @@ internal class EnvironmentExpression(private val operation: EnvironmentOp,
         val environment = Language.currentState(this).environment
         when (operation) {
             EnvironmentOp.GET -> FrameAccess.writeObject(frame, slots[offset], environment.get(address!!))
-            EnvironmentOp.PUT -> FrameAccess.writeLong(frame, slots[offset], environment.put(address!!))
-            EnvironmentOp.UNSET -> FrameAccess.writeLong(frame, slots[offset], environment.unset(address!!))
+            EnvironmentOp.PUT -> FrameAccess.writeInt(frame, slots[offset], environment.put(address!!).toInt())
+            EnvironmentOp.UNSET -> FrameAccess.writeInt(frame, slots[offset], environment.unset(address!!).toInt())
             EnvironmentOp.ENUMERATE -> FrameAccess.writeObject(frame, slots[offset], environment.environ())
         }
         return null

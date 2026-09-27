@@ -15,7 +15,8 @@ corrupted copies of genuine tuple and helper-call metadata on every preparation.
 The four existing runtime test classes retain their exact first-installed-call
 counts, target identities, validity and handoff cleanup assertions.
 Runtime literal checks follow the lowered carrier contract: duplicate integral
-annotations share `Long`, while the literal tag supplies narrowing. Wrong physical
+narrow annotations share `Int`, while the literal tag supplies narrowing; machine
+and explicit 64-bit `Long` annotations are different carriers. Wrong physical
 carriers, signed literal tags at unsigned vector signatures, malformed aggregate
 proofs, and vector shape mismatches remain rejection tests. The exporter audits
 continue checking exact source-level representations independently.

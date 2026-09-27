@@ -75,6 +75,9 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     @field:CompilationFinal internal var leadingCaseReturn: LeadingCaseReturn? = null
         private set
     internal fun configureLeadingCaseReturn(recipe: LeadingCaseReturn?) { leadingCaseReturn = recipe }
+    @field:CompilationFinal internal var scalarResultProof: CoreRepresentation = CoreRepresentation.UNKNOWN
+        private set
+    internal fun configureScalarResult(proof: CoreRepresentation) { scalarResultProof = proof }
     @field:CompilationFinal internal var tupleResult: TupleShape? = null
         private set
     internal fun configureTupleResult(shape: TupleShape?) { tupleResult = shape }

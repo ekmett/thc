@@ -304,14 +304,14 @@ class ManagedAllocationTest {
     @Test fun scalarArrayFieldsStayUsableBeforeAndAfterPointerInstallation() {
         val storage = ManagedAllocation.mutable(32, 8)
         val target = ManagedAddress.fromAllocation(storage).plus(24)
-        ManagedByteArray.writeGuest(storage, 16, 9)
-        assertEquals(9L, ManagedByteArray.readGuest(storage, 16, true))
+        ManagedByteArray.writeGuest(storage, 16, (9).toInt())
+        assertEquals(9L, ManagedByteArray.readGuest(storage, 16, true).toLong())
         storage.writeAddressByteOffset(0, target)
-        assertEquals(9L, ManagedByteArray.readGuest(storage, 16, true))
-        ManagedByteArray.writeInt32Guest(storage, 5, 0x12345678)
-        assertEquals(0x12345678L, ManagedByteArray.readInt32Guest(storage, 5, true))
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readGuest(storage, 0, true) }
-        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32Guest(storage, 0, 0) }
+        assertEquals(9L, ManagedByteArray.readGuest(storage, 16, true).toLong())
+        ManagedByteArray.writeInt32Guest(storage, 5, (0x12345678).toInt())
+        assertEquals(0x12345678L, Integer.toUnsignedLong(ManagedByteArray.readInt32Guest(storage, 5, true)))
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.readGuest(storage, 0, true).toLong() }
+        assertThrows(RuntimeFault::class.java) { ManagedByteArray.writeInt32Guest(storage, 0, (0).toInt()) }
         assertSame(target, storage.readAddressByteOffset(0))
         assertEquals(9L, storage.readByte(16))
         val copied = ManagedAllocation.mutable(32, 8)

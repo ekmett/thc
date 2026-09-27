@@ -61,6 +61,9 @@ internal class AstSelfLayout(
                 if (frame.isDouble(source)) frame.getDouble(source)
                 else if (frame.isObject(source)) frame.getObject(source) as? Double ?: fault("Expected primitive Double argument")
                 else fault("Expected primitive Double argument"))
+            else if (argumentProofs[i].isInt) FrameAccess.writeInt(frame, destination,
+                if (frame.isInt(source)) frame.getInt(source)
+                else FrameAccess.read(frame, source) as? Int ?: fault("Expected primitive Int argument"))
             else if (frame.isLong(source)) FrameAccess.writeLong(frame, destination, frame.getLong(source))
             else if (argumentProofs[i].isLong) {
                 val value = FrameAccess.read(frame, source) as? Long ?: fault("Expected primitive Long argument")

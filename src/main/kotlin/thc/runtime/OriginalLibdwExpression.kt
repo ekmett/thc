@@ -24,7 +24,7 @@ internal class OriginalLibdwExpression(private val operation: LibdwForeignOp,
         if (firstOperands == null) CompilerDirectives.transferToInterpreter()
         for (index in 0 until firstOperands.lastIndex) operands[index].executeRequiredAddress(frame)
         requireVoidCarrier(operands.last().execute(frame))
-        if (operation == LibdwForeignOp.LOOKUP) FrameAccess.writeLong(frame, slots[offset], 1L)
+        if (operation == LibdwForeignOp.LOOKUP) FrameAccess.writeInt(frame, slots[offset], 1)
         else if (operation != LibdwForeignOp.CLEAR)
             FrameAccess.writeObject(frame, slots[offset], ManagedAddress.nullAddress())
         return null

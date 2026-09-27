@@ -84,7 +84,7 @@ class GhcBCOTest {
     }
 
     private fun code(vararg values: Int) = ByteArray(values.size * 2).also { bytes ->
-        values.forEachIndexed { index, value -> ManagedByteArray.writeInt16(bytes, index.toLong(), value.toLong()) }
+        values.forEachIndexed { index, value -> ManagedByteArray.writeInt16(bytes, index.toLong(), (value.toLong()).toInt()) }
     }
     private fun words(vararg values: Long) = ByteArray(values.size * 8).also { bytes ->
         values.forEachIndexed { index, value -> ManagedByteArray.writeInt(bytes, index.toLong(), value) }

@@ -126,7 +126,8 @@ class RtsFlagsTest {
                 val program = if (backend == "ast") Program(language, getterModule(layout))
                     else BytecodeProgram(language, getterModule(layout))
                 val target = program.entryTarget("read")
-                repeat(3) { assertEquals(1L, Calls.target(target, arrayOf(0L, Unit))) }
+                assertTrue((target.rootNode as GuestRoot).scalarResultProof.isInt)
+                repeat(3) { assertEquals(1, Calls.target(target, arrayOf(0L, Unit))) }
             } finally { threads.leaveCurrent(); context.leave() }
         }
     }

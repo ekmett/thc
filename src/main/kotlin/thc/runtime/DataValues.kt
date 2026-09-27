@@ -204,6 +204,11 @@ class DataLayout private constructor(
     }
 
     /** Keep the value private until every final field has been initialized exactly once. */
+    internal fun createInt(field: Int): DataValue {
+        if (arity != 1 || !fields[0].isInt()) fault("Expected one primitive Int constructor field")
+        return allocate().also { fields[0].initializeInt(it, field) }
+    }
+
     @JvmName("allocate")
     internal fun allocate(): DataValue {
         val value = nullaryValue ?: shape.factory.create(this, allocationKey)
@@ -219,6 +224,13 @@ class DataLayout private constructor(
     }
 
     /** A primitive producer can initialize its property without an Object-array bridge. */
+    @JvmName("initializeInt")
+    internal fun initializeInt(value: DataValue, index: Int, field: Int) {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        fields[index].initializeInt(value, field)
+    }
+
     @JvmName("initializeLong")
     internal fun initializeLong(value: DataValue, index: Int, field: Long) {
         if (!owns(value)) fault("Constructor value does not match layout")
@@ -330,7 +342,7 @@ class DataLayout private constructor(
             "AddrRep" -> output.writeLong((field.read(value) as ManagedAddress).toNativeBits())
             "FloatRep" -> output.writeInt(field.readFloat(value).toRawBits())
             "DoubleRep" -> output.writeLong(field.readDouble(value).toRawBits())
-            else -> output.writeLong(field.readLong(value))
+            else -> output.writeLong(if (field.isInt()) field.narrowInteger!!.widen(field.readInt(value)) else field.readLong(value))
         }
     }
     internal fun readCompactScalar(value: DataValue, index: Int, input: java.io.DataInputStream) {
@@ -341,13 +353,14 @@ class DataLayout private constructor(
             "AddrRep" -> NativeAddresses.current(null).recover(input.readLong())
             "FloatRep" -> Float.fromBits(input.readInt())
             "DoubleRep" -> Double.fromBits(input.readLong())
-            else -> input.readLong()
+            else -> if (field.isInt()) input.readLong().toInt() else input.readLong()
         })
     }
 
     /** Cold closure inspection preserves a raw vector field instead of entering it. */
     internal fun inspect(value: DataValue, index: Int): Any? =
-        if (isVector(index)) checkedVector(value, index).restoreRaw(value) else read(value, index)
+        if (isVector(index)) checkedVector(value, index).restoreRaw(value)
+        else if (isInt(index)) fields[index].narrowInteger!!.widen(readInt(value, index)) else read(value, index)
 
     /** The RTS selector in atomicModifyMutVar2# requires a lifted first field. */
     internal fun readFirstLifted(value: DataValue): Any? {
@@ -358,6 +371,16 @@ class DataLayout private constructor(
         })
             fault("atomicModifyMutVar2# requires a lifted first record field")
         return read(value, 0)
+    }
+
+    fun isInt(index: Int): Boolean {
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].isInt()
+    }
+    fun readInt(value: DataValue, index: Int): Int {
+        if (!owns(value)) fault("Constructor value does not match layout")
+        if (index < 0 || index >= arity) fault("Invalid constructor field index")
+        return fields[index].readInt(value)
     }
 
     fun isLong(index: Int): Boolean {
@@ -412,9 +435,9 @@ class DataLayout private constructor(
     private class Field(index: Int, representation: String, referenceType: Class<*>?, vectorProof: CoreRepresentation?) {
         val vector = vectorProof?.let { OwnedVectorFields(it, "field_$index") }
         val isLifted = representation == "LiftedRep"
-        private val kind = if (vector != null) VECTOR else when (representation) {
-            "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep",
-            "Int32Rep", "Word32Rep", "Int64Rep", "Word64Rep" -> LONG
+        val narrowInteger = NarrowInteger.fromRep(representation)
+        private val kind = if (vector != null) VECTOR else if (narrowInteger != null) INT else when (representation) {
+            "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> LONG
             "FloatRep" -> FLOAT
             "DoubleRep" -> DOUBLE
             "LiftedRep", "UnliftedRep", "AddrRep" -> OBJECT
@@ -432,6 +455,7 @@ class DataLayout private constructor(
 
         fun register(builder: StaticShape.Builder) {
             when (kind) {
+                INT -> builder.property(property, narrowInteger!!.storageClass, true)
                 LONG -> builder.property(property, Long::class.javaPrimitiveType, true)
                 FLOAT -> builder.property(property, Float::class.javaPrimitiveType, true)
                 DOUBLE -> builder.property(property, Double::class.javaPrimitiveType, true)
@@ -444,6 +468,7 @@ class DataLayout private constructor(
 
         fun initialize(value: DataValue, field: Any?) {
             when (kind) {
+                INT -> narrowInteger!!.write(property, value, field as? Int ?: fault("Expected primitive Int constructor field"))
                 LONG -> property.setLong(value, field as? Long ?: fault("Expected primitive Long constructor field"))
                 FLOAT -> property.setFloat(value, field as? Float ?: fault("Expected primitive Float constructor field"))
                 DOUBLE -> property.setDouble(value, field as? Double ?: fault("Expected primitive Double constructor field"))
@@ -452,6 +477,11 @@ class DataLayout private constructor(
                 VOID -> if (field !== Unit) fault("Expected zero-width constructor field")
                 VECTOR -> fault("Vector constructor field requires vector-aware initialization")
             }
+        }
+
+        fun initializeInt(value: DataValue, field: Int) {
+            if (kind != INT) fault("Constructor field is not primitive Int")
+            narrowInteger!!.write(property, value, field)
         }
 
         fun initializeLong(value: DataValue, field: Long) {
@@ -469,6 +499,7 @@ class DataLayout private constructor(
         }
 
         fun read(value: DataValue): Any? = when (kind) {
+            INT -> narrowInteger!!.read(property, value)
             LONG -> property.getLong(value)
             FLOAT -> property.getFloat(value)
             DOUBLE -> property.getDouble(value)
@@ -477,11 +508,17 @@ class DataLayout private constructor(
             else -> Unit
         }
 
+        fun isInt(): Boolean = kind == INT
         fun isLong(): Boolean = kind == LONG
         fun isFloat(): Boolean = kind == FLOAT
         fun isDouble(): Boolean = kind == DOUBLE
         fun isVoid(): Boolean = kind == VOID
         fun acceptsReference(value: Any?): Boolean = kind == OBJECT && !address && referenceType.isInstance(value)
+
+        fun readInt(value: DataValue): Int {
+            if (kind != INT) fault("Constructor field is not primitive Int")
+            return narrowInteger!!.read(property, value)
+        }
 
         fun readLong(value: DataValue): Long {
             if (kind != LONG) fault("Constructor field is not primitive Long")
@@ -499,6 +536,7 @@ class DataLayout private constructor(
 
         fun restore(value: DataValue, frame: Frame, slot: Int) {
             when (kind) {
+                INT -> FrameAccess.writeInt(frame, slot, narrowInteger!!.read(property, value))
                 LONG -> FrameAccess.writeLong(frame, slot, property.getLong(value))
                 FLOAT -> FrameAccess.writeFloat(frame, slot, property.getFloat(value))
                 DOUBLE -> FrameAccess.writeDouble(frame, slot, property.getDouble(value))
@@ -515,6 +553,7 @@ class DataLayout private constructor(
             private const val FLOAT = 3
             private const val DOUBLE = 4
             private const val VECTOR = 5
+            private const val INT = 6
         }
     }
 }

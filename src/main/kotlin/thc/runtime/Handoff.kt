@@ -20,6 +20,7 @@ import thc.Language
 internal const val HANDOFF_PROPERTY = "thc.handoffSlabs"
 private val EMPTY_HANDOFF_ARGUMENTS: Array<Any?> = emptyArray()
 private object HandoffComplete
+private object HandoffIntComplete
 
 /**
  * Typed runtime transport storage for arguments or results.
@@ -74,31 +75,37 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         }, false) }
     }.build(HandoffStorage::class.java, HandoffFactory::class.java)
     fun create(): HandoffStorage = shape.factory.create(this)
-    fun isLong(index: Int): Boolean = kinds[index] == 0 || kinds[index] in 4..9
+    fun isInt(index: Int): Boolean = kinds[index] in 4..9
+    fun isLong(index: Int): Boolean = kinds[index] == 0
     fun isFloat(index: Int): Boolean = kinds[index] == 1
     fun isDouble(index: Int): Boolean = kinds[index] == 2
     fun isObject(index: Int): Boolean = kinds[index] == 3 || kinds[index] == 10
-    fun getLong(storage: HandoffStorage, index: Int): Long = when (kinds[index]) {
-        0 -> fields[index].getLong(storage)
-        4 -> fields[index].getByte(storage).toLong()
-        5 -> fields[index].getByte(storage).toLong() and 255L
-        6 -> fields[index].getShort(storage).toLong()
-        7 -> fields[index].getShort(storage).toLong() and 65535L
-        8 -> fields[index].getInt(storage).toLong()
-        9 -> fields[index].getInt(storage).toLong() and 4294967295L
-        else -> fault("Expected integral handoff field")
+    fun getInt(storage: HandoffStorage, index: Int): Int = when (kinds[index]) {
+        4 -> fields[index].getByte(storage).toInt()
+        5 -> fields[index].getByte(storage).toInt() and 255
+        6 -> fields[index].getShort(storage).toInt()
+        7 -> fields[index].getShort(storage).toInt() and 65535
+        8, 9 -> fields[index].getInt(storage)
+        else -> fault("Expected Int handoff field")
+    }
+    fun getLong(storage: HandoffStorage, index: Int): Long {
+        if (!isLong(index)) fault("Expected Long handoff field")
+        return fields[index].getLong(storage)
     }
     fun getFloat(storage: HandoffStorage, index: Int): Float = fields[index].getFloat(storage)
     fun getDouble(storage: HandoffStorage, index: Int): Double = fields[index].getDouble(storage)
     fun getObject(storage: HandoffStorage, index: Int): Any? = fields[index].getObject(storage)
     fun setObject(storage: HandoffStorage, index: Int, value: Any?) =
         fields[index].setObject(storage, if (vectors[index] == null) value else vectors[index]!!.require(value))
-    fun setLong(storage: HandoffStorage, index: Int, value: Long) = when (kinds[index]) {
-        0 -> fields[index].setLong(storage, value)
+    fun setInt(storage: HandoffStorage, index: Int, value: Int) = when (kinds[index]) {
         4, 5 -> fields[index].setByte(storage, value.toByte())
         6, 7 -> fields[index].setShort(storage, value.toShort())
-        8, 9 -> fields[index].setInt(storage, value.toInt())
-        else -> fault("Expected integral handoff field")
+        8, 9 -> fields[index].setInt(storage, value)
+        else -> fault("Expected Int handoff field")
+    }
+    fun setLong(storage: HandoffStorage, index: Int, value: Long) {
+        if (!isLong(index)) fault("Expected Long handoff field")
+        fields[index].setLong(storage, value)
     }
     fun setFloat(storage: HandoffStorage, index: Int, value: Float) = fields[index].setFloat(storage, value)
     fun setDouble(storage: HandoffStorage, index: Int, value: Double) = fields[index].setDouble(storage, value)
@@ -106,7 +113,8 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         check(values.size == fields.size)
         for (i in fields.indices) {
             when (kinds[i]) {
-                0, 4, 5, 6, 7, 8, 9 -> setLong(storage, i, values[i] as? Long ?: fault("Invalid primitive handoff field"))
+                0 -> setLong(storage, i, values[i] as? Long ?: fault("Invalid Long handoff field"))
+                4, 5, 6, 7, 8, 9 -> setInt(storage, i, values[i] as? Int ?: fault("Invalid Int handoff field"))
                 1 -> fields[i].setFloat(storage, values[i] as? Float ?: fault("Invalid Float handoff field"))
                 2 -> fields[i].setDouble(storage, values[i] as? Double ?: fault("Invalid Double handoff field"))
                 else -> setObject(storage, i, values[i])
@@ -127,12 +135,12 @@ class HandoffLayout(language: Language, val id: Int, val reps: List<String>) {
         internal fun supportsResult(rep: String): Boolean = supports(rep) || rep in setOf("FloatRep", "DoubleRep", "AddrRep")
         internal fun fieldKind(rep: String): String = when {
             rep in VECTOR_REPS -> rep
-            rep == "VectorLane Int8Rep" -> "int8-lane"
-            rep == "VectorLane Word8Rep" -> "word8-lane"
-            rep == "VectorLane Int16Rep" -> "int16-lane"
-            rep == "VectorLane Word16Rep" -> "word16-lane"
-            rep == "VectorLane Int32Rep" -> "int32-lane"
-            rep == "VectorLane Word32Rep" -> "word32-lane"
+            rep == "Int8Rep" || rep == "VectorLane Int8Rep" -> "int8-lane"
+            rep == "Word8Rep" || rep == "VectorLane Word8Rep" -> "word8-lane"
+            rep == "Int16Rep" || rep == "VectorLane Int16Rep" -> "int16-lane"
+            rep == "Word16Rep" || rep == "VectorLane Word16Rep" -> "word16-lane"
+            rep == "Int32Rep" || rep == "VectorLane Int32Rep" -> "int32-lane"
+            rep == "Word32Rep" || rep == "VectorLane Word32Rep" -> "word32-lane"
             rep in LONG_REPS -> "long"
             rep == "FloatRep" -> "float"
             rep == "DoubleRep" -> "double"
@@ -192,7 +200,8 @@ internal class HandoffState {
     val arguments = HandoffPool()
     val results = TupleResultPool()
     var pending: HandoffStorage? = null
-    // Synchronous Long-only return register. Consume immediately after the completion token.
+    // Synchronous typed return registers. Consume immediately after the matching token.
+    var returnInt = 0
     var returnLong = 0L
     var calls = 0L
     var tailTransfers = 0L
@@ -206,7 +215,8 @@ internal class HandoffEntry(
     val arguments: HandoffLayout,
     val resultLong: Boolean,
     @field:CompilationFinal(dimensions = 1) val snapshotSlots: IntArray,
-    val destinationSlot: Int
+    val destinationSlot: Int,
+    val resultInt: Boolean = false
 ) {
     fun state(): HandoffState = language.handoffState.get()
     fun destination(frame: VirtualFrame): Int = frame.getLong(destinationSlot).toInt()
@@ -214,7 +224,8 @@ internal class HandoffEntry(
     @ExplodeLoop fun snapshot(frame: VirtualFrame, input: HandoffStorage) {
         check(input.layout === arguments && input.live)
         for (i in snapshotSlots.indices) {
-            if (arguments.isLong(i)) FrameAccess.writeLong(frame, snapshotSlots[i], arguments.getLong(input, i))
+            if (arguments.isInt(i)) FrameAccess.writeInt(frame, snapshotSlots[i], arguments.getInt(input, i))
+            else if (arguments.isLong(i)) FrameAccess.writeLong(frame, snapshotSlots[i], arguments.getLong(input, i))
             else FrameAccess.write(frame, snapshotSlots[i], arguments.getObject(input, i))
         }
     }
@@ -223,6 +234,11 @@ internal class HandoffEntry(
         state().returnLong = value
         return HandoffComplete
     }
+    fun finishInt(frame: VirtualFrame, value: Int): Any {
+        check(destination(frame) >= 0)
+        state().returnInt = value
+        return HandoffIntComplete
+    }
     companion object {
         fun create(language: TruffleLanguage<*>?, layout: FrameLayout, argumentReps: List<CoreRepresentation>,
                    resultRep: CoreRepresentation, hasEnvironment: Boolean): HandoffEntry? {
@@ -230,12 +246,12 @@ internal class HandoffEntry(
             if (argumentReps.any { it.isTuple && !it.isEmptyTuple }) return null
             if (!thc.handoffLayouts.enabled || resultRep.isAggregate) return null
             val resultReference = resultRep.primReps?.singleOrNull()?.startsWith("BoxedRep ") == true
-            if (!resultRep.isLong && !resultReference) return null
+            if (!resultRep.isInt && !resultRep.isLong && !resultReference) return null
             val reps = argumentReps.filterNot { it.isEmptyTuple }.map { it.primReps?.singleOrNull() ?: return null }
             if (!reps.all(HandoffLayout::supports)) return null
             val packetReps = listOf("WordRep") + (if (hasEnvironment) listOf("BoxedRep (Just Unlifted)") else emptyList()) + reps
             return HandoffEntry(thc, thc.handoffLayouts.intern(packetReps), resultRep.isLong,
-                IntArray(packetReps.size) { layout.bind("<handoff entry $it>") }, layout.bind("<handoff result destination>"))
+                IntArray(packetReps.size) { layout.bind("<handoff entry $it>") }, layout.bind("<handoff result destination>"), resultRep.isInt)
         }
     }
 }
@@ -288,7 +304,7 @@ internal class HandoffCaller(private val target: RootCallTarget, private val ent
         try {
             val result = action()
             // Decode only our private token: an ordinary boxed result retains identity.
-            return if (result === HandoffComplete) state.returnLong else result
+            return if (result === HandoffIntComplete) state.returnInt else if (result === HandoffComplete) state.returnLong else result
         } finally { state.pending = oldPending }
     }
 

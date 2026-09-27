@@ -58,7 +58,7 @@ is the machine-readable declaration used by the auditor.
 | Area | Contracts and evidence |
 | --- | --- |
 | Core proofs | [Representation evidence, strictness and local joins](core-evidence.md); [aggregate layouts](aggregate-layout.md); [shared scalar signatures](scalar-primitive-signatures.md) |
-| Integer scalars | [Unsigned machine/narrow operations](integer-primops.md), [signed narrow operations](signed-narrow-primops.md), [Int64 conversions](int64-conversions.md), [explicit Int64/Word64 operations](explicit64-primops.md), [bit operations](bit-primops.md) |
+| Integer scalars | [Narrow integer carriers](narrow-integer-carriers.md), [unsigned machine/narrow operations](integer-primops.md), [signed narrow operations](signed-narrow-primops.md), [Int64 conversions](int64-conversions.md), [explicit Int64/Word64 operations](explicit64-primops.md), [bit operations](bit-primops.md) |
 | Floating scalars | [Float/Double arithmetic, conversions, square roots, raw bit casts and integer decomposition](floating-primitives.md) |
 | Tuple arithmetic | [Quotient/remainder, overflow and carry results](tuple-arithmetic.md) |
 | Remaining scalar integer operations | [Narrow division, logical shifts, double-word division and overflow](integer-completion.md) |

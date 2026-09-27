@@ -32,28 +32,14 @@ internal fun fault(message: String): Nothing {
     CompilerDirectives.transferToInterpreterAndInvalidate()
     throw RuntimeFault(message)
 }
-/** Narrow unsigned carriers are zero-extended Longs, unlike signed Int8/16/32 carriers. */
+/** Machine-word narrowing retains the Word# Long carrier. */
 internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
-    "wordToWord8#", "word8ToWord#", "int8ToWord8#", "narrow8Word#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
-    "quotWord8#", "remWord8#", "eqWord8#", "neWord8#", "gtWord8#", "geWord8#", "andWord8#", "orWord8#", "xorWord8#", "notWord8#", "uncheckedShiftLWord8#", "uncheckedShiftRLWord8#" -> 0xffL
-    "wordToWord16#", "word16ToWord#", "int16ToWord16#", "narrow16Word#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
-    "quotWord16#", "remWord16#", "eqWord16#", "neWord16#", "gtWord16#", "geWord16#", "andWord16#", "orWord16#", "xorWord16#", "notWord16#", "uncheckedShiftLWord16#", "uncheckedShiftRLWord16#" -> 0xffffL
-    "wordToWord32#", "word32ToWord#", "int32ToWord32#", "narrow32Word#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#",
-    "quotWord32#", "remWord32#", "eqWord32#", "neWord32#", "gtWord32#", "geWord32#", "andWord32#", "orWord32#", "xorWord32#", "notWord32#", "uncheckedShiftLWord32#", "uncheckedShiftRLWord32#" -> 0xffff_ffffL
+    "narrow8Word#" -> 0xffL
+    "narrow16Word#" -> 0xffffL
+    "narrow32Word#" -> 0xffff_ffffL
     else -> 0L
 }
-/** Fixed-width signed arithmetic retains canonical sign-extended Long carriers. */
-internal fun narrowIntPrimitiveShift(name: String): Int = when (name) {
-    "uncheckedShiftRLInt8#" -> 56
-    "uncheckedShiftRLInt16#" -> 48
-    "uncheckedShiftRLInt32#" -> 32
-    "word8ToInt8#", "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#", "uncheckedShiftLInt8#", "uncheckedShiftRAInt8#" -> 56
-    "word16ToInt16#", "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#", "uncheckedShiftLInt16#", "uncheckedShiftRAInt16#" -> 48
-    "word32ToInt32#", "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#", "uncheckedShiftLInt32#", "uncheckedShiftRAInt32#" -> 32
-    else -> 0
-}
-private fun signedNarrow(value: Long, shift: Int): Long = (value shl shift) shr shift
-internal fun narrowWordLiteral(kind: String, value: String): Long {
+internal fun narrowWordLiteral(kind: String, value: String): Int {
     val maximum = when (kind) {
         "word8" -> 0xffL; "word16" -> 0xffffL; "word32" -> 0xffff_ffffL
         else -> throw RuntimeFault("Invalid narrow word literal kind: $kind")
@@ -61,28 +47,26 @@ internal fun narrowWordLiteral(kind: String, value: String): Long {
     val number = value.toLongOrNull()
     if (number == null || number !in 0L..maximum || number.toString() != value)
         throw RuntimeFault("Invalid $kind literal: $value")
-    return number
+    return number.toInt()
 }
-/** Int8 literals are canonical decimal signed 8-bit values, widened to Long. */
-internal fun int8Literal(value: String): Long {
+/** Narrow literals have canonical source spellings and an Int computation carrier. */
+internal fun int8Literal(value: String): Int {
     val number = value.toLongOrNull()
     if (number == null || number !in Byte.MIN_VALUE.toLong()..Byte.MAX_VALUE.toLong() || number.toString() != value)
         throw RuntimeFault("Invalid int8 literal: $value")
-    return number
+    return number.toInt()
 }
-/** Int16 literals are canonical decimal signed 16-bit values, widened to Long. */
-internal fun int16Literal(value: String): Long {
+internal fun int16Literal(value: String): Int {
     val number = value.toLongOrNull()
     if (number == null || number !in Short.MIN_VALUE.toLong()..Short.MAX_VALUE.toLong() || number.toString() != value)
         throw RuntimeFault("Invalid int16 literal: $value")
-    return number
+    return number.toInt()
 }
-/** Int32 literals are canonical decimal signed 32-bit values, widened to Long. */
-internal fun int32Literal(value: String): Long {
+internal fun int32Literal(value: String): Int {
     val number = value.toLongOrNull()
     if (number == null || number !in Int.MIN_VALUE.toLong()..Int.MAX_VALUE.toLong() || number.toString() != value)
         throw RuntimeFault("Invalid int32 literal: $value")
-    return number
+    return number.toInt()
 }
 /** Int64 literals are canonical decimal signed 64-bit carriers, including both endpoints. */
 internal fun int64Literal(value: String): Long {
@@ -291,6 +275,10 @@ internal abstract class Expr : Node() {
     }
     abstract fun execute(frame: VirtualFrame): Any?
     @Throws(UnexpectedResultException::class)
+    open fun executeInt(frame: VirtualFrame): Int = RuntimeTypesGen.expectInteger(execute(frame))
+    fun executeRequiredInt(frame: VirtualFrame): Int = try { executeInt(frame) }
+    catch (_: UnexpectedResultException) { fault("Expected primitive Int") }
+    @Throws(UnexpectedResultException::class)
     open fun executeLong(frame: VirtualFrame): Long {
         return RuntimeTypesGen.expectLong(execute(frame))
     }
@@ -328,15 +316,18 @@ internal abstract class Expr : Node() {
 }
 private class Literal(private val value: Any?) : Expr() {
     init { representation = CoreRepresentation(when (value) {
-        is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
+        is Int, is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
         is ManagedAddress -> CoreKind.ADDRESS; Unit -> CoreKind.VOID; else -> CoreKind.OBJECT
     }, evaluated = true) }
     override fun execute(frame: VirtualFrame) = value
+    override fun executeInt(frame: VirtualFrame) = RuntimeTypesGen.expectInteger(value)
     override fun executeLong(frame: VirtualFrame) = RuntimeTypesGen.expectLong(value)
     override fun executeFloat(frame: VirtualFrame) = RuntimeTypesGen.expectFloat(value)
     override fun executeDouble(frame: VirtualFrame) = RuntimeTypesGen.expectDouble(value)
 }
 internal class LocalRead(private val slot: Int, private val cell: Boolean = true) : Expr() {
+    override fun executeInt(frame: VirtualFrame): Int =
+        if ((!cell && representation.isInt) || frame.isInt(slot)) frame.getInt(slot) else super.executeInt(frame)
     override fun executeFloat(frame: VirtualFrame): Float =
         if ((!cell && representation.isFloat) || frame.isFloat(slot)) frame.getFloat(slot) else super.executeFloat(frame)
     override fun executeDouble(frame: VirtualFrame): Double =
@@ -1048,6 +1039,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         return result
     }
     override fun execute(frame: VirtualFrame): Any? = if (AstControl.enabled(this)) executeAsync(frame) else when {
+        value.representation.isInt -> value.executeRequiredInt(frame)
         value.representation.isLong -> value.executeRequiredLong(frame)
         value.representation.isFloat -> value.executeRequiredFloat(frame)
         value.representation.isDouble -> value.executeRequiredDouble(frame)
@@ -1059,6 +1051,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         // suspend, keeping primitive frame accesses visible at loop headers.
         val original = try {
             when {
+                value.representation.isInt -> value.executeRequiredInt(frame)
                 value.representation.isLong -> value.executeRequiredLong(frame)
                 value.representation.isFloat -> value.executeRequiredFloat(frame)
                 value.representation.isDouble -> value.executeRequiredDouble(frame)
@@ -1074,6 +1067,10 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         return if (value.representation.evaluated) original else forceResult(frame, original)
     }
     @CompilationFinal private var genericLong = false
+    override fun executeInt(frame: VirtualFrame): Int =
+        if (AstControl.enabled(this)) RuntimeTypesGen.expectInteger(executeAsync(frame))
+        else if (value.representation.evaluated || value.representation.isInt) value.executeInt(frame)
+        else RuntimeTypesGen.expectInteger(forceResult(frame, value.execute(frame)))
     override fun executeFloat(frame: VirtualFrame): Float =
         if (AstControl.enabled(this)) RuntimeTypesGen.expectFloat(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isFloat) value.executeFloat(frame)
@@ -1196,6 +1193,7 @@ internal class LocalBinding(private val slot: Int, @field:Child private var valu
     }
     private fun writeValue(frame: VirtualFrame) {
         if (vectorSlots != null) { value.executeTuple(frame, vectorSlots, 0); return }
+        if (value.representation.isInt) { FrameAccess.writeInt(frame, slot, value.executeRequiredInt(frame)); return }
         if (exactLong) { FrameAccess.writeLong(frame, slot, value.executeRequiredLong(frame)); return }
         if (value.representation.isFloat) { FrameAccess.writeFloat(frame, slot, value.executeRequiredFloat(frame)); return }
         if (value.representation.isDouble) { FrameAccess.writeDouble(frame, slot, value.executeRequiredDouble(frame)); return }
@@ -1221,6 +1219,10 @@ private class Let(@field:CompilationFinal(dimensions = 1) private val slots: Int
     override fun execute(frame: VirtualFrame): Any? {
         initialize(frame)
         return body.execute(frame)
+    }
+    override fun executeInt(frame: VirtualFrame): Int {
+        initialize(frame)
+        return body.executeInt(frame)
     }
     override fun executeLong(frame: VirtualFrame): Long {
         initialize(frame)
@@ -1312,6 +1314,11 @@ private class Alternative(val kind: Int, val value: Any?,
     })
     private fun matchesLiteral(frame: VirtualFrame, slot: Int): Boolean {
         val literal = value
+        if (literal is Int) {
+            if (frame.isInt(slot)) return frame.getInt(slot) == literal
+            val scrutinee = FrameAccess.read(frame, slot)
+            return scrutinee is Int && scrutinee == literal
+        }
         if (literal is Long) {
             val number = literal.toLong()
             if (frame.isLong(slot)) return frame.getLong(slot) == number
@@ -1337,7 +1344,9 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         }
         val aggregate = proofs.firstOrNull()?.takeIf { first -> first.isAggregate &&
             proofs.all { it.isAggregate && TupleShape.compatible(first, it) } }
+        val narrow = proofs.firstOrNull()?.takeIf { first -> first.isInt && proofs.all { it.primReps == first.primReps } }
         representation = aggregate?.copy(evaluated = proofs.all { it.evaluated }) ?: CoreVectors.caseResult(proofs)
+            ?: narrow?.copy(evaluated = proofs.all { it.evaluated })
             ?: CoreRepresentation(kind, proofs.all { it.evaluated }, proofs.isNotEmpty() && proofs.all { it.present })
     }
     // Preserve primitive scrutinees through their frame write and literal comparisons.
@@ -1393,6 +1402,18 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
         return (fallback ?: fault("Non-exhaustive Core case")).body.execute(frame)
     }
 
+    @ExplodeLoop override fun executeInt(frame: VirtualFrame): Int {
+        prepare(frame)
+        var fallback: Alternative? = null
+        for (alt in alternatives) {
+            if (alt.kind == DEFAULT_ALTERNATIVE) { fallback = alt; continue }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt)
+                return alt.body.executeInt(frame)
+            }
+        }
+        return (fallback ?: fault("Non-exhaustive Core case")).body.executeInt(frame)
+    }
     @ExplodeLoop override fun executeLong(frame: VirtualFrame): Long {
         prepare(frame)
         var fallback: Alternative? = null
@@ -1510,6 +1531,7 @@ private class LongCase(scrutinee: Expr, binder: Int, alternatives: Array<Alterna
 private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alternative>, metrics: Metrics,
                           proof: CoreRepresentation, delimited: Boolean) : Case(scrutinee, binder, alternatives, metrics, proof, delimited) {
     override fun execute(frame: VirtualFrame): Any? { prepare(frame); return alternatives.last().body.execute(frame) }
+    override fun executeInt(frame: VirtualFrame): Int { prepare(frame); return alternatives.last().body.executeInt(frame) }
     override fun executeLong(frame: VirtualFrame): Long { prepare(frame); return alternatives.last().body.executeLong(frame) }
     override fun executeFloat(frame: VirtualFrame): Float { prepare(frame); return alternatives.last().body.executeFloat(frame) }
     override fun executeDouble(frame: VirtualFrame): Double { prepare(frame); return alternatives.last().body.executeDouble(frame) }
@@ -1532,6 +1554,7 @@ private class Construct(private val layout: DataLayout,
                 for (leaf in slots.indices) {
                     val index = physical + leaf
                     if (layout.isVector(index)) layout.initializeVector(value, index, frame, slots, leaf)
+                    else if (layout.isInt(index)) layout.initializeInt(value, index, frame.getInt(slots[leaf]))
                     else if (layout.isLong(index)) layout.initializeLong(value, index, frame.getLong(slots[leaf]))
                     else if (layout.isFloat(index)) layout.initializeFloat(value, index, frame.getFloat(slots[leaf]))
                     else if (layout.isDouble(index)) layout.initializeDouble(value, index, frame.getDouble(slots[leaf]))
@@ -1543,7 +1566,8 @@ private class Construct(private val layout: DataLayout,
                 fields[i].executeTuple(frame, lanes, 0)
                 layout.initializeVector(value, physical, frame, lanes, 0)
                 for (slot in lanes) frame.clear(slot)
-            } else if (layout.isLong(physical)) layout.initializeLong(value, physical, fields[i].executeRequiredLong(frame))
+            } else if (layout.isInt(physical)) layout.initializeInt(value, physical, fields[i].executeRequiredInt(frame))
+            else if (layout.isLong(physical)) layout.initializeLong(value, physical, fields[i].executeRequiredLong(frame))
             else if (layout.isFloat(physical)) layout.initializeFloat(value, physical, fields[i].executeRequiredFloat(frame))
             else if (layout.isDouble(physical)) layout.initializeDouble(value, physical, fields[i].executeRequiredDouble(frame))
             else layout.initialize(value, physical, fields[i].execute(frame))
@@ -1561,7 +1585,6 @@ private class PointerEquality(@field:Child private var left: Expr, @field:Child 
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = scalar64PrimitiveOperation(name)
     private val wordMask = narrowWordPrimitiveMask(name)
-    private val intShift = narrowIntPrimitiveShift(name)
     private val bitShift = scalarBitPrimitiveShift(name)
     private val bitMask = -1L ushr bitShift
     init {
@@ -1575,56 +1598,25 @@ private class Primitive(private val name: String, @field:Children private var ar
             "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#",
             "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> 2
 
-            "negateInt8#", "negateInt16#", "negateInt32#" -> 1
-            "plusInt8#", "plusInt16#", "plusInt32#" -> 2
-            "subInt8#", "subInt16#", "subInt32#" -> 2
-            "timesInt8#", "timesInt16#", "timesInt32#" -> 2
-            "quotInt8#", "quotInt16#", "quotInt32#" -> 2
-            "remInt8#", "remInt16#", "remInt32#" -> 2
-            "eqInt8#", "eqInt16#", "eqInt32#" -> 2
-            "neInt8#", "neInt16#", "neInt32#" -> 2
-            "ltInt8#", "ltInt16#", "ltInt32#" -> 2
-            "leInt8#", "leInt16#", "leInt32#" -> 2
-            "gtInt8#", "gtInt16#", "gtInt32#" -> 2
-            "geInt8#", "geInt16#", "geInt32#" -> 2
-            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#",
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#",
-            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#", "mulIntMayOflo#" -> 2
+            "mulIntMayOflo#" -> 2
 
             "quotWord#" -> 2
             "remWord#" -> 2
             "gtWord#" -> 2
             "geWord#" -> 2
-            "quotWord8#", "quotWord16#", "quotWord32#" -> 2
-            "remWord8#", "remWord16#", "remWord32#" -> 2
-            "eqWord8#", "eqWord16#", "eqWord32#" -> 2
-            "neWord8#", "neWord16#", "neWord32#" -> 2
-            "gtWord8#", "gtWord16#", "gtWord32#" -> 2
-            "geWord8#", "geWord16#", "geWord32#" -> 2
-            "andWord8#", "andWord16#", "andWord32#" -> 2
-            "orWord8#", "orWord16#", "orWord32#" -> 2
-            "xorWord8#", "xorWord16#", "xorWord32#" -> 2
-            "notWord8#", "notWord16#", "notWord32#" -> 1
-            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> 2
-            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> 2
+
             "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#", "intToInt64#", "int64ToInt#",
-            "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#",
-            "int8ToWord8#", "word8ToInt8#", "int16ToWord16#", "word16ToInt16#", "int32ToWord32#", "word32ToInt32#",
-            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#",
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
             "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
-            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#",
-            "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
-            "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
-            "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#" -> 2
+            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         if (arguments.size != arity) throw RuntimeFault("Primitive arity mismatch: $name")
-        if (operation in setOf("uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#", "mulIntMayOflo#") &&
-            arguments.any { it.representation.kind != CoreKind.LONG || it.representation.isTypedTransport })
+        if (operation == "mulIntMayOflo#" &&
+            arguments.any { !it.representation.isLong })
             throw RuntimeFault("Primitive requires Long operands: $name")
     }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
@@ -1642,48 +1634,18 @@ private class Primitive(private val name: String, @field:Children private var ar
                 java.lang.Long.expand(x and bitMask, y and bitMask) and bitMask
             "pext8#", "pext16#", "pext32#", "pext64#", "pext#" ->
                 java.lang.Long.compress(x and bitMask, y and bitMask) and bitMask
-            "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
-            "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
-            "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)
-            "timesInt8#", "timesInt16#", "timesInt32#" -> signedNarrow(x * y, intShift)
-            "quotInt8#", "quotInt16#", "quotInt32#" -> signedNarrow(signedNarrow(x, intShift) / signedNarrow(y, intShift), intShift)
-            "remInt8#", "remInt16#", "remInt32#" -> signedNarrow(signedNarrow(x, intShift) % signedNarrow(y, intShift), intShift)
-            "eqInt8#", "eqInt16#", "eqInt32#" -> b(signedNarrow(x, intShift) == signedNarrow(y, intShift))
-            "neInt8#", "neInt16#", "neInt32#" -> b(signedNarrow(x, intShift) != signedNarrow(y, intShift))
-            "ltInt8#", "ltInt16#", "ltInt32#" -> b(signedNarrow(x, intShift) < signedNarrow(y, intShift))
-            "leInt8#", "leInt16#", "leInt32#" -> b(signedNarrow(x, intShift) <= signedNarrow(y, intShift))
-            "gtInt8#", "gtInt16#", "gtInt32#" -> b(signedNarrow(x, intShift) > signedNarrow(y, intShift))
-            "geInt8#", "geInt16#", "geInt32#" -> b(signedNarrow(x, intShift) >= signedNarrow(y, intShift))
-            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" ->
-                signedNarrow(x shl y.toInt(), intShift)
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" ->
-                signedNarrow(x, intShift) shr y.toInt()
-            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#" ->
-                signedNarrow((x and (-1L ushr intShift)) ushr y.toInt(), intShift)
+
             "mulIntMayOflo#" -> b(Math.multiplyHigh(x, y) != ((x * y) shr 63))
 
             "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
             "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
             "gtWord#" -> b(java.lang.Long.compareUnsigned(x, y) > 0)
             "geWord#" -> b(java.lang.Long.compareUnsigned(x, y) >= 0)
-            "quotWord8#", "quotWord16#", "quotWord32#" -> (x and wordMask) / (y and wordMask)
-            "remWord8#", "remWord16#", "remWord32#" -> (x and wordMask) % (y and wordMask)
-            "eqWord8#", "eqWord16#", "eqWord32#" -> b((x and wordMask) == (y and wordMask))
-            "neWord8#", "neWord16#", "neWord32#" -> b((x and wordMask) != (y and wordMask))
-            "gtWord8#", "gtWord16#", "gtWord32#" -> b((x and wordMask) > (y and wordMask))
-            "geWord8#", "geWord16#", "geWord32#" -> b((x and wordMask) >= (y and wordMask))
-            "andWord8#", "andWord16#", "andWord32#" -> (x and y) and wordMask
-            "orWord8#", "orWord16#", "orWord32#" -> (x or y) and wordMask
-            "xorWord8#", "xorWord16#", "xorWord32#" -> (x xor y) and wordMask
-            "notWord8#", "notWord16#", "notWord32#" -> x.inv() and wordMask
-            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> (x shl y.toInt()) and wordMask
-            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> (x and wordMask) ushr y.toInt()
+
             "+#", "plusWord#" -> x + y
             "-#", "minusWord#" -> x - y
             "*#", "timesWord#" -> x * y
-            "plusWord8#", "plusWord16#", "plusWord32#" -> (x + y) and wordMask
-            "subWord8#", "subWord16#", "subWord32#" -> (x - y) and wordMask
-            "timesWord8#", "timesWord16#", "timesWord32#" -> (x * y) and wordMask
+
             "negateInt#" -> -x
             "quotInt#" -> x / y
             "remInt#" -> x % y
@@ -1693,9 +1655,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "ltWord#" -> b(java.lang.Long.compareUnsigned(x, y) < 0)
             "<=#", "leChar#" -> b(x <= y)
             "leWord#" -> b(java.lang.Long.compareUnsigned(x, y) <= 0)
-            // These masks fit below Long's sign bit, so signed order is unsigned order.
-            "ltWord8#", "ltWord16#", "ltWord32#" -> b((x and wordMask) < (y and wordMask))
-            "leWord8#", "leWord16#", "leWord32#" -> b((x and wordMask) <= (y and wordMask))
+
             ">#", "gtChar#" -> b(x > y)
             ">=#", "geChar#" -> b(x >= y)
             "and#", "andI#" -> x and y
@@ -1708,13 +1668,10 @@ private class Primitive(private val name: String, @field:Children private var ar
             "uncheckedIShiftL#", "uncheckedShiftL#" -> x shl y.toInt()
             "uncheckedIShiftRA#" -> x shr y.toInt()
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
-            // Narrow signed values use sign-normalized Long carriers. Truncation
-            // and signed widening therefore share the width-specific conversion.
-            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> x.toByte().toLong()
-            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> x.toShort().toLong()
-            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> x.toInt().toLong()
-            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
-            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            // These primops narrow machine Int# without changing its Long carrier.
+            "narrow8Int#" -> x.toByte().toLong()
+            "narrow16Int#" -> x.toShort().toLong()
+            "narrow32Int#" -> x.toInt().toLong()
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> x and wordMask
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> x
             else -> fault("Unsupported primitive")
@@ -1725,7 +1682,8 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
     private val tuple: TupleShape?, @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray) : Node() {
     @Child private var value = Evaluate(expression, metrics)
     private val resultKind = if (result.kind == CoreKind.UNKNOWN) expression.representation.kind else result.kind
-    private val exactLong = resultKind == CoreKind.LONG
+    private val exactInt = (if (result.kind == CoreKind.UNKNOWN) expression.representation else result).isInt
+    private val exactLong = resultKind == CoreKind.LONG && !exactInt
     @CompilationFinal private var genericResult = result.present && !exactLong
 
     /** Keep a primitive body until the mandatory Object-returning root/call boundary. */
@@ -1755,6 +1713,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
         }
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.
+        if (exactInt) return value.executeRequiredInt(frame)
         if (resultKind == CoreKind.LONG) return value.executeRequiredLong(frame)
         if (resultKind == CoreKind.FLOAT) return value.executeRequiredFloat(frame)
         if (resultKind == CoreKind.DOUBLE) return value.executeRequiredDouble(frame)
@@ -1769,6 +1728,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
         }
     }
     fun executeLong(frame: VirtualFrame): Long = value.executeRequiredLong(frame)
+    fun executeInt(frame: VirtualFrame): Int = value.executeRequiredInt(frame)
 }
 private class SelfRepeater(@field:Child private var body: FunctionBody, private val metrics: Metrics) : Node(), RepeatingNode {
     fun once(frame: VirtualFrame): Any? {
@@ -1776,7 +1736,8 @@ private class SelfRepeater(@field:Child private var body: FunctionBody, private 
         root.forceEntry(frame)
         root.pollBeforeBody(this)
         val entry = root.handoff
-        return if (entry != null && entry.resultLong && entry.destination(frame) >= 0) entry.finishLong(frame, body.executeLong(frame))
+        return if (entry != null && entry.resultInt && entry.destination(frame) >= 0) entry.finishInt(frame, body.executeInt(frame))
+        else if (entry != null && entry.resultLong && entry.destination(frame) >= 0) entry.finishLong(frame, body.executeLong(frame))
         else body.execute(frame)
     }
     override fun executeRepeating(frame: VirtualFrame): Boolean = error("value loop")
@@ -1821,6 +1782,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         configureEntry(entryStrict, captureLayout != null)
         configureInput(inputLayout)
         configureTupleResult(tuple)
+        configureScalarResult(body.representation.refine(resultProof))
         fun initialize(slot: Int, kind: FrameSlotKind) {
             if (descriptor.getSlotKind(slot) == FrameSlotKind.Illegal) descriptor.setSlotKind(slot, kind)
         }
@@ -1832,6 +1794,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             val proof = argumentProofs.getOrNull(i) ?: continue
             val kind = when {
                 proof.referenceCarrier() != null -> FrameSlotKind.Object
+                proof.isInt -> FrameSlotKind.Int
                 proof.isLong -> FrameSlotKind.Long
                 proof.isFloat -> FrameSlotKind.Float
                 proof.isDouble -> FrameSlotKind.Double
@@ -1842,8 +1805,11 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         // Dense entry first snapshots its owned packet, independently of the
         // formal slots. Its immutable physical layout fixes these carriers too.
         handoff?.let { entry ->
-            for (i in entry.snapshotSlots.indices)
-                initialize(entry.snapshotSlots[i], if (entry.arguments.isLong(i)) FrameSlotKind.Long else FrameSlotKind.Object)
+            for (i in entry.snapshotSlots.indices) initialize(entry.snapshotSlots[i], when {
+                entry.arguments.isInt(i) -> FrameSlotKind.Int
+                entry.arguments.isLong(i) -> FrameSlotKind.Long
+                else -> FrameSlotKind.Object
+            })
             initialize(entry.destinationSlot, FrameSlotKind.Long)
         }
     }
@@ -1861,6 +1827,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics))
     @Child private var delimitedHandoff: HandoffCaller? = null
     override fun requiresUnprofiledReturn(): Boolean = enableAsync || enableDelimited
+    override fun requiresMaterializableFrame(): Boolean = enableAsync || enableDelimited
 
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
@@ -1871,6 +1838,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             if (strictArguments[i]) FrameAccess.write(frame, argumentSlots[i], value)
             else if (reference != null)
                 FrameAccess.write(frame, argumentSlots[i], requireReferenceCarrier(value, reference))
+            else if (i < argumentProofs.size && argumentProofs[i].isInt)
+                FrameAccess.writeInt(frame, argumentSlots[i], value as? Int ?: fault("Expected primitive Int argument"))
             else if (i < argumentProofs.size && argumentProofs[i].isLong)
                 FrameAccess.writeLong(frame, argumentSlots[i], value as? Long ?: fault("Expected primitive Long argument"))
             else if (i < argumentProofs.size && argumentProofs[i].isFloat)
@@ -1946,7 +1915,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         for (i in argumentSlots.indices) {
             val from = argumentIndices[i]
             val to = argumentSlots[i]
-            if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.long(frame, node, null, from))
+            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.int(frame, node, null, from))
+            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.long(frame, node, null, from))
             else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.float(frame, node, null, from))
             else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.double(frame, node, null, from))
             else {
@@ -1966,7 +1936,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             for (i in argumentSlots.indices) {
                 val from = argumentIndices[i] + entry.header
                 val to = argumentSlots[i]
-                if (entry.packet.isLong(from)) FrameAccess.writeLong(frame, to, entry.packet.getLong(input, from))
+                if (entry.packet.isInt(from)) FrameAccess.writeInt(frame, to, entry.packet.getInt(input, from))
+                else if (entry.packet.isLong(from)) FrameAccess.writeLong(frame, to, entry.packet.getLong(input, from))
                 else if (entry.packet.isFloat(from)) FrameAccess.writeFloat(frame, to, entry.packet.getFloat(input, from))
                 else if (entry.packet.isDouble(from)) FrameAccess.writeDouble(frame, to, entry.packet.getDouble(input, from))
                 else {
@@ -1995,7 +1966,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             val offset = if (captureLayout == null) 1 else 2
             for (i in argumentSlots.indices) {
                 val position = argumentIndices[i] + offset
-                if (entry.arguments.isLong(position)) FrameAccess.writeLong(frame, argumentSlots[i], entry.arguments.getLong(input, position))
+                if (entry.arguments.isInt(position)) FrameAccess.writeInt(frame, argumentSlots[i], entry.arguments.getInt(input, position))
+                else if (entry.arguments.isLong(position)) FrameAccess.writeLong(frame, argumentSlots[i], entry.arguments.getLong(input, position))
                 else {
                     val value = entry.arguments.getObject(input, position)
                     val reference = argumentReferences.getOrNull(i)
@@ -2447,7 +2419,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             captureFields.map { !it.cell && it.proof.isLong && it.proof.evaluated }.toBooleanArray(),
             captureFields.map { if (it.cell) null else it.proof.referenceCarrier() }.toTypedArray(),
             captureFields.map { !it.cell && it.proof.isFloat && it.proof.evaluated }.toBooleanArray(),
-            captureFields.map { !it.cell && it.proof.isDouble && it.proof.evaluated }.toBooleanArray())
+            captureFields.map { !it.cell && it.proof.isDouble && it.proof.evaluated }.toBooleanArray(),
+            captureFields.map { if (!it.cell && it.proof.evaluated) it.proof.narrowInteger else null }.toTypedArray())
         val allArgumentSlots = IntArray(args.size) { -1 }
         val allArgumentProofs = Array(args.size) { CoreRepresentation.UNKNOWN }
         args.forEachIndexed { index, arg ->
@@ -2461,7 +2434,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val body = compile(expression, scope, true)
         // Async AST has no caller capture around a typed handoff loan yet.
         // Keep admitted roots on the ordinary scalar call ABI.
-        val handoff = if (enableAsync) null else HandoffEntry.create(language, scope.layout,
+        // Mandatory typed ingress (including narrow scalars) owns its own packet.
+        // It must not also advertise the empty-argument scalar handoff protocol.
+        val handoff = if (enableAsync || inputLayout?.requiresTyped == true) null else HandoffEntry.create(language, scope.layout,
             args.map(CoreRepresentations::binder), resultProof, captures != null)
         if ((body.representation.isSum || resultProof.isSum) && (!body.representation.isSum || !resultProof.isSum))
             throw RuntimeFault("Sum function requires exact body and declared result proofs")
@@ -3348,7 +3323,10 @@ CoreStackForeign.validateHead(fn, defined)
                 val payload = if (selected.isTypedTransport) compile(args.single(), scope, false)
                     else argument(args.single(), scope, lifted)
                 SumShape.payload(selected, payload.representation, lifted)
-                SumConstruct(TupleShape(tupleProof, language as thc.Language), tag, payload)
+                val intSlots = if (selected.isTypedTransport) TupleShape.flatten(selected).mapIndexed { index, field ->
+                    if (field.isInt) scope.layout.bind("<narrow sum payload $index>") else -1
+                }.toIntArray() else IntArray(0)
+                SumConstruct(TupleShape(tupleProof, language as thc.Language), tag, payload, intSlots)
             } else if (tupleProof.isTuple && fn[0] == "con" && constructors[fn[1]]?.get("kind") == "unboxed-tuple") {
                 val shape = TupleShape(tupleProof, language as thc.Language)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
@@ -3607,6 +3585,7 @@ CoreStackForeign.validateHead(fn, defined)
         var fallback = -1
         val arms = (expr[3] as List<List<Any?>>).mapIndexed { index, alt ->
             val child = scope.child()
+            val conversions = ArrayList<Pair<Int, Expr>>()
             val ids = alt[2] as List<String>
             if (alt[0] == "default") {
                 if (fallback >= 0 || ids.isNotEmpty() || CoreRepresentations.alternativeBinders(alt).isNotEmpty())
@@ -3623,12 +3602,20 @@ CoreStackForeign.validateHead(fn, defined)
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
                 val field = component.refine(actual).copy(evaluated = component.evaluated)
-                val projection = SumShape.projection(proof, tag - 1).map { slots[it] }.toIntArray()
+                val leaves = TupleShape.flatten(field)
+                val projection = SumShape.projection(proof, tag - 1).mapIndexed { index, physical ->
+                    val leaf = leaves[index]
+                    if (!leaf.isInt) slots[physical] else child.layout.bind("<narrow sum arm $index>").also { destination ->
+                        conversions += destination to SumNarrowRead(slots[physical], leaf.narrowInteger!!, leaf)
+                    }
+                }.toIntArray()
                 if (component.isTypedTransport) child.bindTuple(ids[0], field, projection)
                 else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], field)
                 else child.bindSlot(ids[0], Local(projection[0], component.isLong, field, false))
             }
-            compile(alt[3] as List<Any?>, child, tail)
+            val body = compile(alt[3] as List<Any?>, child, tail)
+            if (conversions.isEmpty()) body else Let(conversions.map { it.first }.toIntArray(),
+                conversions.map { it.second }.toTypedArray(), BooleanArray(conversions.size), body, false)
         }.toTypedArray()
         if (arms.isEmpty()) throw RuntimeFault("Empty sum case")
         val alternatives = expr[3] as List<List<Any?>>
@@ -3798,7 +3785,8 @@ CoreStackForeign.validateHead(fn, defined)
         DataLayout.fromFields(language ?: throw RuntimeFault("Constructor layout requires a guest language"),
             id, info["name"] as String, fields)
     }
-    private fun primitive(name: String, args: Array<Expr>, someException: Boolean = false): Expr = floatingPrimitive(name, args) ?: when (name) {
+    private fun primitive(name: String, args: Array<Expr>, someException: Boolean = false): Expr =
+        NarrowScalarOp.named(name)?.let { NarrowScalarExpression(name, it, args) } ?: floatingPrimitive(name, args) ?: when (name) {
         "reallyUnsafePtrEquality#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             PointerEquality(args[0], args[1])

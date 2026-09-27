@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 import java.security.MessageDigest
 
-/** GHC's narrow signed values have canonical sign-extended Long carriers. */
+/** Native/model observations are machine-width; narrow guest computations use Int. */
 class SignedNarrowPrimopsTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private fun manifest() = Json.parse(File(root, "build/signed-narrow-primops/manifest.json").readText()) as Map<String, Any?>
@@ -108,10 +108,13 @@ class SignedNarrowPrimopsTest {
     }
 
     private fun rawModule(primitive: String, width: Int, supplied: Int): Map<String, Any?> {
-        val parameters = List(supplied) { mapOf("id" to "x$it", "name" to "x$it", "lifted" to false,
-            "type" to if (primitive.startsWith("word") && "ToInt" in primitive) "Word$width#"
-                else if (primitive.startsWith("uncheckedShift") && it == 1) "Int#" else "Int$width#",
-            "coercion" to false) }
+        val parameters = List(supplied) {
+            val family = if (primitive.startsWith("word") && "ToInt" in primitive) "Word$width"
+                else if (primitive.startsWith("uncheckedShift") && it == 1) "Int" else "Int$width"
+            mapOf("id" to "x$it", "name" to "x$it", "lifted" to false, "type" to "$family#",
+                "rep" to mapOf("kind" to "long", "primReps" to listOf(family + "Rep"), "evaluated" to true),
+                "coercion" to false)
+        }
         val body = listOf("app", listOf("prim", primitive), List(supplied) { listOf("var", "x$it") }, List(supplied) { false })
         return mapOf("schema" to 1, "ghc" to "9.14.1", "module" to "SignedNarrowCarrierControl",
             "constructors" to emptyList<Any?>(), "bindings" to listOf(mapOf("id" to "entry", "name" to "entry",
@@ -137,7 +140,11 @@ class SignedNarrowPrimopsTest {
                     if (pass == 1) assertTrue(function.invokeMember("compile").asBoolean())
                     val before = count(function, "compiledEntries")
                     for ((left, right) in pairs) {
-                        val args = if (arity == 1) arrayOf(left) else arrayOf(left, right)
+                        // Word-to-Int conversion inputs use their unsigned public range;
+                        // the independent model still observes the same low source bits.
+                        val input = if (name.startsWith("word") && "ToInt" in name)
+                            left and ((1L shl width) - 1) else left
+                        val args = if (arity == 1) arrayOf(input) else arrayOf(input, right)
                         assertEquals(mathematical(name, width, left, right), function.execute(*args).asLong(),
                             "$backend raw $name($left, $right), pass $pass")
                     }

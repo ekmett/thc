@@ -107,7 +107,7 @@ class ShrinkByteArrayTest {
         assertEquals(16L, ManagedByteArray.sizeGuest(owner))
         assertSame(owner, ManagedByteArray.freezeGuest(owner))
         assertEquals(15L, alias.readWord8(15))
-        assertEquals(15L, ManagedByteArray.readGuest(owner, 15, true))
+        assertEquals(15L, ManagedByteArray.readGuest(owner, 15, true).toLong())
         assertDoesNotThrow { ManagedByteArray.readIntGuest(owner, 1) }
         assertThrows(RuntimeFault::class.java) { ManagedByteArray.readIntGuest(owner, 2) }
         assertThrows(RuntimeFault::class.java) { alias.readWord8(16) }

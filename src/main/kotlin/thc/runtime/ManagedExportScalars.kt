@@ -117,7 +117,9 @@ internal class ManagedExportScalar private constructor(
     }
 
     fun fromHost(value: Any?, interop: InteropLibrary = InteropLibrary.getUncached()): DataValue = when (kind) {
-        Kind.SIGNED, Kind.UNSIGNED -> layout.createLong(checkedInteger(value, interop))
+        Kind.SIGNED, Kind.UNSIGNED -> checkedInteger(value, interop).let {
+            if (layout.isInt(0)) layout.createInt(it.toInt()) else layout.createLong(it)
+        }
         Kind.CHAR -> layout.createLong(codePoint(value, interop))
         Kind.BOOL -> {
             if (value == null || !interop.isBoolean(value)) fault("Expected a foreign-export Boolean")
@@ -152,8 +154,8 @@ internal class ManagedExportScalar private constructor(
         }
         if (!layout.matches(value)) fault("Foreign-export result constructor mismatch")
         return when (kind) {
-            Kind.SIGNED -> checkedGuestSigned(layout.readLong(value, 0))
-            Kind.UNSIGNED -> checkedGuestUnsigned(layout.readLong(value, 0))
+            Kind.SIGNED -> checkedGuestSigned(if (layout.isInt(0)) layout.readInt(value, 0).toLong() else layout.readLong(value, 0))
+            Kind.UNSIGNED -> checkedGuestUnsigned(if (layout.isInt(0)) Integer.toUnsignedLong(layout.readInt(value, 0)) else layout.readLong(value, 0))
             Kind.CHAR -> {
                 val point = layout.readLong(value, 0)
                 if (point !in 0L..0x10ffffL) fault("Foreign-export result character is out of range")

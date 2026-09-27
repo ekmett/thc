@@ -229,9 +229,9 @@ class PackageNativeForeignTest {
     @Test fun integerConversionsRetainUnsignedBitsAndRejectOutOfRangeInputs() {
         assertEquals((-1).toByte(), packageCInteger("Word8Rep", 255))
         assertEquals((-1).toShort(), packageCInteger("Word16Rep", 65535))
-        assertEquals(-1, packageCInteger("Word32Rep", 0xffff_ffffL))
+        assertEquals(-1, packageCInteger("Word32Rep", -1))
         for ((rep, value) in listOf("Word8Rep" to -1L, "Word8Rep" to 256L, "Word16Rep" to 65536L,
             "Word32Rep" to 0x1_0000_0000L, "Int8Rep" to 128L, "Int16Rep" to 32768L))
-            assertThrows(RuntimeFault::class.java) { packageCInteger(rep, value) }
+            assertThrows(RuntimeFault::class.java) { NarrowInteger.fromRep(rep)!!.fromHost(value) }
     }
 }

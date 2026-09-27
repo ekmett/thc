@@ -102,7 +102,7 @@ internal class RtsArgumentsExpression(private val operation: RtsArgumentsOp,
             requireVoidCarrier(operands[2].execute(frame))
             Language.currentState(this).arguments.get(argc, argv)
         } else {
-            val argc = operands[0].executeRequiredLong(frame)
+            val argc = operands[0].executeRequiredInt(frame).toLong()
             val argv = operands[1].executeRequiredAddress(frame)
             requireVoidCarrier(operands[2].execute(frame))
             Language.currentState(this).arguments.set(argc, argv)

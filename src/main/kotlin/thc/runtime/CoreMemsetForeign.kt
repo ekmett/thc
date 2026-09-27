@@ -73,7 +73,7 @@ internal class MemsetExpression(@field:Children private var operands: Array<Expr
     override fun execute(frame: VirtualFrame): Nothing = fault("memset requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val destination = operands[0].executeRequiredAddress(frame)
-        val value = operands[1].executeRequiredLong(frame)
+        val value = operands[1].executeRequiredInt(frame).toLong()
         val count = operands[2].executeRequiredLong(frame)
         requireVoidCarrier(operands[3].execute(frame))
         destination.fill(count, value)

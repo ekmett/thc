@@ -18,13 +18,13 @@ internal fun rawBitCastPrimitive(name: String, arguments: Array<Expr>): Expr? {
 
 private class FloatToWord32(@field:Child private var value: Expr) : Expr() {
     init { representation = CoreRepresentation(CoreKind.LONG, evaluated = true, primReps = listOf("Word32Rep")) }
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long = (java.lang.Float.floatToRawIntBits(value.executeRequiredFloat(frame)).toLong() and 0xffffffffL)
+    override fun execute(frame: VirtualFrame): Any = executeInt(frame)
+    override fun executeInt(frame: VirtualFrame): Int = java.lang.Float.floatToRawIntBits(value.executeRequiredFloat(frame))
 }
 private class Word32ToFloat(@field:Child private var value: Expr) : Expr() {
     init { representation = CoreRepresentation(CoreKind.FLOAT, evaluated = true, primReps = listOf("FloatRep")) }
     override fun execute(frame: VirtualFrame): Any = executeFloat(frame)
-    override fun executeFloat(frame: VirtualFrame): Float = java.lang.Float.intBitsToFloat((value.executeRequiredLong(frame)).toInt())
+    override fun executeFloat(frame: VirtualFrame): Float = java.lang.Float.intBitsToFloat(value.executeRequiredInt(frame))
 }
 private class DoubleToWord64(@field:Child private var value: Expr) : Expr() {
     init { representation = CoreRepresentation(CoreKind.LONG, evaluated = true, primReps = listOf("Word64Rep")) }

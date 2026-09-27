@@ -69,7 +69,7 @@ class OriginalPosixStatTest {
             events.clear(); FrameAccess.writeLong(frame, slot, 91L)
             val prefix: Array<Expr> = when (operation) {
                 OriginalStdioOp.SIZEOF_STAT -> emptyArray()
-                OriginalStdioOp.IS_DIR -> arrayOf(operand("mode", 16384L))
+                OriginalStdioOp.IS_DIR -> arrayOf(operand("mode", 16384))
                 else -> arrayOf(operand("address", ManagedAddress.nullAddress()))
             }
             val expression = OriginalStdioExpression(operation, prefix + operand("state", 9L), proof)

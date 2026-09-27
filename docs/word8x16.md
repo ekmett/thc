@@ -27,7 +27,8 @@ The scalar-observation fixtures below keep vectors local. Their
 `vectorArgument` negative tests the public host boundary, not guest calls.
 
 Canonical `word8` literals use 0..255. After lowering, integral
-annotations share a `Long` carrier and the literal tag supplies narrowing.
+narrow annotations share an `Int` carrier and the literal tag supplies narrowing.
+Machine-word and explicit 64-bit integers retain `Long` and are distinct carriers.
 Wrong physical carriers, malformed literal values, lifted operand flags, tuple
 lane proofs and vector shapes are checked separately. The strict exporter audit
 also checks exact source-level representations; it is not the runtime's scalar

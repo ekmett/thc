@@ -18,20 +18,19 @@ import java.util.IdentityHashMap
 import java.util.function.LongSupplier
 import java.util.function.Supplier
 
-/** Convert directly into the interop carrier without an intermediate boxed Long. */
+/** C receives the declared width; Int carries Word32 raw bits unchanged. */
+internal fun packageScalarInt32(value: Int): Int = value
+/** Original machine-word CAPI adapters retain an explicit checked CInt boundary. */
 internal fun packageScalarInt32(value: Long): Int {
     if (value != value.toInt().toLong()) fault("Package C Int32 argument is out of range")
     return value.toInt()
 }
-
-/** C receives the declared width; unsigned narrowing preserves all low bits. */
-internal fun packageCInteger(rep: String, value: Long): Any = when (rep) {
-    "Int8Rep" -> value.toByte().also { if (it.toLong() != value) fault("Package C Int8 argument is out of range") }
-    "Word8Rep" -> value.toByte().also { if (value !in 0..255L) fault("Package C Word8 argument is out of range") }
-    "Int16Rep" -> value.toShort().also { if (it.toLong() != value) fault("Package C Int16 argument is out of range") }
-    "Word16Rep" -> value.toShort().also { if (value !in 0..65535L) fault("Package C Word16 argument is out of range") }
-    "Int32Rep" -> packageScalarInt32(value)
-    "Word32Rep" -> value.toInt().also { if (value !in 0..0xffff_ffffL) fault("Package C Word32 argument is out of range") }
+internal fun packageCInteger(rep: String, value: Int): Any = when (rep) {
+    "Int8Rep" -> value.toByte().also { if (it.toInt() != value) fault("Package C Int8 argument is out of range") }
+    "Word8Rep" -> value.toByte().also { if (value !in 0..255) fault("Package C Word8 argument is out of range") }
+    "Int16Rep" -> value.toShort().also { if (it.toInt() != value) fault("Package C Int16 argument is out of range") }
+    "Word16Rep" -> value.toShort().also { if (value !in 0..65535) fault("Package C Word16 argument is out of range") }
+    "Int32Rep", "Word32Rep" -> value
     else -> fault("Package C argument is not a narrow integer")
 }
 
@@ -187,32 +186,33 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
         }
     }
 
-    fun executeLong(arguments: Array<Any?>, state: Any?): Long {
-        if (!integerResult) fault("Package C result is not an integer ABI")
-        val entry = prepare(arguments, state)
-        val result = invoke(entry, arguments)
+    fun executeInt(arguments: Array<Any?>, state: Any?): Int {
+        if (NarrowInteger.fromRep(call.result) == null) fault("Package C result is not a narrow integer ABI")
+        val result = invoke(prepare(arguments, state), arguments)
         return when (call.result) {
             "Int8Rep", "Word8Rep" -> {
                 if (!numbers.fitsInByte(result)) fault("Package C result is not an 8-bit integer")
-                val value = numbers.asByte(result)
-                if (call.result == "Word8Rep") value.toLong() and 255L else value.toLong()
+                val value = numbers.asByte(result).toInt()
+                if (call.result == "Word8Rep") value and 255 else value
             }
             "Int16Rep", "Word16Rep" -> {
                 if (!numbers.fitsInShort(result)) fault("Package C result is not a 16-bit integer")
-                val value = numbers.asShort(result)
-                if (call.result == "Word16Rep") value.toLong() and 65535L else value.toLong()
+                val value = numbers.asShort(result).toInt()
+                if (call.result == "Word16Rep") value and 65535 else value
             }
-            "Int32Rep", "Word32Rep" -> {
+            else -> {
                 if (!numbers.fitsInInt(result)) fault("Package C result is not Int32")
-                val value = numbers.asInt(result)
-                if (call.result == "Word32Rep") Integer.toUnsignedLong(value) else value.toLong()
+                numbers.asInt(result)
             }
-            "IntRep", "WordRep", "Int64Rep", "Word64Rep" -> {
-                if (!numbers.fitsInLong(result)) fault("Package C result is not Int64")
-                numbers.asLong(result)
-            }
-            else -> fault("Package C result is not an integer ABI")
         }
+    }
+
+    fun executeLong(arguments: Array<Any?>, state: Any?): Long {
+        if (!integerResult || NarrowInteger.fromRep(call.result) != null)
+            fault("Package C result is not a machine or 64-bit integer ABI")
+        val result = invoke(prepare(arguments, state), arguments)
+        if (!numbers.fitsInLong(result)) fault("Package C result is not Int64")
+        return numbers.asLong(result)
     }
 
     fun executeFloat(arguments: Array<Any?>, state: Any?): Float {

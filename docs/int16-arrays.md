@@ -24,7 +24,7 @@ Canonical signed `int16` syntax is accepted only in `[-32768,32767]`, including
 literal alternatives. Both `int16` and the already parsed `word16` forms now
 provide intrinsic exact representation proofs. The shared 16/32-bit proof
 helper refines absent or genuinely unconstrained unknown/null metadata from
-literal syntax. Known integral metadata names may share the Long carrier;
+literal syntax. Known narrow integral metadata names may share the Int carrier;
 the literal tag still determines range and signed interpretation. Incompatible
 carriers and malformed records fail. Strict exporter auditing separately checks
 GHC's exact type identities. No int8 literal support is added.

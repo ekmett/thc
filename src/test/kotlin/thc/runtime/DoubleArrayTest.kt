@@ -25,7 +25,7 @@ class DoubleArrayTest {
             assertEquals(value, ManagedByteArray.readInt(bytes, index.toLong()))
             for (byte in 0..7) {
                 val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 7-byte)*8
-                assertEquals((value ushr shift) and 255, ManagedByteArray.read(bytes, index*8L+byte))
+                assertEquals((value ushr shift) and 255, ManagedByteArray.read(bytes, index*8L+byte).toLong())
             }
         }
         for (byte in bits.size*8 until bytes.size) assertEquals(91, bytes[byte].toInt())
@@ -68,7 +68,7 @@ class DoubleArrayTest {
                     assertEquals("Managed allocation $guard outside its backing storage", failure.message,
                         "size=$size/index=$index")
                 assertEquals(size, ManagedByteArray.sizeGuest(array))
-                assertEquals(expected, (0 until size).map { ManagedByteArray.readGuest(array, it, true) })
+                assertEquals(expected, (0 until size).map { ManagedByteArray.readGuest(array, it, true).toLong() })
             }
             if (size >= 8) {
                 ManagedByteArray.writeDoubleGuest(array, 0, -0.0)

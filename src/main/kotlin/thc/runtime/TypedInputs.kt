@@ -34,7 +34,8 @@ internal class TypedInputLayout(val language: Language, val logical: ArgumentLay
     @ExplodeLoop fun validateSelfSource(source: InputSource, frame: VirtualFrame, node: Node) {
         ArgumentLayout.validate(logical, 0, source.layout, 0, logical.logicalArity)
         for (i in leaves.indices) {
-            if (packet.isLong(header + i)) source.long(frame, node, null, i)
+            if (packet.isInt(header + i)) source.int(frame, node, null, i)
+            else if (packet.isLong(header + i)) source.long(frame, node, null, i)
             else if (packet.isFloat(header + i)) source.float(frame, node, null, i)
             else if (packet.isDouble(header + i)) source.double(frame, node, null, i)
             else {
@@ -110,6 +111,7 @@ internal fun discardTypedInput(language: Language, input: HandoffStorage) {
 internal abstract class InputSource(val layout: ArgumentLayout?) {
     @field:CompilationFinal(dimensions = 1)
     internal val physicalProofs = layout?.physicalProofs
+    abstract fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int
     abstract fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long
     abstract fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float
     abstract fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Double
@@ -120,7 +122,8 @@ internal abstract class InputSource(val layout: ArgumentLayout?) {
         for (i in 0 until count) {
             val source = sourceOffset + i
             val target = targetOffset + i
-            if (shape.isLong(target)) shape.setLong(destination, target, long(frame, node, values, source))
+            if (shape.isInt(target)) shape.setInt(destination, target, int(frame, node, values, source))
+            else if (shape.isLong(target)) shape.setLong(destination, target, long(frame, node, values, source))
             else if (shape.isFloat(target)) shape.setFloat(destination, target, float(frame, node, values, source))
             else if (shape.isDouble(target)) shape.setDouble(destination, target, double(frame, node, values, source))
             else shape.setObject(destination, target, reference(frame, node, values, source))
@@ -131,6 +134,8 @@ internal abstract class InputSource(val layout: ArgumentLayout?) {
 /** Used only for pre-existing scalar/empty call sites; tuple payloads never enter this array. */
 internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(layout) {
     init { require(layout?.requiresTyped != true) }
+    override fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
+        values!![index] as? Int ?: fault("Expected primitive Int input")
     override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Long ?: fault("Expected primitive Long input")
     override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
@@ -147,6 +152,8 @@ private val scalarPrefixSource = ScalarArrayInputSource(null)
 
 internal class AstInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: IntArray) : InputSource(layout) {
+    override fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int =
+        if (frame.isInt(slots[index])) frame.getInt(slots[index]) else FrameAccess.read(frame, slots[index]) as? Int ?: fault("Expected primitive Int input")
     override fun long(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Long =
         if (frame.isLong(slots[index])) frame.getLong(slots[index]) else FrameAccess.read(frame, slots[index]) as? Long ?: fault("Expected primitive Long input")
     override fun float(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Float =
@@ -163,6 +170,9 @@ internal class AstInputSource(layout: ArgumentLayout,
 internal class BytecodeInputSource(layout: ArgumentLayout,
     @field:CompilationFinal(dimensions = 1) val slots: Array<LocalAccessor>) : InputSource(layout) {
     private fun bytecode(node: Node): BytecodeNode = (node.rootNode as BytecodeRoot).bytecodeNode
+    override fun int(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Int =
+        if (physicalProofs!![index].isInt) slots[index].getInt(bytecode(node), frame)
+        else slots[index].getObject(bytecode(node), frame) as? Int ?: fault("Expected primitive Int input")
     // Exact tuple leaves retain primitive access. A legacy unknown scalar beside
     // a tuple can generalize its local to Object after another numeric target;
     // read that existing scalar carrier generically, then check the target kind.
@@ -200,7 +210,8 @@ internal fun copyInputFields(source: HandoffStorage, destination: HandoffStorage
     for (i in 0 until count) {
         val s = sourceOffset + i
         val d = targetOffset + i
-        if (into.isLong(d)) into.setLong(destination, d, from.getLong(source, s))
+        if (into.isInt(d)) into.setInt(destination, d, from.getInt(source, s))
+        else if (into.isLong(d)) into.setLong(destination, d, from.getLong(source, s))
         else if (into.isFloat(d)) into.setFloat(destination, d, from.getFloat(source, s))
         else if (into.isDouble(d)) into.setDouble(destination, d, from.getDouble(source, s))
         else into.setObject(destination, d, from.getObject(source, s))
@@ -266,7 +277,7 @@ private fun prepareInput(frame: VirtualFrame, node: Node, function: Closure, inp
         } else {
             val position = ArgumentLayout.offset(source.layout, logicalOffset + i - prefixCount)
             val actual = source.physicalProofs?.get(position)
-            if (actual?.isLong == true || actual?.isFloat == true || actual?.isDouble == true) continue
+            if (actual?.isInt == true || actual?.isLong == true || actual?.isFloat == true || actual?.isDouble == true) continue
             source.setReference(frame, node, values, position, force.execute(frame, source.reference(frame, node, values, position)))
         }
     }
@@ -596,6 +607,7 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
             val offset = layout.offset(i)
             try {
                 if (proof.isTypedTransport) arguments[i].executeTuple(frame, source.slots, offset)
+                else if (proof.isInt) FrameAccess.writeInt(frame, source.slots[offset], arguments[i].executeRequiredInt(frame))
                 else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], arguments[i].executeRequiredLong(frame))
                 else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], arguments[i].executeRequiredFloat(frame))
                 else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], arguments[i].executeRequiredDouble(frame))
@@ -604,7 +616,8 @@ internal class AstInputOperands(arguments: Array<Expr>, frameLayout: FrameLayout
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
                         if (!proof.isTypedTransport) {
-                            if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], input as Long)
+                            if (proof.isInt) FrameAccess.writeInt(frame, source.slots[offset], input as Int)
+                            else if (proof.isLong) FrameAccess.writeLong(frame, source.slots[offset], input as Long)
                             else if (proof.isFloat) FrameAccess.writeFloat(frame, source.slots[offset], input as Float)
                             else if (proof.isDouble) FrameAccess.writeDouble(frame, source.slots[offset], input as Double)
                             else FrameAccess.write(frame, source.slots[offset], input)

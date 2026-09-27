@@ -334,10 +334,10 @@ internal class SignalDispatchRoot(language: Language, program: ExecutableProgram
         if (!async || (target as? GuestRoot)?.tupleResult?.matches(shape) != true)
             fault("Signal dispatcher requires an async IO unit tuple")
         dispatch.execute(frame, closure, arrayOf(pointer.create(arrayOf(frame.arguments[0])),
-            signal.createLong(run {
+            signal.createInt(run {
                 val number = frame.arguments[1]
                 if (number == null) CompilerDirectives.transferToInterpreter()
-                number as Long
+                (number as Long).toInt()
             }), Unit))
         val unit = unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) as? DataValue
             ?: fault("Signal dispatcher did not return boxed unit")

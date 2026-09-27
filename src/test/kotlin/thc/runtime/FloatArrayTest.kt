@@ -17,14 +17,14 @@ class FloatArrayTest {
             0x3f800000, 0x7f7fffff, 0x7f800000, -0x00800000, 0x7fc01234, -0x003fa988)
         val bytes = ByteArray(bits.size*4+3) { 91 }
         for ((index, value) in bits.withIndex()) {
-            ManagedByteArray.writeInt32(bytes, index.toLong(), value.toLong())
+            ManagedByteArray.writeInt32(bytes, index.toLong(), (value.toLong()).toInt())
             val number = ManagedByteArray.readFloat(bytes, index.toLong())
             assertEquals(value, number.toRawBits())
             ManagedByteArray.writeFloat(bytes, index.toLong(), number)
-            assertEquals(value.toLong() and 0xffff_ffffL, ManagedByteArray.readWord32(bytes, index.toLong()))
+            assertEquals(value.toLong() and 0xffff_ffffL, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, index.toLong())))
             for (byte in 0..3) {
                 val shift = (if (ByteOrder.nativeOrder() == ByteOrder.LITTLE_ENDIAN) byte else 3-byte)*8
-                assertEquals(((value ushr shift) and 255).toLong(), ManagedByteArray.read(bytes, index*4L+byte))
+                assertEquals(((value ushr shift) and 255).toLong(), ManagedByteArray.read(bytes, index*4L+byte).toLong())
             }
         }
         for (byte in bits.size*4 until bytes.size) assertEquals(91, bytes[byte].toInt())
@@ -36,12 +36,12 @@ class FloatArrayTest {
             (3.5f.toRawBits().toLong() shl 32) or 0x8000_0000L
             else Long.MIN_VALUE or 3.5f.toRawBits().toLong()
         assertEquals(expected, ManagedByteArray.readInt(other, 0))
-        assertEquals(0L, ManagedByteArray.readWord32(bytes, 0))
+        assertEquals(0L, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)))
         // Mutate two bytes across the Float element boundary using mutable storage.
-        ManagedByteArray.write(other, 3, 0x41)
-        ManagedByteArray.write(other, 4, 0x23)
+        ManagedByteArray.write(other, 3, (0x41).toInt())
+        ManagedByteArray.write(other, 4, (0x23).toInt())
         for (element in 0..1) {
-            val expectedBits = ManagedByteArray.readWord32(other, element.toLong()).toInt()
+            val expectedBits = Integer.toUnsignedLong(ManagedByteArray.readWord32(other, element.toLong())).toInt()
             assertEquals(expectedBits, ManagedByteArray.readFloat(other, element.toLong()).toRawBits())
         }
     }
@@ -78,10 +78,10 @@ class FloatArrayTest {
         val quiet = Float.fromBits(0x7fc01234)
         val write = byteArrayExpression(ByteArrayOp.WRITE_FLOAT, CoreRepresentation.UNKNOWN, arrayOf(
             operand("array") { bytes }, operand("index") { 0L }, operand("value") { quiet },
-            operand("state") { assertEquals(0x8000_0000L, ManagedByteArray.readWord32(bytes, 0)); Unit }))
+            operand("state") { assertEquals(0x8000_0000L, Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0))); Unit }))
         assertSame(Unit, write.execute(frame))
         assertEquals(listOf("array", "index", "value", "state"), events)
-        assertEquals(quiet.toRawBits().toLong(), ManagedByteArray.readWord32(bytes, 0))
+        assertEquals(quiet.toRawBits().toLong(), Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)))
         for (badState in listOf<() -> Any?>({ throw RuntimeFault("state failed") }, { 0L })) {
             frame.setFloat(slot, -0.0f)
             val failedRead = byteArrayExpression(ByteArrayOp.READ_FLOAT, CoreRepresentation.UNKNOWN, arrayOf(
@@ -91,7 +91,7 @@ class FloatArrayTest {
             val failedWrite = byteArrayExpression(ByteArrayOp.WRITE_FLOAT, CoreRepresentation.UNKNOWN, arrayOf(
                 operand("array") { bytes }, operand("index") { 0L }, operand("value") { 99.0f }, operand("state", badState)))
             assertThrows(RuntimeFault::class.java) { failedWrite.execute(frame) }
-            assertEquals(quiet.toRawBits().toLong(), ManagedByteArray.readWord32(bytes, 0))
+            assertEquals(quiet.toRawBits().toLong(), Integer.toUnsignedLong(ManagedByteArray.readWord32(bytes, 0)))
         }
     }
 }

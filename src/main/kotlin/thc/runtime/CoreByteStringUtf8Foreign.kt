@@ -85,7 +85,7 @@ internal class ByteStringUtf8Expression(private val safe: Boolean,
         requireVoidCarrier(operands[2].execute(frame))
         // A safe declaration admits an async poll only after C has returned and
         // its result is saved. Resumption must never invoke the foreign call again.
-        FrameAccess.writeLong(frame, slots[offset], ManagedByteStringUtf8.validate(address, length))
+        FrameAccess.writeInt(frame, slots[offset], ManagedByteStringUtf8.validate(address, length).toInt())
         if (safe && AstControl.enabled(this)) {
             val compiled = CompilerDirectives.inCompiledCode()
             GuestThreads.pollCurrent(this, false)?.let { request ->

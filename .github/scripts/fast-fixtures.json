@@ -55,6 +55,8 @@
     "thc.CoreLoweringRootsTest",
     "thc.runtime.CoreFreeVariablesTest",
     "thc.runtime.CompilerHeapHintTest",
+    "thc.runtime.NarrowIntegerCarrierTest",
+    "thc.runtime.NarrowIntegerContinuationTest",
     "thc.runtime.HandoffTest",
     "thc.runtime.HostEntryCompilationTest",
     "thc.runtime.SimdFamiliesTest",

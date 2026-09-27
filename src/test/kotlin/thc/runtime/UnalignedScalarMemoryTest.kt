@@ -254,9 +254,9 @@ class UnalignedScalarMemoryTest {
                     val mask = when (width) { 1 -> 255L; 2 -> 65535L; 4 -> 0xffffffffL; else -> -1L }
                     assertEquals(bits and mask, operation.read(address.plus(16), offset - 16, true))
                     val arrayValue = when (width) {
-                        1 -> ManagedByteArray.readGuest(owner, offset, true)
-                        2 -> ManagedByteArray.readInt16ByteOffsetGuest(owner, offset, true)
-                        4 -> ManagedByteArray.readInt32ByteOffsetGuest(owner, offset, true)
+                        1 -> ManagedByteArray.readGuest(owner, offset, true).toLong()
+                        2 -> ManagedByteArray.readInt16ByteOffsetGuest(owner, offset, true).toLong()
+                        4 -> Integer.toUnsignedLong(ManagedByteArray.readInt32ByteOffsetGuest(owner, offset, true))
                         else -> ManagedByteArray.readIntGuest(owner, offset, true)
                     }
                     assertEquals(bits and mask, arrayValue)
