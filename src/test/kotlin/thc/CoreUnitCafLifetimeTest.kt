@@ -14,6 +14,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
 import org.graalvm.polyglot.Context
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
@@ -24,6 +25,7 @@ import thc.runtime.*
 @Timeout(60)
 class CoreUnitCafLifetimeTest {
     @TempDir lateinit var directory: Path
+    @AfterEach fun releaseIdleFixtureMappings() { CoreFileMappings.shared.evictIdleBelow(directory) }
     private val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)
     private val integer = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private val data = mapOf("kind" to "data", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to false)
