@@ -848,6 +848,27 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         }
     }
 }
+for ((taskName, dense) in listOf("libyamlNativeDefault" to false, "libyamlNativeDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Checks genuine libyaml C-only dependency products, retained input, cleanup and native encoder buffers."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        val fixture = providers.gradleProperty("thc.libyamlFixture").orElse("build/libyaml-native")
+        systemProperty("thc.libyamlFixture", file(fixture.get()).absolutePath)
+        systemProperty("thc.libyamlBundle", file("${fixture.get()}/libyaml.zip").absolutePath)
+        inputs.dir(fixture)
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.LibyamlNativeProductsTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            check(file("${fixture.get()}/manifest.json").isFile) {
+                "Set THC_LIBYAML_CAPTURE_STAGE to a genuine retained Cabal acquisition; run thc-fixtures libyaml-native"
+            }
+        }
+    }
+}
 for ((taskName, dense) in listOf("wcwidthDefault" to false, "wcwidthDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

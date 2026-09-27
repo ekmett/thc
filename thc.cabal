@@ -1029,6 +1029,7 @@ executable thc-fixtures
     PackageNativeOriginalsFixtures
     PackageNativeArchiveFixtures
     GetEntropyFixtures
+    LibyamlNativeFixtures
     WcwidthFixtures
     TextCbitsFixtures
     ByteStringSortFixtures

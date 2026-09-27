@@ -104,6 +104,7 @@ import PackageScalarFixtures (preparePackageScalar)
 import PackageNativeOriginalsFixtures (preparePackageNativeOriginals)
 import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
+import LibyamlNativeFixtures (prepareLibyamlNative)
 import WcwidthFixtures (prepareWcwidth)
 import TextCbitsFixtures (prepareTextCbits)
 import ByteStringSortFixtures
@@ -1010,6 +1011,7 @@ main = do
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
     ["package-native-originals"] -> preparePackageNativeOriginals root
+    ["libyaml-native"] -> prepareLibyamlNative root
     ["package-native-archives"] -> preparePackageNativeArchives root
     ["getentropy"] -> prepareGetEntropy root
     ["wcwidth"] -> prepareWcwidth root

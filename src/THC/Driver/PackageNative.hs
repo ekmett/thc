@@ -27,7 +27,7 @@ import qualified Data.Aeson.KeyMap as KM
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (isAlpha, isAlphaNum)
-import Data.List (groupBy, isPrefixOf, isSuffixOf, nub, sort)
+import Data.List (groupBy, isInfixOf, isPrefixOf, isSuffixOf, nub, sort)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import Numeric (showHex)
@@ -582,7 +582,9 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
       _ <- command directory opt ["-passes=verify","--mtriple=" ++ target,bridgeSource,"-o",bridgeBitcode]
       _ <- command directory link [linked,"--override=" ++ bridgeBitcode,"-o",bridged]
       inputHash <- sha <$> BS.readFile linked
-      pure (bridged,[object ["profile" .= ("x86_64-c-integer-argument-truncation-v1"::String),
+      let profile = if any (\(_,body,_) -> "zext i32 %r to i64" `isInfixOf` body) bridges
+            then "x86_64-c-integer-slot-bridges-v2" else "x86_64-c-integer-argument-truncation-v1"
+      pure (bridged,[object ["profile" .= (profile::String),
         "source" .= source,"sourceSha256" .= sha (T.encodeUtf8 (T.pack source)),
         "inputBitcodeSha256" .= inputHash,"definitions" .= [witnesses | (_,_,witnesses) <- bridges]]])
     let trim input = command directory opt ["-passes=internalize,globaldce",

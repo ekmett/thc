@@ -30,6 +30,22 @@ import THC.Driver.NativeDependencies (selectCOnlyPieces)
 tests :: Test
 tests = TestLabel "package-owned native C acquisition" $ TestList
   [ TestCase $ do
+      let caller = "define i64 @entry(ptr %0) {\n  %1 = call i64 @result(ptr %0)\n  ret i64 %1\n}\n"
+          callee = "define i32 @result(ptr nocapture noundef readonly %0) {\n"
+          body = "  %2 = getelementptr inbounds nuw i8, ptr %0, i64 12\n  %3 = load i32, ptr %2, align 4, !tbaa !117\n  ret i32 %3\n}\n"
+          bridge suffix = nativeArgumentBridge "x86_64-unknown-linux-gnu" "result" "entry" (caller ++ callee ++ suffix)
+      case bridge body of
+        Just (declaration,generated,witness) -> do
+          assertEqual "actual C result stays i32" "declare i32 @result(ptr)" declaration
+          assertBool "explicit zero extension of observed leaf load" ("zext i32 %r to i64" `isInfixOf` generated)
+          assertBool "retain actual definition not just its signature" ("ret i32 %3" `elem` witness)
+        Nothing -> assertFailure "missing constrained native return bridge"
+      forM_ ["  ret i32 7\n}\n", "  %1 = call i32 @other(ptr %0)\n  ret i32 %1\n}\n",
+          "  %1 = load volatile i32, ptr %0\n  ret i32 %1\n}\n"] $ \other ->
+        assertEqual "signature alone cannot establish excess return bits" Nothing (bridge other)
+      assertEqual "no return adaptation on other targets" Nothing
+        (nativeArgumentBridge "aarch64-unknown-linux-gnu" "result" "entry" (caller ++ callee ++ body))
+  , TestCase $ do
       let validate = validateNativeLibcIR "x86_64-unknown-linux-gnu" ["realloc"]
       assertEqual "original libc allocation declaration" (Right ())
         (validate "declare noalias noundef ptr @realloc(ptr allocptr nocapture noundef, i64 noundef) local_unnamed_addr #5")
