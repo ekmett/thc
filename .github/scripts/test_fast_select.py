@@ -263,7 +263,11 @@ class FastSelectionTest(unittest.TestCase):
                      "compact-core/THC/Compact/Compression.hs", "compact-core/THC/Compact/Zip.hs",
                      "test/compact-core/CbdTests.hs", "test/compact-core/CompressionTests.hs",
                      "test/compact-core/Main.hs", "test/compact-core/golden/integers-v1.json",
-                     "test/compact-core/golden/cbd-header-v1.hex"):
+                     "test/compact-core/golden/cbd-header-v1.hex",
+                     "test/compact-core/golden/cbd-module-v1.json",
+                     "test/compact-core/golden/cbd-module-v1-stored.cbd",
+                     "test/compact-core/golden/cbd-module-v1-deflated.cbd",
+                     "test/compact-core/golden/cbd-module-v1-mixed.cbd"):
             with self.subTest(path=path):
                 self.policy["owners"][path] = policy["owners"][path]
                 self.write(select.POLICY, json.dumps(self.policy))

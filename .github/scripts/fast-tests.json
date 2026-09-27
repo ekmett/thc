@@ -387,6 +387,10 @@
     "test/compact-core/CompressionTests.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/golden/integers-v1.json": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/golden/cbd-header-v1.hex": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/cbd-module-v1.json": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/cbd-module-v1-stored.cbd": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/cbd-module-v1-deflated.cbd": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/cbd-module-v1-mixed.cbd": {"junit": ["thc.CoreCompactGoldenTest"], "python": [], "haskell": ["compact-core-tests"]},
     "json-index/THC/JsonIndex.hs": {
       "junit": [], "python": [], "haskell": ["driver-tests", "json-index"]
     },
