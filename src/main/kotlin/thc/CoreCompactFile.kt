@@ -10,8 +10,8 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.zip.CRC32
 
-/** One lazily acquired immutable container. Only mapped bytes are process-wide;
- * cursors, decoded objects and these detached counters belong to this load. */
+/** One lazily acquired immutable CBD archive. Mapped and inflated bytes are
+ * process-wide; cursors, decoded objects and detached counters belong to this load. */
 internal class CoreCompactFile(private val path: Path, private val identity: String,
                                private val verifyArtifacts: Boolean = false,
                                private val mappings: CoreFileMappings = CoreFileMappings.shared,
@@ -185,7 +185,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
         } finally { counters.lookupBytesRead += cursor.position }
     }
 
-    /** The callback must finish while this file owns its mapping lease. */
+    /** The callback must finish while this file owns its member leases. */
     fun <T> data(offset: Long, decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
         val current = mapping()
         val span = current.header[CoreCompactFormat.Segment.DATA]

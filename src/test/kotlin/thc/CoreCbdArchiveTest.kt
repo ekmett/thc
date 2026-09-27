@@ -41,6 +41,13 @@ class CoreCbdArchiveTest {
         }
     }
 
+    @Test fun offsetOnlyZip64CentralEntryAllowsOrdinarySmallLocalMember() {
+        val bytes = CoreCbdTestSupport.zip64(offsetsOnly = true)
+        CoreFileMappings(0, 0).use { maps -> CoreCbdArchive.open(maps.acquire(write(bytes), sha(bytes))).use { archive ->
+            archive.read("data").use { assertEquals(42, it.bytes.get(ValueLayout.JAVA_BYTE, 0).toInt()) }
+        } }
+    }
+
     @Test fun allDeflatedIncludingEmptyMembersValidateStreamsAndDeclaredLengths() {
         val bytes = source(compressed = CoreCbdArchive.NAMES)
         CoreFileMappings(0, 0).use { maps -> CoreCbdSlabs(0, 0).use { slabs ->
@@ -166,6 +173,7 @@ class CoreCbdArchiveTest {
         val mutations = listOf<(ByteBuffer) -> Unit>(
             { it.putShort(offsets[0] + 10, 12) }, // Unsupported method.
             { it.putShort(offsets[0] + 8, 1) }, // Encryption.
+            { it.putShort(4, 46) }, // Unsupported local extraction version.
             { it.putInt(offsets[0] + 42, Int.MAX_VALUE) },
             { it.putInt(offsets[0] + 24, Int.MAX_VALUE) },
             { it.putInt(offsets[0] + 16, 0) }, // Local/central CRC differs.

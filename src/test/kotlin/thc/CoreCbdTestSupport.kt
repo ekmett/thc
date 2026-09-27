@@ -41,7 +41,7 @@ internal object CoreCbdTestSupport {
     }
 
     /** Small ZIP64 model uses sentinel fields despite small actual members. */
-    fun zip64(): ByteArray {
+    fun zip64(offsetsOnly: Boolean = false): ByteArray {
         val members = listOf("header" to header(), "data" to byteArrayOf(42), "strings" to byteArrayOf(),
             "names" to byteArrayOf(), "filenames" to byteArrayOf(), "line-columns" to byteArrayOf(), "symbols" to byteArrayOf())
         val out = ByteArrayOutputStream()
@@ -50,12 +50,13 @@ internal object CoreCbdTestSupport {
         for ((name, bytes) in members) {
             offsets += out.size().toLong()
             fields(30) {
-                putInt(0x04034b50); putShort(45); putShort(0); putShort(0); putInt(0)
-                putInt(CRC32().also { it.update(bytes) }.value.toInt()); putInt(-1); putInt(-1)
-                putShort(name.length.toShort()); putShort(20)
+                putInt(0x04034b50); putShort(if (offsetsOnly) 20 else 45); putShort(0); putShort(0); putInt(0)
+                putInt(CRC32().also { it.update(bytes) }.value.toInt())
+                putInt(if (offsetsOnly) bytes.size else -1); putInt(if (offsetsOnly) bytes.size else -1)
+                putShort(name.length.toShort()); putShort(if (offsetsOnly) 0 else 20)
             }
             out.write(name.toByteArray())
-            fields(20) { putShort(1); putShort(16); putLong(bytes.size.toLong()); putLong(bytes.size.toLong()) }
+            if (!offsetsOnly) fields(20) { putShort(1); putShort(16); putLong(bytes.size.toLong()); putLong(bytes.size.toLong()) }
             out.write(bytes)
         }
         val directory = out.size().toLong()
@@ -63,11 +64,13 @@ internal object CoreCbdTestSupport {
             val (name, bytes) = pair
             fields(46) {
                 putInt(0x02014b50); putShort(45); putShort(45); putShort(0); putShort(0); putInt(0)
-                putInt(CRC32().also { it.update(bytes) }.value.toInt()); putInt(-1); putInt(-1)
-                putShort(name.length.toShort()); putShort(28); putShort(0); putShort(0); putShort(0); putInt(0); putInt(-1)
+                putInt(CRC32().also { it.update(bytes) }.value.toInt())
+                putInt(if (offsetsOnly) bytes.size else -1); putInt(if (offsetsOnly) bytes.size else -1)
+                putShort(name.length.toShort()); putShort(if (offsetsOnly) 12 else 28); putShort(0); putShort(0); putShort(0); putInt(0); putInt(-1)
             }
             out.write(name.toByteArray())
-            fields(28) { putShort(1); putShort(24); putLong(bytes.size.toLong()); putLong(bytes.size.toLong()); putLong(offsets[index]) }
+            if (offsetsOnly) fields(12) { putShort(1); putShort(8); putLong(offsets[index]) }
+            else fields(28) { putShort(1); putShort(24); putLong(bytes.size.toLong()); putLong(bytes.size.toLong()); putLong(offsets[index]) }
         }
         val directorySize = out.size() - directory
         val record = out.size().toLong()

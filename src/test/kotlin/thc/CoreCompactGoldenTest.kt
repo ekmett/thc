@@ -6,8 +6,10 @@ package thc
 import java.lang.foreign.MemorySegment
 import java.nio.file.Files
 import java.nio.file.Path
+import java.security.MessageDigest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import thc.runtime.CoreSources
 
 /** These same manually specified bytes are checked by the native producer.
  * They test framing/primitives, not a fabricated executable Core module. */
@@ -43,5 +45,48 @@ class CoreCompactGoldenTest {
         assertEquals(1L, format.bindingCount)
         assertEquals(10, format.summaries)
         assertEquals(0, format.debug)
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    @Test fun nativeProducerStoredDeflatedAndMixedGoldensKeepSelectedRecordsAndLazyDebug() {
+        val expected = Json.parse(Files.readString(directory.resolve("cbd-module-v1.json"))) as Map<String, Any?>
+        val expectedSection = CoreSources(expected).binding((expected["bindings"] as List<Map<String, Any?>>).first())!!.section!!
+        for (encoding in listOf("stored", "deflated", "mixed")) {
+            val path = directory.resolve("cbd-module-v1-$encoding.cbd")
+            val identity = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))
+                .joinToString("") { "%02x".format(it) }
+            CoreFileMappings(0, 0).use { mappings -> CoreCbdSlabs(0, 0).use { slabs ->
+                CoreCompactFile(path, identity, mappings = mappings, slabs = slabs).use { file ->
+                    val records = CoreCompactRecords(file, identity)
+                    val facts = records.header()
+                    for (key in listOf("schema", "ghc", "unit", "module", "boundary", "constructors"))
+                        assertEquals(expected[key], facts[key], "$encoding/$key")
+                    assertEquals(0L, file.counters.statistics().dataBytesRead)
+                    assertEquals(0L, file.counters.statistics().debugBytesRead)
+                    val answer = records.binding(file.lookup("main:CBDGolden.answer")!!)
+                    assertEquals(listOf("lit", "int", "42"), (answer["expr"] as List<*>).take(3))
+                    val identityBinding = records.binding(file.lookup("main:CBDGolden.identity")!!)
+                    val lambda = identityBinding["expr"] as List<*>
+                    assertEquals("lam", lambda[0])
+                    val formal = (lambda[1] as List<*>).single() as Map<*, *>
+                    assertEquals(listOf("var", formal["id"]), (lambda[2] as List<*>).take(2))
+                    assertEquals(0L, file.counters.statistics().debugBytesRead)
+                    assertEquals(0L, file.counters.statistics().hashBytesRead)
+                    if (encoding == "stored") assertEquals(0L, file.counters.statistics().inflatedBytes)
+                    else assertTrue(file.counters.statistics().inflatedBytes > 0)
+                    val origin = answer["compactOrigin"] as CoreCompactRecords.Origin
+                    assertEquals("answer", origin.debug!!.name(origin.bindingOffset, 0))
+                    val section = origin.debug.location(origin.dataOffset)!!.section!!
+                    assertEquals("CBDGolden.hs", section.source.name)
+                    // This original model supplies GHC line/column coordinates,
+                    // not character offsets. Preserve the JSON route's exact
+                    // unavailable-text policy rather than inventing offsets.
+                    assertEquals(expectedSection.source.hasCharacters(), section.source.hasCharacters())
+                    assertEquals(expectedSection.characters.toString(), section.characters.toString())
+                    assertEquals(listOf(1, 1, 1, 11), listOf(section.startLine, section.startColumn, section.endLine, section.endColumn))
+                    assertTrue(file.counters.statistics().debugBytesRead > 0)
+                }
+            } }
+        }
     }
 }

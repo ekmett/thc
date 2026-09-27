@@ -98,8 +98,8 @@ internal class CoreFileMappings(private val maxIdleBytes: Long, private val maxI
         return Lease(this, mapping, opened)
     }
 
-    /** Legacy callers without an immutable producer identity cannot share or
-     * retain a pathname-only mapping. Their lease owns a fresh mapping. */
+    /** Callers without an immutable producer identity cannot reuse a pathname-only
+     * cache entry. Their lease (and any retained handles) owns a fresh mapping. */
     @Synchronized fun acquireUncached(path: Path): Lease {
         check(!closed) { "Core file mapping cache is closed" }
         val mapping = open(path.toAbsolutePath().normalize(), null)

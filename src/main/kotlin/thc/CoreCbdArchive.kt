@@ -172,7 +172,7 @@ internal class CoreCbdArchive private constructor(private var mapping: CoreFileM
                 require(u32(record) == 0x06064b50L) { "Invalid CBD ZIP64 directory" }
                 val recordSize = u64(record + 4)
                 require(recordSize >= 44 && extent(record + 12, recordSize, locator) == locator) { "Invalid CBD ZIP64 directory extent" }
-                require(u16(record + 14) <= 45 && u32(record + 16) == 0L && u32(record + 20) == 0L) { "Unsupported CBD ZIP64 directory" }
+                require(u16(record + 14) == 45 && u32(record + 16) == 0L && u32(record + 20) == 0L) { "Unsupported CBD ZIP64 directory" }
                 count = u64(record + 32)
                 require(u64(record + 24) == count) { "Multi-disk CBD ZIP64 member count" }
                 directorySize = u64(record + 40)
@@ -213,6 +213,8 @@ internal class CoreCbdArchive private constructor(private var mapping: CoreFileM
                 val name = name(cursor + 46, nameLength)
                 require(name !in result) { "Duplicate CBD ZIP member: $name" }
                 val extra = zip64(extraAt, extraLength)
+                val central64 = length == 0xffffffffL || compressed == 0xffffffffL || local == 0xffffffffL || disk == 65535L
+                require(!central64 || version == 45) { "Invalid CBD ZIP64 central version" }
                 var extraCursor = extra?.first ?: 0
                 fun longExtra(): Long {
                     val end = requireNotNull(extra) { "Missing CBD ZIP64 extra field" }.second
@@ -228,7 +230,10 @@ internal class CoreCbdArchive private constructor(private var mapping: CoreFileM
                 }
                 require(disk == 0L && (method != 0 || compressed == length)) { "Invalid CBD ZIP member sizes or disk" }
                 extent(local, 30, directoryAt)
-                require(u32(local) == 0x04034b50L && u16(local + 4) == version && u16(local + 6) == flags &&
+                val localVersion = u16(local + 4)
+                // An offset-only central ZIP64 extra does not require ZIP64
+                // local framing: its small member can still use version 2.0.
+                require(u32(local) == 0x04034b50L && localVersion in 10..45 && u16(local + 6) == flags &&
                     u16(local + 8) == method) { "CBD ZIP local/central header disagreement" }
                 val localNameLength = u16(local + 26)
                 val localExtraLength = u16(local + 28)
@@ -238,6 +243,7 @@ internal class CoreCbdArchive private constructor(private var mapping: CoreFileM
                 var localCompressed = u32(local + 18)
                 var localLength = u32(local + 22)
                 val local64 = localCompressed == 0xffffffffL || localLength == 0xffffffffL
+                require(!local64 || localVersion == 45) { "Invalid CBD ZIP64 local version" }
                 val localExtra = zip64(localExtraAt, localExtraLength)
                 if (local64) {
                     val pair = requireNotNull(localExtra) { "Missing local CBD ZIP64 sizes" }
