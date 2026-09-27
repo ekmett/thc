@@ -1510,7 +1510,7 @@ private open class Case(scrutinee: Expr, protected val binderSlot: Int,
             val data = frame.getObject(binderSlot) as? DataValue ?: fault("Invalid constructor case")
             val layout = alt.value as? DataLayout ?: fault("Invalid constructor alternative")
             for (i in alt.fields.indices) {
-                val lanes = alt.vectorFields.getOrNull(i)
+                val lanes = if (i < alt.vectorFields.size) alt.vectorFields[i] else null
                 if (lanes == null) layout.restore(data, i, frame, alt.fields[i])
                 else layout.restoreVector(data, i, frame, lanes, 0)
             }
