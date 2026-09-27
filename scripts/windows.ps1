@@ -56,7 +56,7 @@ try {
         $fixture = Invoke-ThcTool $cabal (@('list-bin', 'exe:thc-fixtures') + $flags)
         Invoke-ThcTool $fixture @('native-addresses')
         $focusedTests += @('thc.runtime.NativeMallocTest', 'thc.runtime.WindowsStdioHostAbiTest',
-            'thc.runtime.PosixStdioHostAbiModelTest',
+            'thc.runtime.PosixStdioHostAbiModelTest', 'thc.runtime.StdioHostAbiFailureTest',
             'thc.runtime.ReturnedForeignPointerTest', 'thc.runtime.ReturnedPointerCompilationTest',
             'thc.runtime.NarrowReturnedPointerTest', 'thc.runtime.ForeignExceptionPolicyTest',
             'thc.runtime.WindowsSulongLibraryLookupTest',

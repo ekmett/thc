@@ -3,10 +3,10 @@
 package thc.runtime;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -98,10 +98,10 @@ final class StdioHostAbi {
     private static final Map<String, Long> WIDTHS = Map.of("charBits", 8L, "pointer", 8L, "int", 4L, "bool", 1L, "size", 8L, "ssize", 8L);
     private static final Map<String, Long> WINDOWS_WIDTHS = Map.of("charBits", 8L, "pointer", 8L, "int", 4L, "long", 4L,
         "bool", 1L, "size", 8L, "crtReadResult", 4L, "crtReadCount", 4L);
-    private static final Set<String> ERROR_NAMES = Set.of("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE");
-    private static final Set<String> SEEK_NAMES = Set.of("SEEK_SET", "SEEK_CUR", "SEEK_END");
-    private static final Set<String> OPEN_NAMES = Set.of("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND",
-        "O_CREAT", "O_EXCL", "O_BINARY", "O_TRUNC", "O_NOCTTY", "O_NONBLOCK", "F_GETFL", "F_SETFL", "F_SETFD", "FD_CLOEXEC");
+    private static final Set<String> ERROR_NAMES = new LinkedHashSet<>(List.of("ENOENT", "EACCES", "EEXIST", "EBADF", "EINVAL", "EIO", "ENOTSUP", "EBUSY", "EISDIR", "ENOTTY", "ESPIPE", "EMFILE"));
+    private static final Set<String> SEEK_NAMES = new LinkedHashSet<>(List.of("SEEK_SET", "SEEK_CUR", "SEEK_END"));
+    private static final Set<String> OPEN_NAMES = new LinkedHashSet<>(List.of("modeBytes", "O_ACCMODE", "O_RDONLY", "O_WRONLY", "O_RDWR", "O_APPEND",
+        "O_CREAT", "O_EXCL", "O_BINARY", "O_TRUNC", "O_NOCTTY", "O_NONBLOCK", "F_GETFL", "F_SETFL", "F_SETFD", "FD_CLOEXEC"));
 
     private static Long exactInteger(Object value) {
         return value instanceof Integer || value instanceof Long ? ((Number) value).longValue() : null;
@@ -191,13 +191,11 @@ final class StdioHostAbi {
         return new StdioHostAbi(errors, seek, open, atFdcwd, atRemoveDir, atNoFollow, atEmptyPath, siginfoBytes);
     }
 
-    public static StdioHostAbi load() {
+    public static StdioHostAbi load() throws IOException {
         Object document;
         try (var stream = StdioHostAbi.class.getResourceAsStream("/thc/native/stdio-host-abi.json")) {
             if (stream == null) throw new RuntimeFault("Missing generated original stdio host ABI");
             document = Json.INSTANCE.parse(new String(stream.readAllBytes(), StandardCharsets.UTF_8));
-        } catch (IOException failure) {
-            throw new UncheckedIOException(failure);
         }
         if (document == null) throw new RuntimeFault("Missing generated original stdio host ABI");
         String system = System.getProperty("os.name");

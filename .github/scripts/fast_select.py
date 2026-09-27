@@ -43,12 +43,11 @@ POLYGLOT_EXACT_INPUTS = {
     "src/examples/kotlin/thc/PolyglotDemo.kt",
     "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
     "src/main/java/thc/runtime/RuntimeTypes.java",
-    "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
     "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (
     POLYGLOT_TEST_ROOT, "compiler/THC/", "examples/THC/Polyglot",
-    "examples/THC/JavaScript", "src/main/kotlin/thc/runtime/",
+    "examples/THC/JavaScript", "src/main/kotlin/thc/runtime/", "src/main/java/thc/runtime/",
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"

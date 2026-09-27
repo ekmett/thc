@@ -1382,6 +1382,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
         owners = self.policy["owners"]
+        self.assertLessEqual({"thc.runtime.PosixStdioHostAbiModelTest", "thc.runtime.StdioHostAbiFailureTest"},
+                             set(owners["src/main/java/thc/runtime/StdioHostAbi.java"]["junit"]))
         native = {"thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest",
                   "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest",
                   "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"}
