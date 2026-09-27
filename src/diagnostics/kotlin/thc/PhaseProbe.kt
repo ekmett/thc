@@ -5,6 +5,8 @@ package thc
 
 import com.sun.management.ThreadMXBean
 import java.lang.management.ManagementFactory
+import java.nio.file.Files
+import java.nio.file.Path
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Value
 
@@ -41,6 +43,70 @@ private class PhaseMeasurements {
                 "failure" to failure?.toString())))
         }
     }
+
+    /** Whole-process observations, not retained Core-only object sizes. */
+    fun memoryCheckpoint(name: String) {
+        val before = collectors.sumOf { it.collectionCount }
+        System.gc()
+        check(collectors.sumOf { it.collectionCount } > before) {
+            "Explicit GC did not complete at $name; no post-GC measurement available"
+        }
+        val status = Path.of("/proc/self/status")
+        val rss = if (Files.isRegularFile(status)) Files.readAllLines(status)
+            .filter { it.startsWith("VmRSS:") || it.startsWith("VmHWM:") }
+            .associate { line ->
+                val fields = line.trim().split(Regex("\\s+"))
+                check(fields.size == 3 && fields[2] == "kB") { "Unexpected Linux RSS units: $line" }
+                fields[0].removeSuffix(":") to fields[1].toLong()
+            } else emptyMap()
+        println(Json.stringify(linkedMapOf("checkpoint" to name, "explicitGc" to true,
+            "heapUsedBytes" to memory.heapMemoryUsage.used,
+            "processRssKiB" to rss["VmRSS"], "processHighWaterRssKiB" to rss["VmHWM"],
+            "scope" to "whole-process, not Core-only retained memory")))
+    }
+}
+
+/** Loading experiment only: no training, compilation or throughput claim.
+ * Eager and indexed variants use identical JSON and settings in fresh JVMs.
+ * The original compiled-call probe below remains a separate strict control.
+ */
+private fun jsonLoadProbe(args: Array<String>) {
+    require(args.size == 5 || args.size == 7) {
+        "Usage: phase-probe --load-json MODULE ENTRY INPUT EXPECTED [NEXT_INPUT NEXT_EXPECTED]; optional -Dthc.jsonIndex=PATH"
+    }
+    val phases = PhaseMeasurements()
+    val backend = System.getProperty("thc.backend", "bytecode")
+    val async = System.getProperty("thc.asyncExceptions", "true").toBooleanStrict()
+    val notes = System.getProperty("thc.sourceNotesEnabled", "false").toBooleanStrict()
+    val index = System.getProperty("thc.jsonIndex")
+    println(Json.stringify(mapOf("mode" to "load-only", "indexed" to (index != null),
+        "backend" to backend, "asyncExceptions" to async, "sourceNotesEnabled" to notes)))
+    val context = phases.measure("context") { executionContext() }
+    try {
+        phases.memoryCheckpoint("preLoad")
+        val function = run {
+            val request = phases.measure("request") {
+                CoreModules.request(listOf(args[1]), args[2], instrument = true, backend = backend,
+                    sourceNotesEnabled = notes, asyncExceptions = async,
+                    jsonSidecars = index?.let { mapOf(args[1] to it) })
+            }
+            phases.measure("eval") { context.eval("thc", request) }
+        }
+        println(function.getMember("diagnostics").asString())
+        phases.memoryCheckpoint("postLoadPreEntry")
+        for (offset in 3 until args.size step 2) {
+            val input = args[offset].toLong()
+            val expected = args[offset + 1].toLong()
+            phases.measure("demand${(offset - 3) / 2 + 1}") {
+                val actual = function.execute(input).asLong()
+                check(actual == expected) { "${args[2]}($input): $actual != expected $expected" }
+            }
+            println(function.getMember("diagnostics").asString())
+            phases.memoryCheckpoint("postDemand${(offset - 3) / 2 + 1}")
+        }
+    } finally {
+        phases.measure("close") { context.close() }
+    }
 }
 
 /**
@@ -49,6 +115,7 @@ private class PhaseMeasurements {
  * Allocation counts cover this calling thread only, not Graal compiler workers.
  */
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--load-json") return jsonLoadProbe(args)
     require(args.size == 4) { "Usage: phase-probe MODULES ENTRY INPUT NATIVE_EXPECTED" }
     val modules = args[0].split(',')
     val entry = args[1]

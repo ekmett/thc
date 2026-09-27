@@ -23,9 +23,11 @@ The pipeline has three distinct boundaries:
    component build information to export the selected program and its
    dependencies. These native build products are not the guest executable.
 2. **Linking and admission.** Package manifests identify Core artifacts by
-   unit, module and hash. Strict loading checks the reachable program and its
-   supported operations, representations and foreign requirements. A complete
-   artifact is not by itself evidence that its code can execute.
+   unit, module and hash. Strict linking checks reachable references and foreign
+   requirements; the separate execution audit checks the program's supported
+   operations. Runtime representation and operation checks apply as bindings are
+   admitted and lowered, including when an indexed binding is first demanded.
+   A complete artifact is not by itself evidence that its code can execute.
 3. **Guest execution.** An accepted entry is lowered to the selected Truffle
    backend and runs with context-owned services. Host entry contracts decide
    how to supply arguments, start an IO action and expose its result.
@@ -58,6 +60,13 @@ closure, thunk and storage representations. Their control-flow machinery and
 continuation coverage are not interchangeable merely because values are shared.
 See the [bytecode guide](bytecode.md) and
 [JVM implementation reference introduction](site/jvm.md).
+
+An optional [JSON sidecar](core-package-manifest.md#optional-json-indexes-and-lazy-loading)
+lets either backend project fields from retained JSON bytes and prepare eligible
+top-level functions and thunks on demand. Source authentication, structural
+validation and dependency discovery still do eager work. The selected entry is
+prepared when loaded; cold callees need not have executable roots yet. Immutable
+source projections may be shared, but each Context owns its executable program.
 
 A guest value is distinct from the executable node that manipulates it:
 
