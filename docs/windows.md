@@ -351,6 +351,12 @@ the original global/native lookup. It grants no guest filesystem access and
 leaves native authority, C-owned pointer carriers and context ownership intact.
 Linux/macOS continue to use the unmodified pinned Sulong dependency.
 
+The packaged pointer bridge is compiled for Sulong's actual MSVC LLVM target,
+using Clang memory builtins on Windows to avoid an extra SDK dependency. The
+native GHC helpers retain their MinGW ABI, and the cbits manifest records the
+separate bitcode targets. Arbitrary MinGW package bitcode still requires a
+compatible producer; the loader's ABI verification remains enabled.
+
 See the [patch provenance and focused checks](../tools/sulong-windows/README.md).
 `verifyWindowsSulongSelection` verifies that only the intended upstream class
 changes and that the runtime selects exactly one patched artifact. The first

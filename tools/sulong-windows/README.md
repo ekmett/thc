@@ -21,6 +21,14 @@ duplicate stock/patched selection and checks unrelated entries byte-for-byte.
 The installed JDK, Gradle cache artifacts and Linux/macOS dependency selection
 are unchanged.
 
+The packaged pointer bridge is genuinely compiled by the selected Clang for
+`x86_64-pc-windows-msvc19.33.0`, the pinned Sulong Windows target. Its Windows
+memory operations use Clang builtins, which emit the same LLVM memory intrinsics
+without requiring a separate MSVC SDK. Native GHC/MD5/libdw DLLs retain their
+MinGW target. The cbits manifest records each bitcode artifact's target; no
+bitcode target metadata is rewritten and Sulong's ABI check remains enabled.
+This does not port arbitrary MinGW package bitcode to Sulong's MSVC ABI.
+
 Upstream artifacts from Maven Central (`org/graalvm/llvm/llvm-language/25.3.4.1`):
 
 - Sources SHA256: `716562a9c6cbe9201f53bc972d9eafbb1a692a9d9aebb9f177a541c5e0913f66`

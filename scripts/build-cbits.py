@@ -105,6 +105,17 @@ def main():
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
+    pointer_compiler, pointer_target = compiler, target
+    if system == "Windows":
+        # Sulong 25.3.4.1's managed Windows runtime uses the MSVC ABI. Compile
+        # this portable pointer bridge for that target; native GHC DLLs below
+        # still use the selected MinGW compiler/headers. Never relabel bitcode
+        # or turn off Sulong's target check to accept a different ABI.
+        pointer_target = "x86_64-pc-windows-msvc19.33.0"
+        pointer_compiler = [clang, "--target=" + pointer_target]
+        actual = subprocess.check_output([*pointer_compiler, "-dumpmachine"], text=True).strip()
+        if actual != pointer_target:
+            raise SystemExit(f"Clang did not select the Windows Sulong pointer ABI: {actual}")
     sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
                "md5": ROOT / "src/main/c/md5-api.c",
                "libdw-unavailable": ROOT / "src/main/c/libdw-unavailable.c"}
@@ -123,7 +134,8 @@ def main():
     if "wait-status" in sources and len(unix_headers) != 1:
         raise SystemExit(f"Expected one installed unix HsUnix.h, got {unix_headers}")
     for name, source in sources.items():
-        command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
+        selected_compiler = pointer_compiler if name == "package-pointer" else compiler
+        command = [*selected_compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
                    "-I", str(reference), "-I", str(headers[0].parent), "-I", str(config[0].parent),
                    str(source.relative_to(ROOT)),
@@ -196,6 +208,7 @@ def main():
         artifacts.append(artifact)
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,
+                "bitcodeTargets": {name + ".bc": pointer_target if name == "package-pointer" else target for name in sources},
                 "system": system, "architecture": arch,
                 "clangVersion": subprocess.check_output([clang, "--version"], text=True),
                 "ghc": "9.14.1", "commands": commands,
