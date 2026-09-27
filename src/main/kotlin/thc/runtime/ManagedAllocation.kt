@@ -105,7 +105,11 @@ internal class ManagedAllocation private constructor(
     }
 
     private fun invalidate(offset: Int, count: Int) {
-        if (count == 0) return
+        if (count == 0 || pointers == null) return
+        invalidatePointerCells(offset, count)
+    }
+
+    @TruffleBoundary private fun invalidatePointerCells(offset: Int, count: Int) {
         requireWholePointerOverlaps(offset, count)
         pointers?.keys?.removeIf { it.toLong() < offset.toLong() + count && it.toLong() + pointerBytes > offset }
         if (pointers?.isEmpty() == true) pointers = null
