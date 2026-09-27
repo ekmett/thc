@@ -1368,6 +1368,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    public static final class OriginalByteStringSort {
+        @Specialization public static void apply(ManagedAddress address, long count, Object state) {
+            TupleResultsKt.requireVoidCarrier(state);
+            ByteStringSort.sort(address, count);
+        }
+    }
+
+    @Operation
     public static final class OriginalByteStringDecimalPadded18 {
         @Specialization public static void apply(long value, ManagedAddress address, Object state) {
             TupleResultsKt.requireVoidCarrier(state);

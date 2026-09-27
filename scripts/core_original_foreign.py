@@ -96,6 +96,7 @@ TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosi
 OPERATIONS = {
     **TEXT_OPERATIONS,
     **BYTESTRING_DECIMAL_OPERATIONS,
+    'fps_sort': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None,)),
     **WAIT_STATUS_OPERATIONS,
     **{'is' + precision + predicate: ('ccall', 'unsafe', (rep, None), (None, 'IntRep'))
        for precision, rep in (('Float', 'FloatRep'), ('Double', 'DoubleRep'))
@@ -380,7 +381,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     convention, safety, expected, output = operation(target)
     if symbol in BYTESTRING_DECIMAL_OPERATIONS:
         require(bytestring_unit(target.get('unit')), 'pinned original bytestring decimal unit')
-    if symbol in ('memchr', 'memset', 'bytestring_is_valid_utf8'):
+    if symbol in ('memchr', 'memset', 'bytestring_is_valid_utf8', 'fps_sort'):
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
         require(text_unit(target.get('unit')), 'supported installed text unit')
@@ -395,7 +396,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
-                 symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
+                 symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),

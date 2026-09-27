@@ -14,6 +14,7 @@
     "thc_runtime_v1_trace": ["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null]
   },
   "managedForeignCalls": [
+    "fps_sort",
     "_hs_bytestring_long_long_int_dec",
     "_hs_bytestring_long_long_int_dec_padded18",
     "getRTSStatsEnabled",

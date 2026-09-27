@@ -336,6 +336,12 @@
     }
   },
   "owners": {
+    "src/test/kotlin/thc/runtime/ByteStringSortTest.kt": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/kotlin/thc/runtime/CoreByteStringSort.kt": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+    "compiler/test-fixtures/ByteStringSortAudit.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/haskell-fixtures/ByteStringSortFixtures.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/resources/core/original-bytestring-sort-descriptor.json": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+
     "src/test/kotlin/thc/runtime/ByteStringDecimalTest.kt": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/ByteStringDecimalAudit.hs": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
@@ -1085,6 +1091,7 @@
     },
     "src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt": {
       "junit": ["thc.runtime.AddressIdentityNativeTest",
+        "thc.runtime.ByteStringSortTest",
         "thc.runtime.ByteStringDecimalTest",
         "thc.runtime.UnixLibcTest",
         "thc.runtime.GhcBCOTest",
@@ -1491,6 +1498,7 @@
     },
     "test/haskell-fixtures/Main.hs": {
       "junit": [
+        "thc.runtime.ByteStringSortTest",
         "thc.runtime.ByteStringDecimalTest",
         "thc.runtime.UnixLibcTest",
         "thc.runtime.TextCbitsTest",
