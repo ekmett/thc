@@ -46,7 +46,7 @@ import THC.Driver.GhcProxy (ghcProxyCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
   readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
-import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules)
+import THC.Driver.RuntimeShim (RuntimeShim, withRuntimeShim, runtimeShimInputs, validateRuntimeShimModules, foreignExceptionBridgeUnit)
 import THC.Driver.PackageNative (captureNativeObject, capturePackageNative, finishPackageNative)
 import THC.Driver.NativeCache (nativeToolIdentity, nativePieceIdentity)
 import THC.Driver.Installed
@@ -205,7 +205,7 @@ resolveRunnable working target configuration environment native = do
   -- fallback without executing anything. Its exact bin-file selects the unit;
   -- do not duplicate Cabal's package/flag/ambiguity resolution here.
   (resolved, binary, diagnostic) <- readCreateProcessWithExitCode
-    (proc "cabal" (["list-bin", if null target then "." else target] ++ configuration))
+    (proc (maybe "cabal" id (lookup "CABAL" environment)) (["list-bin", if null target then "." else target] ++ configuration))
       {cwd = Just working, env = Just environment} ""
   require (resolved == ExitSuccess) ("Cabal runnable target selection failed: " ++ diagnostic)
   selectedPath <- case lines binary of
@@ -274,7 +274,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
                    ("THC_PROXY_NATIVE_RECIPES", receipts), ("THC_PROXY_GLOBAL_UNITS", ""),
                    ("THC_PROXY_NATIVE_PIECES", native </> "cache/thc/native-pieces-v1")]
       environment = overrides ++ filter (\(key, _) -> key `notElem` map fst overrides) inherited
-      nativeBuild arguments = runCommandWithEnv True "cabal" arguments project (Just environment)
+      cabal = maybe "cabal" id (lookup "CABAL" environment)
+      nativeBuild arguments = runCommandWithEnv True cabal arguments project (Just environment)
   selectedUnit <- resolveRunnable working target configuration environment native
   selectedPackageName <- field (unitValue selectedUnit) "pkg-name"
   selectedComponentName <- field (unitValue selectedUnit) "component-name"
@@ -327,7 +328,7 @@ runBuiltProject action project working thcRoot runtime output native target proj
       -- v2-build's monitor can say "up to date" after an intermediate .o is
       -- deleted. Ask this same Cabal CLI's Simple Setup to build the component
       -- directly; it owns and reads its own configured build representation.
-      runCommandWithEnv True "cabal" ["act-as-setup", "--build-type=Simple", "--", "build",
+      runCommandWithEnv True cabal ["act-as-setup", "--build-type=Simple", "--", "build",
         "--builddir=" ++ dist, componentTarget] sourceRoot (Just environment)
   let globals = [unit | unit <- ordered, not (unitLocal unit),
                        jsonField (unitValue unit) "type" == Just ("configured" :: String)]
@@ -393,6 +394,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
   wired <- if installedPolicy == "required" then pure [] else do
     require (Map.notMember "ghc-internal" byId) "Cabal plan duplicates the wired ghc-internal unit"
     (:[]) <$> wiredGhcInternal context thcRoot
+  (bridgeUnit, linked) <- linkForeignExceptionRuntime context environment installedPolicy ghcSource
+    registeredLibrary (described ++ wired)
   let manifest = output </> "packages.json"
       -- Complete installed Core provides GHC's generated :Main wrapper and
       -- original Handle shutdown. Pinned source remains the explicit limited
@@ -403,7 +406,8 @@ runBuiltProject action project working thcRoot runtime output native target proj
       audit = output </> "audit.json"
   atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
                                "schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-                               "units" .= (described ++ wired)])
+                               "foreignExceptionBridgeUnit" .= bridgeUnit,
+                               "units" .= linked])
   when (action == AuditAndRun) $ do
     runCommand True "python3" ([thcRoot </> "scripts/audit-core.py", "--package-manifest", manifest,
                                 "--entry", entry] ++
@@ -415,6 +419,114 @@ runBuiltProject action project working thcRoot runtime output native target proj
     runCommand False runtime (runtimeLaunchArguments ffiMode (if lifecycle
         then ["--run-executable", '@' : manifest, entry, shutdown]
         else ["--run-io", '@' : manifest, entry]) programName guestArguments) working
+
+exceptionBridgeModules :: [Value] -> IO [Value]
+exceptionBridgeModules units = fmap concat $ forM units $ \unit -> do
+  references <- optionalField unit "modules" ([] :: [Value])
+  let selected = [ref | ref <- references, jsonField ref "name" `elem`
+        map Just (["THC.Exception", "THC.Internal.Exception"] :: [String])]
+  if null selected then pure [] else do
+    bundle <- field unit "bundle"
+    path <- field bundle "path"
+    expected <- field bundle "sha256"
+    bytes <- BS.readFile path
+    require (shaHex bytes == expected) "exception runtime bundle changed during linking"
+    entries <- either fail pure =<< decodeZip bytes
+    forM selected $ \ref -> do
+      member <- field ref "path"
+      digest <- field ref "sha256"
+      body <- maybe (fail "exception runtime bundle lacks its declared module") pure (lookup member entries)
+      require (shaHex body == digest) "exception runtime module hash mismatch"
+      value <- either fail pure (eitherDecodeStrict' body)
+      require (jsonField value "unit" == (jsonField unit "id" :: Maybe String) &&
+        jsonField value "module" == (jsonField ref "name" :: Maybe String))
+        "exception runtime module identity mismatch"
+      pure value
+
+-- Cabal owns the sidecar's unit, configuration, dependencies and native compiler
+-- invocations. The source is the real runtime library; no rewritten package or
+-- synthetic foreign import acquires an application unit ID. All generated files
+-- live under this run's native output, leaving its project files untouched.
+linkForeignExceptionRuntime :: ExportContext -> [(String, String)] -> String -> Maybe FilePath ->
+  FilePath -> [Value] -> IO (String, [Value])
+linkForeignExceptionRuntime context environment installedPolicy ghcSource registeredLibrary described = do
+  existing <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules described
+  case existing of
+    Just unit -> pure (unit, described)
+    Nothing -> do
+      let native = contextNative context
+          root = contextRoot context
+          directory = native </> "runtime-sidecar"
+          project = directory </> "cabal.project"
+          dist = directory </> "dist"
+          compiler = contextGhc context
+          cabal = maybe "cabal" id (lookup "CABAL" environment)
+          pkg = maybe (takeDirectory compiler </> "ghc-pkg") id (contextGhcPkg context)
+          projectText = "packages: " ++ show (root </> "thc.cabal") ++ "\n"
+          configuration = ["--project-file", project, "--builddir", dist,
+            "--with-compiler", native </> "cache/thc/native-ghc", "--with-hc-pkg", pkg]
+      createDirectoryIfMissing True directory
+      exists <- doesFileExist project
+      previous <- if exists then readFile project else pure ""
+      unless (previous == projectText) (writeFile project projectText)
+      runCommandWithEnv True cabal (["build", "thc:lib:runtime", "--enable-build-info"] ++ configuration)
+        directory (Just environment)
+      plan <- readJson (dist </> "cache/plan.json")
+      require (jsonField plan "compiler-id" == Just (contextCompiler context) &&
+        jsonField plan "compiler-abi" == Just (contextAbi context))
+        "runtime sidecar compiler differs from the application"
+      units <- mapM readUnit =<< field plan "install-plan"
+      let byId = Map.fromList [(unitId unit, unit) | unit <- units]
+          candidates = [unit | unit <- units, unitLocal unit,
+            jsonField (unitValue unit) "pkg-name" == Just ("thc" :: String),
+            jsonField (unitValue unit) "component-name" == Just ("lib:runtime" :: String)]
+      runtime <- case candidates of
+        [unit] -> pure unit
+        _ -> fail "runtime sidecar plan must contain exactly one local thc:runtime library"
+      ordered <- dependencyClosure byId (unitId runtime)
+      require (all (\unit -> unitId unit == unitId runtime ||
+        jsonField (unitValue unit) "type" == Just ("pre-existing" :: String)) ordered)
+        "runtime sidecar has an unsupported non-installed dependency"
+      component <- readComponent runtime context
+      shim <- componentRuntimeShim (componentValue component)
+      require shim "runtime sidecar lacks the exact native runtime-shim profile"
+      componentDist <- field (unitValue runtime) "dist-dir"
+      roots <- componentRoots componentDist (componentValue component)
+      ensureNativeRecipes native componentDist roots compiler (componentValue component) $
+        runCommandWithEnv True cabal ["act-as-setup", "--build-type=Simple", "--", "build",
+          "--builddir=" ++ componentDist, "lib:runtime"] root (Just environment)
+      let present = [identifier | record <- described, Just identifier <- [jsonField record "id" :: Maybe String]]
+          missing = [unit | unit <- ordered, unitId unit /= unitId runtime, unitId unit `notElem` present]
+      dependencies <- if installedPolicy == "pinned"
+        then pure [object ["id" .= unitId unit, "depends" .= unitDepends unit, "modules" .= ([] :: [Value])] |
+                    unit <- missing]
+        else do
+          original <- prepareInterfaceHelper context root
+          registrations <- mapM (discoverInstalled original . unitId) missing
+          helper <- case ghcSource of
+            Nothing -> pure original
+            Just source -> prepareForeignInterfaces
+              (ForeignCompiler compiler (contextPluginDb context) (contextPluginUnit context)
+                (contextPluginLibrary context) registeredLibrary (contextDriverHash context))
+              (contextCache context) source original registrations
+          fmap concat $ forM missing $ \unit -> do
+            registrationUnit <- discoverInstalled helper (unitId unit)
+            require (sort (unitDepends unit) == sort (installedDepends registrationUnit))
+              "runtime sidecar installed dependencies differ from its plan"
+            result <- prepareInstalledBundle (contextCache context) (native </> "cache/thc/staging")
+              (root </> "compiler/target-layout.c") (contextDriverHash context) helper registrationUnit
+            bundle <- either (\failure -> fail ("runtime sidecar lacks complete Core: " ++ show failure)) pure result
+            pure (installedRecords registrationUnit bundle)
+      bundle <- exportUnit context roots Map.empty runtime
+      let record = object ["id" .= unitId runtime, "depends" .= unitDepends runtime,
+            "modules" .= bundleModules bundle,
+            "bundle" .= object ["path" .= bundlePath bundle, "sha256" .= bundleHash bundle]]
+          linked = described ++ dependencies ++ [record]
+          identities = [identifier | item <- linked, Just identifier <- [jsonField item "id" :: Maybe String]]
+      require (length identities == length (nub identities)) "runtime sidecar collides with an existing Core owner"
+      selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules linked
+      require (selected == Just (unitId runtime)) "runtime sidecar did not export its genuine exception bridge"
+      pure (unitId runtime, linked)
 
 prepareInterfaceHelper :: ExportContext -> FilePath -> IO InstalledContext
 prepareInterfaceHelper context root = do

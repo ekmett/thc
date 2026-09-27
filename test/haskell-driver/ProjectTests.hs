@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
-module ProjectTests (tests, acquisitionTests) where
+module ProjectTests (tests, acquisitionTests, exceptionBridgeTests) where
 
 import Control.Exception (bracket)
 import Control.Monad (forM, forM_)
@@ -16,7 +16,75 @@ import qualified THC.Driver.NativeRecipe as NativeRecipe
 import TestSupport
 
 tests :: Env -> Test
-tests env = TestList [acquisitionTests env, projectTests env, cstringTests env]
+tests env = TestList [acquisitionTests env, exceptionBridgeTests env, projectTests env, cstringTests env]
+
+exceptionBridgeTests :: Env -> Test
+exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linking" $ TestCase $
+  withFixtureNamed env "test/fixtures/run-pure" "ordinary project" $ \project ->
+  withCache (scratch env </> "core-cache") $ do
+    let base = takeDirectory project
+        sidecarOutput = base </> "sidecar-output"
+        linkedOutput = base </> "linked-output"
+        acquire output = run env base Nothing 300
+          ["acquire", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+           "--dist-dir", output]
+        selected manifest = string (field manifest "foreignExceptionBridgeUnit")
+        runtimeRecord manifest = one ((== selected manifest) . string . (`field` "id"))
+          (objects manifest "units")
+    before <- readText (project </> "run-pure.cabal")
+    first <- acquire sidecarOutput
+    assertSuccess first
+    manifest <- readJson (sidecarOutput </> "packages.json")
+    let bridge = selected manifest
+        record = runtimeRecord manifest
+        bundle = string (field (field record "bundle") "path")
+    assertBool "automatic runtime unit has actual exported modules" (not (null (objects record "modules")))
+    plan <- readJson (sidecarOutput </> "native/runtime-sidecar/dist/cache/plan.json")
+    let built = one ((== "lib:runtime") . string . (`field` "component-name")) (objects plan "install-plan")
+    assertEqual "bridge identity comes from the genuine sidecar Cabal plan" bridge (string (field built "id"))
+    internal <- readCore bundle (string $ field
+      (one ((== "THC.Internal.Exception") . string . (`field` "name")) (objects record "modules")) "path")
+    assertEqual "exported typed proof retains exact unit" bridge
+      (string $ field (field internal "foreignExceptionBridge") "unit")
+    inputs <- readCore bundle "inplace-manifest.json"
+    assertBool "compiled runtime source artifacts participate in the cache key" $
+      any (("THC/Internal/Exception." `isInfixOf`) . string . (`field` "path"))
+        (objects inputs "nativeArtifacts")
+    assertBool "native exception fallback remains a hashed, observed shim input" $
+      any ((== "exception.c") . takeFileName . string . (`field` "path"))
+        (objects (field inputs "runtimeShimRecipe") "inputs")
+    copyFile bundle (scratch env </> "exception-bridge-sidecar.zip")
+    copyFile (sidecarOutput </> "packages.json") (scratch env </> "exception-bridge-sidecar-packages.json")
+    copyFile (sidecarOutput </> "native/runtime-sidecar/dist/cache/plan.json")
+      (scratch env </> "exception-bridge-sidecar-plan.json")
+    assertEqual "user Cabal source untouched" before =<< readText (project </> "run-pure.cabal")
+    inventedProject <- doesFileExist (project </> "cabal.project")
+    assertBool "private sidecar never writes user project configuration" (not inventedProject)
+    repeated <- acquire sidecarOutput
+    assertSuccess repeated
+    warm <- readJson (sidecarOutput </> "packages.json")
+    assertEqual "warm acquisition retains exact bridge unit" bridge (selected warm)
+    assertEqual "warm acquisition reuses the content-keyed runtime bundle"
+      (field record "bundle") (field (runtimeRecord warm) "bundle")
+    -- Link the real runtime through Cabal as a dependency. The driver must reuse
+    -- that unit even though its inplace name differs from a store installation.
+    writeText (project </> "run-pure.cabal")
+      (replaceText "build-depends: base" "build-depends: thc:runtime, base" before)
+    writeText (project </> "cabal.project")
+      ("packages: run-pure.cabal " ++ show (thcRoot env </> "thc.cabal") ++ "\n")
+    linked <- acquire linkedOutput
+    assertSuccess linked
+    linkedManifest <- readJson (linkedOutput </> "packages.json")
+    linkedPlan <- readJson (linkedOutput </> "native/cache/plan.json")
+    let runtimeUnit = one ((== "lib:runtime") . string . (`field` "component-name"))
+          (objects linkedPlan "install-plan")
+    assertEqual "already-linked runtime dictionary is never replaced"
+      (string $ field runtimeUnit "id") (selected linkedManifest)
+    copyFile (string $ field (field (runtimeRecord linkedManifest) "bundle") "path")
+      (scratch env </> "exception-bridge-linked.zip")
+    copyFile (linkedOutput </> "packages.json") (scratch env </> "exception-bridge-linked-packages.json")
+    unusedSidecar <- doesFileExist (linkedOutput </> "native/runtime-sidecar/cabal.project")
+    assertBool "already linked bridge does not build another runtime" (not unusedSidecar)
 
 acquisitionTests :: Env -> Test
 acquisitionTests env = TestLabel "project acquisition stops before audit and execution" $ TestCase $
