@@ -168,7 +168,7 @@ class CoreCompactLoadTest {
         }
     }
 
-    @Test fun malformedSelectedBodyIdentityAndUnsupportedProvenanceRejectOnDemand() {
+    @Test fun malformedSelectedBodyIdentityAndTruncatedProvenanceRejectOnDemand() {
         for (variant in 0..2) {
             CoreFileMappings.shared.evictIdleBelow(directory)
             val path = fixture(badB = variant == 0, wrongIdentity = variant == 1, badProvenance = variant == 2)
@@ -177,7 +177,7 @@ class CoreCompactLoadTest {
                 assertEquals(7L, entry.execute(0).asLong())
                 val failure = assertThrows(RuntimeException::class.java) { entry.execute(1) }
                 val expected = listOf("Invalid compact Core expression tag", "identity differs from package directory",
-                    "provenance record is not yet supported")[variant]
+                    "Truncated compact Core record")[variant]
                 assertTrue(failure.message.orEmpty().contains(expected), failure.message)
                 assertEquals(7L, entry.execute(0).asLong())
             }

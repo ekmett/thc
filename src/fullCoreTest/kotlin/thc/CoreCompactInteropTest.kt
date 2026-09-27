@@ -25,8 +25,10 @@ class CoreCompactInteropTest {
 
     @Test fun nativeResultsAndImmediateCompiledEntriesUseTheActualCompactRequest() = checkCompiled("ast")
     @Test fun bytecodeNativeResultsAndImmediateCompiledEntriesUseTheActualCompactRequest() = checkCompiled("bytecode")
+    @Test fun debugContainerPreservesImmediateAstCompiledEntriesWithoutReadingDebug() =
+        checkCompiled("ast", Path.of(System.getProperty("thc.compactInteropDebugManifest")), sourceNotes = true)
 
-    private fun checkCompiled(backend: String) {
+    private fun checkCompiled(backend: String, selectedManifest: Path = manifest, sourceNotes: Boolean = false) {
         val oracle = rows().groupBy { it.name }
         for (verify in listOf(false, true))
             for ((name, values) in oracle) Context.newBuilder("thc").allowExperimentalOptions(true)
@@ -34,8 +36,8 @@ class CoreCompactInteropTest {
                 .option("engine.CompilationFailureAction", "Throw")
                 .option("engine.SingleTierCompilationThreshold", "10000000").build().use { context ->
                     val id = "main:SourceNotes.$name"
-                    val entry = context.eval("thc", CoreModules.request(listOf("@$manifest"), id,
-                        backend = backend, sourceNotesEnabled = false, asyncExceptions = false, verifyArtifacts = verify))
+                    val entry = context.eval("thc", CoreModules.request(listOf("@$selectedManifest"), id,
+                        backend = backend, sourceNotesEnabled = sourceNotes, asyncExceptions = false, verifyArtifacts = verify))
                     context.enter()
                     val program = try { Language.currentState().coreUnitPrograms.single() } finally { context.leave() }
                     fun count(field: String) = (program.diagnostics().getValue(field) as Number).toLong()

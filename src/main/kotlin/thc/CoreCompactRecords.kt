@@ -167,7 +167,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         "constructors" to list(cursor) { text(cursor) })
     private fun tagFamily(cursor: CoreCompactCursor) = family(cursor) + mapOf("smallFamilyLimit" to cursor.unsigned(),
         "smallFamily" to cursor.boolean())
-    private fun foreign(cursor: CoreCompactCursor): Map<String, Any?> {
+    private fun foreign(cursor: CoreCompactCursor, inline: Boolean = false): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
         result["target"] = when (val tag = cursor.byte()) {
             0 -> linkedMapOf<String, Any?>("kind" to "static", "symbol" to text(cursor)).also { target ->
@@ -181,8 +181,8 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         result["safety"] = enum(cursor, listOf("unsafe", "safe", "interruptible"))
         result["arity"] = cursor.unsigned()
         result["suppliedArity"] = cursor.unsigned()
-        result["argumentReps"] = list(cursor) { rep(cursor) }
-        result["resultRep"] = rep(cursor)
+        result["argumentReps"] = list(cursor) { rep(cursor, inline) }
+        result["resultRep"] = rep(cursor, inline)
         field(cursor, result, "intrinsic") { text(cursor) }
         field(cursor, result, "javascriptSource") { text(cursor) }
         return result
@@ -299,11 +299,14 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
             }
         }
         field(cursor, result, "foreignExceptionBridgeUnit") { text(cursor) }
-        for (key in listOf("foreignLink", "staticForeignImportStubs", "staticForeignImports",
-            "staticForeignExports", "staticForeignExportRegistration", "packageScalarLink",
-            "packageNativeLink", "packageNativeArchive")) {
-            field(cursor, result, key) { error("Compact Core provenance record is not yet supported: $key") }
-        }
+        field(cursor, result, "foreignLink") { foreignLink(cursor) }
+        field(cursor, result, "staticForeignImportStubs") { importProof(cursor) }
+        field(cursor, result, "staticForeignImports") { importProof(cursor) }
+        field(cursor, result, "staticForeignExports") { exports(cursor) }
+        field(cursor, result, "staticForeignExportRegistration") { registration(cursor) }
+        field(cursor, result, "packageScalarLink") { scalarLink(cursor) }
+        field(cursor, result, "packageNativeLink") { nativeLink(cursor) }
+        field(cursor, result, "packageNativeArchive") { nativeArchive(cursor) }
         cursor.expectEnd()
         result
     }
@@ -331,6 +334,196 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         }
         result["files"] = list(cursor) {
             mapOf("language" to text(cursor), "source" to text(cursor), "extension" to text(cursor))
+        }
+        return result
+    }
+
+    private fun texts(cursor: CoreCompactCursor) = list(cursor) { text(cursor) }
+    private fun strings(cursor: CoreCompactCursor, vararg keys: String) =
+        keys.associateWithTo(linkedMapOf<String, Any?>()) { text(cursor) }
+    private fun convention(cursor: CoreCompactCursor) = enum(cursor, listOf("ccall", "capi", "stdcall", "prim", "javascript"))
+    private fun safety(cursor: CoreCompactCursor) = enum(cursor, listOf("unsafe", "safe", "interruptible"))
+    private fun qualifiedName(cursor: CoreCompactCursor) = strings(cursor, "unit", "module", "occurrence", "namespace")
+    private fun foreignType(cursor: CoreCompactCursor): Map<String, Any?> = when (val tag = cursor.byte()) {
+        0 -> mapOf("kind" to "tycon", "name" to qualifiedName(cursor), "arguments" to list(cursor) { foreignType(cursor) })
+        1 -> mapOf("kind" to "application", "function" to foreignType(cursor), "argument" to foreignType(cursor))
+        2 -> mapOf("kind" to "function", "multiplicity" to foreignType(cursor), "argument" to foreignType(cursor),
+            "result" to foreignType(cursor))
+        3 -> mapOf("kind" to "bound-variable", "index" to cursor.unsigned())
+        4 -> mapOf("kind" to "forall", "binderKind" to foreignType(cursor), "body" to foreignType(cursor))
+        else -> error("Invalid compact foreign type: $tag")
+    }
+    private fun emitted(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = strings(cursor, "symbol")
+        field(cursor, result, "unit") { text(cursor) }
+        result["convention"] = convention(cursor); result["safety"] = safety(cursor)
+        result["arguments"] = texts(cursor); result["result"] = texts(cursor)
+        return result
+    }
+    private fun importProof(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
+        result.putAll(strings(cursor, "scope", "execution", "profile", "unit", "module"))
+        val status = enum(cursor, listOf("unclassified", "rejected", "verified"))
+        result["status"] = status
+        if (status != "verified") result["reason"] = text(cursor)
+        else {
+            result["wordBits"] = cursor.unsigned()
+            result["expectedForeign"] = artifacts(cursor)
+            result["imports"] = list(cursor) {
+                val entry = linkedMapOf<String, Any?>("binder" to qualifiedName(cursor))
+                field(cursor, entry, "header") { text(cursor) }
+                entry["symbol"] = text(cursor)
+                field(cursor, entry, "unit") { text(cursor) }
+                entry["isFunction"] = cursor.boolean()
+                entry["convention"] = convention(cursor); entry["safety"] = safety(cursor)
+                entry["declaredType"] = foreignType(cursor); entry["normalizedType"] = foreignType(cursor)
+                entry["normalizationRole"] = text(cursor); entry["emitted"] = emitted(cursor)
+                entry
+            }
+            // Module inventory reps are inline header values, never executable DATA references.
+            result["expectedCalls"] = list(cursor) { foreign(cursor, inline = true) }
+        }
+        return result
+    }
+    private fun exports(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
+        result.putAll(strings(cursor, "producer", "scope", "execution", "unit", "module"))
+        result["exports"] = list(cursor) {
+            linkedMapOf<String, Any?>("binder" to qualifiedName(cursor), "symbol" to text(cursor),
+                "convention" to convention(cursor), "declaredType" to foreignType(cursor),
+                "normalizedType" to foreignType(cursor), "normalizationRole" to text(cursor),
+                "arguments" to list(cursor) { foreignType(cursor) }, "result" to foreignType(cursor),
+                "effect" to enum(cursor, listOf("pure", "io")))
+        }
+        return result
+    }
+    private fun registration(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
+        result.putAll(strings(cursor, "scope", "execution", "profile"))
+        val status = enum(cursor, listOf("unclassified", "rejected", "verified"))
+        result["status"] = status
+        if (status != "verified") result["reason"] = text(cursor)
+        else {
+            result["roots"] = list(cursor) { qualifiedName(cursor) }
+            result["wordBits"] = cursor.unsigned(); result["expectedForeign"] = artifacts(cursor)
+            result["expectedExports"] = exports(cursor)
+        }
+        return result
+    }
+    private fun blob(cursor: CoreCompactCursor) = java.util.HexFormat.of().formatHex(cursor.bytes(cursor.count()))
+    private fun foreignLink(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
+        result.putAll(strings(cursor, "format", "unit", "module", "sourceSha256", "bitcodeSha256"))
+        result["bitcodeHex"] = blob(cursor); result["target"] = text(cursor); result["symbols"] = texts(cursor)
+        result["abi"] = list(cursor) { strings(cursor, "symbol", "kind") }
+        field(cursor, result, "headerHashes") { list(cursor) { strings(cursor, "name", "sha256") } }
+        return result
+    }
+    private fun linkPayload(cursor: CoreCompactCursor): MutableMap<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
+        result.putAll(strings(cursor, "format", "profile", "unit", "target", "componentSha256", "bitcodeSha256"))
+        result["bitcodeHex"] = blob(cursor)
+        return result
+    }
+    private fun scalarLink(cursor: CoreCompactCursor) = linkPayload(cursor).also { result ->
+        result["abi"] = list(cursor) {
+            strings(cursor, "symbol", "entry").also { it["arguments"] = texts(cursor); it["result"] = text(cursor) }
+        }
+    }
+    private fun nativeLink(cursor: CoreCompactCursor) = linkPayload(cursor).also { result ->
+        result["abi"] = list(cursor) {
+            strings(cursor, "symbol", "entry").also {
+                it["convention"] = convention(cursor); it["safety"] = safety(cursor)
+                it["arguments"] = texts(cursor); it["result"] = text(cursor)
+            }
+        }
+        field(cursor, result, "buildInputs") { nativeBuildInputs(cursor) }
+        field(cursor, result, "availableEntries") { texts(cursor) }
+    }
+    private fun compileInput(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = strings(cursor, "compiler", "clang")
+        result["arguments"] = texts(cursor)
+        field(cursor, result, "language") { text(cursor) }
+        result.putAll(strings(cursor, "nativeTarget", "target"))
+        result["files"] = list(cursor) { strings(cursor, "path", "sha256") }
+        return result
+    }
+    private fun nativeBuildInputs(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>()
+        result["translationUnits"] = list(cursor) {
+            when (val tag = cursor.byte()) {
+                0 -> compileInput(cursor)
+                1 -> list(cursor) { compileInput(cursor) }
+                else -> error("Invalid compact native compile group: $tag")
+            }
+        }
+        result["providers"] = list(cursor) {
+            strings(cursor, "provider").also {
+                it["symbols"] = texts(cursor); it.putAll(strings(cursor, "bitcode", "bitcodeSha256", "target"))
+                it["inputs"] = compileInput(cursor)
+            }
+        }
+        field(cursor, result, "dependencies") { list(cursor) { nativeDependency(cursor) } }
+        result["nativeLibraries"] = list(cursor) {
+            strings(cursor, "provider").also {
+                it["symbols"] = texts(cursor); it.putAll(strings(cursor, "compiler", "compilerSha256"))
+                it["arguments"] = texts(cursor)
+            }
+        }
+        result["unresolved"] = texts(cursor)
+        result["argumentBridges"] = list(cursor) {
+            strings(cursor, "profile", "source", "sourceSha256", "inputBitcodeSha256").also {
+                it["definitions"] = list(cursor) { texts(cursor) }
+            }
+        }
+        return result
+    }
+    private fun sourceIdentity(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>()
+        field(cursor, result, "id") { text(cursor) }
+        field(cursor, result, "depends") { texts(cursor) }
+        for (key in listOf("type", "style", "pkg-name", "pkg-version")) field(cursor, result, key) { text(cursor) }
+        field(cursor, result, "flags") {
+            val flags = linkedMapOf<String, Boolean>()
+            repeat(cursor.count()) {
+                val name = text(cursor)
+                require(flags.putIfAbsent(name, cursor.boolean()) == null) { "Duplicate compact native source flag" }
+            }
+            flags
+        }
+        for (key in listOf("component-name", "pkg-src-sha256", "pkg-cabal-sha256")) field(cursor, result, key) { text(cursor) }
+        return result
+    }
+    private fun nativeDependency(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = strings(cursor, "profile", "unit")
+        result["sourceIdentity"] = sourceIdentity(cursor)
+        result.putAll(strings(cursor, "registration", "registrationSha256"))
+        result["archives"] = list(cursor) {
+            strings(cursor, "path", "sha256").also { it["members"] = list(cursor) { strings(cursor, "name", "sha256") } }
+        }
+        result["translationUnits"] = list(cursor) {
+            val receipt = strings(cursor, "root", "object", "objectSha256", "bitcode", "target")
+            receipt["inputs"] = compileInput(cursor)
+            mapOf("receipt" to receipt, "bitcodeSha256" to text(cursor))
+        }
+        return result
+    }
+    private fun nativeArchive(cursor: CoreCompactCursor): Map<String, Any?> {
+        val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
+        result.putAll(strings(cursor, "profile", "execution", "unit", "module"))
+        result["unsupportedImports"] = list(cursor) { emitted(cursor) }
+        field(cursor, result, "unclassifiedReason") { text(cursor) }
+        result["unresolvedSymbols"] = texts(cursor)
+        field(cursor, result, "artifact") { nativeLink(cursor) }
+        field(cursor, result, "conflictingImports") { list(cursor) { emitted(cursor) } }
+        field(cursor, result, "entryResolution") {
+            linkedMapOf<String, Any?>("schema" to cursor.unsigned()).also {
+                it.putAll(strings(cursor, "profile", "inputBitcodeSha256"))
+                it["entries"] = list(cursor) {
+                    strings(cursor, "entry", "bitcodeSha256").also { entry -> entry["unresolved"] = texts(cursor) }
+                }
+                it["outputBitcodeSha256"] = text(cursor); it["unresolved"] = texts(cursor)
+            }
         }
         return result
     }

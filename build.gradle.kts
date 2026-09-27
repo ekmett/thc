@@ -501,14 +501,23 @@ val compactInteropTests = listOf("compactCoreInteropTest" to false, "compactCore
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         useJUnitPlatform()
-        filter { includeTestsMatching("thc.CoreCompactInteropTest") }
+        filter {
+            includeTestsMatching("thc.CoreCompactInteropTest")
+            includeTestsMatching("thc.CoreCompactDebugInteropTest")
+            includeTestsMatching("thc.CoreCompactHeaderInteropTest")
+        }
         for ((property, fallback) in listOf("thc.compactInteropManifest" to "packages.json",
             "thc.compactInteropReference" to "reference-packages.json",
+            "thc.compactInteropDebugManifest" to "debug-packages.json",
             "thc.compactInteropOracle" to "native.tsv")) {
             val input = providers.gradleProperty(property).map { file(it) }
                 .orElse(layout.buildDirectory.file("compact-core-interop/$fallback").map { it.asFile })
             inputs.file(input)
             systemProperty(property, input.get().absolutePath)
+        }
+        providers.gradleProperty("thc.compactInteropHeaders").orNull?.let { paths ->
+            inputs.files(paths.split(',').map(::file))
+            systemProperty("thc.compactInteropHeaders", paths)
         }
         systemProperty("thc.handoffSlabs", dense.toString())
         maxParallelForks = 1
