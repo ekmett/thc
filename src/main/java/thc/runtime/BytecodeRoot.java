@@ -1725,6 +1725,25 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
+    public static final class OriginalWindowsDirectory {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                OriginalStdioOp operation, ManagedAddress first, ManagedAddress output, Object state, @Bind Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            WindowsDirectoryStreams streams = WindowsDirectoryStreams.current(node);
+            if (operation == OriginalStdioOp.FIND_FIRST) {
+                ManagedAddress result = streams.first(first, output);
+                destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            } else {
+                long result = operation == OriginalStdioOp.FIND_NEXT ? streams.next(first, output)
+                    : operation == OriginalStdioOp.FIND_CLOSE ? streams.closeSearch(first) : streams.error();
+                destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+            }
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalDirectoryPointer {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 OriginalStdioOp operation, ManagedAddress address, Object state, @Bind("$node") Node node) {
@@ -2605,18 +2624,20 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "someException")
     public static final class Raise {
-        @Specialization public static Object raise(Object payload, @Bind("$node") Node node) {
-            return throwGuest(payload, node);
+        @Specialization public static Object raise(boolean someException, Object payload, @Bind("$node") Node node) {
+            return throwGuest(payload, node, someException);
         }
-        @TruffleBoundary private static Object throwGuest(Object payload, Node node) { throw new GuestException(payload, node); }
+        @TruffleBoundary private static Object throwGuest(Object payload, Node node, boolean someException) { throw new GuestException(payload, node, someException); }
     }
 
     @Operation
+    @ConstantOperand(type = boolean.class, name = "someException")
     public static final class RaiseIO {
-        @Specialization public static void raise(Object payload, Object state, @Bind("$node") Node node) {
+        @Specialization public static void raise(boolean someException, Object payload, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            throw new GuestException(payload, node);
+            throw new GuestException(payload, node, someException);
         }
     }
 
@@ -3632,6 +3653,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResultsKt.requireVoidCarrier(state);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
                     RuntimeServices.control(node, (int) selector, setting));
+        }
+    }
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class ExceptionText {
+        @Specialization public static void text(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress handle, long selector, long index, Object state,
+                @Cached(value = "new()", neverDefault = true) ForeignExceptionAccess access,
+                @Bind("$node") Node node) {
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame,
+                    access.text(handle, selector, index, state));
         }
     }
     @Operation

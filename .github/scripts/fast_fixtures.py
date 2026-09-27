@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "faa50f1ac12a5f2b4f6353ebda479f8dc24de67787305a24a28c7ce4a1ef4f0a"
+FULL_PREPARATION_PLAN = "13c0665c1b0dac5cd2f95c630150652b6126c6e47df3bf0040be920b3f6e6ed0"
 TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
     "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",
@@ -357,6 +357,15 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    families = [output.removeprefix("build/") for output in group["outputs"]]
+    if families and all(family in fast_inputs.INTEGER_SIMD_FAMILIES for family in families):
+        result = {}
+        for family in families:
+            name = f"build/{family}/provenance.json"
+            manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+            expected = fast_inputs.integer_simd_artifact_hashes(family, manifest)
+            result.update(_manifest_output_hashes(root, name, expected))
+        return result
     for output, validator in (
             ("build/original-path-stat", fast_inputs.original_path_stat_artifact_hashes),
             ("build/original-path-mode", fast_inputs.original_path_mode_artifact_hashes),
@@ -645,7 +654,7 @@ def _full_output_hashes(root):
         if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/unix-wait-status"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
-        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
+        if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES | fast_inputs.INTEGER_SIMD_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         for member in path.rglob("*"):

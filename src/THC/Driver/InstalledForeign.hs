@@ -52,12 +52,14 @@ data ForeignCompiler = ForeignCompiler
   , foreignPluginLibrary :: FilePath, foreignRegisteredLibrary :: FilePath
   , foreignDriverHash :: String }
 
-boundModule, posixModule :: String
+boundModule, posixModule, directoryModule :: String
 boundModule = "GHC.Internal.Conc.Bound"
 posixModule = "GHC.Internal.System.Posix.Internals"
+directoryModule = "System.Directory.Internal.Posix"
 
 unixModules :: [String]
-unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals"]
+unixModules = ["System.Posix.Files.PosixString", "System.Posix.Process.Internals", "System.Posix.Signals",
+  "System.Posix.Directory.PosixPath", "System.Posix.Env.PosixString"]
 
 -- Presence is not permission to replace bad evidence. The helper has already
 -- checked actual annotations against the retained Core/foreign products.
@@ -67,7 +69,8 @@ missingForeignProof name core
       (Nothing, Nothing) -> Right True
       (Just _, Just proof) -> classified proof
       _ -> Left "incomplete static foreign-export evidence"
-  | name `elem` (posixModule : unixModules) = maybe (Right True) classified (member "staticForeignImportStubs" core)
+  | name `elem` (posixModule : directoryModule : unixModules) =
+      maybe (Right True) classified (member "staticForeignImportStubs" core)
   | otherwise = Left "module is outside the installed foreign producer profile"
   where
     classified proof
@@ -79,7 +82,8 @@ prepareForeignInterfaces :: ForeignCompiler -> FilePath -> FilePath -> Installed
                             [InstalledUnit] -> IO InstalledContext
 prepareForeignInterfaces producer cache source context registrations = do
   base <- prepareProfile [boundModule, posixModule] context
-  prepareProfile unixModules base
+  unix <- prepareProfile unixModules base
+  prepareProfile [directoryModule] unix
   where
     prepareProfile names selected = do
       let candidates = [u | u <- registrations, all (`elem` map fst (installedInterfaces u)) names]
@@ -180,14 +184,19 @@ configuredRecipe producer context unit root names = do
   check (null (installedDatabases context)) "foreign regeneration requires the selected global package database"
   version <- command (foreignGhc producer) ["--numeric-version"] Nothing
   check (words version == ["9.14.1"]) "--ghc-source requires selected GHC 9.14.1"
-  let unixProfile = names == unixModules
-      packageName = if unixProfile then "unix" else "ghc-internal"
+  packageName <- case names of
+    [bound, posix] | bound == boundModule && posix == posixModule -> pure "ghc-internal"
+    _ | names == unixModules -> pure "unix"
+    [directory] | directory == directoryModule -> pure "directory"
+    _ -> fail "unsupported installed foreign source profile"
+  let hscProfile = packageName /= "ghc-internal"
+      includeDirectory = if packageName == "directory" then "." else "include"
       stage = root </> "_build/stage1"
       packageRoot = root </> "libraries" </> packageName
       configured = stage </> "libraries" </> packageName
       built = configured </> "build"
       autogen = built </> "autogen"
-      src = if unixProfile then packageRoot else packageRoot </> "src"
+      src = if hscProfile then packageRoot else packageRoot </> "src"
   lbi <- getPersistBuildConfig Nothing (makeSymbolicPath configured)
   check (prettyShow (Compiler.compilerId (compiler lbi)) == "ghc-9.14.1") "GHC source configuration compiler differs"
   let platform = prettyShow (hostPlatform lbi)
@@ -206,32 +215,32 @@ configuredRecipe producer context unit root names = do
   check (prettyShow (componentUnitId component) == registeredId unit &&
          sort (map (prettyShow . fst) (componentPackageDeps component)) == sort (installedDepends unit))
     "GHC source configuration unit/dependencies differ from selected installation"
-  check (map getSymbolicPath (hsSourceDirs info) == [if unixProfile then "." else "src"] &&
-         map getSymbolicPath (includeDirs info) == ["include"])
+  check (map getSymbolicPath (hsSourceDirs info) == [if hscProfile then "." else "src"] &&
+         map getSymbolicPath (includeDirs info) == [includeDirectory])
     "unsupported GHC source/include directory configuration"
   -- Do not execute hidden arbitrary hooks/plugins from a setup-config. This is
   -- the known library option profile; conditional CPP comes from Cabal itself.
-  check (hcOptions GHC info == (if unixProfile then ["-Wall"] else
+  check (hcOptions GHC info == (if hscProfile then ["-Wall"] else
            ["-this-unit-id", "ghc-internal", "-Wcompat", "-Wnoncanonical-monad-instances"]) &&
-         cppOptions info == (if unixProfile then [] else ["-DBIGNUM_GMP"]) &&
+         cppOptions info == (if hscProfile then [] else ["-DBIGNUM_GMP"]) &&
          fmap prettyShow (defaultLanguage info) == Just "Haskell2010" &&
-         map prettyShow (defaultExtensions info) == (if unixProfile then [] else ["NoImplicitPrelude"]))
+         map prettyShow (defaultExtensions info) == (if hscProfile then [] else ["NoImplicitPrelude"]))
     "unsupported original library compiler option profile"
   forM_ (installedInterfaces unit) $ \(name, installed) -> do
     let original = built </> modulePath name <.> "dyn_hi"
     left <- hashFile installed
     right <- hashFile original
     check (left == right) ("--ghc-source interfaces do not match selected GHC: " ++ name)
-  let includeRoots = [root </> "rts/include", stage </> "rts/build/include", built,
-                      built </> "include", packageRoot </> "include"]
+  let includeRoots = [root </> "rts/include", stage </> "rts/build/include", built] ++
+        if includeDirectory == "." then [packageRoot] else [built </> "include", packageRoot </> "include"]
       roots = [built, autogen, src]
       macros = autogen </> "cabal_macros.h"
   originalInputs <- forM names $ \name -> do
     let original = built </> modulePath name <.> "dyn_hi"
-        -- Unix's retained source is the configured hsc2hs output, whose own
+        -- Unix/directory retain the configured hsc2hs output, whose own
         -- UsageFile points back to the original .hsc. Never rerun hsc2hs with
         -- newly guessed headers and call that the installed source.
-        sourceFile = (if unixProfile then built else src) </> modulePath name <.> "hs"
+        sourceFile = (if hscProfile then built else src) </> modulePath name <.> "hs"
     description <- command (foreignGhc producer) ["--show-iface", original] Nothing
     digest <- show <$> getFileHash sourceFile
     let fingerprints = [value | line <- lines description, ["src", "hash:", value] <- [words line]]
@@ -239,7 +248,7 @@ configuredRecipe producer context unit root names = do
       ("--ghc-source original source does not match retained self-recomp metadata: " ++ name)
     retained <- either fail pure (retainedUsageFiles description)
     verified <- verifyUsageFiles root retained
-    required <- mapM canonicalizePath $ (if unixProfile
+    required <- mapM canonicalizePath $ (if hscProfile
       then [src </> modulePath name <.> "hsc"] else [root </> "rts/include/ghcversion.h", macros]) ++
       (if name == posixModule then [built </> "include/HsBaseConfig.h", stage </> "rts/build/include/ghcplatform.h"] else [])
     check (all (`elem` map fst verified) required)
@@ -254,7 +263,7 @@ configuredRecipe producer context unit root names = do
       args = ["-c", "-fforce-recomp", "-O2", "-static", "-dynamic-too", "-fsplit-sections",
               "-hide-all-packages", "-no-user-package-db", "-package-env", "-",
               "-this-package-name", packageName, "-i"] ++
-        (if unixProfile then ["-this-unit-id", registeredId unit] else []) ++
+        (if hscProfile then ["-this-unit-id", registeredId unit] else []) ++
         concatMap (\dep -> ["-package-id", dep]) (installedDepends unit) ++
         hcOptions GHC info ++ maybe [] (\lang -> ["-X" ++ prettyShow lang]) (defaultLanguage info) ++
         map (("-X" ++) . prettyShow) (defaultExtensions info) ++

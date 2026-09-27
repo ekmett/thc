@@ -1,7 +1,7 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
-module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, field, readJson) where
+module InstalledCoreFixtures (InstalledFixture(..), prepareInstalledCore, prepareInstalledCoreUnits, prepareInstalledCoreWithForeign, field, readJson) where
 
 import Control.Monad (forM, unless)
 import Data.Aeson (Value, FromJSON, decodeStrict', fromJSON, Result(..), object, (.=))
@@ -12,6 +12,7 @@ import qualified Data.ByteString.Char8 as BS
 import FixtureSupport (CommandResult(..), hashFile, runLogged, writeJson)
 import qualified THC.Driver.Cache as Cache
 import qualified THC.Driver.Installed as Installed
+import qualified THC.Driver.InstalledForeign as Foreign
 import qualified THC.Driver.Project as Project
 import System.Directory (copyFile, createDirectoryIfMissing)
 import System.Environment (getExecutablePath, lookupEnv)
@@ -42,7 +43,16 @@ prepareInstalledCore root directory = prepareInstalledCoreUnits root directory [
 -- Additional original library units use the same complete-Core acquisition and
 -- dependency closure as ghc-internal; no source or synthetic binding substitute.
 prepareInstalledCoreUnits :: FilePath -> FilePath -> [String] -> IO InstalledFixture
-prepareInstalledCoreUnits root directory libraries = do
+
+-- Opt into the production producer of genuine foreign registration annotations.
+prepareInstalledCoreWithForeign :: FilePath -> FilePath -> FilePath -> IO InstalledFixture
+prepareInstalledCoreWithForeign root directory source =
+  prepareInstalledCoreProfile (Just source) root directory []
+
+prepareInstalledCoreUnits = prepareInstalledCoreProfile Nothing
+
+prepareInstalledCoreProfile :: Maybe FilePath -> FilePath -> FilePath -> [String] -> IO InstalledFixture
+prepareInstalledCoreProfile foreignSource root directory libraries = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
@@ -75,7 +85,7 @@ prepareInstalledCoreUnits root directory libraries = do
         (die "Installed Core provider and native compiler versions differ")
       pure (compiler, packageTool, [providerVersion])
     _ -> die "Set THC_INSTALLED_CORE_GHC and THC_INSTALLED_CORE_GHC_PKG together"
-  selected <- Installed.installedContext providerGhc providerPkg helper [] (object
+  initialContext <- Installed.installedContext providerGhc providerPkg helper [] (object
     ["id" .= compilerId, "abi" .= abi, "platform" .= (arch ++ "-" ++ os),
      "way" .= ("dynamic-nonprofiling" :: String)])
   registration <- run "ghc-internal-unit" providerPkg
@@ -87,7 +97,7 @@ prepareInstalledCoreUnits root directory libraries = do
       discover seen (identifier:todo)
         | identifier `elem` map Installed.registeredId seen = discover seen todo
         | otherwise = do
-            unit <- Installed.discoverInstalled selected identifier
+            unit <- Installed.discoverInstalled initialContext identifier
             discover (unit:seen) (Installed.installedDepends unit ++ todo)
   additional <- forM libraries $ \library -> do
     registered <- run (library ++ "-unit") providerPkg
@@ -95,14 +105,26 @@ prepareInstalledCoreUnits root directory libraries = do
     case BS.words (commandStdout registered) of
       [identifier] -> pure (BS.unpack identifier)
       _ -> die ("Expected one selected registration: " ++ library)
-  units <- discover [] (internal : additional)
+  originalUnits <- discover [] (internal : additional)
+  cache <- Cache.coreCacheDirectory
+  driverHash <- hashFile =<< getExecutablePath
+  selected <- case foreignSource of
+    Nothing -> pure initialContext
+    Just source -> do
+      plugin <- readJson (root </> "build/compiler/plugin.json")
+      pluginDb <- field plugin "packageDb"
+      pluginUnit <- field plugin "unitId"
+      pluginLibrary <- field plugin "sharedLibrary"
+      registeredLibrary <- field plugin "cabalSharedLibrary"
+      Foreign.prepareForeignInterfaces
+        (Foreign.ForeignCompiler ghc pluginDb pluginUnit pluginLibrary registeredLibrary driverHash)
+        cache source initialContext originalUnits
+  units <- mapM (Installed.discoverInstalled selected . Installed.registeredId) originalUnits
   Installed.validateReexports units
   internalRegistration <- case [Installed.registration unit | unit <- units,
                                 Installed.registeredId unit == internal] of
     [value] -> pure value
     _ -> die "Installed fixture lost its selected ghc-internal registration"
-  cache <- Cache.coreCacheDirectory
-  driverHash <- hashFile =<< getExecutablePath
   createDirectoryIfMissing True (root </> directory </> "installed/bundles")
   bundles <- forM units $ \unit -> do
     acquired <- Project.prepareInstalledBundle cache (root </> directory </> "installed/staging")

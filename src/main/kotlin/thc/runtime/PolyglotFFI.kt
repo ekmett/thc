@@ -5,6 +5,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.exception.AbstractTruffleException
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.interop.InteropException
 import com.oracle.truffle.api.interop.InteropLibrary
@@ -81,11 +82,14 @@ internal class PolyglotAccess : Node() {
     @Child private var functions = InteropLibrary.getFactory().createDispatched(3)
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(3)
 
+    @Child private var foreignExceptions = ForeignExceptionAccess()
     private inline fun <T> foreign(action: () -> T): T {
         val threads = Language.currentState(this).threads
         val previous = threads.enterForeign(ForeignSafety.SAFE)
-        try { return action() }
-        finally { threads.leaveForeign(previous) }
+        try {
+            try { return action() }
+            finally { threads.leaveForeign(previous) }
+        } catch (error: AbstractTruffleException) { foreignExceptions.raise(error) }
     }
 
     @TruffleBoundary

@@ -93,7 +93,7 @@ Each branch finishes its vector work and returns a scalar. The declared corpus
 uses only those selector domains.
 
 Every lane's left and right operands depend on different seeds through odd
-coefficients. The Python model inverts those coefficients modulo 256, producing
+coefficients. The Haskell producer inverts those coefficients modulo 256, producing
 the complete 9-by-9 operand grid
 `[-128,-127,-65,-1,0,1,65,126,127]` for each lane and operation.
 Broadcast rows arrange each boundary value at every lane directly. This gives
@@ -120,19 +120,22 @@ compiled JVM execution.
 
 ## Reproduction and limits
 
+See the shared [integer SIMD fixture guide](integer-simd-fixtures.md) for the
+four-family model controls and both-handoff recipe.
+
 Use the pinned environment and wrap the preparation command with the shared
 resource gate for this checkout's `build` directory:
 
 ```sh
-python3 scripts/test-int8x16-model.py
-python3 scripts/prepare-int8x16-audit.py
+cabal run exe:thc-fixtures --offline -- int8x16
+./gradlew testDefault --tests thc.runtime.SimdInt8VectorTest
 ```
 
 Each of the eight arity-two entries has 174 seed pairs covering byte sign/wrap
 boundaries, all eight bit positions and neighbors, varied high bits, and signed
 64-bit endpoints. Together with `laneCase`, this gives 9,168 native/model rows.
-The model uses integer modulo/sign arithmetic and is checked against a separate
-mask/sign implementation for every row. Its tests cover all 256 lane encodings,
+The Haskell producer uses integer modulo/sign arithmetic; Kotlin independently
+checks machine arithmetic and mask/sign semantics for every row. Its tests cover all 256 lane encodings,
 all 65,536 signed-byte scalar products, each lane's full operand grid, lane order,
 malformed tuple widths/leaf types, and hidden or changed guest-root boundaries.
 

@@ -19,6 +19,42 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_integer_simd_has_focused_preparation_and_closed_receipts(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest["groups"]["integer-simd"]
+        for name in group["junit"]:
+            self.assertEqual("integer-simd", owners[name])
+        self.assertEqual({"build/" + family for family in fast_fixtures.fast_inputs.INTEGER_SIMD_FAMILIES}, set(group["outputs"]))
+        self.assertTrue(all((project / path).is_file() for path in group["sources"]))
+        sources = fast_fixtures._source_hashes(project, group)
+        self.assertIn("src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt", sources)
+        self.assertIn("test/haskell-fixtures/IntegerSimdFixtures.hs", sources)
+        for native in (False, True):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                expected = {}
+                for family, (_, rows) in fast_fixtures.fast_inputs.INTEGER_SIMD_FAMILIES.items():
+                    name = f"build/{family}/provenance.json"
+                    outputs = fast_fixtures.fast_inputs.integer_simd_outputs(family, native)
+                    artifacts = {}
+                    for path in outputs - {name}:
+                        target = root / path
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(b"fixture\n")
+                        artifacts[path] = fast_fixtures._digest(target)
+                    receipt = dict(stages=["pre", "post"] if native else ["pre"], modelRows=rows,
+                        nativeRows=rows if native else None, modelMatched=True if native else None,
+                        positiveAuditsAccepted=True, proofNegativeControlsPassed=True,
+                        artifacts=[dict(path=path, sha256=digest) for path, digest in artifacts.items()])
+                    (root / name).write_text(json.dumps(receipt))
+                    expected.update(artifacts)
+                    expected[name] = fast_fixtures._digest(root / name)
+                self.assertEqual(expected, fast_fixtures._output_hashes(root, group))
+                (root / "build/simd-int8x16/expected.tsv").write_bytes(b"corrupt\n")
+                with self.assertRaisesRegex(RuntimeError, "Stale original artifact"):
+                    fast_fixtures._output_hashes(root, group)
+
     def test_deep_evaluation_is_required_for_full_preparation_reuse(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

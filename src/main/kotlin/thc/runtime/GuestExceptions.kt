@@ -14,7 +14,7 @@ import java.util.concurrent.Callable
 import thc.Language
 
 /** A synchronous Haskell exception payload, kept separate from unsupported-runtime diagnostics. */
-class GuestException(val payload: Any?, location: Node) :
+class GuestException @JvmOverloads constructor(val payload: Any?, location: Node, val someException: Boolean = false) :
     AbstractTruffleException("Haskell exception (payload retained lazily)", location)
 
 /** The observed GHC 9.14.1 synchronous IO contract, not polymorphic RuntimeRep. */
@@ -48,13 +48,13 @@ internal object CoreSynchronousExceptions {
 
 /** raiseIO# consumes its State# token but never forces its lifted payload. */
 internal class RaiseIOException(@field:Child private var payload: Expr,
-    @field:Child private var state: Expr, proof: CoreRepresentation) : Expr() {
+    @field:Child private var state: Expr, proof: CoreRepresentation, private val someException: Boolean = false) : Expr() {
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("raiseIO# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing {
         val value = payload.execute(frame)
         requireVoidCarrier(state.execute(frame))
-        throw GuestException(value, this)
+        throw GuestException(value, this, someException)
     }
 }
 
@@ -336,20 +336,20 @@ internal class YieldThread(@field:Child private var state: Expr, private val asy
  * to the handler; it does not enter that closure. In particular, a handler that
  * ignores the payload can catch a raise# whose payload is itself bottom.
  */
-internal class RaiseException(@field:Child private var exception: Expr) : Expr() {
+internal class RaiseException(@field:Child private var exception: Expr, private val someException: Boolean = false) : Expr() {
     // This branch produces no value. It must not weaken the value proof of
     // another case branch; this does not grant permission to speculate a raise.
     init { representation = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing {
         val payload = exception.execute(frame)
-        raise(payload, this)
+        raise(payload, this, someException)
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Nothing = execute(frame)
 
     companion object {
         @TruffleBoundary
-        private fun raise(payload: Any?, location: Node): Nothing = throw GuestException(payload, location)
+        private fun raise(payload: Any?, location: Node, someException: Boolean): Nothing = throw GuestException(payload, location, someException)
     }
 }
 

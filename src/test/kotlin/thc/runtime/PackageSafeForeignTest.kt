@@ -113,11 +113,13 @@ class PackageSafeForeignTest {
             "packageScalarLinks" to listOf(link), "instrument" to true)
     }
 
+    @org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
     @ParameterizedTest @ValueSource(strings = ["ast", "ast-compiled", "bytecode", "bytecode-compiled"])
     fun safeScalarDefersAsyncUntilReturnWhileOtherGuestCallsAndGcProgress(mode: String) {
         exerciseSafeReturn(mode, pointer = false)
     }
 
+    @org.junit.jupiter.api.Tag("foreign-exceptions-full-core")
     @ParameterizedTest @ValueSource(strings = ["ast", "ast-compiled", "bytecode", "bytecode-compiled"])
     fun temporarySafePointerPathPreservesNativeStorageAndCompletedResult(mode: String) {
         exerciseSafeReturn(mode, pointer = true)
@@ -133,8 +135,8 @@ class PackageSafeForeignTest {
                     val owner = Language.currentState()
                     owner.packageCbits.link(link)
                     val entries = link.abi.associate { it.symbol to Entry(language, PackageScalarCall(link, it)).callTarget }
-                    val program: ExecutableProgram = if (mode.startsWith("ast")) Program(language, module(link, pointer), true)
-                        else BytecodeProgram(language, module(link, pointer), true)
+                    val program: ExecutableProgram = if (mode.startsWith("ast")) Program(language, ForeignExceptionFixtureSupport.link(module(link, pointer), "wait"), true)
+                        else BytecodeProgram(language, ForeignExceptionFixtureSupport.link(module(link, pointer), "wait"), true)
                     val target = program.entryTarget("wait")
                     val shape = checkNotNull((target.rootNode as GuestRoot).tupleResult)
                     val storage = if (pointer) PinnedMemory.allocate(8, 64) else null

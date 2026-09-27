@@ -110,8 +110,7 @@ vector-result issue. Both require zero missing globals.
 
 ## Preparation and provenance
 
-Run `python3 scripts/test-word32x4-model.py`, then
-`python3 scripts/prepare-word32x4-audit.py` with the pinned environment and shared
+Run `cabal run exe:thc-fixtures --offline -- word32x4` with the pinned environment and shared
 resource gate. Preparation builds the genuine exporter, exports pre/post Core,
 requires all sixteen positive audits to have zero issues and missing globals,
 checks the exact negatives and actual root counts, and compiles/runs the real
@@ -121,9 +120,11 @@ fixture compilation on the pinned x86 host.
 
 `build/simd-word32x4/provenance.json` records stages, original Core structure,
 entry arities and cases, actual root counts, strict audits, labeled signedness
-controls, commands, toolchain identity, seventeen source hashes and seven
-artifact hashes. The artifacts cover expected rows, both original Core files,
-both audit reports, native oracle rows and the actual native executable.
+controls, commands, toolchain identity, and complete source/artifact hashes.
+Artifacts include expected rows, original Core, strict reports, separate negative
+copies, native rows/executable, and command outputs/status. The shared
+[integer SIMD fixture guide](integer-simd-fixtures.md) includes the independent
+Kotlin model tests and both-handoff runtime recipe.
 
 `--export-only` exports only pre-Tidy Core and model rows for environments such
 as AArch64 where the pinned native backend is not the validation path. It removes

@@ -18,7 +18,7 @@ import Distribution.Simple.Setup
 import Distribution.Utils.Path (getSymbolicPath, makeSymbolicPath)
 import Distribution.Verbosity (silent)
 import GHC.ResponseFile (escapeArgs)
-import System.Directory (canonicalizePath, doesFileExist, listDirectory, makeAbsolute,
+import System.Directory (canonicalizePath, doesFileExist, findExecutable, listDirectory, makeAbsolute,
                          createDirectoryIfMissing, removeFile)
 import System.Environment (getEnvironment, lookupEnv)
 import System.Info (os)
@@ -142,7 +142,10 @@ runResolvedPackage opts working target = do
       -- named arguments. GHC's own response-file format preserves exact tokens.
       let response = output </> "export.args"
       writeFile response (escapeArgs exportArgs)
-      checked True "powershell.exe" ["-NoProfile", "-File", exporter, "@" ++ response] thcRoot environment
+      -- Prefer the current PowerShell host when installed. Each host retains
+      -- its configured execution policy; never add a policy override.
+      powershell <- maybe "powershell.exe" id <$> findExecutable "pwsh"
+      checked True powershell ["-NoProfile", "-File", exporter, "@" ++ response] thcRoot environment
     else checked True exporter exportArgs thcRoot environment
   files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory core
   let modules = [core </> file | file <- files, file /= "audit.json"]

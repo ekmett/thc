@@ -18,6 +18,7 @@ import Simd128ArrayFixtures (prepareSimd128Arrays)
 import SimdWideArrayFixtures (prepareSimdWideArrays)
 import SimdAddressFixtures (prepareSimdAddresses)
 import SimdArithmeticFixtures (prepareSimdArithmetic)
+import IntegerSimdFixtures (prepareIntegerSimd)
 import WordFloatingFixtures (prepareWordFloating)
 import ScalarBitCastFixtures (prepareScalarBitCasts)
 import BigNatLiteralFixtures (prepareBigNatLiterals)
@@ -42,6 +43,7 @@ import UnsafeEqualityFixtures (prepareUnsafeEquality)
 import ContinuationFixtures (prepareCoreContinuation)
 import DelimitedContinuationsFixtures (prepareDelimitedContinuations)
 import GhcBCOFixtures (prepareGhcBCO)
+import ForeignExceptionFixtures (prepareForeignExceptions)
 import ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmeticCore)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
@@ -65,6 +67,7 @@ import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import OriginalCurrentDirectoryFixtures (prepareOriginalCurrentDirectory)
 import OriginalDirectoryPathsFixtures (prepareOriginalDirectoryPaths)
 import OriginalDirectoryStreamsFixtures (prepareOriginalDirectoryStreams)
+import WindowsDirectoryFixtures (prepareWindowsDirectory)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
@@ -948,6 +951,7 @@ main = do
     ["simd-wide-arrays"] -> prepareSimdWideArrays root
     ["simd-address-families"] -> prepareSimdAddresses root
     ["simd-arithmetic"] -> prepareSimdArithmetic root
+    family:options | family `elem` ["int8x16", "int16x8", "word16x8", "word32x4"] -> prepareIntegerSimd root family options
     ["bignat-literals"] -> prepareBigNatLiterals root False
     ["rubbish-literals"] -> prepareRubbishLiterals root
     ["bignat-literals", "--check-only"] -> prepareBigNatLiterals root True
@@ -986,6 +990,7 @@ main = do
     ["original-current-directory"] -> prepareOriginalCurrentDirectory root
     ["original-directory-paths"] -> prepareOriginalDirectoryPaths root
     ["original-directory-streams"] -> prepareOriginalDirectoryStreams root
+    ["windows-directory"] -> prepareWindowsDirectory root
     ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root
@@ -1065,6 +1070,7 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["delimited-continuations"] -> prepareDelimitedContinuations root
     ["ghc-bco"] -> prepareGhcBCO root
+    ["foreign-exceptions"] -> prepareForeignExceptions root
     ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["arithmetic-exceptions", "--core-only"] -> refreshArithmeticCore root
     ["live-async"] -> prepareLiveAsync root

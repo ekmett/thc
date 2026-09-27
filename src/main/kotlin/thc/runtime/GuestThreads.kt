@@ -401,7 +401,9 @@ internal class GuestThreads internal constructor(
                 ?: return@synchronized AsyncRequest(this, targetId, null, payload).also {
                     it.transition(AsyncRequestState.TARGET_FINISHED)
                 }
-            val self = currentSlot.get() === target
+            // Another context may retain its suspended caller on this carrier.
+            // Only the active logical guest receives self-throwTo semantics.
+            val self = currentSlot.get() === target && activeIdentity.get() === target.identity
             if (!self && !target.externalAsync)
                 throw UnsupportedCore("External killThread# to a nonresumable AST fork is unsupported")
             AsyncRequest(this, targetId, target.thread, payload, self).also {
@@ -455,7 +457,7 @@ internal class GuestThreads internal constructor(
         if (closed) return null
         val current = Thread.currentThread()
         if (target.thread !== current || currentSlot.get() !== target || threads[target.identity.logicalId] !== target ||
-            delivery.get()?.permission != DeliveryPermission.GUEST ||
+            delivery.get()?.permission != DeliveryPermission.GUEST || activeIdentity.get() !== target.identity ||
             target.claimed != null || target.queue.isEmpty()) return null
         val request = target.queue.first()
         val allowed = request.forceSelf || when (maskingState.get()) {

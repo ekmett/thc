@@ -9,6 +9,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
+import com.oracle.truffle.api.exception.AbstractTruffleException
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.interop.InteropException
 import com.oracle.truffle.api.interop.InteropLibrary
@@ -124,11 +125,14 @@ internal class JavaScriptAccess(private val declaration: JavaScriptImport) : Nod
     @Child private var numbers = InteropLibrary.getFactory().createDispatched(3)
 
     /** Only the foreign call is opaque; a reentrant THC public entry opens its own guest cut. */
+    @Child private var foreignExceptions = ForeignExceptionAccess()
     private inline fun <T> foreign(action: () -> T): T {
         val threads = Language.currentState(this).threads
         val previous = threads.enterForeign(declaration.safety)
-        try { return action() }
-        finally { threads.leaveForeign(previous) }
+        try {
+            try { return action() }
+            finally { threads.leaveForeign(previous) }
+        } catch (error: AbstractTruffleException) { foreignExceptions.raise(error) }
     }
 
     private fun function(): Any {

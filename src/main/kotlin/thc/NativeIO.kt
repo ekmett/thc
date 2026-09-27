@@ -5,8 +5,11 @@ package thc
 
 import org.graalvm.polyglot.Context
 import thc.runtime.NativeFileProvider
+import thc.runtime.WindowsDirectoryStreams
 
-/** Explicit Linux host-filesystem authority for an opt-in context. This factory
+/** Explicit host-filesystem authority for an opt-in context. Linux provides
+ * native files; Windows currently provides the original Win32 directory search API.
+ * This factory
  * owns the final filesystem configuration and returns a built Context, never a
  * mutable Builder. It cannot authenticate arbitrary filesystem wrappers.
  * Connects the provider to this context's shared managed descriptor owners.
@@ -16,11 +19,15 @@ object NativeIO {
     enum class StandardEndpoint { INPUT, OUTPUT, ERROR }
 
     @JvmStatic fun createContext(standardEndpoints: Set<StandardEndpoint> = emptySet()): Context =
-        NativeFileProvider.createContext(standardEndpoints.toSet())
+        if (WindowsDirectoryStreams.supportedHost()) WindowsDirectoryStreams.createContext()
+        else NativeFileProvider.createContext(standardEndpoints.toSet())
 
-    internal fun supportedHost(): Boolean = System.getProperty("os.name") == "Linux" &&
+    internal fun supportedHost(): Boolean = supportedPosixHost() || WindowsDirectoryStreams.supportedHost()
+
+    internal fun supportedPosixHost(): Boolean = System.getProperty("os.name") == "Linux" &&
         System.getProperty("os.arch") in setOf("amd64", "x86_64")
 
     internal fun commandLineContext(ffiMode: FfiMode): Context =
-        NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.LAUNCHER, ffiMode)
+        if (WindowsDirectoryStreams.supportedHost()) WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER, ffiMode)
+        else NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.LAUNCHER, ffiMode)
 }

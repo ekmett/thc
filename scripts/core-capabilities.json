@@ -11,7 +11,8 @@
   "runtimeServiceCalls": {
     "thc_runtime_v1_query": ["Int32Rep", "Int64Rep", "Int64Rep", null],
     "thc_runtime_v1_control": ["Int32Rep", "Int64Rep", null],
-    "thc_runtime_v1_trace": ["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null]
+    "thc_runtime_v1_trace": ["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null],
+    "thc_exception_v1_text": ["AddrRep", "Int32Rep", "Int64Rep", null]
   },
   "managedForeignCalls": [
     "fps_sort",
@@ -105,6 +106,10 @@
     "__hscore_readdir",
     "__hscore_d_name",
     "__hscore_free_dirent",
+    "FindFirstFileW",
+    "FindNextFileW",
+    "FindClose",
+    "GetLastError",
     "symlink",
     "readlink",
     "rmdir",

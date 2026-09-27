@@ -65,7 +65,7 @@ branch completes the local vector operation and returns a scalar; no vector
 crosses the branch result boundary. The declared corpus uses only those selectors.
 
 For every lane, the left and right inputs depend on different scalar seeds
-through odd affine coefficients. The Python model inverts those coefficients
+through odd affine coefficients. The Haskell producer inverts those coefficients
 modulo 65536 to test the complete 9-by-9 operand grid
 `[-32768,-32767,-257,-1,0,1,257,32766,32767]` independently at every
 lane. Broadcast cases arrange every boundary value at every lane directly.
@@ -92,11 +92,14 @@ evidence.
 
 ## Preparation
 
+See the shared [integer SIMD fixture guide](integer-simd-fixtures.md) for the
+independent Kotlin model controls and both-handoff recipe.
+
 With the pinned environment and the shared resource gate:
 
 ```sh
-python3 scripts/test-int16x8-model.py
-python3 scripts/prepare-int16x8-audit.py
+cabal run exe:thc-fixtures --offline -- int16x8
+./gradlew testDefault --tests thc.runtime.SimdInt16VectorTest
 ```
 
 The eight arity-two entries each have 268 distinct seed pairs, covering narrow

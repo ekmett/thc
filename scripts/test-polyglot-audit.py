@@ -64,12 +64,12 @@ class PolyglotAuditTest(unittest.TestCase):
         auditor.walk(expression, bound, 'test:root', '/expr')
         return auditor
 
-    def test_each_declared_operation_is_exactly_linked(self):
+    def test_exact_polyglot_abi_still_requires_genuine_exception_runtime(self):
         for symbol in ABI['operations']:
             with self.subTest(symbol=symbol):
                 expression, bound = call(symbol)
                 auditor = self.audit(expression, bound)
-                self.assertEqual([], auditor.issues)
+                self.assertEqual(['foreign-exception-bridge'], [issue['code'] for issue in auditor.issues])
                 self.assertEqual({}, auditor.missing)
                 self.assertEqual([symbol], [entry['symbol'] for entry in auditor.foreign_calls])
 
@@ -103,7 +103,7 @@ class PolyglotAuditTest(unittest.TestCase):
                 self.assertIn('ffi:external', auditor.missing)
                 self.assertEqual([], auditor.foreign_calls)
 
-    def test_exact_javascript_source_and_scalar_io_signatures(self):
+    def test_exact_javascript_abi_still_requires_genuine_exception_runtime(self):
         cases = [
             ('(() => {})', (), 'void', 'safe'),
             ('(() => 7)', (), 'IntRep', 'unsafe'),
@@ -116,7 +116,7 @@ class PolyglotAuditTest(unittest.TestCase):
             with self.subTest(source=source, output=output, safety=safety):
                 expression, bound = javascript_call(source, inputs, output, safety)
                 auditor = self.audit(expression, bound)
-                self.assertEqual([], auditor.issues)
+                self.assertEqual(['foreign-exception-bridge'], [issue['code'] for issue in auditor.issues])
                 self.assertEqual({}, auditor.missing)
                 self.assertEqual(1, len(auditor.foreign_calls))
                 self.assertEqual(source, auditor.foreign_calls[0]['javascriptSource'])
