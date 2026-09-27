@@ -224,4 +224,61 @@ class OriginalMemorySearchTest {
             }
         }
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = ["ast", "bytecode"])
+    fun lexicalJoinsCannotClaimOriginalMemorySearchAuthority(backend: String) {
+        for (stage in listOf("pre", "post")) {
+            val source = module(stage)
+            inside { language ->
+                for (original in OriginalStdioChecks.foreignCalls(source)) {
+                    val descriptor = (original[6] as Map<*, *>)["foreignCall"] as Map<*, *>
+                    val compare = (descriptor["target"] as Map<*, *>)["symbol"] == "memcmp"
+                    fun shadowed(claimForeign: Boolean): Map<String, Any?> {
+                        val raw = Json.parse(Json.stringify(OriginalStdioChecks.rawModule(original, source)))
+                            as Map<String, Any?>
+                        val entry = (raw["bindings"] as List<Map<String, Any?>>).single()
+                        val lambda = entry["expr"] as List<Any?>
+                        val body = lambda[2] as MutableList<Any?>
+                        val call = body[1] as MutableList<Any?>
+                        val metadata = call[6] as Map<String, Any?>
+                        val tuple = metadata["rep"] as Map<String, Any?>
+                        val fields = tuple["components"] as List<Map<String, Any?>>
+                        val operands = call[2] as List<List<Any?>>
+                        val closure = OriginalStdioFixtures.closure()
+                        val formals = operands.mapIndexed { index, operand ->
+                            mapOf("id" to "join$index", "lifted" to false,
+                                "rep" to CoreRepresentations.metadata(operand)!!.getValue("rep"))
+                        }
+                        val value = if (compare) listOf("lit", "int32", "37", mapOf("rep" to fields[1]))
+                            else listOf("var", "join0", mapOf("rep" to fields[1]))
+                        val pair = listOf("app", listOf("con", "T2", 2, mapOf("rep" to closure)),
+                            listOf(listOf("var", "join3", mapOf("rep" to fields[0])), value),
+                            listOf(false, false), false, false, mapOf("rep" to (tuple + ("evaluated" to true))))
+                        val join = mapOf("id" to (call[1] as List<*>)[1], "name" to "shadowedMemorySearch",
+                            "lifted" to true, "rep" to closure,
+                            "expr" to listOf("lam", formals, pair, mapOf("rep" to closure, "resultRep" to tuple)),
+                            "joinValueArity" to 4L, "joinResultRep" to tuple, "info" to mapOf("joinArity" to 4L))
+                        if (!claimForeign) call[6] = metadata - "foreignCall"
+                        CoreJoins.validate(listOf(join), call, false)
+                        body[1] = listOf("let", false, listOf(join), call, mapOf("rep" to tuple))
+                        return raw
+                    }
+                    // The same well-formed lexical join works without claiming
+                    // the original foreign declaration's authority.
+                    val bytes = ManagedAddress.fromByteArray(byteArrayOf(1, 2))
+                    val second: Any = if (compare) ManagedAddress.fromByteArray(byteArrayOf(9, 8)) else 9L
+                    val target = load(language, backend, shadowed(false)).entryTarget("entry")
+                    val result = Calls.target(target, arrayOf(0L, bytes, second, 1L, Unit))
+                    if (compare) assertEquals(37L, result)
+                    else assertSame(bytes, result)
+                    val failure = assertThrows(RuntimeFault::class.java) {
+                        load(language, backend, shadowed(true))
+                    }
+                    assertTrue(failure.message.orEmpty().contains("unresolved original FCallId required"),
+                        "$stage/$backend rejects the shadowed head specifically: " + failure.message)
+                }
+            }
+        }
+    }
 }

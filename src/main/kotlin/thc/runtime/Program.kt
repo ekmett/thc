@@ -2486,7 +2486,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
             val tupleProof = CoreRepresentations.expression(expr)
             val tupleOperation = if (fn[0] == "prim") TupleArithmeticOp.named(fn[1] as String) else null
             val floatDecode = if (fn[0] == "prim") FloatDecodeOp.named(fn[1] as String) else null
-            val defined = fn[0] == "var" && (fn[1] in globals || fn[1] in scope.locals)
+            // Join heads are lexically owned too: foreign metadata cannot turn
+            // a local jump into an unresolved external declaration.
+            val defined = fn[0] == "var" &&
+                (fn[1] in globals || fn[1] in scope.locals || fn[1] in scope.joins)
             val cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val runtimeService = CoreRuntimeServices.validate(expr, defined || fn.getOrNull(1) in scope.joins)
             val packageScalar = if (cpuAffinity == null && runtimeService == null) CorePackageScalarForeign.validate(CoreRepresentations.metadata(expr),
