@@ -714,7 +714,7 @@ internal class ContinuationTupleDestination(private val destination: BytecodeTup
 internal class TupleCallYield @JvmOverloads constructor(
     val continuation: com.oracle.truffle.api.bytecode.ContinuationResult,
     val tail: Boolean = false, val tailTarget: RootCallTarget? = null) :
-    com.oracle.truffle.api.exception.AbstractTruffleException("Internal tuple call suspension", null, 0, null)
+    com.oracle.truffle.api.exception.AbstractTruffleException("Internal tuple call suspension", null, 0, null), InternalGuestControl
 
 /** A completion token names a thread-local slab; copy and release it before cross-thread publication. */
 internal fun ownedTupleResult(result: Any?, shape: TupleShape): HandoffStorage {

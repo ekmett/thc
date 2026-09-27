@@ -16,16 +16,19 @@ tests = TestLabel "exact runtime shim native fallback profile" $ TestList
       (Right (["thc_runtime_v1_query"], ["thc_runtime_v1_query"]))
       (validateRuntimeShimModule owner (moduleValue [declaration] [descriptor]))
   , TestCase $ do
-      let textCall = alter "symbol" (String "thc_exception_v1_text") $
+      let textCall = alter "safety" (String "safe") $ alter "symbol" (String "thc_exception_v1_text") $
             alter "arguments" (strings ["AddrRep", "Int32Rep", "Int64Rep", "void"]) call
-          textDescriptor = alter "target" (alter "symbol" (String "thc_exception_v1_text") target) $
+          textDescriptor = alter "safety" (String "safe") $ alter "target" (alter "symbol" (String "thc_exception_v1_text") target) $
             alter "argumentReps" (toJSON [rep ["AddrRep"], rep ["Int32Rep"], rep ["Int64Rep"], rep []]) descriptor
           textDeclaration = alter "emitted" textCall declaration
       assertEqual "exception metadata has one exact target-defined ABI"
         (Right (["thc_exception_v1_text"], ["thc_exception_v1_text"]))
         (validateRuntimeShimModule owner (moduleValue [textDeclaration] [textDescriptor]))
+      assertBool "exception Core descriptor rejects unsafe metadata execution"
+        (isLeft (validateRuntimeShimModule owner
+          (moduleValue [textDeclaration] [alter "safety" (String "unsafe") textDescriptor])))
       forM_ [alter "arguments" (strings ["Int64Rep", "Int32Rep", "Int64Rep", "void"]) textCall,
-             alter "safety" (String "safe") textCall,
+             alter "safety" (String "unsafe") textCall,
              alter "unit" (String "other-unit") textCall,
              alter "symbol" (String "thc_exception_v1_text_extra") textCall] $ \wrong ->
         assertBool "exception shim rejects changed owner, pointer ABI, safety and suffix"

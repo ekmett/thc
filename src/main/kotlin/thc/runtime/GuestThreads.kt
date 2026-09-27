@@ -65,7 +65,6 @@ internal class GuestThreads internal constructor(
     private class DeliveryState {
         var permission = DeliveryPermission.NONE
         val guestPrevious = ArrayDeque<DeliveryPermission>()
-        val foreignStatus = ArrayDeque<GuestThreadExtent>()
     }
 
     constructor(env: TruffleLanguage.Env, maskingState: ThreadLocal<MaskingState>) : this(
@@ -133,28 +132,66 @@ internal class GuestThreads internal constructor(
     @Synchronized fun mainThreadRegistration(): MainThreadWeakKey? = mainThreadWeak
     private val currentSlot = ThreadLocal<GuestThread?>()
     private val delivery = ThreadLocal<DeliveryState?>()
-    private var closed = false
+    @Volatile private var closed = false
 
     private fun deliveryState(): DeliveryState = delivery.get() ?: DeliveryState().also { delivery.set(it) }
 
-    /** A foreign call may run before a guest thread has registered with this context. */
-    @TruffleBoundary fun enterForeign(): DeliveryPermission {
+    /** One reusable frame per nesting depth, with no per-call lease/wrapper for
+     * synchronous leaves. Cleared frames retain neither context nor guest roots. */
+    private class ForeignActivation {
+        var owner: GuestThreads? = null
+        var caller: GuestThreadId? = null
+        var safety = ForeignSafety.UNSAFE
+        var previous = DeliveryPermission.NONE
+        var status: GuestThreadStatus? = null
+    }
+    private class ForeignStack {
+        val frames = ArrayList<ForeignActivation>()
+        var depth = 0
+        fun top(): ForeignActivation? = if (depth == 0) null else frames[depth - 1]
+    }
+
+    /** A foreign call may run before a guest thread has registered. The default
+     * is deliberately unsafe: only an exact safe declaration admits callbacks. */
+    @TruffleBoundary fun enterForeign(safety: ForeignSafety = ForeignSafety.UNSAFE): DeliveryPermission =
+        enterForeignImpl(safety, disposal = false)
+
+    /** Final resource retirement follows registry close; it grants no callback
+     * authority and is never used to begin a new guest-requested operation. */
+    @TruffleBoundary internal fun enterForeignForDisposal(): DeliveryPermission =
+        enterForeignImpl(ForeignSafety.UNSAFE, disposal = true)
+
+    private fun enterForeignImpl(safety: ForeignSafety, disposal: Boolean): DeliveryPermission {
+        if (closed && !disposal) fault("Guest context has closed")
         val state = deliveryState()
-        val previous = state.permission
-        state.foreignStatus.addLast(enterStatus(currentSlot.get()?.identity, GuestThreadStatus.FOREIGN))
+        val stack = foreignActivations.get() ?: ForeignStack().also { foreignActivations.set(it) }
+        if (stack.depth == stack.frames.size) stack.frames.add(ForeignActivation())
+        val activation = stack.frames[stack.depth++]
+        check(activation.owner == null && activation.caller == null)
+        activation.owner = this
+        activation.caller = activeIdentity.get()
+        activation.safety = safety
+        activation.previous = state.permission
+        activation.status = activation.caller?.status
+        activation.caller?.let { if (!it.status.terminal) it.status = GuestThreadStatus.FOREIGN }
         state.permission = DeliveryPermission.FOREIGN
-        foreignExtents.set((foreignExtents.get() ?: 0) + 1)
-        return previous
+        return activation.previous
     }
 
     @TruffleBoundary fun leaveForeign(previous: DeliveryPermission) {
         val state = delivery.get() ?: error("Foreign execution has no delivery state")
         check(state.permission == DeliveryPermission.FOREIGN) { "Foreign execution exited across a guest entry" }
-        val depth = foreignExtents.get() ?: error("Foreign execution has no Java-thread origin")
-        check(depth > 0)
-        if (depth == 1) foreignExtents.remove() else foreignExtents.set(depth - 1)
+        val stack = foreignActivations.get() ?: error("Foreign execution has no Java-thread origin")
+        val activation = stack.top() ?: error("Foreign execution has no Java-thread origin")
+        check(activation.owner === this && activation.previous == previous) { "Foreign execution exited out of order" }
+        activation.caller?.let { if (!it.status.terminal) it.status = checkNotNull(activation.status) }
+        activation.owner = null
+        activation.caller = null
+        activation.status = null
+        activation.previous = DeliveryPermission.NONE
+        activation.safety = ForeignSafety.UNSAFE
+        stack.depth--
         state.permission = previous
-        state.foreignStatus.removeLast().close()
         if (previous == DeliveryPermission.NONE && state.guestPrevious.isEmpty()) delivery.remove()
     }
 
@@ -178,14 +215,21 @@ internal class GuestThreads internal constructor(
         val state = delivery.get() ?: return false
         // Another THC context may own the opaque Java frame. This process-wide
         // thread-local tags origin only; it never grants delivery in this context.
-        return state.permission == DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
+        return state.permission == DeliveryPermission.GUEST && foreignActivations.get()?.top() != null
     }
 
     @TruffleBoundary fun enterCurrent(inheritedMask: MaskingState? = null, forked: Boolean = false,
                                     externalAsync: Boolean = true, capability: Long? = null): Long {
-        // Origin alone is not a declaration that an FFI call is safe. A future
-        // foreign activation must authorize/reject reverse entry at this seam.
-        val callback = delivery.get()?.permission != DeliveryPermission.GUEST && (foreignExtents.get() ?: 0) > 0
+        val activation = foreignActivations.get()?.top()
+        // The carrier may return to a context whose earlier guest entry is still
+        // present. Its local GUEST permission must not bypass the active foreign
+        // declaration. Ordinary nesting inside an admitted callback keeps its ID.
+        val callback = activation != null && (delivery.get()?.permission != DeliveryPermission.GUEST ||
+            activation.caller === activeIdentity.get())
+        if (callback) {
+            if (activation.owner!!.closed) fault("Foreign caller context has closed")
+            if (activation.safety != ForeignSafety.SAFE) fault("Unsafe foreign call cannot re-enter guest code")
+        }
         val suspended = if (callback) activeIdentity.get() else null
         // Cross-context reverse entries must never acquire two registry locks.
         suspended?.owner?.pauseAllocation(suspended)
@@ -540,7 +584,7 @@ internal class GuestThreads internal constructor(
 
     companion object {
         @JvmStatic fun current(node: Node): GuestThreads = Language.currentState(node).threads
-        private val foreignExtents = ThreadLocal<Int?>()
+        private val foreignActivations = ThreadLocal<ForeignStack?>()
         private val activeIdentity = ThreadLocal<GuestThreadId?>()
 
         private fun enterStatus(identity: GuestThreadId?, status: GuestThreadStatus): GuestThreadExtent {

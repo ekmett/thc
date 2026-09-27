@@ -43,6 +43,7 @@ import UnsafeEqualityFixtures (prepareUnsafeEquality)
 import ContinuationFixtures (prepareCoreContinuation)
 import DelimitedContinuationsFixtures (prepareDelimitedContinuations)
 import GhcBCOFixtures (prepareGhcBCO)
+import ForeignExceptionFixtures (prepareForeignExceptions)
 import ArithmeticExceptionFixtures (prepareArithmeticExceptions, refreshArithmeticCore)
 import LiveAsyncFixtures (prepareLiveAsync)
 import ThreadLabelFixtures (prepareThreadLabel)
@@ -1069,6 +1070,7 @@ main = do
     ["core-continuation"] -> prepareCoreContinuation root
     ["delimited-continuations"] -> prepareDelimitedContinuations root
     ["ghc-bco"] -> prepareGhcBCO root
+    ["foreign-exceptions"] -> prepareForeignExceptions root
     ["arithmetic-exceptions"] -> prepareArithmeticExceptions root
     ["arithmetic-exceptions", "--core-only"] -> refreshArithmeticCore root
     ["live-async"] -> prepareLiveAsync root

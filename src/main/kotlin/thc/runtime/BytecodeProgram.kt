@@ -25,6 +25,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                                            private val checkpoint: BytecodeCheckpoint?,
                                            internal val enableAsync: Boolean) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
     private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
@@ -475,6 +476,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             source?.let { BytecodeSources.end(b) }
         }.getNode(0)
         root.setLabel(label)
+        root.configureForeignExceptionBridge(foreignExceptionBridge)
         root.configureAsync(enableAsync)
         root.configureDelimited(delimited)
         root.configureEntry(context.entryStrict, context.captureLayout != null)
@@ -1529,6 +1531,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && !memset && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
+            if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
+                foreignExceptionBridge == null) fault("Foreign execution requires a linked genuine THC.Exception runtime bundle")
             if (runtimeService != null) {
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { lowered ->
@@ -1541,13 +1545,16 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         RuntimeServiceCall.QUERY -> e.builder.beginRuntimeServiceQuery(destination.single())
                         RuntimeServiceCall.CONTROL -> e.builder.beginRuntimeServiceControl(destination.single())
                         RuntimeServiceCall.TRACE -> e.builder.beginRuntimeServiceTrace(destination.single())
+                        RuntimeServiceCall.EXCEPTION_TEXT -> e.builder.beginExceptionText(destination.single())
                     }
                     operands.forEach { it.emit(e) }
                     when (runtimeService) {
                         RuntimeServiceCall.QUERY -> e.builder.endRuntimeServiceQuery()
                         RuntimeServiceCall.CONTROL -> e.builder.endRuntimeServiceControl()
                         RuntimeServiceCall.TRACE -> e.builder.endRuntimeServiceTrace()
+                        RuntimeServiceCall.EXCEPTION_TEXT -> e.builder.endExceptionText()
                     }
+                    if (enableAsync && runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) emitAsyncPoll(e)
                 }
             } else if (cpuAffinity != null) {
                 val state = compile(args.single(), scope, false)
@@ -1844,7 +1851,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                     // Commit the result before the resumable guest cut. A pending
                     // async exception never unwinds/replays the opaque foreign call.
-                    if (enableAsync && packageScalar.signature.safety == "safe") emitAsyncPoll(e)
+                    if (enableAsync && packageScalar.safety == ForeignSafety.SAFE) emitAsyncPoll(e)
                 }
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2084,6 +2091,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
                         ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
                     }
+                    if (enableAsync) emitAsyncPoll(e)
                 }
             } else if (processSignal != null) {
                 CoreSignalForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2317,6 +2325,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         CoreKind.VOID -> b.emitJavaScriptVoid(source)
                         else -> throw RuntimeFault("Unsupported JavaScript result")
                     }
+                    if (enableAsync && javascript.safety == ForeignSafety.SAFE) emitAsyncPoll(e)
                 }
             } else if (polyglot != null) {
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
@@ -2332,6 +2341,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PolyglotOp.READ_MEMBER -> e.builder.endPolyglotReadMember()
                         PolyglotOp.EXECUTE_INT -> e.builder.endPolyglotExecuteInt()
                     }
+                    if (enableAsync) emitAsyncPoll(e)
                 }
             } else if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
                 if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")
@@ -2369,7 +2379,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     b.beginBlock()
                     operand.emitTuple(e, emptyList())
                     if (destination != null) b.beginStoreLocal(b.createLocal("non-returning arithmetic exception", null))
-                    b.beginRaise(); b.emitReadGlobal(payload); b.endRaise()
+                    b.beginRaise(true); b.emitReadGlobal(payload); b.endRaise()
                     if (destination != null) b.endStoreLocal()
                     b.endBlock()
                 }, tupleProof.copy(evaluated = true))
@@ -2445,7 +2455,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     val b = e.builder
                     when (name) {
                         "raiseIO#" -> {
-                            b.beginRaiseIO(); operands.forEach { it.emit(e) }; b.endRaiseIO()
+                            b.beginRaiseIO(CoreExceptionPayload.validate(expr)); operands.forEach { it.emit(e) }; b.endRaiseIO()
                         }
                         "getMaskingState#" -> {
                             b.beginGetMaskingState(destination[0]); operands[0].emit(e); b.endGetMaskingState()
@@ -3693,7 +3703,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             when {
                 fn[0] == "var" && fn[1] in scope.joins -> joinCall(scope.joins.getValue(fn[1] as String), operands)
                 fn[0] == "prim" -> {
-                    val value = primitive(fn[1] as String, operands)
+                    val value = primitive(fn[1] as String, operands, CoreExceptionPayload.validate(expr))
                     if (fn[1] == "raise#" && tupleProof.isTypedTransport) tupleExpression(tupleProof) { e, _ ->
                         val b = e.builder
                         b.beginBlock()
@@ -5083,7 +5093,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
 
 
-    private fun primitive(name: String, args: List<Expression>): Expression {
+    private fun primitive(name: String, args: List<Expression>, someException: Boolean = false): Expression {
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
         val intShift = narrowIntPrimitiveShift(name)
@@ -5247,7 +5257,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 "Narrow8" -> b.beginNarrow8(); "Narrow16" -> b.beginNarrow16(); "Narrow32" -> b.beginNarrow32()
                 "NarrowWord" -> b.beginNarrowWord(wordMask)
                 "AddressToInt" -> b.beginAddressToInt(); "IntToAddress" -> b.beginIntToAddress()
-                "Raise" -> b.beginRaise(); "AddressPlus" -> b.beginAddressPlus()
+                "Raise" -> b.beginRaise(someException); "AddressPlus" -> b.beginAddressPlus()
                 "AddressMinus" -> b.beginAddressMinus(); "AddressRemainder" -> b.beginAddressRemainder()
                 "AddressIndexByte" -> b.beginAddressIndexByte(name == "indexInt8OffAddr#")
                 "AddressIndexManagedScalar" -> b.beginAddressIndexManagedScalar(

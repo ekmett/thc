@@ -177,7 +177,7 @@ class CallMaskSegmentsTest {
             b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
             b.beginYield(); b.emitLoadConstant(Unit); b.endYield()
             if (payload != null) {
-                b.beginRaiseIO(); b.emitLoadConstant(payload); b.emitLoadConstant(Unit); b.endRaiseIO()
+                b.beginRaiseIO(false); b.emitLoadConstant(payload); b.emitLoadConstant(Unit); b.endRaiseIO()
             }
             b.endBlock()
             b.endTryFinally()

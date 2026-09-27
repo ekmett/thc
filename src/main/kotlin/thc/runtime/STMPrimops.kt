@@ -51,12 +51,12 @@ internal enum class STMOp(val primitive: String, val arguments: List<String>, va
 /** An aborted STM scope leaves no child continuation or mutable log behind. The
  * enclosing backend saves a fresh invocation of the original callback scope. */
 internal class STMRestart(val request: AsyncRequest) :
-    AbstractTruffleException("Restart interrupted STM scope", null, 0, null)
+    AbstractTruffleException("Restart interrupted STM scope", null, 0, null), InternalGuestControl
 
 /** A callback yielded before writing its result. Kept distinct from synchronous
  * exceptions so catchSTM and catchRetry cannot intercept asynchronous delivery. */
 private class STMActionSuspended(val request: AsyncRequest) :
-    AbstractTruffleException("Interrupted STM callback", null, 0, null)
+    AbstractTruffleException("Interrupted STM callback", null, 0, null), InternalGuestControl
 
 private fun stmRequest(marker: Any?): AsyncRequest = when (marker) {
     is AsyncRequest -> marker

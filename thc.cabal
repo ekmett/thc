@@ -806,6 +806,7 @@ executable thc-fixtures
     ScalarMemoryUtilitiesFixtures
     ThreadAsyncFixtures
     UncaughtSelfFixtures
+    ForeignExceptionFixtures
     ArithmeticExceptionFixtures
     MaskFunctionFixtures
     DeepEvaluationFixtures
