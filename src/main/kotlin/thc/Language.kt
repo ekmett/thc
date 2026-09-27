@@ -45,6 +45,43 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
+/** Runtime diagnostics retain cumulative admission/work totals, not the owners
+ * of unused source snapshots or projections. Reachable spans retain their own
+ * source independently; their existing operation monitors publish live counts.
+ */
+internal class CoreJsonLoadingStatistics : () -> Map<String, Any> {
+    private val sources = ArrayList<CoreJsonIndex.Counters>()
+    private val adapters = linkedSetOf<CoreJsonBindings.Counters>()
+    val isEmpty: Boolean get() = sources.isEmpty()
+    fun include(source: CoreJsonIndex, adapter: CoreJsonBindings) {
+        sources += source.counters
+        adapters += adapter.counters
+    }
+    override fun invoke(): Map<String, Any> {
+        val sourceTotals = sources.map(CoreJsonIndex.Counters::statistics)
+        val adapterTotals = adapters.map(CoreJsonBindings.Counters::statistics)
+        return mapOf("jsonSourceBytes" to sourceTotals.sumOf { it.sourceByteSize.toLong() },
+            "jsonIndexPrimitiveBytes" to sourceTotals.sumOf { it.indexByteSize },
+            "jsonSidecarBytes" to sourceTotals.sumOf { it.serializedByteSize ?: 0L },
+            "jsonSourceFileBytesRead" to sourceTotals.sumOf { it.sourceFileBytesRead },
+            "jsonSourceHashBytesScanned" to sourceTotals.sumOf { it.sourceHashBytesScanned },
+            "jsonStructuralBytesScanned" to sourceTotals.sumOf { it.structuralBytesScanned },
+            "jsonIndexSourceBytesScanned" to sourceTotals.sumOf { it.indexSourceBytesScanned },
+            "jsonDecodedSpanCount" to sourceTotals.sumOf { it.decodedSpanCount },
+            "jsonDecodedByteCount" to sourceTotals.sumOf { it.decodedByteCount },
+            "jsonNavigationByteReads" to sourceTotals.sumOf { it.navigationByteReads },
+            "jsonRegeneratedSourceBytes" to sourceTotals.sumOf { it.regeneratedSourceBytes },
+            "jsonBindingHeaders" to adapterTotals.sumOf { it.bindingHeaders },
+            "jsonBodyMaterializations" to adapterTotals.sumOf { it.bodyMaterializations },
+            "jsonExpressionViews" to adapterTotals.sumOf { it.expressionViews },
+            "jsonLinkingExpressionViews" to adapterTotals.sumOf { it.linkingExpressionViews },
+            "jsonScalarDecodes" to adapterTotals.sumOf { it.scalarDecodes },
+            "jsonLinkingScalarDecodes" to adapterTotals.sumOf { it.linkingScalarDecodes },
+            "jsonSummaryExpressionsVisited" to adapterTotals.sumOf { it.summaryExpressionsVisited },
+            "jsonCanonicalStrings" to adapterTotals.sumOf { it.canonicalStrings })
+    }
+}
+
 /**
  * Internal Core assembly and request serialization shared by the launcher and tests.
  * Original unit identities, foreign obligations and strict reachable references
@@ -744,42 +781,15 @@ class Language : TruffleLanguage<Language.State>() {
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) {
             "IO main requires strict unsupported-Core rejection"
         }
-        val indexedSources = ArrayList<CoreJsonIndex>()
-        val indexedAdapters = linkedSetOf<CoreJsonBindings>()
-        val layout = CoreModules.visitRequestModules(input, indexed = { source, adapter ->
-            indexedSources += source
-            indexedAdapters += adapter
-        }) { merger.add(it) }
-        val loadingStatistics: () -> Map<String, Any> = {
-            val sources = indexedSources.map(CoreJsonIndex::statistics)
-            val adapters = indexedAdapters.map(CoreJsonBindings::statistics)
-            mapOf("jsonSourceBytes" to sources.sumOf { it.sourceByteSize.toLong() },
-                "jsonIndexPrimitiveBytes" to sources.sumOf { it.indexByteSize },
-                "jsonSidecarBytes" to sources.sumOf { it.serializedByteSize ?: 0L },
-                "jsonSourceFileBytesRead" to sources.sumOf { it.sourceFileBytesRead },
-                "jsonSourceHashBytesScanned" to sources.sumOf { it.sourceHashBytesScanned },
-                "jsonStructuralBytesScanned" to sources.sumOf { it.structuralBytesScanned },
-                "jsonIndexSourceBytesScanned" to sources.sumOf { it.indexSourceBytesScanned },
-                "jsonDecodedSpanCount" to sources.sumOf { it.decodedSpanCount },
-                "jsonDecodedByteCount" to sources.sumOf { it.decodedByteCount },
-                "jsonNavigationByteReads" to sources.sumOf { it.navigationByteReads },
-                "jsonRegeneratedSourceBytes" to sources.sumOf { it.regeneratedSourceBytes },
-                "jsonBindingHeaders" to adapters.sumOf { it.bindingHeaders },
-                "jsonBodyMaterializations" to adapters.sumOf { it.bodyMaterializations },
-                "jsonExpressionViews" to adapters.sumOf { it.expressionViews },
-                "jsonLinkingExpressionViews" to adapters.sumOf { it.linkingExpressionViews },
-                "jsonScalarDecodes" to adapters.sumOf { it.scalarDecodes },
-                "jsonLinkingScalarDecodes" to adapters.sumOf { it.linkingScalarDecodes },
-                "jsonSummaryExpressionsVisited" to adapters.sumOf { it.summaryExpressionsVisited },
-                "jsonCanonicalStrings" to adapters.sumOf { it.canonicalStrings })
-        }
+        val loadingStatistics = CoreJsonLoadingStatistics()
+        val layout = CoreModules.visitRequestModules(input, indexed = loadingStatistics::include) { merger.add(it) }
         val linked = CoreModules.reachable(merger.finish(),
             if (shutdownEntry == null) listOf(entry) else listOf(entry, shutdownEntry),
             input["strictLink"] == true) + mapOf("instrument" to (input["instrument"] != false),
             "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
             "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false)) +
             (if (layout == null) emptyMap() else mapOf("targetLayout" to layout)) +
-            (if (indexedSources.isEmpty()) emptyMap() else mapOf("coreLoadingStatistics" to loadingStatistics))
+            (if (loadingStatistics.isEmpty) emptyMap() else mapOf("coreLoadingStatistics" to loadingStatistics))
         val bindings = linked["bindings"] as List<Map<String, Any?>>
         val selected = bindings.singleOrNull { it["id"] == entry } ?: bindings.single { it["name"] == entry }
         val selectedExpression = selected["expr"] as List<Any?>

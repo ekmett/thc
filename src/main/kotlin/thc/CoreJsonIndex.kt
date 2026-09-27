@@ -49,34 +49,56 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         val regeneratedSourceBytes: Long, val regeneratedBlockCount: Long)
     data class Member(val name: String, val value: Span)
 
+    /** Detached scalar totals. The handle is also the existing source-operation
+     * monitor, so diagnostics see live updates without retaining source storage
+     * or adding synchronization to individual byte reads. Totals survive close.
+     */
+    class Counters {
+        var sourceByteSize = 0
+        var indexByteSize = 0L
+        var serializedByteSize: Long? = null
+        var sourceFileBytesRead = 0L
+        var sourceSnapshotBytesCopied = 0L
+        var sourceHashBytesScanned = 0L
+        var structuralBytesScanned = 0L
+        var decodedSpanCount = 0L
+        var decodedByteCount = 0L
+        var navigationByteReads = 0L
+        var balancedParenthesisBitsExamined = 0L
+        var interestDirectoryBytes = 0L
+        var lexerCheckpointBytes = 0L
+        var topologyBytes = 0L
+        var topologyNavigationBytes = 0L
+        var scratchBytes = 0L
+        var sourceIdentityBytes = 0L
+        var indexSourceBytesScanned = 0L
+        var regeneratedSourceBytes = 0L
+        var regeneratedBlockCount = 0L
+        @Synchronized fun statistics() = Statistics(sourceByteSize, indexByteSize, serializedByteSize,
+            sourceFileBytesRead, sourceSnapshotBytesCopied, sourceHashBytesScanned, structuralBytesScanned,
+            decodedSpanCount, decodedByteCount, navigationByteReads, balancedParenthesisBitsExamined,
+            interestDirectoryBytes, lexerCheckpointBytes, topologyBytes, topologyNavigationBytes,
+            scratchBytes, sourceIdentityBytes, indexSourceBytesScanned, regeneratedSourceBytes, regeneratedBlockCount)
+    }
+
+    val counters: Counters = checkNotNull(storage).counters
     private val decoded = HashMap<Int, Result<Any?>>()
-    private var decodeCount = 0L
-    private var decodeBytes = 0L
-    private var navigationBytes = 0L
-    private var bpExamined = 0L
     private fun live(): Storage = checkNotNull(storage) { "JSON index is closed" }
 
-    val root: Span get() = synchronized(this) { val s = live(); Span(this, s.rootStart, s.rootEnd) }
-    fun statistics(): Statistics = synchronized(this) {
-        val s = live()
-        Statistics(s.bytes.size, s.indexBytes, s.serializedBytes, s.fileBytesRead, s.snapshotBytesCopied,
-            s.hashBytesScanned, s.scanBytes, decodeCount, decodeBytes, navigationBytes, bpExamined,
-            s.interest.directoryBytes, s.interest.checkpointBytes, s.bp.bits.data.size.toLong() * 8,
-            s.bp.byteSize - s.bp.bits.data.size.toLong() * 8, s.interest.scratchBytes,
-            s.identityBytes, s.interest.indexSourceBytesScanned, s.interest.regeneratedSourceBytes, s.interest.regeneratedBlockCount)
-    }
+    val root: Span get() = synchronized(counters) { val s = live(); Span(this, s.rootStart, s.rootEnd) }
+    fun statistics(): Statistics = synchronized(counters) { live(); counters.statistics() }
     /** Hashes the exact original bytes, never normalized or reserialized JSON. */
-    fun sha256(): String = synchronized(this) { live().hash.joinToString("") { "%02x".format(it) } }
+    fun sha256(): String = synchronized(counters) { live().hash.joinToString("") { "%02x".format(it) } }
     fun validateDocument(): Any? = root.decode()
     /** Structural coordinates, primarily for producer/reader parity and diagnostics. */
-    internal fun rankInterest(endExclusive: Int): Int = synchronized(this) { live().interest.rank1(endExclusive) }
-    internal fun selectInterest(ordinal: Int): Int = synchronized(this) { live().interest.select(ordinal) }
-    override fun close() = synchronized(this) { decoded.clear(); storage = null }
+    internal fun rankInterest(endExclusive: Int): Int = synchronized(counters) { live().interest.rank1(endExclusive) }
+    internal fun selectInterest(ordinal: Int): Int = synchronized(counters) { live().interest.select(ordinal) }
+    override fun close() = synchronized(counters) { decoded.clear(); storage = null }
 
     class Span internal constructor(private val owner: CoreJsonIndex, internal val begin: Int, internal val end: Int) {
         val kind: Kind get() = owner.kind(begin)
-        val start: Int get() = synchronized(owner) { owner.live(); begin }
-        val endExclusive: Int get() = synchronized(owner) { owner.live(); end }
+        val start: Int get() = synchronized(owner.counters) { owner.live(); begin }
+        val endExclusive: Int get() = synchronized(owner.counters) { owner.live(); end }
         fun decode(): Any? = owner.decode(this)
         /** The adapter may canonicalize and memoize the result without retaining a duplicate here. */
         fun decodeUncached(): Any? = owner.decodeUncached(this)
@@ -90,8 +112,8 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         fun bytes(): ByteArray = owner.bytes(this)
     }
 
-    private fun read(s: Storage, at: Int): Int { navigationBytes++; return s.bytes[at].toInt() and 255 }
-    private fun kind(start: Int): Kind = synchronized(this) {
+    private fun read(s: Storage, at: Int): Int { counters.navigationByteReads++; return s.bytes[at].toInt() and 255 }
+    private fun kind(start: Int): Kind = synchronized(counters) {
         when (read(live(), start)) {
             123 -> Kind.OBJECT
             91 -> Kind.ARRAY
@@ -99,10 +121,10 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             else -> Kind.ATOM
         }
     }
-    private fun bytes(span: Span): ByteArray = synchronized(this) {
+    private fun bytes(span: Span): ByteArray = synchronized(counters) {
         live().bytes.copyOfRange(span.begin, span.end)
     }
-    private fun decode(span: Span): Any? = synchronized(this) {
+    private fun decode(span: Span): Any? = synchronized(counters) {
         live()
         decoded[span.begin]?.let { return@synchronized it.getOrThrow() }
         val result = try {
@@ -111,9 +133,9 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         decoded[span.begin] = result
         result.getOrThrow()
     }
-    private fun decodeUncached(span: Span): Any? = synchronized(this) {
+    private fun decodeUncached(span: Span): Any? = synchronized(counters) {
         val s = live()
-        decodeCount++; decodeBytes += span.end - span.begin
+        counters.decodedSpanCount++; counters.decodedByteCount += span.end - span.begin
         val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
             .decode(ByteBuffer.wrap(s.bytes, span.begin, span.end - span.begin)).toString()
@@ -126,7 +148,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             val marker = s.interest.rank1(start)
             val open = Math.multiplyExact(marker, 2)
             check(open < s.bp.bits.size && s.bp.bits[open] && s.bp.bits[open + 1])
-            val close = s.bp.close(open) { bpExamined++ }
+            val close = s.bp.close(open) { counters.balancedParenthesisBitsExamined++ }
             Math.addExact(s.interest.select(close / 2), 1)
         }
         else -> {
@@ -138,7 +160,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         }
     }
 
-    private fun children(span: Span, expected: Kind): List<Span> = synchronized(this) {
+    private fun children(span: Span, expected: Kind): List<Span> = synchronized(counters) {
         require(kind(span.begin) == expected) { "Expected JSON $expected" }
         object : AbstractList<Span>() {
             override val size: Int get() {
@@ -163,10 +185,10 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
                         next++
                     }
                 }
-                override fun hasNext(): Boolean = synchronized(this@CoreJsonIndex) {
+                override fun hasNext(): Boolean = synchronized(counters) {
                     advance(live()); next < span.end - 1
                 }
-                override fun next(): Span = synchronized(this@CoreJsonIndex) {
+                override fun next(): Span = synchronized(counters) {
                     val s = live(); advance(s)
                     if (next >= span.end - 1) throw NoSuchElementException()
                     val end = endAt(s, next, span.end - 1)
@@ -178,7 +200,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         }
     }
     private fun elements(span: Span): List<Span> = children(span, Kind.ARRAY)
-    private fun members(span: Span): List<Member> = synchronized(this) {
+    private fun members(span: Span): List<Member> = synchronized(counters) {
         val children = children(span, Kind.OBJECT).iterator()
         val seen = HashSet<String>(); val result = ArrayList<Member>()
         while (children.hasNext()) {
@@ -188,7 +210,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         }
         result
     }
-    private fun member(span: Span, name: String): Span? = synchronized(this) {
+    private fun member(span: Span, name: String): Span? = synchronized(counters) {
         val children = children(span, Kind.OBJECT).iterator()
         var found: Span? = null
         while (children.hasNext()) {
@@ -202,11 +224,11 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
     }
 
     /** Compare UTF-16 code units without allocating or interning the candidate string. */
-    private fun stringEquals(span: Span, expected: String): Boolean = synchronized(this) {
+    private fun stringEquals(span: Span, expected: String): Boolean = synchronized(counters) {
         require(kind(span.begin) == Kind.STRING) { "Expected JSON string" }
         val s = live(); val start = span.begin; val end = span.end
         var at = start + 1; var matched = 0
-        fun read(): Int { require(at < end - 1) { "Incomplete JSON string" }; navigationBytes++; return s.bytes[at++].toInt() and 255 }
+        fun read(): Int { require(at < end - 1) { "Incomplete JSON string" }; counters.navigationByteReads++; return s.bytes[at++].toInt() and 255 }
         fun matches(c: Char): Boolean = matched < expected.length && expected[matched++] == c
         while (at < end - 1) {
             var c = read()
@@ -245,16 +267,30 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
                           val fileBytesRead: Long, val snapshotBytesCopied: Long,
                           val serializedBytes: Long? = null, initialHash: ByteArray? = null) {
         private var sourceHash: ByteArray? = initialHash
-        var hashBytesScanned = if (initialHash == null) 0L else bytes.size.toLong()
-            private set
+        val counters = interest.counters.apply {
+            sourceByteSize = bytes.size
+            indexByteSize = interest.byteSize + bp.byteSize + (initialHash?.size ?: 0)
+            serializedByteSize = serializedBytes
+            sourceFileBytesRead = fileBytesRead
+            sourceSnapshotBytesCopied = snapshotBytesCopied
+            sourceHashBytesScanned = if (initialHash == null) 0L else bytes.size.toLong()
+            structuralBytesScanned = scanBytes
+            interestDirectoryBytes = interest.directoryBytes
+            lexerCheckpointBytes = interest.checkpointBytes
+            topologyBytes = bp.bits.data.size.toLong() * 8
+            topologyNavigationBytes = bp.byteSize - topologyBytes
+            scratchBytes = interest.scratchBytes
+            sourceIdentityBytes = (initialHash?.size ?: 0).toLong()
+        }
         val hash: ByteArray get() {
             sourceHash?.let { return it }
             return MessageDigest.getInstance("SHA-256").digest(bytes).also {
-                sourceHash = it; hashBytesScanned += bytes.size
+                sourceHash = it
+                counters.sourceHashBytesScanned += bytes.size
+                counters.sourceIdentityBytes = it.size.toLong()
+                counters.indexByteSize += it.size
             }
         }
-        val identityBytes: Long get() = sourceHash?.size?.toLong() ?: 0L
-        val indexBytes: Long get() = interest.byteSize + bp.byteSize + identityBytes
     }
     companion object {
         /** Load a verified navigation cache over a defensive snapshot; the caller owns [input]. */
@@ -435,7 +471,7 @@ private class Bits(val data: LongArray, val size: Int) {
 
 /**
  * Original-byte interest masks are regenerated only in the selected512-byte block.
- * All calls after publication occur under the CoreJsonIndex owner monitor. The
+ * All calls after publication occur under the CoreJsonIndex counter monitor. The
  * fixed scratch mask cache is included in resident primitive-array accounting.
  */
 private class SourceInterest(
@@ -450,12 +486,7 @@ private class SourceInterest(
     private val opens = LongArray(8)
     private val closes = LongArray(8)
     private var cachedQuarter = -1
-    var indexSourceBytesScanned = 0L
-        private set
-    var regeneratedSourceBytes = 0L
-        private set
-    var regeneratedBlockCount = 0L
-        private set
+    val counters = CoreJsonIndex.Counters()
     val directoryBytes: Long get() = directory.size.toLong() * 4 + supers.size.toLong() * 8
     val checkpointBytes: Long get() = states.size.toLong() * 8
     val scratchBytes: Long get() = (masks.size + opens.size + closes.size).toLong() * 8
@@ -471,8 +502,8 @@ private class SourceInterest(
         val length = minOf(512, source.size - start)
         jsonMaskBlock(source, start, length, state(quarter), masks, opens, closes)
         cachedQuarter = quarter
-        regeneratedSourceBytes += length
-        regeneratedBlockCount++
+        counters.regeneratedSourceBytes += length
+        counters.regeneratedBlockCount++
     }
     fun rank1(end: Int): Int {
         require(end in 0..source.size)
@@ -516,7 +547,7 @@ private class SourceInterest(
             lexer = jsonMaskBlock(source, start, minOf(512, source.size - start), lexer, masks, opens, closes)
             visit(quarter, before)
         }
-        indexSourceBytesScanned += source.size
+        counters.indexSourceBytesScanned += source.size
         cachedQuarter = -1
     }
     private inline fun markers(visit: (opening: Boolean, closing: Boolean) -> Unit) {
