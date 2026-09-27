@@ -23,11 +23,14 @@ internal class AstStackScope {
 internal fun astStackScope(node: Node): AstStackScope =
     Language.currentState(node).threadPollState.get().astStack
 
-internal fun SavedGuestContinuation.stackSpill(): Boolean = when (val marker = yielded) {
-    AstStackSpill -> true
-    is ThunkSuspended -> marker.stackSpill
-    is CallSegmentSuspended -> marker.stackSpill
-    else -> false
+internal fun SavedGuestContinuation.stackSpill(): Boolean {
+    val marker = yielded
+    return when {
+        marker === AstStackSpill -> true
+        marker is ThunkSuspended -> marker.stackSpill
+        marker is CallSegmentSuspended -> marker.stackSpill
+        else -> false
+    }
 }
 
 /** The driver's retained segment may acquire a new async cut deep in its chain.

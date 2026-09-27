@@ -70,7 +70,7 @@ The [SIMD slice](simd.md) supports six local operations each for `Int64X2#` and
 `Int32X4#`. Exact vector metadata keeps these values distinct from each other and
 from unboxed tuples. The Int64 controls include actual Core graph evidence of
 packed arithmetic with temporary carriers eliminated on AArch64 and x86. Vector
-guest-to-guest calling conventions now support 24 exact `VecRep` shapes across
+guest-to-guest calling conventions support 30 exact `VecRep` shapes across
 arguments, results, PAPs, joins, tuple fields and owned heap fields; see the
 [current SIMD transport contract](simd-families.md). Public host vector
 arguments/results, other shapes and unimplemented operations remain outside

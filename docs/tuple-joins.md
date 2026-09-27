@@ -20,9 +20,11 @@ STM retry propagate normally. If malformed Core returns from that scrutinee,
 the case raises the ordinary non-exhaustive-case fault. No bottom proof or
 fabricated successful result is required.
 
-This fixes the original GHC 9.14.1 `GHC.Internal.Float.$wroundTo` local join whose
-third argument is `(# Int, [Int] #)`. It does not introduce ordinary sum arguments,
-sum/PAP ingress, aggregate closure captures or general aggregate local lets.
+This contract covers the original GHC 9.14.1 `GHC.Internal.Float.$wroundTo` local
+join whose third argument is `(# Int, [Int] #)`. [Binary sum arguments and PAPs](sum-inputs.md)
+and [owned tuple closure/thunk captures](tuple-captures.md) have separate typed
+transport paths. Ordinary aggregate let/global storage and public host aggregate
+parameters/results remain unsupported.
 
 ## Reproduce
 

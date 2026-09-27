@@ -133,7 +133,8 @@ internal class ManagedAllocation private constructor(
         }
     }
 
-    @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
+    // Pointer-cell bookkeeping is a host operation; scalar byte access stays inline.
+    @TruffleBoundary @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
         requireAddressCell(offset)
         val start = range(offset, pointerBytes.toLong())
         invalidate(start, pointerBytes)
@@ -166,7 +167,7 @@ internal class ManagedAllocation private constructor(
         synchronized(bytes ?: this) { action(segment, offset.toInt()) }
     }
 
-    @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
+    @TruffleBoundary @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
         val start = range(offset, pointerBytes.toLong())
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")
     }
