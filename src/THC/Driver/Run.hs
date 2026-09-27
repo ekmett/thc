@@ -72,10 +72,10 @@ parseFfiMode value = Left ("--ffi must be native or managed; got " ++ show value
 -- after the guest delimiter. No explicit choice leaves launcher defaults and
 -- its environment/property configuration intact.
 --
--- >>> runtimeLaunchArguments (Just ManagedFfi) ["--main", "bundle.json"] "demo" ["hello"]
--- ["--ffi","managed","--main","bundle.json","--","demo","hello"]
--- >>> runtimeLaunchArguments Nothing ["--main", "bundle.json"] "demo" []
--- ["--main","bundle.json","--","demo"]
+-- >>> runtimeLaunchArguments (Just ManagedFfi) ["--run-io", "bundle.json", "main:Main.main"] "demo" ["hello"]
+-- ["--ffi","managed","--run-io","bundle.json","main:Main.main","--","demo","hello"]
+-- >>> runtimeLaunchArguments Nothing ["--run-io", "bundle.json", "main:Main.main"] "demo" []
+-- ["--run-io","bundle.json","main:Main.main","--","demo"]
 runtimeLaunchArguments :: Maybe FfiMode -> [String] -> String -> [String] -> [String]
 runtimeLaunchArguments mode entry program arguments =
   maybe [] (\selected -> ["--ffi", case selected of
