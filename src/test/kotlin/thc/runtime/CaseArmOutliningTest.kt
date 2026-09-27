@@ -209,7 +209,7 @@ class CaseArmOutliningTest {
             val worker = Thread {
                 context.enter(); owner.threads.enterCurrent()
                 try {
-                    val saved = checkNotNull(savedGuestContinuation(Calls.target(target, arrayOf(0L, prefix, blocked, 918273645L))))
+                    val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(target, arrayOf(0L, prefix, blocked, 918273645L))))
                     checkNotNull(saved.asyncRequest()).acknowledge()
                     answer.complete(saved)
                 } catch (failure: Throwable) { answer.completeExceptionally(failure) }

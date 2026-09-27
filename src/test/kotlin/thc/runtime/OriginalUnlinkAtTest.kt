@@ -302,7 +302,7 @@ class OriginalUnlinkAtTest {
                 val ast = FunctionRoot(language, layout.build(), "unlinkat completion", null,
                     intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
                     tuple = shape, tupleSlots = slots, enableAsync = true)
-                val saved = checkNotNull(savedGuestContinuation(Calls.target(ast.callTarget, arrayOf(0L))))
+                val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(Calls.target(ast.callTarget, arrayOf(0L))))
                 assertSame(pending, saved.asyncRequest()); assertFalse(Files.exists(file))
                 pending!!.acknowledge()
                 Files.writeString(file, "replacement")

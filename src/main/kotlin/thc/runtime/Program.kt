@@ -173,7 +173,7 @@ internal class CallSegment @JvmOverloads constructor(
     /** A newly captured identity-tail edge; ordinary calls retain their trampoline barrier. */
     val tailSpill: Boolean = false
 ) {
-    init { check(savedGuestContinuation(continuation) != null) { "Call segment needs a saved continuation" } }
+    init { check(SavedGuestContinuationKt.savedGuestContinuation(continuation) != null) { "Call segment needs a saved continuation" } }
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
     var value: Any? = continuation
     var owner: Thread? = null
@@ -205,8 +205,8 @@ internal class CallSegmentSuspended @JvmOverloads constructor(
     val segment: CallSegment,
     /** Logical mask before a caller parked to its root-entry mask for Yield. */
     val parkedActiveMask: MaskingState? = null,
-    val asyncRequest: AsyncRequest? = savedGuestContinuation(segment.value)?.asyncRequest(),
-    val stackSpill: Boolean = savedGuestContinuation(segment.value)?.stackSpill() == true
+    val asyncRequest: AsyncRequest? = SavedGuestContinuationKt.savedGuestContinuation(segment.value)?.asyncRequest(),
+    val stackSpill: Boolean = SavedGuestContinuationKt.savedGuestContinuation(segment.value)?.stackSpill() == true
 ) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
         "Internal bytecode call segment suspension", null, 0, null), InternalGuestControl
@@ -430,7 +430,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             }
             val observed = if (original.state == 5) {
                 resumeProfile.enter()
-                savedGuestContinuation(original.value)
+                SavedGuestContinuationKt.savedGuestContinuation(original.value)
             } else null
             val child = suspendedChild(observed)
             // The continuation owns its captured callee frame. None of the
@@ -458,7 +458,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 claimed = true
                 checkNotNull(saved)
             }
-            return evaluateOwned(original, savedGuestContinuation(continuation), AsyncThunkUnwind(payload))
+            return evaluateOwned(original, SavedGuestContinuationKt.savedGuestContinuation(continuation), AsyncThunkUnwind(payload))
         } catch (failure: Throwable) {
             if (claimed) suspendOwned(original)
             throw failure
@@ -510,7 +510,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     // The captured parent commits this cut. An independent observer may
                     // complete the shared child before its handler continuation runs.
                     afterClaim?.invoke()
-                    evaluateOwned(original, savedGuestContinuation(continuation), PrivateIOUnwind(child, payload, request))
+                    evaluateOwned(original, SavedGuestContinuationKt.savedGuestContinuation(continuation), PrivateIOUnwind(child, payload, request))
                 } catch (failure: Throwable) {
                     if (claimed) suspendOwned(original)
                     if (claimed) request?.fail()
@@ -535,7 +535,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                         checkNotNull(saved)
                     }
                     afterClaim?.invoke()
-                    evaluateCallSegment(original, checkNotNull(savedGuestContinuation(continuation)), mask,
+                    evaluateCallSegment(original, checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(continuation)), mask,
                         PrivateIOUnwind(child, payload, request))
                 } catch (failure: Throwable) {
                     if (claimed) suspendCallOwned(original)
@@ -567,8 +567,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                             resumeProfile.enter()
                             if ((observed != null && original.value !== observed.identity) ||
                                 (observed == null &&
-                                    (suspendedChild(savedGuestContinuation(original.value)) != null))) 3 else {
-                                continuation = savedGuestContinuation(original.value)
+                                    (suspendedChild(SavedGuestContinuationKt.savedGuestContinuation(original.value)) != null))) 3 else {
+                                continuation = SavedGuestContinuationKt.savedGuestContinuation(original.value)
                                     ?: fault("Suspended thunk has no guest continuation")
                                 original.value = null // One owner consumes the one-shot continuation.
                                 original.owner = Thread.currentThread()
@@ -612,7 +612,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 val child = suspendedChild(leafContinuation) ?: break
                 parked.addLast(Parked(leaf, leafContinuation!!))
                 if (drainSpills) {
-                    val scope = astStackScope(this)
+                    val scope = AstStackKt.astStackScope(this)
                     scope.maxParkedSpillParents = maxOf(scope.maxParkedSpillParents, parked.size)
                 }
                 leaf = child
@@ -661,7 +661,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     throw cut
                 } catch (failure: GuestException) { ChildResume(null, failure) }
                 catch (tail: TailCall) {
-                    if (!AstTailAnchor.accepts(astStackScope(this).tailAnchor, tail)) throw tail
+                    if (!AstTailAnchor.accepts(AstStackKt.astStackScope(this).tailAnchor, tail)) throw tail
                     // Unwind each retained AST scope before entering the live anchor.
                     // This is not a guest exception, and never acknowledges delivery.
                     tail
@@ -746,8 +746,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         resumeChain(boundary, drainSpills = true, delimitedInvocation = true)
 
     private fun continuationOf(boundary: Any): SavedGuestContinuation? = when (boundary) {
-        is Thunk -> if (boundary.state == 5) savedGuestContinuation(boundary.value) else null
-        is CallSegment -> if (boundary.state == 5) savedGuestContinuation(boundary.value) else null
+        is Thunk -> if (boundary.state == 5) SavedGuestContinuationKt.savedGuestContinuation(boundary.value) else null
+        is CallSegment -> if (boundary.state == 5) SavedGuestContinuationKt.savedGuestContinuation(boundary.value) else null
         else -> fault("Invalid suspended continuation boundary")
     }
 
@@ -771,8 +771,8 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 val claim = synchronized(segment.monitor) {
                     when (segment.state) {
                         5 -> if ((observed != null && segment.value !== observed.identity) ||
-                            (observed == null && suspendedChild(savedGuestContinuation(segment.value)) != null)) 3 else {
-                            continuation = savedGuestContinuation(segment.value)
+                            (observed == null && suspendedChild(SavedGuestContinuationKt.savedGuestContinuation(segment.value)) != null)) 3 else {
+                            continuation = SavedGuestContinuationKt.savedGuestContinuation(segment.value)
                                 ?: fault("Suspended call segment has no guest continuation")
                             resumeMask = segment.logicalMask
                             segment.value = null // Consume the one-shot continuation under ownership.
@@ -805,11 +805,11 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         try {
             SynchronousMasking.set(this, resumeMask)
             if (segment.tailSpill && continuation is AstContinuation && continuation.tailSpill) {
-                astStackScope(this).tailAnchor?.let { continuation.rebaseTailBloom(it.liveBloom()) }
+                AstStackKt.astStackScope(this).tailAnchor?.let { continuation.rebaseTailBloom(it.liveBloom()) }
             }
             val returned = try { continuation.continueWith(resumeValue) }
                 catch (tail: TailCall) {
-                    if (segment.tailSpill && AstTailAnchor.accepts(astStackScope(this).tailAnchor, tail)) throw tail
+                    if (segment.tailSpill && AstTailAnchor.accepts(AstStackKt.astStackScope(this).tailAnchor, tail)) throw tail
                     tailCallProfile.enter(); trampoline.execute(tail)
                 }
             val result = when (returned) {
@@ -817,7 +817,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 is AstTailYield -> returned.continuation
                 else -> returned
             }
-            val saved = savedGuestContinuation(result)
+            val saved = SavedGuestContinuationKt.savedGuestContinuation(result)
             if (saved != null) {
                 if (returned !is TailYield && returned !is AstTailYield && !sameContinuationBody(saved.sourceRoot, continuation.sourceRoot))
                     throw IllegalStateException("Nested guest yield has no captured caller segment")
@@ -952,7 +952,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 // Otherwise parsing its implementation can specialize the shared
                 // interface before another continuation kind links in this graph.
                 suspensionProfile.enter()
-                val continuationResult = savedGuestContinuation(result)
+                val continuationResult = SavedGuestContinuationKt.savedGuestContinuation(result)
                 if (continuationResult == null) CompilerDirectives.transferToInterpreter()
                 val saved = continuationResult!!
                 if (saved.yielded is DelimitedCut)
@@ -1983,10 +1983,10 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         for (i in argumentSlots.indices) {
             val from = argumentIndices[i]
             val to = argumentSlots[i]
-            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.int(frame, node, null, from))
-            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.long(frame, node, null, from))
-            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.float(frame, node, null, from))
-            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.double(frame, node, null, from))
+            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.readInt(frame, node, null, from))
+            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.readLong(frame, node, null, from))
+            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.readFloat(frame, node, null, from))
+            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.readDouble(frame, node, null, from))
             else {
                 val value = source.reference(frame, node, null, from)
                 val expected = argumentReferences.getOrNull(i)
@@ -2051,7 +2051,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
 
     override fun execute(frame: VirtualFrame): Any? {
         if (!capturesContinuations) return executeInitial(frame, false)
-        val stack = astStackScope(this)
+        val stack = AstStackKt.astStackScope(this)
         val driver = !stack.driving
         if (driver) stack.driving = true
         return try {
@@ -2061,7 +2061,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             // Drain only after all nested guest activations have returned.
             val saved = when (result) {
                 is AstTailYield -> result.continuation
-                else -> savedGuestContinuation(result)
+                else -> SavedGuestContinuationKt.savedGuestContinuation(result)
             }
             if (driver && saved?.stackSpill() == true && saved.asyncRequest() == null)
                 entryForce.drainStack(saved)
@@ -2102,7 +2102,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         if (cut.yielded is AstPendingTail && isTailSpillIdentityRoot()) {
             val pending = cut.pendingTail()
             if (pending != null && role == FunctionRootRole.PASS_THROUGH) {
-                astStackScope(this).compactedFrames++
+                AstStackKt.astStackScope(this).compactedFrames++
                 return AstTailYield(pending.child, pending.target)
             }
             if (role == FunctionRootRole.FUNCTION) {
@@ -2118,9 +2118,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private fun captureStack(frame: MaterializedFrame): AstContinuation {
         if (thc.Language.currentState(this).stm.hasTransaction())
             throw UnsupportedCore("AST stack spilling across an active STM transaction is unsupported")
-        astStackScope(this).spills++
-        return AstCapture(AstStackSpill, SynchronousMasking.current(this))
-            .append(ResumeBody(this)).freeze(this, frame, rootEntrySpill = true)
+        AstStackKt.astStackScope(this).spills++
+        return AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
+            .append(ResumeBody(this)).freeze(this, frame, true)
     }
 
     private fun executeCapturableBody(frame: VirtualFrame): Any? {
@@ -2257,7 +2257,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false,
               private val outlineCaseArms: Boolean = false) : ExecutableProgram {
-    override val asynchronousExceptions get() = enableAsync
+    override fun getAsynchronousExceptions() = enableAsync
     private val capturesContinuations = enableAsync || outlineCaseArms
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val demand = moduleData["demandBindings"] as? CoreDemandBindings
