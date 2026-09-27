@@ -3,11 +3,14 @@
 
 package thc
 
+import java.io.InputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.security.DigestInputStream
 
 /**
  * A structural index of an owned, immutable UTF-8 snapshot, not a parsed JSON tree.
@@ -35,7 +38,10 @@ import java.security.MessageDigest
  */
 internal class CoreJsonIndex private constructor(private var storage: Storage?) : AutoCloseable {
     enum class Kind { OBJECT, ARRAY, STRING, ATOM }
+    /** Index bytes count retained primitive arrays, not object headers or the source snapshot. */
     data class Statistics(val sourceByteSize: Int, val indexByteSize: Long,
+        val serializedByteSize: Long?, val sourceFileBytesRead: Long, val sourceSnapshotBytesCopied: Long,
+        val sourceHashBytesScanned: Long,
         val structuralBytesScanned: Long, val decodedSpanCount: Long, val decodedByteCount: Long,
         val navigationByteReads: Long, val balancedParenthesisBitsExamined: Long)
     data class Member(val name: String, val value: Span)
@@ -50,7 +56,8 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
     val root: Span get() = synchronized(this) { val s = live(); Span(this, s.rootStart, s.rootEnd) }
     fun statistics(): Statistics = synchronized(this) {
         val s = live()
-        Statistics(s.bytes.size, s.indexBytes, s.scanBytes, decodeCount, decodeBytes, navigationBytes, bpExamined)
+        Statistics(s.bytes.size, s.indexBytes, s.serializedBytes, s.fileBytesRead, s.snapshotBytesCopied,
+            s.hashBytesScanned, s.scanBytes, decodeCount, decodeBytes, navigationBytes, bpExamined)
     }
     /** Hashes the exact original bytes, never normalized or reserialized JSON. */
     fun sha256(): String = synchronized(this) { live().hash.joinToString("") { "%02x".format(it) } }
@@ -110,7 +117,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             while (at < limit) {
                 when (read(s, at++)) {
                     34 -> break
-                    92 -> { check(at < limit); read(s, at++ ) }
+                    92 -> { check(at < limit); read(s, at++) }
                 }
             }
             at
@@ -225,31 +232,114 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
     }
 
     private class Storage(val bytes: ByteArray, val positions: Positions,
-                          val bp: Parentheses, val scanBytes: Long) {
-        val hash: ByteArray by lazy { MessageDigest.getInstance("SHA-256").digest(bytes) }
+                          val bp: Parentheses, val scanBytes: Long, val rootStart: Int, val rootEnd: Int,
+                          val fileBytesRead: Long, val snapshotBytesCopied: Long,
+                          val serializedBytes: Long? = null, initialHash: ByteArray? = null) {
+        private var sourceHash: ByteArray? = initialHash
+        var hashBytesScanned = if (initialHash == null) 0L else bytes.size.toLong()
+            private set
+        val hash: ByteArray get() {
+            sourceHash?.let { return it }
+            return MessageDigest.getInstance("SHA-256").digest(bytes).also {
+                sourceHash = it; hashBytesScanned += bytes.size
+            }
+        }
         val indexBytes: Long get() = positions.byteSize + bp.byteSize
-        val rootStart = bytes.indexOfFirst { !whitespace(it.toInt() and 255) }
-        val rootEnd = bytes.indexOfLast { !whitespace(it.toInt() and 255) } + 1
     }
     companion object {
+        /** Load a verified navigation cache over a defensive snapshot; the caller owns [input]. */
+        fun loadSidecar(bytes: ByteArray, input: InputStream): CoreJsonIndex =
+            loadOwned(bytes.copyOf(), input, 0, bytes.size.toLong())
+
+        /** Pin the file contents once; later pathname replacement cannot redirect any span. */
+        fun loadSidecar(path: Path, input: InputStream): CoreJsonIndex {
+            val bytes = Files.readAllBytes(path)
+            return loadOwned(bytes, input, bytes.size.toLong(), 0)
+        }
+
+        private fun loadOwned(bytes: ByteArray, input: InputStream, fileBytesRead: Long, copiedBytes: Long): CoreJsonIndex {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val checked = DigestInputStream(input, digest)
+            val header = checked.readNBytes(64)
+            require(header.size == 64) { "Truncated JSON index header" }
+            require(header.copyOfRange(0, 8).contentEquals("THCJSIX1".toByteArray(Charsets.US_ASCII))) { "Unknown JSON index magic" }
+            val fields = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+            fields.position(8)
+            require(fields.int == 1 && fields.int == 0) { "Unsupported JSON index version or flags" }
+            val sourceLength = fields.long
+            val eventCount = fields.long
+            require(sourceLength > 0 && sourceLength == bytes.size.toLong()) { "JSON index source length mismatch" }
+            require(eventCount >= 0 && eventCount <= sourceLength && eventCount and 1L == 0L) { "Invalid JSON container event count" }
+            val count = Math.toIntExact(eventCount)
+            val shape = JsonIndexShape(sourceLength, eventCount)
+            val sourceHash = MessageDigest.getInstance("SHA-256").digest(bytes)
+            require(MessageDigest.isEqual(header.copyOfRange(32, 64), sourceHash)) { "JSON index source identity mismatch" }
+            val chunk = ByteArray(8192)
+            fun section(bitCount: Int): LongArray {
+                val result = LongArray(words(bitCount))
+                var word = 0
+                while (word < result.size) {
+                    val wordCount = minOf(chunk.size / 8, result.size - word)
+                    val size = wordCount * 8
+                    require(checked.readNBytes(chunk, 0, size) == size) { "Truncated JSON index section" }
+                    val buffer = ByteBuffer.wrap(chunk, 0, size).order(ByteOrder.LITTLE_ENDIAN)
+                    repeat(wordCount) { result[word++] = buffer.long }
+                }
+                if (bitCount and 63 != 0) require(result.last() ushr (bitCount and 63) == 0L) { "Nonzero JSON index padding" }
+                return result
+            }
+            val low = section(shape.lowSize)
+            val high = section(shape.highSize)
+            val bpWords = section(count)
+            val expectedDigest = digest.digest()
+            val trailer = input.readNBytes(32)
+            require(trailer.size == 32 && MessageDigest.isEqual(trailer, expectedDigest)) { "JSON index integrity mismatch" }
+            require(input.read() == -1) { "Trailing JSON index bytes" }
+
+            val highBits = Bits(high, shape.highSize)
+            require(highBits.ones == count) { "JSON index high population mismatch" }
+            val positions = Positions(count, shape.width, low, highBits)
+            var previous = -1
+            for (event in 0 until count) {
+                val position = positions.select(event)
+                require(position > previous && position < bytes.size) { "Invalid JSON index event position" }
+                previous = position
+            }
+            val bp = Bits(bpWords, count)
+            var event = 0
+            fun verify(position: Int, opening: Boolean) {
+                require(event < count && positions.select(event) == position && bp[event] == opening) { "JSON index structural mismatch at $position" }
+                event++
+            }
+            val (start, end) = scan(bytes, { verify(it, true) }, { verify(it, false) })
+            require(event == count) { "Extra JSON index events" }
+            val serializedBytes = 96L + (low.size.toLong() + high.size + bpWords.size) * 8
+            return CoreJsonIndex(Storage(bytes, positions, Parentheses(bp), bytes.size.toLong(), start, end,
+                fileBytesRead, copiedBytes, serializedBytes, sourceHash))
+        }
+
         /** Scalar reference builder for tests/parity; not the production sidecar producer. */
-        fun fromBytes(bytes: ByteArray): CoreJsonIndex = build(bytes.copyOf())
+        fun fromBytes(bytes: ByteArray): CoreJsonIndex = build(bytes.copyOf(), 0, bytes.size.toLong())
         /** Scalar reference read: later replacement/deletion cannot retarget the snapshot. */
-        fun read(path: Path): CoreJsonIndex = build(Files.readAllBytes(path))
-        private fun build(bytes: ByteArray): CoreJsonIndex {
+        fun read(path: Path): CoreJsonIndex {
+            val bytes = Files.readAllBytes(path)
+            return build(bytes, bytes.size.toLong(), 0)
+        }
+        private fun build(bytes: ByteArray, fileBytesRead: Long, copiedBytes: Long): CoreJsonIndex {
             var count = 0
             scan(bytes, { count = Math.incrementExact(count) }, { count = Math.incrementExact(count) })
             val positions = Positions.Builder(bytes.size, count)
             val bp = LongArray(words(count)); var bit = 0
-            scan(bytes, { positions.add(it); bp[bit ushr 6] = bp[bit ushr 6] or (1L shl (bit and 63)); bit++ },
+            val (start, end) = scan(bytes, { positions.add(it); bp[bit ushr 6] = bp[bit ushr 6] or (1L shl (bit and 63)); bit++ },
                 { positions.add(it); bit++ })
             check(bit == count)
-            return CoreJsonIndex(Storage(bytes, positions.finish(), Parentheses(Bits(bp, bit)), bytes.size.toLong() * 2))
+            return CoreJsonIndex(Storage(bytes, positions.finish(), Parentheses(Bits(bp, bit)),
+                bytes.size.toLong() * 2, start, end, fileBytesRead, copiedBytes))
         }
 
         /** Two passes allocate no token/value objects; scalar contents are never converted. */
-        private fun scan(bytes: ByteArray, open: (Int) -> Unit, close: (Int) -> Unit) {
-            var at = 0; var depth = 0; var states = ByteArray(32); var root = false
+        private fun scan(bytes: ByteArray, open: (Int) -> Unit, close: (Int) -> Unit): Pair<Int, Int> {
+            var at = 0; var depth = 0; var states = ByteArray(32); var root = false; var rootStart = 0
             fun push(state: Int) {
                 if (depth == states.size) states = states.copyOf(Math.multiplyExact(states.size, 2))
                 states[depth++] = state.toByte()
@@ -278,10 +368,11 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
                 }
             }
             while (true) {
+                val beforeWhitespace = at
                 while (at < bytes.size && whitespace(bytes[at].toInt() and 255)) at++
                 if (depth == 0) {
-                    if (root) { require(at == bytes.size) { "Trailing JSON at $at" }; return }
-                    root = true; value(); continue
+                    if (root) { require(at == bytes.size) { "Trailing JSON at $at" }; return rootStart to beforeWhitespace }
+                    root = true; rootStart = at; value(); continue
                 }
                 require(at < bytes.size) { "Unclosed JSON container" }
                 val c = bytes[at].toInt() and 255
@@ -311,6 +402,16 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
 }
 
 private fun words(bits: Int): Int = ((bits.toLong() + 63) / 64).toInt()
+
+/** All derived extents are checked before narrowing or allocating a section. */
+internal class JsonIndexShape(universe: Long, count: Long) {
+    init {
+        require(universe in 1..Int.MAX_VALUE.toLong() && count in 0..universe && count and 1L == 0L) { "Unsupported JSON index shape" }
+    }
+    val width = if (count == 0L) 0 else 63 - java.lang.Long.numberOfLeadingZeros(maxOf(1L, universe / count))
+    val lowSize = Math.toIntExact(count * width)
+    val highSize = if (count == 0L) 0 else Math.toIntExact(((universe - 1) ushr width) + count + 1)
+}
 
 /** Select bisects rank at 512-bit boundaries, then scans at most eight words. */
 private class Bits(val data: LongArray, val size: Int) {
@@ -348,12 +449,13 @@ private class Positions(val count: Int, val lowBits: Int, val low: LongArray, va
         var lower = if (lowBits == 0) 0L else low[word] ushr shift
         if (shift + lowBits > 64) lower = lower or (low[word + 1] shl (64 - shift))
         lower = lower and ((1L shl lowBits) - 1)
-        return (((high.select(ordinal) - ordinal).toLong() shl lowBits) or lower).toInt()
+        return Math.toIntExact(((high.select(ordinal) - ordinal).toLong() shl lowBits) or lower)
     }
     class Builder(universe: Int, val count: Int) {
-        private val width = if (count == 0) 0 else 31 - Integer.numberOfLeadingZeros(maxOf(1, universe / count))
-        private val low = LongArray(words(Math.toIntExact(count.toLong() * width)))
-        private val highSize = if (count == 0) 0 else Math.toIntExact(((universe - 1).toLong() ushr width) + count + 1)
+        private val shape = JsonIndexShape(universe.toLong(), count.toLong())
+        private val width = shape.width
+        private val low = LongArray(words(shape.lowSize))
+        private val highSize = shape.highSize
         private val high = LongArray(words(highSize))
         private var next = 0
         fun add(value: Int) {
