@@ -77,8 +77,12 @@ native compilation and ABI probes across these tasks:
 ```
 
 The named tasks always run fresh tests and explicitly set their fork's
-`thc.handoffSlabs` property. `HandoffTest` checks that property and the runtime
-context without changing the selected mode. XML and HTML remain separate under
+`thc.handoffSlabs` property. The dedicated
+`HandoffTest.requestedModeReachesTestProcessAndContext` check observes that property
+and the runtime context without changing the selected mode. Other focused
+handoff tests deliberately enable the protocol within a scoped helper and
+restore the previous property; see the [handoff guide](handoff-slabs.md).
+XML and HTML remain separate under
 `build/test-results/testDefault`, `build/test-results/testDense` and the matching
 `build/reports/tests` directories. `--tests` and `--rerun` apply to the preceding
 task: select only `testDense` to repeat that mode, or use `testHandoffModes
@@ -162,16 +166,31 @@ target snapshots in its artifacts. Code retirement is tracked in
 [#72](https://github.com/ekmett/thc/issues/72); a failure here does not block
 the required PR checks. The complete native-result comparisons, strict
 closure checks and handoff cleanup checks remain in the required test suite.
-Run the advisory checks locally with:
+The active fixture producer is `scripts/prepare-short-bytes-slices.py`, also
+used by `scripts/prepare-tests.sh` and the advisory workflow. It produces native
+oracle rows, original Core and a checked manifest under `build/short-bytes-slices`.
+An existing preparation can be revalidated with its `--check-only` option;
+changed or missing inputs require fresh preparation, not edited hashes.
+
+Run the advisory checks locally, selecting each handoff mode explicitly:
 
 ```sh
 python3 scripts/prepare-short-bytes-slices.py
-./gradlew --no-daemon jitStabilityTest --rerun
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon jitStabilityTest --rerun
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=false ./gradlew --max-workers=2 --no-daemon jitStabilityTest
+JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --max-workers=2 --no-daemon jitStabilityTest
 ```
 
-The local task exits unsuccessfully if a stability assertion fails; only CI
-allows that failure. Its XML and reports are separate from ordinary tests.
+`jitStabilityTest` always starts a fresh test process and selects only the
+`jit-stability` tagged checks; the ordinary mode tasks exclude those checks.
+It does not generate its Haskell fixtures. Both commands use the same
+`build/test-results/jitStabilityTest` and `build/reports/tests/jitStabilityTest`
+locations, so preserve the first reports before running the second when both
+sets of evidence are needed. The examples replace `JAVA_TOOL_OPTIONS`; retain
+any other required JVM flags explicitly.
+
+The local task exits unsuccessfully if a stability assertion fails; the advisory
+CI workflow allows that failure while retaining evidence. It remains separate
+from ordinary native-result correctness checks.
 
 ## Retained merge-bot implementation
 
