@@ -79,9 +79,9 @@ still apply.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `catch#` | Supports lifted boxed and fixed `Int#`, `Word#`, `Addr#` action results through typed tuple destinations in both backends. Other unboxed result representations remain unsupported. This is separate from the asynchronous-delivery restrictions below. |
-| `raiseIO#` | Accepts lifted boxed exception payloads and lifted boxed or fixed `Int#`, `Word#`, `Addr#` result positions. Boxed-unlifted payloads and other representation-polymorphic bottom results remain unsupported. |
-| `maskAsyncExceptions#` | Implements interruptible masking/restoration for lifted boxed and fixed `Int#`, `Word#`, `Addr#` action results. Other unboxed results remain unsupported. |
+| `catch#` | Uses the ordinary concrete recursive typed result layout in both backends, including supported integral, floating, address, boxed, zero-width/nested tuple, sum and vector carriers. The outer result keeps exactly two logical fields, State# and the action result. Unresolved layouts/boxed levity and shapes unsupported by the generic transport still reject. |
+| `raiseIO#` | Accepts concrete lifted or unlifted boxed exception payloads independently of its concrete typed result layout. Lifted payloads remain lazy; unlifted boxed references retain their identity. Unknown payload levity and scalar/unboxed payloads reject according to the pinned GHC signature. |
+| `maskAsyncExceptions#` | Implements interruptible masking/restoration with the same concrete typed result layouts as `catch#`; no exception-specific scalar whitelist. |
 | `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
 | `unmaskAsyncExceptions#` | Implements unmasking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
 | `killThread#` | With `asyncExceptions: true`, both backends support `throwTo` through saved guest continuations. With `false`, AST supports self-delivery but rejects external sends and delivery; bytecode rejects `killThread#` during lowering, including self-delivery. Arbitrary Java/native foreign frames do not gain resumable interruption. Sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
@@ -101,6 +101,10 @@ still apply.
 Do not apply the transaction-frame restriction to `newTVar#` or `readTVarIO#`:
 they do not require such a frame. The absence of GC-driven deadlock exceptions
 is separate from functioning MVar handoff and STM read-set wakeups.
+
+The [concrete exception-layout controls](async-exceptions.md#concrete-exception-result-layouts)
+distinguish THC's typed-result semantics from GHC's narrower native continuation
+ABI and list remaining generic sum/vector transport limits.
 
 Details: [asynchronous exceptions](async-exceptions.md), [MVars](managed-mvars.md),
 [STM](stm.md), [arithmetic exception implementation](../src/main/kotlin/thc/runtime/GuestExceptions.kt).

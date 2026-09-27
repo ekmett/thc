@@ -951,6 +951,7 @@ executable thc-fixtures
     ArithmeticExceptionFixtures
     MaskFunctionFixtures
     ScalarExceptionResultsFixtures
+    ExceptionResultLayoutsFixtures
     DeepEvaluationFixtures
     InterfaceFixtures
     InstalledCacheFixtures

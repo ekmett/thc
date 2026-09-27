@@ -94,6 +94,7 @@ python3 scripts/prepare-synchronous-exceptions.py
 "$fixture_bin" uncaught-self
 "$fixture_bin" mask-functions
 "$fixture_bin" scalar-exception-results
+"$fixture_bin" exception-result-layouts
 "$fixture_bin" deep-evaluation
 "$fixture_bin" interface-core
 "$fixture_bin" record-fields

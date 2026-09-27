@@ -25,7 +25,7 @@ FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
 # The metadata export requests pretty diagnostics in the same required Core files.
-FULL_PREPARATION_PLAN = "d38fdf0396bb26d6596e26e1e5d87309a93110ea37a9ed6b8cb8936d2441039a"
+FULL_PREPARATION_PLAN = "87d63835b91271c880598769a76488d4dd0119f62c9ccf21ca80dc26a4f70a6f"
 PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
     "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
     *[f"logs/{command}.{suffix}" for command in
@@ -44,7 +44,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
     "build/original-stdio", "build/original-stdio-read", "build/original-stdio-close", "build/original-stdio-seek", "build/original-stdio-truncate", "build/original-handle-readiness", "build/core-continuation", "build/live-async", "build/thread-async", "build/thread-status", "build/thread-label", "build/uncaught-self", "build/small-arrays", "build/floating-address", "build/atomic-address",
     "build/floating-byte-offset", "build/narrow-byte-offset", "build/int32-byte-offset", "build/unaligned-scalar-memory",
-    "build/explicit64-arrays", "build/mask-functions", "build/scalar-exception-results", "build/deep-evaluation", "build/interface-core",
+    "build/explicit64-arrays", "build/mask-functions", "build/scalar-exception-results", "build/exception-result-layouts", "build/deep-evaluation", "build/interface-core",
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
@@ -167,6 +167,13 @@ FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
     "build/mask-functions/post/core/MaskFunctionAudit.json",
     "build/mask-functions/logs/native-oracle.stdout",
     "build/scalar-exception-results/manifest.json", "build/scalar-exception-results/native/oracle",
+    "build/exception-result-layouts/manifest.json", "build/exception-result-layouts/native/oracle",
+    "build/exception-result-layouts/oracle.tsv",
+    *[f"build/exception-result-layouts/{stage}/{name}"
+      for stage in (("pre",) if platform.machine().lower() in ("arm64", "aarch64") else ("pre", "post"))
+      for name in ("core/ExceptionResultLayoutsAudit.json",
+                   *[f"{family}Result-audit.json" for family in ("int8", "word8", "int16", "word16", "int32", "word32",
+                       "int64", "word64", "float", "double", "empty", "nested", "sum", "vector", "unlifted", "unliftedPayload")])],
     "build/scalar-exception-results/logs/native-oracle.stdout",
     *[f"build/scalar-exception-results/{stage}/{name}" for stage in ("pre", "post")
       for name in ("core/ScalarExceptionResultsAudit.json",

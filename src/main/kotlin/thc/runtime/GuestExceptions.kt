@@ -17,23 +17,21 @@ import thc.Language
 class GuestException @JvmOverloads constructor(val payload: Any?, location: Node, val someException: Boolean = false) :
     AbstractTruffleException("Haskell exception (payload retained lazily)", location)
 
-/** Fixed GHC 9.14.1 IO result representations, not arbitrary RuntimeRep polymorphism. */
+/** GHC's boxed exception payload levity is independent of the action's result layout. */
 internal object CoreSynchronousExceptions {
     private val lifted = listOf("BoxedRep (Just Lifted)")
+    private val unlifted = listOf("BoxedRep (Just Unlifted)")
     private fun state(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
         proof.kind == CoreKind.VOID && proof.primReps == emptyList<String>()
     private fun boxed(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
-        proof.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) && proof.primReps == lifted
-    private fun closure(proof: CoreRepresentation) = boxed(proof) && proof.kind == CoreKind.CLOSURE
-    private fun resultValue(proof: CoreRepresentation) = boxed(proof) ||
-        !proof.isAggregate && !proof.isVector && when (proof.kind) {
-            CoreKind.LONG -> proof.primReps == listOf("IntRep") || proof.primReps == listOf("WordRep")
-            CoreKind.ADDRESS -> proof.primReps == listOf("AddrRep")
-            else -> false
-        }
+        proof.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) &&
+        (proof.primReps == lifted || proof.primReps == unlifted)
+    private fun closure(proof: CoreRepresentation) = boxed(proof) && proof.kind == CoreKind.CLOSURE &&
+        proof.primReps == lifted
     fun validate(name: String, arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         val validArguments = when (name) {
-            "raiseIO#" -> arguments.size == 2 && boxed(arguments[0]) && state(arguments[1]) && flags == listOf(true, false)
+            "raiseIO#" -> arguments.size == 2 && boxed(arguments[0]) && state(arguments[1]) &&
+                flags == listOf(arguments[0].primReps == lifted, false)
             "catch#" -> arguments.size == 3 && closure(arguments[0]) && closure(arguments[1]) &&
                 state(arguments[2]) && flags == listOf(true, true, false)
             "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#" ->
@@ -45,10 +43,16 @@ internal object CoreSynchronousExceptions {
         val components = result.components
         if (!validArguments || result.kind != CoreKind.UNKNOWN || !result.isTuple || result.isSum || result.isVector ||
             components?.size != 2 || !state(components[0]) ||
-            (if (name == "getMaskingState#") components[1].kind != CoreKind.LONG ||
+            (name == "getMaskingState#" && (components[1].kind != CoreKind.LONG ||
                 components[1].primReps != listOf("IntRep") || result.primReps != listOf("IntRep")
-             else !resultValue(components[1]) || result.primReps != components[1].primReps))
-            throw RuntimeFault("$name: expected exact lifted exception, State# and supported result tuple contract")
+            )))
+            throw RuntimeFault("$name: expected exact boxed exception, State# and result tuple contract")
+        // Keep the two logical fields above, including a nested or zero-width
+        // result. Physical transport is the ordinary recursive tuple layout,
+        // not a separate list of representations implemented by each primop.
+        TupleShape.validate(result)
+        if (TupleShape.flatten(result).any { it.primReps == listOf("BoxedRep Nothing") })
+            throw UnsupportedCore("$name: result layout has unresolved boxed levity")
     }
 }
 

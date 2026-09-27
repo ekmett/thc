@@ -1668,6 +1668,27 @@ class FixturePreparationTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 fast_fixtures.fast_inputs.rts_diagnostic_artifact_hashes(dict(proof, artifactHashes=invalid))
 
+    def test_exception_result_layout_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['exception-result-layouts']
+        self.assertEqual('exception-result-layouts', owners['thc.runtime.ExceptionResultLayoutsNativeTest'])
+        self.assertEqual(['build/exception-result-layouts'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" exception-result-layouts', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/exception-result-layouts', fast_fixtures.FULL_OUTPUT_ROOTS)
+        expected = {'build/exception-result-layouts/manifest.json',
+                    'build/exception-result-layouts/native/oracle', 'build/exception-result-layouts/oracle.tsv'}
+        stages = ('pre',) if fast_fixtures.platform.machine().lower() in ('arm64', 'aarch64') else ('pre', 'post')
+        expected.update(f'build/exception-result-layouts/{stage}/core/ExceptionResultLayoutsAudit.json'
+                        for stage in stages)
+        expected.update(f'build/exception-result-layouts/{stage}/{family}Result-audit.json'
+                        for stage in stages for family in ('int8', 'word8', 'int16', 'word16',
+                        'int32', 'word32', 'int64', 'word64', 'float', 'double', 'empty', 'nested',
+                        'sum', 'vector', 'unlifted', 'unliftedPayload'))
+        self.assertTrue(expected <= fast_fixtures.FULL_REQUIRED)
+
     def test_scalar_exception_result_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

@@ -100,13 +100,19 @@ class ScalarExceptionResultsNativeTest {
                 for (broken in listOf(
                     result.copy(components = components.reversed()),
                     result.copy(components = components + components.last()),
-                    result.copy(primReps = listOf("DoubleRep")),
-                    result.copy(components = listOf(components[0], components[1].copy(kind = CoreKind.FLOAT))),
-                    result.copy(primReps = listOf("DoubleRep"), components = listOf(components[0],
-                        CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))))
+                    result.copy(primReps = listOf("DoubleRep"))
                 )) assertThrows(RuntimeFault::class.java, {
                     CoreSynchronousExceptions.validate(name, arguments, flags, broken)
                 }, "$stage/$entry/$name malformed result")
+                // Scalar carrier/repr disagreements are checked by the generic
+                // proof parser, before the primop consumes the lowered layout.
+                assertThrows(RuntimeFault::class.java) {
+                    CoreRepresentations.parse(mapOf("kind" to "float", "evaluated" to true,
+                        "primReps" to components[1].primReps))
+                }
+                CoreSynchronousExceptions.validate(name, arguments, flags,
+                    result.copy(primReps = listOf("DoubleRep"), components = listOf(components[0],
+                        CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep")))))
                 assertThrows(RuntimeFault::class.java) {
                     CoreSynchronousExceptions.validate(name, arguments, flags.dropLast(1) + true, result)
                 }

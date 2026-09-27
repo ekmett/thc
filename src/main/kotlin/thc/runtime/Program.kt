@@ -2192,7 +2192,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 val slots = IntArray(shape.width) { layout.bind("<async operand field $it>") }
                 temporaries.addAll(slots.toList())
                 bindings += LocalBinding(-1, value, false, slots)
-                return TupleLocalRead(shape, slots)
+                return if (proof.isVector) VectorLocalRead(shape, slots) else TupleLocalRead(shape, slots)
             }
             val slot = layout.bind("<async operand ${bindings.size}>")
             temporaries += slot

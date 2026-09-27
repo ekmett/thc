@@ -184,3 +184,43 @@ interruption from the public option. See the
 [primop-by-primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions)
 for current restrictions, and [scheduling](thread-scheduling.md) and
 [thread inspection](thread-inventory.md) for the implemented operations.
+
+## Concrete exception result layouts
+
+`catch#`, `raiseIO#` and the three masking primops use the same recursive typed
+tuple destination as ordinary calls. Their outer result remains exactly
+`(# State# RealWorld, result #)` even when `result` is an empty or nested tuple,
+a sum, or a vector. Known zero-width layouts are not unknown representations.
+Supported scalar carriers include all ten integral PrimReps, Float, Double,
+Addr and concrete boxed levities; aggregate/vector support is inherited from
+the generic transport, not a second exception-specific whitelist. Unknown
+boxed levity still rejects. Generic sum alternatives containing addresses,
+nested sums or vectors remain outside this checkpoint; vector species remain
+limited to the [implemented families](simd-families.md).
+
+The exception payload is a separate parameter. The pinned `raiseIO#` signature
+permits lifted or unlifted boxed payloads, not unboxed scalar payloads. The
+payload's actual levity determines its argument flag. Lifted payloads are not
+forced merely by raising them, and boxed-unlifted references pass unchanged
+to the handler. Action and handler functions remain lifted closures.
+
+`ExceptionResultLayoutsAudit.hs` retains concrete original Core for narrow and
+64-bit integers, Float/Double, zero-width/nested tuples, a mixed sum, Int32X4#,
+an unlifted boxed result and an unlifted boxed exception payload. Controls observe
+the completed prefix and reject the post-delivery sentinel write, and
+observe handler/outer masks, with immediate first-installed calls in both
+backends. The unlifted boxed fixture also carries an unused divergent lifted
+field. Linux exports both pre- and post-Tidy Core; AArch64 uses the existing
+codegen-free SIMD fixture convention and records pre-Tidy only, because GHC's
+NCG does not emit these SIMD instructions and `-fno-code` does not run its late
+plugin hook. The independent native oracle itself needs no SIMD codegen.
+
+These tests deliberately separate THC semantics from a native GHC RTS ABI
+limitation. GHC 9.14.1 gives the primops a RuntimeRep-polymorphic result type but
+[documents a one-machine-word operational restriction](https://github.com/ghc/ghc/blob/902339d332fb4ce2b3c87dcac1ee6495d41ad886/compiler/GHC/Builtin/primops.txt.pp#L4456).
+The broader fixture therefore combines native **boxed-result** exception,
+masking and delivery effects with an independent value/layout model; it
+does not claim direct native wide, floating-register or SIMD continuation ABI
+parity. The earlier fixed Int#/Word#/Addr# fixtures retain their direct native
+comparisons. Representative shape coverage is not a claim that every possible
+RuntimeRep composition or native platform has been exercised.

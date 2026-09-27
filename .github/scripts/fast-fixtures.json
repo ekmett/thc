@@ -1135,6 +1135,19 @@
         "compiler/test-fixtures/DeepEvaluationNative.hs"
       ]
     },
+    "exception-result-layouts": {
+      "junit": ["thc.runtime.ExceptionResultLayoutsNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "exception-result-layouts"]}],
+      "outputs": ["build/exception-result-layouts"],
+      "sources": [
+        "test/haskell-fixtures/ExceptionResultLayoutsFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/ExceptionResultLayoutsAudit.hs",
+        "compiler/test-fixtures/ExceptionResultLayoutsNative.hs"
+      ]
+    },
     "scalar-exception-results": {
       "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-exception-results"]}],

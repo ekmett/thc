@@ -1464,7 +1464,7 @@ class AuditTest(unittest.TestCase):
                     mutations = [
                         tuple_rep(scalar, state),
                         tuple_rep(state, scalar, scalar),
-                        tuple_rep(state, dict(kind='double', primReps=['DoubleRep'], evaluated=True)),
+                        tuple_rep(state, dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)),
                         dict(tuple_rep(state, scalar), primReps=['DoubleRep']),
                         tuple_rep(state, dict(scalar, kind='float')),
                     ]
@@ -1475,6 +1475,35 @@ class AuditTest(unittest.TestCase):
                     bad = copy.deepcopy(good)
                     bad[2][0][-1]['rep'] = scalar
                     self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
+
+    def test_exception_result_layouts_and_payload_levities_are_independent(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        unlifted = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)
+        floating = dict(kind='float', primReps=['FloatRep'], evaluated=True)
+        results = [REFERENCE, unlifted, state, tuple_rep(), floating,
+                   dict(kind='double', primReps=['DoubleRep'], evaluated=True),
+                   tuple_rep(LONG, tuple_rep(floating, tuple_rep()))]
+        results.extend(dict(kind='long', primReps=[rep], evaluated=True) for rep in
+                       ('Int8Rep', 'Word8Rep', 'Int16Rep', 'Word16Rep', 'Int32Rep', 'Word32Rep', 'Int64Rep', 'Word64Rep'))
+        for name in ('raiseIO#', 'catch#', 'maskAsyncExceptions#', 'maskUninterruptible#', 'unmaskAsyncExceptions#'):
+            for payload in (REFERENCE, unlifted):
+                arguments = ([payload, state] if name == 'raiseIO#' else
+                             [CLOSURE, CLOSURE, state] if name == 'catch#' else [CLOSURE, state])
+                flags = [rep.get('primReps') == ['BoxedRep (Just Lifted)'] for rep in arguments]
+                for result in results:
+                    good = ['app', ['prim', name],
+                            [[*var('operand'), dict(rep=copy.deepcopy(rep))] for rep in arguments],
+                            flags, False, False, dict(rep=tuple_rep(state, result))]
+                    with self.subTest(name=name, payload=payload, result=result):
+                        self.assertNotIn('primitive-representation', {i['code'] for i in run(good)['issues']})
+                        for malformed in (dict(kind='unknown', primReps=[], evaluated=True),
+                                          dict(kind='object', primReps=['BoxedRep Nothing'], evaluated=True)):
+                            bad = copy.deepcopy(good)
+                            bad[-1]['rep'] = tuple_rep(state, malformed)
+                            self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
+                        bad = copy.deepcopy(good)
+                        bad[3] = [not flags[0], *flags[1:]]
+                        self.assertIn('primitive-representation', {i['code'] for i in run(bad)['issues']})
 
     def test_public_thread_primops_require_exact_thread_id_and_lazy_payload(self):
         state = dict(kind='void', primReps=[], evaluated=True)

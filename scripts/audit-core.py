@@ -2090,29 +2090,29 @@ class Audit:
                             return rep.get('kind') == 'void' and rep.get('primReps') == []
                         if role == 'int':
                             return rep.get('kind') == 'long' and rep.get('primReps') == ['IntRep']
-                        if role == 'result' and (
-                                rep.get('kind') == 'long' and rep.get('primReps') in (['IntRep'], ['WordRep']) or
-                                rep.get('kind') == 'address' and rep.get('primReps') == ['AddrRep']):
-                            return True
                         return ((rep.get('kind') == 'closure' if role == 'closure' else
                                  rep.get('kind') in ('object', 'data', 'closure')) and
-                                rep.get('primReps') == ['BoxedRep (Just Lifted)'])
+                                rep.get('primReps') in ([['BoxedRep (Just Lifted)']] if role == 'closure' else
+                                    [['BoxedRep (Just Lifted)'], ['BoxedRep (Just Unlifted)']]))
                     roles = {'raiseIO#': ('boxed', 'state'), 'catch#': ('closure', 'closure', 'state'),
                              'unmaskAsyncExceptions#': ('closure', 'state'),
                              'maskAsyncExceptions#': ('closure', 'state'),
                              'maskUninterruptible#': ('closure', 'state'),
                              'getMaskingState#': ('state',)}[function[1]]
                     actual = [self.expression_rep(argument) for argument in arguments]
-                    if (len(actual) != len(roles) or flags != [role != 'state' for role in roles] or
+                    expected_flags = [isinstance(rep, dict) and rep.get('primReps') == ['BoxedRep (Just Lifted)']
+                                      for rep in actual]
+                    if (len(actual) != len(roles) or flags != expected_flags or
                             any(not exception_role(rep, role) for rep, role in zip(actual, roles))):
                         self.issue('primitive-representation', owner, path,
-                                   function[1] + ': exact lifted exception and State# arguments required')
+                                   function[1] + ': exact boxed exception and State# arguments required')
                     fields = proof.get('components') if isinstance(proof, dict) else None
-                    output = 'int' if function[1] == 'getMaskingState#' else 'result'
                     if not (self.is_tuple(proof) and proof.get('kind') == 'unknown' and
                             isinstance(fields, list) and len(fields) == 2 and
-                            exception_role(fields[0], 'state') and exception_role(fields[1], output) and
-                            proof.get('primReps') == fields[1].get('primReps')):
+                            exception_role(fields[0], 'state') and
+                            (function[1] != 'getMaskingState#' or exception_role(fields[1], 'int')) and
+                            tuple_input_proof_error(proof, allow_vectors=True, allow_addresses=True,
+                                                    allow_sums=True) is None):
                         self.issue('primitive-representation', owner, path,
                                    function[1] + ': exact State#/result tuple required')
                 thread = self.cap.get('managedThreadPrimitives', {}).get(function[1]) if function[0] == 'prim' else None
