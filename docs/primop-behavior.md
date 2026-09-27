@@ -59,7 +59,7 @@ acceptance; `threadStatus#` cannot supply that information.
 [`newTruffleThreadBuilder(...).virtual(false)`](../src/main/kotlin/thc/runtime/GuestThreadOps.kt).
 They do not migrate between Java virtual-thread carriers. Both the
 [Linux](../src/main/kotlin/thc/runtime/CpuAffinity.kt) and
-[Windows](../src/main/kotlin/thc/runtime/WindowsCpuAffinity.kt) affinity paths
+[Windows](../src/main/java/thc/runtime/WindowsCpuAffinity.java) affinity paths
 refuse native affinity changes on virtual threads, including when an embedding
 enters from one. Do not remove those guards or switch guest forks to virtual
 threads while retaining carrier-local pinning: a pin could otherwise affect
