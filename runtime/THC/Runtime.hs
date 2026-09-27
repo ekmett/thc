@@ -5,7 +5,7 @@
 -- | Read-only runtime identity and permissions. The trusted boundary consists
 -- only of fixed, validated selectors; no raw foreign values escape this module.
 module THC.Runtime
-  ( Availability(..), RuntimeKind(..), Backend(..), RuntimeInfo(..)
+  ( Available(..), RuntimeKind(..), Backend(..), RuntimeInfo(..)
   , RuntimeCapabilities(..), runtimeInfo, runtimeCapabilities
   ) where
 
@@ -18,19 +18,19 @@ data Backend = NativeBackend | ASTBackend | BytecodeBackend deriving (Eq, Ord, S
 
 -- | Version strings are informational, not feature-detection interfaces.
 data RuntimeInfo = RuntimeInfo
-  { runtimeKind :: Availability RuntimeKind
-  , executingBackend :: Availability Backend
-  , runtimeVersion :: Availability String
-  , jvmVersion :: Availability String
-  , jvmName :: Availability String
+  { runtimeKind :: Available RuntimeKind
+  , executingBackend :: Available Backend
+  , runtimeVersion :: Available String
+  , jvmVersion :: Available String
+  , jvmName :: Available String
   } deriving (Eq, Show)
 
 -- | Permissions are for the current THC context, not the entire JVM. CPU
 -- capacity is the context's initial eligible capacity, not a thread count.
 data RuntimeCapabilities = RuntimeCapabilities
-  { nativeAccessPermitted :: Availability Bool
-  , threadCreationPermitted :: Availability Bool
-  , cpuCapacity :: Availability Int
+  { nativeAccessPermitted :: Available Bool
+  , threadCreationPermitted :: Available Bool
+  , cpuCapacity :: Available Int
   } deriving (Eq, Show)
 
 runtimeInfo :: IO RuntimeInfo

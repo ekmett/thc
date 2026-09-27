@@ -8,7 +8,7 @@
 -- integration is version-pinned. No Java handles or forced recompilation are
 -- exposed. Counters are context-attributed, not JVM-wide.
 module THC.Internal.JIT
-  ( Availability(..), JitSnapshot(..), jitTelemetryEnabled
+  ( Available(..), JitSnapshot(..), jitTelemetryEnabled
   , setJitTelemetryEnabled, jitSnapshot
   ) where
 
@@ -22,20 +22,20 @@ import THC.Internal.RuntimeABI
 -- start from its completion, so matching totals are not guaranteed. Counts
 -- saturate at 2^63-1.
 data JitSnapshot = JitSnapshot
-  { compilationsStarted :: Availability Word64
-  , compilationsSucceeded :: Availability Word64
-  , compilationsFailed :: Availability Word64
-  , invalidations :: Availability Word64
-  , deoptimizations :: Availability Word64
-  , compilationsQueued :: Availability Word64
+  { compilationsStarted :: Available Word64
+  , compilationsSucceeded :: Available Word64
+  , compilationsFailed :: Available Word64
+  , invalidations :: Available Word64
+  , deoptimizations :: Available Word64
+  , compilationsQueued :: Available Word64
   } deriving (Eq, Show)
 
-jitTelemetryEnabled :: IO (Availability Bool)
+jitTelemetryEnabled :: IO (Available Bool)
 jitTelemetryEnabled = queryEnum 400 [(0, False), (1, True)]
 
 -- | Explicitly opt this context into or out of telemetry. Does not force
 -- compilation or enable process-wide monitoring; counters survive toggling.
-setJitTelemetryEnabled :: Bool -> IO (Availability ())
+setJitTelemetryEnabled :: Bool -> IO (Available ())
 setJitTelemetryEnabled enabled = control 400 (if enabled then 1 else 0)
 
 jitSnapshot :: IO JitSnapshot

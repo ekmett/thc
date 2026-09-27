@@ -5,7 +5,7 @@
 -- | Context-local structured diagnostics. Selecting JFR never starts a JVM
 -- recording; an enabled sink is not evidence that a recording is consuming it.
 module THC.Trace
-  ( Availability(..), TraceSink(..), getTraceSink, supportedTraceSinks
+  ( Available(..), TraceSink(..), getTraceSink, supportedTraceSinks
   , setTraceSink, traceEvent, withSpan
   ) where
 
@@ -21,15 +21,15 @@ import THC.Internal.RuntimeABI
 data TraceSink = TraceOff | TraceStderr | TraceJFR | TraceStderrAndJFR
   deriving (Eq, Ord, Show)
 
-getTraceSink :: IO (Availability TraceSink)
+getTraceSink :: IO (Available TraceSink)
 getTraceSink = queryEnum 500 [(0, TraceOff), (1, TraceStderr), (2, TraceJFR), (3, TraceStderrAndJFR)]
 
-supportedTraceSinks :: IO (Availability [TraceSink])
+supportedTraceSinks :: IO (Available [TraceSink])
 supportedTraceSinks = queryEnum 501
   [(0, [TraceOff]), (1, [TraceOff, TraceStderr]), (2, [TraceOff, TraceJFR]),
    (3, [TraceOff, TraceStderr, TraceJFR, TraceStderrAndJFR])]
 
-setTraceSink :: TraceSink -> IO (Availability ())
+setTraceSink :: TraceSink -> IO (Available ())
 setTraceSink sink = control 500 $ case sink of
   TraceOff -> 0
   TraceStderr -> 1
@@ -39,7 +39,7 @@ setTraceSink sink = control 500 $ case sink of
 -- | Emit a UTF-8 label, preserving embedded NUL. Limited to 1 MiB encoded;
 -- invalid Unicode surrogate characters become U+FFFD. Data is never evaluated
 -- as code. 'Disabled' emits nothing; native GHC reports 'Unsupported'.
-traceEvent :: String -> IO (Availability ())
+traceEvent :: String -> IO (Available ())
 traceEvent label = fmap (fmap (const ())) (emitLabel 0 label)
 
 -- | Bracket the IO action with a context-owned span when tracing is enabled.
@@ -69,7 +69,7 @@ withSpan label action = mask $ \restore -> do
       pure ()
     finish _ _ = pure ()
 
-emitLabel :: Int -> String -> IO (Availability Int64)
+emitLabel :: Int -> String -> IO (Available Int64)
 emitLabel operation label = do
   -- Bound traversal/allocation even for an infinite input string.
   let bytes = take (1048576 + 1) (concatMap encode label)

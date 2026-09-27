@@ -4,7 +4,7 @@
 /* Native GHC compatibility only. THC recognizes these exact declarations
  * before dispatching package C calls. Do not fabricate JVM counters. */
 long long thc_runtime_v1_query(int selector, long long index, long long detail) {
-  /* -5 is deliberately not an Availability status: the Haskell decoder turns
+  /* -5 is deliberately not an Available status: the Haskell decoder turns
    * malformed private-ABI calls into diagnostics instead of invented values. */
   switch (selector) {
     case 0: /* native GHC runtime */
