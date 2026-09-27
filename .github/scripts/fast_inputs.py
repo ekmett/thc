@@ -129,6 +129,13 @@ ORIGINAL_CURRENT_DIRECTORY_OUTPUTS = frozenset("build/original-current-directory
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "native-child", "unix-extract", "unix-build",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_CURRENT_DIRECTORY_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
+ORIGINAL_DIRECTORY_STREAMS_ENTRIES = ("directoryOpen", "directoryFdOpen", "directoryClose", "directoryRead", "directoryName", "directoryFree")
+ORIGINAL_DIRECTORY_STREAMS_OUTPUTS = frozenset("build/original-directory-streams/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json", "unix-source.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_STREAMS_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_STREAMS_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
@@ -464,6 +471,7 @@ REQUIRED = tuple(sorted({
     *(ORIGINAL_UNLINKAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_FSTATAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_CURRENT_DIRECTORY_OUTPUTS if platform.system() == "Linux" else []),
+    *(ORIGINAL_DIRECTORY_STREAMS_OUTPUTS if platform.system() == "Linux" else []),
     *BYTESTRING_SORT_OUTPUTS,
     *BYTESTRING_DECIMAL_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
@@ -485,7 +493,7 @@ REQUIRED = tuple(sorted({
     *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
@@ -1396,6 +1404,24 @@ def original_current_directory_artifact_hashes(manifest):
     return artifacts
 
 
+def original_directory_streams_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
+            manifest.get("entries") == list(ORIGINAL_DIRECTORY_STREAMS_ENTRIES) and
+            manifest.get("installedArtifactsHashed") is False and
+            manifest.get("privateRebuiltUnix") is True and
+            manifest.get("unixSourceReceipt") == "build/original-directory-streams/unix-source.json" and
+            manifest.get("unixArchiveSha256") == "a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e",
+            "Invalid original directory streams fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_DIRECTORY_STREAMS_OUTPUTS - {"build/original-directory-streams/manifest.json"},
+            "Incomplete/unreviewed original directory streams artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original directory streams artifact hash")
+    return artifacts
+
+
 def original_path_access_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
             manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
@@ -1716,6 +1742,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_FSTATAT_OUTPUTS
     if parts[1] == "original-current-directory":
         return name in ORIGINAL_CURRENT_DIRECTORY_OUTPUTS
+    if parts[1] == "original-directory-streams":
+        return name in ORIGINAL_DIRECTORY_STREAMS_OUTPUTS
     if parts[1] == "proxy-void":
         return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":
@@ -1992,6 +2020,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_fstatat_artifact_hashes(doc)
         if name == "build/original-current-directory/manifest.json":
             original_current_directory_artifact_hashes(doc)
+        if name == "build/original-directory-streams/manifest.json":
+            original_directory_streams_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
         if name == "build/unix-wait-status/manifest.json":

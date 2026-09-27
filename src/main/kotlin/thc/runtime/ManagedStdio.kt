@@ -58,6 +58,20 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return lastError.get()
     }
 
+    @TruffleBoundary fun openDirectory(path: ManagedAddress): ManagedAddress {
+        val abi = hostAbi
+        return files.openDirectoryOriginal(path).also {
+            if (it === ManagedAddress.nullAddress()) lastError.set(fileError(abi))
+        }
+    }
+    @TruffleBoundary fun openDirectoryFd(fd: Long): ManagedAddress {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong()) fault("Original fdopendir requires a canonical signed CInt")
+        return files.openDirectoryDescriptor(fd).also {
+            if (it === ManagedAddress.nullAddress()) lastError.set(fileError(abi))
+        }
+    }
+
     /** Zero explicitly clears the slot; every signed CInt is otherwise preserved. */
     @TruffleBoundary fun setErrno(value: Long) {
         hostAbi
