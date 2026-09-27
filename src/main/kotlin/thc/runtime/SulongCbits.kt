@@ -300,9 +300,9 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         val bytes = address.cbitsBuffer()
         val owner = address.cbitsOwner()
         val key = address.cbitsStorageKey()
-        if (!allowNativePointer) return CbitsBuffer(bytes, address.cbitsWritable(), LongSupplier { address.cbitsSize() })
+        if (!allowNativePointer) return CbitsBuffer(bytes, address.cbitsWritable(), CbitsBufferSize { address.cbitsSize() })
         return buffers[key]?.get() ?: CbitsBuffer(bytes, address.cbitsWritable(),
-            LongSupplier { address.cbitsSize() }, 0,
+            CbitsBufferSize { address.cbitsSize() }, 0,
             if (address.nativeImageKey() == null) null else Supplier {
                 val registry = NativeAddresses.current(null)
                 registry.project(address)
@@ -328,7 +328,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
             registry.transport(address) ?: fault("Missing immutable callback pointer image")
         }
         return CbitsBuffer(address.cbitsBuffer(), address.cbitsWritable(),
-            LongSupplier { address.cbitsSize() }, address.cbitsOffset(), nativeImage,
+            CbitsBufferSize { address.cbitsSize() }, address.cbitsOffset(), nativeImage,
             if (allowNativePointer && address.cbitsOwner()?.isPinned == true)
                 LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null)
     }
@@ -359,16 +359,19 @@ internal class CFinalizerFunction internal constructor(
     fun invoke(address: ManagedAddress) = owner.invokeFinalizer(this, address)
 }
 
+/** A live buffer bound, kept separate from unrelated host/compiler numeric callbacks. */
+internal fun interface CbitsBufferSize { fun size(): Long }
+
 /** Byte interop over the original allocation; immutable views may acquire an owned native image. */
 @ExportLibrary(InteropLibrary::class)
 internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private val writable: Boolean,
-    private val logicalSize: LongSupplier = LongSupplier { bytes.capacity().toLong() },
+    private val logicalSize: CbitsBufferSize = CbitsBufferSize { bytes.capacity().toLong() },
     private val baseOffset: Long = 0,
     private val nativeImage: Supplier<NativeReadOnlyPointer>? = null,
     private val nativeAddress: LongSupplier? = null,
     private val identity: Any = bytes) : TruffleObject {
     @JvmOverloads constructor(bytes: ByteArray, writable: Boolean,
-        logicalSize: LongSupplier = LongSupplier { bytes.size.toLong() }, baseOffset: Long = 0,
+        logicalSize: CbitsBufferSize = CbitsBufferSize { bytes.size.toLong() }, baseOffset: Long = 0,
         nativeImage: Supplier<NativeReadOnlyPointer>? = null, identity: Any = bytes) :
         this(ByteBuffer.wrap(bytes), writable, logicalSize, baseOffset, nativeImage, identity = identity)
     private val little = bytes.duplicate().order(ByteOrder.LITTLE_ENDIAN)
@@ -377,7 +380,7 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
 
     init {
         require(!writable || nativeImage == null) { "Mutable C buffers cannot use immutable native images" }
-        require(baseOffset >= 0 && baseOffset <= logicalSize.asLong) { "C buffer address exceeds its allocation" }
+        require(baseOffset >= 0 && baseOffset <= logicalSize.size()) { "C buffer address exceeds its allocation" }
     }
 
     /** New transport views are still the same original allocation, including
@@ -388,7 +391,7 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
     @ExportMessage fun identityHashCode(): Int = 31 * System.identityHashCode(identity) + baseOffset.hashCode()
 
     @Synchronized @ExportMessage fun isPointer(): Boolean = nativeAddress != null || pointer?.isPointer() == true
-    @Synchronized @ExportMessage fun toNative() {
+    @Synchronized @ExportMessage @TruffleBoundary fun toNative() {
         if (nativeImage != null && pointer == null) pointer = nativeImage.get()
     }
     @Synchronized @ExportMessage @TruffleBoundary @Throws(UnsupportedMessageException::class)
@@ -398,10 +401,10 @@ internal class CbitsBuffer @JvmOverloads constructor(bytes: ByteBuffer, private 
     }
     @ExportMessage fun hasBufferElements(): Boolean = true
     @ExportMessage fun isBufferWritable(): Boolean = writable
-    @ExportMessage fun getBufferSize(): Long = maxOf(0L, logicalSize.asLong - baseOffset)
+    @ExportMessage fun getBufferSize(): Long = maxOf(0L, logicalSize.size() - baseOffset)
 
     private fun index(offset: Long, width: Int): Int {
-        if (offset < 0 || offset > logicalSize.asLong - baseOffset - width)
+        if (offset < 0 || offset > logicalSize.size() - baseOffset - width)
             throw InvalidBufferOffsetException.create(offset, width.toLong())
         return Math.toIntExact(baseOffset + offset)
     }

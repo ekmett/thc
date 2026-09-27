@@ -5,7 +5,6 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import java.lang.ref.Reference
 import java.nio.ByteBuffer
-import java.util.function.LongSupplier
 import thc.Language
 
 /** Synchronous read-only borrowing; the original C validator never gets an
@@ -29,7 +28,7 @@ internal object ManagedByteStringUtf8 {
         // The original function returns true before inspecting the pointer.
         if (address === ManagedAddress.nullAddress() && length == 0L) return call(0L)
         fun view(buffer: ByteBuffer, offset: Long): Long = call(CbitsBuffer(
-            buffer.asReadOnlyBuffer(), false, LongSupplier { offset + length }, offset))
+            buffer.asReadOnlyBuffer(), false, CbitsBufferSize { offset + length }, offset))
         if (address.nativeAllocation() != null) return address.withNativeBorrow {
             address.requireByteRegion(length)
             address.withNativeSegment { view(it.asByteBuffer(), 0) }

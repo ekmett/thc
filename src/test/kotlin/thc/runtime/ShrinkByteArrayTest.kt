@@ -20,7 +20,6 @@ import thc.Json
 import thc.Language
 import java.io.File
 import java.security.MessageDigest
-import java.util.function.LongSupplier
 
 class ShrinkByteArrayTest {
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -129,7 +128,7 @@ class ShrinkByteArrayTest {
         exposed.shrink(16)
         assertSame(backing, exposed.rawBytesIfPointerFree())
         assertEquals(16L, exposed.size)
-        val buffer = CbitsBuffer(backing, true, LongSupplier { exposed.size })
+        val buffer = CbitsBuffer(backing, true, CbitsBufferSize { exposed.size })
         val interop = InteropLibrary.getUncached()
         assertEquals(16L, interop.getBufferSize(buffer))
         assertThrows(InvalidBufferOffsetException::class.java) { interop.readBufferByte(buffer, 16) }

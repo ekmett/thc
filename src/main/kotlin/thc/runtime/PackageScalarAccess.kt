@@ -158,7 +158,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                         entry.owner.nativeAddresses.transport(address) ?: fault("Missing immutable C pointer image")
                     }
                     buffer.transport = CbitsBuffer(address.cbitsBuffer(), buffer.writable,
-                        LongSupplier { address.cbitsSize() }, 0, nativeImage,
+                        CbitsBufferSize { address.cbitsSize() }, 0, nativeImage,
                         if (address.cbitsOwner()?.isPinned == true)
                             LongSupplier { address.toNativeBits() - address.cbitsOffset() } else null,
                         identity = address.cbitsStorageKey())

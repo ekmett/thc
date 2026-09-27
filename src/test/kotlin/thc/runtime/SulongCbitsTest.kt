@@ -12,9 +12,75 @@ import org.junit.jupiter.api.Test
 import java.nio.ByteOrder
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.function.Supplier
 import thc.Language
 
 class SulongCbitsTest {
+    @Test fun liveBufferBoundsAreReadOncePerOperationAndPropagateFailure() {
+        val bytes = ByteArray(16) { it.toByte() }
+        var size = 16L
+        var reads = 0
+        val failure = IllegalStateException("size failure")
+        var failed = false
+        val view = CbitsBuffer(bytes, true, CbitsBufferSize {
+            reads++
+            if (failed) throw failure
+            size
+        }, 4)
+        val interop = InteropLibrary.getUncached()
+        assertEquals(1, reads, "constructor preflight reads the live size")
+        assertEquals(12L, interop.getBufferSize(view)); assertEquals(2, reads)
+        assertEquals(4.toByte(), interop.readBufferByte(view, 0)); assertEquals(3, reads)
+        size = 7
+        assertEquals(3L, interop.getBufferSize(view)); assertEquals(4, reads)
+        interop.writeBufferByte(view, 2, 42); assertEquals(5, reads)
+        val before = bytes.copyOf()
+        assertThrows(InvalidBufferOffsetException::class.java) { interop.writeBufferByte(view, 3, 99) }
+        assertEquals(6, reads); assertArrayEquals(before, bytes)
+        assertThrows(InvalidBufferOffsetException::class.java) { interop.readBufferByte(view, -1) }
+        assertEquals(6, reads, "negative offset retains the original short circuit")
+        size = 2
+        assertEquals(0L, interop.getBufferSize(view)); assertEquals(7, reads)
+        failed = true
+        assertSame(failure, assertThrows(IllegalStateException::class.java) { interop.getBufferSize(view) })
+        assertEquals(8, reads)
+        assertSame(failure, assertThrows(IllegalStateException::class.java) { interop.writeBufferByte(view, 0, 99) })
+        assertEquals(9, reads); assertArrayEquals(before, bytes)
+    }
+
+    @Test fun nativePromotionSerializesAcquisitionAndPreservesFailureAndOwnerLifetime() {
+        val bytes = ByteArray(8)
+        val image = NativeReadOnlyImage(bytes, bytes)
+        val pointer = NativeReadOnlyPointer(image, bytes)
+        val failure = IllegalStateException("promotion failure")
+        var acquisitions = 0
+        lateinit var view: CbitsBuffer
+        view = CbitsBuffer(bytes, false, nativeImage = Supplier {
+            assertTrue(Thread.holdsLock(view), "acquisition keeps the buffer monitor")
+            if (++acquisitions == 1) throw failure
+            pointer
+        })
+        val interop = InteropLibrary.getUncached()
+        val pool = Executors.newFixedThreadPool(4)
+        try {
+            assertFalse(interop.isPointer(view))
+            assertSame(failure, assertThrows(IllegalStateException::class.java) { interop.toNative(view) })
+            assertFalse(interop.isPointer(view)); assertFalse(Thread.holdsLock(view))
+            val start = CountDownLatch(1)
+            val calls = (0 until 16).map {
+                pool.submit<Long> { start.await(); interop.toNative(view); interop.asPointer(view) }
+            }
+            start.countDown()
+            calls.forEach { assertEquals(image.base, it.get()) }
+            assertEquals(2, acquisitions, "one failed attempt and one published pointer")
+            image.close()
+            assertFalse(interop.isPointer(view))
+            assertThrows(UnsupportedMessageException::class.java) { interop.asPointer(view) }
+            interop.toNative(view)
+            assertEquals(2, acquisitions, "a closed owner is not silently replaced")
+        } finally { pool.shutdownNow(); image.close() }
+    }
+
     @Test fun concurrentAliasesPublishOneLiveBufferView() {
         Context.newBuilder("thc").allowNativeAccess(true).build().use { context ->
             context.initialize("thc"); context.enter()

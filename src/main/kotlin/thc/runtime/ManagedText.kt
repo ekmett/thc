@@ -5,7 +5,6 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import java.lang.ref.Reference
 import java.nio.ByteBuffer
-import java.util.function.LongSupplier
 import thc.Language
 
 /** Synchronous borrowed views of the existing ByteArray# storage. No staging
@@ -31,7 +30,7 @@ internal object ManagedText {
                 is ManagedAllocation -> bytes.exposeSegment().asByteBuffer()
                 else -> fault("Text reverse requires ByteArray# carriers")
             }
-            return CbitsBuffer(if (writable) buffer else buffer.asReadOnlyBuffer(), writable, LongSupplier { size })
+            return CbitsBuffer(if (writable) buffer else buffer.asReadOnlyBuffer(), writable, CbitsBufferSize { size })
         }
         fun call() {
             val sourceSize = size(source)
@@ -76,7 +75,7 @@ internal object ManagedText {
                 fault("Text memchr byte is outside Word8")
         }
         fun call(buffer: ByteBuffer, size: Long): Long {
-            val view = CbitsBuffer(buffer.asReadOnlyBuffer(), false, LongSupplier { size })
+            val view = CbitsBuffer(buffer.asReadOnlyBuffer(), false, CbitsBufferSize { size })
             val previous = owner.threads.enterForeign()
             try { return cbits.text(function, operation, view, offset, length, count) }
             finally {

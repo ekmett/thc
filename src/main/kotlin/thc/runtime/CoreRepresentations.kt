@@ -29,7 +29,9 @@ internal data class CoreRepresentation(
     val isAggregate: Boolean get() = isTuple || isSum
     /** A vector remains one logical value and one raw reference in typed transport. */
     val isTypedTransport: Boolean get() = isAggregate || isVector
-    val isEmptyTuple: Boolean get() = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
+    // Like the evaluated-object proof above, this is derived from owned load-time
+    // metadata. Parsing copies input lists; copy/refine construct a fresh proof.
+    val isEmptyTuple: Boolean = present && kind == CoreKind.UNKNOWN && components?.isEmpty() == true && primReps?.isEmpty() == true
     val isLong: Boolean get() = kind == CoreKind.LONG
     val isFloat: Boolean get() = kind == CoreKind.FLOAT
     val isDouble: Boolean get() = kind == CoreKind.DOUBLE

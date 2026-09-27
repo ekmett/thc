@@ -16,6 +16,36 @@ import thc.Language
 import java.io.File
 
 class TupleRepresentationTest {
+    @Test fun emptyTupleProofOwnsParsedListsAndRecomputesOnCopyAndRefinement() {
+        val reps = mutableListOf<String>()
+        val components = mutableListOf<Any?>()
+        val input = mutableMapOf<String, Any?>("kind" to "unknown", "evaluated" to true,
+            "primReps" to reps, "aggregate" to "unboxed-tuple", "components" to components)
+        val empty = CoreRepresentations.parse(input)
+        assertTrue(empty.isEmptyTuple)
+        assertNotSame(reps, empty.primReps)
+        assertNotSame(components, empty.components)
+        reps.add("IntRep")
+        components.add(mapOf("kind" to "long", "evaluated" to true, "primReps" to listOf("IntRep")))
+        val nonempty = CoreRepresentations.parse(input)
+        assertFalse(nonempty.isEmptyTuple)
+        reps.clear(); components.clear()
+        assertEquals(listOf("IntRep"), nonempty.primReps)
+        assertEquals(1, nonempty.components!!.size)
+        assertTrue(empty.isEmptyTuple)
+        assertTrue(empty.primReps!!.isEmpty()); assertTrue(empty.components!!.isEmpty())
+        assertFalse(empty.copy(components = listOf(empty)).isEmptyTuple, "nested empty tuple has one logical component")
+        assertFalse(empty.copy(primReps = null).isEmptyTuple)
+        assertFalse(empty.copy(components = null).isEmptyTuple)
+        assertFalse(empty.copy(present = false).isEmptyTuple)
+        assertFalse(empty.copy(kind = CoreKind.VOID).isEmptyTuple)
+        assertTrue(nonempty.copy(primReps = emptyList(), components = emptyList()).isEmptyTuple)
+        assertTrue(CoreRepresentation.UNKNOWN.refine(empty).isEmptyTuple)
+        assertTrue(empty.refine(CoreRepresentation.UNKNOWN).isEmptyTuple)
+        assertEquals(empty, empty.copy(), "derived proof does not change structural equality")
+        assertTrue(empty.copy(evaluated = false).isEmptyTuple)
+    }
+
     private val root = File(System.getProperty("thc.projectRoot"))
     private fun map(value: Any?) = value as MutableMap<String, Any?>
     private fun list(value: Any?) = value as MutableList<Any?>

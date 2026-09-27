@@ -126,7 +126,7 @@ class NativePinnedStorageTest {
         val base = ManagedAddress.fromGuestByteArray(storage)
         val interop = InteropLibrary.getUncached()
         val buffer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true)
-        val pointer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true, LongSupplier { storage.size }, 7,
+        val pointer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true, CbitsBufferSize { storage.size }, 7,
             nativeAddress = LongSupplier { base.toNativeBits() })
         assertTrue(interop.hasBufferElements(buffer))
         assertFalse(interop.isPointer(buffer))
@@ -290,7 +290,7 @@ class NativePinnedStorageTest {
         val base = ManagedAddress.fromGuestByteArray(storage)
         val alias = base.plus(7)
         val interop = InteropLibrary.getUncached()
-        val buffer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true, LongSupplier { storage.size }, 7,
+        val buffer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true, CbitsBufferSize { storage.size }, 7,
             nativeAddress = LongSupplier { base.toNativeBits() })
         val bits = interop.asPointer(buffer)
         storage.shrink(16)
