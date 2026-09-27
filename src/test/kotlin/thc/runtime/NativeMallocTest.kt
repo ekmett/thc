@@ -533,15 +533,17 @@ class NativeMallocTest {
                 val program = load(language, backend, module(emptyList()))
                 val target = program.entryTarget("loadByte")
                 val alias = base.plus(8)
-                alias.writeWord8(0, 128)
-                assertEquals(128L, Calls.target(target, arrayOf(0L, alias, 0L)))
+                // Word8Rep retains an Int computational carrier after lowering.
+                // Assert that exact carrier, not a widened Number conversion.
+                alias.writeWord8Int(0, 128)
+                assertEquals(128, Calls.target(target, arrayOf(0L, alias, 0L)))
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                 valid(target)
                 val runtime = Truffle.getRuntime()
                 runtime.javaClass.getMethod("bypassedInstalledCode",
                     Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
-                for (value in listOf(255L, 0L, 129L)) {
-                    base.writeWord8(8, value)
+                for (value in listOf(255, 0, 129)) {
+                    base.writeWord8Int(8, value)
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                     assertEquals(value, Calls.target(target, arrayOf(0L, alias, 0L)))
                     assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
