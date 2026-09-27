@@ -1804,7 +1804,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
-                val operands = args.map { compile(it, scope, false) }
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreCapiForeign.validateOperand(capi, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (capi.zeroArgument) b.beginLinkedCapiZero(destination.single(), capi)

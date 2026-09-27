@@ -7,14 +7,15 @@ import thc.ForeignBitcode
 import thc.Language
 import com.oracle.truffle.api.nodes.Node
 
-internal data class CapiCall(val unit: String, val symbol: String, val zeroArgument: Boolean)
+internal data class CapiCall(val unit: String, val symbol: String, val zeroArgument: Boolean,
+    val timeClock: Boolean = false, val resolution: Boolean = false)
 
 /** Exact CAPI descriptors of verified, context-loaded bitcode exports. */
 internal object CoreCapiForeign {
     @JvmStatic fun zero(node: Node, call: CapiCall): Long {
         val state = Language.currentState(node)
         val previous = state.threads.enterForeign()
-        try { return state.cbits().capiZero(call.unit, call.symbol) }
+        try { return state.cbits().capiZero(call.unit, call.symbol, call.timeClock) }
         finally { state.threads.leaveForeign(previous) }
     }
 
@@ -22,7 +23,7 @@ internal object CoreCapiForeign {
         val state = Language.currentState(node)
         val previous = state.threads.enterForeign()
         try {
-            val result = state.cbits().capiWordAddress(call.unit, call.symbol, word, address)
+            val result = state.cbits().capiWordAddress(call, word, address)
             if (result.value < 0) state.stdio.captureForeignErrno(result.errno)
             return result.value
         } finally { state.threads.leaveForeign(previous) }
@@ -60,7 +61,8 @@ internal object CoreCapiForeign {
         val unit = target["unit"] as? String ?: return null
         val symbol = target["symbol"] as? String ?: return null
         val link = links.firstOrNull { it.unit == unit && symbol in it.symbols } ?: return null
-        if (link.module != "System.CPUTime.Posix.ClockGetTime") failProof("unsupported module")
+        val time = link.module == "Data.Time.Clock.Internal.CTimespec"
+        if (!time && link.module != "System.CPUTime.Posix.ClockGetTime") failProof("unsupported module")
         if (descriptor.keys != descriptorKeys || !integer(descriptor["schema"], 1) ||
             target.keys != setOf("kind", "symbol", "unit", "isFunction") ||
             target["kind"] != "static" || target["isFunction"] != true ||
@@ -68,12 +70,15 @@ internal object CoreCapiForeign {
             failProof("static target, calling convention or safety")
         val declared = descriptor["argumentReps"] as? List<*> ?: failProof("argument representations")
         val zero = when (link.abi[symbol]) {
-            "clock-id" -> true
-            "clock-buffer" -> false
+            "clock-id" -> if (!time) true else failProof("base clock ABI in time module")
+            "clock-buffer" -> if (!time) false else failProof("base clock ABI in time module")
+            "time-clock-id" -> if (time) true else failProof("time clock ABI in base module")
+            "time-clock-time", "time-clock-resolution" -> if (time) false else failProof("time clock ABI in base module")
             else -> failProof("symbol lacks a linked CAPI ABI")
         }
-        val expected = if (zero) listOf<String?>(null) else listOf("Word64Rep", "AddrRep", null)
-        val output = if (zero) "Word64Rep" else "Int32Rep"
+        val word = if (time) "Int32Rep" else "Word64Rep"
+        val expected = if (zero) listOf<String?>(null) else listOf(word, "AddrRep", null)
+        val output = if (zero) word else "Int32Rep"
         if (!integer(descriptor["arity"], expected.size) ||
             !integer(descriptor["suppliedArity"], expected.size) ||
             declared.size != expected.size || argumentReps.size != expected.size ||
@@ -83,7 +88,7 @@ internal object CoreCapiForeign {
             !result(descriptor["resultRep"], output, true) ||
             !result(meta["rep"], output, false) || !result(resultRep, output, false))
             failProof("actual or declared CAPI argument/result representation")
-        return CapiCall(unit, symbol, zero)
+        return CapiCall(unit, symbol, zero, time, link.abi[symbol] == "time-clock-resolution")
     }
 
     fun validateHead(function: List<Any?>, defined: Boolean) {
@@ -92,5 +97,17 @@ internal object CoreCapiForeign {
             (function[1] as String).isEmpty() || defined || proof?.keys != scalarKeys ||
             proof["kind"] != "closure" || proof["primReps"] != listOf("BoxedRep (Just Lifted)") ||
             proof["evaluated"] != true) failProof("unresolved declared foreign head")
+    }
+
+    fun validateOperand(call: CapiCall, index: Int, lowered: CoreRepresentation, stored: CoreRepresentation?) {
+        val primitive = if (call.zeroArgument || index == 2) null
+            else if (index == 1) "AddrRep" else if (call.timeClock) "Int32Rep" else "Word64Rep"
+        val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
+        val reps = primitive?.let { listOf(it) } ?: emptyList()
+        if (!lowered.present || lowered.isAggregate || lowered.isVector || lowered.kind != kind || lowered.primReps != reps)
+            failProof("lowered operand $index")
+        if (stored?.present == true && (stored.isAggregate || stored.isVector ||
+            stored.kind !in setOf(kind, CoreKind.UNKNOWN) || stored.primReps != null && stored.primReps != reps))
+            failProof("stored operand $index")
     }
 }

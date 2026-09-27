@@ -374,7 +374,7 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
             "initializers" .= ([] :: [Value]), "finalizers" .= ([] :: [Value])],
           "files" .= ([] :: [Value])]]
       capiArchive = capiArchiveFor (zipWith capiCall [True, False, False] capiSymbols)
-  capiLinked <- linkClockGetTime (Installed.installedLibdir full)
+  capiLinked <- linkClockGetTime (Installed.installedLibdir full) []
     (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
     capiUnit capiName (BL.toStrict (encode capiArchive))
   let capiRecord = maybe Null id (decodeStrict' capiLinked)
@@ -387,7 +387,7 @@ checkDriver root directory ghc ghcPkg helper baseUnit = do
          valueAt "sourceSha256" capiLink /= Null &&
          valueAt "bitcodeSha256" capiLink /= Null)
     "Original callback-free CAPI source was not acquired as LLVM bitcode"
-  wrongAbi <- Exception.try (linkClockGetTime (Installed.installedLibdir full)
+  wrongAbi <- Exception.try (linkClockGetTime (Installed.installedLibdir full) []
     (root </> directory </> "native/staging") (Info.arch ++ "-" ++ Info.os)
     capiUnit capiName (BL.toStrict (encode (capiArchiveFor
       (capiCall False capiId : zipWith capiCall [True, False, False] capiSymbols)))))

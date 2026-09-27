@@ -435,6 +435,23 @@ configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configura
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 
+for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalTimeClockDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests the original time CAPI clock module with native and first-compiled controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
+        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/original-time-clock/manifest.json").isFile) {
+            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
+    }
+}
+
 for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"

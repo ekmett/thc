@@ -43,6 +43,51 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class OriginalTimeClockOperandTest(unittest.TestCase):
+    def test_genuine_capi_lowered_and_stored_state(self):
+        fixture = ROOT.parent / 'build/original-time-clock'
+        if not (fixture / 'manifest.json').is_file():
+            self.skipTest('requires the explicit original-time-clock full-Core native fixture')
+        linked = json.loads((fixture / 'linked.json').read_text())
+        for stage in ('pre', 'post'):
+            module = json.loads((fixture / (stage + '.json')).read_text())
+            original = next(binding for binding in module['bindings'] if binding['name'] == 'originalTime')
+            def find_call(value):
+                if isinstance(value, list):
+                    if value and value[0] == 'app' and isinstance(value[-1], dict) and 'foreignCall' in value[-1]:
+                        return value
+                    for child in value:
+                        found = find_call(child)
+                        if found is not None:
+                            return found
+                elif isinstance(value, dict):
+                    for child in value.values():
+                        found = find_call(child)
+                        if found is not None:
+                            return found
+                return None
+            call = find_call(original['expr'])
+            self.assertIsNotNone(call)
+            declared = call[-1]['foreignCall']['argumentReps']
+            for malformed in ('valid', 'lowered-state', 'stored-state', 'stored-clock'):
+                expression = copy.deepcopy(call)
+                expression[2] = [['var', 'argument' + str(index), dict(rep=copy.deepcopy(rep))]
+                                 for index, rep in enumerate(declared)]
+                stored = {'argument' + str(index): copy.deepcopy(rep) for index, rep in enumerate(declared)}
+                if malformed == 'lowered-state':
+                    expression[2][2] = ['lit', 'int', '7', dict(rep=declared[2])]
+                elif malformed == 'stored-state':
+                    stored['argument2'] = LONG
+                elif malformed == 'stored-clock':
+                    stored['argument0'] = LONG
+                auditor = audit_core.Audit([('original-linked.json', linked)], CAP)
+                auditor.walk(expression, stored, 'clock-control', '/expr')
+                if malformed == 'valid':
+                    self.assertEqual([], auditor.issues)
+                else:
+                    self.assertTrue(any(issue['code'] == 'foreign-call' for issue in auditor.issues), malformed)
+
+
 class AggregateHeapFieldTest(unittest.TestCase):
     empty = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple', components=[], primReps=[])
     sum_rep = dict(kind='unknown', evaluated=True, aggregate='unboxed-sum',
