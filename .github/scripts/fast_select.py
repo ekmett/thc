@@ -43,6 +43,7 @@ POLYGLOT_EXACT_INPUTS = {
     "src/examples/kotlin/thc/PolyglotDemo.kt",
     "src/main/java/thc/runtime/Calls.java", "src/main/java/thc/runtime/BytecodeRoot.java",
     "src/main/java/thc/runtime/RuntimeTypes.java",
+    "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
     "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (

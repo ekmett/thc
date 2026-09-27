@@ -377,7 +377,9 @@ rules are shared with Linux; LocalFree allocations keep their own deallocator.
 
 Run `./scripts/windows.ps1 -Action MallocTest -Jobs 2` to build the pinned native
 GHC oracle and distribution and run the allocation/returned-pointer/descriptor
-checks in `testDefault` and `testDense` together. The full Windows Test action
+checks in `testDefault` and `testDense` together. It also runs portable Linux/macOS
+stdio ABI parser controls; these model receipts do not establish native POSIX
+execution on Windows. The full Windows Test action
 includes this slice too. To acquire only the native oracle, use
 `cabal run thc-fixtures --disable-shared -- native-addresses`.
 Both runtime backends and first-installed-entry checks are exercised by that

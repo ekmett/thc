@@ -196,6 +196,7 @@ internal class WindowsDirectoryStreams private constructor(private val context: 
     }
 
     companion object {
+        @JvmName("supportedHost")
         internal fun supportedHost(): Boolean = System.getProperty("os.name").startsWith("Windows") &&
             System.getProperty("os.arch") in setOf("amd64", "x86_64")
         internal fun invalidHandle(): ManagedAddress = ManagedAddress.unownedNumeric(-1L)
