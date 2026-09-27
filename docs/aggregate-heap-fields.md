@@ -1,6 +1,6 @@
 # Aggregate fields in boxed constructors
 
-Both backends construct and match boxed values with exact unboxed tuple or scalar
+Both backends construct and match boxed values with exact unboxed tuple or
 sum fields. This includes GHC 9.14.1's real `GHC.Core.TyCon.BoxedRep`: its source
 field `{-# UNPACK #-} !(Maybe Levity)` becomes one logical worker field
 `(# (# #) | Levity #)`, stored as a tag and one lifted reference.
@@ -8,7 +8,8 @@ field `{-# UNPACK #-} !(Maybe Levity)` becomes one logical worker field
 Constructor metadata retains logical field order and shape. Lowering maps each
 logical field to a contiguous range of existing final typed heap properties;
 tuple components flatten recursively and sum payloads retain GHC's existing
-slot projections. Empty tuples and scalar void components occupy no payload
+slot proofs, with the [managed storage adaptation](sum-results.md) applied separately.
+Empty tuples and scalar void components occupy no payload
 property, but their expressions still execute. Scalar fields after a zero-width
 or multi-register field retain their own positions. No boxed tuple/sum payload
 array or additional guest carrier is introduced.
@@ -23,7 +24,8 @@ The supported tuple leaves and sum payloads are the existing
 [tuple](tuple-results.md) and [sum](sum-results.md) layouts. Logical shape, arity,
 sum tags/projections, scalar carriers, vector species and heap ownership remain
 checked. Families with two or more alternatives and sums inside recursive tuples
-are supported; sums inside sum payloads and ordinary aggregate lets are not.
+are supported, including sums nested inside sum payloads, managed addresses and
+supported exact vector species. Ordinary aggregate lets remain unsupported.
 [Tuple captures](tuple-captures.md), [sum inputs and captures](sum-inputs.md) and [tuple join inputs](tuple-joins.md)
 are supported separately. Constructors with aggregate fields currently require direct saturated
 applications; their unsaturated/PAP workers remain an explicit boundary.

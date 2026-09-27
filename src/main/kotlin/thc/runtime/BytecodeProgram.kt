@@ -3766,7 +3766,7 @@ CoreStackForeign.validateHead(fn, defined)
                 if (args.size != 1) throw RuntimeFault("Sum constructor must be saturated")
                 val selected = tupleProof.alternatives!![tag - 1]
                 val lifted = flags.single() as? Boolean ?: throw UnsupportedCore("Unknown sum payload levity")
-                val payload = if (selected.isTuple) compile(args.single(), scope, false) else argument(args.single(), scope, lifted)
+                val payload = if (selected.isTypedTransport) compile(args.single(), scope, false) else argument(args.single(), scope, lifted)
                 SumShape.payload(selected, payload.proof, lifted)
                 val shape = TupleShape(tupleProof, language)
                 tupleExpression(tupleProof) { e, destination ->
@@ -3775,11 +3775,14 @@ CoreStackForeign.validateHead(fn, defined)
                     shape.leaves.forEachIndexed { index, field ->
                         b.beginStoreLocal(destination[index])
                         if (field.isLong) b.emitLoadConstant(0L) else if (field.isFloat) b.emitLoadConstant(0.0f)
-                        else if (field.isDouble) b.emitLoadConstant(0.0) else b.emitLoadNull()
+                        else if (field.isDouble) b.emitLoadConstant(0.0)
+                        else if (field.kind == CoreKind.ADDRESS) b.emitLoadConstant(ManagedAddress.nullAddress())
+                        else if (field.isVector) b.emitLoadConstant(VectorLayout(field).species.zero())
+                        else b.emitLoadNull()
                         b.endStoreLocal()
                     }
-                    val mapped = tupleProof.alternativeSlots!![tag - 1].map { destination[it] }
-                    if (selected.isTuple) payload.emitTuple(e, mapped)
+                    val mapped = SumShape.projection(tupleProof, tag - 1).map { destination[it] }
+                    if (selected.isTypedTransport) payload.emitTuple(e, mapped)
                     else if (selected.kind == CoreKind.VOID) { b.beginDiscardVoid(); payload.emit(e); b.endDiscardVoid() }
                     else { b.beginStoreLocal(mapped.single()); payload.emit(e); b.endStoreLocal() }
                     b.beginStoreLocal(destination[0]); b.emitLoadConstant(tag.toLong()); b.endStoreLocal()
@@ -4670,8 +4673,8 @@ CoreStackForeign.validateHead(fn, defined)
                 val lifted = metadata.single()["lifted"] as? Boolean ?: throw RuntimeFault("Unknown sum payload binder levity")
                 SumShape.payload(component, actual, lifted)
                 val logical = component.refine(actual).copy(evaluated = component.evaluated)
-                val projected = proof.alternativeSlots!![selected - 1].map { fields[it] }
-                if (component.isTuple) {
+                val projected = SumShape.projection(proof, selected - 1).map { fields[it] }
+                if (component.isTypedTransport) {
                     val leaves = TupleShape.flatten(logical)
                     child.bindTuple(ids[0], logical, projected.mapIndexed { i, field -> field.copy(proof = leaves[i]) })
                 } else if (component.kind == CoreKind.VOID) child.bindVoid(ids[0], logical)

@@ -127,10 +127,20 @@ class SumProofTest(unittest.TestCase):
         self.assertTrue(sums.lifted_payload(BOX))
         self.assertNotEqual(audit.Audit.shape(VOID),audit.Audit.shape(tup()))
 
-    def test_unknown_nested_sum_and_unsupported_leaf_families_reject(self):
+    def test_exact_nested_address_and_vector_proofs_preserve_ghc_slots(self):
+        address = dict(kind='address',primReps=['AddrRep'],evaluated=True)
+        vector = dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],evaluated=True,
+                      vector=dict(lanes=2,element='Int64ElemRep'))
+        shared = summ(address,INT)
+        self.assertEqual(['WordRep','WordRep'], shared['primReps'])
+        self.assertEqual([[1],[1]], shared['alternativeSlots'])
+        for proof in [shared,summ(summ(),INT),summ(tup(summ(),VOID),vector),summ(tup(),vector)]:
+            self.assertIsNone(sums.proof_error(proof))
+
+    def test_unknown_and_malformed_leaf_families_reject(self):
         invalid=[dict(FLOAT,primReps=['Word64Rep']),dict(BOX,primReps=['BoxedRep Nothing']),dict(INT,kind='unknown'),
-                 dict(INT,kind='address',primReps=['AddrRep']),dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],evaluated=True),
-                 dict(kind='unknown',primReps=None,evaluated=False),dict(tup(),components=None),summ(),tup(summ())]
+                 dict(INT,kind='address',primReps=['AddrRep'],evaluated=False),dict(kind='vector',primReps=['VecRep 2 Int64ElemRep'],evaluated=True),
+                 dict(kind='unknown',primReps=None,evaluated=False),dict(tup(),components=None),dict(summ(),tagSlot=1),tup(dict(summ(),tagSlot=1))]
         for field in invalid:
             with self.subTest(field=field):
                 proof=dict(summ(),alternatives=[field,INT])
@@ -371,9 +381,9 @@ class SumAuditTest(unittest.TestCase):
 
     @unittest.skipUnless((ROOT/'build/sum-layout/pre-core/SumLayoutAudit.json').exists(),'Prepare genuine sum metadata fixtures')
     def test_genuine_pre_and_post_core_accept_only_bounded_consumers(self):
-        positive=['sumCase','directCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase',
+        positive=['sumCase','directCase','nestedCase','lazyCase','zeroCase','unitCase','boxedKindsCase','floatDoubleCase',
                   'narrowWideCase','threeWayCase']
-        negative=['nestedCase','returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
+        negative=['returnedSum','lazySum','zeroSum','unitSum','boxedKindsSum',
                   'floatDoubleSum','aliasIdentity','runtimePolymorphic','levityPolymorphic','abstractSumIdentity','abstractRuntimeSum',
                   'abstractAlternative','addressResult','vectorResult']
         for stage in ('pre','post'):

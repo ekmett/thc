@@ -18,6 +18,7 @@ module Main (main) where
 import AggregateFixtures (prepareAggregate)
 import AggregateHeapFixtures (prepareAggregateHeap)
 import FourWayAggregateFixtures (prepareFourWayAggregate)
+import GenericSumTransportFixtures (prepareGenericSumTransport)
 import CompactRegionsFixtures (prepareCompactRegions, prepareCompactSerialization)
 import GraphFixtures (prepareGraph)
 import IntegerCompletionFixtures (prepareIntegerCompletion)
@@ -1062,6 +1063,7 @@ main = do
     ["sum-join-input"] -> prepareSumJoinInputs root
     ["aggregate-heap"] -> prepareAggregateHeap root False
     ["fourway-aggregate"] -> prepareFourWayAggregate root
+    ["generic-sum-transport"] -> prepareGenericSumTransport root
     ["aggregate-heap", "--export-only"] -> prepareAggregateHeap root True
     ["weak-explicit"] -> prepareWeaks root
     ["shrink-bytearrays"] -> prepareShrinkByteArrays root
