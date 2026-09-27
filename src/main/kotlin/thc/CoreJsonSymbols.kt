@@ -6,14 +6,16 @@ package thc
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.CodingErrorAction
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.concurrent.CancellationException
 
-/** On-disk unsigned-UTF8-sorted `binding.id SPACE byte-offset NEWLINE` rows.
+/** An explicitly selected on-disk symbol directory: legacy UTF8 text rows or
+ * fixed MD5(UTF8 binding.id)/little-endian offset records.
  *
- * Binary search touches only candidate lines; there is no per-row heap index.
+ * Binary search touches only candidate records; there is no per-row heap index.
  * The JSON file is mapped only after finding a symbol. Only its selected object
  * is decoded. A mapping pins the opened file, not its pathname; callers must not
  * mutate an opened file in place. Already decoded bindings own their values.
@@ -22,7 +24,10 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
                               private val verifyArtifacts: Boolean = false,
                               private val sourceSha256: String? = null,
                               private val directorySha256: String? = null,
-                              private val mappings: CoreFileMappings = CoreFileMappings.shared) : AutoCloseable {
+                              private val mappings: CoreFileMappings = CoreFileMappings.shared,
+                              private val format: Format = Format.TEXT) : AutoCloseable {
+    enum class Format { TEXT, MD5_UTF8_U64LE }
+    companion object { const val MD5_FORMAT = "md5-utf8-u64le-v1" }
     data class Statistics(val directoryOpens: Long, val sourceOpens: Long,
         val directoryMappedBytes: Long, val sourceMappedBytes: Long,
         val directoryByteReads: Long, val sourceByteReads: Long,
@@ -61,6 +66,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
     private var closed = false
     private var directory: Mapping? = null
     private var source: Mapping? = null
+    private val symbolDigest by lazy { MessageDigest.getInstance("MD5") }
     private data class Selected(val start: Long, val end: Long, val binding: Map<String, Any?>)
     private val selected = HashMap<String, Result<Selected?>>()
     private val modules = HashMap<ModuleSpan, Result<Map<String, Any?>>>()
@@ -125,12 +131,13 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         // GHC foreign declaration expression IDs may contain pretty-printed
         // multiline types. Such an ID cannot be a row in this text directory;
         // absence is distinct from asking to decode an invalid binding ID.
-        id.isNotEmpty() && '\n' !in id && '\r' !in id && lookup(id) != null
+        (format != Format.TEXT || id.isNotEmpty() && '\n' !in id && '\r' !in id) && lookup(id) != null
     }
 
     /** Returns the selected row's original JSON position, never its successor's
      * position: directory order is unrelated to the module's binding order. */
     private fun lookup(id: String): Long? {
+        if (format == Format.MD5_UTF8_U64LE) return lookupDigest(id)
         require(id.isNotEmpty() && '\n' !in id && '\r' !in id) { "Invalid line-based Core symbol" }
         val key = id.toByteArray(Charsets.UTF_8)
         val mapped = directory()
@@ -174,6 +181,34 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         return null
     }
 
+    private fun lookupDigest(id: String): Long? {
+        val key = symbolDigest.digest(id.toByteArray(Charsets.UTF_8))
+        val mapped = directory()
+        require(mapped.size % 24 == 0L) { "Incomplete fixed-width Core symbol record" }
+        var low = 0L
+        var high = mapped.size / 24
+        while (low < high) {
+            val middle = low + (high - low) / 2
+            val start = middle * 24
+            counters.lookupComparisons++
+            var compared = 0
+            for (index in 0 until 16) {
+                compared = directoryByte(mapped, start + index) - (key[index].toInt() and 255)
+                if (compared != 0) break
+            }
+            when {
+                compared < 0 -> low = middle + 1
+                compared > 0 -> high = middle
+                else -> {
+                    counters.directoryByteReads += 8
+                    return mapped.bytes.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), start + 16)
+                        .also { require(it >= 0) { "Core symbol offset exceeds JVM address range" } }
+                }
+            }
+        }
+        return null
+    }
+
     private fun decode(id: String, start: Long, end: Long?): Selected {
         val mapped = source()
         val limit = end?.also { require(it <= mapped.size) { "Core binding extent exceeds source" } } ?: mapped.size
@@ -202,7 +237,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         counters.sourceByteReads += length
         counters.decodedBindings++; counters.decodedBytes += length
         val binding = parseObject(bytes)
-        require(binding["id"] == id) { "Core symbol directory identity mismatch: $id" }
+        if (format == Format.TEXT) require(binding["id"] == id) { "Core symbol directory identity mismatch: $id" }
         return Selected(start, at, binding)
     }
 
