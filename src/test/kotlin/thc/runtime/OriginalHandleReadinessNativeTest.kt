@@ -54,6 +54,20 @@ class OriginalHandleReadinessNativeTest {
     }
 
     @Suppress("UNCHECKED_CAST")
+    private fun loweredEntryRoots(module: Map<String, Any?>, name: String): Int {
+        val evidence = ArrayCoreEvidence(module, name)
+        val outer = evidence.root["expr"] as List<Any?>
+        assertEquals(1, evidence.bindings.size)
+        assertTrue(evidence.globalReferences(outer).isEmpty())
+        val state = evidence.stateLambda(outer)
+        assertEquals(listOf(outer, state), evidence.guestLambdas(outer),
+            "$name: preserve the two exported lambdas")
+        val lowered = evidence.loweredStateLambdas(outer)
+        assertEquals(listOf(outer), lowered, "$name: the immediate State# redex executes in-frame")
+        return lowered.size
+    }
+
+    @Suppress("UNCHECKED_CAST")
     private fun checkedRows(): List<Map<String, Number>> {
         val manifest = json("build/original-handle-readiness/manifest.json")
         assertEquals(1L, manifest["schema"])
@@ -97,6 +111,7 @@ class OriginalHandleReadinessNativeTest {
                 val prefix = "build/original-handle-readiness/$stage"
                 val module = CoreModules.merge(listOf("OriginalHandleReadinessAudit", "THC.InterfaceClosure")
                     .map { json("$prefix/core/$it.json") })
+                val executedRoots = loweredEntryRoots(module, "originalIsTerminal")
                 for (backend in listOf("ast", "bytecode")) {
                     NativeFileProvider.createContext(emptySet(), ContextProfile.SYNCHRONOUS_TEST).use { context ->
                         context.enter()
@@ -112,14 +127,14 @@ class OriginalHandleReadinessNativeTest {
                                 val target = program.entryTarget("originalIsTerminal")
                                 repeat(3) { assertEquals(1L, Calls.target(target, arrayOf(0L, fd))) }
                                 val active = targets(target)
-                                assertEquals(2, active.size, "Entry and original runRW local lambda")
+                                assertEquals(executedRoots, active.size, "Exactly the lowered entry roots")
                                 active.forEach {
                                     it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true)
                                     valid(it)
                                 }
                                 val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
                                 assertEquals(1L, Calls.target(target, arrayOf(0L, fd)))
-                                assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                                assertEquals(before + executedRoots, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                                 assertEquals(active, targets(target))
                                 active.forEach(::valid)
                                 val alias = state.files.duplicate(fd)
@@ -162,21 +177,9 @@ class OriginalHandleReadinessNativeTest {
                 val audit = json("$prefix/$name.audit.json")
                 assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any?>(), audit["issues"])
                 assertEquals(emptyList<Any?>(), audit["missingGlobals"])
-                // runRW# exports as an immediately applied local State# lambda.
-                // It is a second instrumented root, not another top-level binding.
-                val binding = (module["bindings"] as List<Map<String, Any?>>).single { it["name"] == name }
-                val entry = binding["expr"] as List<*>
-                assertEquals("lam", entry[0])
-                val application = entry[2] as List<*>
-                assertEquals("app", application[0])
-                val local = application[1] as List<*>
-                assertEquals("lam", local[0])
-                val formal = (local[1] as List<Map<String, Any?>>).single()
-                assertEquals("State# RealWorld", formal["type"])
-                assertEquals(false, formal["lifted"])
-                assertEquals(mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true), formal["rep"])
-                assertEquals("void", ((application[2] as List<*>).single() as List<*>)[0])
             }
+            val executedRoots = listOf("originalIsTerminal", "originalIsTerminalErrno")
+                .associateWith { loweredEntryRoots(module, it) }
             for (backend in listOf("ast", "bytecode")) {
                 val output = ByteArrayOutputStream(); val errors = ByteArrayOutputStream()
                 Context.newBuilder("thc").allowIO(IOAccess.NONE).out(output).err(errors)
@@ -200,8 +203,8 @@ class OriginalHandleReadinessNativeTest {
                                     val expected = if (name == "originalIsTerminal") row.getValue("result") else row.getValue("errno")
                                     assertEquals(expected.toLong(), actual, "$stage/$backend/$name/$row")
                                     if (compiled) {
-                                        assertEquals(before + 2, (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
-                                            "$stage/$backend/$name/$row: entry plus runRW local lambda")
+                                        assertEquals(before + executedRoots.getValue(name), (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
+                                            "$stage/$backend/$name/$row: every lowered entry root")
                                         assertEquals(active.getValue(name), targets(target), "First-installed target identities must remain unchanged")
                                         active.getValue(name).forEach(::valid)
                                     }
@@ -212,8 +215,8 @@ class OriginalHandleReadinessNativeTest {
                                 assertEquals(0, handoff.results.retainedReferences())
                             }
                             exercise(false)
-                            active = targets.mapValues { (_, target) -> targets(target).also {
-                                assertEquals(2, it.size, "$stage/$backend: exactly entry and runRW local lambda")
+                            active = targets.mapValues { (name, target) -> targets(target).also {
+                                assertEquals(executedRoots.getValue(name), it.size, "$stage/$backend/$name: exactly the lowered entry roots")
                             } }
                             for (target in active.values.flatten()) {
                                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
