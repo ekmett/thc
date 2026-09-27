@@ -29,7 +29,9 @@ preparePackageNativeArchives root = do
       execute = runLogged 600 root (relative </> "logs")
       mixedUnit = "native-archive-mixed-0.1.0.0-inplace"
       unresolvedUnit = "native-archive-unresolved-0.1.0.0-inplace"
-      units = [mixedUnit,unresolvedUnit]
+      poisonedUnit = "native-archive-poisoned-0.1.0.0-inplace"
+      providerUnit = "native-archive-provider-0.1.0.0-inplace"
+      units = [mixedUnit,unresolvedUnit,poisonedUnit,providerUnit]
   createDirectoryIfMissing True output
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
@@ -68,7 +70,7 @@ preparePackageNativeArchives root = do
   let oracleLines = BSC.lines (commandStdout oracle)
   unless (take 7 oracleLines == ["40","99","1","7","True","True","47"]) (fail "native archive oracle differs")
   observations <- case drop 7 oracleLines of
-    [row] -> maybe (fail "native mixed-header oracle is malformed") pure
+    [row,"1010","1515","1313","1414","1818","True","True"] -> maybe (fail "native mixed-header oracle is malformed") pure
       (readMaybe (BSC.unpack row) :: Maybe [(Integer,Integer,Integer,Integer,Integer,Integer)])
     _ -> fail "missing native mixed-header oracle"
   unless (length observations == 36) (fail "native mixed-header oracle row count differs")
@@ -92,9 +94,14 @@ preparePackageNativeArchives root = do
     (audit (mixedUnit ++ ":CapiMix.mixedProbe#") "mixed-header-audit")
   lifecycle <- execute "lifecycle-audit" [] "python3"
     (audit (mixedUnit ++ ":Lifecycle.lifecycleProbe#") "lifecycle-audit")
+  partial <- execute "partial-audit" [] "python3"
+    (audit (unresolvedUnit ++ ":Unresolved.partialProbe#") "partial-audit")
   negatives <- forM [(mixed ++ "blocked","interruptible"),(mixedUnit ++ ":Unknown.other","non-static"),
     (mixedUnit ++ ":Narrow.narrow","narrow-conflict"),(mixedUnit ++ ":Wide.wide","wide-conflict"),
-    (unresolvedUnit ++ ":Unresolved.process","unresolved")] $ \(entry,label) -> do
+    (unresolvedUnit ++ ":Unresolved.process","unresolved"),
+    (unresolvedUnit ++ ":Unresolved.throughGlobal","indirect-unresolved"),
+    (poisonedUnit ++ ":Poisoned.poisoned","constructor-unresolved"),
+    (providerUnit ++ ":Provider.nativeMath","provider-container")] $ \(entry,label) -> do
       rejected <- runLoggedExpect 1 60 root (relative </> "logs") label [] "python3" (audit entry label)
       report <- readJson (output </> label <.> "json")
       ok <- field report "accepted"
@@ -107,11 +114,12 @@ preparePackageNativeArchives root = do
      "src/THC/Driver/NativeLibrarySources.hs",
      "scripts/core_package_manifest.py","scripts/audit-core.py"])
   artifacts <- hashes root (linked ++ [relative </> name <.> "json" | name <-
-    ["supported-audit","mixed-width-audit","mixed-header-audit","lifecycle-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved"]])
+    ["supported-audit","mixed-width-audit","mixed-header-audit","lifecycle-audit","partial-audit","interruptible","non-static","narrow-conflict","wide-conflict","unresolved","indirect-unresolved","constructor-unresolved","provider-container"]])
   writeJson (output </> "manifest.json") (object ["schema" .= (1::Int),"driverSha256" .= driverHash,
     "modules" .= linked,"inputHashes" .= inputs,"artifactHashes" .= artifacts,
     "mixedHeaderObservations" .= observations,
-    "commands" .= map commandRecord ([built,acquired,oracle,accepted,mixedWidth,mixedHeader,lifecycle] ++ negatives)])
+    "partialObservations" .= ([1010,1515,1313,1414,1818] :: [Int]),
+    "commands" .= map commandRecord ([built,acquired,oracle,accepted,mixedWidth,mixedHeader,lifecycle,partial] ++ negatives)])
   putStrLn "package-native-archives: supported mixed imports admitted; interruptible, non-static, conflicting-width and unresolved imports archived and rejected when reachable"
   where
     line bytes = case BSC.lines bytes of [value] -> BSC.unpack value; _ -> error "expected one tool result"

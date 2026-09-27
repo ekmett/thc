@@ -15,5 +15,5 @@ library
 executable oracle
   main-is: Main.hs
   hs-source-dirs: app
-  build-depends: base, native-archive-mixed, native-archive-unresolved
+  build-depends: base, native-archive-mixed, native-archive-unresolved, native-archive-poisoned, native-archive-provider
   default-language: Haskell2010

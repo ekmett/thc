@@ -90,8 +90,9 @@ internal object PackageScalarLinks {
             (native || !module.containsKey("staticForeignImportStubs")) && !module.containsKey("staticForeignExports") &&
             !module.containsKey("staticForeignExportRegistration"), "mixed foreign obligations")
         val inputs = native && raw is Map<*, *> && raw.containsKey("buildInputs")
+        val partial = native && raw is Map<*, *> && raw.containsKey("availableEntries")
         val fields = record(raw, "schema format profile unit target componentSha256 bitcodeSha256 bitcodeHex abi" +
-            if (inputs) " buildInputs" else "")
+            (if (inputs) " buildInputs" else "") + (if (partial) " availableEntries" else ""))
         if (inputs) check(fields["buildInputs"] is Map<*, *>, "build inputs record")
         val format = text(fields["format"])
         check(version(fields["schema"], 1) && (format == "llvm-bitcode" || native && format == "llvm-embedded-elf" &&
@@ -144,7 +145,9 @@ internal object PackageScalarLinks {
                 if (rep == "MutableByteArray#") "ByteArray#" else rep }, it.result) }.distinct().size == variants.size,
                 "ambiguous byte-array mutability variants")
         }
-        val link = PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, abi, format)
+        val available = if (partial) PackageNativeArchives.available(module) else null
+        val link = PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes,
+            abi.filter { available == null || it.entry in available }, format)
         if (native && !module.containsKey("staticForeignImports")) {
             check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"),
                 "foreign products lack import provenance")
@@ -208,6 +211,6 @@ internal object PackageScalarLinks {
             proved.add(signature.entry)
         }
         check(proof["expectedCalls"] == calls(module["bindings"]), "retained Core foreign inventory differs")
-        return PackageScalarAdmission(link, proved)
+        return PackageScalarAdmission(link, proved.intersect(link.abi.map { it.entry }.toSet()))
     }
 }

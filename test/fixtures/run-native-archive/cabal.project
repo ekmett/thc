@@ -1,4 +1,4 @@
-packages: mixed unresolved
+packages: mixed unresolved poisoned provider
 jobs: 1
 tests: False
 benchmarks: False
