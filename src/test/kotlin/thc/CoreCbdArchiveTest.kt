@@ -103,7 +103,7 @@ class CoreCbdArchiveTest {
             repeat(2) { iteration -> CoreCompactFile(path, sha(bytes), mappings = maps, slabs = slabs).use { file ->
                 file.header()
                 assertEquals(0L, file.counters.statistics().memberInflations)
-                assertEquals(42, file.data(0) { it.byte() })
+                assertEquals(42, file.data(0) { it.readByte() })
                 assertEquals(1L, file.counters.statistics().dataBytesRead)
                 assertEquals(if (iteration == 0) 1000L else 0L, file.counters.statistics().inflatedBytes)
                 assertEquals(iteration.toLong(), file.counters.statistics().slabCacheHits)
@@ -198,7 +198,7 @@ class CoreCbdArchiveTest {
         val path = write(bytes)
         CoreFileMappings(10000, 2).use { maps ->
             CoreCompactFile(path, sha(bytes), mappings = maps).use { file ->
-                assertEquals(42, file.data(0) { it.byte() })
+                assertEquals(42, file.data(0) { it.readByte() })
                 assertEquals(0L, file.counters.statistics().verifiedStoredBytes)
                 assertEquals(0L, file.counters.statistics().hashBytesRead)
             }

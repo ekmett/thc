@@ -26,13 +26,13 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return strings.getOrPut(span) { file.string(span.first, span.second) }
     }
     private fun ordinal(cursor: CoreCompactCursor) = "\u0000compact-local:${cursor.unsigned()}"
-    private fun id(cursor: CoreCompactCursor): String = when (val tag = cursor.byte()) {
+    private fun id(cursor: CoreCompactCursor): String = when (val tag = cursor.readByte()) {
         0 -> text(cursor)
         1 -> ordinal(cursor)
         else -> error("Invalid compact Core identity tag: $tag")
     }
     private fun entry(cursor: CoreCompactCursor, target: MutableMap<String, Any?>) {
-        when (val tag = cursor.byte()) {
+        when (val tag = cursor.readByte()) {
             0 -> Unit
             1 -> target["type"] = "IO ()"
             2 -> target["type"] = "State# RealWorld"
@@ -40,7 +40,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         }
     }
     private inline fun <T> list(cursor: CoreCompactCursor, read: () -> T): List<T> = List(cursor.count()) { read() }
-    private inline fun <T> presence(cursor: CoreCompactCursor, read: () -> T): Any? = when (val tag = cursor.byte()) {
+    private inline fun <T> presence(cursor: CoreCompactCursor, read: () -> T): Any? = when (val tag = cursor.readByte()) {
         0 -> Missing
         1 -> null
         2 -> read()
@@ -53,11 +53,11 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private inline fun <T> element(cursor: CoreCompactCursor, read: () -> T): Any? = presence(cursor, read).also {
         require(it !== Missing) { "Missing compact Core array element" }
     }
-    private fun enum(cursor: CoreCompactCursor, values: List<String>): String = values.getOrNull(cursor.byte())
+    private fun enum(cursor: CoreCompactCursor, values: List<String>): String = values.getOrNull(cursor.readByte())
         ?: error("Invalid compact Core enumeration")
     private fun vector(cursor: CoreCompactCursor) = mapOf("lanes" to cursor.unsigned(), "element" to enum(cursor, ELEMENTS))
     private fun primitive(cursor: CoreCompactCursor): String {
-        val tag = cursor.byte()
+        val tag = cursor.readByte()
         if (tag == 16) {
             val vector = vector(cursor)
             return "VecRep ${vector["lanes"]} ${vector["element"]}"
@@ -67,7 +67,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
 
     private fun shapeUse(cursor: CoreCompactCursor): Shape {
         val at = cursor.position
-        return when (val tag = cursor.byte()) {
+        return when (val tag = cursor.readByte()) {
             0 -> {
                 require(readingShapes.add(at)) { "Cyclic compact Core shape reference" }
                 try {
@@ -81,7 +81,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
                 val target = cursor.unsigned()
                 require(target < at && target !in readingShapes) { "Forward or cyclic compact Core shape reference" }
                 shapes[target] ?: file.data(target) { selected ->
-                    require(selected.byte() == 0) { "Compact Core shape reference is not a definition" }
+                    require(selected.readByte() == 0) { "Compact Core shape reference is not a definition" }
                     require(readingShapes.add(target)) { "Cyclic compact Core shape reference" }
                     try { shape(selected, false).also { shapes[target] = it } }
                     finally { readingShapes.remove(target) }
@@ -104,7 +104,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     }
     private fun evaluation(cursor: CoreCompactCursor, shape: Shape): Map<String, Any?> {
         val result = LinkedHashMap(shape.fields)
-        field(cursor, result, "evaluated") { cursor.boolean() }
+        field(cursor, result, "evaluated") { cursor.readBoolean() }
         for (key in listOf("components", "alternatives")) {
             val children = shape.fields[key] as? List<*> ?: continue
             result[key] = children.map { evaluation(cursor, it as Shape) }
@@ -119,8 +119,8 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private fun info(cursor: CoreCompactCursor): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>()
         field(cursor, result, "joinArity") { cursor.unsigned() }
-        field(cursor, result, "cbvEligible") { cursor.boolean() }
-        field(cursor, result, "cbvMarks") { list(cursor) { cursor.boolean() } }
+        field(cursor, result, "cbvEligible") { cursor.readBoolean() }
+        field(cursor, result, "cbvMarks") { list(cursor) { cursor.readBoolean() } }
         return result
     }
     private fun binder(cursor: CoreCompactCursor): Map<String, Any?> {
@@ -128,8 +128,8 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         val id = ordinal(cursor)
         val result = linkedMapOf<String, Any?>("id" to id, "name" to id, "compactOrigin" to origin)
         entry(cursor, result)
-        field(cursor, result, "lifted") { cursor.boolean() }
-        field(cursor, result, "coercion") { cursor.boolean() }
+        field(cursor, result, "lifted") { cursor.readBoolean() }
+        field(cursor, result, "coercion") { cursor.readBoolean() }
         field(cursor, result, "rep") { rep(cursor) }
         field(cursor, result, "info") { info(cursor) }
         return result
@@ -150,11 +150,11 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         val id = id(cursor)
         val result = linkedMapOf<String, Any?>("id" to id, "name" to id, "compactOrigin" to origin)
         entry(cursor, result)
-        field(cursor, result, "lifted") { cursor.boolean() }
+        field(cursor, result, "lifted") { cursor.readBoolean() }
         result["arity"] = cursor.unsigned()
         field(cursor, result, "rep") { rep(cursor) }
         field(cursor, result, "info") { info(cursor) }
-        field(cursor, result, "entryStrict") { list(cursor) { cursor.boolean() } }
+        field(cursor, result, "entryStrict") { list(cursor) { cursor.readBoolean() } }
         field(cursor, result, "entryStrictSource") { text(cursor) }
         field(cursor, result, "joinValueArity") { cursor.unsigned() }
         field(cursor, result, "joinResultRep") { rep(cursor) }
@@ -162,17 +162,17 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return result
     }
     private fun demand(cursor: CoreCompactCursor) = mapOf("arity" to cursor.unsigned(),
-        "strictArgs" to list(cursor) { cursor.boolean() })
+        "strictArgs" to list(cursor) { cursor.readBoolean() })
     private fun family(cursor: CoreCompactCursor): Map<String, Any?> = mapOf("typeConstructor" to text(cursor),
         "constructors" to list(cursor) { text(cursor) })
     private fun tagFamily(cursor: CoreCompactCursor) = family(cursor) + mapOf("smallFamilyLimit" to cursor.unsigned(),
-        "smallFamily" to cursor.boolean())
+        "smallFamily" to cursor.readBoolean())
     private fun foreign(cursor: CoreCompactCursor, inline: Boolean = false): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>("schema" to cursor.unsigned())
-        result["target"] = when (val tag = cursor.byte()) {
+        result["target"] = when (val tag = cursor.readByte()) {
             0 -> linkedMapOf<String, Any?>("kind" to "static", "symbol" to text(cursor)).also { target ->
                 field(cursor, target, "unit") { text(cursor) }
-                target["isFunction"] = cursor.boolean()
+                target["isFunction"] = cursor.readBoolean()
             }
             1 -> mapOf("kind" to "dynamic")
             else -> error("Invalid compact Core foreign target: $tag")
@@ -191,7 +191,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         val result = linkedMapOf<String, Any?>("compactOrigin" to origin)
         field(cursor, result, "rep") { rep(cursor) }
         field(cursor, result, "resultRep") { rep(cursor) }
-        field(cursor, result, "entryStrict") { list(cursor) { cursor.boolean() } }
+        field(cursor, result, "entryStrict") { list(cursor) { cursor.readBoolean() } }
         field(cursor, result, "entryStrictSource") { text(cursor) }
         field(cursor, result, "callDemand") { demand(cursor) }
         field(cursor, result, "foreignCall") { foreign(cursor) }
@@ -203,7 +203,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     }
     private fun expression(cursor: CoreCompactCursor): List<Any?> {
         val origin = origin(cursor.position)
-        val tag = cursor.byte()
+        val tag = cursor.readByte()
         require(tag in 0..8) { "Invalid compact Core expression tag: $tag" }
         val metadata = meta(cursor, origin)
         val fields: List<Any?> = when (tag) {
@@ -213,9 +213,9 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
             3 -> listOf("lam", list(cursor) { binder(cursor) }, expression(cursor))
             4 -> listOf("con", text(cursor), cursor.unsigned())
             5 -> listOf("app", expression(cursor), list(cursor) { expression(cursor) },
-                list(cursor) { element(cursor) { cursor.boolean() } },
-                cursor.boolean(), cursor.boolean())
-            6 -> listOf("let", cursor.boolean(), list(cursor) { binding(cursor) }, expression(cursor))
+                list(cursor) { element(cursor) { cursor.readBoolean() } },
+                cursor.readBoolean(), cursor.readBoolean())
+            6 -> listOf("let", cursor.readBoolean(), list(cursor) { binding(cursor) }, expression(cursor))
             7 -> {
                 val scrutinee = expression(cursor)
                 val binderId = ordinal(cursor)
@@ -230,7 +230,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return fields + metadata
     }
     private fun alternative(cursor: CoreCompactCursor): List<Any?> {
-        val (kind, discriminator) = when (val tag = cursor.byte()) {
+        val (kind, discriminator) = when (val tag = cursor.readByte()) {
             0 -> "default" to null
             1 -> "data" to text(cursor)
             2 -> "lit" to literal(cursor)
@@ -240,7 +240,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         return listOf(kind, discriminator, binders.map { it["id"] }, expression(cursor), mapOf("binders" to binders))
     }
     private fun literal(cursor: CoreCompactCursor): List<Any?> {
-        val tag = cursor.byte()
+        val tag = cursor.readByte()
         val kind = LITERALS.getOrNull(tag) ?: error("Invalid compact Core literal tag: $tag")
         val value: Any = when (tag) {
             0, 2, 3, 4, 5 -> cursor.signed().also {
@@ -272,8 +272,8 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         val id = text(cursor)
         val result = linkedMapOf<String, Any?>("id" to id, "name" to id, "arity" to cursor.unsigned(),
             "tag" to cursor.unsigned(), "kind" to enum(cursor, listOf("boxed", "unboxed-tuple", "unboxed-sum", "newtype")),
-            "strictFields" to list(cursor) { cursor.boolean() },
-            "fieldLifted" to list(cursor) { element(cursor) { cursor.boolean() } },
+            "strictFields" to list(cursor) { cursor.readBoolean() },
+            "fieldLifted" to list(cursor) { element(cursor) { cursor.readBoolean() } },
             "fieldReps" to list(cursor) { element(cursor) { list(cursor) { primitive(cursor) } } },
             "fieldTypes" to list(cursor) { rep(cursor, true) })
         field(cursor, result, "sumArity") { cursor.unsigned() }
@@ -314,9 +314,9 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private fun targetLayout(cursor: CoreCompactCursor): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>("format" to "thc-target-layout", "schema" to cursor.unsigned())
         result["compiler"] = listOf("id", "abi", "platform", "way").associateWith { text(cursor) }
-        val layout = linkedMapOf<String, Any?>("schema" to cursor.unsigned(), "profiled" to cursor.boolean(),
+        val layout = linkedMapOf<String, Any?>("schema" to cursor.unsigned(), "profiled" to cursor.readBoolean(),
             "wordBytes" to cursor.unsigned(), "endianness" to enum(cursor, listOf("little", "big")),
-            "targetPlatform" to text(cursor), "tablesNextToCode" to cursor.boolean())
+            "targetPlatform" to text(cursor), "tablesNextToCode" to cursor.readBoolean())
         for (key in LAYOUT_NUMBERS) layout[key] = cursor.unsigned()
         result["layout"] = layout
         return result
@@ -327,7 +327,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
         field(cursor, result, "stubs") {
             linkedMapOf<String, Any?>("header" to text(cursor), "source" to text(cursor)).also { stubs ->
                 for (key in listOf("initializers", "finalizers")) stubs[key] = list(cursor) {
-                    mapOf("isInitializer" to cursor.boolean(), "unit" to text(cursor),
+                    mapOf("isInitializer" to cursor.readBoolean(), "unit" to text(cursor),
                         "module" to text(cursor), "name" to text(cursor))
                 }
             }
@@ -344,7 +344,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private fun convention(cursor: CoreCompactCursor) = enum(cursor, listOf("ccall", "capi", "stdcall", "prim", "javascript"))
     private fun safety(cursor: CoreCompactCursor) = enum(cursor, listOf("unsafe", "safe", "interruptible"))
     private fun qualifiedName(cursor: CoreCompactCursor) = strings(cursor, "unit", "module", "occurrence", "namespace")
-    private fun foreignType(cursor: CoreCompactCursor): Map<String, Any?> = when (val tag = cursor.byte()) {
+    private fun foreignType(cursor: CoreCompactCursor): Map<String, Any?> = when (val tag = cursor.readByte()) {
         0 -> mapOf("kind" to "tycon", "name" to qualifiedName(cursor), "arguments" to list(cursor) { foreignType(cursor) })
         1 -> mapOf("kind" to "application", "function" to foreignType(cursor), "argument" to foreignType(cursor))
         2 -> mapOf("kind" to "function", "multiplicity" to foreignType(cursor), "argument" to foreignType(cursor),
@@ -374,7 +374,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
                 field(cursor, entry, "header") { text(cursor) }
                 entry["symbol"] = text(cursor)
                 field(cursor, entry, "unit") { text(cursor) }
-                entry["isFunction"] = cursor.boolean()
+                entry["isFunction"] = cursor.readBoolean()
                 entry["convention"] = convention(cursor); entry["safety"] = safety(cursor)
                 entry["declaredType"] = foreignType(cursor); entry["normalizedType"] = foreignType(cursor)
                 entry["normalizationRole"] = text(cursor); entry["emitted"] = emitted(cursor)
@@ -451,7 +451,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
     private fun nativeBuildInputs(cursor: CoreCompactCursor): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>()
         result["translationUnits"] = list(cursor) {
-            when (val tag = cursor.byte()) {
+            when (val tag = cursor.readByte()) {
                 0 -> compileInput(cursor)
                 1 -> list(cursor) { compileInput(cursor) }
                 else -> error("Invalid compact native compile group: $tag")
@@ -487,7 +487,7 @@ internal class CoreCompactRecords(private val file: CoreCompactFile, private val
             val flags = linkedMapOf<String, Boolean>()
             repeat(cursor.count()) {
                 val name = text(cursor)
-                require(flags.putIfAbsent(name, cursor.boolean()) == null) { "Duplicate compact native source flag" }
+                require(flags.putIfAbsent(name, cursor.readBoolean()) == null) { "Duplicate compact native source flag" }
             }
             flags
         }
