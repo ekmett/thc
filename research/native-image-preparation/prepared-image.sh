@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+# Experimental runtime-graph preparation; retain normal compiler checks.
+# Not the supported pure-interpreter recipe or evidence of guest JIT/AOT.
+set -euo pipefail
+if (( $# < 1 || $# > 2 )); then
+    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build]' >&2
+    exit 2
+fi
+recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_dir=$(cd -- "$1" && pwd)
+mode=${2:-build}
+[[ "$mode" == prepare-only || "$mode" == build ]] || exit 2
+: "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
+unset JAVA_TOOL_OPTIONS THC_BACKEND JAVA_OPTS THC_OPTS JDK_JAVA_OPTIONS GHC_PACKAGE_PATH GHC_ENVIRONMENT
+[[ "$("$JAVA_HOME/bin/native-image" --version)" == *25.3.4.1* ]] || exit 2
+cd "$repo_dir"
+classpath=
+for jar in build/install/thc/lib/*.jar; do
+    case "${jar##*/}" in llvm-*|antlr4-*|truffle-nfi-*) continue ;; esac
+    classpath="${classpath:+$classpath:}$repo_dir/$jar"
+done
+test -f build/install/thc/lib/thc-0.1-experiment.jar
+probe_dir="$repo_dir/build/native-image/reproduction-probe"
+inventory_dir="$repo_dir/build/native-image/reproduction-inventory"
+mkdir -p "$probe_dir" "$inventory_dir"
+"$JAVA_HOME/bin/javac" -d "$probe_dir" "$recipe_dir/ClassInitializationInventory.java"
+for kind in stateless companions markers enums; do
+    "$JAVA_HOME/bin/java" -Xmx512m -XX:-UseJVMCICompiler -cp "$probe_dir:$classpath" \
+        ClassInitializationInventory build/install/thc/lib/thc-0.1-experiment.jar "$kind" \
+        > "$inventory_dir/$kind.txt"
+done
+initialization=
+while IFS= read -r prepared; do
+    [[ -z "$prepared" || "$prepared" == \#* ]] && continue
+    [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
+    initialization="${initialization:+$initialization,}$prepared"
+done < "$repo_dir/scripts/native-image/pure-initialization.txt"
+for kind in stateless companions markers enums; do
+    initialization="$initialization,$(<"$inventory_dir/$kind.txt")"
+done
+while IFS= read -r prepared; do
+    [[ -z "$prepared" || "$prepared" == \#* ]] && continue
+    [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
+    initialization="$initialization,$prepared"
+done < "$recipe_dir/prepared-initialization.txt"
+initialization_args="$inventory_dir/prepared-initialization.args"
+printf '%s\n' "--initialize-at-build-time=$initialization" > "$initialization_args"
+[[ "$mode" == prepare-only ]] && exit 0
+diagnostics=()
+if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
+    diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
+fi
+exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+    --add-modules=jdk.incubator.vector \
+    --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
+    --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
+    "@$initialization_args" \
+    -H:+UnlockExperimentalVMOptions -H:+PrintCanonicalGraphStrings \
+    -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
+    "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
+    -cp "$classpath" thc.MainKt "$repo_dir/build/native-image/thc-reproduced-prepared"

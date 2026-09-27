@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+# Individually inspected additions to the generated research inventory.
+# This is not the public pure-interpreter initialization inventory.
+kotlin.Function
+kotlin.SynchronizedLazyImpl
+kotlin.UNINITIALIZED_VALUE
+kotlin.Unit
+kotlin.collections.AbstractList
+kotlin.collections.AbstractList$Companion
+kotlin.collections.EmptyIterator
+kotlin.collections.EmptyList
+kotlin.collections.EmptyMap
+kotlin.enums.EnumEntriesList
+kotlin.jvm.functions.Function0
+kotlin.jvm.internal.CollectionToArray
+thc.runtime.ApplicationKt
+thc.runtime.ArgumentLayoutKt
+thc.runtime.AtomicAddressOp
+thc.runtime.BytecodeRootGen$AbstractBytecodeNode
+thc.runtime.BytecodeRootGen$CachedBytecodeNode
+thc.runtime.BytecodeRootGen$InstructionDescriptorImpl
+thc.runtime.BytecodeRootGen$InstructionDescriptorList
+thc.runtime.BytecodeRootGen$Instructions$ArgumentDescriptorImpl
+thc.runtime.CoreRepresentation
+thc.runtime.GmpForeignOp
+thc.runtime.GuestThreadOps
+thc.runtime.HandoffKt
+thc.runtime.ManagedAddressRead
+thc.runtime.ManagedArray
+thc.runtime.ManagedMVar
+thc.runtime.ManagedMd5
+thc.runtime.ManagedMutVar
+thc.runtime.ManagedWeaks
+thc.runtime.PosixStat
+thc.runtime.SigsetImage
+thc.runtime.StdioHostAbi
+thc.runtime.SumShape
+thc.runtime.TermiosImage
+# Only a fieldless companion and a private Object lock are initialized here.
+# WindowsCodePages$Abi/$Api native resources and context instances stay runtime.
+thc.runtime.WindowsCodePages
