@@ -257,9 +257,12 @@ internal class DelimitedActionSite(private val language: Language, private val m
         return ownedTupleResult(result, shape)
     }
     fun handle(frame: VirtualFrame, cut: DelimitedCut, shape: TupleShape): Any? {
-        val continuation = DelimitedStack(cut, shape).closure(language, metrics)
+        val continuation = snapshot(cut, shape)
         return invoke(frame, cut.handler, arrayOf(continuation, Unit), shape)
     }
+    @TruffleBoundary
+    private fun snapshot(cut: DelimitedCut, shape: TupleShape): Closure =
+        DelimitedStack(cut, shape).closure(language, metrics)
     fun prompt(frame: VirtualFrame, tag: Any?, action: Any?, state: Any?, shape: TupleShape): Any? {
         requireVoidCarrier(state)
         val identity = DelimitedControl.tag(this, tag)

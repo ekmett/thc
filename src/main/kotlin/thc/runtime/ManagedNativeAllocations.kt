@@ -12,6 +12,7 @@ import java.lang.foreign.MemoryLayout
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.function.ToLongFunction
 import thc.Language
 
 /** Native allocations are explicitly owned until their matching deallocator or
@@ -71,6 +72,8 @@ internal class ManagedNativeAllocations(private val env: TruffleLanguage.Env) {
         }
         @TruffleBoundary fun requireLive() { borrow().use {} }
         @TruffleBoundary fun <T> access(body: (MemorySegment) -> T): T = borrow().use { body(it.segment()) }
+        @TruffleBoundary fun accessLong(body: ToLongFunction<MemorySegment>): Long =
+            borrow().use { body.applyAsLong(it.segment()) }
     }
     @Synchronized @TruffleBoundary fun malloc(size: Long): ManagedAddress {
         current()

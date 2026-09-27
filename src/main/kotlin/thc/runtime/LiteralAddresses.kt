@@ -17,6 +17,7 @@ import java.nio.ByteOrder
 import java.nio.ByteBuffer
 import java.lang.foreign.MemorySegment
 import java.lang.foreign.ValueLayout
+import java.util.function.ToLongFunction
 
 /** An Addr# carrier with managed storage or an unowned numeric bit pattern.
  * Static literals may acquire a real, context-owned native image. Storage-backed
@@ -60,6 +61,11 @@ internal class ManagedAddress private constructor(
         if (native != null) native.access { body(it.asSlice(offset)) }
         else synchronized(owner ?: fault("Address has no owned native allocation")) {
             body((owner.nativeSegment() ?: fault("Address has no owned native allocation")).asSlice(offset))
+        }
+    internal fun withNativeSegmentLong(body: ToLongFunction<MemorySegment>): Long =
+        if (native != null) native.accessLong { body.applyAsLong(it.asSlice(offset)) }
+        else synchronized(owner ?: fault("Address has no owned native allocation")) {
+            body.applyAsLong((owner.nativeSegment() ?: fault("Address has no owned native allocation")).asSlice(offset))
         }
     internal fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
         if (native == null) return other.withNativeBorrow(body)
@@ -320,7 +326,7 @@ internal class ManagedAddress private constructor(
 
     /** Both backing variants use byte offsets and return zero-extended Word8#. */
     fun readWord8(displacement: Long): Long {
-        native?.let { allocation -> return allocation.access { segment ->
+        native?.let { allocation -> return allocation.accessLong { segment ->
             requireRange(displacement, 1)
             segment.get(ValueLayout.JAVA_BYTE, offset + displacement).toLong() and 255L
         } }
@@ -339,12 +345,12 @@ internal class ManagedAddress private constructor(
      * allocation cannot be freed and an owner cannot shrink while scanning. */
     @TruffleBoundary
     fun cStringLength(): Long {
-        native?.let { allocation -> return allocation.access { segment ->
+        native?.let { allocation -> return allocation.accessLong { segment ->
             requireRange(0, 0)
             val limit = segment.byteSize() - offset
             var length = 0L
             while (length < limit) {
-                if (segment.get(ValueLayout.JAVA_BYTE, offset + length) == 0.toByte()) return@access length
+                if (segment.get(ValueLayout.JAVA_BYTE, offset + length) == 0.toByte()) return@accessLong length
                 length++
             }
             fault("Unterminated original C string inside managed Addr#")
