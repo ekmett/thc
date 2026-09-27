@@ -12,6 +12,8 @@ import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
+import java.lang.management.ManagementFactory
+import com.sun.management.HotSpotDiagnosticMXBean
 
 class AstTailSpillTest {
     private val proof = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
@@ -31,7 +33,17 @@ class AstTailSpillTest {
     @Test fun failedSharedUpdateKeepsItsFailureWithoutReplayingTheCompactedPrefix() =
         chain(shared = true, failure = true, cleanup = 16)
 
+    @Test fun savedCatchKeepsTheOriginalUnforcedPayloadAndMaskCleanup() = chain(caught = true, cleanup = 16)
+
+    private fun checkRequestedStackSize() {
+        System.getProperty("thc.test.stackKiB")?.let { expected ->
+            assertEquals(expected, ManagementFactory.getPlatformMXBean(HotSpotDiagnosticMXBean::class.java)
+                .getVMOption("ThreadStackSize").value, "Observe the actual bounded test JVM, not argument order")
+        }
+    }
+
     @Test fun nestedAnchorDoesNotCaptureTailTransfersAcrossItsNonTailCaller() {
+        checkRequestedStackSize()
         Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build().use { context ->
             context.initialize("thc"); context.enter()
             try {
@@ -104,7 +116,8 @@ class AstTailSpillTest {
     }
 
     private fun chain(nonTail: Boolean = false, cleanup: Int = -1, compiled: Boolean = false,
-                      shared: Boolean = false, failure: Boolean = false) {
+                      shared: Boolean = false, failure: Boolean = false, caught: Boolean = false) {
+        checkRequestedStackSize()
         val builder = Context.newBuilder("thc").allowExperimentalOptions(true)
         if (compiled) builder.option("engine.BackgroundCompilation", "false")
             .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", "false")
@@ -120,8 +133,12 @@ class AstTailSpillTest {
                 var iterations = 0
                 var finished = 0
                 var cleanups = 0
+                var catches = 0
                 var outerPrefixes = 0
                 var outerSuffixes = 0
+                val payload = Thunk(object : RootNode(language) {
+                    override fun execute(frame: VirtualFrame): Nothing = error("Exception payload was forced")
+                }.callTarget, null)
                 lateinit var owner: FunctionRoot
                 var next: RootCallTarget? = null
                 for (index in count - 1 downTo 0) {
@@ -139,7 +156,7 @@ class AstTailSpillTest {
                                 else MaskingState.UNMASKED, ambient)
                             if (following == null) {
                                 if (++finished == laps) {
-                                    if (failure) throw GuestException("compacted failure", this)
+                                    if (failure || caught) throw GuestException(payload, this)
                                     return 73L
                                 }
                                 tail.check(frame, owner.callTarget, arrayOf(bloom))
@@ -158,9 +175,16 @@ class AstTailSpillTest {
                                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
                                         SynchronousMasking.set(owner, MaskingState.MASKED_INTERRUPTIBLE)
                                         try { return resumeAstSteps(frame, steps, input) }
+                                        catch (guest: GuestException) {
+                                            if (!caught) throw guest
+                                            assertSame(payload, guest.payload); catches++; return 73L
+                                        }
                                         finally { cleanups++; SynchronousMasking.set(owner, ambient) }
                                     }
                                 } }
+                            } catch (guest: GuestException) {
+                                if (!caught) throw guest
+                                assertSame(payload, guest.payload); catches++; return 73L
                             } finally {
                                 if (!captured) cleanups++
                                 SynchronousMasking.set(this, ambient)
@@ -237,6 +261,8 @@ class AstTailSpillTest {
                 assertEquals(if (nonTail) 1 else 0, outerPrefixes)
                 assertEquals(if (nonTail) 1 else 0, outerSuffixes)
                 assertEquals(if (cleanup >= 0) laps else 0, cleanups)
+                assertEquals(if (caught) 1 else 0, catches)
+                assertEquals(0, payload.state, "Catch/update transport never enters the exception payload")
                 assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner))
                 assertNull(scope.tailAnchor)
                 assertEquals(0, scope.depth); assertFalse(scope.driving)
