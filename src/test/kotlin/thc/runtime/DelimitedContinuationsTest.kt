@@ -542,7 +542,7 @@ class DelimitedContinuationsTest {
                                 return next()
                             }
                         }).freeze(this, frame.materialize()).also { children += it }
-                    override fun execute(frame: VirtualFrame): Any = cut(frame, AstStackSpill) {
+                    override fun execute(frame: VirtualFrame): Any = cut(frame, AstStackSpill.INSTANCE) {
                         when (mode) {
                             0 -> cut(frame, Unit) {
                                 shape.layout.create().also { shape.layout.setObject(it, 0, payload) }
@@ -573,7 +573,7 @@ class DelimitedContinuationsTest {
                                                 input: DelimitedResume, ambient: MaskingState,
                                                 outerMask: DelimitedStep?): Any? {
                                 val result = input.get()
-                                throw AstCapture(AstStackSpill, SynchronousMasking.current(node))
+                                throw AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(node))
                                     .append(object : AstResumeStep {
                                         override fun resume(frame: VirtualFrame, input: Any?): Any? {
                                             assertSame(Unit, input)
@@ -614,7 +614,7 @@ class DelimitedContinuationsTest {
                     mode = 0
                     assertSame(payload, shape.layout.getObject(root.resume(image) as HandoffStorage, 0))
                     assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
-                    assertEquals(0, astStackScope(root).depth)
+                    assertEquals(0, AstStackKt.astStackScope(root).depth)
                     assertNull(threads.poll(root))
                 } finally { threads.leaveCurrent() }
             } finally { context.leave() }
@@ -723,7 +723,7 @@ class DelimitedContinuationsTest {
                 val scheduled = object : Expr() {
                     private fun cut(slots: IntArray? = null, offset: Int = 0): Nothing {
                         events += "join prefix"
-                        throw AstCapture(AstStackSpill, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                        throw AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? {
                                 assertSame(Unit, input)
                                 events += "join suffix"
@@ -798,7 +798,7 @@ class DelimitedContinuationsTest {
                     override fun execute(frame: VirtualFrame): Nothing = error("tuple-only model")
                     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
                         effects++
-                        throw AstCapture(AstStackSpill, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                        throw AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this)).append(object : AstResumeStep {
                             override fun resume(frame: VirtualFrame, input: Any?): Any? {
                                 assertSame(Unit, input)
                                 FrameAccess.writeLong(frame, slots[offset], 42L)

@@ -252,7 +252,7 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
                                     private val slots: IntArray?, private val offset: Int) : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
             try {
-                try { resumeAstSteps(frame, steps, input) }
+                try { AstContinuationKt.resumeAstSteps(frame, steps, input) }
                 catch (jump: LocalJoinJump) {
                     if (jump.target.group !== region.group) throw jump
                     val once = region.single

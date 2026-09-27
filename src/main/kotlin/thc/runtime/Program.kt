@@ -360,10 +360,10 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         for (i in argumentSlots.indices) {
             val from = argumentIndices[i]
             val to = argumentSlots[i]
-            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.int(frame, node, null, from))
-            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.long(frame, node, null, from))
-            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.float(frame, node, null, from))
-            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.double(frame, node, null, from))
+            if (entry.packet.isInt(entry.header + from)) FrameAccess.writeInt(frame, to, source.readInt(frame, node, null, from))
+            else if (entry.packet.isLong(entry.header + from)) FrameAccess.writeLong(frame, to, source.readLong(frame, node, null, from))
+            else if (entry.packet.isFloat(entry.header + from)) FrameAccess.writeFloat(frame, to, source.readFloat(frame, node, null, from))
+            else if (entry.packet.isDouble(entry.header + from)) FrameAccess.writeDouble(frame, to, source.readDouble(frame, node, null, from))
             else {
                 val value = source.reference(frame, node, null, from)
                 val expected = argumentReferences.getOrNull(i)
@@ -428,7 +428,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
 
     override fun execute(frame: VirtualFrame): Any? {
         if (!capturesContinuations) return executeInitial(frame, false)
-        val stack = astStackScope(this)
+        val stack = AstStackKt.astStackScope(this)
         val driver = !stack.driving
         if (driver) stack.driving = true
         return try {
@@ -438,7 +438,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             // Drain only after all nested guest activations have returned.
             val saved = when (result) {
                 is AstTailYield -> result.continuation
-                else -> savedGuestContinuation(result)
+                else -> SavedGuestContinuationKt.savedGuestContinuation(result)
             }
             if (driver && saved?.stackSpill() == true && saved.asyncRequest() == null)
                 entryForce.drainStack(saved)
@@ -479,7 +479,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         if (cut.yielded is AstPendingTail && isTailSpillIdentityRoot()) {
             val pending = cut.pendingTail()
             if (pending != null && role == FunctionRootRole.PASS_THROUGH) {
-                astStackScope(this).compactedFrames++
+                AstStackKt.astStackScope(this).compactedFrames++
                 return AstTailYield(pending.child, pending.target)
             }
             if (role == FunctionRootRole.FUNCTION) {
@@ -495,9 +495,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private fun captureStack(frame: MaterializedFrame): AstContinuation {
         if (thc.Language.currentState(this).stm.hasTransaction())
             throw UnsupportedCore("AST stack spilling across an active STM transaction is unsupported")
-        astStackScope(this).spills++
-        return AstCapture(AstStackSpill, SynchronousMasking.current(this))
-            .append(ResumeBody(this)).freeze(this, frame, rootEntrySpill = true)
+        AstStackKt.astStackScope(this).spills++
+        return AstCapture(AstStackSpill.INSTANCE, SynchronousMasking.current(this))
+            .append(ResumeBody(this)).freeze(this, frame, true)
     }
 
     private fun executeCapturableBody(frame: VirtualFrame): Any? {
@@ -634,7 +634,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false,
               private val outlineCaseArms: Boolean = false) : ExecutableProgram {
-    override val asynchronousExceptions get() = enableAsync
+    override fun getAsynchronousExceptions() = enableAsync
     private val capturesContinuations = enableAsync || outlineCaseArms
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
     private val demand = moduleData["demandBindings"] as? CoreDemandBindings

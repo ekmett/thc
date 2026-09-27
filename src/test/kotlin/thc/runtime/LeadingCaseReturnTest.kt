@@ -72,8 +72,8 @@ class LeadingCaseReturnTest {
                 "charIndex" to 21, "charLength" to 3)))
     private fun each(enabled: Boolean = true, notes: Boolean = true, diagnostic: Boolean = false,
                      bindings: List<Map<String, Any?>>, action: (String, ExecutableProgram) -> Unit) {
-        val previous = System.getProperty(LEADING_CASE_RETURN_PROPERTY)
-        System.setProperty(LEADING_CASE_RETURN_PROPERTY, enabled.toString())
+        val previous = System.getProperty(LeadingCaseReturn.LEADING_CASE_RETURN_PROPERTY)
+        System.setProperty(LeadingCaseReturn.LEADING_CASE_RETURN_PROPERTY, enabled.toString())
         try {
             executionContext().use { context ->
                 context.initialize("thc"); context.enter()
@@ -85,7 +85,7 @@ class LeadingCaseReturnTest {
                     }
                 } finally { context.leave() }
             }
-        } finally { if (previous == null) System.clearProperty(LEADING_CASE_RETURN_PROPERTY) else System.setProperty(LEADING_CASE_RETURN_PROPERTY, previous) }
+        } finally { if (previous == null) System.clearProperty(LeadingCaseReturn.LEADING_CASE_RETURN_PROPERTY) else System.setProperty(LeadingCaseReturn.LEADING_CASE_RETURN_PROPERTY, previous) }
     }
     private fun run(p: ExecutableProgram, name: String, vararg args: Any?): Any? =
         Calls.target(p.hostEntryTarget(args.size), arrayOf(p.entryValue(name), arrayOf(*args)))
