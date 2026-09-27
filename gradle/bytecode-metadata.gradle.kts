@@ -214,6 +214,91 @@ class BytecodeSourceModeAccessor {
         "    }\n}\n"
 }
 
+/** Initialize only immutable compiler-certified local carriers when cached code
+ * is constructed. Operation specialization and all dynamic widening stay intact. */
+class BytecodeStaticPreparation {
+    val version = "25.3.4.1"
+    private val marker = "THC static local preparation v1"
+    private val transition = "    private void transitionToCached() {\n"
+    private val preparation = "    // $marker\n" +
+        "    @Override\n" +
+        "    protected boolean prepareForCompilation(boolean rootCompilation, int compilationTier, boolean lastTier) {\n" +
+        "        if (this.bytecode instanceof UninitializedBytecodeNode) transitionToCached();\n" +
+        "        return super.prepareForCompilation(rootCompilation, compilationTier, lastTier);\n" +
+        "    }\n\n"
+    private val oldTags = "    private static byte[] createCachedTags(int numLocals) {\n" +
+        "        byte[] localTags = new byte[numLocals];\n" +
+        "        Arrays.fill(localTags, FrameSlotKind.Illegal.tag);\n" +
+        "        return localTags;\n    }\n"
+    private val newTags = "    private static byte[] createCachedTags(int numLocals, int[] locals, Object[] constants) {\n" +
+        "        byte[] localTags = new byte[numLocals];\n" +
+        "        Arrays.fill(localTags, FrameSlotKind.Illegal.tag);\n" +
+        "        boolean[] seen = new boolean[numLocals];\n" +
+        "        for (int at = 0; at < locals.length; at += LOCALS_LENGTH) {\n" +
+        "            int local = locals[at + LOCALS_OFFSET_LOCAL_INDEX];\n" +
+        "            int index = locals[at + LOCALS_OFFSET_INFO];\n" +
+        "            Object info = index < 0 ? null : constants[index];\n" +
+        "            byte tag = info instanceof BytecodeStaticLocal proof ? proof.getKind().tag : FrameSlotKind.Illegal.tag;\n" +
+        "            if (!seen[local]) { localTags[local] = tag; seen[local] = true; }\n" +
+        "            else if (localTags[local] != tag) localTags[local] = FrameSlotKind.Illegal.tag;\n" +
+        "        }\n" +
+        "        return localTags;\n    }\n"
+    private val calls = listOf("createCachedTags(numLocals)" to "createCachedTags(numLocals, this.locals, this.constants)",
+        "createCachedTags(this.localTags_.length)" to "createCachedTags(this.localTags_.length, this.locals, clonedConstants)")
+
+    fun transform(source: String, processorVersion: String): String {
+        require(processorVersion == version) { "Review static preparation before changing Truffle $version." }
+        val unix = source.replace("\r\n", "\n")
+        fun shape(condition: Boolean) { require(condition) { "Unexpected Truffle static preparation shape." } }
+        shape(!unix.contains('\r'))
+        val crlf = source.contains("\r\n")
+        shape(!crlf || source == unix.replace("\n", "\r\n"))
+        fun replaceOnce(value: String, from: String, to: String): String {
+            val at = value.indexOf(from)
+            shape(at >= 0 && value.indexOf(from, at + from.length) < 0)
+            return value.replaceRange(at, at + from.length, to)
+        }
+        var result = unix
+        if (result.contains(marker)) {
+            result = replaceOnce(result, preparation, "")
+            result = replaceOnce(result, newTags, oldTags)
+            for ((old, changed) in calls) result = replaceOnce(result, changed, old)
+            shape(!result.contains(marker))
+        }
+        shape(!Regex("protected boolean prepareForCompilation\\(").containsMatchIn(result))
+        result = replaceOnce(result, transition, preparation + transition)
+        result = replaceOnce(result, oldTags, newTags)
+        for ((old, changed) in calls) result = replaceOnce(result, old, changed)
+        return if (crlf) result.replace("\n", "\r\n") else result
+    }
+
+    fun fixture() = "class StaticPreparationFixture {\n" + oldTags + transition + "    }\n" +
+        "    Object first() { return createCachedTags(numLocals); }\n" +
+        "    Object copy() { return createCachedTags(this.localTags_.length); }\n}\n"
+}
+
+val testBytecodeStaticPreparation = tasks.register("testBytecodeStaticPreparation") {
+    group = "verification"
+    inputs.file("gradle/bytecode-metadata.gradle.kts")
+    doLast {
+        val patch = BytecodeStaticPreparation()
+        val before = patch.fixture()
+        val after = patch.transform(before, patch.version)
+        check(patch.transform(after, patch.version) == after)
+        check(patch.transform(before.replace("\n", "\r\n"), patch.version) == after.replace("\n", "\r\n"))
+        fun rejects(source: String, version: String = patch.version) {
+            check(runCatching { patch.transform(source, version) }.exceptionOrNull() is IllegalArgumentException)
+        }
+        rejects(before, "changed-version")
+        rejects(before + before)
+        rejects(before.replace("int numLocals", "long numLocals"))
+        rejects(before.replace("createCachedTags(numLocals);", "createCachedTags(other);"))
+        rejects(after.replace("proof.getKind().tag", "FrameSlotKind.Object.tag"))
+        rejects(after.replace("super.prepareForCompilation", "otherPreparation"))
+        logger.lifecycle("Static cached-node/local metadata preparation: version, shape, clone, CRLF and idempotence controls passed.")
+    }
+}
+
 val testBytecodeSourceModeAccessor = tasks.register("testBytecodeSourceModeAccessor") {
     group = "verification"
     description = "Check the pinned generated builder's read-only lazy source-mode accessor."
@@ -304,7 +389,7 @@ val testBytecodeMetadataSplit = tasks.register("testBytecodeMetadataSplit") {
     }
 }
 
-tasks.named("check") { dependsOn(testBytecodeMetadataSplit, testBytecodeSourceModeAccessor) }
+tasks.named("check") { dependsOn(testBytecodeMetadataSplit, testBytecodeSourceModeAccessor, testBytecodeStaticPreparation) }
 tasks.matching { it.name == "kaptKotlin" }.configureEach {
     inputs.file("gradle/bytecode-metadata.gradle.kts")
     doLast {
@@ -314,7 +399,8 @@ tasks.matching { it.name == "kaptKotlin" }.configureEach {
         val source = layout.buildDirectory.file("generated/source/kapt/main/thc/runtime/BytecodeRootGen.java").get().asFile
         val before = source.readText()
         val version = checkNotNull(dependency.version)
-        val after = BytecodeSourceModeAccessor().transform(BytecodeMetadataSplitter().transform(before, version), version)
+        val after = BytecodeStaticPreparation().transform(
+            BytecodeSourceModeAccessor().transform(BytecodeMetadataSplitter().transform(before, version), version), version)
         if (before != after) source.writeText(after)
     }
 }

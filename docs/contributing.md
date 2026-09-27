@@ -159,6 +159,21 @@ accessor and rejects unknown processor versions or builder shapes.
 `BytecodeLazySourceModeTest` checks explicit source-information replay without
 changing root identity, instructions or instruction arguments.
 
+Cold bytecode compilation uses the existing cached-node transition before
+partial evaluation. The compiler can attach `BytecodeStaticLocal` metadata to
+exact, evaluated wide-integer formals with one ingress store; cached-node
+construction initializes only those local carriers. Conflicting slot metadata
+remains unknown, and ordinary writes retain the DSL's widening behavior. Async,
+captured, loop, typed-input and unknown formals keep the adaptive path. Selected
+wide add/subtract/multiply operations use stateless DSL declarations with actual
+carrier checks, not fabricated specialization history. Narrow-integer carriers
+are not selected by this wide-only rule.
+
+`testBytecodeStaticPreparation` checks the pinned preparation transform;
+`BytecodeStaticEntryTest` covers immediate compiled entry, source replay, clones
+and widening. The strict JSON/compact interoperability checks must continue to
+enter the original installed target on their first invocation without warmup.
+
 `scripts/try.sh --handoff-modes` prepares the full fixture set once and batches
 installation, diagnostic tools and both test forks. Native ABI probes still run
 once per Gradle graph because their complete host/compiler/header inputs are not
