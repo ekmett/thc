@@ -1100,7 +1100,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(36, len(consumers))
+        self.assertEqual(37, len(consumers))
+        self.assertIn("thc.runtime.Explicit64ArrayTest", consumers)
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)
         self.assertIn("thc.runtime.OriginalPathModeTest", consumers)
         self.assertIn("thc.runtime.OriginalPathLinkTest", consumers)
