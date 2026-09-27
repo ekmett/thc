@@ -65,6 +65,7 @@ import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import OriginalCurrentDirectoryFixtures (prepareOriginalCurrentDirectory)
 import OriginalDirectoryPathsFixtures (prepareOriginalDirectoryPaths)
 import OriginalDirectoryStreamsFixtures (prepareOriginalDirectoryStreams)
+import WindowsDirectoryFixtures (prepareWindowsDirectory)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
@@ -986,6 +987,7 @@ main = do
     ["original-current-directory"] -> prepareOriginalCurrentDirectory root
     ["original-directory-paths"] -> prepareOriginalDirectoryPaths root
     ["original-directory-streams"] -> prepareOriginalDirectoryStreams root
+    ["windows-directory"] -> prepareWindowsDirectory root
     ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root

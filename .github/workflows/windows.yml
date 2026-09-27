@@ -47,6 +47,11 @@ jobs:
             build/windows-smoke/
             build/windows-launcher/
             build/windows-driver/
+            build/windows-directory/*.json
+            build/windows-directory/logs/
+            build/generated/windows-directory-abi/
+            build/test-results/testDefault/
+            build/test-results/testDense/
             build/managed-md5-native*/
             build/generated/cbits/
             build/test-results/windows*SmokeTest/

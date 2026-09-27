@@ -163,6 +163,7 @@ extra-source-files:
   compiler/test-fixtures/OriginalFstatAtAudit.hs
   compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs
   compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs
+  compiler/test-fixtures/WindowsDirectoryAudit.hsc
   compiler/test-fixtures/OriginalFcntlNative.hs
   compiler/test-fixtures/OriginalErrnoAudit.hs
   compiler/test-fixtures/OriginalErrnoNative.hs
@@ -854,6 +855,7 @@ executable thc-fixtures
     OriginalFstatAtFixtures
     OriginalCurrentDirectoryFixtures
     OriginalDirectoryStreamsFixtures
+    WindowsDirectoryFixtures
     OriginalPathStatFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
