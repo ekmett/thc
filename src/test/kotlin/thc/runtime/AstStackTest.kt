@@ -295,7 +295,7 @@ class AstStackTest {
                 state.threads.enterCurrent()
                 val outer = state.threadPollState.get().astStack
                 outer.depth = 17; outer.driving = true
-                val foreign = state.threads.enterForeign()
+                val foreign = state.threads.enterForeign(ForeignSafety.SAFE)
                 try {
                     state.threads.enterCurrent()
                     try {

@@ -192,6 +192,83 @@ class GuestThreadsTest {
         assertEquals(MaskingState.UNMASKED, masks.get())
     }
 
+    @Test fun unsafeReverseEntryIsRejectedBeforeIdentityMaskOrAccountingMutation() {
+        for (crossContext in listOf(false, true)) for (alreadyEntered in listOf(false, true)) {
+            val outerMasks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+            val innerMasks = ThreadLocal.withInitial { MaskingState.UNMASKED }
+            val outer = GuestThreads(outerMasks) { }
+            val inner = if (crossContext) GuestThreads(innerMasks) { } else outer
+            outer.enterCurrent(MaskingState.MASKED_INTERRUPTIBLE)
+            val caller = outer.currentIdentity()
+            if (crossContext && alreadyEntered) inner.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+            val innerIdentity = if (!crossContext || alreadyEntered) inner.currentIdentity() else null
+            val before = if (innerIdentity != null) inner.snapshot().toList() else emptyList()
+            val previousMask = if (crossContext) innerMasks.get() else outerMasks.get()
+            try {
+                val foreign = outer.enterForeign() // Default leaf authority must stay unsafe.
+                try {
+                    val failure = assertThrows(RuntimeFault::class.java) { inner.enterCurrent() }
+                    assertTrue(failure.message!!.contains("Unsafe foreign call"))
+                    assertFalse(caller.allocationSuspended)
+                    assertEquals(previousMask, if (crossContext) innerMasks.get() else outerMasks.get())
+                    if (innerIdentity != null) {
+                        assertSame(innerIdentity, inner.currentIdentity())
+                        assertEquals(before, inner.snapshot().toList())
+                        assertFalse(innerIdentity.allocationSuspended)
+                    } else assertThrows(RuntimeFault::class.java) { inner.currentIdentity() }
+                } finally { outer.leaveForeign(foreign) }
+                // The denied entry leaves no permission or allocation residue.
+                val safe = outer.enterForeign(ForeignSafety.SAFE)
+                try {
+                    inner.enterCurrent()
+                    try {
+                        assertTrue(inner.isCurrentBound())
+                        assertNotSame(innerIdentity, inner.currentIdentity())
+                    } finally { inner.leaveCurrent() }
+                } finally { outer.leaveForeign(safe) }
+            } finally {
+                if (crossContext && alreadyEntered) inner.leaveCurrent()
+                outer.leaveCurrent(); outer.close(); if (crossContext) inner.close()
+            }
+        }
+    }
+
+    @Test fun innermostDeclarationAndClosedOriginControlNestedCallbacks() {
+        val outer = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        val inner = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        outer.enterCurrent()
+        val caller = outer.currentIdentity()
+        val safe = outer.enterForeign(ForeignSafety.SAFE)
+        try {
+            inner.enterCurrent()
+            val callback = inner.currentIdentity()
+            try {
+                val unsafe = inner.enterForeign(ForeignSafety.UNSAFE)
+                try {
+                    assertThrows(RuntimeFault::class.java) { outer.enterCurrent() }
+                    assertThrows(RuntimeFault::class.java) { inner.enterCurrent() }
+                    assertSame(callback, inner.currentIdentity())
+                    assertSame(caller, outer.currentIdentity())
+                } finally { inner.leaveForeign(unsafe) }
+                val nested = inner.enterForeign(ForeignSafety.SAFE)
+                try {
+                    outer.enterCurrent()
+                    try {
+                        assertTrue(outer.isCurrentBound())
+                        assertNotSame(caller, outer.currentIdentity())
+                    } finally { outer.leaveCurrent() }
+                } finally { inner.leaveForeign(nested) }
+            } finally { inner.leaveCurrent() }
+            outer.close()
+            assertThrows(RuntimeFault::class.java) { outer.enterForeign() }
+            assertThrows(RuntimeFault::class.java) { inner.enterCurrent() }
+        } finally { outer.leaveForeign(safe); outer.leaveCurrent(); inner.close() }
+        // Popped activations must not poison subsequent contexts on this carrier.
+        val fresh = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
+        fresh.enterCurrent()
+        try { assertFalse(fresh.isCurrentBound()) } finally { fresh.leaveCurrent(); fresh.close() }
+    }
+
     @Test fun crossContextSendKeepsCallerMaskAndFifoAcrossOrdinaryAndCallbackEntries() {
         for (callback in listOf(false, true)) for (mask in MaskingState.entries) {
             val callerMasks = ThreadLocal.withInitial { MaskingState.UNMASKED }
@@ -204,7 +281,7 @@ class GuestThreadsTest {
             lateinit var first: AsyncRequest
             lateinit var second: AsyncRequest
             try {
-                val foreign = if (callback) caller.enterForeign() else null
+                val foreign = if (callback) caller.enterForeign(ForeignSafety.SAFE) else null
                 try {
                     other.enterCurrent()
                     try {
@@ -283,7 +360,7 @@ class GuestThreadsTest {
             caller.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, forked = true, externalAsync = false)
             val callerId = caller.currentIdentity()
             try {
-                val foreign = if (callback) caller.enterForeign() else null
+                val foreign = if (callback) caller.enterForeign(ForeignSafety.SAFE) else null
                 try {
                     other.enterCurrent()
                     try {
@@ -314,7 +391,7 @@ class GuestThreadsTest {
                 sender.start(); sender.join(5000)
                 assertFalse(sender.isAlive)
                 val external = submitted.get()
-                val prior = threads.enterForeign()
+                val prior = threads.enterForeign(ForeignSafety.SAFE)
                 lateinit var callback: GuestThreadId
                 lateinit var callerFromCallback: AsyncRequest
                 try {
@@ -338,7 +415,7 @@ class GuestThreadsTest {
                         masks.set(MaskingState.MASKED_UNINTERRUPTIBLE)
                         assertSame(self, threads.poll(node), "Self throwTo still bypasses this guest's mask")
                         self.acknowledge()
-                        val nestedForeign = threads.enterForeign()
+                        val nestedForeign = threads.enterForeign(ForeignSafety.SAFE)
                         try {
                             threads.enterCurrent()
                             val nested = threads.currentIdentity()
@@ -382,7 +459,7 @@ class GuestThreadsTest {
             val caller = outer.currentIdentity()
             try {
                 outer.setAllocationCounter(10_000_000L)
-                val foreign = outer.enterForeign()
+                val foreign = outer.enterForeign(ForeignSafety.SAFE)
                 try {
                     callbacks.enterCurrent()
                     val first = callbacks.currentIdentity()
@@ -392,7 +469,7 @@ class GuestThreadsTest {
                         callbacks.setAllocationCounter(10_000_000L)
                         retained.add(ByteArray(2_000_000))
                         assertTrue(callbacks.allocationCounter() < 8_000_000L)
-                        val nestedForeign = callbacks.enterForeign()
+                        val nestedForeign = callbacks.enterForeign(ForeignSafety.SAFE)
                         try {
                             callbacks.enterCurrent()
                             try {
@@ -420,7 +497,7 @@ class GuestThreadsTest {
                 assertEquals(6_000_000, retained.sumOf { it.size })
                 // Missing accounting evidence stays missing across a callback.
                 caller.allocationUnavailable = true
-                val again = outer.enterForeign()
+                val again = outer.enterForeign(ForeignSafety.SAFE)
                 try { callbacks.enterCurrent(); callbacks.leaveCurrent() }
                 finally { outer.leaveForeign(again) }
                 assertThrows(RuntimeFault::class.java) { outer.allocationCounter() }
@@ -430,7 +507,7 @@ class GuestThreadsTest {
 
     @Test fun foreignScopeBeforeRegistrationAndExceptionalCallbackExitRestorePermission() {
         val threads = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
-        val prior = threads.enterForeign()
+        val prior = threads.enterForeign(ForeignSafety.SAFE)
         try {
             assertNull(threads.poll(node))
             assertThrows(RuntimeFault::class.java) { threads.currentId() }
@@ -465,7 +542,7 @@ class GuestThreadsTest {
         val inner = GuestThreads(innerMask) { }
         outer.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
         try {
-            val previous = outer.enterForeign()
+            val previous = outer.enterForeign(ForeignSafety.SAFE)
             try {
                 val id = inner.enterCurrent()
                 try {
