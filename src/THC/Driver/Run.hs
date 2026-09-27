@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : THC.Driver.Run
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
+-- Build a selected Cabal component and launch it with explicit guest runtime arguments.
 module THC.Driver.Run
   ( RunOptions(..), FfiMode(..), parseFfiMode, runtimeLaunchArguments, runResolvedPackage
   ) where
@@ -28,6 +37,8 @@ import System.IO (stderr)
 import System.Process (createProcess, proc, waitForProcess, CreateProcess(..), StdStream(..))
 import THC.Driver.Cabal (PlanOptions(..), configurePackage)
 
+-- | Resolved driver inputs, runtime selection and arguments passed to the
+-- guest program. Compiler/package selection lives in 'runPlan'.
 data RunOptions = RunOptions
   { runPlan :: PlanOptions
   , runTarget :: String
@@ -41,23 +52,37 @@ data RunOptions = RunOptions
   , runArguments :: [String]
   }
 
+-- | Explicit runtime FFI selection. Omitting it preserves launcher defaults.
 data FfiMode = NativeFfi | ManagedFfi deriving (Eq, Show)
 
+-- | Parse the two accepted, case-sensitive @--ffi@ values.
+--
+-- >>> parseFfiMode "native"
+-- Right NativeFfi
+-- >>> parseFfiMode "managed"
+-- Right ManagedFfi
+-- >>> parseFfiMode "auto"
+-- Left "--ffi must be native or managed; got \"auto\""
 parseFfiMode :: String -> Either String FfiMode
 parseFfiMode "native" = Right NativeFfi
 parseFfiMode "managed" = Right ManagedFfi
 parseFfiMode value = Left ("--ffi must be native or managed; got " ++ show value)
 
--- Runtime selection belongs before the entry command, never in GHC flags or
+-- | Runtime selection belongs before the entry command, never in GHC flags or
 -- after the guest delimiter. No explicit choice leaves launcher defaults and
 -- its environment/property configuration intact.
+--
+-- >>> runtimeLaunchArguments (Just ManagedFfi) ["--run-io", "bundle.json", "main:Main.main"] "demo" ["hello"]
+-- ["--ffi","managed","--run-io","bundle.json","main:Main.main","--","demo","hello"]
+-- >>> runtimeLaunchArguments Nothing ["--run-io", "bundle.json", "main:Main.main"] "demo" []
+-- ["--run-io","bundle.json","main:Main.main","--","demo"]
 runtimeLaunchArguments :: Maybe FfiMode -> [String] -> String -> [String] -> [String]
 runtimeLaunchArguments mode entry program arguments =
   maybe [] (\selected -> ["--ffi", case selected of
     NativeFfi -> "native"
     ManagedFfi -> "managed"]) mode ++ entry ++ ["--", program] ++ arguments
 
--- Internal simple-package backend retained for Windows after Cabal resolves
+-- | Internal simple-package backend retained for Windows after Cabal resolves
 -- the public positional target. This is not a second command-line selector.
 -- Native build output is never executed; the exported GHC Core is.
 runResolvedPackage :: RunOptions -> FilePath -> FilePath -> (FilePath -> IO ([String], FilePath)) -> IO ()

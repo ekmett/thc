@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; HUnit, bytestring, text and the producer JSON module
+--
+-- Check byte-exact interface JSON serialization against its reference renderer.
 module Main (main) where
 
 import Control.Exception (SomeException, evaluate, try)

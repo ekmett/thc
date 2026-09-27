@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE Unsafe #-}
 
--- | Unstable, potentially hazardous Graal diagnostics. This module is
+-- |
+-- Module      : THC.Internal.JIT
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : THC with the pinned Graal integration; native fallback statuses
+--
+-- Unstable, potentially hazardous Graal diagnostics. This module is
 -- deliberately Unsafe for Safe Haskell and is not re-exported by @THC@.
 -- Enabling callbacks affects compilation behavior and overhead; the Graal
 -- integration is version-pinned. No Java handles or forced recompilation are
@@ -30,6 +38,7 @@ data JitSnapshot = JitSnapshot
   , compilationsQueued :: Available Word64
   } deriving (Eq, Show)
 
+-- | Query whether this context has opted into telemetry callbacks.
 jitTelemetryEnabled :: IO (Available Bool)
 jitTelemetryEnabled = queryEnum 400 [(0, False), (1, True)]
 
@@ -38,6 +47,8 @@ jitTelemetryEnabled = queryEnum 400 [(0, False), (1, True)]
 setJitTelemetryEnabled :: Bool -> IO (Available ())
 setJitTelemetryEnabled enabled = control 400 (if enabled then 1 else 0)
 
+-- | Sample the context-attributed counters without enabling telemetry or
+-- requesting compilation. Each counter retains its own availability status.
 jitSnapshot :: IO JitSnapshot
 jitSnapshot = JitSnapshot
   <$> queryWord64 401 0 0 <*> queryWord64 402 0 0 <*> queryWord64 403 0 0

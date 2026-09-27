@@ -1,4 +1,14 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; corresponding compiled fixture module
+--
+-- Native GHC observer for the io main pap fixture.
 module Main where
 
 import qualified Control.Exception as E

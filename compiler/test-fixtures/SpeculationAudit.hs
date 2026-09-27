@@ -2,6 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude, UndecidableSuperClasses, UndecidableInstances, FlexibleInstances #-}
+
+-- |
+-- Module      : SpeculationAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Compiler-only analysis fixture. These expressions validate exported GHC
 -- certificates; they do not enlarge the runtime's supported primops/classes.
 module SpeculationAudit where

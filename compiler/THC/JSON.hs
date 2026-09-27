@@ -1,7 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
--- | The producer's ordered JSON representation and byte-exact renderers.
+-- |
+-- Module      : THC.JSON
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Haskell 2010; bytestring
+--
+-- The producer's ordered JSON representation and byte-exact renderers.
 module THC.JSON (J(..), json, jsonBytes) where
 
 import qualified Data.ByteString as BS
@@ -10,8 +18,14 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (ord)
 import Numeric (showHex)
 
+-- | Ordered JSON: objects, arrays, strings, arbitrary-size integers, booleans
+-- and null. Ordering is part of the producer's serialized output contract.
 data J = O [(String,J)] | A [J] | S String | N Integer | B Bool | Z
 
+-- | Render compact JSON with stable object-field order and integer spelling.
+--
+-- >>> putStrLn (json (O [("count", N 2), ("ready", B True)]))
+-- {"count":2,"ready":true}
 json :: J -> String
 json value = render value ""
   where
@@ -40,6 +54,9 @@ json value = render value ""
 -- any success bytes. In particular, it does not retain a character-list copy of
 -- the complete document. Reject surrogate code points as a UTF-8 Handle would;
 -- the Builder primitives themselves do not validate them.
+--
+-- >>> BS.unpack (jsonBytes (A [N 1, Z]))
+-- [91,49,44,110,117,108,108,93]
 jsonBytes :: J -> BS.ByteString
 jsonBytes = BL.toStrict . Builder.toLazyByteString . render
   where

@@ -4,6 +4,16 @@
 -- GHC normally eta-expands the State# callback and moves this checkpoint into
 -- its body. Keep the action head genuinely lazy for the capture regression.
 {-# OPTIONS_GHC -fno-do-lambda-eta-expansion #-}
+
+-- |
+-- Module      : LazyIOCallbackAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for lazy io callback audit Core and metadata.
 module LazyIOCallbackAudit where
 
 import GHC.Exts

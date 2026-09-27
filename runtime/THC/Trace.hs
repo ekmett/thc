@@ -2,7 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE ScopedTypeVariables, Trustworthy #-}
 
--- | Context-local structured diagnostics. Selecting JFR never starts a JVM
+-- |
+-- Module      : THC.Trace
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; THC runtime services or native fallback implementation
+--
+-- Context-local structured diagnostics. Selecting JFR never starts a JVM
 -- recording; an enabled sink is not evidence that a recording is consuming it.
 module THC.Trace
   ( Available(..), TraceSink(..), getTraceSink, supportedTraceSinks
@@ -18,17 +26,23 @@ import Foreign.Marshal.Array (withArrayLen)
 import Foreign.Ptr (nullPtr)
 import THC.Internal.RuntimeABI
 
+-- | Destination for context-local trace events. JFR selection does not start
+-- a recording; the host controls recording independently.
 data TraceSink = TraceOff | TraceStderr | TraceJFR | TraceStderrAndJFR
   deriving (Eq, Ord, Show)
 
+-- | Read the current context's sink selection without changing it.
 getTraceSink :: IO (Available TraceSink)
 getTraceSink = queryEnum 500 [(0, TraceOff), (1, TraceStderr), (2, TraceJFR), (3, TraceStderrAndJFR)]
 
+-- | List sink choices supported by the provider, not active recordings.
 supportedTraceSinks :: IO (Available [TraceSink])
 supportedTraceSinks = queryEnum 501
   [(0, [TraceOff]), (1, [TraceOff, TraceStderr]), (2, [TraceOff, TraceJFR]),
    (3, [TraceOff, TraceStderr, TraceJFR, TraceStderrAndJFR])]
 
+-- | Select the context's sink. The returned status distinguishes an accepted
+-- change from an unsupported or unavailable control.
 setTraceSink :: TraceSink -> IO (Available ())
 setTraceSink sink = control 500 $ case sink of
   TraceOff -> 0

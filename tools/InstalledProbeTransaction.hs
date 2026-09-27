@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; driver acquisition and host process services
+--
+-- Exercise installed-interface probe transactions and their cache boundaries.
 module Main (main) where
 
 import Control.Exception (evaluate)

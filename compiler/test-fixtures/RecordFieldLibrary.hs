@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE DuplicateRecordFields, MagicHash #-}
+
+-- |
+-- Module      : RecordFieldLibrary
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for record field library Core and metadata.
 module RecordFieldLibrary (LeftRecord(..), RightRecord(..), Plain(..),
                            applyPlain, leftValue, rightValue) where
 

@@ -1,7 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE DeriveDataTypeable, LambdaCase #-}
--- | A closed producer profile for stock static-import C products. These are
+
+-- |
+-- Module      : THC.ForeignImportProvenance
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- A closed producer profile for stock static-import C products. These are
 -- retained provenance records, not native links or execution capabilities.
 module THC.ForeignImportProvenance
   ( Import(..), ImportType(..), Call(..), Verdict(..), recordImports, inspectImports ) where

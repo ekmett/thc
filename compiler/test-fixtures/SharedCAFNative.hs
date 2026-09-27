@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash #-}
+
+-- |
+-- Module      : SharedCAFNative
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC FFI; declared foreign symbols required at link/run time
+--
 -- Native symbol oracle and test consumer. Its home-unit FCallIds are replaced
 -- only in a separate synthetic Core copy with pinned original GHC FCallIds.
 module SharedCAFNative where

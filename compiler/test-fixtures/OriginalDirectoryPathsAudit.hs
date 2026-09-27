@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
+
+-- |
+-- Module      : OriginalDirectoryPathsAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for original directory paths audit Core and metadata.
 module OriginalDirectoryPathsAudit where
 import GHC.Exts
 import GHC.IO (IO(..))

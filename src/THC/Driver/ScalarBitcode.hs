@@ -1,7 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE OverloadedStrings #-}
--- | The first package-owned C profile. Cabal's configured C invocation produces
+
+-- |
+-- Module      : THC.Driver.ScalarBitcode
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Cabal API and host filesystem/process services
+--
+-- Package-owned scalar C acquisition. Cabal's configured C invocation produces
 -- LLVM; its native roundtrip must equal Cabal's actual object before admission.
 module THC.Driver.ScalarBitcode
   ( ScalarBitcode, withScalarBitcode, scalarBuildInputs, linkScalarBitcode

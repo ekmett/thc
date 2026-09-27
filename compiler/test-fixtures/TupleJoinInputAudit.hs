@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE MagicHash, UnboxedTuples, EmptyCase #-}
 {-# OPTIONS_GHC -fno-full-laziness -fno-worker-wrapper -fno-specialise -fno-spec-constr #-}
+
+-- |
+-- Module      : TupleJoinInputAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 internal library APIs
+--
+-- Compiler fixture for tuple join input audit Core and metadata.
 module TupleJoinInputAudit where
 import GHC.Exts
 import qualified GHC.Internal.Float as Original

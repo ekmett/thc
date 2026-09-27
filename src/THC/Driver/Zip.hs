@@ -1,6 +1,15 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+-- |
+-- Module      : THC.Driver.Zip
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Haskell 2010; bytestring and zip-archive
+--
+-- Encode and validate deterministic, path-safe ZIP bundles.
 module THC.Driver.Zip (encodeZip, decodeZip) where
 
 import Codec.Archive.Zip (Archive(..), Entry(..), emptyArchive, fromArchive,
@@ -10,6 +19,8 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
 import Data.List (nub)
 
+-- | Encode members with a fixed timestamp, preserving their order. Reject
+-- duplicate names, absolute paths and traversal components before encoding.
 encodeZip :: [(String, BS.ByteString)] -> Either String BL.ByteString
 encodeZip files
   | any (not . safeName . fst) files = Left "invalid ZIP member name"
@@ -18,6 +29,8 @@ encodeZip files
       { zEntries = [toEntry name 0 (BL.fromStrict bytes) | (name, bytes) <- files] }
   where names = map fst files
 
+-- | Decode and force every member in IO, rejecting corrupt archives and unsafe
+-- or duplicate names. This reads an archive; it does not extract files to disk.
 decodeZip :: BS.ByteString -> IO (Either String [(String, BS.ByteString)])
 decodeZip bytes = do
   parsed <- try (evaluate (decode bytes)) :: IO (Either SomeException (Either String [(String, BS.ByteString)]))

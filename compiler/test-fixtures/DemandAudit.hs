@@ -3,6 +3,15 @@
 
 {-# LANGUAGE CPP, MagicHash, NoImplicitPrelude, ScopedTypeVariables, TypeApplications, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-worker-wrapper -fno-specialise -fno-spec-constr -fno-do-lambda-eta-expansion -fno-full-laziness #-}
+
+-- |
+-- Module      : DemandAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Ordinary strict calls exercise caller demand without requesting an entry ABI.
 module DemandAudit where
 import GHC.Exts (Int#, (+#), (<=#), lazy)

@@ -3,6 +3,15 @@
 
 {-# LANGUAGE DataKinds, MagicHash, NoImplicitPrelude, StandaloneKindSignatures #-}
 {-# LANGUAGE UnboxedTuples, UnliftedDatatypes #-}
+
+-- |
+-- Module      : TupleReturnAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Result-only tuple boundaries: every executable oracle entry is Int# -> Int#.
 -- OPAQUE retains cross-root producers; lifted fields are deliberately lazy.
 module TupleReturnAudit where

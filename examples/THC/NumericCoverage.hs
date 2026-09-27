@@ -2,6 +2,15 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE MagicHash, NoImplicitPrelude #-}
+
+-- |
+-- Module      : THC.NumericCoverage
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- Bounded numerical workloads for differential execution of optimized GHC Core.
 -- All entries accept every 64-bit Int#. Shift counts are in range, division
 -- uses +/-10, and Unicode construction only uses valid scalar values.

@@ -4,6 +4,15 @@
 {-# LANGUAGE MagicHash, NoImplicitPrelude, GADTs, UnliftedNewtypes #-}
 {-# LANGUAGE ExplicitNamespaces, StandaloneKindSignatures, UnliftedDatatypes #-}
 {-# OPTIONS_GHC -fno-cpr-anal #-}
+
+-- |
+-- Module      : CBVCoercionAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
 -- A worker retains an equality coercion before the strict boxed tree slot.
 module CBVCoercionAudit where
 import GHC.Exts (Int(I#), Int#, Word#, UnliftedType, (+#), int2Word#)

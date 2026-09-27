@@ -3,6 +3,15 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
+-- Check primop-tool output and reject invalid capability contracts.
 module Main (main) where
 
 import Control.Exception (bracket, try)

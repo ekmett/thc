@@ -1,6 +1,16 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 {-# LANGUAGE CApiFFI, ForeignFunctionInterface, MagicHash, UnliftedFFITypes #-}
+
+-- |
+-- Module      : CapiMix
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC C API FFI; declared native headers and libraries
+--
+-- Module for the @run-native-archive@ integration fixture.
 module CapiMix (mixed, mixedProbe#, wideProbe#, word16Probe#, staticPointerProbe#) where
 import Foreign.Marshal.Alloc (allocaBytes)
 import Foreign.Storable (poke)

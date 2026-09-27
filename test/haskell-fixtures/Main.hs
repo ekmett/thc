@@ -3,6 +3,14 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : Main
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
 -- Native fixture production belongs to Haskell. The JVM tests own the
 -- independent arithmetic models and compiled guest comparisons.
 module Main (main) where

@@ -3,6 +3,15 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : AggregateFixtures
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
+-- Fixture acquisition support for aggregate.
 module AggregateFixtures (prepareAggregate) where
 
 import Control.Monad (forM, forM_, unless, when)

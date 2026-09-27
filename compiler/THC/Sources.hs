@@ -2,6 +2,16 @@
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
 {-# LANGUAGE LambdaCase #-}
+
+-- |
+-- Module      : THC.Sources
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC 9.14.1 compiler API
+--
+-- Collect source files and source-note metadata for serialized GHC Core.
 module THC.Sources
   ( Note(..), SourceFile(..), SourceSpan(..), SourceTable(..)
   , tickNote, binderNote, noteKey, buildSourceTable, hasNote

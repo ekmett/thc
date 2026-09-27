@@ -3,6 +3,16 @@
 
 {-# LANGUAGE MagicHash, UnboxedTuples #-}
 {-# OPTIONS_GHC -fno-do-lambda-eta-expansion #-}
+
+-- |
+-- Module      : ThreadInventory
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Example entry points exercising thread inventory.
 module ThreadInventory where
 
 import GHC.Exts

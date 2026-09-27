@@ -4,6 +4,16 @@
 {-# LANGUAGE MagicHash, UnliftedDatatypes, StandaloneKindSignatures #-}
 -- Retain dataToTagSmall# to test its primitive and unsupported family frontiers.
 {-# OPTIONS_GHC -Wno-deprecations #-}
+
+-- |
+-- Module      : DataToTagAudit
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : GHC-specific primitive types and operations
+--
+-- Compiler fixture for data to tag audit Core and metadata.
 module DataToTagAudit where
 
 import GHC.Exts

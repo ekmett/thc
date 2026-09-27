@@ -3,6 +3,15 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
+-- |
+-- Module      : FixtureSupport
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Native GHC; host filesystem/process services
+--
+-- Shared subprocess, logging and provenance helpers for fixture producers.
 module FixtureSupport
   ( run, runWithTimeout, CommandResult(..), runLogged, runLoggedExpect, runLoggedWithInput
   , writeJson, hashFile, hashes, hexBytes, splitTab, readInteger, isOriginalUnixUnit
