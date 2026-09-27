@@ -29,8 +29,8 @@ bundles so that an unchanged dependency need not be exported again.
 The implemented commands separate acquisition from execution:
 
 ```sh
-thc acquire my-program
-thc run my-program
+thc acquire my-program --thc-root /absolute/path/to/thc
+thc run my-program --thc-root /absolute/path/to/thc
 ```
 
 `thc acquire [TARGET] [FLAGS]` produces a package manifest without auditing or
@@ -40,6 +40,8 @@ Targets use Cabal's syntax, including `my-package:bench:my-benchmark` and
 `my-package:test:my-test`. With no target, Cabal selects the current package's
 sole buildable executable, otherwise its sole buildable runnable component.
 Use `--project-dir` or `--project-file` to select a different project.
+`--thc-root` names the built THC checkout, not the application directory; both
+commands require it.
 General `thc build` and interactive `thc repl` commands are planned, not
 implemented. The aim is to run complete programs, including their error paths;
 acquisition alone does not establish that a program is runnable. The

@@ -137,7 +137,7 @@ whose build messages are not part of the protocol):
 
 ```sh
 cabal build exe:thc-interface --with-compiler=/path/to/ghc
-cabal list-bin exe:thc-interface
+cabal list-bin exe:thc-interface --with-compiler=/path/to/ghc
 /path/to/thc-interface --libdir /path/from/selected-ghc-print-libdir \
   --unit exact-installed-unit-id --module Package.Module \
   --interface /path/to/Package/Module.hi --package-db /path/to/package.conf.d \
@@ -174,7 +174,7 @@ result never substitutes inline unfoldings. In the driver's installed-Core
 required mode it is a capability failure; choosing the pinned source provider
 is an explicit option, not a retry policy.
 
-The fixture now feeds helper JSON through AST/bytecode execution and checks the
+The fixture feeds helper JSON through AST/bytecode execution and checks the
 installed `CBVCoercionAudit` worker's real `idCbvMarks_maybe`/`entryStrict` against
 the direct late-plugin export from its native compilation. No inferred marks
 are allowed in this comparison.
@@ -189,7 +189,7 @@ executables are not hashed.
 
 ## Build a compiler with complete Core
 
-These commands rebuild the release selected by an existing compiler. Use a
+These commands build THC's supported GHC 9.14.1 release. Use a
 separate build directory and installation prefix. Install that release's
 [GHC build prerequisites](https://gitlab.haskell.org/ghc/ghc/-/wikis/building/preparation)
 first. GHC 9.14.1's `configure.ac` requires a bootstrap GHC of at least 9.6;
@@ -200,7 +200,7 @@ From the THC repository, record its configuration location and select the bootst
 ```sh
 THC_SOURCE="$PWD"
 THC_BOOT_GHC=$(command -v ghc)
-THC_GHC_VERSION=$("$THC_BOOT_GHC" --numeric-version)
+THC_GHC_VERSION=9.14.1
 THC_GHC_PREFIX="$HOME/.local/ghc/$THC_GHC_VERSION-core"
 
 mkdir ghc-core-build
@@ -217,7 +217,8 @@ GHC="$THC_BOOT_GHC" ./hadrian/build -j4 --flavour=perf --docs=none \
   install --prefix="$THC_GHC_PREFIX"
 ```
 
-This follows GHC's [Hadrian build and installation procedure](https://gitlab.haskell.org/ghc/ghc/-/blob/ghc-9.14.1-release/hadrian/README.md).
+The bootstrap compiler builds the pinned release; its version does not select
+the target release. This follows GHC's [Hadrian build and installation procedure](https://gitlab.haskell.org/ghc/ghc/-/blob/ghc-9.14.1-release/hadrian/README.md).
 Use the release's published checksum or signature to verify the source archive.
 Allow enough disk space for a compiler build; the source archive is much smaller
 than the working set. For a nondefault build root, put `hadrian.settings` in that
@@ -236,22 +237,12 @@ Passing the same compiler to Cabal directly is `cabal build --with-compiler=/pat
 Changing the selected GHC must select its matching exporter build and package
 database; cache entries also remain separated by target and compiler identity.
 
-## Patch scope and checks
+## Patch scope
 
-The Hadrian patch was dry-run against GHC's `ghc-9.14.1-release` source
-(`902339d332fb4ce2b3c87dcac1ee6495d41ad886`) and upstream master at
-`35bf6f4bcf06675565992725df62e837bc7788ce`. It selects Haskell
-compilation of library packages after Stage0, for every built library way.
-It includes GHC's compiler library as well as ordinary libraries; excluding
-the compiler would make this an incomplete library-wide rule. The installed
-release libraries are built with a later stage.
-
-A small `-O2` probe with an `OPAQUE` exported entry and a private `NOINLINE`
-worker acquired an `extra decls:` section containing both bodies. Its interface
-grew from 1,313 to 1,516 bytes; its native object was byte-for-byte identical,
-and both executables returned the same result. This does not measure the size
-of a patched `ghc-internal` build. A complete compiler rebuild has not been
-validated here.
+The optional Hadrian patch selects Haskell compilation of library packages
+after Stage0, for every built library way. It includes GHC's compiler library
+as well as ordinary libraries. The settings-file recipe above does not require
+the patch and also covers program and bootstrap compilation.
 
 The Hadrian flag only covers libraries built by that GHC source tree. Ordinary
 project packages can emit Core when THC builds them; independently installed
@@ -259,3 +250,6 @@ packages require their own complete-Core build. `rts` C code and primop
 semantics are separate from Haskell interface payloads. GHC API changes remain
 explicit compatibility work; retaining library Core removes one source of
 version-specific scaffolding, not those obligations.
+
+The [original patch and interface-size investigation](../research/ghc-core-build-checkpoint.md)
+is retained as historical evidence, not a current compiler-installation check.
