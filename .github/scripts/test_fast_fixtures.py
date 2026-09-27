@@ -19,6 +19,19 @@ import fast_fixtures
 
 
 class FixturePreparationTest(unittest.TestCase):
+    def test_delimited_self_delivery_retains_thread_fixture_audits(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        self.assertEqual("thread-async", owners["thc.runtime.ThreadAsyncNativeTest"])
+        self.assertEqual(["build/thread-async"], manifest["groups"]["thread-async"]["outputs"])
+        producer = (project / "test/haskell-fixtures/ThreadAsyncFixtures.hs").read_text()
+        native = (project / "compiler/test-fixtures/ThreadAsyncNative.hs").read_text()
+        for entry in ("promptSelfThrow", "promptMaskedUnmaskSelf"):
+            self.assertIn('"' + entry + '"', producer)
+            self.assertIn("Audit." + entry + " 0#", native)
+            for stage in ("pre", "post"):
+                self.assertIn(f"build/thread-async/{stage}/{entry}-audit.json", fast_fixtures.FULL_REQUIRED)
+
     def test_pretty_metadata_export_keeps_required_outputs_and_changes_receipt_plan(self):
         project = Path(__file__).resolve().parents[2]
         source = (project / "scripts/prepare-tests.sh").read_text()
