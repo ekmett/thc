@@ -18,9 +18,13 @@ import jdk.vm.ci.runtime.JVMCI;
 /** Executes the emitted decision with strict compiler-service markers, not a native image. */
 public final class SimulatedFoldTest {
     private static final String DECODER = "com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl";
+    private static final String SUPPORT = "com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport";
+    private static final String REFLECTION = SUPPORT + "$RuntimeCompilationReflectionProvider";
     private static final String HEAP = "com/oracle/graal/pointsto/heap/ImageHeapConstant";
     private enum Marker { DECODER, LOAD, FIELD, TYPE, SIMULATION, ANALYSIS, GRAPH, INTERCEPTION, PROVIDERS, INTRINSIC }
-    private record Heap(JavaConstant hostedObject) {}
+    private record Heap(JavaConstant hostedObject, boolean array) {
+        Heap(JavaConstant hostedObject) { this(hostedObject, false); }
+    }
     private record Fold(Object constant) {}
     private record Result(Object value, List<String> calls) {}
     private static int checks;
@@ -152,12 +156,93 @@ public final class SimulatedFoldTest {
         throw new AssertionError("Unbounded decoder decision");
     }
 
+    private static Result evaluateReflection(CodeModel code, Object candidate, Object fieldReceiver, RuntimeException failure) {
+        var instructions = new ArrayList<Instruction>();
+        var labels = new HashMap<Label, Integer>();
+        for (var element : code) {
+            if (element instanceof LabelTarget target) labels.put(target.label(), instructions.size());
+            if (element instanceof Instruction instruction) instructions.add(instruction);
+        }
+        var locals = new Object[8];
+        locals[0] = Marker.PROVIDERS;
+        locals[1] = Marker.FIELD;
+        locals[2] = fieldReceiver;
+        var stack = new ArrayList<Object>();
+        var calls = new ArrayList<String>();
+        for (int pc = 0, steps = 0; steps < 50; steps++) {
+            var instruction = instructions.get(pc++);
+            if (instruction instanceof LoadInstruction load) {
+                stack.add(locals[load.slot()]);
+            } else if (instruction instanceof StoreInstruction store) {
+                locals[store.slot()] = pop(stack);
+            } else if (instruction instanceof ConstantInstruction constant) {
+                Object value = constant.opcode() == Opcode.ACONST_NULL ? null : constant.constantValue();
+                require(value == null || value.equals(0) || value.equals(1),
+                        "only original read flags and rejected null constant");
+                stack.add(value);
+            } else if (instruction instanceof TypeCheckInstruction type) {
+                Object value = pop(stack);
+                String name = type.type().asInternalName();
+                if (type.opcode() == Opcode.INSTANCEOF) {
+                    require(name.equals(HEAP), "late check admits every heap-constant subtype");
+                    stack.add(value instanceof Heap ? 1 : 0);
+                } else {
+                    require(type.opcode() == Opcode.CHECKCAST &&
+                            ((name.equals(HEAP) && value instanceof Heap) ||
+                            (name.equals("com/oracle/graal/pointsto/meta/AnalysisField") && value == Marker.FIELD)),
+                            "original field or heap-constant cast");
+                    stack.add(value);
+                }
+            } else if (instruction instanceof InvokeInstruction call) {
+                var arguments = new ArrayList<Object>();
+                for (int i = 0; i < call.typeSymbol().parameterCount(); i++) arguments.addFirst(pop(stack));
+                require(call.opcode() == Opcode.INVOKEVIRTUAL, "only original read and backing inspection calls");
+                Object receiver = pop(stack);
+                String key = call.owner().asInternalName() + "." + call.name().stringValue();
+                if (key.equals(REFLECTION + ".readValue")) {
+                    require(receiver == Marker.PROVIDERS && arguments.size() == 4 && arguments.get(0) == Marker.FIELD &&
+                            arguments.get(1) == fieldReceiver && arguments.get(2).equals(1) && arguments.get(3).equals(0),
+                            "unchanged field, receiver and simulated/relocatable flags");
+                    require(calls.isEmpty(), "exactly one original read before any backing inspection");
+                    calls.add("read");
+                    if (failure != null) throw failure;
+                    stack.add(candidate);
+                } else if (key.equals(HEAP + ".getHostedObject")) {
+                    require(receiver == candidate && arguments.isEmpty() && calls.equals(List.of("read")),
+                            "one backing inspection after original read");
+                    calls.add("backing");
+                    stack.add(((Heap) receiver).hostedObject());
+                } else {
+                    throw new AssertionError("Unexpected late reflection call: " + call);
+                }
+            } else if (instruction instanceof BranchInstruction branch) {
+                Object value = pop(stack);
+                boolean take = switch (branch.opcode()) {
+                    case IFEQ -> value.equals(0);
+                    case IFNE -> !value.equals(0);
+                    case IFNULL -> value == null;
+                    case IFNONNULL -> value != null;
+                    default -> throw new AssertionError("Unexpected late branch: " + branch);
+                };
+                if (take) pc = labels.get(branch.target());
+            } else if (instruction.opcode() == Opcode.ARETURN) {
+                Object value = pop(stack);
+                require(stack.isEmpty(), "balanced late return stack");
+                return new Result(value, calls);
+            } else {
+                throw new AssertionError("Unexpected late instruction: " + instruction);
+            }
+        }
+        throw new AssertionError("Unbounded late reflection decision");
+    }
+
     public static void main(String[] args) throws Exception {
         require(args.length == 1, "overlay argument");
         try (var jar = new JarFile(Path.of(args[0]).toFile())) {
             var payload = jar.stream().filter(entry -> !entry.isDirectory()).map(entry -> entry.getName()).collect(java.util.stream.Collectors.toSet());
             require(payload.equals(Set.of("META-INF/MANIFEST.MF", "META-INF/upstream-toolchain-LICENSE.txt",
-                    "META-INF/source/" + DECODER + ".java", DECODER + ".class")), "exact one-class overlay payload");
+                    "META-INF/source/" + DECODER + ".java", DECODER + ".class",
+                    "META-INF/source/" + SUPPORT + ".java", REFLECTION + ".class")), "exact two-class overlay payload");
             var model = ClassFile.of().parse(jar.getInputStream(jar.getJarEntry(DECODER + ".class")).readAllBytes());
             var code = model.methods().stream().filter(candidate -> candidate.methodName().equalsString("handleLoadFieldNode"))
                     .findFirst().orElseThrow().code().orElseThrow();
@@ -185,6 +270,37 @@ public final class SimulatedFoldTest {
                 }
             }
             System.out.println("PASS " + cases + " emitted decision cases / " + checks + " checks; compiler-service markers, not native-image execution");
+            int beforeLate = checks;
+            var reflection = ClassFile.of().parse(jar.getInputStream(jar.getJarEntry(REFLECTION + ".class")).readAllBytes());
+            require(reflection.methods().stream().map(m -> m.methodName().stringValue()).collect(java.util.stream.Collectors.toSet())
+                    .equals(Set.of("<init>", "readFieldValue")), "no extra provider methods or initializer");
+            var lateCode = reflection.methods().stream().filter(m -> m.methodName().equalsString("readFieldValue"))
+                    .findFirst().orElseThrow().code().orElseThrow();
+            require(lateCode.exceptionHandlers().isEmpty(), "late exceptions propagate unchanged");
+            Object[] lateCandidates = {null, JavaConstant.NULL_POINTER, hosted, JavaConstant.forInt(42),
+                    JavaConstant.forLong(-1), JavaConstant.forFloat(Float.NaN), JavaConstant.forDouble(-0.0),
+                    new Heap(hosted), new Heap(hosted, true), new Heap(null), new Heap(null, true)};
+            int lateCases = 0;
+            for (Object receiver : new Object[]{null, new Heap(hosted)}) {
+                for (Object candidate : lateCandidates) {
+                    var result = evaluateReflection(lateCode, candidate, receiver, null);
+                    require(result.value() == (candidate instanceof Heap heap && heap.hostedObject() == null ? null : candidate),
+                            "late hostless-only rejection and all other result identities");
+                    require(result.calls().equals(candidate instanceof Heap ? List.of("read", "backing") : List.of("read")),
+                            "exact late read/backing sequence");
+                    lateCases++;
+                }
+                var failure = new IllegalStateException("original field read failure");
+                try {
+                    evaluateReflection(lateCode, new Heap(null), receiver, failure);
+                    throw new AssertionError("Original read exception swallowed");
+                } catch (IllegalStateException actual) {
+                    require(actual == failure, "exact original exception identity");
+                }
+                lateCases++;
+            }
+            System.out.println("PASS " + lateCases + " late reflection cases / " + (checks - beforeLate)
+                    + " checks; emitted method with compiler-service markers, not native-image execution");
         }
     }
 }

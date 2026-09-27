@@ -18,8 +18,12 @@ check_hash "$builder_dir/svm.src.zip" b10b638d654121fd60923fa86d10f17aaaa82ecd3c
 check_hash "$builder_dir/svm.jar" 7558a5c20e347c0aa5af411472c76c908d15b2601d029b1a0b7d8ed15f5e086c
 work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
 source_file=com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
-mkdir -p "$work_dir/source/com/oracle/svm/hosted/phases" "$work_dir/classes"
+late_source=com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport.java
+late_class='com/oracle/svm/graal/hosted/runtimecompilation/RuntimeCompiledMethodSupport$RuntimeCompilationReflectionProvider.class'
+mkdir -p "$work_dir/source/$(dirname "$source_file")" "$work_dir/source/$(dirname "$late_source")" \
+    "$work_dir/compiled" "$work_dir/classes"
 unzip -p "$builder_dir/svm.src.zip" "$source_file" > "$work_dir/source/$source_file"
+unzip -p "$builder_dir/svm.src.zip" "$late_source" > "$work_dir/source/$late_source"
 (
     cd "$work_dir/source"
     GIT_CEILING_DIRECTORIES="$work_dir" git apply --no-index "$recipe_dir/hosted-constant-eligibility.patch"
@@ -29,14 +33,22 @@ unzip -p "$builder_dir/svm.src.zip" "$source_file" > "$work_dir/source/$source_f
     --patch-module "org.graalvm.nativeimage.builder=$work_dir/source" \
     --add-exports jdk.internal.vm.ci/jdk.vm.ci.meta=org.graalvm.nativeimage.builder,org.graalvm.nativeimage.pointsto,org.graalvm.nativeimage.base \
     --add-exports jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=org.graalvm.nativeimage.builder,org.graalvm.nativeimage.pointsto,org.graalvm.nativeimage.base \
-    -d "$work_dir/classes" "$work_dir/source/$source_file"
-mkdir -p "$work_dir/classes/META-INF/source/com/oracle/svm/hosted/phases"
-cp "$work_dir/source/$source_file" "$work_dir/classes/META-INF/source/$source_file"
+    --add-exports jdk.internal.vm.ci/jdk.vm.ci.code=org.graalvm.nativeimage.builder,org.graalvm.nativeimage.pointsto,org.graalvm.nativeimage.base \
+    -d "$work_dir/compiled" "$work_dir/source/$source_file" "$work_dir/source/$late_source"
+# Only the two modified classes are installed. The enclosing support class and
+# its other nested classes retain their original pinned builder implementations.
+mkdir -p "$work_dir/classes/$(dirname "$source_file")" "$work_dir/classes/$(dirname "$late_class")"
+cp "$work_dir/compiled/${source_file%.java}.class" "$work_dir/classes/${source_file%.java}.class"
+cp "$work_dir/compiled/$late_class" "$work_dir/classes/$late_class"
+for file in "$source_file" "$late_source"; do
+    mkdir -p "$work_dir/classes/META-INF/source/$(dirname "$file")"
+    cp "$work_dir/source/$file" "$work_dir/classes/META-INF/source/$file"
+done
 cp "$JAVA_HOME/LICENSE.txt" "$work_dir/classes/META-INF/upstream-toolchain-LICENSE.txt"
 "$JAVA_HOME/bin/jar" --create --file "$work_dir/thc-svm-runtime-simulated-folds.jar" \
     --date=2026-01-01T00:00:00Z -C "$work_dir/classes" .
 cp "$work_dir/thc-svm-runtime-simulated-folds.jar" "$output_dir/thc-svm-runtime-simulated-folds.jar"
 sha256sum "$builder_dir/svm.src.zip" "$builder_dir/svm.jar" "$JAVA_HOME/LICENSE.txt" \
-    "$recipe_dir/hosted-constant-eligibility.patch" "$work_dir/source/$source_file" \
+    "$recipe_dir/hosted-constant-eligibility.patch" "$work_dir/source/$source_file" "$work_dir/source/$late_source" \
     "$output_dir/thc-svm-runtime-simulated-folds.jar" > "$output_dir/provenance.sha256"
 printf 'Prepared isolated builder overlay: %s\n' "$output_dir/thc-svm-runtime-simulated-folds.jar"
