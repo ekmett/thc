@@ -420,7 +420,7 @@ private fun appendWithHeader(skip: Int, prefix: Array<Any?>, prefixSize: Int,
 internal class TailCall(val target: RootCallTarget, val args: Array<Any?>,
     val input: HandoffStorage? = null) : ControlFlowException()
 
-internal class TailCheck(private val metrics: Metrics) : Node() {
+internal class TailCheck(private val metrics: Metrics, private val coldCompiled: Boolean = false) : Node() {
     @Child private var bloomValue: BloomValue = BloomValueNodeGen.create()
     private val bounceProfile = BranchProfile.create()
     private val unrollProfile = BranchProfile.create()
@@ -434,13 +434,15 @@ internal class TailCheck(private val metrics: Metrics) : Node() {
         if (mask and targetRoot.mask == targetRoot.mask) {
             bounce(target, arguments)
         } else {
-            unrollProfile.enter()
-            arguments[0] = bloomValue.execute(mask)
+            if (!coldCompiled || !CompilerDirectives.inCompiledCode()) unrollProfile.enter()
+            // The generic carrier is exactly the same Long; no observed mask is
+            // required merely to box it on an untouched compiled call site.
+            arguments[0] = if (coldCompiled && CompilerDirectives.inCompiledCode()) mask else bloomValue.execute(mask)
         }
     }
 
     private fun bounce(target: RootCallTarget, arguments: Array<Any?>): Nothing {
-        bounceProfile.enter()
+        if (!coldCompiled || !CompilerDirectives.inCompiledCode()) bounceProfile.enter()
         if (metrics.enabled) metrics.incrementTailBounces()
         throw TailCall(target, arguments)
     }
@@ -488,11 +490,11 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
     }
 }
 
-internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
+internal class IndirectCallerNode(private val metrics: Metrics, private val coldCompiled: Boolean = false) : Node() {
     @Child private var entryArguments = IndirectEntryArguments(metrics)
     @Child private var callNode = IndirectCallNode.create()
     @Child private var loop = TailCallLoop(metrics)
-    @Child private var tailCheck = TailCheck(metrics)
+    @Child private var tailCheck = TailCheck(metrics, coldCompiled)
     private val normalProfile = BranchProfile.create()
     private val tailProfile = BranchProfile.create()
 
@@ -505,10 +507,10 @@ internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
         } else try {
             arguments[0] = 0L
             val result = Calls.indirect(callNode, target, arguments)
-            normalProfile.enter()
+            if (!coldCompiled || !CompilerDirectives.inCompiledCode()) normalProfile.enter()
             result
         } catch (tail: TailCall) {
-            tailProfile.enter()
+            if (!coldCompiled || !CompilerDirectives.inCompiledCode()) tailProfile.enter()
             loop.execute(tail)
         }
         return if (AstControl.captures(this)) AstControl.complete(this, result, target) else result
@@ -542,12 +544,8 @@ internal class TailCallRepeatingNode(val descriptor: FrameDescriptor, private va
 
     override fun executeRepeating(frame: VirtualFrame): Boolean = try {
         if (metrics.enabled) metrics.incrementTrampolineIterations()
-        val targetValue = frame.getObject(FrameLayout.TAIL_FUNCTION)
-        if (targetValue == null) CompilerDirectives.transferToInterpreter()
-        val target = targetValue as RootCallTarget
-        val transferValue = frame.getObject(FrameLayout.TAIL_ARGUMENTS)
-        if (transferValue == null) CompilerDirectives.transferToInterpreter()
-        val transfer = transferValue as TailCall
+        val target = ColdCallChecks.target(frame.getObject(FrameLayout.TAIL_FUNCTION))
+        val transfer = ColdCallChecks.transfer(frame.getObject(FrameLayout.TAIL_ARGUMENTS))
         val arguments = transfer.args
         frame.setObject(FrameLayout.TAIL_FUNCTION, null)
         frame.setObject(FrameLayout.TAIL_ARGUMENTS, null)

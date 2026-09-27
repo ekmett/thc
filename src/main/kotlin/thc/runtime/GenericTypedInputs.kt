@@ -137,16 +137,14 @@ internal fun releaseGenericInput(input: TypedInputLayout, storage: HandoffStorag
 
 internal fun prepareGenericInput(frame: VirtualFrame, node: Node, function: Closure, input: TypedInputLayout,
     source: InputSource, values: Array<Any?>?, maximum: Int, offset: Int, count: Int, force: Force): HandoffStorage {
-    val root = function.target.rootNode
-    if (root == null) CompilerDirectives.transferToInterpreter()
-    val strict = strictInputPositions(root as GuestRoot, input)
+    val root = ColdCallChecks.guestRoot(function.target.rootNode)
+    val strict = strictInputPositions(root, input)
     val prefixCount = function.suppliedCount
     val prefixWidth = input.logical.offset(prefixCount)
     val overrides = if (strict.any { it < prefixCount }) arrayOfNulls<Any>(prefixWidth) else null
     for (i in strict) if (i < prefixCount) {
         val physical = input.logical.offset(i)
-        if (overrides == null) CompilerDirectives.transferToInterpreter()
-        overrides!![physical] = force.execute(frame, prefixValue(function, input, physical))
+        ColdCallChecks.values(overrides)[physical] = force.execute(frame, prefixValue(function, input, physical))
     }
     forceActuals(frame, node, function, source, values, maximum, offset, count, strict, force)
     val storage = acquireGenericInput(input, CompilerDirectives.inCompiledCode())

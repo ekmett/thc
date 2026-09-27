@@ -143,12 +143,10 @@ internal class ScalarArrayInputSource(layout: ArgumentLayout?) : InputSource(lay
     override fun double(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int) =
         values!![index] as? Double ?: fault("Expected primitive Double input")
     override fun reference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int): Any? {
-        if (values == null) CompilerDirectives.transferToInterpreter()
-        return values!![index]
+        return ColdCallChecks.values(values)[index]
     }
     override fun setReference(frame: VirtualFrame, node: Node, values: Array<Any?>?, index: Int, value: Any?) {
-        if (values == null) CompilerDirectives.transferToInterpreter()
-        values!![index] = value
+        ColdCallChecks.values(values)[index] = value
     }
 }
 
@@ -246,9 +244,7 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
  * deoptimization still have one generation-checked owner in the caller. */
 internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage,
     action: (Array<Any?>) -> Any?): Any? {
-    val root = target.rootNode
-    if (root == null) CompilerDirectives.transferToInterpreter()
-    val layout = (root as GuestRoot).typedInput ?: fault("Target has no typed input entry")
+    val layout = ColdCallChecks.guestRoot(target.rootNode).typedInput ?: fault("Target has no typed input entry")
     val generation = input.generation
     try { return action(arrayOf(input)) }
     // Trampoline targets vary at runtime. Cleanup receives only storage and
@@ -435,9 +431,10 @@ private class InputCallArm(private val source: InputSource, private val count: I
 }
 
 internal class GenericInputCall(private val source: InputSource, private val count: Int, private val tail: Boolean,
-    private val metrics: Metrics, private val destination: TupleDestination?, private val start: Int) : Node() {
+    private val metrics: Metrics, private val destination: TupleDestination?, private val start: Int,
+    coldCompiled: Boolean = false) : Node() {
     @Child private var indirect = com.oracle.truffle.api.nodes.IndirectCallNode.create()
-    @Child private var legacy = IndirectCallerNode(metrics)
+    @Child private var legacy = IndirectCallerNode(metrics, coldCompiled)
     @Child private var force = Force(metrics)
     @Child private var loop = TailCallLoop(metrics)
     @Child private var tupleBounce: TupleBounce? = destination?.let { TupleBounce(it, metrics) }
@@ -447,9 +444,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
         while (true) {
             val remaining = count + start - offset
             val target = function.target
-            val rootValue = target.rootNode
-            if (rootValue == null) CompilerDirectives.transferToInterpreter()
-            val root = rootValue as GuestRoot
+            val root = ColdCallChecks.guestRoot(target.rootNode)
             val input = root.typedInput
             val used = minOf(function.arity, remaining)
             validateGenericInput(root, function.suppliedCount, source.layout, offset, used, destination, function.arity == remaining, function.arity > remaining)
@@ -546,10 +541,10 @@ internal fun checkInputResult(root: GuestRoot, destination: TupleDestination?, e
 private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.truffle.api.RootCallTarget,
     loan: HandoffStorage, packet: HandoffLayout, metrics: Metrics) {
     val source = node.rootNode as? GuestRoot
-    val targetRoot = target.rootNode as GuestRoot
+    val targetRoot = ColdCallChecks.guestRoot(target.rootNode)
     val mask = source?.bloom(frame) ?: 0L
     if (source == null || mask and targetRoot.mask == targetRoot.mask) {
-        if (metrics.enabled) { metrics.incrementTailBounces(); targetRoot.typedInput!!.state().tailTransfers++ }
+        if (metrics.enabled) { metrics.incrementTailBounces(); ColdCallChecks.typedInput(targetRoot.typedInput).state().tailTransfers++ }
         // A tail transfer deliberately materializes this carrier in a control
         // exception. It remains unpooled, but is no longer an inline-only input.
         if (loan.inputMode == 2) loan.inputMode = 3

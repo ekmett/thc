@@ -2619,7 +2619,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(VirtualFrame frame, int arity, boolean tail,
                 Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
                 @Bind("$node") Node node,
-                @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
+                @Cached(value = "createDispatch(arity, tail, metrics, evaluatedArguments)", neverDefault = true) PreparedDispatch dispatch) {
             try {
                 return tailResult(dispatch.execute(frame, function, arguments), function, arity, tail);
             } catch (TailCall call) {
@@ -2631,8 +2631,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return call;
             }
         }
-        public static Dispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
-            return Dispatch.Companion.create(arity, tail, metrics, evaluatedArguments);
+        public static PreparedDispatch createDispatch(int arity, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
+            return new PreparedDispatch(arity, tail, metrics, evaluatedArguments, null);
         }
     }
 
@@ -2645,7 +2645,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static Object apply(VirtualFrame frame, ArgumentLayout layout, boolean tail,
                 Metrics metrics, boolean[] evaluatedArguments, Closure function, @Variadic Object[] arguments,
                 @Bind("$node") Node node,
-                @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) Dispatch dispatch) {
+                @Cached(value = "createDispatch(layout, tail, metrics, evaluatedArguments)", neverDefault = true) PreparedDispatch dispatch) {
             try {
                 return tailResult(dispatch.execute(frame, function, arguments), function,
                         layout.getLogicalArity(), tail);
@@ -2658,8 +2658,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 return call;
             }
         }
-        public static Dispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
-            return Dispatch.Companion.create(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
+        public static PreparedDispatch createDispatch(ArgumentLayout layout, boolean tail, Metrics metrics, boolean[] evaluatedArguments) {
+            return new PreparedDispatch(layout.getLogicalArity(), tail, metrics, evaluatedArguments, layout);
         }
     }
 

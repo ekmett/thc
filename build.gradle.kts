@@ -102,6 +102,7 @@ dependencies {
 }
 if (windowsHost) apply(from = "gradle/windows-sulong.gradle.kts")
 apply(from = "gradle/bytecode-metadata.gradle.kts")
+apply(from = "gradle/bytecode-cold-apply.gradle.kts")
 kotlin {
     jvmToolchain(25)
     // Kotlin's generated null-check failures inline stack-trace sanitization into
