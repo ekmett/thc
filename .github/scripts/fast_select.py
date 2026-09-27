@@ -53,6 +53,7 @@ TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Te
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"
 DECLARATION = re.compile(r"\b(class|object|interface|fun|val|var|typealias)\s+"
                          r"(?:<[A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*>\s+)?([A-Za-z_]\w*)")
+JAVA_DECLARATION = re.compile(r"\b(class|interface|enum|record)\s+([A-Za-z_$][\w$]*)")
 SOURCE_SPECIAL = re.compile(r'''//|/\*|"""|["']''')
 
 
@@ -267,7 +268,69 @@ def mask_escaped_members(code):
     return re.sub(r"\.[ \t\n]*`[A-Za-z_][A-Za-z_0-9]*`", reference, code)
 
 
-def junit_info(source):
+def java_test_members(code, depths, start, end):
+    """Recognize direct Java test members; unknown/shared members still widen.
+
+    This is deliberately not a Java parser. Bodies and annotation arguments are
+    balanced before selecting a member header, so a nested annotation/body cannot
+    hide a following package-private helper. Only private members, ordinary JUnit
+    methods and injected TempDir fields are local to the selected class.
+    """
+    unsafe = []
+    first = start + 1
+    index = first
+    parentheses = 0
+    while index < end:
+        char = code[index]
+        if depths[index] != 1:
+            index += 1
+            continue
+        parentheses += (char == "(") - (char == ")")
+        if parentheses < 0:
+            unsafe.append("unresolved-test-declaration")
+            parentheses = 0
+        if parentheses or char not in "{;":
+            index += 1
+            continue
+        header = code[first:index].strip()
+        # Strip complete annotations only, including balanced nested arguments.
+        plain = header
+        while plain.startswith("@"):
+            annotation = re.match(r"@[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*", plain)
+            if annotation is None:
+                break
+            position = annotation.end()
+            if position < len(plain) and plain[position] == "(":
+                level = 1
+                position += 1
+                while position < len(plain) and level:
+                    level += (plain[position] == "(") - (plain[position] == ")")
+                    position += 1
+                if level:
+                    break
+            plain = plain[position:].lstrip()
+        private = re.match(r"(?:(?:static|final|synchronized|strictfp)\s+)*private\b", plain)
+        method = re.fullmatch(
+            r"(?:(?:public|protected|static|final|synchronized|strictfp|default)\s+)*"
+            r"(?:void|[A-Za-z_$][\w.$]*(?:\s*<[^{};=]+>)?(?:\s*\[\s*\])*)\s+"
+            r"[A-Za-z_$][\w$]*\s*\([^{};]*\)\s*(?:throws\s+[\w.$,\s]+)?", plain)
+        injected = re.search(r"@\s*(?:org\.junit\.jupiter\.api\.io\.)?TempDir\b", header) and re.fullmatch(
+            r"(?:(?:public|protected|static)\s+)*(?:java\.nio\.file\.Path|Path|java\.io\.File|File)\s+[A-Za-z_$][\w$]*", plain)
+        if header and not private and not injected and not (
+                method and char == "{" and re.search(TEST_ANNOTATION + "|" + LIFECYCLE, header)):
+            unsafe.append("shared-test-member")
+        if char == "{":
+            # Consume this member's whole body/initializer, not nested members.
+            index = next((i for i in range(index + 1, end)
+                          if code[i] == "}" and depths[i] == 2), end)
+        first = index + 1
+        index += 1
+    if code[first:end].strip() or parentheses:
+        unsafe.append("unresolved-test-declaration")
+    return unsafe
+
+
+def junit_info(source, java=False):
     source_code = code_only(source)
     code = mask_escaped_members(source_code)
     packages = re.findall(r"^\s*package\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*;?\s*$", code, re.M)
@@ -280,7 +343,7 @@ def junit_info(source):
             raise SelectionError("unbalanced test source")
     if depth:
         raise SelectionError("unbalanced test source")
-    declarations = list(DECLARATION.finditer(code))
+    declarations = list((JAVA_DECLARATION if java else DECLARATION).finditer(code))
     classes = []
     ranges = []
     unsafe = []
@@ -298,11 +361,11 @@ def junit_info(source):
                 raise SelectionError("JUnit source needs an exact package")
             classes.append(packages[0] + "." + item[2])
             ranges.append((item, start, end))
-            if ":" in code[item.end():start] or "extends" in code[item.end():start]:
+            if ":" in code[item.end():start] or re.search(r"\b(?:extends|implements)\b", code[item.end():start]):
                 unsafe.append("inherited-test-class")
     if re.search(TEST_ANNOTATION, code) and not classes:
         raise SelectionError("unresolved JUnit declaration")
-    if re.search(r"@\s*Nested\b", code):
+    if re.search(r"@\s*(?:org\.junit\.jupiter\.api\.)?Nested\b", code):
         unsafe.append("nested-test-class")
     if re.search(r"\bcompanion\s+object\b", code):
         unsafe.append("shared-test-companion")
@@ -317,7 +380,8 @@ def junit_info(source):
                          code[max(0, index - 256):index]) is not None
     test_starts = {item.start() for item, _, _ in ranges}
     declaration_starts = {item.start() for item in declarations}
-    for item in re.finditer(r"(?<!:)\b(?:class|object|interface|fun|val|var|typealias)\b", code):
+    declaration_words = "class|interface|enum|record" if java else "class|object|interface|fun|val|var|typealias"
+    for item in re.finditer(r"(?<![.:])\b(?:" + declaration_words + r")\b", code):
         # Anonymous objects are expressions inside a helper or initializer.
         # The enclosing declaration still decides whether that helper is shared.
         if item[0] == "object" and re.match(r"\s*[:{]", code[item.end():]):
@@ -328,6 +392,10 @@ def junit_info(source):
         if depths[item.start()] == 0 and item.start() not in test_starts:
             if not private_at(item.start()):
                 unsafe.append("shared-test-helper")
+    if java:
+        for _, start, end in ranges:
+            unsafe.extend(java_test_members(code, depths, start, end))
+        return sorted(set(classes)), sorted(set(unsafe)), source_code
     for _, start, end in ranges:
         private_constructors = []
         for item in declarations:
@@ -723,7 +791,7 @@ def select(repo, base_ref, head_ref):
     for path in sorted(files):
         if junit_source(path):
             try:
-                infos[path] = junit_info(text(path))
+                infos[path] = junit_info(text(path), java=path.endswith(".java"))
                 for name in infos[path][0]:
                     if name in classes or name in polyglot_classes:
                         raise SelectionError("duplicate JUnit class")
@@ -733,7 +801,7 @@ def select(repo, base_ref, head_ref):
                 inventory_complete = False
         elif polyglot_junit_source(path):
             try:
-                names, unsafe, _ = junit_info(text(path))
+                names, unsafe, _ = junit_info(text(path), java=path.endswith(".java"))
                 if unsafe or not names:
                     raise SelectionError("unresolved optional JUnit source")
                 for name in names:
@@ -867,8 +935,6 @@ def select(repo, base_ref, head_ref):
                 affected_python.update(group["python"])
                 affected_haskell.update(group.get("haskell", []))
             elif junit_source(path):
-                if path.endswith(".java"):
-                    widen("non-kotlin-test-source", path)
                 info = infos.get(path)
                 if not info or not info[0]:
                     widen("test-helper-or-unresolved-class", path)
@@ -879,7 +945,7 @@ def select(repo, base_ref, head_ref):
                     if base and record["status"] == "M":
                         try:
                             previous = git(repo, "show", base + ":" + path).decode("utf-8")
-                            if set(junit_info(previous)[0]) - set(info[0]):
+                            if set(junit_info(previous, java=path.endswith(".java"))[0]) - set(info[0]):
                                 widen("removed-junit-class", path)
                         except (SelectionError, UnicodeError):
                             widen("unresolved-prior-test", path)

@@ -832,8 +832,81 @@ private val text = "class FakeString { @Test }"
     def test_java_tests_select_their_class_but_widen_unknown_helper_grammar(self):
         self.write("src/test/java/example/JavaTest.java", "package example;\npublic class JavaTest { @Test public void test() {} public static void helper() {} }\n")
         self.commit()
-        result = self.full("non-kotlin-test-source")
+        result = self.full("shared-test-member")
         self.assertIn("example.JavaTest", result["affected"]["junit"])
+
+    def test_java_public_and_package_private_junit_methods_select_actual_classes(self):
+        path = "src/test/java/example/NotTheClassName.java"
+        for modifier in ("public ", ""):
+            with self.subTest(modifier=modifier):
+                self.write(path, "package example;\n" + modifier + "final class JavaTest {\n"
+                           "  @org.junit.jupiter.api.Test " + modifier + "void boundary() {}\n"
+                           "  @BeforeEach void setup() {}\n"
+                           "  private static final Class<?> TYPE = String.class;\n"
+                           "  private static int helper(int value) { return value; }\n"
+                           "}\n")
+                self.commit()
+                result = self.plan()
+                self.assertEqual("narrow", result["mode"], result["reasons"])
+                self.assertEqual(["example.JavaTest"], result["affected"]["junit"])
+
+    def test_java_members_cannot_hide_package_private_helpers_or_fields(self):
+        path = "src/test/java/example/JavaTest.java"
+        for member in ("int helper() { return 1; }", "static int shared = 1;",
+                       "private void local() {} void shared() {}",
+                       "public record Shared(int value) {}", "JavaTest() {}"):
+            with self.subTest(member=member):
+                self.write(path, "package example;\nclass JavaTest {\n"
+                           "  @Test void works() {}\n  " + member + "\n}\n")
+                self.commit()
+                self.full("shared-test-member")
+
+    def test_java_annotations_strings_nested_types_and_unknown_syntax_are_conservative(self):
+        path = "src/test/java/example/JavaTest.java"
+        source = ('package example;\nclass JavaTest {\n'
+                  '  @ParameterizedTest @ValueSource(ints = {1, 2}) void value(int n) {}\n'
+                  '  @TempDir Path temporary;\n'
+                  '  private record Row(int value) {}\n'
+                  '  private String text = "@Test class Fake { public void shared() {} }";\n'
+                  '}\n')
+        self.write(path, source)
+        self.commit()
+        self.assertEqual("narrow", self.plan()["mode"])
+        for added, reason in (("\nrecord Shared(int x) {}\n", "shared-test-helper"),
+                              ("\ninterface Shared {}\n", "shared-test-helper")):
+            self.write(path, source + added)
+            self.commit()
+            self.full(reason)
+        self.write(path, source.replace("private record Row(int value) {}", "unrecognized member syntax"))
+        self.commit()
+        self.full("shared-test-member")
+
+    def test_java_inheritance_and_test_class_reuse_still_widen(self):
+        path = "src/test/java/example/JavaTest.java"
+        self.write(path, "package example;\nclass JavaTest implements Shared { @Test void works() {} }\n")
+        self.commit()
+        self.full("inherited-test-class")
+        self.write(path, "package example;\nclass JavaTest { @Test void works() {} }\n")
+        self.write("src/test/kotlin/example/OtherTest.kt", kotlin("OtherTest", "@Test fun usesJava() { JavaTest() }"))
+        self.commit()
+        self.full("test-class-used-as-helper")
+
+    def test_java_multiple_classes_removed_class_and_qualified_nested_still_widen(self):
+        path = "src/test/java/example/JavaTest.java"
+        source = ("package example;\nclass JavaTest { @Test void works() {} }\n"
+                  "class SecondTest { @Test void checks() {} }\n")
+        self.write(path, source)
+        self.commit()
+        self.assertEqual(["example.JavaTest", "example.SecondTest"], self.plan()["affected"]["junit"])
+        self.base = self.git("rev-parse", "HEAD")
+        self.write(path, source.split("class SecondTest")[0])
+        self.commit()
+        self.full("removed-junit-class")
+        self.base = self.git("rev-parse", "HEAD")
+        self.write(path, "package example;\nclass JavaTest { @Test void works() {}\n"
+                   "  @org.junit.jupiter.api.Nested private class Inner { @Test void checks() {} }\n}\n")
+        self.commit()
+        self.full("nested-test-class")
 
     def test_class_reused_as_helper_widens(self):
         self.write("src/test/kotlin/example/ConsumerTest.kt", kotlin("ConsumerTest", "@Test fun reads() { OtherTest() }"))
@@ -1006,11 +1079,20 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         cls.root = Path(__file__).resolve().parents[2]
         cls.policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         cls.families = cls.policy["leafSources"]
-        cls.classes = {name for path in (cls.root / "src/test").rglob("*.kt")
-                       for name in select.junit_info(path.read_text())[0]}
+        cls.classes = {name for path in (cls.root / "src/test").rglob("*")
+                       if path.suffix in (".kt", ".java")
+                       for name in select.junit_info(path.read_text(), java=path.suffix == ".java")[0]}
 
     def family(self, name):
         return self.families["src/main/kotlin/thc/runtime/" + name + ".kt"]
+
+    def test_converted_java_model_keeps_junit_and_shared_oracle_inventory(self):
+        self.assertIn("thc.ScalarPrimopModelTest", self.classes)
+        for helper in ("ScalarPrimopModel", "NumericPrimopCoreEvidence"):
+            path = "src/test/java/thc/" + helper + ".java"
+            self.assertTrue((self.root / path).is_file())
+            self.assertTrue(self.policy["owners"][path]["junit"])
+            self.assertNotIn("src/test/kotlin/thc/" + helper + ".kt", self.policy["owners"])
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemmoveForeign", "CoreStringRtsForeign", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",

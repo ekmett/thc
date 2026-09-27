@@ -67,7 +67,7 @@ class BitPrimopsTest {
         assertEquals(1953, cases.size)
         for ((stage, paths) in stages) {
             val merged = CoreModules.merge(paths.map { Json.parse(File(root, it).readText()) as Map<String, Any?> })
-            val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite, singleBinding = true)
+            val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite, true)
             for (entry in entries) {
                 val name = entry["name"] as String
                 val primitive = entry["primitive"] as String

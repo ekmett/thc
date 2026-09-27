@@ -60,7 +60,7 @@ class IntegerPrimopsTest {
             Json.parse(File(root, it).readText()) as Map<String, Any?>
         }
         val merged = CoreModules.merge(modules)
-        val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite["name"] as String, singleBinding = true)
+        val compositeCalls = NumericPrimopCoreEvidence.calls(merged, composite["name"] as String, true)
         for (entry in entries) {
             val name = entry["name"] as String
             val operation = name.substringBefore("Word")
