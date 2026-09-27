@@ -79,6 +79,8 @@ class WindowsDistributionTest {
         assertEquals(4L, (receipt["runs"] as Number).toLong())
         val commands = receipt["commands"] as List<Map<String, Any?>>
         assertEquals(6, commands.size)
+        assertEquals(listOf(true, false, false, false),
+            commands.drop(2).map { (it["argv"] as List<*>).contains("--verify-artifacts") })
         assertEquals(setOf(
             "ast" to "-Dthc.diagnostics=true -Dthc.handoffSlabs=false",
             "ast" to "-Dthc.diagnostics=true -Dthc.handoffSlabs=true",
@@ -93,7 +95,11 @@ class WindowsDistributionTest {
     @Suppress("UNCHECKED_CAST")
     @Test fun genuineHaskellHostEntryPreservesTheThunkAndStrictIoSignature() {
         val receipt = verifiedReceipt("build/windows-driver/provenance.json")
-        for (manifest in receipt["supportManifests"] as List<String>) {
+        val manifests = receipt["supportManifests"] as List<String>
+        val audited = receipt["auditedManifests"] as List<String>
+        assertEquals(4, manifests.size)
+        assertEquals(manifests.take(1), audited)
+        for (manifest in manifests) {
             val output = File(root, manifest).parentFile.parentFile
             fun document(path: String) = Json.parse(File(output, path).readText()) as Map<String, Any?>
             val original = document("core/Main.json")["bindings"] as List<Map<String, Any?>>
@@ -109,11 +115,15 @@ class WindowsDistributionTest {
             assertThrows(UnsupportedCore::class.java) {
                 CoreRepresentations.ioUnitMainResult(entry + ("type" to "IO Int"), bindings)
             }
-            val audit = document("audit.json")
-            assertEquals(true, audit["accepted"])
-            assertEquals(listOf(entry["id"]), audit["roots"])
-            assertEquals(emptyList<Any>(), audit["issues"])
-            assertEquals(emptyList<Any>(), audit["missingGlobals"])
+            if (manifest in audited) {
+                val audit = document("audit.json")
+                assertEquals(true, audit["accepted"])
+                assertEquals(listOf(entry["id"]), audit["roots"])
+                assertEquals(emptyList<Any>(), audit["issues"])
+                assertEquals(emptyList<Any>(), audit["missingGlobals"])
+            } else {
+                assertFalse(File(output, "audit.json").exists(), "Auditing must remain opt-in: $manifest")
+            }
         }
     }
 
