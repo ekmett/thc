@@ -493,6 +493,31 @@ configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configura
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
 
+// Explicitly prepared converter/native controls, separate from ordinary models.
+val compactInteropTests = listOf("compactCoreInteropTest" to false, "compactCoreInteropDenseTest" to true).map { (taskName, dense) ->
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine compact Core conversion against native GHC and immediate compiled calls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.CoreCompactInteropTest") }
+        for ((property, fallback) in listOf("thc.compactInteropManifest" to "packages.json",
+            "thc.compactInteropReference" to "reference-packages.json",
+            "thc.compactInteropOracle" to "native.tsv")) {
+            val input = providers.gradleProperty(property).map { file(it) }
+                .orElse(layout.buildDirectory.file("compact-core-interop/$fallback").map { it.asFile })
+            inputs.file(input)
+            systemProperty(property, input.get().absolutePath)
+        }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Compact interop needs fresh native/first-entry evidence") { true }
+    }
+}
+compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
+
 for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalTimeClockDense" to true)) {
     tasks.register<Test>(taskName) {
         group = "verification"
