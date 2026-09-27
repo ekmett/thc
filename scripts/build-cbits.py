@@ -24,6 +24,7 @@ TEXT_SHA256 = {
     "LICENSE": "cf522e3d53b8d1768695fe5b66438baf4514fcd64b7a95739960f2f5b50c6ee8",
     "openbsd-memchr.c": "6058dd440eacf8f9929437d8f6bacc593066c3032407e4428ea5f0e6bccff053",
 }
+BYTESTRING_UTF8_SHA256 = "d25c2ce0260fe4509c59ad400cba5df33dfafb9935ef3099ba04b26a2ce36e65"
 LIBDW_SHA256 = {
     "BeginPrivate.h": "9523f652d274067f5a89ca3ce9ad156f212c88941affbcdf23711f33f684055e",
     "EndPrivate.h": "636273ae8e7d978ab90ea1c51b2b05aeb624392b2f04c25894622acf84f1726e",
@@ -98,6 +99,9 @@ def main():
     for name, expected in TEXT_SHA256.items():
         if hashlib.sha256((text_source / name).read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original text 2.1.3 {name} changed")
+    bytestring_source = ROOT / "compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c"
+    if hashlib.sha256(bytestring_source.read_bytes()).hexdigest() != BYTESTRING_UTF8_SHA256:
+        raise SystemExit("Original ByteString 0.12.2.0 is-valid-utf8.c changed")
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
@@ -112,6 +116,7 @@ def main():
     if system == "Linux":
         sources["iconv"] = ROOT / "src/main/c/iconv-api.c"
         if arch == "x86_64":
+            sources["bytestring-utf8"] = ROOT / "src/main/c/bytestring-utf8-api.c"
             sources["text"] = ROOT / "src/main/c/text-api.c"
             sources["wait-status"] = ROOT / "src/main/c/wait-status-api.c"
     unix_headers = list(libdir.rglob("HsUnix.h")) if "wait-status" in sources else []
@@ -126,6 +131,8 @@ def main():
         if name == "text":
             command.insert(1, "-D__STDC_NO_ATOMICS__=1")
             command.insert(1, "-fno-builtin-memchr")
+        if name == "bytestring-utf8":
+            command.insert(1, "-D__STDC_NO_ATOMICS__=1")
         if name == "wait-status":
             command[1:1] = ["-I", str(unix_headers[0].parent)]
         subprocess.run(command, cwd=ROOT, check=True)
@@ -141,8 +148,18 @@ def main():
                 raise SystemExit("text memchr dependency is not defined in the original managed bitcode")
             (output / "text-LICENSE").write_bytes((text_source / "LICENSE").read_bytes())
             (output / "text-memchr-LICENSE").write_bytes((text_source / "openbsd-memchr.c").read_bytes())
+        if name == "bytestring-utf8":
+            # Never let a managed buffer escape to native libc via an unresolved
+            # memcpy; the original small load must stay within LLVM execution.
+            inspect = [*compiler, "-S", "-emit-llvm", str(output / "bytestring-utf8.bc"), "-o", "-"]
+            ir = subprocess.check_output(inspect, cwd=ROOT, text=True)
+            commands.append(inspect)
+            if (re.search(r'^declare .*@memcpy\(', ir, re.M) or
+                    not re.search(r'^define .*@bytestring_is_valid_utf8\(', ir, re.M)):
+                raise SystemExit("ByteString UTF-8 dependency is not defined in managed bitcode")
+            (output / "bytestring-utf8-LICENSE").write_bytes(bytestring_source.read_bytes())
     source_files = [reference / n for n in PINNED] + [libdw / n for n in LIBDW_SHA256] + list(sources.values())
-    source_files += [text_source / n for n in TEXT_SHA256]
+    source_files += [text_source / n for n in TEXT_SHA256] + [bytestring_source]
     source_files += unix_headers + [p.parent / "HsUnixConfig.h" for p in unix_headers]
     artifacts = [output / (name + ".bc") for name in sources]
     if system == "Windows":

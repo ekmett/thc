@@ -21,6 +21,25 @@ DECLARED_REQUIRED = cache.REQUIRED
 
 
 class FastInputTests(unittest.TestCase):
+    def test_bytestring_utf8_closed_receipt(self):
+        manifest_path = 'build/bytestring-utf8/manifest.json'
+        outputs = cache.BYTESTRING_UTF8_OUTPUTS
+        self.assertEqual(48, len(outputs))
+        self.assertIn(manifest_path, DECLARED_REQUIRED)
+        artifacts = {name: 'a' * 64 for name in outputs - {manifest_path}}
+        good = dict(schema=1, entries=['validateUnsafe', 'validateSafe'], nativeRows=800,
+                    strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.bytestring_utf8_artifact_hashes(good))
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(nativeRows=799), dict(strictAccepted=False), dict(runtimeVerified=True),
+                        dict(entries=['validateSafe']), dict(artifactHashes={}),
+                        dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
+            with self.assertRaises(cache.CacheMiss):
+                cache.bytestring_utf8_artifact_hashes(dict(good, **changes))
+        for path in ('native/ByteStringUtf8Native.o', 'native/other-oracle', 'unreviewed.json'):
+            self.assertFalse(cache.allowed_payload('build/bytestring-utf8/' + path, {}))
+
     def test_memory_search_closed_receipt(self):
         manifest_path = 'build/original-memory-search/manifest.json'
         outputs = cache.MEMORY_SEARCH_OUTPUTS
@@ -1603,6 +1622,7 @@ class RenamedInputContractTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         self.assertEqual(("src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
                           "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                          "src/main/c/bytestring-utf8-api.c",
                           "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
                           "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                           "src/main/kotlin/thc/runtime/VectorMemory.kt"), cache.RUNTIME_INPUTS)

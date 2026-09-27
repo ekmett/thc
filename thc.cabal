@@ -27,6 +27,10 @@ extra-source-files:
   test/fixtures/run-native-archive/provider/native-archive-provider.cabal
   test/fixtures/run-native-archive/provider/native.c
   test/fixtures/run-native-archive/provider/Provider.hs
+  compiler/test-fixtures/ByteStringUtf8Audit.hs
+  compiler/test-fixtures/ByteStringUtf8Native.hs
+  compiler/pinned-bytestring/0.12.2.0/README.md
+  compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c
   compiler/test-fixtures/TextCbitsAudit.hs
   compiler/test-fixtures/ByteStringDecimalAudit.hs
   compiler/test-fixtures/UnixLibcAudit.hs
@@ -821,6 +825,7 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
+    ByteStringUtf8Fixtures
     MemorySearchFixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures

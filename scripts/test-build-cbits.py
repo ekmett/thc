@@ -93,13 +93,16 @@ class CompilerTargetTest(unittest.TestCase):
             source.parent.mkdir(parents=True)
             source.write_bytes(b"/* synthetic ABI wrapper */\n")
             for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c", "package-pointer-api.c",
-                         "text-api.c", "wait-status-api.c"):
+                         "text-api.c", "wait-status-api.c", "bytestring-utf8-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
             text_source = root / "compiler/pinned-text/2.1.3"
             for name in build.TEXT_SHA256:
                 path = text_source / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes((build.ROOT / "compiler/pinned-text/2.1.3" / name).read_bytes())
+            utf8 = root / "compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c"
+            utf8.parent.mkdir(parents=True)
+            utf8.write_bytes((build.ROOT / utf8.relative_to(root)).read_bytes())
             libdw = root / "compiler/pinned-ghc-rts"
             libdw.mkdir(parents=True)
             for name in build.LIBDW_SHA256:
@@ -117,6 +120,8 @@ class CompilerTargetTest(unittest.TestCase):
             default, target = "x86_64-pc-linux-gnu", "x86_64-unknown-linux-gnu"
 
             def query(command, **kwargs):
+                if "-S" in command and command[-3].endswith("bytestring-utf8.bc"):
+                    return "define i32 @bytestring_is_valid_utf8(ptr %src, i64 %len) { ret i32 1 }\n"
                 if "-S" in command:
                     self.assertEqual(["/clang", "--target=" + target, "-S", "-emit-llvm",
                                       str(output.resolve() / "thc/cbits/text.bc"), "-o", "-"], command)
@@ -149,9 +154,13 @@ class CompilerTargetTest(unittest.TestCase):
             self.assertEqual(target, manifest["target"])
             self.assertEqual("Linux", manifest["system"])
             self.assertEqual("x86_64", manifest["architecture"])
-            self.assertEqual(10, len(manifest["commands"]))
-            self.assertEqual(25, len(manifest["sources"]))
-            self.assertEqual(9, len(manifest["artifacts"]))
+            self.assertEqual(12, len(manifest["commands"]))
+            self.assertEqual(27, len(manifest["sources"]))
+            self.assertEqual(10, len(manifest["artifacts"]))
+            utf8_command = next(c for c in manifest["commands"] if "src/main/c/bytestring-utf8-api.c" in c)
+            self.assertIn("-D__STDC_NO_ATOMICS__=1", utf8_command)
+            self.assertEqual(build.BYTESTRING_UTF8_SHA256, hashlib.sha256(
+                (output / "thc/cbits/bytestring-utf8-LICENSE").read_bytes()).hexdigest())
             for entry in manifest["sources"] + manifest["artifacts"]:
                 self.assertEqual(hashlib.sha256(Path(entry["path"]).read_bytes()).hexdigest(), entry["sha256"])
 

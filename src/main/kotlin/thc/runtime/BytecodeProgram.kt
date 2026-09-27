@@ -1513,11 +1513,13 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val byteStringDecimal = CoreByteStringDecimal.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val byteStringUtf8 = CoreByteStringUtf8Foreign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val memorySearch = CoreMemorySearchForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && byteStringDecimal == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if (runtimeService != null) {
@@ -2086,6 +2088,20 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     operands.forEach { it.emit(e) }
                     if (byteStringDecimal.addressResult) e.builder.endOriginalByteStringDecimal()
                     else e.builder.endOriginalByteStringDecimalPadded18()
+                }
+            } else if (byteStringUtf8 != null) {
+                CoreByteStringUtf8Foreign.validateHead(fn, defined || fn.getOrNull(1) in scope.joins)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreByteStringUtf8Foreign.validateOperand(index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    e.builder.beginOriginalUtf8Validate(destination.single())
+                    operands.forEach { it.emit(e) }
+                    e.builder.endOriginalUtf8Validate()
+                    if (enableAsync && byteStringUtf8) emitAsyncPoll(e)
                 }
             } else if (memorySearch != null) {
                 CoreMemorySearchForeign.validateHead(fn, defined)
