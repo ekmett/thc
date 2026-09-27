@@ -63,6 +63,16 @@ def compiler_target(clang, system, arch):
     return command, target, default_target
 
 
+def bitcode_target(disassembler, artifact, expected):
+    # llvm-dis reads the actual module; unlike compiling IR again, it cannot
+    # replace an incompatible module triple with the driver's selected target.
+    ir = subprocess.check_output([disassembler, str(artifact), "-o", "-"], text=True)
+    targets = re.findall(r'^target triple = "([^"]+)"$', ir, re.M)
+    if targets != [expected]:
+        raise SystemExit(f"Compiled bitcode target mismatch for {artifact.name}: expected {expected}, got {targets}")
+    return targets[0]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
@@ -105,6 +115,22 @@ def main():
     output = args.output.resolve() / "thc/cbits"
     output.mkdir(parents=True, exist_ok=True)
     commands = []
+    pointer_compiler, pointer_target = compiler, target
+    disassembler = None
+    if system == "Windows":
+        # Sulong 25.3.4.1's managed Windows runtime uses the MSVC ABI. Compile
+        # this portable pointer bridge for that target; native GHC DLLs below
+        # still use the selected MinGW compiler/headers. Never relabel bitcode
+        # or turn off Sulong's target check to accept a different ABI.
+        pointer_target = "x86_64-pc-windows-msvc19.33.0"
+        pointer_compiler = [clang, "--target=" + pointer_target]
+        actual = subprocess.check_output([*pointer_compiler, "-dumpmachine"], text=True).strip()
+        if actual != pointer_target:
+            raise SystemExit(f"Clang did not select the Windows Sulong pointer ABI: {actual}")
+        sibling = Path(clang).with_name("llvm-dis.exe")
+        disassembler = shutil.which(os.environ.get("THC_LLVM_DIS", str(sibling) if sibling.is_file() else "llvm-dis"))
+        if not disassembler:
+            raise SystemExit("Windows cbits require llvm-dis beside Clang, on PATH, or selected by THC_LLVM_DIS")
     sources = {"package-pointer": ROOT / "src/main/c/package-pointer-api.c",
                "md5": ROOT / "src/main/c/md5-api.c",
                "libdw-unavailable": ROOT / "src/main/c/libdw-unavailable.c"}
@@ -122,8 +148,10 @@ def main():
     unix_headers = list(libdir.rglob("HsUnix.h")) if "wait-status" in sources else []
     if "wait-status" in sources and len(unix_headers) != 1:
         raise SystemExit(f"Expected one installed unix HsUnix.h, got {unix_headers}")
+    bitcode_targets = {}
     for name, source in sources.items():
-        command = [*compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
+        selected_compiler = pointer_compiler if name == "package-pointer" else compiler
+        command = [*selected_compiler, "-O1", "-g", "-fno-strict-aliasing", "-emit-llvm", "-c",
                    f"-ffile-prefix-map={ROOT}=.", f"-fdebug-prefix-map={ROOT}=.",
                    "-I", str(reference), "-I", str(headers[0].parent), "-I", str(config[0].parent),
                    str(source.relative_to(ROOT)),
@@ -137,6 +165,9 @@ def main():
             command[1:1] = ["-I", str(unix_headers[0].parent)]
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
+        expected_target = pointer_target if name == "package-pointer" else target
+        artifact = output / (name + ".bc")
+        bitcode_targets[artifact.name] = bitcode_target(disassembler, artifact, expected_target) if disassembler else expected_target
         if name == "text":
             # Inspect the compiled artifact, not only source spelling. The
             # managed buffer must never escape to native libc's memchr.
@@ -196,11 +227,15 @@ def main():
         artifacts.append(artifact)
     record = lambda p: {"path": str(p), "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
     manifest = {"schema": 1, "target": target, "compilerDefaultTarget": default_target,
+                "bitcodeTargets": bitcode_targets,
                 "system": system, "architecture": arch,
                 "clangVersion": subprocess.check_output([clang, "--version"], text=True),
                 "ghc": "9.14.1", "commands": commands,
                 "sources": [record(p) for p in source_files],
                 "artifacts": [record(p) for p in artifacts]}
+    if disassembler:
+        manifest["bitcodeInspector"] = {"path": disassembler,
+                                       "version": subprocess.check_output([disassembler, "--version"], text=True)}
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"Compiled C resources {', '.join(p.name for p in artifacts)} for {target}")
 
