@@ -1101,7 +1101,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(40, len(consumers))
+        self.assertEqual(41, len(consumers))
+        self.assertIn("thc.runtime.ManagedWeakTest", consumers)
+        self.assertIn("thc.runtime.OriginalDirectoryStreamsTest", consumers)
         self.assertIn("thc.runtime.OriginalHandleReadinessNativeTest", consumers)
         self.assertIn("thc.runtime.OriginalTermiosTest", consumers)
 
