@@ -833,7 +833,7 @@ class DelimitedContinuationsTest {
                 cut.frames += DelimitedFrame(frame, object : DelimitedStep {
                     override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame,
                                         input: DelimitedResume, ambient: MaskingState,
-                                        outerMask: DelimitedStep?): Nothing { input.get(); throw AstSelfCall }
+                                        outerMask: DelimitedStep?): Nothing { input.get(); throw AstSelfCall.INSTANCE }
                 })
                 cut.frames += DelimitedFrame(frame, DelimitedRootStep(function))
                 cut.frames += DelimitedFrame(frame, object : DelimitedStep {

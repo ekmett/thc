@@ -97,7 +97,7 @@ class EmptyArgumentRuntimeTest {
             val value = frame.arguments[1] as Long
             events += if (empty == null) value + 100L else value
             if (value < 0) throw GuestException(value, this)
-            return empty?.finish(frame, EMPTY_TUPLE_SLOTS) ?: value
+            return empty?.finish(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS) ?: value
         }
     }
     @Test fun emptyComputationsRunBeforeLaterOperandsAndPapPublicationAndReleaseResultsOnThrow() = withLanguage { language ->

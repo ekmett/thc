@@ -14,10 +14,10 @@ import thc.Language
 class StaticShapeSafetyTest {
     private fun configuration(strategy: String, unchecked: Boolean, force: Boolean = false,
                               action: (Language) -> Unit) {
-        val previous = System.getProperty(STATIC_SHAPE_UNCHECKED_PROPERTY)
+        val previous = System.getProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY)
         try {
-            if (unchecked) System.setProperty(STATIC_SHAPE_UNCHECKED_PROPERTY, "true")
-            else System.clearProperty(STATIC_SHAPE_UNCHECKED_PROPERTY)
+            if (unchecked) System.setProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY, "true")
+            else System.clearProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY)
             Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.StaticObjectStorageStrategy", strategy)
                 .option("engine.ForceStaticObjectSafetyChecks", force.toString())
@@ -28,8 +28,8 @@ class StaticShapeSafetyTest {
                     finally { context.leave() }
                 }
         } finally {
-            if (previous == null) System.clearProperty(STATIC_SHAPE_UNCHECKED_PROPERTY)
-            else System.setProperty(STATIC_SHAPE_UNCHECKED_PROPERTY, previous)
+            if (previous == null) System.clearProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY)
+            else System.setProperty(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY, previous)
         }
     }
 

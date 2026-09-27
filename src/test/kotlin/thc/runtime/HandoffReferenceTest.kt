@@ -40,8 +40,8 @@ class HandoffReferenceTest {
             mapOf("id" to "Box", "name" to "Box", "arity" to 1, "kind" to "boxed", "fieldReps" to listOf(listOf("IntRep")), "strictFields" to listOf(false), "fieldLifted" to listOf(false)),
             mapOf("id" to "Pair", "name" to "Pair", "arity" to 2, "kind" to "boxed", "fieldReps" to List(2) { listOf("BoxedRep (Just Lifted)") }, "strictFields" to listOf(false, false), "fieldLifted" to listOf(true, true))))
     private fun withLanguage(action: (Language) -> Unit) {
-        val old = System.getProperty(HANDOFF_PROPERTY)
-        System.setProperty(HANDOFF_PROPERTY, "true")
+        val old = System.getProperty(HandoffKt.HANDOFF_PROPERTY)
+        System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true")
         try {
             Context.newBuilder("thc").allowExperimentalOptions(true).option("compiler.Inlining", "false")
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
@@ -50,7 +50,7 @@ class HandoffReferenceTest {
                     try { action(TruffleLanguage.LanguageReference.create(Language::class.java).get(null)) }
                     finally { context.leave() }
                 }
-        } finally { if (old == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, old) }
+        } finally { if (old == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY) else System.setProperty(HandoffKt.HANDOFF_PROPERTY, old) }
     }
     private fun compile(target: RootCallTarget) {
         val type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")

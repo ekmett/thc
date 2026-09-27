@@ -48,7 +48,7 @@ internal class DelimitedRootStep(private val root: FunctionRoot) : DelimitedTran
     override fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
                         outerMask: DelimitedStep?): Any? = input.get()
     override fun accepts(transfer: ControlFlowException): Boolean =
-        transfer === AstSelfCall || transfer is TailCall || transfer is HandoffTailCall
+        transfer === AstSelfCall.INSTANCE || transfer is TailCall || transfer is HandoffTailCall
     override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? =
         root.resumeDelimited(frame, transfer, site)
     override fun finish(result: Any?, site: DelimitedActionSite): Any? = site.finish(result, root.tupleResult)

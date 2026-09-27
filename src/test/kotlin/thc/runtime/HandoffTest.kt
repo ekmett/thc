@@ -121,8 +121,8 @@ class HandoffTest {
         assertEquals(true, type.getMethod("isValidLastTier").invoke(target))
     }
     private fun withLanguage(inlining: Boolean = true, action: (Language) -> Unit) {
-        val previous = System.getProperty(HANDOFF_PROPERTY)
-        System.setProperty(HANDOFF_PROPERTY, "true")
+        val previous = System.getProperty(HandoffKt.HANDOFF_PROPERTY)
+        System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true")
         try {
             (if (inlining) executionContext() else Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("compiler.Inlining", "false").option("engine.BackgroundCompilation", "false")
@@ -133,7 +133,7 @@ class HandoffTest {
                 finally { context.leave() }
             }
         } finally {
-            if (previous == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, previous)
+            if (previous == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY) else System.setProperty(HandoffKt.HANDOFF_PROPERTY, previous)
         }
     }
     private fun assertReleased(state: HandoffState) {
@@ -146,11 +146,11 @@ class HandoffTest {
         // Unlike withLanguage, this proof never changes the process property.
         // Named Gradle forks supply an independent expectation; legacy `test`
         // still accepts the caller's JAVA_TOOL_OPTIONS setting.
-        val actual = java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
+        val actual = java.lang.Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY)
         val expected = System.getProperty("thc.expectedHandoffSlabs")
         if (expected != null) {
             assertTrue(expected == "true" || expected == "false")
-            assertEquals(expected, System.getProperty(HANDOFF_PROPERTY),
+            assertEquals(expected, System.getProperty(HandoffKt.HANDOFF_PROPERTY),
                 "The fork must receive its requested handoff mode")
         }
         executionContext().use { context ->

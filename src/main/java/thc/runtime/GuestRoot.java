@@ -67,7 +67,7 @@ public abstract class GuestRoot extends RootNode {
         int count = 0;
         for (int i = 0; i < entryStrict.length; i++)
             if (entryStrict[i] && (inputLayout == null || !inputLayout.isTuple(i) && !inputLayout.isVector(i)))
-                positions[count++] = ArgumentLayout.Companion.offset(inputLayout, i) + entryArgumentOffset;
+                positions[count++] = ArgumentLayout.offset(inputLayout, i) + entryArgumentOffset;
         strictArgumentPositions = Arrays.copyOf(positions, count);
     }
     public final void configureForeignExceptionBridge(ForeignExceptionBridge value) { foreignExceptionBridge = value; }

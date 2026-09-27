@@ -105,8 +105,8 @@ class ScalarMemoryUtilitiesTest {
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val requestedMode = System.getenv("THC_EXPECT_HANDOFF_MODE")?.toBooleanStrict()
-                        ?: java.lang.Boolean.getBoolean(HANDOFF_PROPERTY)
-                    assertEquals(requestedMode,java.lang.Boolean.getBoolean(HANDOFF_PROPERTY))
+                        ?: java.lang.Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY)
+                    assertEquals(requestedMode,java.lang.Boolean.getBoolean(HandoffKt.HANDOFF_PROPERTY))
                     assertEquals(requestedMode,language.handoffLayouts.enabled)
                     val linked = CoreModules.reachable(module, name) + ("instrument" to true)
                     val program: ExecutableProgram = if (backend == "ast") Program(language,linked) else BytecodeProgram(language,linked)
