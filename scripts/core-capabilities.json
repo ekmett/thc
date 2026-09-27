@@ -239,7 +239,7 @@
     "data-addr"
   ],
   "functionLabels": ["libdwPoolRelease", "backtraceFree", "free"],
-  "dataLabels": ["enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc"],
+  "dataLabels": ["enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc", "RtsFlags"],
   "integerLiteralRanges": {
     "int8": [
       -128,
@@ -1843,6 +1843,7 @@
     "subWordC#": 2
   },
   "limitations": [
+    "The RtsFlags data label supports only the evidenced GHC 9.14.1 inplace x86_64-linux dynamic-nonprofiling layout: TraceFlags.user is a read-only CBool at byte offset 403 (392+11). It reports true because THC traceEvent#, traceMarker# and traceBinaryEvent# always emit to context stderr, independently of diagnostic counters. This deliberately differs from native GHC's default disabled user-event flag; it does not claim native eventlog status or supply a zero-filled RTS image. Unknown fields, widths, writes, missing or other producing layouts and native pointer projection reject. See docs/hints-and-tracing.md.",
     "Original ghc-internal getRTSStatsEnabled is false; direct getRTSStats rejects without reading or writing its buffer, while original Haskell raises its own UnsupportedOperation before allocation. performGC, performMajorGC and performBlockingMajorGC request advisory System.gc(), without GHC generation, finalizer or completion guarantees. getMonotonicNSec returns System.nanoTime() bits with an arbitrary JVM origin. Both backends preserve safe-call completion before async delivery. See docs/gc-stats-clock.md; JVM runtime-service counters are not fabricated GHC RTS statistics.",
     "The base-only THC runtime-service API exposes actual context permissions/backend, thread/affinity observations, JVM-wide memory and GC statistics, context-owned libc allocation statistics, context-local structured tracing and opt-in JIT telemetry. The private versioned C query/control/trace ABI returns explicit Unsupported/Disabled/Denied/Unavailable states; native-GHC fallback does not invent JVM data. THC.Internal.JIT is explicitly Unsafe and is not re-exported from the Safe facade. Queries do not enable JVM-wide instrumentation; diagnostics never automatically start JFR recording. See docs/runtime-services.md for scope, units and SafeHaskell boundaries.",
     "See docs/primop-behavior.md for the exact primop-by-primop behavioral reference, separate from implementation coverage. catch#, maskAsyncExceptions#, maskUninterruptible# and unmaskAsyncExceptions# require lifted boxed action results and reject valid single-word unboxed results. raiseIO# also restricts exception payloads and bottom result positions to lifted boxed forms. tagToEnum# excludes phantom-parameter enumerations and enumeration data-family instances.",

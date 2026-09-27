@@ -283,6 +283,13 @@ a formal equivalence proof. Details: [floating vector min/max](floating-vector-m
 
 Details: [hints and tracing](hints-and-tracing.md).
 
+The pinned Linux GHC 9.14.1 `RtsFlags.TraceFlags.user` getter reports true for
+THC's always-enabled context stderr trace sink, independently of diagnostic
+counters. This single read-only CBool mapping does not implement a native RTS
+image or GHC event-selection flags; unknown fields/widths and writes reject.
+The supported producing layout and native-default difference are documented
+in the tracing guide above.
+
 ## Related limits that are not individual primops
 
 The `enabled_capabilities` RTS data label reports the context-local logical count,

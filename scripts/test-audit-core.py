@@ -4088,6 +4088,19 @@ class ExplicitWeakContractTest(unittest.TestCase):
 
 
 class RTSDataLabelTest(unittest.TestCase):
+    def test_rtsflags_label_still_requires_exact_evaluated_address_proof(self):
+        label = ['lit', 'data-addr', 'RtsFlags',
+                 dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
+        self.assertTrue(run(label)['accepted'])
+        self.assertFalse(run(label, cap=dict(CAP, dataLabels=[]))['accepted'])
+        for symbol in ('RtsFlags_extra', 'rtsFlags'):
+            wrong = copy.deepcopy(label); wrong[2] = symbol
+            self.assertFalse(run(wrong)['accepted'])
+        for rep in (dict(kind='address', primReps=['AddrRep'], evaluated=False),
+                    dict(kind='long', primReps=['WordRep'], evaluated=True)):
+            wrong = copy.deepcopy(label); wrong[3]['rep'] = rep
+            self.assertFalse(run(wrong)['accepted'])
+
     def test_only_enabled_capabilities_with_evaluated_address_proof_is_admitted(self):
         label = ['lit', 'data-addr', 'enabled_capabilities',
                  dict(rep=dict(kind='address', primReps=['AddrRep'], evaluated=True))]
