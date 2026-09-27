@@ -3,6 +3,7 @@
 
 package thc.runtime
 
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 
@@ -19,7 +20,9 @@ internal class OriginalLibdwExpression(private val operation: LibdwForeignOp,
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         // Native stubs ignore pointer contents, but evaluating the arguments and
         // checking their carriers remains required, including the State token.
-        for (index in 0 until operands.lastIndex) operands[index].executeRequiredAddress(frame)
+        val firstOperands = operands
+        if (firstOperands == null) CompilerDirectives.transferToInterpreter()
+        for (index in 0 until firstOperands.lastIndex) operands[index].executeRequiredAddress(frame)
         requireVoidCarrier(operands.last().execute(frame))
         if (operation == LibdwForeignOp.LOOKUP) FrameAccess.writeLong(frame, slots[offset], 1L)
         else if (operation != LibdwForeignOp.CLEAR)
