@@ -150,6 +150,7 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
                               private val userSignalAvailable: () -> Boolean = { NativeSignalTransport.userSignalAvailable() },
                               private val factory: () -> ProcessSignalTransport = { NativeSignalTransport() }) {
     private var authorized = false
+    private var program: ExecutableProgram? = null
     private var binding: SignalDispatchRoot? = null
     private var transport: ProcessSignalTransport? = null
     private var worker: Thread? = null
@@ -158,9 +159,11 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     internal fun authorizeLauncher() { authorized = true }
     @Synchronized fun bind(program: ExecutableProgram) {
         current()
-        if (closed || binding != null) fault("Process signal dispatcher already bound")
+        if (closed || this.program != null) fault("Process signal dispatcher already bound")
         if (!program.asynchronousExceptions) fault("Process signal delivery requires asyncExceptions=true")
-        binding = SignalDispatchRoot(language, program)
+        // Availability of GHC's signal module is not use of its dispatcher.
+        // Resolve the action/layouts only at the first actual installation.
+        this.program = program
     }
     private fun current() {
         if (Language.currentState() !== owner) fault("Process signals belong to another context")
@@ -180,7 +183,8 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
         if (signal == 12L && !userSignalAvailable())
             fault("SIGUSR2 requires the standalone JVM launcher with _JAVA_SR_SIGNUM=64 and verified native dispositions")
         if (closed || stopping) fault("Process signal service is closed")
-        val root = binding ?: fault("Missing original signal dispatcher")
+        val root = binding ?: SignalDispatchRoot(language, program ?: fault("Missing original signal dispatcher"))
+            .also { binding = it }
         val native = transport ?: factory().also { acquired ->
             transport = acquired
             val child = owner.env.newTruffleThreadBuilder(Runnable { consume(acquired, root) }).build()
@@ -249,7 +253,7 @@ internal class ManagedSignals(private val owner: Language.State, private val lan
     @Synchronized fun requestStop() {
         stopping = true
         transport?.wake()
-        if (worker == null) closed = true
+        if (worker == null) { closed = true; binding = null; program = null }
     }
 
     /** Stop before leaving runIO; finalizeContext also covers cancellation. The
