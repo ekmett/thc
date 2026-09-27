@@ -83,7 +83,7 @@ internal class PolyglotAccess : Node() {
 
     private inline fun <T> foreign(action: () -> T): T {
         val threads = Language.currentState(this).threads
-        val previous = threads.enterForeign()
+        val previous = threads.enterForeign(ForeignSafety.SAFE)
         try { return action() }
         finally { threads.leaveForeign(previous) }
     }
@@ -163,6 +163,7 @@ internal class PolyglotExpression(private val operation: PolyglotOp,
                 FrameAccess.writeLong(frame, slots[offset], access.executeInt(frame, value, input, state))
             }
         }
+        AstForeignCompleted.poll(this)
         return null
     }
 }

@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /** GHC has already unboxed the public Int/Double arguments at this boundary. */
 internal class JavaScriptImport(val source: String,
-    @field:CompilationFinal(dimensions = 1) val arguments: Array<CoreKind>, val result: CoreKind)
+    @field:CompilationFinal(dimensions = 1) val arguments: Array<CoreKind>, val result: CoreKind, val safety: ForeignSafety)
 
 internal object CoreJavaScript {
     private const val PREFIX = "thc_javascript_v1_"
@@ -78,7 +78,8 @@ internal object CoreJavaScript {
             "actual argument representations")
         val result = result(CoreRepresentations.parse(descriptor["resultRep"]))
         requireProof(result != null && result(CoreRepresentations.expression(expr)) == result, "state/result tuple")
-        return JavaScriptImport(source, kinds.dropLast(1).map { it!! }.toTypedArray(), result!!)
+        return JavaScriptImport(source, kinds.dropLast(1).map { it!! }.toTypedArray(), result!!,
+            ForeignSafety.synchronous(descriptor["safety"] as String))
     }
 }
 
@@ -125,7 +126,7 @@ internal class JavaScriptAccess(private val declaration: JavaScriptImport) : Nod
     /** Only the foreign call is opaque; a reentrant THC public entry opens its own guest cut. */
     private inline fun <T> foreign(action: () -> T): T {
         val threads = Language.currentState(this).threads
-        val previous = threads.enterForeign()
+        val previous = threads.enterForeign(declaration.safety)
         try { return action() }
         finally { threads.leaveForeign(previous) }
     }
@@ -200,6 +201,7 @@ internal class JavaScriptExpression(private val declaration: JavaScriptImport,
             CoreKind.VOID -> access.executeVoid(values, state)
             else -> fault("Invalid JavaScript result type")
         }
+        if (declaration.safety == ForeignSafety.SAFE) AstForeignCompleted.poll(this)
         return null
     }
 }
