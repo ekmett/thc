@@ -369,21 +369,6 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             arityCertificate).also { scope.bindLocal(name, it) }
     private fun representation(binding: Map<String, Any?>): Boolean = binding["lifted"] as? Boolean
         ?: throw UnsupportedCore("Unknown levity for ${binding["id"]}")
-    private fun freeVariables(expr: List<Any?>): Set<String> = when (expr[0]) {
-        "var" -> setOf(expr[1] as String)
-        "lam" -> freeVariables(expr[2] as List<Any?>) - (expr[1] as List<Map<String, Any?>>).map { it["id"] as String }.toSet()
-        "app" -> freeVariables(expr[1] as List<Any?>) + (expr[2] as List<List<Any?>>).flatMap { freeVariables(it) }
-        "let" -> {
-            val group = expr[2] as List<Map<String, Any?>>
-            val ids = group.map { it["id"] as String }.toSet()
-            val rhs = group.flatMap { freeVariables(it["expr"] as List<Any?>) }.toSet()
-            (if (expr[1] == true) rhs - ids else rhs) + (freeVariables(expr[3] as List<Any?>) - ids)
-        }
-        "case" -> freeVariables(expr[1] as List<Any?>) + (expr[3] as List<List<Any?>>).flatMap {
-            freeVariables(it[3] as List<Any?>) - (it[2] as List<String>).toSet() - (expr[2] as String)
-        }
-        else -> emptySet()
-    }
 
     private fun function(label: String, args: List<Map<String, Any?>>, expression: List<Any?>, outer: Scope,
                          resultProof: CoreRepresentation = CoreRepresentations.expression(expression),
@@ -391,7 +376,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         if (entryStrict.size != args.size) throw RuntimeFault("Function entry contract arity mismatch")
         val context = FunctionContext(args.size, entryStrict.copyOf())
         val scope = Scope(context, source = outer.source)
-        val free = freeVariables(expression)
+        val free = coreFreeVariables(expression)
         val argumentIds = args.map { it["id"] as String }.toSet()
         args.forEach { CoreRepresentations.requireInput(CoreRepresentations.binder(it)) }
         context.inputLayout = ArgumentLayout.fromProofs(args.map(CoreRepresentations::binder))
@@ -1426,7 +1411,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     throw RuntimeFault("Typed join formal must be unlifted")
             }
             val formals = definition.parameters.map { it["id"] as String }.toSet()
-            (freeVariables(definition.body) - formals - shadowed).forEach { id ->
+            (coreFreeVariables(definition.body) - formals - shadowed).forEach { id ->
                 scope.tuples[id]?.let { (proof, fields) ->
                     CoreRepresentations.requireInput(proof)
                     val leaves = ArgumentLayout.leaves(proof)
