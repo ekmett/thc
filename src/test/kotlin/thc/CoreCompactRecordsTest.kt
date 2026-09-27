@@ -19,15 +19,11 @@ class CoreCompactRecordsTest {
     private fun bytes(vararg values: Int) = values.map(Int::toByte).toByteArray()
     private val id = "unit:M.f".toByteArray()
     private fun module(data: ByteArray, action: (CoreCompactRecords, CoreCompactFile) -> Unit) {
-        val out = ByteBuffer.allocate(24 + data.size + id.size + 24 + 128).order(ByteOrder.LITTLE_ENDIAN)
-        out.put(bytes(84, 72, 67, 67, 77, 80, 0, 0)).putShort(1).putShort(0).putInt(0).putLong(0)
-        out.put(data).put(id).put(MessageDigest.getInstance("MD5").digest(id)).putLong(0)
-        out.put(bytes(84, 72, 67, 67, 69, 78, 68, 49))
-        var at = 24L
-        for (size in listOf(data.size, id.size, 0, 0, 0, 24)) { out.putLong(at).putLong(size.toLong()); at += size }
-        out.putLong(1).putInt(0).putInt(0).putLong(0)
-        val encoded = out.array()
-        val path = directory.resolve("module.thc")
+        val symbols = ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
+            .put(MessageDigest.getInstance("MD5").digest(id)).putLong(0).array()
+        val encoded = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(count = 1),
+            listOf(data, id, byteArrayOf(), byteArrayOf(), byteArrayOf(), symbols))
+        val path = directory.resolve("module.cbd")
         Files.write(path, encoded)
         val sha = MessageDigest.getInstance("SHA-256").digest(encoded).joinToString("") { "%02x".format(it) }
         CoreFileMappings(1024 * 1024, 1).use { cache ->

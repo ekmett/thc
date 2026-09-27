@@ -57,17 +57,10 @@ class CoreCompactDebugTest {
             fixed(start); fixed(3)
         }
         val segments = listOf(ByteArray(100), strings.toByteArray(), names.toByteArray(), files.toByteArray(), lines.toByteArray(), byteArrayOf())
-        val out = ByteBuffer.allocate(24 + segments.sumOf { it.size } + 128).order(ByteOrder.LITTLE_ENDIAN)
-        out.put(byteArrayOf(84, 72, 67, 67, 77, 80, 0, 0)).putShort(1).putShort(0).putInt(0).putLong(0)
-        segments.forEach(out::put)
-        out.put(byteArrayOf(84, 72, 67, 67, 69, 78, 68, 49))
-        var offset = 24L
-        segments.forEach { out.putLong(offset).putLong(it.size.toLong()); offset += it.size }
-        out.putLong(0).putInt(0).putInt(7).putLong(0)
-        return out.array()
+        return CoreCbdTestSupport.archive(CoreCbdTestSupport.header(debug = 7), segments)
     }
     private fun withFile(bytes: ByteArray = fixture(), action: (CoreCompactFile) -> Unit) {
-        val path = directory.resolve("debug.thcc")
+        val path = directory.resolve("debug.cbd")
         Files.write(path, bytes)
         val identity = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         CoreFileMappings(0, 0).use { cache -> CoreCompactFile(path, identity, mappings = cache).use(action) }

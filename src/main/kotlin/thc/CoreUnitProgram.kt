@@ -225,6 +225,12 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         val compact = compactTotals.map { it.statistics() }
         result["coreCompactModuleOpens"] = compact.sumOf { it.acquisitions }
         result["coreCompactMappedBytes"] = compact.sumOf { it.mappedBytes }
+        result["coreCompactDirectoryBytesRead"] = compact.sumOf { it.directoryBytesRead }
+        result["coreCompactMemberInflations"] = compact.sumOf { it.memberInflations }
+        result["coreCompactInflatedBytes"] = compact.sumOf { it.inflatedBytes }
+        result["coreCompactCompressedBytesRead"] = compact.sumOf { it.compressedBytesRead }
+        result["coreCompactSlabCacheHits"] = compact.sumOf { it.slabCacheHits }
+        result["coreCompactVerifiedStoredBytes"] = compact.sumOf { it.verifiedStoredBytes }
         result["coreCompactHeaderBytesRead"] = compact.sumOf { it.headerBytesRead }
         result["coreCompactLookupBytesRead"] = compact.sumOf { it.lookupBytesRead }
         result["coreCompactDataBytesRead"] = compact.sumOf { it.dataBytesRead }

@@ -14,7 +14,7 @@ class CoreCompactDirectoryTest {
     private val hash = "a".repeat(64)
     private fun module(name: String) = mapOf("name" to name,
         "boundary" to "optimized-Core-after-Tidy-before-CorePrep", "sha256" to hash,
-        "compact" to mapOf("path" to directory.resolve("$name.thc").toString(), "sha256" to hash,
+        "compact" to mapOf("path" to directory.resolve("$name.cbd").toString(), "sha256" to hash,
             "format" to CoreCompactFormat.NAME),
         "containsDelimitedControl" to false, "registrationObligations" to false,
         "mainAlias" to false, "packageScalarDeclarations" to false)

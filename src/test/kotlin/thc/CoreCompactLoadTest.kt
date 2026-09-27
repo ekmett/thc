@@ -72,20 +72,10 @@ class CoreCompactLoadTest {
                 ByteBuffer.allocate(24).order(ByteOrder.LITTLE_ENDIAN)
                     .put(MessageDigest.getInstance("MD5").digest(id.toByteArray(Charsets.UTF_8))).putLong(offset).array()
             }.sortedWith { a, b -> java.util.Arrays.compareUnsigned(a, 0, 16, b, 0, 16) }
-            val out = ByteBuffer.allocate(24 + facts.size() + data.size() + strings.size() + 3 + rows.size * 24 + 128)
-                .order(ByteOrder.LITTLE_ENDIAN)
-            out.put(byteArrayOf(84, 72, 67, 67, 77, 80, 0, 0)).putShort(1).putShort(0).putInt(0).putLong(facts.size().toLong())
-            out.put(facts.toByteArray()).put(data.toByteArray()).put(strings.toByteArray())
-            out.put(byteArrayOf(-1, -1, -1)) // Deliberately unread debug segments.
-            rows.forEach(out::put)
-            out.put(byteArrayOf(84, 72, 67, 67, 69, 78, 68, 49))
-            var offset = 24L + facts.size()
-            for (size in listOf(data.size(), strings.size(), 1, 1, 1, rows.size * 24)) {
-                out.putLong(offset).putLong(size.toLong()); offset += size
-            }
-            out.putLong(rows.size.toLong()).putInt(0).putInt(7).putLong(0)
-            val bytes = out.array()
-            val path = directory.resolve("$name.thc")
+            val symbols = ByteBuffer.allocate(rows.size * 24).also { out -> rows.forEach(out::put) }.array()
+            val bytes = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(facts.toByteArray(), rows.size.toLong(), debug = 7),
+                listOf(data.toByteArray(), strings.toByteArray(), byteArrayOf(-1), byteArrayOf(-1), byteArrayOf(-1), symbols))
+            val path = directory.resolve("$name.cbd")
             Files.write(path, bytes)
             return mapOf("name" to name, "boundary" to boundary, "sha256" to "a".repeat(64),
                 "compact" to mapOf("path" to path.toString(), "sha256" to hash(bytes), "format" to CoreCompactFormat.NAME),
@@ -114,7 +104,7 @@ class CoreCompactLoadTest {
             write(if (wrongIdentity) "Wrong" else "B", badProvenance)
         }
         val c = Model("C").run { function("entry") { literal(99) }; write() }
-        Files.delete(directory.resolve("C.thc"))
+        Files.delete(directory.resolve("C.cbd"))
         val path = directory.resolve("packages.json")
         Files.writeString(path, Json.stringify(mapOf("format" to "thc-core-packages", "schema" to 1,
             "ghc" to "9.14.1", "units" to listOf(mapOf("id" to "unit", "depends" to emptyList<String>(),

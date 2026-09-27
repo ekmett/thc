@@ -14,26 +14,30 @@ import org.junit.jupiter.api.io.TempDir
 
 class CoreCompactFileTest {
     @TempDir lateinit var directory: Path
-    private val path get() = directory.resolve("module.thc")
+    private val path get() = directory.resolve("module.cbd")
     private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
     private fun md5(id: String) = MessageDigest.getInstance("MD5").digest(id.toByteArray(Charsets.UTF_8))
 
-    private fun fixture(ids: List<String> = listOf("unit:M.f")): ByteArray {
+    @Test fun standardZipCbdHeaderIsAccepted() {
+        val bytes = CoreCbdTestSupport.archive(CoreCbdTestSupport.header(byteArrayOf(42)))
+        Files.write(path, bytes)
+        CoreFileMappings(0, 0).use { cache ->
+            CoreCompactFile(path, sha(bytes), mappings = cache).use { file ->
+                assertEquals(0L, file.header().bindingCount)
+                assertEquals(42, file.facts { it.byte() })
+            }
+        }
+    }
+
+    private fun fixture(ids: List<String> = listOf("unit:M.f"), invalidOffset: Boolean = false): ByteArray {
         val strings = "é😀".toByteArray(Charsets.UTF_8)
-        val sizes = listOf(ids.size, strings.size, 1, 1, 1, ids.size * 24)
-        val out = ByteBuffer.allocate(24 + 1 + sizes.sum() + 128).order(ByteOrder.LITTLE_ENDIAN)
-        out.put(byteArrayOf(84, 72, 67, 67, 77, 80, 0, 0)).putShort(1).putShort(0).putInt(0).putLong(1)
-        out.put(42) // Independently decodable model header fact.
-        repeat(ids.size) { out.put((it and 127).toByte()) }
-        out.put(strings).put(255.toByte()).put(255.toByte()).put(255.toByte())
+        val out = ByteBuffer.allocate(ids.size * 24).order(ByteOrder.LITTLE_ENDIAN)
         ids.mapIndexed { index, id -> md5(id) to index.toLong() }
             .sortedWith { a, b -> java.util.Arrays.compareUnsigned(a.first, b.first) }
-            .forEach { (digest, offset) -> out.put(digest).putLong(offset) }
-        out.put(byteArrayOf(84, 72, 67, 67, 69, 78, 68, 49))
-        var at = 25L
-        for (size in sizes) { out.putLong(at).putLong(size.toLong()); at += size }
-        out.putLong(ids.size.toLong()).putInt(0).putInt(7).putLong(0)
-        return out.array()
+            .forEach { (digest, offset) -> out.put(digest).putLong(if (invalidOffset) Long.MAX_VALUE else offset) }
+        return CoreCbdTestSupport.archive(CoreCbdTestSupport.header(byteArrayOf(42), ids.size.toLong(), debug = 7),
+            listOf(ByteArray(ids.size) { (it and 127).toByte() }, strings, byteArrayOf(-1), byteArrayOf(-1),
+                byteArrayOf(-1), out.array()))
     }
 
     @Test fun constructionIsColdAndDigestLookupDoesNotDecodeBodiesStringsOrDebug() {
@@ -45,7 +49,7 @@ class CoreCompactFileTest {
                 assertEquals(250L, file.lookup("unit:M.f250"))
                 val counts = file.counters.statistics()
                 assertEquals(1L, counts.acquisitions)
-                assertEquals(152L, counts.headerBytesRead)
+                assertEquals(32L, counts.headerBytesRead)
                 assertTrue(counts.lookupComparisons <= 11)
                 assertTrue(counts.lookupBytesRead <= 16 * 11 + 8)
                 assertEquals(0L, counts.hashBytesRead)
@@ -123,10 +127,7 @@ class CoreCompactFileTest {
     }
 
     @Test fun invalidSelectedOffsetsAndLocalRecordBoundsNeverEscapeSegments() {
-        val bytes = fixture()
-        val footer = bytes.size - 128
-        val lookup = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getLong(footer + 88).toInt()
-        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putLong(lookup + 16, Long.MAX_VALUE)
+        val bytes = fixture(invalidOffset = true)
         Files.write(path, bytes)
         CoreFileMappings(1024 * 1024, 4).use { cache ->
             CoreCompactFile(path, sha(bytes), mappings = cache).use { file ->

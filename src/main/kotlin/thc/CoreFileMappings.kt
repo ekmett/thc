@@ -36,6 +36,7 @@ internal class CoreFileMappings(private val maxIdleBytes: Long, private val maxI
 
     internal data class Key(val path: Path, val identity: String)
     internal class Mapping(val key: Key?, val arena: Arena, val bytes: MemorySegment) {
+        val snapshot = Any()
         var leases = 0L
     }
     class Lease internal constructor(private var owner: CoreFileMappings?, private var mapping: Mapping?,
@@ -46,6 +47,13 @@ internal class CoreFileMappings(private val maxIdleBytes: Long, private val maxI
             checkNotNull(mapping) { "Core file mapping lease is closed" }.bytes
         }
         val size: Long get() = bytes.byteSize()
+        /** Identity of these exact mapped bytes, including fresh verified opens. */
+        val snapshot: Any get() = synchronized(this) {
+            checkNotNull(mapping) { "Core file mapping lease is closed" }.snapshot
+        }
+        /** Pins this snapshot without looking up or opening its pathname again. */
+        @Synchronized fun retain(): Lease = checkNotNull(owner) { "Core file mapping lease is closed" }
+            .retain(checkNotNull(mapping))
         @Synchronized override fun close() {
             val retained = mapping ?: return
             val cache = checkNotNull(owner)
@@ -99,6 +107,15 @@ internal class CoreFileMappings(private val maxIdleBytes: Long, private val maxI
         active++
         leases++
         return Lease(this, mapping, true)
+    }
+
+    // Retaining an existing active lease is permitted after cache close: close
+    // forbids new acquisition, not ownership transfer of already pinned bytes.
+    @Synchronized private fun retain(mapping: Mapping): Lease {
+        check(mapping.leases > 0 && mapping.leases < Long.MAX_VALUE && leases < Long.MAX_VALUE)
+        mapping.leases++
+        leases++
+        return Lease(this, mapping, false)
     }
 
     private fun open(path: Path, key: Key?): Mapping {

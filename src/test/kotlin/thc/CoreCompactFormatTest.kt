@@ -10,73 +10,38 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class CoreCompactFormatTest {
-    /** Independent fixed-field model; deliberately invalid bytes in the
-     * payload demonstrate that envelope reading does not parse its records. */
-    private fun container(lengths: List<Int> = listOf(3, 6, 0, 0, 0, 24), facts: Int = 5): ByteArray {
-        val out = ByteBuffer.allocate(24 + facts + lengths.sum() + 128).order(ByteOrder.LITTLE_ENDIAN)
-        out.put(byteArrayOf(84, 72, 67, 67, 77, 80, 0, 0)).putShort(1).putShort(0).putInt(0).putLong(facts.toLong())
-        repeat(facts + lengths.sum()) { out.put(255.toByte()) }
-        out.put(byteArrayOf(84, 72, 67, 67, 69, 78, 68, 49))
-        var at = 24L + facts
-        for (length in lengths) {
-            out.putLong(at).putLong(length.toLong())
-            at += length
-        }
-        out.putLong(lengths.last() / 24L).putInt(15)
-            .putInt((if (lengths[2] > 0) 1 else 0) or (if (lengths[3] > 0) 2 else 0) or (if (lengths[4] > 0) 4 else 0))
-            .putLong(0)
-        return out.array()
-    }
-    private fun read(bytes: ByteArray) = CoreCompactFormat.read(MemorySegment.ofArray(bytes))
-    private fun mutate(bytes: ByteArray, position: Int, value: Long): ByteArray = bytes.clone().also {
-        ByteBuffer.wrap(it).order(ByteOrder.LITTLE_ENDIAN).putLong(position, value)
-    }
+    private val lengths = listOf(3L, 6L, 0L, 0L, 0L, 24L)
+    private fun header() = CoreCbdTestSupport.header(ByteArray(5) { -1 }, 1, 15)
+    private fun read(bytes: ByteArray, sizes: List<Long> = lengths) = CoreCompactFormat.read(MemorySegment.ofArray(bytes), sizes)
 
-    @Test fun headerAndEndFooterLocateSixSegmentsWithoutReadingTheirContents() {
-        val bytes = container()
-        val header = read(bytes)
-        assertEquals(CoreCompactFormat.Span(24, 5), header.facts)
-        assertEquals(CoreCompactFormat.Span(29, 3), header[CoreCompactFormat.Segment.DATA])
-        assertEquals(CoreCompactFormat.Span(32, 6), header[CoreCompactFormat.Segment.STRINGS])
-        assertEquals(CoreCompactFormat.Span(38, 24), header[CoreCompactFormat.Segment.SYMBOLS])
-        assertEquals(1L, header.bindingCount)
-        assertEquals(0, header.debug)
-        assertTrue(header.containsDelimitedControl && header.registrationObligations && header.mainAlias && header.packageScalarDeclarations)
+    @Test fun headerUsesUncompressedMemberLengthsWithoutReadingTheirContents() {
+        val value = read(header())
+        assertEquals(CoreCompactFormat.Span(32, 5), value.facts)
+        assertEquals(CoreCompactFormat.Span(0, 3), value[CoreCompactFormat.Segment.DATA])
+        assertEquals(CoreCompactFormat.Span(0, 6), value[CoreCompactFormat.Segment.STRINGS])
+        assertEquals(CoreCompactFormat.Span(0, 24), value[CoreCompactFormat.Segment.SYMBOLS])
+        assertEquals(1L, value.bindingCount)
+        assertTrue(value.containsDelimitedControl && value.registrationObligations && value.mainAlias && value.packageScalarDeclarations)
     }
-
-    @Test fun emptySegmentsAndIndependentOptionalDebugSegmentsHaveExactFlags() {
-        assertEquals(0L, read(container(List(6) { 0 }, 0)).bindingCount)
-        assertEquals(7, read(container(listOf(0, 0, 1, 1, 1, 0))).debug)
-        assertEquals(2, read(container(listOf(0, 0, 0, 1, 0, 0))).debug)
-        val bytes = container()
-        assertThrows(IllegalArgumentException::class.java) {
-            read(mutate(bytes, bytes.size - 128 + 112, 1L shl 32))
-        }
+    @Test fun emptyAndIndependentDebugMembersRequireExactFlags() {
+        assertEquals(0L, read(CoreCbdTestSupport.header(), List(6) { 0L }).bindingCount)
+        assertEquals(2, read(CoreCbdTestSupport.header(debug = 2), listOf(0, 0, 0, 1, 0, 0).map(Int::toLong)).debug)
+        assertThrows(IllegalArgumentException::class.java) { read(CoreCbdTestSupport.header(debug = 7), List(6) { 0L }) }
     }
-
-    @Test fun versionMagicAndReservedFieldsRejectBeforeSemanticDecoding() {
-        for (position in listOf(0, 8, 10, 12)) {
-            val bytes = container()
-            bytes[position] = (bytes[position] + 1).toByte()
+    @Test fun versionMagicReservedFlagsAndTruncationRejectBeforePayloadDecoding() {
+        for (position in listOf(0, 8, 10, 12, 24, 28)) {
+            val bytes = header(); bytes[position] = -1
             assertThrows(IllegalArgumentException::class.java) { read(bytes) }
         }
-        for (relative in listOf(0, 112, 116, 120)) {
-            val bytes = container()
-            bytes[bytes.size - 128 + relative] = 255.toByte()
+        for (size in 0 until 32) assertThrows(IllegalArgumentException::class.java) { read(ByteArray(size)) }
+    }
+    @Test fun countOverflowUnknownLengthsAndSymbolWidthMismatchReject() {
+        for (count in listOf(-1L, Long.MAX_VALUE, 2L)) {
+            val bytes = header(); ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putLong(16, count)
             assertThrows(IllegalArgumentException::class.java) { read(bytes) }
         }
-        assertThrows(IllegalArgumentException::class.java) { read(ByteArray(151)) }
-    }
-
-    @Test fun segmentOverlapsGapsOverflowAndFingerprintCountMismatchRejectLocally() {
-        val bytes = container()
-        val footer = bytes.size - 128
-        for ((position, value) in listOf(16 to Long.MAX_VALUE, 16 to Long.MIN_VALUE,
-            footer + 8 to 28L, footer + 8 to 30L, footer + 16 to Long.MAX_VALUE,
-            footer + 16 to Long.MIN_VALUE, footer + 104 to 2L)) {
-            assertThrows(IllegalArgumentException::class.java) { read(mutate(bytes, position, value)) }
-        }
-        assertThrows(IllegalArgumentException::class.java) { read(container(listOf(0, 0, 0, 0, 0, 23))) }
-        assertThrows(IllegalArgumentException::class.java) { read(bytes + byteArrayOf(0)) }
+        assertThrows(IllegalArgumentException::class.java) { read(header(), lengths.dropLast(1) + 23L) }
+        assertThrows(IllegalArgumentException::class.java) { read(header(), listOf(-1L) + lengths.drop(1)) }
+        assertThrows(IllegalArgumentException::class.java) { read(header(), lengths.drop(1)) }
     }
 }

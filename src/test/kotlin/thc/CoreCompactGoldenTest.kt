@@ -32,18 +32,14 @@ class CoreCompactGoldenTest {
         }
     }
 
-    @Test fun sharedHeaderAndFooterLocateOpaquePayloadWithoutScanningIt() {
-        val header = hex(Files.readString(directory.resolve("header-v1.hex")))
-        val footer = hex(Files.readString(directory.resolve("footer-v1.hex")))
-        assertEquals(24, header.size)
-        assertEquals(128, footer.size)
-        val bytes = header + ByteArray(29) { 255.toByte() } + footer
-        assertEquals(181, bytes.size)
-        val format = CoreCompactFormat.read(MemorySegment.ofArray(bytes))
-        assertEquals(CoreCompactFormat.Span(24, 0), format.facts)
-        assertEquals(CoreCompactFormat.Span(24, 2), format[CoreCompactFormat.Segment.DATA])
-        assertEquals(CoreCompactFormat.Span(26, 3), format[CoreCompactFormat.Segment.STRINGS])
-        assertEquals(CoreCompactFormat.Span(29, 24), format[CoreCompactFormat.Segment.SYMBOLS])
+    @Test fun sharedCbdHeaderDescribesMemberRelativePayloadWithoutScanningIt() {
+        val header = hex(Files.readString(directory.resolve("cbd-header-v1.hex")))
+        assertEquals(32, header.size)
+        val format = CoreCompactFormat.read(MemorySegment.ofArray(header), listOf(2, 3, 0, 0, 0, 24).map(Int::toLong))
+        assertEquals(CoreCompactFormat.Span(32, 0), format.facts)
+        assertEquals(CoreCompactFormat.Span(0, 2), format[CoreCompactFormat.Segment.DATA])
+        assertEquals(CoreCompactFormat.Span(0, 3), format[CoreCompactFormat.Segment.STRINGS])
+        assertEquals(CoreCompactFormat.Span(0, 24), format[CoreCompactFormat.Segment.SYMBOLS])
         assertEquals(1L, format.bindingCount)
         assertEquals(10, format.summaries)
         assertEquals(0, format.debug)

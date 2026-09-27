@@ -8,16 +8,20 @@ import java.lang.foreign.ValueLayout
 import java.nio.ByteOrder
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.util.zip.CRC32
 
 /** One lazily acquired immutable container. Only mapped bytes are process-wide;
  * cursors, decoded objects and these detached counters belong to this load. */
 internal class CoreCompactFile(private val path: Path, private val identity: String,
                                private val verifyArtifacts: Boolean = false,
-                               private val mappings: CoreFileMappings = CoreFileMappings.shared) : AutoCloseable {
+                               private val mappings: CoreFileMappings = CoreFileMappings.shared,
+                               private val slabs: CoreCbdSlabs = CoreCbdSlabs.shared) : AutoCloseable {
     data class Statistics(val acquisitions: Long, val physicalOpens: Long, val cacheHits: Long,
         val mappedBytes: Long, val headerBytesRead: Long, val lookupBytesRead: Long,
         val lookupComparisons: Long, val dataBytesRead: Long, val stringBytesRead: Long,
-        val debugBytesRead: Long, val hashBytesRead: Long, val decodedBindings: Long, val decodedModules: Long)
+        val debugBytesRead: Long, val hashBytesRead: Long, val decodedBindings: Long, val decodedModules: Long,
+        val directoryBytesRead: Long, val memberInflations: Long, val inflatedBytes: Long,
+        val compressedBytesRead: Long, val slabCacheHits: Long, val verifiedStoredBytes: Long)
     class Counters {
         var acquisitions = 0L
         var physicalOpens = 0L
@@ -32,16 +36,37 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
         var hashBytesRead = 0L
         var decodedBindings = 0L
         var decodedModules = 0L
+        var directoryBytesRead = 0L
+        var memberInflations = 0L
+        var inflatedBytes = 0L
+        var compressedBytesRead = 0L
+        var slabCacheHits = 0L
+        var verifiedStoredBytes = 0L
         @Synchronized fun statistics() = Statistics(acquisitions, physicalOpens, cacheHits, mappedBytes,
             headerBytesRead, lookupBytesRead, lookupComparisons, dataBytesRead, stringBytesRead, debugBytesRead, hashBytesRead,
-            decodedBindings, decodedModules)
+            decodedBindings, decodedModules, directoryBytesRead, memberInflations, inflatedBytes,
+            compressedBytesRead, slabCacheHits, verifiedStoredBytes)
     }
     val counters = Counters()
     private var closed = false
     private var mapped: Mapped? = null
     private val digest by lazy { MessageDigest.getInstance("MD5") }
-    private class Mapped(val lease: CoreFileMappings.Lease, val bytes: MemorySegment,
-                         val header: CoreCompactFormat.Header)
+    private class Mapped(val archive: CoreCbdArchive, val header: CoreCompactFormat.Header,
+                         val handles: MutableMap<String, CoreCbdArchive.Handle>) : AutoCloseable {
+        override fun close() { try { handles.values.forEach { it.close() }; handles.clear() } finally { archive.close() } }
+    }
+
+    private fun account(handle: CoreCbdArchive.Handle) {
+        if (handle.inflated) {
+            counters.memberInflations++
+            counters.inflatedBytes += handle.member.length
+            counters.compressedBytesRead += handle.member.compressed
+        }
+        if (handle.cacheHit) counters.slabCacheHits++
+    }
+    private fun member(current: Mapped, name: String): MemorySegment = current.handles.getOrPut(name) {
+        current.archive.read(name).also(::account)
+    }.bytes
 
     init { require(identity.matches(Regex("[0-9a-f]{64}"))) { "Missing compact Core producer identity" } }
 
@@ -53,6 +78,8 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
         // fresh lease. Normal loads trust producer identity and share mappings.
         val lease = if (verifyArtifacts) mappings.acquireUncached(path) else mappings.acquire(path, identity)
         if (lease.opened) counters.physicalOpens++ else counters.cacheHits++
+        var archive: CoreCbdArchive? = null
+        val handles = LinkedHashMap<String, CoreCbdArchive.Handle>()
         try {
             val bytes = lease.bytes
             counters.mappedBytes += bytes.byteSize()
@@ -69,11 +96,31 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
                     "Compact Core artifact hash mismatch: $path"
                 }
             }
-            val header = CoreCompactFormat.read(bytes)
-            counters.headerBytesRead += CoreCompactFormat.PREFIX_BYTES + CoreCompactFormat.FOOTER_BYTES
-            return Mapped(lease, bytes, header).also { mapped = it }
+            archive = CoreCbdArchive.open(lease, slabs)
+            counters.directoryBytesRead += archive.directoryBytesRead
+            val head = archive.read("header").also { handles["header"] = it; account(it) }
+            val header = CoreCompactFormat.read(head.bytes, CoreCompactFormat.Segment.entries.map { archive.member(it.member).length })
+            counters.headerBytesRead += CoreCompactFormat.HEADER_BYTES
+            val result = Mapped(archive, header, handles)
+            if (verifyArtifacts) for (name in CoreCbdArchive.NAMES) {
+                val payload = member(result, name)
+                val entry = archive.member(name)
+                if (entry.method == 0) {
+                    val crc = CRC32()
+                    var at = 0L
+                    while (at < payload.byteSize()) {
+                        val length = minOf(65536L, payload.byteSize() - at)
+                        crc.update(payload.asSlice(at, length).asByteBuffer())
+                        at += length
+                        counters.verifiedStoredBytes += length
+                    }
+                    require(crc.value == entry.crc) { "CBD member CRC mismatch: $name" }
+                }
+            }
+            return result.also { mapped = it }
         } catch (failure: Throwable) {
-            lease.close()
+            handles.values.forEach { it.close() }
+            archive?.close() ?: lease.close()
             throw failure
         }
     }
@@ -84,6 +131,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
     fun lookup(id: String): Long? = synchronized(counters) {
         val current = mapping()
         val symbols = current.header[CoreCompactFormat.Segment.SYMBOLS]
+        val bytes = member(current, "symbols")
         val key = digest.digest(id.toByteArray(Charsets.UTF_8))
         var low = 0L
         var high = current.header.bindingCount
@@ -94,7 +142,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
             var comparison = 0
             for (index in key.indices) {
                 counters.lookupBytesRead++
-                comparison = (current.bytes.get(ValueLayout.JAVA_BYTE, start + index).toInt() and 255) -
+                comparison = (bytes.get(ValueLayout.JAVA_BYTE, start + index).toInt() and 255) -
                     (key[index].toInt() and 255)
                 if (comparison != 0) break
             }
@@ -102,7 +150,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
                 comparison < 0 -> low = middle + 1
                 comparison > 0 -> high = middle
                 else -> {
-                    val offset = current.bytes.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), start + 16)
+                    val offset = bytes.get(ValueLayout.JAVA_LONG_UNALIGNED.withOrder(ByteOrder.LITTLE_ENDIAN), start + 16)
                     counters.lookupBytesRead += 8
                     require(offset >= 0 && offset < current.header[CoreCompactFormat.Segment.DATA].length) {
                         "Invalid compact Core binding offset: $offset"
@@ -119,7 +167,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
         check(verifyArtifacts) { "Complete compact binding inspection requires explicit verification" }
         val current = mapping()
         val span = current.header[CoreCompactFormat.Segment.SYMBOLS]
-        val cursor = CoreCompactCursor(CoreCompactCursor.slice(current.bytes, span.offset, span.length))
+        val cursor = CoreCompactCursor(CoreCompactCursor.slice(member(current, "symbols"), span.offset, span.length))
         var previous: ByteArray? = null
         try {
             while (cursor.remaining != 0L) {
@@ -141,21 +189,21 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
     fun <T> data(offset: Long, decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
         val current = mapping()
         val span = current.header[CoreCompactFormat.Segment.DATA]
-        val cursor = CoreCompactCursor(CoreCompactCursor.slice(current.bytes, span.offset, span.length), offset)
+        val cursor = CoreCompactCursor(CoreCompactCursor.slice(member(current, "data"), span.offset, span.length), offset)
         try { decode(cursor) } finally { counters.dataBytesRead += cursor.position - offset }
     }
 
     fun <T> facts(decode: (CoreCompactCursor) -> T): T = synchronized(counters) {
         val current = mapping()
         val span = current.header.facts
-        val cursor = CoreCompactCursor(CoreCompactCursor.slice(current.bytes, span.offset, span.length))
+        val cursor = CoreCompactCursor(CoreCompactCursor.slice(member(current, "header"), span.offset, span.length))
         try { decode(cursor) } finally { counters.headerBytesRead += cursor.position }
     }
 
     fun string(offset: Long, length: Long): String = synchronized(counters) {
         val current = mapping()
         val span = current.header[CoreCompactFormat.Segment.STRINGS]
-        val strings = CoreCompactCursor.slice(current.bytes, span.offset, span.length)
+        val strings = CoreCompactCursor.slice(member(current, "strings"), span.offset, span.length)
         // Count only a valid selected range, including a failing UTF8 decode.
         CoreCompactCursor.slice(strings, offset, length)
         counters.stringBytesRead += length
@@ -172,7 +220,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
             CoreCompactFormat.Segment.LINE_COLUMNS)) { "Not a compact Core debug segment" }
         val current = mapping()
         val span = current.header[segment]
-        val selected = CoreCompactCursor.slice(current.bytes, span.offset, span.length)
+        val selected = CoreCompactCursor.slice(member(current, segment.member), span.offset, span.length)
         val cursor = CoreCompactCursor(CoreCompactCursor.slice(selected, offset, length))
         try { decode(cursor) } finally { counters.debugBytesRead += cursor.position }
     }
@@ -182,7 +230,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
             closed = true
             val retained = mapped
             mapped = null
-            retained?.lease?.close()
+            retained?.close()
         }
     }
 }
