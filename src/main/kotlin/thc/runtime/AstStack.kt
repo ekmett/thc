@@ -53,7 +53,7 @@ internal class AstStackContinuation(
         if (input is AstChildSuspension) {
             if (input.child !== yielded.segment) fault("AST stack continuation received an unrelated child cut")
             return AstStackContinuation(sourceRoot,
-                CallSegmentSuspended(yielded.segment, asyncRequest = input.request, stackSpill = false))
+                CallSegmentSuspended(yielded.segment, null, input.request, false))
         }
         val resumed = input as? ChildResume ?: fault("AST stack continuation requires ChildResume")
         resumed.failure?.let { throw it }

@@ -635,7 +635,7 @@ class CoreContinuationNativeTest {
                     b.endRoot()
                 }.getNode(0).callTarget
                 val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
-                    tupleShape = tuple)
+                    MaskingState.UNMASKED, MaskingState.UNMASKED, tuple)
                 segment to Thunk(callSegmentCaller(language, segment), null)
             }
             val driver = entered(context) { Driver() }
@@ -1820,7 +1820,7 @@ class CoreContinuationNativeTest {
                 val target = ThunkYieldProofRoot.target(language, effects, AtomicInteger(),
                     ThunkYieldProofRoot.Gate(), marker)
                 val segment = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult,
-                    tupleShape = tuple)
+                    MaskingState.UNMASKED, MaskingState.UNMASKED, tuple)
                 segment to Thunk(callSegmentCaller(language, segment), null)
             }
             entered(context) {
