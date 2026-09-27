@@ -27,6 +27,8 @@ parser.add_argument('--build-dir', type=Path, default=root / 'build/map',
                     help='Private output directory (default: build/map)')
 parser.add_argument('--frontier', choices=['cstring', 'exceptions', 'lists', 'show', 'bignum'], default='exceptions',
                     help='Original ghc-internal modules to export (default: exceptions)')
+parser.add_argument('--pretty-diagnostics', action='store_true',
+                    help='Include readable Core and Id-info dumps for inspection')
 args = parser.parse_args()
 build = args.build_dir.resolve()
 (build / 'core').mkdir(parents=True, exist_ok=True)
@@ -109,6 +111,8 @@ for name in boot_modules:
 plugin = ['-O2', '-dcore-lint', '-package-db', plugin_info['packageDb'],
           '-plugin-package-id', plugin_info['unitId'], '-fplugin=THC.Plugin',
           '-fplugin-opt=THC.Plugin:' + str(build / 'boot-core'), '-fplugin-opt=THC.Plugin:post-tidy']
+if args.pretty_diagnostics:
+    plugin += ['-fplugin-opt=THC.Plugin:pretty-diagnostics']
 if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
     plugin += ['-g', '-fplugin-opt=THC.Plugin:source-notes']
 if args.frontier in ('cstring', 'lists', 'show', 'bignum'):
@@ -117,6 +121,8 @@ if args.frontier in ('cstring', 'lists', 'show', 'bignum'):
     # compiled plugin directly so the installed Base interface cannot introduce
     # duplicate class instances into this compilation. Source remains unchanged.
     options = [str(build / 'boot-core'), 'post-tidy']
+    if args.pretty_diagnostics:
+        options += ['pretty-diagnostics']
     plugin = ['-O2', '-dcore-lint']
     if (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true':
         plugin += ['-g']
@@ -133,13 +139,16 @@ if args.frontier == 'exceptions':
     env = os.environ.copy()
     env.update(GHC=ghc, GHC_PKG=ghc_pkg)
     env.update(THC_CORE_OUT=str(build / 'interface-core'), THC_GHC_OUT=str(build / 'interface-ghc'))
-    subprocess.run([str(root / 'compiler/export.sh'), '-package', 'ghc-internal',
+    subprocess.run([str(root / 'compiler/export.sh'),
+                    *(['-fplugin-opt=THC.Plugin:pretty-diagnostics'] if args.pretty_diagnostics else []),
+                    '-package', 'ghc-internal',
                     '-fplugin-opt=THC.Plugin:closure=exceptionInterfaceRoot',
                     'compiler/package-roots/InterfaceRoots.hs'], cwd=root, env=env, check=True)
     shutil.copyfile(build / 'interface-core/THC.InterfaceClosure.json', build / 'core/GHC.InterfaceClosure.json')
 (build / 'boot-provenance.json').write_text(json.dumps({
     'ghcTag': 'ghc-9.14.1-release', 'sourcePatches': [], 'frontier': args.frontier,
     'sourceNotes': (os.environ.get('THC_SOURCE_NOTES') or 'true') == 'true',
+    'prettyDiagnostics': args.pretty_diagnostics,
     'sources': [{'url': source_url(name), 'path': str((source_root / name).relative_to(root)), 'sha256': digest}
                 for name, digest in sources.items()],
     'sourceModules': ['GHC.Internal.' + name.replace('/', '.') for name in source_modules],

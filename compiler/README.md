@@ -4,7 +4,17 @@ The root `thc.cabal` builds `THC.Plugin` as the `thc` library against **GHC 9.14
 
 The default source-fixture export appends `CoreDoPluginPass` to `installCoreToDos`, observing the **optimized Core pipeline's final `ModGuts`, before Tidy/CorePrep/STG**. With `post-tidy`, the plugin instead uses `latePlugin` to export **after Tidy and before CorePrep**; package manifests require that boundary. The ordinary GHC Core optimization passes run first in both paths. This is executable tree export directly from the GHC API; the runtime never parses a Core pretty dump.
 
-This is a deliberately version-pinned experiment, **not** a lossless, stable, general-purpose Core interchange format. It implements a checked executable subset. `sourceCore` retains the module's readable pre-erasure Core for inspection, and binder metadata retains types, demand, strictness, CPR, arity, call arity, occurrence/one-shot information, join arity and inline pragmas. Module rewrite rules are retained as readable metadata. These strings do not promise that an optimizer can round-trip arbitrary GHC objects. Full structured coercions, rules and unfoldings, and general representation-polymorphic lowering remain outside that contract. Dependency acquisition and linking have their own implemented [package-manifest contract](../docs/core-package-manifest.md).
+This is a deliberately version-pinned experiment, **not** a lossless, stable, general-purpose Core interchange format. It implements a checked executable subset. Default exports retain executable trees, binder types and arity, representation and calling-contract facts, join arity, and typed foreign metadata. Source locations and contents remain controlled independently by `source-notes`.
+
+For inspection, add `-fplugin-opt=THC.Plugin:pretty-diagnostics`. This includes
+`sourceCore` (the readable pre-erasure Core), readable module rewrite rules when
+available, and printed Id demand, strictness, CPR, occurrence/one-shot and inline
+information plus call arity. These diagnostics are absent by default and never
+used to reconstruct executable Core. `compiler/export-boot.py` and `thc-interface`
+expose the same choice as `--pretty-diagnostics`. Full structured coercions, rules and unfoldings,
+and general representation-polymorphic lowering remain outside the contract.
+Dependency acquisition and linking have their own implemented
+[package-manifest contract](../docs/core-package-manifest.md).
 
 ## Executable schema
 
@@ -17,7 +27,7 @@ exactly saturated primitive call; a type-instantiated bare mask gets both
 parameters. Its supplied action remains lazy until the state token arrives.
 The lambda, binder and result proofs come from the resulting Core types, using
 the existing schema. Saturated primitive calls and their runtime contract are
-unchanged. `sourceCore` retains the original unexpanded GHC definitions, and
+unchanged. With `pretty-diagnostics`, `sourceCore` retains the original unexpanded GHC definitions, and
 native GHC compilation is unchanged. This bounded lowering does not implement
 general primop partial applications or establish support for full `bracket`.
 `cabal run exe:thc-fixtures --offline -- mask-functions` prepares the native and
@@ -102,7 +112,7 @@ Exactly saturated `tagToEnum#` applications retain an `enumFamily` object in the
 
 Data-constructor **workers** become constructor expressions. Constructor wrappers remain ordinary variable references and require actual compiled definitions.
 
-Type arguments and type lambdas erase. A type-only application becomes its function. Coercion arguments and coercion lambda binders retain a zero-width `void` slot so Core's value arity conventions remain explicit. Casts and ticks erase from the executable subset and remain visible in `sourceCore`. The source-note metadata below retains source attribution without executable tick wrappers or instrumentation events. Primitive literals retain kind, with integral/character codepoint values in decimal, byte strings in hexadecimal, floating values in decimal. `LitLabel` preserves its exact symbol as `function-addr` or `data-addr`, according to GHC's `FunctionOrData`; it does not certify a function ABI or identify a providing library. Unsupported literal kinds stay explicit, and exporting a label does not admit it for execution.
+Type arguments and type lambdas erase. A type-only application becomes its function. Coercion arguments and coercion lambda binders retain a zero-width `void` slot so Core's value arity conventions remain explicit. Casts and ticks erase from the executable subset and remain visible in the optional `sourceCore` diagnostic. The source-note metadata below retains source attribution without executable tick wrappers or instrumentation events. Primitive literals retain kind, with integral/character codepoint values in decimal, byte strings in hexadecimal, floating values in decimal. `LitLabel` preserves its exact symbol as `function-addr` or `data-addr`, according to GHC's `FunctionOrData`; it does not certify a function ABI or identify a providing library. Unsupported literal kinds stay explicit, and exporting a label does not admit it for execution.
 
 Scalar `LitRubbish` exports as `["lit","rubbish","IntRep",metadata]` (or the
 other exact closed scalar `PrimRep`). Its type applications erase without

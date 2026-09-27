@@ -45,12 +45,13 @@ import THC.Interface
 data Options = Options
   { libdir :: FilePath, unit :: String, moduleName :: String, interface :: FilePath
   , way :: String, databases :: [FilePath], sourceNotes :: Bool, inventoryProbe :: Bool
+  , prettyDiagnostics :: Bool
   , homeInterfaces :: Maybe FilePath
   }
 
 usage :: String
 usage = "thc-interface --libdir DIR --unit UNIT --module MODULE --interface FILE " ++
-  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes] [--home-interfaces DIR]"
+  "[--way vanilla|dynamic|profiling] [--package-db DIR ...] [--source-notes] [--pretty-diagnostics] [--home-interfaces DIR]"
 
 parseOptions :: [String] -> Either String Options
 parseOptions = go Map.empty [] False False
@@ -61,15 +62,18 @@ parseOptions = go Map.empty [] False False
       u <- required "--unit"
       m <- if probe then pure "" else required "--module"
       i <- if probe then pure "" else required "--interface"
-      unless (not probe || all (`Map.notMember` values) ["--module", "--interface"] && not notes)
-        (Left "Inventory probe does not accept a single interface or source notes")
+      unless (not probe || all (`Map.notMember` values) ["--module", "--interface", "--pretty-diagnostics"] && not notes)
+        (Left "Inventory probe does not accept a single interface, source notes or pretty diagnostics")
       let w = Map.findWithDefault "vanilla" "--way" values
       unless (w `elem` ["vanilla", "dynamic", "profiling"]) (Left "Unsupported --way")
       let home = Map.lookup "--home-interfaces" values
       unless (not probe || home == Nothing) (Left "Inventory probe requires registered packages")
-      pure (Options l u m i w (reverse dbs) notes probe home)
+      pure (Options l u m i w (reverse dbs) notes probe (Map.member "--pretty-diagnostics" values) home)
     go values dbs False probe ("--source-notes":rest) = go values dbs True probe rest
     go values dbs notes False ("--probe-inventory":rest) = go values dbs notes True rest
+    go values dbs notes probe ("--pretty-diagnostics":rest)
+      | Map.notMember "--pretty-diagnostics" values =
+          go (Map.insert "--pretty-diagnostics" "" values) dbs notes probe rest
     go values dbs notes probe ("--package-db":value:rest)
       | not (null value || "--" `isPrefixOf` value) = go values (value:dbs) notes probe rest
     go values dbs notes probe (key:value:rest)
@@ -153,7 +157,8 @@ loadSelected options = withSelected options $ \environment -> do
   case loaded of
     Nothing -> pure Nothing
     Just core -> do
-      rendered <- interfaceCoreJSONBytes (["unit-qualified"] ++ ["source-notes" | sourceNotes options]) core
+      rendered <- interfaceCoreJSONBytes (["unit-qualified"] ++ ["source-notes" | sourceNotes options] ++
+        ["pretty-diagnostics" | prettyDiagnostics options]) core
       output <- Exception.evaluate (BS.concat ["{\"schema\":1,\"status\":\"loaded\",\"core\":", rendered, "}\n"])
       pure (Just output)
 
