@@ -6,15 +6,18 @@ module BoxedArrayExtensionsAudit where
 
 import GHC.Exts
 
+-- These forward traversals start at zero and stay within a checked array size.
+-- Keep the ordered bound explicit: an equality loop lets Graal speculate that
+-- the peeled loop has more iterations, invalidating valid singleton calls.
 fill :: MutableArray# s Int -> Int# -> Int# -> Int# -> State# s -> State# s
-fill a seed n i s = case i ==# n of
-  1# -> s
+fill a seed n i s = case i <# n of
+  0# -> s
   _ -> case writeArray# a i (I# (seed +# i)) s of
     s1 -> fill a seed n (i +# 1#) s1
 
 weighted :: MutableArray# s Int -> Int# -> Int# -> Int# -> State# s -> (# State# s, Int# #)
-weighted a n i total s = case i ==# n of
-  1# -> (# s, total #)
+weighted a n i total s = case i <# n of
+  0# -> (# s, total #)
   _ -> case readArray# a i s of
     (# s1, I# x #) -> weighted a n (i +# 1#) (total +# (x *# (i +# 1#))) s1
 
