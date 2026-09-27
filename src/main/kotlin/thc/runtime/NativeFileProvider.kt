@@ -262,6 +262,34 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
     }
 
+    private fun statAtImage(name: String, path: ByteArray, flags: Int, lease: NativeFileLease? = null): ByteArray =
+        NativeLimbScope().use { scope ->
+            val bytes = scope.allocate((path.size.toLong() + 7) and -8L)
+            bytes.copyFrom(path, 0, path.size)
+            val image = scope.allocate(statSize.toLong())
+            if (lease == null) result(name, bytes, image, flags) else result(name, lease, bytes, image, flags)
+            ByteArray(statSize).also { image.copyTo(it, 0, it.size) }
+        }
+
+    @Synchronized fun statAtInvalidRaw(path: ByteArray, flags: Int): ByteArray {
+        current()
+        if (disposed) throw ClosedChannelException()
+        check(path.isNotEmpty() && path.last() == 0.toByte() && path[0] != '/'.code.toByte())
+        return statAtImage("fstatat_invalid", path, flags)
+    }
+
+    /** Empty+AT_EMPTY_PATH names this context's directory. Anchoring "." also
+     * follows a symlink in the context anchor when NOFOLLOW is set. Plain empty
+     * names retain libc's ENOENT, and no call observes the process CWD. */
+    @Synchronized fun statAtRaw(path: ByteArray, flags: Int, emptyPath: Long): ByteArray {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val name = if (path.size == 1 && path[0] == 0.toByte() && flags.toLong() and emptyPath != 0L)
+            byteArrayOf('.'.code.toByte(), 0) else path
+        return statAtImage("fstatat_cwd", absoluteRawPath(anchor, name), flags)
+    }
+
     /** AT_FDCWD and absolute paths use the fixed context filesystem's anchor. */
     @Synchronized fun unlinkAtRaw(path: ByteArray, flags: Int): Long {
         current()
@@ -420,6 +448,9 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
                 name.copyFrom(path, 0, path.size)
                 result("unlinkat", lease, name, flags)
             }
+        }
+        override fun statAt(path: ByteArray, flags: Int): ByteArray = live {
+            statAtImage("fstatat", path, flags, lease)
         }
         override fun statImage(): ByteArray = live {
             NativeLimbScope().use { scope ->

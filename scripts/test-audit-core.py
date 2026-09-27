@@ -3421,6 +3421,61 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
 
 
 
+class OriginalFstatAtDeclarationTest(unittest.TestCase):
+    """Exact original wrapper controls, separate from genuine native Id fixtures."""
+
+    symbol = 'ghczuwrapperZC1ZCdirectoryzm1zi3zi10zi0zminplaceZCSystemziDirectoryziInternalziPosixZCfstatat'
+
+    def declaration(self, suffix='inplace'):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
+        integer = dict(kind='long', primReps=['Int32Rep'], evaluated=True)
+        return dict(schema=1, target=dict(kind='static',
+            symbol=self.symbol.replace('zminplaceZC', 'zm' + suffix + 'ZC'),
+            isFunction=True, unit='directory-1.3.10.0-' + suffix), convention='capi', safety='safe',
+            arity=5, suppliedArity=5,
+            argumentReps=[dict(rep, evaluated=False) for rep in (integer, address, address, integer, state)],
+            resultRep=dict(tuple_rep(state, integer), evaluated=False))
+
+    def test_exact_fstatat_owner_wrapper_and_safe_cint_abi(self):
+        fixture = LibdwUnavailableAuditTest()
+        for suffix in ('inplace', '02fc'):
+            declaration = self.declaration(suffix)
+            report = fixture.audit(fixture.fixture(declaration))
+            self.assertTrue(report['accepted'], report)
+            self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
+            for unit in ('ghc-internal', 'main', 'unix-2.8.8.0-inplace', 'directory-1.3.9.0-' + suffix,
+                         'directory-1.3.10.0-', 'directory-1.3.10.0-02FC', 'directory-1.3.10.0-02fc:forged',
+                         'directory-1.3.10.0-' + ('02fc' if suffix == 'inplace' else 'inplace')):
+                wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], unit)
+            for old, new in (('ZC1ZC', 'ZC2ZC'), ('InternalziPosix', 'Posix'), ('ZCfstatat', 'ZCfstat')):
+                wrong = copy.deepcopy(declaration)
+                wrong['target']['symbol'] = wrong['target']['symbol'].replace(old, new)
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+            for key, value in (('convention', 'ccall'), ('safety', 'unsafe'), ('safety', 'interruptible'),
+                               ('arity', 4), ('suppliedArity', 4), ('resultRep', LONG)):
+                wrong = copy.deepcopy(declaration); wrong[key] = value
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+
+    def test_fstatat_declared_stored_and_lowered_operands_are_checked(self):
+        fixture = LibdwUnavailableAuditTest()
+        declaration = self.declaration()
+        for index in (0, 3):
+            for rep in ('IntRep', 'Word32Rep', 'Word64Rep'):
+                wrong = copy.deepcopy(declaration); wrong['argumentReps'][index]['primReps'] = [rep]
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        for index in range(5):
+            module = fixture.fixture(declaration)
+            module['bindings'][0]['expr'][1][index]['rep'] = LONG
+            self.assertFalse(fixture.audit(module)['accepted'], (index, 'stored'))
+            module = fixture.fixture(declaration)
+            call = module['bindings'][0]['expr'][2][1]
+            producer = ['lit', 'string-bytes', '41'] if index in (0, 3) else lit(9)
+            call[2][index] = [*producer, call[2][index][2]]
+            self.assertFalse(fixture.audit(module)['accepted'], (index, 'producer'))
+
+
 class OriginalUnlinkAtDeclarationTest(unittest.TestCase):
     """Synthetic rejection controls; native fixtures retain the actual directory Id."""
 

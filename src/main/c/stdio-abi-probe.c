@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+#define _GNU_SOURCE 1
 #define _POSIX_C_SOURCE 200809L
 #include <errno.h>
 #include <fcntl.h>
@@ -13,6 +14,13 @@
 // HsBase uses CONST_O_BINARY, configured to zero when the host has no O_BINARY.
 #ifndef O_BINARY
 #define O_BINARY 0
+#endif
+
+// AT_EMPTY_PATH is a Linux extension; zero records its absence elsewhere.
+#ifdef AT_EMPTY_PATH
+#define THC_AT_EMPTY_PATH AT_EMPTY_PATH
+#else
+#define THC_AT_EMPTY_PATH 0
 #endif
 
 _Static_assert(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(int) == 4 && sizeof(bool) == 1 &&
@@ -30,10 +38,10 @@ int main(void) {
            "\"seek\":{\"SEEK_SET\":%d,\"SEEK_CUR\":%d,\"SEEK_END\":%d},"
            "\"open\":{\"modeBytes\":%zu,\"O_ACCMODE\":%d,\"O_RDONLY\":%d,\"O_WRONLY\":%d,\"O_RDWR\":%d,\"O_APPEND\":%d,"
            "\"O_CREAT\":%d,\"O_EXCL\":%d,\"O_BINARY\":%d,\"O_TRUNC\":%d,\"O_NOCTTY\":%d,\"O_NONBLOCK\":%d,\"F_GETFL\":%d,\"F_SETFL\":%d,"
-           "\"F_SETFD\":%d,\"FD_CLOEXEC\":%d},\"at\":{\"AT_FDCWD\":%d,\"AT_REMOVEDIR\":%d},\"siginfoBytes\":%zu}\n",
+           "\"F_SETFD\":%d,\"FD_CLOEXEC\":%d},\"at\":{\"AT_FDCWD\":%d,\"AT_REMOVEDIR\":%d,\"AT_SYMLINK_NOFOLLOW\":%d,\"AT_EMPTY_PATH\":%d},\"siginfoBytes\":%zu}\n",
            CHAR_BIT, sizeof(void *), sizeof(int), sizeof(bool), sizeof(size_t), sizeof(ssize_t),
            ENOENT, EACCES, EEXIST, EBADF, EINVAL, EIO, ENOTSUP, EBUSY, EISDIR, ENOTTY, ESPIPE, EMFILE,
            SEEK_SET, SEEK_CUR, SEEK_END, sizeof(mode_t), O_ACCMODE, O_RDONLY, O_WRONLY, O_RDWR, O_APPEND,
-           O_CREAT, O_EXCL, O_BINARY, O_TRUNC, O_NOCTTY, O_NONBLOCK, F_GETFL, F_SETFL, F_SETFD, FD_CLOEXEC, AT_FDCWD, AT_REMOVEDIR, sizeof(siginfo_t));
+           O_CREAT, O_EXCL, O_BINARY, O_TRUNC, O_NOCTTY, O_NONBLOCK, F_GETFL, F_SETFL, F_SETFD, FD_CLOEXEC, AT_FDCWD, AT_REMOVEDIR, AT_SYMLINK_NOFOLLOW, THC_AT_EMPTY_PATH, sizeof(siginfo_t));
     return 0;
 }

@@ -115,6 +115,13 @@ ORIGINAL_UNLINKAT_OUTPUTS = frozenset("build/original-unlinkat/" + name for name
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "abi-compile", "abi-run",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_UNLINKAT_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
+ORIGINAL_FSTATAT_ENTRIES = ("pathFstatAt",)
+ORIGINAL_FSTATAT_OUTPUTS = frozenset("build/original-fstatat/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_FSTATAT_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports", "abi-compile", "abi-run",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_FSTATAT_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 PROXY_VOID_OUTPUTS = frozenset("build/proxy-void/" + name for name in (
     "manifest.json", "oracle.tsv", "native/oracle", "api/predicate",
     *(f"{stage}/{suffix}" for stage in ("pre", "post")
@@ -448,6 +455,7 @@ REQUIRED = tuple(sorted({
     *(ORIGINAL_PATH_LINK_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_ACCESS_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_UNLINKAT_OUTPUTS if platform.system() == "Linux" else []),
+    *(ORIGINAL_FSTATAT_OUTPUTS if platform.system() == "Linux" else []),
     *BYTESTRING_SORT_OUTPUTS,
     *BYTESTRING_DECIMAL_OUTPUTS,
     *(f"build/{d}/manifest.json" for d in MANIFEST_DIRS),
@@ -469,7 +477,7 @@ REQUIRED = tuple(sorted({
     *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-path-access", "original-unlinkat", "floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-path-access", "original-unlinkat", "original-fstatat", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
@@ -1391,6 +1399,21 @@ def original_unlinkat_artifact_hashes(manifest):
     return artifacts
 
 
+def original_fstatat_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("directoryUnit"), str) and ORIGINAL_DIRECTORY_UNIT.fullmatch(manifest["directoryUnit"]) and
+            manifest.get("entries") == list(ORIGINAL_FSTATAT_ENTRIES) and
+            manifest.get("installedArtifactsHashed") is False,
+            "Invalid original fstatat fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_FSTATAT_OUTPUTS - {"build/original-fstatat/manifest.json"},
+            "Incomplete/unreviewed original fstatat artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original fstatat artifact hash")
+    return artifacts
+
+
 def command(argv, root):
     return subprocess.check_output(list(map(str, argv)), cwd=root, text=True).strip()
 
@@ -1662,6 +1685,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_PATH_ACCESS_OUTPUTS
     if parts[1] == "original-unlinkat":
         return name in ORIGINAL_UNLINKAT_OUTPUTS
+    if parts[1] == "original-fstatat":
+        return name in ORIGINAL_FSTATAT_OUTPUTS
     if parts[1] == "proxy-void":
         return name in PROXY_VOID_OUTPUTS
     if parts[1] == "rubbish-literals":
@@ -1934,6 +1959,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_path_access_artifact_hashes(doc)
         if name == "build/original-unlinkat/manifest.json":
             original_unlinkat_artifact_hashes(doc)
+        if name == "build/original-fstatat/manifest.json":
+            original_fstatat_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":
             rts_diagnostic_artifact_hashes(doc)
         if name == "build/unix-wait-status/manifest.json":

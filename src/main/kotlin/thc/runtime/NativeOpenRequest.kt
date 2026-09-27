@@ -48,6 +48,7 @@ internal class NativeOpenRequest(val endpoint: StandardEndpoint?,
 
 internal interface NativeFileResource : SeekableByteChannel {
     fun unlinkAt(path: ByteArray, flags: Int): Long
+    fun statAt(path: ByteArray, flags: Int): ByteArray
     fun statImage(): ByteArray
     fun readTermios(image: ByteArray)
     fun terminalStatus(): Long
@@ -67,6 +68,7 @@ internal interface NativeFileResource : SeekableByteChannel {
 internal class OpenedNativeFile(private val channel: SeekableByteChannel,
     private val metadata: NativeFileResource) : NativeFileResource, SeekableByteChannel by channel {
     override fun unlinkAt(path: ByteArray, flags: Int): Long = metadata.unlinkAt(path, flags)
+    override fun statAt(path: ByteArray, flags: Int): ByteArray = metadata.statAt(path, flags)
     override fun statImage(): ByteArray = metadata.statImage()
     override fun readTermios(image: ByteArray) = metadata.readTermios(image)
     override fun terminalStatus(): Long = metadata.terminalStatus()

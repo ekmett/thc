@@ -416,7 +416,8 @@
         "thc.runtime.OriginalPathModeTest",
         "thc.runtime.OriginalPathLinkTest",
         "thc.runtime.OriginalPathAccessTest",
-        "thc.runtime.OriginalUnlinkAtTest"
+        "thc.runtime.OriginalUnlinkAtTest",
+        "thc.runtime.OriginalFstatAtTest"
       ],
       "commands": [
         {
@@ -436,7 +437,8 @@
         "build/original-path-mode",
         "build/original-path-link",
         "build/original-path-access",
-        "build/original-unlinkat"
+        "build/original-unlinkat",
+        "build/original-fstatat"
       ],
       "sources": [
         "compiler/test-fixtures/OriginalPosixStatAudit.hs",
@@ -454,7 +456,9 @@
         "compiler/test-fixtures/OriginalPathAccessAudit.hs",
         "test/haskell-fixtures/OriginalPathAccessFixtures.hs",
         "compiler/test-fixtures/OriginalUnlinkAtAudit.hs",
-        "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs"
+        "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
+        "compiler/test-fixtures/OriginalFstatAtAudit.hs",
+        "test/haskell-fixtures/OriginalFstatAtFixtures.hs"
       ]
     },
     "original-fd-ready": {
