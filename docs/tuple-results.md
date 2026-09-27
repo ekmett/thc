@@ -61,8 +61,9 @@ the instantiated constructor application and case metadata provide the layout.
 
 [Typed tuple inputs](tuple-inputs.md) preserve recursive logical shape and use
 concrete primitive/reference fields, while [exact empty tuple inputs](empty-tuple-inputs.md)
-need no payload fields. Ordinary aggregate captures and let bindings remain
-unsupported. [Tuple join parameters](tuple-joins.md) use typed parallel frame moves. Exact tuple
+need no payload fields. [Ordinary tuple captures](tuple-captures.md) retain owned
+typed fields; ordinary aggregate let/global bindings remain unsupported.
+[Tuple join parameters](tuple-joins.md) use typed parallel frame moves. Exact tuple
 join results use typed local slots inside the same guest root; no result carrier
 or pool loan is needed for that local control flow. Same-frame join captures can
 read whole tuples from their existing typed slots. Empty tuple cases evaluate

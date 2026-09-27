@@ -92,7 +92,7 @@ These contracts distinguish lifted tuples, unboxed aggregates and scalar State.
 [Packed and scalar-offset SIMD address memory](simd-address-families.md) covers
 18 existing 128-/256-/512-bit shapes with original-Core and native scalar models.
 
-The current [guest transport contract](simd-families.md) carries 24 exact `VecRep`
+The current [guest transport contract](simd-families.md) carries 30 exact `VecRep`
 shapes through calls, results, PAPs, joins, tuple fields, owned closure/thunk
 captures and boxed constructor fields. Public host vector arguments/results,
 other shapes and unimplemented operations remain outside that contract. The
