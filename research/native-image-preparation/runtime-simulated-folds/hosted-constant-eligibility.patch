@@ -1,0 +1,30 @@
+diff --git a/com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java b/com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
+--- a/com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
++++ b/com/oracle/svm/hosted/phases/InlineBeforeAnalysisGraphDecoderImpl.java
+@@ -28,4 +28,7 @@
++import static com.oracle.svm.hosted.code.SubstrateCompilationDirectives.isRuntimeCompiledMethod;
++
+ import com.oracle.graal.pointsto.BigBang;
++import com.oracle.graal.pointsto.heap.ImageHeapConstant;
+ import com.oracle.graal.pointsto.meta.AnalysisField;
+ import com.oracle.graal.pointsto.meta.AnalysisType;
+ import com.oracle.graal.pointsto.meta.HostedProviders;
+@@ -117,7 +120,17 @@ public class InlineBeforeAnalysisGraphDecoderImpl extends InlineBeforeAnalysisGra
+         }
+         ConstantNode canonicalized = simulateClassInitializerSupport.tryCanonicalize(bb, node);
+         if (canonicalized != null) {
+-            return canonicalized;
++            /*
++             * Runtime graph encoding unwraps image heap constants to their hosted objects.
++             * A simulated reference without a hosted object cannot cross that boundary.
++             * Keep the field load in that case; simulation and its image-heap values remain
++             * available to ordinary/deoptimization compilation and image initialization.
++             */
++            if (!isRuntimeCompiledMethod(graph.method()) ||
++                            !(canonicalized.asJavaConstant() instanceof ImageHeapConstant heapConstant) ||
++                            heapConstant.getHostedObject() != null) {
++                return canonicalized;
++            }
+         }
+         var intrinsified = fieldValueInterceptionSupport.tryIntrinsifyFieldLoad(providers, node);
+         if (intrinsified != null) {

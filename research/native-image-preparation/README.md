@@ -47,7 +47,10 @@ unchanged. This experiment is separate from initialization inventory preparation
 The independent [runtime snippet-provider overlay](runtime-snippet-providers/README.md)
 uses `THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1` to bind runtime parsing to its existing
 runtime replacement cache. It preserves complete option sets and other providers.
-Both opt-ins can be combined; neither changes the pure-interpreter recipe.
+The [simulated-field folding overlay](runtime-simulated-folds/README.md) uses
+`THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1` to retain a field load when runtime
+graph encoding cannot represent its simulated constant without a hosted object.
+These independent opt-ins can be combined; none changes the pure-interpreter recipe.
 
 ## Inventory contract
 
