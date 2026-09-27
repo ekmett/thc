@@ -32,6 +32,7 @@ import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import thc.Language;
 
 /**
@@ -47,6 +48,19 @@ import thc.Language;
 @GenerateBytecode(languageClass = Language.class, enableYield = true,
         boxingEliminationTypes = {long.class, float.class, double.class, boolean.class})
 public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode {
+    static {
+        // Stock API would silently ignore the new protected override.
+        if (RootNode.materializableFramePolicyVersion() != 1)
+            throw new LinkageError("THC requires the declared materializable-root API");
+    }
+    @Override public final boolean requiresUnprofiledReturn() {
+        return asyncEnabled || delimitedEnabled;
+    }
+
+    @Override protected final boolean requiresMaterializableFrame() {
+        return asyncEnabled || delimitedEnabled;
+    }
+
     private String label = "bytecode";
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
@@ -509,6 +523,35 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             pending.compiledCapture = compiled;
             request.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, pending);
             return true;
+        }
+    }
+
+    /** A pending cut uses fixed object registers, never cold generic load/store quickening. */
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "request")
+    @ConstantOperand(type = LocalAccessor.class, name = "rootEntry")
+    @ConstantOperand(type = LocalAccessor.class, name = "active")
+    public static final class ParkPendingAsyncMask {
+        @Specialization public static AsyncRequest park(VirtualFrame frame, LocalAccessor request,
+                LocalAccessor rootEntry, LocalAccessor active, @Bind Node node) {
+            BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+            AsyncRequest pending = (AsyncRequest) request.getObject(bytecode, frame);
+            active.setObject(bytecode, frame, SynchronousMasking.current(node));
+            SynchronousMasking.set(node, (MaskingState) rootEntry.getObject(bytecode, frame));
+            return pending;
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "active")
+    public static final class ReenterPendingAsyncMask {
+        @Specialization public static Object reenter(VirtualFrame frame, LocalAccessor active,
+                Object resumed, @Bind Node node) {
+            if (!(resumed instanceof DelimitedResume)) {
+                BytecodeNode bytecode = ((BytecodeRoot) node.getRootNode()).getBytecodeNode();
+                SynchronousMasking.set(node, (MaskingState) active.getObject(bytecode, frame));
+            }
+            return resumed;
         }
     }
 

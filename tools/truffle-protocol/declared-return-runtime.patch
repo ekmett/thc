@@ -1,0 +1,57 @@
+diff --git a/com/oracle/truffle/runtime/OptimizedCallTarget.java b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+index 1ea9febf..69a95056 100644
+--- a/com/oracle/truffle/runtime/OptimizedCallTarget.java
++++ b/com/oracle/truffle/runtime/OptimizedCallTarget.java
+@@ -149,6 +149,12 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+ 
+     /** The AST to be executed when this call target is called. */
+     private final RootNode rootNode;
++    private final boolean declaredUnprofiledReturn;
++
++    /** Versioned linkage check for the explicit per-root completion contract. */
++    public static int declaredReturnPolicyVersion() {
++        return 1;
++    }
+ 
+     /** Whether this call target was cloned, compiled or called. */
+     @CompilationFinal protected volatile boolean initialized;
+@@ -382,6 +388,12 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+          */
+         this.speculationLog = null;
+         this.rootNode = rootNode;
++        // Sample before engine callbacks, node adoption or target publication.
++        // This is a declared completion ABI, never an observed/trained profile.
++        this.declaredUnprofiledReturn = rootNode.requiresUnprofiledReturn();
++        if (declaredUnprofiledReturn) {
++            this.returnProfile = ReturnProfile.INVALID;
++        }
+         this.engine = OptimizedTVMCI.getEngineData(rootNode);
+         this.resetCompilationProfile();
+         // Do not adopt children of OSRRootNodes; we want to preserve the parent of the child
+@@ -393,6 +405,7 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+     protected OptimizedCallTarget(EngineData engine) {
+         this.speculationLog = null;
+         this.rootNode = null;
++        this.declaredUnprofiledReturn = false;
+         this.engine = engine;
+         this.resetCompilationProfile();
+         this.uninitializedNodeCount = 0;
+@@ -1969,7 +1982,8 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+             return true;
+         }
+ 
+-        assert returnProfile == null : "return profile already initialized";
++        assert declaredUnprofiledReturn ? returnProfile == ReturnProfile.INVALID : returnProfile == null :
++                        "return profile already initialized";
+         assert argumentsProfile == null : "argument profile already initialized";
+ 
+         Class<?>[] argumentTypes = profile.getArgumentTypes();
+@@ -1983,7 +1997,7 @@ public abstract class OptimizedCallTarget implements TruffleCompilable, RootCall
+ 
+         ReturnProfile returnProfile;
+         Class<?> returnType = profile.getReturnType();
+-        if (returnType != null && returnType != Object.class) {
++        if (!declaredUnprofiledReturn && returnType != null && returnType != Object.class) {
+             returnProfile = new ReturnProfile(returnType);
+         } else {
+             returnProfile = ReturnProfile.INVALID;

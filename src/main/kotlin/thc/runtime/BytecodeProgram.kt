@@ -497,9 +497,9 @@ class BytecodeProgram internal constructor(private val language: Language, modul
 
     /** Yield skips lexical finally. Save this activation's lazy annotations and
      * park to its caller; the resumed instruction reinstalls the saved extent. */
-    private fun beginAnnotationYield(e: Emission) {
+    private fun beginAnnotationYield(e: Emission,
+                                     active: BytecodeLocal = e.builder.createLocal("yielded annotations", "object")) {
         val b = e.builder
-        val active = b.createLocal("yielded annotations", "object")
         b.beginResumeAnnotations(active)
         b.beginYield()
         b.beginParkAnnotations(checkNotNull(e.annotationRootEntry), active)
@@ -516,21 +516,22 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         b.beginBlock()
         val request = b.createLocal("pending async request", "object")
         val active = b.createLocal("async logical mask", "object")
-        b.beginIfThen()
+        val annotations = b.createLocal("yielded annotations", "object")
+        // These private registers have object carriers before any request arrives.
+        // The first cut must not specialize uninitialized cached local tags.
+        for (local in listOf(request, active, annotations)) {
+            b.beginStoreLocal(local); b.emitLoadNull(); b.endStoreLocal()
+        }
+        b.beginUnprofiledIfThen()
         b.emitPollAsync(request)
         b.beginBlock()
-        b.beginStoreLocal(active); b.emitCurrentMask(); b.endStoreLocal()
-        b.beginReenterCallMask()
-        beginAnnotationYield(e)
-        b.beginParkAsyncMask()
-        b.emitLoadLocal(request)
-        b.emitLoadLocal(checkNotNull(e.checkpointRootEntry))
-        b.endParkAsyncMask()
+        b.beginReenterPendingAsyncMask(active)
+        beginAnnotationYield(e, annotations)
+        b.emitParkPendingAsyncMask(request, checkNotNull(e.checkpointRootEntry), active)
         endAnnotationYield(e)
-        b.emitLoadLocal(active)
-        b.endReenterCallMask()
+        b.endReenterPendingAsyncMask()
         b.endBlock()
-        b.endIfThen()
+        b.endUnprofiledIfThen()
         b.endBlock()
     }
 

@@ -234,7 +234,7 @@ tasks.named("check") { dependsOn(testBytecodeMetadataSplit) }
 tasks.matching { it.name == "kaptKotlin" }.configureEach {
     inputs.file("gradle/bytecode-metadata.gradle.kts")
     doLast {
-        val dependency = configurations.getByName("kapt").dependencies.single {
+        val dependency = configurations.getByName("protocolProcessorSources").dependencies.single {
             it.group == "org.graalvm.truffle" && it.name == "truffle-dsl-processor"
         }
         val source = layout.buildDirectory.file("generated/source/kapt/main/thc/runtime/BytecodeRootGen.java").get().asFile

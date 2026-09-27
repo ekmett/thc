@@ -69,6 +69,10 @@ tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateS
     dependsOn(generateSimdFamilies)
 }
 val graalVersion = "25.3.4.1"
+apply(from = "gradle/protocol-processor.gradle.kts")
+apply(from = "gradle/materializable-api.gradle.kts")
+apply(from = "gradle/protocol-runtime.gradle.kts")
+val protocolProcessor = tasks.named<Jar>("protocolProcessorJar")
 // Additional languages are opt-in; the ordinary runtime stays language-neutral.
 val polyglotDemoRuntime by configurations.creating
 dependencies {
@@ -79,8 +83,8 @@ dependencies {
     compileOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
     runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
-    kapt("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
-    testAnnotationProcessor("org.graalvm.truffle:truffle-dsl-processor:$graalVersion")
+    kapt(files(protocolProcessor.flatMap { it.archiveFile }))
+    testAnnotationProcessor(files(protocolProcessor.flatMap { it.archiveFile }))
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testImplementation("org.graalvm.truffle:truffle-runtime:$graalVersion")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -1379,3 +1383,5 @@ for ((name, dense) in listOf("windowsSmokeTest" to false, "windowsDenseSmokeTest
     }
 }
 tasks.named("windowsDenseSmokeTest") { mustRunAfter("windowsSmokeTest") }
+
+apply(from = "gradle/protocol-processor-tests.gradle.kts")

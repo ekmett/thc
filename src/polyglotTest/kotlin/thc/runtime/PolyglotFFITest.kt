@@ -15,6 +15,7 @@ import org.graalvm.polyglot.PolyglotAccess
 import org.graalvm.polyglot.proxy.ProxyExecutable
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import thc.Language
@@ -468,12 +469,14 @@ class PolyglotFFITest {
             "expr" to listOf("lam", parameters, expression, mapOf("resultRep" to result)))), "instrument" to true)
     }
 
+    @Tag("foreign-exceptions-full-core")
     @ParameterizedTest(name = "{0}")
     @ValueSource(strings = ["ast/js-safe", "ast/js-unsafe", "ast/polyglot",
         "bytecode/js-safe", "bytecode/js-unsafe", "bytecode/polyglot"])
     fun safeManagedCallsSaveTheirFirstCompiledResultBeforeAsyncDeliveryWithoutReplay(mode: String) {
         val (backend, kind) = mode.split('/')
             Context.newBuilder("thc", "js").allowExperimentalOptions(true).allowPolyglotAccess(PolyglotAccess.ALL)
+                .allowNativeAccess(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.SingleTierCompilationThreshold", "10000000")
                 .option("engine.CompilationFailureAction", "Throw").option("compiler.Inlining", "false")
@@ -494,7 +497,7 @@ class PolyglotFFITest {
                         val polyglot = kind == "polyglot"
                         val expression = if (polyglot) call(PolyglotOp.EXECUTE_INT)
                             else javascriptCall("globalThis.thcCompleted", safety = if (kind == "js-safe") "safe" else "unsafe")
-                        val module = foreignModule(expression)
+                        val module = thc.ForeignExceptionFixtureSupport.link(foreignModule(expression), "call")
                         val program: ExecutableProgram = if (backend == "ast") Program(language, module, true)
                             else BytecodeProgram(language, module, true)
                         val target = program.entryTarget("call")

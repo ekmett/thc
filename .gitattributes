@@ -20,3 +20,6 @@ docs/bytecode-graphs/** -whitespace linguist-generated=true
 bench/experiments/int32x4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
 bench/experiments/word32x4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
 bench/experiments/floatx4-bytearray/evidence-x86_64/** -whitespace linguist-generated=true
+
+# Unified diffs retain a space prefix on empty context lines.
+tools/truffle-protocol/*.patch -whitespace
