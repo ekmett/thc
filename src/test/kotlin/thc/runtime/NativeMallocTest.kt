@@ -223,6 +223,33 @@ class NativeMallocTest {
         }
     }
 
+    @Test fun pinnedStorageCopyInstallsOnFirstAstCompilation() = pinnedStorageCopy("ast")
+    @Test fun pinnedStorageCopyInstallsOnFirstBytecodeCompilation() = pinnedStorageCopy("bytecode")
+
+    /** Exercise the existing bulk-copy path without malloc declarations, the
+     * native allocation registry, or the platform allocator DLL. */
+    private fun pinnedStorageCopy(backend: String) = inside { language ->
+        val program = load(language, backend, module(emptyList()))
+        val target = program.entryTarget("copy")
+        val source = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, pinned = true))
+        val destination = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, pinned = true))
+        fun exercise(seed: Long, compiled: Boolean) {
+            for (offset in 0L until 24L) source.writeWord8(offset, seed + offset)
+            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+            assertEquals(23L, Calls.target(target, arrayOf(0L, source, destination, 24L, Unit)))
+            assertEquals(before + if (compiled) 1 else 0,
+                (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+            assertEquals((0L until 24L).map { (seed + it) and 255 }, (0L until 24L).map(destination::readWord8))
+            if (compiled) valid(target)
+            released(language)
+        }
+        exercise(17, false)
+        assertDoesNotThrow({ target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true) },
+            "First compilation of $backend/copy with pinned storage")
+        valid(target)
+        exercise(197, true)
+    }
+
     @Test fun nativeWritesAndAllAliasesShareLiveStorageWithCheckedOwnership() = inside { _ ->
         val registry = Language.currentState().nativeAllocations
         val base = registry.malloc(64)
