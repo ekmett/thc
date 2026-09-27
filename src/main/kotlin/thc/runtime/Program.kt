@@ -1763,6 +1763,9 @@ private class SelfRepeater(@field:Child private var body: FunctionBody, private 
         RepeatingNode.CONTINUE_LOOP_STATUS
     }
 }
+/** A side-exit body is a call boundary, not a new owner of an inherited tail cycle. */
+internal enum class FunctionRootRole { FUNCTION, PASS_THROUGH }
+
 internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDescriptor, private val label: String,
                             private val captureLayout: CaptureLayout?,
                             @field:CompilationFinal(dimensions = 1) private val environmentSlots: IntArray,
@@ -1779,7 +1782,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             inputLayout: ArgumentLayout? = null,
                             internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
-                            internal val enableDelimited: Boolean = false) : GuestRoot(language, descriptor) {
+                            internal val enableDelimited: Boolean = false,
+                            internal val role: FunctionRootRole = FunctionRootRole.FUNCTION) : GuestRoot(language, descriptor) {
     init {
         configureEntry(entryStrict, captureLayout != null)
         configureInput(inputLayout)
@@ -2051,6 +2055,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
 
     internal fun resumeDelimited(frame: VirtualFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
+        if (role == FunctionRootRole.PASS_THROUGH) throw transfer
         if (transfer is TailCall && !isSelf(transfer.target)) return site.tail(transfer)
         if (transfer is HandoffTailCall && !isSelf(transfer.target)) {
             val entry = handoff ?: fault("Missing saved handoff entry")
@@ -2081,6 +2086,10 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         delimitedHandoff ?: insert(HandoffCaller(callTarget, entry, metrics)).also { delimitedHandoff = it }
 
     private fun executeBody(frame: VirtualFrame): Any? {
+        if (role == FunctionRootRole.PASS_THROUGH) {
+            val repeating = loop.repeatingNode as? SelfRepeater ?: fault("Invalid function body node")
+            return repeating.once(frame)
+        }
         // Non-looping roots retain entry argument facts. Once self recursion
         // is observed, PE selects only the loop body instead of duplicating it.
         if (hasSelfTail) return loop.execute(frame)
