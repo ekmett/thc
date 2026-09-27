@@ -160,10 +160,11 @@ internal class ManagedAddress private constructor(
             native?.requireLive(); other.native?.requireLive()
             return rtsFlags != null && rtsFlags === other.rtsFlags && offset == other.offset
         }
-        if (foreign?.backing != null || other.foreign?.backing != null)
-            return (foreign?.backing ?: this).sameLocation(other.foreign?.backing ?: other)
-        foreign?.let { return it.compare(other, "equal") != 0L }
-        other.foreign?.let { return it.compare(this, "equal") != 0L }
+        // Known returned aliases already carry their backing's identity fields
+        // (fromReturnedAddress). Compare those directly, without recursive
+        // unwrapping during partial evaluation; only unknown C storage needs C.
+        externalPointer()?.let { return it.compare(other, "equal") != 0L }
+        other.externalPointer()?.let { return it.compare(this, "equal") != 0L }
         if (heap != null || other.heap != null) {
             val registry = HeapAddresses.current()
             heap?.let(registry::require); other.heap?.let(registry::require)

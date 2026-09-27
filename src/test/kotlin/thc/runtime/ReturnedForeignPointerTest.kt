@@ -55,6 +55,9 @@ class ReturnedForeignPointerTest {
             assertThrows(RuntimeFault::class.java) { owner.nativeAllocations.free(alias) }
         } finally { owner.nativeAllocations.free(allocation) }
         assertThrows(RuntimeFault::class.java) { alias.readWord8(0) }
+        assertThrows(RuntimeFault::class.java) { alias.sameLocation(allocation) }
+        assertThrows(RuntimeFault::class.java) { allocation.sameLocation(alias) }
+        assertThrows(RuntimeFault::class.java) { alias.sameLocation(alias) }
     } }
 
     @Test fun rtsComparisonRejectsFreedReturnedAllocationInEitherOrder() {
@@ -123,9 +126,11 @@ class ReturnedForeignPointerTest {
             assertEquals(1L, pointer.readWord8(0))
             context().use { other -> entered(other) {
                 assertThrows(RuntimeFault::class.java) { pointer.readWord8(0) }
+                assertThrows(RuntimeFault::class.java) { pointer.sameLocation(pointer) }
             } }
             owner.packageCbits.close()
             assertThrows(RuntimeFault::class.java) { pointer.readWord8(0) }
+            assertThrows(RuntimeFault::class.java) { pointer.sameLocation(pointer) }
         } }
         context(false).use { denied -> entered(denied) { owner ->
             assertThrows(RuntimeFault::class.java) { offset(owner) }

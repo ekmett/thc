@@ -39,6 +39,65 @@ class ReturnedPointerCompilationTest {
     private fun valid(target: RootCallTarget) = assertEquals(true,
         target.javaClass.getMethod("isValidLastTier").invoke(target))
 
+    @Test fun dynamicReturnedAliasEqualityRetainsItsFirstCompiledEntry() {
+        val address = mapOf("kind" to "address", "primReps" to listOf("AddrRep"), "evaluated" to true)
+        val result = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
+        val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
+        val parameters = listOf("left", "right").map { mapOf("id" to it, "lifted" to false, "rep" to address) }
+        val call = listOf("app", listOf("prim", "eqAddr#"),
+            listOf("left", "right").map { listOf("var", it, mapOf("rep" to address)) },
+            listOf(false, false), false, false, mapOf("rep" to result))
+        val module = mapOf("instrument" to true, "constructors" to emptyList<Any>(),
+            "bindings" to listOf(mapOf("id" to "equal", "name" to "equal", "arity" to 2,
+                "lifted" to true, "rep" to closure,
+                "expr" to listOf("lam", parameters, call, mapOf("rep" to closure, "resultRep" to result)))))
+        for (backend in listOf("ast", "bytecode")) Context.newBuilder("thc")
+            .allowNativeAccess(true).allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.CompilationFailureAction", "Throw")
+            .option("engine.SingleTierCompilationThreshold", "10000000")
+            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+                context.initialize("thc"); context.enter()
+                try {
+                    val owner = Language.currentState()
+                    val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                    val symbol = "thc_package_pointer_offset"
+                    val signature = PackageScalarSignature(symbol, symbol, listOf("AddrRep", "Int64Rep"), "AddrRep")
+                    val bytes = javaClass.getResourceAsStream("/thc/cbits/package-pointer.bc")!!.use { it.readBytes() }
+                    val link = PackageScalarLink("compiled-equality-control", "unused", "compiled-equality-control", "", bytes, listOf(signature))
+                    owner.packageCbits.link(link)
+                    val offset = AddressResult(language, PackageScalarCall(link, signature)).callTarget
+                    val original = ManagedAddress.fromByteArray(ByteArray(16))
+                    val alias = offset.call(original, 4L) as ManagedAddress
+                    val repeated = offset.call(original, 4L) as ManagedAddress
+                    assertNotNull(alias.returnedAddress()!!.backing)
+                    val inputs = listOf(Triple(original.plus(4), alias, 1L), Triple(alias, original.plus(4), 1L),
+                        Triple(alias, repeated, 1L), Triple(alias, alias.plus(1), 0L),
+                        Triple(original, original.plus(1), 0L))
+                    val program: ExecutableProgram = if (backend == "ast") Program(language, module)
+                        else BytecodeProgram(language, module)
+                    val target = program.entryTarget("equal")
+                    owner.threads.enterCurrent()
+                    try {
+                        fun equal(left: ManagedAddress, right: ManagedAddress) =
+                            Calls.target(target, arrayOf(0L, left, right)) as Long
+                        repeat(5) { for ((left, right, expected) in inputs) assertEquals(expected, equal(left, right)) }
+                        target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                        valid(target)
+                        val runtime = Truffle.getRuntime()
+                        runtime.javaClass.getMethod("bypassedInstalledCode",
+                            Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                        for ((left, right, expected) in inputs) {
+                            val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                            assertEquals(expected, equal(left, right), backend)
+                            assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong(), backend)
+                            valid(target)
+                        }
+                    } finally { owner.threads.leaveCurrent() }
+                } finally { context.leave() }
+            }
+    }
+
     /** The C helper really returns both managed aliases and unknown native
      * pointers. The independent arena, not a fabricated malloc owner, owns the
      * latter. This transport control does not manufacture GHC import proof. */
