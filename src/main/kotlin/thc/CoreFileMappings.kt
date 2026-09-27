@@ -147,6 +147,30 @@ internal class CoreFileMappings(private val maxIdleBytes: Long, private val maxI
         dispose(mapping)
     }
 
+    /** Release idle mappings at this normalized path or below it before a
+     * temporary artifact tree is removed or immutable files are replaced.
+     * Windows may deny deletion/replacement while any mapped view survives.
+     * Active leases remain pinned; callers must close all their leases first
+     * if they require filesystem removal to succeed. No files are inspected
+     * or removed here, and unrelated idle cache entries retain their order. */
+    @Synchronized fun evictIdleBelow(path: Path): Int {
+        val prefix = path.toAbsolutePath().normalize()
+        var removed = 0
+        val iterator = idle.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (!entry.key.path.startsWith(prefix)) continue
+            val mapping = entry.value
+            check(mapping.leases == 0L)
+            iterator.remove()
+            check(mappings.remove(entry.key) === mapping)
+            idleBytes -= mapping.bytes.byteSize()
+            dispose(mapping)
+            removed++
+        }
+        return removed
+    }
+
     /** Stops new acquisition and drops idle entries. Existing active leases
      * remain usable and release their arenas when their last holder closes. */
     @Synchronized override fun close() {

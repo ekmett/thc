@@ -53,13 +53,12 @@ class CoreFileMappingsTest {
         }
     }
 
-    @Test fun normalizedPathAndSequentialIdentityReuseNeedNoNewOpenOrExistenceProbe() {
+    @Test fun normalizedPathAndSequentialIdentityReuseNeedNoNewMapping() {
         val source = file("unit.jsons", "original")
         CoreFileMappings(1024, 2).use { cache ->
             val bytes = cache.acquire(source, "v1").use { it.bytes }
             // This nonexistent intermediate path disappears by lexical normalization.
             val alias = directory.resolve("absent/../unit.jsons")
-            Files.move(source, directory.resolve("moved.jsons"))
             cache.acquire(alias, "v1").use { lease ->
                 assertFalse(lease.opened)
                 assertSame(bytes, lease.bytes)
@@ -70,19 +69,81 @@ class CoreFileMappingsTest {
         }
     }
 
-    @Test fun changedProducerIdentityMapsReplacementWithoutAffectingPinnedOldBytes() {
+    @Test fun explicitIdleEvictionAllowsSamePathReplacementWithChangedIdentity() {
         val source = file("unit.jsons", "original")
         CoreFileMappings(1024, 2).use { cache ->
-            cache.acquire(source, "v1").use { first ->
-                val replacement = file("replacement.jsons", "replacement")
-                Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING)
-                cache.acquire(source, "v2").use { second ->
+            val prior = cache.acquire(source, "v1").use { it.bytes }
+            assertEquals(1, cache.evictIdleBelow(source))
+            assertFalse(prior.scope().isAlive)
+            val replacement = file("replacement.jsons", "replacement")
+            Files.move(replacement, source, StandardCopyOption.REPLACE_EXISTING)
+            cache.acquire(source, "v2").use { second ->
+                assertTrue(second.opened)
+                assertNotSame(prior, second.bytes)
+                assertEquals("replacement", text(second.bytes))
+                assertEquals(2L, cache.statistics().mappingOpens)
+            }
+        }
+    }
+
+    @Test fun versionedPathsKeepOldAndNewProducerBytesAliveAtTheSameTime() {
+        val oldPath = file("unit-v1.jsons", "original")
+        val newPath = file("unit-v2.jsons", "replacement")
+        CoreFileMappings(1024, 2).use { cache ->
+            cache.acquire(oldPath, "v1").use { first ->
+                cache.acquire(newPath, "v2").use { second ->
                     assertTrue(second.opened)
                     assertNotSame(first.bytes, second.bytes)
                     assertEquals("original", text(first.bytes))
                     assertEquals("replacement", text(second.bytes))
-                    assertEquals(2L, cache.statistics().mappingOpens)
+                    assertEquals(0, cache.evictIdleBelow(directory), "active views are never forcibly unmapped")
+                    assertEquals("original", text(first.bytes))
+                    assertEquals("replacement", text(second.bytes))
                 }
+            }
+        }
+    }
+
+    @Test fun producerIdentitySeparatesSamePathMappingsAndIdleEvictionSkipsTheLiveVersion() {
+        val source = file("unit.jsons", "published")
+        CoreFileMappings(1024, 2).use { cache ->
+            cache.acquire(source, "v1").use { active ->
+                val other = cache.acquire(source, "v2").use {
+                    assertTrue(it.opened)
+                    assertNotSame(active.bytes, it.bytes)
+                    it.bytes
+                }
+                assertEquals(1, cache.evictIdleBelow(source))
+                assertFalse(other.scope().isAlive)
+                assertEquals("published", text(active.bytes))
+                cache.acquire(source, "v1").use {
+                    assertFalse(it.opened)
+                    assertSame(active.bytes, it.bytes)
+                }
+                assertEquals(2L, cache.statistics().mappingOpens)
+            }
+        }
+    }
+
+    @Test fun scopedIdleEvictionAllowsTemporaryCleanupWithoutDisturbingOtherOrActiveMappings() {
+        val temporary = Files.createDirectory(directory.resolve("temporary"))
+        val source = temporary.resolve("unit.jsons").also { Files.writeString(it, "temporary") }
+        val sibling = file("temporary-other", "sibling")
+        val pinned = file("active", "pinned")
+        CoreFileMappings(1024, 8).use { cache ->
+            val old = cache.acquire(source, "v1").use { it.bytes }
+            val other = cache.acquire(sibling, "v1").use { it.bytes }
+            cache.acquire(pinned, "v1").use { active ->
+                assertEquals(0, cache.evictIdleBelow(pinned))
+                assertEquals(1, cache.evictIdleBelow(temporary.resolve("absent/..")))
+                assertFalse(old.scope().isAlive)
+                assertTrue(other.scope().isAlive, "path components, not string-prefix matching")
+                assertEquals("pinned", text(active.bytes))
+                Files.delete(source)
+                Files.delete(temporary)
+                assertEquals(1, cache.statistics().idleMappings)
+                assertEquals(1L, cache.statistics().activeMappings)
+                assertEquals(0, cache.evictIdleBelow(temporary))
             }
         }
     }
