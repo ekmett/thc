@@ -357,17 +357,31 @@ object CoreModules {
         val files = input["indexedModuleFiles"]
         if (files != null) {
             require(files is List<*> && files.isNotEmpty() &&
-                listOf("modules", "packageManifest", "packageManifestSha256", "packageCapability", "consumerModules", "targetLayout")
+                listOf("modules", "consumerModules", "targetLayout")
                     .all { input[it] == null }) { "Indexed module request must not mix input protocols" }
+            require(input["packageManifest"] != null ||
+                input["packageManifestSha256"] == null && input["packageCapability"] == null) {
+                "Orphan package manifest identity"
+            }
             val adapter = CoreJsonBindings(input["sourceNotesEnabled"] != false)
             val opened = ArrayList<CoreJsonIndex>()
             try {
+                // Remove this component before replaying the independently
+                // authenticated package request. Consumers remain consumers:
+                // interface fragments do not acquire package-unit ownership.
+                val layout = if (input["packageManifest"] == null) null else
+                    visitRequestModules(input - "indexedModuleFiles", { source, projection ->
+                        opened += source
+                        indexed(source, projection)
+                    }, accept)
+                val seenPaths = HashSet<String>()
                 for (raw in files) {
                     val file = raw as? Map<*, *> ?: error("Invalid indexed Core descriptor")
                     require(file.keys == setOf("path", "sha256", "sidecar", "sidecarSha256", "capability")) {
                         "Invalid indexed Core descriptor fields"
                     }
                     val path = file["path"] as? String ?: error("Missing indexed Core path")
+                    require(seenPaths.add(path)) { "Duplicate indexed Core path: $path" }
                     val sha = file["sha256"] as? String ?: error("Missing indexed Core identity")
                     val sidecar = file["sidecar"] as? String ?: error("Missing JSON sidecar path")
                     val sidecarSha = file["sidecarSha256"] as? String ?: error("Missing JSON sidecar identity")
@@ -388,7 +402,7 @@ object CoreModules {
                 // These are byte snapshots, not open file handles. Parsed Engine
                 // roots own their immutable sources; Context disposal must not
                 // close another Context's shared parse plan. GC releases them.
-                return null
+                return layout
             } catch (failure: Throwable) {
                 opened.forEach(CoreJsonIndex::close)
                 throw failure
@@ -447,24 +461,36 @@ object CoreModules {
     private fun indexedCapability(path: String, sha: String, sidecar: String, sidecarSha: String): String =
         packageCapability("indexed-json:" + Json.stringify(listOf(path, sidecar, sidecarSha)), sha)
 
-    /** Opt-in host path: exact JSON and explicit producer sidecars, without
+    /** Opt-in host path: exact loose JSON and explicit producer sidecars, without
      * embedding or parsing a module body while assembling the load request.
-     * Legacy whole-file hashes are still paid, here and at checked replay.
+     * An optional package manifest retains its independently checked identity.
+     * Whole-file hashes are still paid here and at checked replay.
      */
     private fun indexedRequestDocument(paths: List<String>, sidecars: Map<String, String>, settings: Map<String, Any>): String {
-        require(paths.isNotEmpty() && paths.distinct().size == paths.size &&
-            paths.none { it.startsWith("@") } && sidecars.keys == paths.toSet()) {
-            "Indexed loading currently requires explicit loose JSON/sidecar pairs"
+        val manifests = paths.filter { it.startsWith("@") }
+        val loose = paths.filterNot { it.startsWith("@") }
+        require(manifests.size <= 1 && paths.distinct().size == paths.size && loose.isNotEmpty() &&
+            sidecars.keys == loose.toSet()) {
+            "Explicit JSON sidecars require exactly the listed loose JSON inputs and at most one package manifest"
         }
-        val files = paths.map { raw ->
+        val seenPaths = HashSet<String>()
+        val files = loose.map { raw ->
             val path = Path.of(raw).toRealPath().toString()
+            require(seenPaths.add(path)) { "Duplicate indexed Core path: $path" }
             val sidecar = Path.of(sidecars.getValue(raw)).toRealPath().toString()
             val sha = sha256(Path.of(path))
             val sidecarSha = sha256(Path.of(sidecar))
             mapOf("path" to path, "sha256" to sha, "sidecar" to sidecar, "sidecarSha256" to sidecarSha,
                 "capability" to indexedCapability(path, sha, sidecar, sidecarSha))
         }
-        return Json.stringify(settings + mapOf("indexedModuleFiles" to files))
+        val identity = manifests.singleOrNull()?.let {
+            checkNotNull(CorePackageManifest.indexedRequestIdentity(it.drop(1), forceDescriptor = true))
+        }
+        return Json.stringify(settings + mapOf("indexedModuleFiles" to files) +
+            (identity?.let { mapOf("packageManifest" to it.manifestPath,
+                "packageManifestSha256" to it.manifestSha256,
+                "packageCapability" to packageCapability(it.manifestPath, it.manifestSha256),
+                "foreignExceptionBridgeUnit" to it.foreignExceptionBridgeUnit) } ?: emptyMap()))
     }
 
     private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {

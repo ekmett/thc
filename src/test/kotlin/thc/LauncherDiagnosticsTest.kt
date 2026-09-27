@@ -17,6 +17,21 @@ import java.nio.file.Path
 class LauncherDiagnosticsTest {
     @TempDir lateinit var directory: Path
 
+    @Test fun explicitSidecarPairsAreRepeatableAndStopAtTheGuestSeparator() {
+        val (arguments, pairs) = launcherJsonSidecars(arrayOf("--ffi", "native", "--json-sidecar", "a.json", "a.idx",
+            "--run-io", "a.json,b.json,@packages.json", "main", "--json-sidecar", "b.json", "b.idx",
+            "--", "program", "--json-sidecar", "guest.json", "guest.idx"))
+        assertArrayEquals(arrayOf("--ffi", "native", "--run-io", "a.json,b.json,@packages.json", "main",
+            "--", "program", "--json-sidecar", "guest.json", "guest.idx"), arguments)
+        assertEquals(linkedMapOf("a.json" to "a.idx", "b.json" to "b.idx"), pairs)
+        assertNull(launcherJsonSidecars(arrayOf("--", "--json-sidecar", "guest")).second)
+        for (invalid in listOf(arrayOf("--json-sidecar"), arrayOf("--json-sidecar", "a.json"),
+                arrayOf("--json-sidecar", "a.json", "--"), arrayOf("--json-sidecar", "@packages.json", "a.idx"),
+                arrayOf("--json-sidecar", "a.json", "a.idx", "--json-sidecar", "a.json", "b.idx"))) {
+            assertThrows(IllegalArgumentException::class.java) { launcherJsonSidecars(invalid) }
+        }
+    }
+
     /** Synthetic exact IO boundary: no foreign effects, fixture export, or native process. */
     private fun module(): Map<String, Any?> {
         val state = mapOf("kind" to "void", "primReps" to emptyList<String>(), "evaluated" to true)

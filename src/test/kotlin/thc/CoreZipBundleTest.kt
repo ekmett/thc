@@ -386,6 +386,31 @@ class CoreZipBundleTest {
         }
     }
 
+    @Test fun explicitIndexedConsumerKeepsCheckedPackageLayoutAndBridgeSelection() {
+        val layout = targetLayout()
+        val path = manifest(listOf(unit("dependency", layout = layout)))
+        fun fixture(name: String) = temporary.resolve(name).also { target ->
+            javaClass.getResourceAsStream("/core/$name")!!.use { Files.copy(it, target) }
+        }
+        val json = fixture("lazy-json-module.json")
+        val index = fixture("lazy-json-module.idx")
+        @Suppress("UNCHECKED_CAST")
+        val document = Json.parse(Files.readString(path)) as Map<String, Any?>
+        Files.writeString(path, Json.stringify(document + ("foreignExceptionBridgeUnit" to "selected-runtime")))
+        @Suppress("UNCHECKED_CAST")
+        val request = Json.parse(CoreModules.request(listOf(json.toString(), "@$path"),
+            "synthetic:LazyJson.entry", jsonSidecars = mapOf(json.toString() to index.toString()))) as Map<String, Any?>
+        val visited = mutableListOf<Map<String, Any?>>()
+        val actualLayout = CoreModules.visitRequestModules(request, visited::add)
+        assertTrue(actualLayout != null)
+        assertEquals(layout, actualLayout!!.document()["layout"])
+        assertEquals(listOf("dependency", "synthetic"), visited.map { it["unit"] })
+        assertTrue(visited.all { it["foreignExceptionBridgeUnit"] == "selected-runtime" })
+        assertTrue(assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.visitRequestModules(request + ("foreignExceptionBridgeUnit" to "another-runtime")) {}
+        }.message!!.contains("bridge selection changed"))
+    }
+
     @Test fun largePackageRequestStreamsVerifiedModulesAndBindsItsManifestIdentity() {
         val other = "pkg-b:Shared.entry"
         @Suppress("UNCHECKED_CAST")
