@@ -63,6 +63,7 @@ import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
 import OriginalCurrentDirectoryFixtures (prepareOriginalCurrentDirectory)
+import OriginalDirectoryPathsFixtures (prepareOriginalDirectoryPaths)
 import OriginalDirectoryStreamsFixtures (prepareOriginalDirectoryStreams)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
@@ -983,6 +984,7 @@ main = do
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
     ["original-current-directory"] -> prepareOriginalCurrentDirectory root
+    ["original-directory-paths"] -> prepareOriginalDirectoryPaths root
     ["original-directory-streams"] -> prepareOriginalDirectoryStreams root
     ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root

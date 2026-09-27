@@ -170,6 +170,7 @@ OPERATIONS = {
     'chdir': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     'getcwd': ('ccall', 'unsafe', ('AddrRep', 'Word64Rep', None), (None, 'AddrRep')),
     'symlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
+    'rmdir': ('ccall', 'unsafe', ('AddrRep', None), (None, 'Int32Rep')),
     'readlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'mkdir': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
     'ghczuwrapperZC1ZCdirectoryzm1zi3zi10zi0zminplaceZCSystemziDirectoryziInternalziPosixZCfstatat': ('capi', 'safe', ('Int32Rep', 'AddrRep', 'AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
@@ -284,7 +285,7 @@ DESCRIPTOR_KEYS = {'schema', 'target', 'convention', 'safety', 'arity', 'supplie
 # ghc-internal declarations above. Do not infer these from caller binding names.
 LIBRARY_OPERATIONS = {
     **{('unix-2.8.8.0-inplace', symbol): signature for symbol, signature in DIRECTORY_STREAM_OPERATIONS.items()},
-    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink', 'chdir', 'getcwd')},
+    **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol] for symbol in ('symlink', 'readlink', 'chdir', 'getcwd', 'rmdir')},
     ('unix-2.8.8.0-inplace', 'geteuid'): OPERATIONS['geteuid'],
     ('unix-2.8.8.0-inplace', 'mkdir'): OPERATIONS['mkdir'],
     **{('unix-2.8.8.0-inplace', symbol): OPERATIONS[symbol]
@@ -456,8 +457,11 @@ def validate(metadata, argument_reps, flags, result_rep):
                 'matching installed directory fstatat unit and symbol')
     if symbol == 'unlinkat':
         require(directory_unit(target.get('unit')), 'supported installed directory unlinkat unit')
-    if symbol in ('symlink', 'readlink', 'chdir', 'getcwd'):
+    if symbol in ('symlink', 'chdir', 'getcwd', 'rmdir'):
         require(unix_libc_unit(target.get('unit')), 'supported installed unix pathname unit')
+    if symbol == 'readlink':
+        require(target.get('unit') == 'ghc-internal' or unix_libc_unit(target.get('unit')),
+                'supported original ghc-internal or installed unix readlink unit')
     if symbol == 'geteuid':
         require(unix_libc_unit(target.get('unit')), 'supported installed unix effective UID unit')
     if symbol == 'mkdir':
@@ -482,7 +486,7 @@ def validate(metadata, argument_reps, flags, result_rep):
             and (target.get('unit') == 'ghc-internal' or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
-                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS, *DIRECTORY_STREAM_OPERATIONS) and unix_libc_unit(target.get('unit')) or
+                 symbol in ('close', 'dup', 'isatty', 'getenv', 'symlink', 'readlink', 'chdir', 'getcwd', 'rmdir', 'geteuid', 'mkdir', UNIX_LSTAT, *WAIT_STATUS_OPERATIONS, *DIRECTORY_STREAM_OPERATIONS) and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
                  symbol in ('unlinkat', DIRECTORY_FSTATAT) and directory_unit(target.get('unit')) or
                  isinstance(target.get('unit'), str) and (target['unit'], symbol) in LIBRARY_OPERATIONS),
