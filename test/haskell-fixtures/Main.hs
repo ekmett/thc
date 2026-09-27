@@ -87,6 +87,7 @@ import PackageNativeArchiveFixtures (preparePackageNativeArchives)
 import GetEntropyFixtures (prepareGetEntropy)
 import WcwidthFixtures (prepareWcwidth)
 import TextCbitsFixtures (prepareTextCbits)
+import ByteStringSortFixtures
 import ByteStringDecimalFixtures (prepareByteStringDecimal)
 import UnixLibcFixtures (prepareUnixLibc)
 import UnixWaitStatusFixtures (prepareUnixWaitStatus)
@@ -985,6 +986,7 @@ main = do
     ["getentropy"] -> prepareGetEntropy root
     ["wcwidth"] -> prepareWcwidth root
     ["text-cbits"] -> prepareTextCbits root
+    ["bytestring-sort"] -> prepareByteStringSort root
     ["bytestring-decimal"] -> prepareByteStringDecimal root
     ["unix-libc"] -> prepareUnixLibc root
     ["unix-wait-status"] -> prepareUnixWaitStatus root

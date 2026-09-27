@@ -24,7 +24,7 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "eb40b784491ad3ea27fe0896f4038ca82a5375aecd8e3bcf4f36f7db40e8960b"
+FULL_PREPARATION_PLAN = "a4fb2b09b89f7eeb884db85de97100974e6bca33ed51ecc6284f52e60bb0a93a"
 TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
     "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",

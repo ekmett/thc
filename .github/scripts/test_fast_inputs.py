@@ -1144,6 +1144,7 @@ class FastInputTests(unittest.TestCase):
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS, *cache.SIMD_BYTEARRAY_RETAINED,
                      "scripts/prepare-tests.sh", "examples/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
+                     "src/test/resources/core/original-bytestring-sort-descriptor.json",
                      "src/test/resources/core/original-bytestring-decimal-descriptors.json",
                      "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
@@ -1639,7 +1640,8 @@ class ToolchainVersionTests(unittest.TestCase):
 class RenamedInputContractTests(unittest.TestCase):
     def test_recorded_runtime_and_compiler_sources_use_actual_published_paths(self):
         root = Path(__file__).resolve().parents[2]
-        self.assertEqual(("src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
+        self.assertEqual(("src/main/kotlin/thc/runtime/CoreByteStringSort.kt",
+                          "src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
                           "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
                           "src/main/c/bytestring-utf8-api.c",
                           "src/main/kotlin/thc/runtime/CoreEnvironmentForeign.kt",
@@ -1655,6 +1657,8 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
         self.assertIn("test/haskell-fixtures/PinnedAddressFixtures.hs", sources)
         self.assertIn("tools/primops/PrimopTools.hs", sources)
+        sort = "src/test/resources/core/original-bytestring-sort-descriptor.json"
+        self.assertEqual(cache.digest(root / sort), sources[sort])
         decimal = "src/test/resources/core/original-bytestring-decimal-descriptors.json"
         self.assertEqual(cache.digest(root / decimal), sources[decimal])
         declaration = "src/test/resources/core/original-unix-libc-descriptors.json"

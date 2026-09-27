@@ -26,6 +26,7 @@ are different claims; each report identifies which it establishes.
 | Native executable investigation | [Native Image feasibility](native-image-feasibility.md); pinned-toolchain build blockers and runtime packaging versus guest AOT, not a working native executable |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Byte comparison and search | [Original libc `memcmp`/`memchr`](original-memory-search.md), unsigned byte semantics and allocation-preserving interior pointers |
+| Byte sorting | [Original ByteString `fps_sort`](original-bytestring-sort.md), unsigned ordering in checked writable slices |
 | Native file ownership | [Opened-resource provider and original fstat](native-file-provider.md); Linux x86_64 `--run-io` uses it, RTS locking remains separate |
 | Threads | [Asynchronous exceptions and resumable thunk evaluation](async-exceptions.md); [thread snapshots and boundness](thread-inventory.md); Java thread identities, masking and interruptible MVar waits |
 | Delimited continuations | [Initial synchronous multi-shot slice](delimited-continuations.md); prompt identity, saved suffixes, shared effects, and catch/mask restoration |
