@@ -29,7 +29,9 @@ SIMD_SPEC = "scripts/simd-families.json"
 SIMD_GENERATOR = "scripts/generate-simd-families.py"
 SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
-HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": "test/primop-tools/Main.hs"}
+HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": "test/primop-tools/Main.hs",
+                 "json-index": "test/json-index/Main.hs"}
+DOCUMENTATION_PATHS = {"compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew",
     "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
@@ -920,7 +922,7 @@ def select(repo, base_ref, head_ref):
                             affected_haskell.update(group.get("haskell", []))
                 except (SelectionError, UnicodeError, ValueError, TypeError):
                     widen("shared-primop-registry-change", path)
-            elif path.endswith(".md") and (path.startswith("docs/") or "/" not in path):
+            elif path in DOCUMENTATION_PATHS or (path.endswith(".md") and (path.startswith("docs/") or "/" not in path)):
                 pass  # Explicit documentation-only lane still executes all smoke.
             elif base and record["status"] == "M" and path.startswith("src/main/") and path.endswith(".kt"):
                 try:

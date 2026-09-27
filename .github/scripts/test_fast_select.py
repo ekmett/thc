@@ -63,6 +63,7 @@ class FastSelectionTest(unittest.TestCase):
             "scripts/test-other.py": PYTHON_TEST,
             "test/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
             "test/primop-tools/Main.hs": "module Main where\nmain = pure ()\n",
+            "test/json-index/Main.hs": "module Main where\nmain = pure ()\n",
             "README.md": "Documentation\n",
         }
         for path, text in files.items():
@@ -233,6 +234,42 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual("narrow", selected["mode"], selected)
         self.assertEqual(["primop-tools"], selected["haskell"]["suites"])
         self.assertEqual(["primop-tools"], selected["affected"]["haskell"])
+
+    def test_json_index_inputs_select_the_cabal_suite(self):
+        policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
+        for path in ("compiler/THC/JsonIndex/Scanner.hs", "compiler/json-index/json_index.c",
+                     "compiler/json-index/json_index.h", "test/json-index/Main.hs", "test/json-index/native.c"):
+            with self.subTest(path=path):
+                self.policy["owners"][path] = policy["owners"][path]
+                self.write(select.POLICY, json.dumps(self.policy))
+                self.write(path, "original\n")
+                before = self.commit()
+                self.write(path, "changed\n")
+                self.commit()
+                selected = self.plan(base=before)
+                self.assertEqual("narrow", selected["mode"], selected)
+                self.assertTrue(selected["runnable"])
+                self.assertEqual(["json-index"], selected["haskell"]["suites"])
+                self.assertEqual(["json-index"], selected["affected"]["haskell"])
+                self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
+
+    def test_json_index_documentation_retains_only_smoke(self):
+        for path in ("compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"):
+            with self.subTest(path=path):
+                before = self.git("rev-parse", "HEAD")
+                self.write(path, "Documentation or license update\n")
+                self.commit()
+                selected = self.plan(base=before)
+                self.assertEqual("narrow", selected["mode"], selected)
+                self.assertEqual([], selected["haskell"]["suites"])
+                self.assertEqual(["example.SmokeTest"], selected["junit"]["classes"])
+
+    def test_full_selection_includes_json_index(self):
+        self.write("compiler/THC/JsonIndex/Producer.hs", "unreviewed production dependency\n")
+        self.commit()
+        selected = self.full("unmapped-source-or-configuration")
+        self.assertTrue(selected["runnable"])
+        self.assertEqual(["driver-tests", "json-index", "primop-tools"], selected["haskell"]["suites"])
 
     def test_polyglot_changes_select_actual_optional_class_without_all_regular_tests(self):
         path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"

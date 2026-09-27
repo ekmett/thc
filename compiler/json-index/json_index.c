@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: MIT
+/* SPDX-License-Identifier: MIT AND BSD-2-Clause
  * SPDX-FileCopyrightText: 2025 rust-works
  * SPDX-FileCopyrightText: 2026 Edward Kmett
  * Copyright (c) 2025 rust-works; Copyright (c) 2026 Edward Kmett.
@@ -9,6 +9,9 @@
  * The source's quote/escape automaton and SIMD classifiers are retained.
  * Outputs are ephemeral Simple Cursor masks with disjoint open/close planes.
  * Persistence and topology encoding belong to the Haskell producer.
+ * The directory builder below follows Edward Kmett's public Everett rank.h,
+ * eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca, under BSD-2-Clause.
+ * See LICENSE.everett and LICENSE.everett-bsd.
  */
 #include "json_index.h"
 #include <stddef.h>
@@ -177,4 +180,117 @@ int thc_json_scan_block(const uint8_t *source, uint64_t length, int backend,
     scan(&w, source, length, backend);
     *final_state = w.state;
     return THC_JSON_OK;
+}
+
+/* Whole-document passes resolve the ISA once and reuse this bounded scratch.
+ * No input-sized interest bitmap or per-quarter allocation is retained. */
+static unsigned block_masks(const uint8_t *source, uint64_t length, int backend,
+                            unsigned state, uint8_t masks_out[3][64]) {
+    memset(masks_out, 0, 3 * 64);
+    writer w = {0};
+    w.state = state;
+    w.interest = masks_out[0]; w.opens = masks_out[1]; w.closes = masks_out[2];
+    scan(&w, source, length, backend);
+    return w.state;
+}
+static unsigned population(const uint8_t *bytes, unsigned length) {
+    unsigned result = 0;
+    for (unsigned i = 0; i < length; ++i) {
+        /* Portable byte population; compilers may select their target's legal
+         * instructions without imposing a runtime POPCNT requirement. */
+        unsigned v = bytes[i];
+        v = v - ((v >> 1) & 0x55u);
+        v = (v & 0x33u) + ((v >> 2) & 0x33u);
+        result += (v + (v >> 4)) & 0x0fu;
+    }
+    return result;
+}
+int thc_json_simple_count(const uint8_t *source, uint64_t length, int backend,
+                          uint64_t *events, uint32_t *final_state) {
+    if (length > SIZE_MAX || (length && !source) || !events || !final_state) return THC_JSON_ARGUMENT;
+    backend = thc_json_backend_selected(backend);
+    if (backend < 0) return THC_JSON_UNSUPPORTED;
+    uint64_t total = 0, offset = 0;
+    unsigned state = 0;
+    uint8_t scratch[3][64];
+    while (offset < length) {
+        uint64_t count = length - offset < 512 ? length - offset : 512;
+        state = block_masks(source + offset, count, backend, state, scratch);
+        total += population(scratch[0], (unsigned)((count + 7) / 8));
+        offset += count;
+    }
+    *events = total; *final_state = state;
+    return THC_JSON_OK;
+}
+static int section_size(uint64_t count, uint64_t per, uint64_t bytes_each, uint64_t *result) {
+    uint64_t units = count / per + (count % per != 0);
+    if (units > SIZE_MAX / bytes_each) return 0;
+    *result = units * bytes_each;
+    return 1;
+}
+static void put32(uint8_t *target, uint32_t value) {
+    for (unsigned i = 0; i < 4; ++i) target[i] = (uint8_t)(value >> (8 * i));
+}
+static void put64(uint8_t *target, uint64_t value) {
+    for (unsigned i = 0; i < 8; ++i) target[i] = (uint8_t)(value >> (8 * i));
+}
+int thc_json_simple_build(const uint8_t *source, uint64_t length, int backend, uint64_t events,
+                          uint8_t *epochs, uint64_t epoch_bytes,
+                          uint8_t *blocks, uint64_t block_bytes,
+                          uint8_t *states, uint64_t state_bytes,
+                          uint8_t *bp, uint64_t bp_bytes) {
+    if (length > SIZE_MAX || (length && !source) || events > length) return THC_JSON_ARGUMENT;
+    backend = thc_json_backend_selected(backend);
+    if (backend < 0) return THC_JSON_UNSUPPORTED;
+    uint64_t e, b, s, p;
+    /* FSM: 2 bits/512 bytes, padded to 64-bit words => one word/16384 bytes.
+     * BP: two bits/event => one word/32 events. No overflowing 2*events. */
+    if (!section_size(length, UINT64_C(1) << 32, 8, &e)
+        || !section_size(length, 2048, 8, &b)
+        || !section_size(length, 16384, 8, &s)
+        || !section_size(events, 32, 8, &p)
+        || e != epoch_bytes || b != block_bytes || s != state_bytes || p != bp_bytes
+        || (e && !epochs) || (b && !blocks) || (s && !states) || (p && !bp)) return THC_JSON_ARGUMENT;
+    if (e) memset(epochs, 0, (size_t)e);
+    if (b) memset(blocks, 0, (size_t)b);
+    if (s) memset(states, 0, (size_t)s);
+    if (p) memset(bp, 0, (size_t)p);
+    uint64_t offset = 0, ordinal = 0, quarter = 0, epoch_base = 0;
+    uint32_t packed = 0;
+    unsigned state = 0;
+    uint8_t scratch[3][64];
+    while (offset < length) {
+        uint64_t block = quarter >> 2;
+        unsigned run = (unsigned)(quarter & 3);
+        if (run == 0) {
+            /* Everett directory_cursor: one absolute count per 2^32 source
+             * bits; here the virtual IB has exactly one bit per JSON byte. */
+            if ((block & ((UINT64_C(1) << 21) - 1)) == 0) {
+                epoch_base = ordinal;
+                put64(epochs + (block >> 21) * 8, ordinal);
+            }
+            if (ordinal - epoch_base > UINT32_MAX) return THC_JSON_ARGUMENT;
+            put32(blocks + block * 8, (uint32_t)(ordinal - epoch_base));
+            packed = 0;
+        }
+        states[quarter >> 2] |= (uint8_t)(state << (2 * run));
+        uint64_t count = length - offset < 512 ? length - offset : 512;
+        state = block_masks(source + offset, count, backend, state, scratch);
+        unsigned found = population(scratch[0], (unsigned)((count + 7) / 8));
+        if (run < 3) packed |= (uint32_t)found << (11 * run);
+        put32(blocks + block * 8 + 4, packed);
+        for (unsigned byte = 0; byte < (count + 7) / 8; ++byte) {
+            unsigned interest = scratch[0][byte];
+            for (unsigned bit_index = 0; interest; ++bit_index, interest >>= 1) {
+                if (!(interest & 1)) continue;
+                if (ordinal >= events) return THC_JSON_COUNT_MISMATCH;
+                unsigned mask = 1u << bit_index;
+                unsigned pair = scratch[1][byte] & mask ? 3u : scratch[2][byte] & mask ? 0u : 2u;
+                bp[ordinal >> 2] |= (uint8_t)(pair << (2 * (ordinal & 3)));
+                ++ordinal;
+            }
+        }
+        offset += count; ++quarter;
+    }
+    return ordinal == events ? THC_JSON_OK : THC_JSON_COUNT_MISMATCH;
 }

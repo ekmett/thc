@@ -14,8 +14,12 @@ description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/G
 extra-source-files:
   compiler/json-index/README.md
   compiler/json-index/LICENSE.succinctly
+  compiler/json-index/LICENSE.everett
+  compiler/json-index/LICENSE.everett-bsd
   compiler/json-index/json_index.h
   test/json-index/native.c
+  test/json-index/golden/*.json
+  test/json-index/golden/*.idx
   docs/foreign-exceptions.md
   compiler/test-fixtures/ForeignExceptionNative.hs
   compiler/test-fixtures/ForeignExceptionSafe.hs
@@ -492,18 +496,41 @@ library
   if flag(development)
     ghc-options: -Werror
 
+executable thc-json-index
+  main-is: Main.hs
+  hs-source-dirs: compiler/json-index-tool, compiler
+  other-modules: THC.JsonIndex, THC.JsonIndex.Scanner
+  c-sources: compiler/json-index/json_index.c
+  include-dirs: compiler/json-index
+  cc-options: -std=c11 -Wall -Wextra
+  build-depends:
+    base >= 4.22 && < 4.23,
+    bytestring >= 0.12.2 && < 0.13,
+    cryptohash-sha256 >= 0.11 && < 0.12,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6
+  default-language: Haskell2010
+  ghc-options: -Wall -rtsopts
+  if flag(development)
+    ghc-options: -Werror
+    cc-options: -Werror
+
 test-suite json-index
   type: exitcode-stdio-1.0
+  build-tool-depends: thc:thc-json-index
   main-is: Main.hs
   hs-source-dirs: test/json-index, compiler
-  other-modules: THC.JsonIndex.Scanner
+  other-modules: THC.JsonIndex, THC.JsonIndex.Scanner
   c-sources: compiler/json-index/json_index.c, test/json-index/native.c
   include-dirs: compiler/json-index
   cc-options: -std=c11 -Wall -Wextra -DTHC_JSON_TEST_EMBEDDED
   build-depends:
     base >= 4.22 && < 4.23,
     bytestring >= 0.12.2 && < 0.13,
-    HUnit >= 1.6 && < 1.7
+    HUnit >= 1.6 && < 1.7,
+    cryptohash-sha256 >= 0.11 && < 0.12,
+    directory >= 1.3.10 && < 1.4,
+    filepath >= 1.5.4 && < 1.6
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)
