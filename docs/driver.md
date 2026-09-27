@@ -26,10 +26,13 @@ binary. The resolved build information drives `THC.Plugin` export, strict
 reachable-Core audit, and execution in the THC JVM runtime.
 
 Project acquisition also acquires and selects the genuine
-`THC.Internal.Exception` dictionary. This is
-[foreign-exception bridge groundwork](foreign-exceptions.md): automatic boundary
-conversion and auditor/runtime consumption of the bridge are separate, upcoming
-changes. Acquiring this library alone does not make foreign failures catchable.
+`THC.Internal.Exception` dictionary. The
+[foreign-exception bridge](foreign-exceptions.md) automatically converts eligible
+foreign runtime and parse failures at admitted execution boundaries into
+`THC.Exception.ForeignException`. Ordinary `catch` with `SomeException`, `finally`
+and `bracket` work without an application import of `THC.Exception`. Compatible
+Polyglot and managed-export exits restore the original foreign object, including
+after a caught `SomeException` is stored and rethrown with `throwIO`.
 If the application's dependency closure already contains that API, THC reuses
 the exact runtime unit and its `Typeable` identity.
 Multiple bridge units, or an API without a matching typed bridge proof, are
@@ -40,19 +43,29 @@ Otherwise Cabal builds the original `thc:runtime` library from `--thc-root` in
 proxy. Its own plan, build information, native objects and typed Core determine
 the exported unit; the application's project files are unchanged. Runtime
 source and native artifact changes invalidate the ordinary content-keyed export.
-The package manifest records the exact `foreignExceptionBridgeUnit`. The upcoming
-consumer change will retain its compiled box/project helpers and use the selected
-dictionary for ordinary `catch` with `SomeException` and `bracket`, including
-applications that do not import `THC.Exception`.
+The package manifest records the exact `foreignExceptionBridgeUnit`. The auditor
+and runtime retain its genuine compiled box/project helpers when reachable
+foreign execution needs them.
 
-The planned automatic-conversion contract for compiler-free embedding requires
-the same genuine bridge bundle and its dependency closure. A sole bridge will be
-unambiguous; otherwise the package manifest must select its exact unit. The
-consumer change must reject missing or ambiguous support when conversion is
-required, without a process-global default dictionary or explicit `liftForeign`
-scope.
-The legacy Windows simple-package backend does not yet generate this sidecar;
-automatic support there also requires a genuine bundle-linking path.
+Compiler-free embedding must supply the same genuine bridge bundle and its
+dependency closure. A sole bridge is unambiguous; otherwise select its exact unit
+with `foreignExceptionBridgeUnit`. Missing or ambiguous support for foreign
+execution is a load/link error. There is no process-global default dictionary or
+explicit lifting scope. The Windows simple-package backend also acquires this
+support through the selected compiler's vanilla interfaces and a checked runtime
+manifest; this does not expand its supported application dependency closure.
+
+Declared call safety still governs callback admission: unsafe calls cannot
+reenter Haskell. It does not provide raw C callback transport or interruption of
+arbitrary native blocking calls. Foreign metadata accessors run in `IO` through
+an explicitly `safe` import because inspection can execute foreign code; pure
+display remains inert. The public `THC.Exception` wrapper can be imported by Safe
+Haskell clients, while `THC.Internal.Exception` is `Unsafe`. Cancellation,
+internal control transfers, runtime invariant failures and fatal host errors are
+not converted.
+Native errno/error-code APIs retain their ordinary adapters, and arbitrary
+plain-C exception unwinding is unsupported. See the bridge guide for exact
+eligibility, rethrow provenance and focused validation.
 
 The default pinned provider runs a raw `Main.main :: IO ()` action.
 The complete installed-Core provider instead runs GHC's generated
