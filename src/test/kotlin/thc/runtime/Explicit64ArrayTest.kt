@@ -92,6 +92,20 @@ class Explicit64ArrayTest {
                 assertEquals(arity, uses.single()["arity"])
             }
             val module = Json.parse(File(directory, "core/Explicit64ArrayAudit.json").readText()) as Map<String, Any?>
+            val evidence = ArrayCoreEvidence(module, "explicit64ArrayBits")
+            val outer = evidence.root["expr"] as List<Any?>
+            assertEquals(1, evidence.bindings.size)
+            assertTrue(evidence.globalReferences(outer).isEmpty())
+            assertEquals("lam", outer[0])
+            assertEquals(listOf("IntRep", "IntRep"), (outer[1] as List<Map<String, Any?>>).map {
+                ((it["rep"] as Map<*, *>)["primReps"] as List<*>).single()
+            })
+            val state = evidence.immediateStateLambda(outer[2])
+            assertEquals(listOf(outer, state), evidence.guestLambdas(outer),
+                "the exported entry retains exactly its immediate State# lambda")
+            val lowered = evidence.loweredGuestLambdas(outer)
+            assertEquals(listOf(outer), lowered, "the exact State# beta-redex executes in-frame")
+            val executedRoots = lowered.size
             for (backend in listOf("ast", "bytecode")) context().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
@@ -123,9 +137,10 @@ class Explicit64ArrayTest {
                         assertEquals(row.results[selector], function.execute(row.bits, selector).asLong(),
                             stage + "/" + backend + "/" + selector)
                         val after = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        // The public entry and the retained runRW# lambda each enter compiled code.
-                        assertEquals(before + 2, after,
-                            stage + "/" + backend + "/" + selector + " must enter both compiled roots")
+                        // Count the exact lowered Core roots, retaining the separate
+                        // exported-lambda proof above and every first-installed call.
+                        assertEquals(before + executedRoots, after,
+                            stage + "/" + backend + "/" + selector + " must enter every lowered root in compiled code")
                         assertTrue(valid(host), stage + "/" + backend + " host remains installed")
                         assertTrue(valid(active), stage + "/" + backend + " active guest remains installed")
                         assertSame(active, guestCall.currentCallTarget,
