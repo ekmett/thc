@@ -952,11 +952,14 @@ val compileNativeAtomics by tasks.registering {
     outputs.dir(output)
     doLast {
         val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
-        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-atomic-api.so")
+        val darwin = host["system"] == "Darwin" && host["architecture"] in setOf("x86_64", "aarch64")
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            val extension = if (darwin) ".dylib" else ".so"
+            val destination = output.get().asFile.resolve("thc/native/native-atomic-api$extension")
             destination.parentFile.mkdirs()
-            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+            val compiler = listOf(clang.get()) + if (darwin) emptyList() else listOf("--target=${host["target"]}")
+            providers.exec { commandLine(compiler + listOf("-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", if (darwin) "-dynamiclib" else "-shared", source.asFile.path, "-o", destination.path)) }.result.get()
         }
     }
 }

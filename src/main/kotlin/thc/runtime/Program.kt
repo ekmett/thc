@@ -1961,6 +1961,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         if (spill) {
             return captureStack(frame.materialize())
         }
+        // Synchronous roots cannot capture an AST continuation. Keeping that
+        // return arm would merge an inlined virtual tuple with a saved frame.
+        if (!enableAsync) return executeCapturableBody(frame)
         return try { executeCapturableBody(frame) }
         catch (cut: AstCapture) {
             // Continuations own a real frame only on the interrupted slow path.

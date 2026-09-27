@@ -23,13 +23,16 @@ pointer cells retain address references, including null; CAS compares location
 identity and offset. Numeric atomics reject pointer cells rather than exposing
 synthetic pointer bits. Immutable byte storage admits atomic reads only.
 
-Native-enabled Linux x86_64 contexts also admit owned malloc storage under a
-lifetime borrow. Word and Word32 operations use volatile memory-segment handles.
-JDK 25 excludes byte/short atomic updates, so a small C provider implements those
-two CAS widths using sequentially consistent compiler atomics; it never reads a
-wider element to emulate them. This follows the
+Pinned numeric storage uses real atomics on Linux x86_64 and macOS x86_64/arm64.
+Word and Word32 operations use volatile memory-segment handles. JDK 25 excludes
+byte/short atomic updates, so the packaged C provider implements those two CAS
+widths using sequentially consistent compiler atomics; it never reads a wider
+element to emulate them. This follows the
 [JDK access-mode restrictions](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/foreign/MemoryLayout.html#access-mode-restrictions).
-Native pointer cells contain actual process pointer bits. Results recover live
+
+Native-enabled Linux x86_64 contexts also admit owned malloc storage under a
+lifetime borrow. Native pointer cells contain actual process pointer bits.
+Results recover live
 allocations in the current context or registered immutable images; unknown bits
 remain non-dereferenceable. Managed mutable pointers cannot be stored in native
 cells because they have no real native address. Freed owners, foreign contexts,
@@ -44,8 +47,8 @@ lifetime/context failures. Run the focused group with the pinned toolchain:
 
 ```sh
 cabal run exe:thc-fixtures --offline -- atomic-address
-./gradlew --no-daemon test --tests thc.runtime.AtomicAddressTest
-JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --tests thc.runtime.AtomicAddressTest
+./gradlew --continue testDefault --tests thc.runtime.AtomicAddressTest \
+  testDense --tests thc.runtime.AtomicAddressTest
 ```
 
 [AtomicTickets.hs](../examples/AtomicTickets.hs) shows a ticket dispenser whose
