@@ -129,7 +129,7 @@ private class LocalJoinRepeater(private val group: Any, private val selector: In
     private val exactDouble = proof.isDouble
     private val referenceKind = if (proof.evaluated) proof.kind else CoreKind.UNKNOWN
     private fun executeBody(frame: VirtualFrame, body: Expr) {
-        if (!delimited && !AstControl.enabled(this)) return executeUninterrupted(frame, body)
+        if (!delimited && !AstControl.captures(this)) return executeUninterrupted(frame, body)
         try {
             executeUninterrupted(frame, body)
         } catch (cut: AstCapture) {
@@ -236,7 +236,7 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
     @Child private var loop: LoopNode? = if (recursive) Truffle.getRuntime().createLoopNode(
         LocalJoinRepeater(group, selector, result, bodies, proof, tupleSlots, delimited)) else null
     private fun run(frame: VirtualFrame, slots: IntArray? = null, offset: Int = 0) {
-        if (!delimited && !AstControl.enabled(this)) return runUninterrupted(frame)
+        if (!delimited && !AstControl.captures(this)) return runUninterrupted(frame)
         try { runUninterrupted(frame) }
         catch (cut: AstCapture) { throw cut.enclose { ResumeAsyncRegion(this, it, slots, offset) } }
         catch (cut: DelimitedCut) {

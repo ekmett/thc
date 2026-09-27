@@ -201,7 +201,7 @@ internal abstract class Dispatch(
             function.supplied, prefixSize, arguments, ArgumentLayout.width(argumentLayout, arity))
         if (hasEnvironment) packet[1] = function.environment
         // There is pending application work, so this first call is not tail.
-        if (AstControl.enabled(this)) {
+        if (AstControl.captures(this)) {
             val result = try { caller.call(frame, packet, false) }
             catch (cut: AstCapture) {
                 val remaining = arguments.copyOfRange(ArgumentLayout.offset(argumentLayout, arity), arguments.size)
@@ -327,7 +327,7 @@ internal abstract class GenericDispatch : Node() {
                 if (exact.profile(node, count == remaining)) {
                     return caller.call(frame, function.target, packet, tailCall)
                 }
-                if (AstControl.enabled(node)) {
+                if (AstControl.captures(node)) {
                     val next = offset + count
                     val result = try { caller.call(frame, function.target, packet, false) }
                     catch (cut: AstCapture) {
@@ -450,7 +450,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
                                knownEvaluated: BooleanArray = booleanArrayOf(), prefixSize: Int = 0) : Node() {
     @Child private var entryArguments = EntryArguments(target, metrics, knownEvaluated, prefixSize)
     @Child private var leadingCaseReturn: LeadingCaseReturnNode? = (target.rootNode as? GuestRoot)
-        ?.takeUnless { it is FunctionRoot && it.enableAsync }
+        ?.takeUnless { it is FunctionRoot && it.capturesContinuations }
         ?.leadingCaseReturn?.let { LeadingCaseReturnNode(it, metrics) }
     @Child private var callNode = DirectCallNode.create(target)
     @Child private var handoff: HandoffCaller? = (target.rootNode as? FunctionRoot)?.handoff?.let { HandoffCaller(target, it, metrics) }
@@ -480,7 +480,7 @@ internal class DirectCallerNode(val target: RootCallTarget, private val metrics:
             tailProfile.enter()
             loop.execute(tail)
         }
-        return if (AstControl.enabled(this)) AstControl.complete(this, result, target) else result
+        return if (AstControl.captures(this)) AstControl.complete(this, result, target) else result
     }
 
     companion object {
@@ -511,7 +511,7 @@ internal class IndirectCallerNode(private val metrics: Metrics) : Node() {
             tailProfile.enter()
             loop.execute(tail)
         }
-        return if (AstControl.enabled(this)) AstControl.complete(this, result, target) else result
+        return if (AstControl.captures(this)) AstControl.complete(this, result, target) else result
     }
 
     companion object { @JvmStatic fun create(metrics: Metrics) = IndirectCallerNode(metrics) }

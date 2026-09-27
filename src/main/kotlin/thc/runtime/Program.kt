@@ -1052,7 +1052,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
         if (original is Thunk && value is LocalRead) (value as LocalRead).writeForced(frame, original, result)
         return result
     }
-    override fun execute(frame: VirtualFrame): Any? = if (AstControl.enabled(this)) executeAsync(frame) else when {
+    override fun execute(frame: VirtualFrame): Any? = if (AstControl.captures(this)) executeAsync(frame) else when {
         value.representation.isInt -> value.executeRequiredInt(frame)
         value.representation.isLong -> value.executeRequiredLong(frame)
         value.representation.isFloat -> value.executeRequiredFloat(frame)
@@ -1082,19 +1082,19 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericLong = false
     override fun executeInt(frame: VirtualFrame): Int =
-        if (AstControl.enabled(this)) RuntimeTypesGen.expectInteger(executeAsync(frame))
+        if (AstControl.captures(this)) RuntimeTypesGen.expectInteger(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isInt) value.executeInt(frame)
         else RuntimeTypesGen.expectInteger(forceResult(frame, value.execute(frame)))
     override fun executeFloat(frame: VirtualFrame): Float =
-        if (AstControl.enabled(this)) RuntimeTypesGen.expectFloat(executeAsync(frame))
+        if (AstControl.captures(this)) RuntimeTypesGen.expectFloat(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isFloat) value.executeFloat(frame)
         else RuntimeTypesGen.expectFloat(forceResult(frame, value.execute(frame)))
     override fun executeDouble(frame: VirtualFrame): Double =
-        if (AstControl.enabled(this)) RuntimeTypesGen.expectDouble(executeAsync(frame))
+        if (AstControl.captures(this)) RuntimeTypesGen.expectDouble(executeAsync(frame))
         else if (value.representation.evaluated || value.representation.isDouble) value.executeDouble(frame)
         else RuntimeTypesGen.expectDouble(forceResult(frame, value.execute(frame)))
     override fun executeLong(frame: VirtualFrame): Long {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectLong(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectLong(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeLong(frame)
         if (genericLong) return RuntimeTypesGen.expectLong(forceResult(frame, value.execute(frame)))
         return try { value.executeLong(frame) }
@@ -1107,7 +1107,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericClosure = false
     override fun executeClosure(frame: VirtualFrame): Closure {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectClosure(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectClosure(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeClosure(frame)
         if (value.representation.kind == CoreKind.CLOSURE || genericClosure) return RuntimeTypesGen.expectClosure(forceResult(frame, value.execute(frame)))
         return try { value.executeClosure(frame) }
@@ -1120,7 +1120,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericDataValue = false
     override fun executeDataValue(frame: VirtualFrame): DataValue {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectDataValue(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeDataValue(frame)
         if (value.representation.kind == CoreKind.DATA || genericDataValue) return RuntimeTypesGen.expectDataValue(forceResult(frame, value.execute(frame)))
         return try { value.executeDataValue(frame) }
@@ -1133,7 +1133,7 @@ internal class Evaluate(@field:Child private var value: Expr, metrics: Metrics) 
     }
     @CompilationFinal private var genericAddress = false
     override fun executeAddress(frame: VirtualFrame): ManagedAddress {
-        if (AstControl.enabled(this)) return RuntimeTypesGen.expectManagedAddress(executeAsync(frame))
+        if (AstControl.captures(this)) return RuntimeTypesGen.expectManagedAddress(executeAsync(frame))
         if (value.representation.evaluated || value.representation.isLong) return value.executeAddress(frame)
         if (value.representation.kind == CoreKind.ADDRESS || genericAddress) return RuntimeTypesGen.expectManagedAddress(forceResult(frame, value.execute(frame)))
         return try { value.executeAddress(frame) }
@@ -1725,7 +1725,7 @@ private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepre
             }
             // Both continuation protocols can retain a carrier in an owned frame.
             return shape.finish(frame, tupleSlots,
-                AstControl.enabled(this) || DelimitedControl.enabled(this))
+                AstControl.captures(this) || DelimitedControl.enabled(this))
         }
         // Kotlin's enum when uses a mutable synthetic int[] mapping. Graal
         // cannot fold that lookup, even when this node's resultKind is constant.
@@ -1797,7 +1797,9 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                             internal val enableAsync: Boolean = false,
                             @field:CompilationFinal(dimensions = 2) private val environmentVectorSlots: Array<IntArray?> = emptyArray(),
                             internal val enableDelimited: Boolean = false,
-                            internal val role: FunctionRootRole = FunctionRootRole.FUNCTION) : GuestRoot(language, descriptor) {
+                            internal val role: FunctionRootRole = FunctionRootRole.FUNCTION,
+                            internal val stackCapture: Boolean = false) : GuestRoot(language, descriptor) {
+    internal val capturesContinuations = enableAsync || stackCapture
     init {
         configureEntry(entryStrict, captureLayout != null)
         configureInput(inputLayout)
@@ -1810,7 +1812,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         // slot kinds before publishing the root, not on its first compiled call.
         // An asynchronously forced argument may still contain a thunk here.
         for (i in argumentSlots.indices) {
-            if (enableAsync && argumentIndices[i] + entryArgumentOffset in strictArgumentPositions) continue
+            if (capturesContinuations && argumentIndices[i] + entryArgumentOffset in strictArgumentPositions) continue
             val proof = argumentProofs.getOrNull(i) ?: continue
             val kind = when {
                 proof.referenceCarrier() != null -> FrameSlotKind.Object
@@ -1837,7 +1839,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private val argumentReferences = argumentProofs.map { it.referenceCarrier() }.toTypedArray()
     @field:CompilationFinal(dimensions = 1)
     private val strictArguments = BooleanArray(argumentSlots.size) {
-        enableAsync && argumentIndices[it] + entryArgumentOffset in strictArgumentPositions
+        capturesContinuations && argumentIndices[it] + entryArgumentOffset in strictArgumentPositions
     }
     @field:CompilationFinal(dimensions = 1)
     private val strictSlots = argumentSlots.indices.filter { strictArguments[it] }.toIntArray()
@@ -1846,8 +1848,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private val tailCallProfile = BranchProfile.create()
     @Child private var loop: LoopNode = Truffle.getRuntime().createLoopNode(SelfRepeater(FunctionBody(body, metrics, resultProof, tuple, tupleSlots), metrics))
     @Child private var delimitedHandoff: HandoffCaller? = null
-    override fun requiresUnprofiledReturn(): Boolean = enableAsync || enableDelimited
-    override fun requiresMaterializableFrame(): Boolean = enableAsync || enableDelimited
+    override fun requiresUnprofiledReturn(): Boolean = capturesContinuations || enableDelimited
+    override fun requiresMaterializableFrame(): Boolean = capturesContinuations || enableDelimited
 
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
@@ -2002,7 +2004,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     }
 
     override fun execute(frame: VirtualFrame): Any? {
-        if (!enableAsync) return executeInitial(frame, false)
+        if (!capturesContinuations) return executeInitial(frame, false)
         val stack = astStackScope(this)
         val driver = !stack.driving
         if (driver) stack.driving = true
@@ -2040,9 +2042,8 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         if (spill) {
             return captureStack(frame.materialize())
         }
-        // Synchronous roots cannot capture an AST continuation. Keeping that
-        // return arm would merge an inlined virtual tuple with a saved frame.
-        if (!enableAsync) return executeCapturableBody(frame)
+        // Roots without either capture capability retain their virtual result path.
+        if (!capturesContinuations) return executeCapturableBody(frame)
         return try { executeCapturableBody(frame) }
         catch (cut: AstCapture) {
             // Continuations own a real frame only on the interrupted slow path.
