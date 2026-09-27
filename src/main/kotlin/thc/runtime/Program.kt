@@ -165,7 +165,9 @@ internal class CallSegment @JvmOverloads constructor(
     val callerMask: MaskingState = MaskingState.UNMASKED,
     val tupleShape: TupleShape? = null,
     /** This cold token was captured inside a real catch# action boundary. */
-    val caughtIOAction: Boolean = false
+    val caughtIOAction: Boolean = false,
+    /** A newly captured identity-tail edge; ordinary calls retain their trampoline barrier. */
+    val tailSpill: Boolean = false
 ) {
     init { check(savedGuestContinuation(continuation) != null) { "Call segment needs a saved continuation" } }
     @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
@@ -605,6 +607,10 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     throw UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain")
                 val child = suspendedChild(leafContinuation) ?: break
                 parked.addLast(Parked(leaf, leafContinuation!!))
+                if (drainSpills) {
+                    val scope = astStackScope(this)
+                    scope.maxParkedSpillParents = maxOf(scope.maxParkedSpillParents, parked.size)
+                }
                 leaf = child
             }
             var current: Any = leaf
@@ -650,6 +656,12 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                         throw UnsupportedCore("control0# cannot recapture a parked one-shot invocation chain")
                     throw cut
                 } catch (failure: GuestException) { ChildResume(null, failure) }
+                catch (tail: TailCall) {
+                    if (!AstTailAnchor.accepts(astStackScope(this).tailAnchor, tail)) throw tail
+                    // Unwind each retained AST scope before entering the live anchor.
+                    // This is not a guest exception, and never acknowledges delivery.
+                    tail
+                }
                 val pending = (input as? AstChildSuspension)?.request
                     ?.takeIf { it.state == AsyncRequestState.CLAIMED }
                 if (pending != null && (outcome is ChildResume || outcome == null && !spilled)) {
@@ -675,6 +687,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 }
                 seen.remove(current)
                 if (parked.isEmpty()) {
+                    if (outcome is TailCall) throw outcome
                     val completed = outcome as? ChildResume ?: fault("AST child cut has no saved caller")
                     completed.failure?.let { throw it }
                     return completed.value
@@ -708,11 +721,11 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     @CompilerDirectives.TruffleBoundary
     internal fun drainStack(initial: SavedGuestContinuation,
                             resultShape: TupleShape? = (initial.sourceRoot as? GuestRoot)?.tupleResult,
-                            delimitedInvocation: Boolean = false): Any? {
+                            delimitedInvocation: Boolean = false, tailSpill: Boolean = false): Any? {
         val mask = SynchronousMasking.current(this)
         val root = initial.sourceRoot as? GuestRoot ?: fault("AST stack cut has no guest root")
         val parkedMask = (initial.yielded as? CallSegmentSuspended)?.parkedActiveMask ?: mask
-        val segment = CallSegment(initial.identity, parkedMask, mask, resultShape)
+        val segment = CallSegment(initial.identity, parkedMask, mask, resultShape, tailSpill = tailSpill)
         while (true) {
             try { return resumeChain(segment, drainSpills = true, delimitedInvocation = delimitedInvocation) }
             catch (cut: CallSegmentSuspended) {
@@ -787,8 +800,14 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         val carrierAnnotations = StackAnnotations.current(this)
         try {
             SynchronousMasking.set(this, resumeMask)
+            if (segment.tailSpill && continuation is AstContinuation && continuation.tailSpill) {
+                astStackScope(this).tailAnchor?.let { continuation.rebaseTailBloom(it.liveBloom()) }
+            }
             val returned = try { continuation.continueWith(resumeValue) }
-                catch (tail: TailCall) { tailCallProfile.enter(); trampoline.execute(tail) }
+                catch (tail: TailCall) {
+                    if (segment.tailSpill && AstTailAnchor.accepts(astStackScope(this).tailAnchor, tail)) throw tail
+                    tailCallProfile.enter(); trampoline.execute(tail)
+                }
             val result = when (returned) {
                 is TailYield -> returned.continuation
                 is AstTailYield -> returned.continuation
@@ -1858,6 +1877,24 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     override fun requiresMaterializableFrame(): Boolean = capturesContinuations || enableDelimited
 
     override fun bloom(frame: VirtualFrame): Long = frame.getLong(FrameLayout.BLOOM_FILTER)
+    /** A pass-through side root has no catcher of its own. */
+    fun entryBloom(inherited: Long): Long =
+        if (stackCapture && role == FunctionRootRole.PASS_THROUGH) inherited else inherited or mask
+
+    /** First compaction tranche: no return loan, tuple copy, lazy force or external delivery. */
+    fun isTailSpillIdentityRoot(): Boolean = stackCapture && !enableAsync && !enableDelimited &&
+        handoff == null && typedInput == null && tupleResult == null && scalarResultProof.evaluated &&
+        (scalarResultProof.isInt || scalarResultProof.isLong || scalarResultProof.isFloat || scalarResultProof.isDouble)
+
+    /** Java anchor bridge; the driver runs the saved suffix, not the original body. */
+    fun drainTailChild(saved: SavedGuestContinuation): Any? = entryForce.drainStack(saved, tailSpill = true)
+
+    fun restartTailAnchor(frame: VirtualFrame, transfer: TailCall): Any? {
+        check(role == FunctionRootRole.FUNCTION && isSelf(transfer.target))
+        restoreTail(frame, transfer)
+        if (metrics.enabled) metrics.incrementSelfTailReentries()
+        return executeBody(frame)
+    }
     @ExplodeLoop fun buildFrame(arguments: Array<Any?>, frame: VirtualFrame) {
         val offset = if (captureLayout == null) 1 else 2
         for (i in argumentSlots.indices) {
@@ -1960,7 +1997,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         val entry = typedInput ?: fault("Target does not support typed tuple inputs")
         try {
             if (initial) entry.validate(input) else entry.validateTail(input)
-            if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entry.packet.getLong(input, 0) or mask)
+            if (initial) frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.packet.getLong(input, 0)))
             for (i in argumentSlots.indices) {
                 val from = argumentIndices[i] + entry.header
                 val to = argumentSlots[i]
@@ -1989,7 +2026,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             if (initial) {
                 entry.snapshot(frame, input)
                 frame.setLong(entry.destinationSlot, 0L)
-                frame.setLong(FrameLayout.BLOOM_FILTER, entry.arguments.getLong(input, 0) or mask)
+                frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(entry.arguments.getLong(input, 0)))
             }
             val offset = if (captureLayout == null) 1 else 2
             for (i in argumentSlots.indices) {
@@ -2042,7 +2079,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             restoreHandoff(frame, input, true)
         } else {
             entry?.initializeOrdinary(frame)
-            frame.setLong(FrameLayout.BLOOM_FILTER, (frame.arguments[0] as? Long ?: fault("Invalid bloom argument")) or mask)
+            frame.setLong(FrameLayout.BLOOM_FILTER, entryBloom(frame.arguments[0] as? Long ?: fault("Invalid bloom argument")))
             buildFrame(frame.arguments, frame)
         }
         if (spill) {
@@ -2053,8 +2090,24 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         return try { executeCapturableBody(frame) }
         catch (cut: AstCapture) {
             // Continuations own a real frame only on the interrupted slow path.
-            cut.freeze(this, frame.materialize())
+            finishCapture(cut, frame.materialize())
         }
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    fun finishCapture(cut: AstCapture, frame: MaterializedFrame): Any? {
+        if (cut.yielded is AstPendingTail && isTailSpillIdentityRoot()) {
+            val pending = cut.pendingTail()
+            if (pending != null && role == FunctionRootRole.PASS_THROUGH) {
+                astStackScope(this).compactedFrames++
+                return AstTailYield(pending.child, pending.target)
+            }
+            if (role == FunctionRootRole.FUNCTION) {
+                val child = pending?.child ?: cut.freeze(this, frame)
+                return AstTailAnchor(this, frame, child, SynchronousMasking.current(this), StackAnnotations.current(this))
+            }
+        }
+        return cut.freeze(this, frame)
     }
 
     /** A root-entry cut has no executed body or caller suffix to unwind here. */
@@ -2064,7 +2117,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             throw UnsupportedCore("AST stack spilling across an active STM transaction is unsupported")
         astStackScope(this).spills++
         return AstCapture(AstStackSpill, SynchronousMasking.current(this))
-            .append(ResumeBody(this)).freeze(this, frame)
+            .append(ResumeBody(this)).freeze(this, frame, rootEntrySpill = true)
     }
 
     private fun executeCapturableBody(frame: VirtualFrame): Any? {

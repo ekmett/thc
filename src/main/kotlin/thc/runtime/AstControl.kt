@@ -16,26 +16,29 @@ internal object AstControl {
     fun captures(node: Node): Boolean = (node.rootNode as? FunctionRoot)?.capturesContinuations == true
 
     private class ResumeChild(private val child: Any, private val node: Node) : AstResumeStep {
-        override fun resume(frame: VirtualFrame, input: Any?): Any? {
-            if (input is AstChildSuspension) {
-                if (input.child !== child) fault("AST caller received an unrelated child cut")
-                val marker = when (child) {
-                    is Thunk -> ThunkSuspended(child, input.request)
-                    is CallSegment -> CallSegmentSuspended(child, asyncRequest = input.request, stackSpill = false)
-                    else -> fault("Invalid AST suspended child")
-                }
-                throw AstCapture(marker, SynchronousMasking.current(node)).append(this)
+        override fun resume(frame: VirtualFrame, input: Any?): Any? = resumeChild(child, node, input, this)
+    }
+
+    @JvmStatic fun resumeChild(child: Any, node: Node, input: Any?, step: AstResumeStep): Any? {
+        if (input is TailCall && AstTailAnchor.accepts(astStackScope(node).tailAnchor, input)) throw input
+        if (input is AstChildSuspension) {
+            if (input.child !== child) fault("AST caller received an unrelated child cut")
+            val marker = when (child) {
+                is Thunk -> ThunkSuspended(child, input.request)
+                is CallSegment -> CallSegmentSuspended(child, asyncRequest = input.request, stackSpill = false)
+                else -> fault("Invalid AST suspended child")
             }
-            val resumed = input as? ChildResume ?: fault("AST child continuation requires ChildResume")
-            resumed.failure?.let { throw it }
-            val valid = when (child) {
-                is Thunk -> child.state == 2 && child.value === resumed.value
-                is CallSegment -> child.state == 2 && child.value === resumed.value
-                else -> false
-            }
-            if (!valid) fault("AST child continuation lost its completed update")
-            return resumed.value
+            throw AstCapture(marker, SynchronousMasking.current(node)).append(step)
         }
+        val resumed = input as? ChildResume ?: fault("AST child continuation requires ChildResume")
+        resumed.failure?.let { throw it }
+        val valid = when (child) {
+            is Thunk -> child.state == 2 && child.value === resumed.value
+            is CallSegment -> child.state == 2 && child.value === resumed.value
+            else -> false
+        }
+        if (!valid) fault("AST child continuation lost its completed update")
+        return resumed.value
     }
 
     private class RetryForce(private val node: Node, private val force: Force,
@@ -59,11 +62,11 @@ internal object AstControl {
     }
 
     fun complete(node: Node, result: Any?, expectedTarget: RootCallTarget? = null,
-                 tupleShape: TupleShape? = null): Any? {
+                 tupleShape: TupleShape? = null, identityTail: Boolean = false): Any? {
         if (!captures(node)) return result
         if (result !is TailYield && result !is AstTailYield &&
             result !is SavedGuestContinuation && result !is ContinuationResult) return result
-        return completeSuspended(node, result, expectedTarget, tupleShape)
+        return completeSuspended(node, result, expectedTarget, tupleShape, identityTail)
     }
 
     // The ordinary result path must not inline continuation adapters, ownership
@@ -71,7 +74,7 @@ internal object AstControl {
     // this cold boundary; the caller appends its own suffix after the capture.
     @TruffleBoundary(transferToInterpreterOnException = false)
     private fun completeSuspended(node: Node, result: Any?, expectedTarget: RootCallTarget?,
-                                  tupleShape: TupleShape?): Any? {
+                                  tupleShape: TupleShape?, identityTail: Boolean): Any? {
         val tailTarget = when (result) {
             is TailYield -> result.target
             is AstTailYield -> result.target
@@ -91,6 +94,17 @@ internal object AstControl {
         if (!AsyncContinuations.isYieldMarker(saved.yielded))
             fault("AST call returned an unsupported continuation cut")
         val callerMask = SynchronousMasking.current(node)
+        val caller = node.rootNode as? FunctionRoot
+        if (identityTail && tupleShape == null && saved is AstContinuation &&
+            (saved.rootEntrySpill || saved.tailSpill) && saved.stackSpill() && saved.asyncRequest() == null &&
+            caller?.isTailSpillIdentityRoot() == true &&
+            root is FunctionRoot && root.isTailSpillIdentityRoot() && root.role == FunctionRootRole.PASS_THROUGH &&
+            caller.scalarResultProof.kind == root.scalarResultProof.kind &&
+            caller.scalarResultProof.isInt == root.scalarResultProof.isInt) {
+            if (saved.rootEntrySpill) saved.certifyTailEntry()
+            val pending = AstPendingTail(saved, tailTarget ?: expectedTarget ?: root.callTarget, node, callerMask)
+            throw AstCapture(pending, callerMask).append(pending)
+        }
         val parkedMask = (saved.yielded as? CallSegmentSuspended)?.parkedActiveMask
         val segment = CallSegment(saved.identity, parkedMask ?: callerMask, callerMask, tupleShape ?: root.tupleResult)
         val suspended = CallSegmentSuspended(segment, asyncRequest = saved.asyncRequest(), stackSpill = saved.stackSpill())

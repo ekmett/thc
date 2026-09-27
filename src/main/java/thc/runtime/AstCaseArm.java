@@ -52,7 +52,9 @@ public final class AstCaseArm extends Expr {
         Object result = captures == null
                 ? Calls.direct(call, new Object[]{bloom})
                 : Calls.direct(call, new Object[]{bloom, captures.capture(frame, sourceSlots)});
-        return AstControl.INSTANCE.complete(this, result, target, shape);
+        // Core tail position is only a candidate: complete also requires an exact
+        // scalar identity return and an owned internal spill. Cleanup steps veto omission.
+        return AstControl.INSTANCE.complete(this, result, target, shape, tailPosition);
     }
 
     @Override

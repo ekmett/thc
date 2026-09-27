@@ -17,6 +17,10 @@ internal class AstStackScope {
     var depth = 0
     var driving = false
     var spills = 0L
+    var compactedFrames = 0L
+    var tailAnchors = 0L
+    var maxParkedSpillParents = 0
+    var tailAnchor: AstTailAnchor? = null
     companion object { const val MAX_DEPTH = 64 }
 }
 
@@ -45,6 +49,7 @@ internal class AstStackContinuation(
     @com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
     override fun continueWith(input: Any?): Any? {
         if (!claimed.compareAndSet(false, true)) fault("AST stack continuation was already resumed")
+        if (input is TailCall && AstTailAnchor.accepts(astStackScope(sourceRoot as Node).tailAnchor, input)) throw input
         if (input is AstChildSuspension) {
             if (input.child !== yielded.segment) fault("AST stack continuation received an unrelated child cut")
             return AstStackContinuation(sourceRoot,
