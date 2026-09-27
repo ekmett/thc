@@ -18,20 +18,27 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         val expressionViews: Long, val linkingExpressionViews: Long, val scalarDecodes: Long,
         val linkingScalarDecodes: Long, val summaryExpressionsVisited: Long, val canonicalStrings: Int,
         val canonicalLists: Int)
-    private var bindingHeaders = 0L
-    private var bodyMaterializations = 0L
-    private var expressionViews = 0L
-    private var linkingExpressionViews = 0L
-    private var scalarDecodes = 0L
-    private var linkingScalarDecodes = 0L
-    private var summaryExpressionsVisited = 0L
+    /** Scalar-only handle and operation monitor; no projection or intern-pool owner backreference. */
+    class Counters {
+        var bindingHeaders = 0L
+        var bodyMaterializations = 0L
+        var expressionViews = 0L
+        var linkingExpressionViews = 0L
+        var scalarDecodes = 0L
+        var linkingScalarDecodes = 0L
+        var summaryExpressionsVisited = 0L
+        var canonicalStrings = 0
+        var canonicalLists = 0
+        @Synchronized fun statistics() = Statistics(bindingHeaders, bodyMaterializations,
+            expressionViews, linkingExpressionViews, scalarDecodes, linkingScalarDecodes,
+            summaryExpressionsVisited, canonicalStrings, canonicalLists)
+    }
+    val counters = Counters()
     private val strings = HashMap<String, String>()
     private val lists = HashMap<List<Any?>, List<Any?>>()
-    @Synchronized fun statistics() = Statistics(bindingHeaders, bodyMaterializations,
-        expressionViews, linkingExpressionViews, scalarDecodes, linkingScalarDecodes,
-        summaryExpressionsVisited, strings.size, lists.size)
+    fun statistics() = counters.statistics()
 
-    fun module(span: CoreJsonIndex.Span): Map<String, Any?> = synchronized(this) {
+    fun module(span: CoreJsonIndex.Span): Map<String, Any?> = synchronized(counters) {
         require(span.kind == CoreJsonIndex.Kind.OBJECT) { "Core module must be an object" }
         Record(span, Role.MODULE)
     }
@@ -40,9 +47,9 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
     fun bindings(span: CoreJsonIndex.Span): List<Map<String, Any?>> =
         Collections.unmodifiableList(span.elements().map { binding(it) })
 
-    fun binding(span: CoreJsonIndex.Span): Map<String, Any?> = synchronized(this) {
+    fun binding(span: CoreJsonIndex.Span): Map<String, Any?> = synchronized(counters) {
         require(span.kind == CoreJsonIndex.Kind.OBJECT) { "Core binding must be an object" }
-        bindingHeaders++
+        counters.bindingHeaders++
         Record(span, Role.BINDING)
     }
 
@@ -78,9 +85,9 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         return result.getOrThrow()
     }
     private fun scalar(span: CoreJsonIndex.Span): Any? {
-        scalarDecodes++
+        counters.scalarDecodes++
         val value = span.decodeUncached()
-        return if (value is String) strings.getOrPut(value) { value } else value
+        return if (value is String) strings.getOrPut(value) { counters.canonicalStrings++; value } else value
     }
     private fun value(span: CoreJsonIndex.Span): Any? = when (span.kind) {
         CoreJsonIndex.Kind.OBJECT -> Record(span, Role.FULL)
@@ -104,7 +111,7 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
             result += item
         }
         val immutable = Collections.unmodifiableList(result)
-        return if (scalarsOnly) lists.getOrPut(immutable) { immutable } else immutable
+        return if (scalarsOnly) lists.getOrPut(immutable) { counters.canonicalLists++; immutable } else immutable
     }
 
     private inner class Record(private val span: CoreJsonIndex.Span, private val role: Role) : AbstractMap<String, Any?>() {
@@ -115,8 +122,8 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
             if (!admitted(role, key)) return null
             return memo(locations, key) { span.member(key) }
         }
-        override fun containsKey(key: String): Boolean = synchronized(this@CoreJsonBindings) { location(key) != null }
-        override fun get(key: String): Any? = synchronized(this@CoreJsonBindings) {
+        override fun containsKey(key: String): Boolean = synchronized(counters) { location(key) != null }
+        override fun get(key: String): Any? = synchronized(counters) {
             memo(decodedFields, key) {
                 val child = location(key) ?: return@memo null
                 when {
@@ -130,13 +137,13 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
                 }
             }
         }
-        override val keys: Set<String> get() = synchronized(this@CoreJsonBindings) {
+        override val keys: Set<String> get() = synchronized(counters) {
             allKeys ?: Collections.unmodifiableSet(LinkedHashSet<String>().also { result ->
                 val selected = fields(role)
                 if (selected == null) {
                     // Exact-key ABI records keep ALL fields, including unknown/forged ones.
                     for ((key, child) in span.members()) {
-                        val canonical = strings.getOrPut(key) { key }
+                        val canonical = strings.getOrPut(key) { counters.canonicalStrings++; key }
                         locations[canonical] = Result.success(child)
                         result += canonical
                     }
@@ -164,7 +171,7 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         private val children = span.elements().toList()
         private val values = HashMap<Int, Result<Any?>>()
         override val size get() = children.size
-        override fun get(index: Int): Any? = synchronized(this@CoreJsonBindings) {
+        override fun get(index: Int): Any? = synchronized(counters) {
             memo(values, index) { project(index, children[index]) }
         }
     }
@@ -200,14 +207,14 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         val parts = span.elements().toList()
         val head = parts.firstOrNull()?.let(::value)
         val tag = head as? String
-        expressionViews++
+        counters.expressionViews++
         return expression(parts, tag, if (parts.isEmpty()) emptyMap() else mapOf(0 to head))
     }
     private fun expression(parts: List<CoreJsonIndex.Span>, tag: String?, prepared: Map<Int, Any?>): List<Any?> =
         object : AbstractList<Any?>() {
             private val values = prepared.mapValuesTo(HashMap<Int, Result<Any?>>()) { Result.success(it.value) }
             override val size get() = parts.size
-            override fun get(index: Int): Any? = synchronized(this@CoreJsonBindings) {
+            override fun get(index: Int): Any? = synchronized(counters) {
                 memo(values, index) { if (tag == null) value(parts[index]) else child(tag, index, parts[index]) }
             }
         }
@@ -231,17 +238,17 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
                 visit(inspection.expression(span) as List<Any?>)
             } finally {
                 val inspected = inspection.statistics()
-                synchronized(this) {
-                    linkingExpressionViews += inspected.expressionViews
-                    linkingScalarDecodes += inspected.scalarDecodes
+                synchronized(counters) {
+                    counters.linkingExpressionViews += inspected.expressionViews
+                    counters.linkingScalarDecodes += inspected.scalarDecodes
                 }
             }
         }) {
-            synchronized(this) {
+            synchronized(counters) {
                 // Check the owner even if all shallow header fields were already projected.
                 span.kind
-                bodyMaterializations++
-                expressionViews++
+                counters.bodyMaterializations++
+                counters.expressionViews++
                 expression(parts, tag, header)
             }
         }
@@ -261,7 +268,7 @@ internal class CoreJsonBindings(private val sourceNotesEnabled: Boolean) {
         while (pending.isNotEmpty()) {
             val current = pending.removeLast()
             if (current.kind != CoreJsonIndex.Kind.ARRAY) continue
-            summaryExpressionsVisited++
+            counters.summaryExpressionsVisited++
             val parts = current.elements().toList()
             val tag = parts.firstOrNull()?.takeIf { it.kind == CoreJsonIndex.Kind.STRING } ?: continue
             when {
