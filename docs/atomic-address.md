@@ -52,15 +52,38 @@ cabal run exe:thc-fixtures --offline -- atomic-address
 ```
 
 [AtomicTickets.hs](../examples/AtomicTickets.hs) shows a ticket dispenser whose
-fetch-add returns the first reserved ticket:
+fetch-add returns the first reserved ticket. Export it from the repository root:
 
 ```sh
 compiler/export.sh examples/AtomicTickets.hs
-build/install/thc/bin/thc build/core/AtomicTickets.json reserveTickets 40 3 --compile
-THC_BACKEND=ast build/install/thc/bin/thc build/core/AtomicTickets.json reserveTickets 40 3 --compile
 ```
 
-Both calls return `40`; the counter in the local allocation advances to `43`.
-This example requires an existing `installDist` build. The native fixture driver
-can also be run directly, for example
-`printf 'numeric 8 40 3 0\\n' | build/atomic-address/native/oracle`.
+`reserveTickets :: Int# -> Int# -> Int#` needs two arguments. The low-level
+command-line kernel launcher accepts only one integer, so call this entry from
+the existing [JVM embedding API](site/embedding.md#load-an-integer-kernel):
+
+```kotlin
+import thc.executionContext
+import thc.loadEntry
+
+fun main() {
+    for (backend in listOf("bytecode", "ast")) {
+        executionContext().use { context ->
+            val reserve = loadEntry(context,
+                listOf("build/core/AtomicTickets.json"),
+                "reserveTickets", backend = backend)
+            check(reserve.execute(40L, 3L).asLong() == 40L)
+        }
+    }
+}
+```
+
+Use the pinned JVM dependencies and run with the repository root as the working
+directory. The arguments initialize the local counter to `40` and advance it to
+`43`; the returned ticket is `40`. This example does not request compilation.
+After preparing `atomic-address`, its native fixture driver can also be run
+directly:
+
+```sh
+printf 'numeric 8 40 3 0\n' | build/atomic-address/native/oracle
+```

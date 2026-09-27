@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.interop.InteropLibrary
 import org.graalvm.polyglot.Context
@@ -15,6 +16,21 @@ import java.io.File
 
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
 class LibdwUnavailableTest {
+    @Test fun brokenOperandArrayRetainsItsHelperNullDiagnostic() {
+        val expression = OriginalLibdwExpression(LibdwForeignOp.CLEAR, emptyArray(),
+            CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep")))
+        val operands = OriginalLibdwExpression::class.java.getDeclaredField("operands").also { it.isAccessible = true }
+        val original = operands.get(expression)
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
+        try {
+            operands.set(expression, null)
+            val failure = assertThrows(NullPointerException::class.java) {
+                expression.executeTuple(frame, intArrayOf(), 0)
+            }
+            assertEquals("Parameter specified as non-null is null: method kotlin.collections.ArraysKt___ArraysKt.getLastIndex, parameter <this>", failure.message)
+        } finally { operands.set(expression, original) }
+    }
+
     private val closure = mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)"), "evaluated" to true)
     private val long = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
     private fun declarations() = Json.parse(javaClass.getResource("/core/original-libdw-descriptors.json")!!.readText())

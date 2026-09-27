@@ -88,7 +88,11 @@ internal class ManagedAllocation private constructor(
         if (!writable) fault("Cannot write through an immutable managed allocation")
     }
 
-    private fun intersectsPointer(offset: Int, count: Int): Boolean = count > 0 &&
+    private fun intersectsPointer(offset: Int, count: Int): Boolean =
+        count > 0 && pointers != null && intersectsPointerCells(offset, count)
+
+    // Keep pointer-free scalar/atomic access inline; only scan an actual registry on the host.
+    @TruffleBoundary private fun intersectsPointerCells(offset: Int, count: Int): Boolean =
         pointers?.keys?.any { it.toLong() < offset.toLong() + count && it.toLong() + pointerBytes > offset } == true
 
     private fun requireWholePointerOverlaps(offset: Int, count: Int) {
@@ -101,7 +105,11 @@ internal class ManagedAllocation private constructor(
     }
 
     private fun invalidate(offset: Int, count: Int) {
-        if (count == 0) return
+        if (count == 0 || pointers == null) return
+        invalidatePointerCells(offset, count)
+    }
+
+    @TruffleBoundary private fun invalidatePointerCells(offset: Int, count: Int) {
         requireWholePointerOverlaps(offset, count)
         pointers?.keys?.removeIf { it.toLong() < offset.toLong() + count && it.toLong() + pointerBytes > offset }
         if (pointers?.isEmpty() == true) pointers = null
@@ -133,7 +141,8 @@ internal class ManagedAllocation private constructor(
         }
     }
 
-    @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
+    // Pointer-cell bookkeeping is a host operation; scalar byte access stays inline.
+    @TruffleBoundary @Synchronized fun writeAddressByteOffset(offset: Long, value: ManagedAddress) {
         requireAddressCell(offset)
         val start = range(offset, pointerBytes.toLong())
         invalidate(start, pointerBytes)
@@ -166,7 +175,7 @@ internal class ManagedAllocation private constructor(
         synchronized(bytes ?: this) { action(segment, offset.toInt()) }
     }
 
-    @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
+    @TruffleBoundary @Synchronized fun readAddressByteOffset(offset: Long): ManagedAddress {
         val start = range(offset, pointerBytes.toLong())
         return pointers?.get(start) ?: fault("No managed pointer cell at this address")
     }
@@ -365,20 +374,27 @@ internal class ManagedAllocation private constructor(
             if (pointerBytes != source.pointerBytes) fault("Cannot copy between different target pointer widths")
             val from = source.range(sourceOffset, count)
             val to = range(destinationOffset, count)
-            val width = count.toInt()
-            source.requireWholePointerOverlaps(from, width)
-            requireWholePointerOverlaps(to, width)
-            val copied = source.pointers?.filterKeys {
-                it >= from && it.toLong() + pointerBytes <= from.toLong() + width
-            }?.mapKeys { (start, _) -> to + start - from } ?: emptyMap()
-            if (copied.isNotEmpty() && (exposedToNative || exposedAsRawBytes))
-                fault("Cannot copy managed pointers into a raw-exposed array")
-            if (copied.isNotEmpty()) pointerCapable = true
-            MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
-            invalidate(to, width)
-            if (copied.isNotEmpty()) {
-                cells().putAll(copied)
-            }
+            if (source.pointers == null && pointers == null)
+                MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
+            else copyPointerCellsFrom(source, from, to, count)
+        }
+    }
+
+    // Called with both ordered owner monitors held. Pointer-free copies stay inline.
+    @TruffleBoundary private fun copyPointerCellsFrom(source: ManagedAllocation, from: Int, to: Int, count: Long) {
+        val width = count.toInt()
+        source.requireWholePointerOverlaps(from, width)
+        requireWholePointerOverlaps(to, width)
+        val copied = source.pointers?.filterKeys {
+            it >= from && it.toLong() + pointerBytes <= from.toLong() + width
+        }?.mapKeys { (start, _) -> to + start - from } ?: emptyMap()
+        if (copied.isNotEmpty() && (exposedToNative || exposedAsRawBytes))
+            fault("Cannot copy managed pointers into a raw-exposed array")
+        if (copied.isNotEmpty()) pointerCapable = true
+        MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
+        invalidate(to, width)
+        if (copied.isNotEmpty()) {
+            cells().putAll(copied)
         }
     }
 

@@ -71,7 +71,9 @@ otherwise its sole buildable runnable component. Explicit `PACKAGE:exe:NAME`,
 another project. The command builds with Cabal, exports GHC Core, and executes
 an accepted `Main.main :: IO ()` in THC. Use `cabal run thc -- --help` for the
 command-line options. The [driver guide](docs/driver.md)
-has the options and integration check.
+has the options and integration check. `thc acquire [TARGET] [FLAGS]` uses the
+same acquisition path but stops before auditing or executing the guest; a
+produced manifest is not a claim that the program is runnable.
 
 A directory containing `cabal.project` also works for a bounded multi-package
 build. For example, the included project has a data library, a native Template
@@ -88,7 +90,7 @@ executable's accepted Core. The driver uses Cabal's resolved unit IDs and
 per-component build information for the export.
 
 On Linux x86_64, with complete installed Core and matching configured GHC sources, the bytecode
-backend now runs ordinary `putStrLn`, including GHC's original startup and Handle
+backend runs ordinary `putStrLn`, including GHC's original startup and Handle
 shutdown. Select `--installed-core required --ghc-source /path/to/ghc-source`
 on the project-directory path; the [driver guide](docs/driver.md) describes the
 current Linux configuration and cache. A file-lifecycle test also matches native
@@ -125,7 +127,9 @@ between Haskell threads. Public load requests accept a Boolean `asyncExceptions`
 and `true` for bytecode. AST capture covers ordinary calls, cases, lets, local
 joins, mask/catch scopes and shared-thunk updates. An interrupted shared thunk
 keeps its continuation, so another thread can resume it without repeating
-completed work. Thread identities are Java thread IDs scoped to their THC context.
+completed work. Thread identities name logical guest lifetimes within their
+THC context, independently of Java thread IDs. Distinct callback guest lifetimes
+can share one Java carrier thread.
 
 `forkOn#` requests best-effort CPU affinity; ordinary `fork#` clears an inherited
 pin. The logical capability count initially matches eligible CPU capacity and can
@@ -170,7 +174,7 @@ still separate work.
 
 This is still an experiment, not a replacement for GHC. General `Main`/IO, the
 complete boot-library closure and full FFI coverage remain unfinished.
-[Async-enabled AST evaluation](docs/async-exceptions.md) now bounds nested calls
+[Async-enabled AST evaluation](docs/async-exceptions.md) bounds nested calls
 and thunk forcing with saved continuations. Deep evaluation inside an active
 STM transaction remains unsupported; other modes keep their existing stack
 behavior. The script-level scalar entry is integer-only;
@@ -218,28 +222,24 @@ The latter builds, updates, queries and folds a histogram using the actual
 
 ## Performance
 
-The recorded Map comparisons are encouraging: about **1.19 times native GHC's
-elapsed time** on both an ARM64 Mac and an x86-64 Linux machine. These are
-warmed-up results for one workload, not a claim about arbitrary Haskell.
-The [entry-contract report](docs/entry-contracts.md) describes the measurements;
-[retained runs and graph reports](docs/README.md#performance-and-runtime-design)
-include the inputs, variation and remaining costs.
-
-Constructor layouts belong to their generated storage classes where possible.
-With compact headers, a Map `Bin` is 32 bytes and an `I#` is 16 bytes. The
-[class-owned layout experiment](bench/results/class-owned-layouts/) records the
-allocation comparison. Compact headers are the default; the reports document
-controls for that and the opt-in storage experiments.
+Use native-GHC comparisons and compiler graphs to evaluate the workloads and
+configurations you intend to run. Typed runtime storage and successful guest
+compilation do not by themselves establish allocation removal or a speedup.
 
 ```sh
-scripts/benchmark.sh
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh
+scripts/benchmark.sh work/bench-kernels
+THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-map
 THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh work/bench-ast
 ```
 
-Run the corresponding `try` script first. Benchmarks vary their inputs, consume
-the results, warm the JVM and compare against native GHC. Graph capture is a
-separate run.
+Run the corresponding `try` script first and choose an unused output directory:
+the scripts overwrite files in the supplied directory. Benchmarks vary their
+inputs, consume the results, warm the JVM and compare against native GHC. Graph capture is a
+separate run. Diagnostic Map execution does not establish strict support for
+its entire dependency closure.
+
+The [current runtime guides](docs/README.md#performance-and-runtime-design)
+describe implemented protocols and opt-in experiments.
 
 ## Finding your way around
 
@@ -251,16 +251,18 @@ separate run.
   runtime and its tests.
 * [`examples/`](examples/) contains Haskell programs and the native oracle.
 * [`scripts/`](scripts/) contains build, audit, benchmark and graph drivers.
-* [The documentation index](docs/README.md) groups coverage and design reports;
-  [`research/`](research/) contains the earlier design investigation.
+* [The architecture guide](docs/architecture.md) describes the current system
+  and planned work. [The documentation index](docs/README.md) groups coverage
+  and design reports; [open design questions](research/open-questions.md)
+  identify the next design decisions and relevant background.
 * [The documentation site](https://ekmett.github.io/thc/) combines selected
   guides, the mixed Java/Kotlin reference and the Haskell library API.
   [Build it locally](docs/documentation.md) with `make docs` (also needs Pandoc).
 * [Development](docs/contributing.md) covers local checks, build batching and manual
   integration of reviewed PRs. Update the [primop checklist](docs/primops.md#updating-the-list) when
   adding a primitive.
-* [Cabal integration](docs/cabal.md) describes the limited working `thc run`
-  path and the planned `thc build` and `thc repl` commands.
+* [Cabal integration](docs/cabal.md) describes the working `thc acquire` and
+  limited `thc run` paths, and the planned `thc build` and `thc repl` commands.
 
 The older runtime experiments live on the
 [legacy branch](https://github.com/ekmett/thc/tree/legacy).

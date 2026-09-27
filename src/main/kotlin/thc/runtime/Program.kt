@@ -2175,6 +2175,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
+        CoreProcessForeign.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
         CoreRtsShutdown.validateHeads(bindings)
         CoreMainThreadForeign.validateHeads(bindings)
@@ -2510,6 +2511,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val originalProcess = CoreProcessForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val capi = CoreCapiForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                 CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
@@ -2568,7 +2571,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && !memset && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
@@ -2609,6 +2612,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 OriginalStackInfoExpression(stackInfo, layout, operands.toTypedArray(), tupleProof)
+            } else if (originalProcess != null) {
+                CoreProcessForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreProcessForeign.validateOperand(originalProcess, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                ProcessForeignExpression(originalProcess, operands.toTypedArray(), tupleProof)
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
@@ -2623,7 +2635,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 OriginalStdioExpression(originalStdio, operands.toTypedArray(), tupleProof)
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
-                CapiExpression(capi, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreCapiForeign.validateOperand(capi, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                CapiExpression(capi, operands.toTypedArray(), tupleProof)
             } else if (packageScalar != null) {
                 CoreCapiForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->

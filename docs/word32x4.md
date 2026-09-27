@@ -1,39 +1,44 @@
-# Local Word32X4 vectors
+# Word32X4 vectors
 
-This page retains the original foundation evidence. Current execution uses raw
-`IntVector.SPECIES_128` values with unsigned `VecRep` metadata, not a `Word32X4`
-JVM wrapper. Historical carrier and local-only descriptions below are superseded
-by the [current SIMD representation and transport contract](simd.md).
+Both backends execute `VecRep 4 Word32ElemRep` with raw
+`IntVector.SPECIES_128` values. An activation carries one exact vector
+reference; owned captures and boxed constructor fields store primitive lanes
+inside the enclosing heap object. Equal bit width does not make another vector
+shape compatible.
 
-The bounded contract is exactly six pinned GHC 9.14.1 primitives:
+The foundation fixture covers six GHC 9.14.1 operations:
 `packWord32X4#`, `unpackWord32X4#`, `broadcastWord32X4#`,
-`plusWord32X4#`, `minusWord32X4#`, and `timesWord32X4#`.
-GHC provides no `negateWord32X4#`. The exact representation is
-`VecRep 4 Word32ElemRep`, with four `Word32#`/`Word32Rep` lanes.
-Signed `Int32Rep` or `VecRep 4 Int32ElemRep` metadata is incompatible despite
-having the same payload width.
+`plusWord32X4#`, `minusWord32X4#`, `timesWord32X4#`.
+GHC provides no unsigned vector negation primitive.
+This is a fixture scope, not the complete operation inventory; see
+[SIMD families](simd-families.md) and the [primop checklist](primops.md).
 
-Pack takes one logical four-component unboxed tuple; unpack returns that
-scalar-lane tuple. Arithmetic wraps modulo 2^32, including subtraction underflow
-and low-32-bit multiplication. Unpacked lanes widen to 0..4,294,967,295;
-4,294,967,295 must not become -1. Vectors remain local: vector formals, function
-results, captures, heap fields and vector-containing tuple ABIs remain
-unsupported. Machine `Int#` inputs and scalar results require a 64-bit host.
+Pack takes one logical 4-component unboxed tuple; unpack returns that
+scalar-lane tuple with exact `Word32Rep` leaves. Arithmetic wraps modulo
+2^32, including low-32-bit multiplication and subtraction underflow.
+Unpack zero-extends each lane to 0..4,294,967,295.
+A high unsigned lane must not become a negative scalar.
 
-The original runtime used a distinct `Word32X4` carrier with four final primitive
-`int` fields: sixteen bytes of lane payload, not total object size. Transient
-`IntVector.SPECIES_128` values performed low-32-bit arithmetic. No vector object,
-payload array or lane box was stored in that carrier. Pack narrows four Long slots;
-both AST and bytecode unpack each field with `& 0xffff_ffffL`.
+Guest vector arguments/results, PAP prefixes, joins, tuple fields, nonrecursive
+unlifted lets, owned captures and boxed constructor fields are supported.
+Public host vector arguments/results, recursive or lifted vector lets, and
+sum fields remain unsupported; see the [SIMD transport contract](simd.md).
+The scalar-observation fixtures below keep vectors local. Their
+`vectorArgument` negative tests the public host boundary, not guest calls.
 
-Canonical Word32 literal and aggregate-aware guards are unchanged. JVM checks
-include 65,536 constructed samples covering each 16-bit half in every lane,
-independent Cartesian power-neighborhood pairs with a BigInteger product oracle,
-signedness mismatches, malformed literals and vector calling-frontier rejection.
-These samples do not exhaust the 32-bit value space. Native execution checks
-require exact per-call compiled guest-entry deltas, stable active target
-identities, valid last-tier code and empty argument/result pools. No retries,
-postcompile settling or compiler-limit changes are allowed.
+Canonical `word32` literals use 0..4,294,967,295. After lowering, integral
+annotations share a `Long` carrier and the literal tag supplies narrowing.
+Wrong physical carriers, malformed literal values, lifted operand flags, tuple
+lane proofs and vector shapes are checked separately. The strict exporter audit
+also checks exact source-level representations; it is not the runtime's scalar
+carrier contract.
+
+`SimdWord32VectorTest` checks the raw carrier, lane arithmetic, exact shape and
+literal controls on both loaders. Native/Core tests require exact per-call
+compiled guest-entry counts, stable active targets, valid last-tier code and
+released argument/result handoff pools, with Truffle inlining on and off.
+No post-compilation settling calls or retries are part of those checks.
+Its 65,536 constructed lane samples do not exhaust the 32-bit value space.
 
 ## Genuine Core and independent observations
 
@@ -100,7 +105,7 @@ invocations and 46,512 guest entries per handoff mode, requiring those exact
 per-call deltas separately from static proof, unchanged targets and empty pools.
 
 The genuine `vectorArgument` negative must fail each stage with exactly one
-vector-formal issue and no missing globals. Two additional controls deliberately
+public-host-vector issue and no missing globals. Two additional controls deliberately
 mutate separate metadata copies of `plusCase`: a four-lane `Int32Rep` tuple and
 an `Int32ElemRep` vector operand. They are clearly labeled non-genuine controls,
 never original Core or native oracle replacements. The tuple mutation requires
@@ -136,26 +141,3 @@ Fixture/model/native evidence alone establishes no JVM compilation, packed
 machine instructions, allocation elimination, throughput, vector calling
 conventions or cross-architecture execution. Those require separately retained
 runtime tests and graph/LIR evidence.
-
-## Retained compiled-code evidence
-
-The [x86-64 evidence](../bench/experiments/word32x4-foundation/evidence-x86_64/README.md)
-retains twelve actual pre/post × AST/bytecode × plus/minus/times captures at
-runtime `b048144c75a775f6f1538bf7e1b04119f39a1163`. All pass on their first check,
-without reader correction or guest replay. Every output lane feeds an exact
-unsigned 32-to-64-bit extension; all 48 observations are connected to the public
-checksum. Each graph has one live i32x4 arithmetic node and one corresponding
-physical XMM VPADDD, VPSUBD or VPMULLD instruction.
-
-The captures check 11,184 native answers, with installed entry validity and
-active-target identity checked after every input. Selected inlined graphs
-eliminate the local vector carrier, payload and lane boxes. The public Long
-result box and precisely proved virtual frame-tag deoptimization metadata remain.
-This is bounded packed-code evidence, not throughput, globally allocation-free
-execution, no spills, vector ABI or cross-platform native conformance.
-
-The complete JVM suite passes 481 tests in each of default and dense-handoff
-modes with zero failures, errors or skips. All 198 suite reports and both full
-logs are retained. Classes, seven focused tests, both complete modes and the
-twelve graph captures pass first time. The forced dense rebuild executes all
-twelve Gradle tasks and preserves every frozen source, JAR and JDK snapshot hash.

@@ -9,7 +9,7 @@ import com.oracle.truffle.api.nodes.Node
 /** Callback authority of a synchronous managed foreign activation. This is not
  * a promise of an interruptible native transport or permission to leave Truffle. */
 internal enum class ForeignSafety {
-    UNSAFE, SAFE;
+    UNSAFE, SAFE, INTERRUPTIBLE;
 
     companion object {
         fun synchronous(declared: String): ForeignSafety = when (declared) {
@@ -22,6 +22,13 @@ internal enum class ForeignSafety {
 
 /** The typed result is already in the caller's destination before this cut. */
 internal object AstForeignCompleted : AstResumeStep {
+    private class RestoreErrno(private val errno: Long) : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input !== Unit) fault("Invalid completed foreign-call continuation")
+            thc.Language.currentState().stdio.captureForeignErrno(errno)
+            return null
+        }
+    }
     override fun resume(frame: VirtualFrame, input: Any?): Any? {
         if (input !== Unit) fault("Invalid completed foreign-call continuation")
         return null
@@ -33,6 +40,17 @@ internal object AstForeignCompleted : AstResumeStep {
         GuestThreads.pollCurrent(node, false)?.let { request ->
             request.compiledCapture = compiled
             throw AstCapture(request, SynchronousMasking.current(node)).append(this)
+        }
+    }
+
+    /** Both the result destination and errno have committed before delivery.
+     * A resumed waiter restores errno, never the process effect. */
+    fun poll(node: Node, errno: Long, interruptible: Boolean) {
+        if (!AstControl.enabled(node)) return
+        val compiled = CompilerDirectives.inCompiledCode()
+        GuestThreads.pollCurrent(node, interruptible)?.let { request ->
+            request.compiledCapture = compiled
+            throw AstCapture(request, SynchronousMasking.current(node)).append(RestoreErrno(errno))
         }
     }
 }

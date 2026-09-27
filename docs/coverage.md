@@ -1,5 +1,13 @@
 # Core coverage
 
+The compatibility corpus compares ordinary Haskell programs against native GHC
+on both executable backends. Strict loading checks the complete reachable Core;
+passing a finite corpus does not establish support for every use of a library.
+The [primop checklist](primops.md) records implemented operations, while
+[behavioral limits](primop-behavior.md) and the guides below describe their scope.
+
+## Constructor tags
+
 Saturated GHC 9.14.1 `dataToTagSmall#` and `dataToTagLarge#` calls use retained
 concrete algebraic-family proofs. Both backends demand the outer data value and
 return its zero-based constructor tag through class-owned layout guards, leaving
@@ -18,9 +26,7 @@ larger families may grow compiled graphs substantially, and this slice makes
 no throughput claim. It adds no per-object tag or layout pointer and does not
 resolve a layout through the global class registry on the tag-reading path.
 
-Map got the runtime into a useful performance range. The next question is how
-much Haskell it can run. The compatibility corpus gives that question a
-repeatable answer against native GHC, across both executable backends.
+## Preparing the corpus
 
 Run `scripts/try.sh` from a fresh checkout. It builds the exporter, prepares the
 native oracles and runs the JVM tests. The additional corpus is described in
@@ -39,75 +45,39 @@ with its `scalars` command. Both commands use the GHC 9.14.1 API directly,
 reject a different compiler or word size, and record the selected compiler,
 tool binary and source hashes. Run `cabal test primop-tools` for the inventory,
 scalar-contract, stale-file and command-line controls. The report remains
-schema 2; the checked-in scalar resource remains byte-for-byte compatible.
+schema 2.
 
-The [unsigned primop suite](integer-primops.md) adds 40 operations checked against
-56,791 native/model rows on both backends, including installed-code checks for
-each row. The [signed narrow suite](signed-narrow-primops.md) adds 36 operations
-with 73,453 native/model rows and direct canonical-result checks. The
-[explicit64 suite](explicit64-primops.md) adds 36 scalar operations, Word64
-literals and 66,117 native/model rows with exact representation checks. The
-[tuple arithmetic suite](tuple-arithmetic.md) adds six operations with 8,279
-native two-field rows, exact local destinations and pre/post-Tidy compiled-entry
-checks on both backends.
+## Focused primitive suites
 
-The [scalar bit suite](bit-primops.md) adds 21 population/zero-count, byte-swap,
-and bit-reversal operations with 11,923 native/model rows, pre/post-Tidy exports,
-and exact compiled-entry checks for every row on both backends.
+The corpus is complemented by native/model fixtures for
+[unsigned integers](integer-primops.md), [signed narrow integers](signed-narrow-primops.md),
+[explicit 64-bit values](explicit64-primops.md), [tuple arithmetic](tuple-arithmetic.md),
+and [bit operations](bit-primops.md). Their guides describe exact input domains,
+negative controls and interpreted/compiled checks.
 
-The [floating suite](floating-primitives.md) adds 28 scalar `Float#`/`Double#`
-operations and 441 native/model rows, with primitive locals, fields and captures.
-Two additional square-root primitives have a separate 418-row native/model suite.
-Four raw Float/Word32 and Double/Word64 bit casts have 13,555 exact-bit native/model
-rows, including signed signalling NaNs, retained fields and captures, and separate
-encode/decode controls against array storage.
-Its compiled loop retains both precisions without boxing in the continuing loop;
-generic scalar call boundaries still use the Object ABI. The floating tuple result
-slice adds genuine `Data.Complex` CPR workers, 44 native/model rows and eight IEEE
-bit rows, using concrete float/double result fields and local slots on both backends.
+[Floating primitives](floating-primitives.md) cover scalar arithmetic,
+conversions, bit-sensitive operations and decomposition.
+[Floating tuple results](tuple-results.md) retain primitive fields and slots;
+generic scalar call boundaries still use Truffle's Object ABI.
 
-The [SIMD slice](simd.md) supports six local operations each for `Int64X2#` and
-`Int32X4#`. Exact vector metadata keeps these values distinct from each other and
-from unboxed tuples. The Int64 controls include actual Core graph evidence of
-packed arithmetic with temporary carriers eliminated on AArch64 and x86. Vector
-guest-to-guest calling conventions now support 24 exact `VecRep` shapes across
-arguments, results, PAPs, joins, tuple fields and owned heap fields; see the
-[current SIMD transport contract](simd-families.md). Public host vector
-arguments/results, other shapes and unimplemented operations remain outside
-that contract. The slice descriptions below retain their original scopes.
-The [FloatX4 foundation](floatx4.md) adds another six local vector primops and
-2,196 native/model rows, including signed zeros, NaNs, exact subnormal ties and
-separate multiply/add rounding. The [DoubleX2 foundation](doublex2.md) adds the
-corresponding six binary64 operations, with an exact integer-significand model
-and bit-sensitive edge controls. Vector ABI boundaries remain unchanged.
-The [Int16X8](int16x8.md) and [Int8X16](int8x16.md) foundations each support
-pack, unpack, broadcast, add, subtract, negate and multiply with exact narrow
-lane proofs. Their native/model corpora contain 6,032 and 9,168 rows respectively,
-including independently observable lanes and residual scalar/tuple calls.
-Those checkpoints used dense primitive carriers and a local-only vector boundary.
-Current execution uses [raw JDK vectors and the expanded guest transport](simd.md).
-The [Word8X16 foundation](word8x16.md) adds six unsigned byte-vector operations
-and 7,712 native/model rows, with exact Word8 proofs, zero-extension and explicit
-signed/unsigned mismatch controls. There is no GHC unsigned vector negate primop.
-The [Word16X8 foundation](word16x8.md) adds the corresponding six unsigned
-16-bit operations and 5,116 native/model rows. Word16 and Int16 proofs remain
-distinct; unpack widens all eight lanes to 0..65535 without changing vector ABIs.
-The [Word32X4 foundation](word32x4.md) adds six unsigned 32-bit operations and
-4,882 native/model rows. Four Word32 lanes retain distinct proofs from Int32,
-wrap modulo 2^32 and unpack to 0..4294967295; vector ABI limits remain unchanged.
-The [Int32X4 multiplication slice](int32x4-multiply.md) adds the missing signed
-`timesInt32X4#`, with 1,722 native/model observations and signed low-32-bit products.
-The [Int32X4 ByteArray slice](int32x4-bytearray.md) adds six managed index/read/write
-operations and 9,666 native/model observations. Both offset units access sixteen
-bytes; mutable read tuples can only be destructured immediately into local State
-and vector binders in that checkpoint. It did not establish the separately
-implemented [vector tuple transport](simd.md).
+[SIMD transport](simd.md) supports 30 exact `VecRep` shapes through guest
+arguments/results, PAPs, joins, tuple fields and owned heap fields. Activation
+transport uses raw fixed-species JDK vectors. Public host vector arguments and
+results remain unsupported. The [family inventory](simd-families.md) distinguishes
+the complete operation coverage from focused foundation fixtures:
+[FloatX4](floatx4.md), [DoubleX2](doublex2.md), [Int16X8](int16x8.md),
+[Int8X16](int8x16.md), [Word8X16](word8x16.md), [Word16X8](word16x8.md),
+and [Word32X4](word32x4.md). Exact vector proofs remain distinct from
+equal-width vectors or scalar tuples. Managed vector loads/stores and their
+offset units are covered separately for [128-bit arrays](simd128-array-memory.md),
+[wide arrays](simd-wide-array-memory.md) and [128-bit addresses](simd128-address-memory.md).
 
 The separate [library suite](library-coverage.md), run by
-`scripts/try-libraries.sh`, adds 13 executable entries and 2,524 native-oracle
-pairs covering real `Data.IntMap.Strict`, `Data.IntSet` and word primitives. Its Set
-workload records a rejected frontier separately. CI runs both suites on Linux
-and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
+`scripts/try-libraries.sh`, declares 17 supported entries and 2,676 native-oracle
+pairs covering real `Data.IntMap.Strict`, `Data.IntSet`, four `Data.Sequence`
+workloads and word primitives. Set and three additional Sequence entries are
+explicit strict frontiers, not supported execution. The Build workflow runs
+library checks on Linux and macOS with both backends and both handoff modes.
 
 | Group | What it exercises |
 |---|---|
@@ -122,8 +92,8 @@ and macOS, and also runs the JVM suite with the opt-in dense handoff enabled.
 
 The functional programs use ordinary Haskell `Int`, lists, functions and data
 types internally. The numerical fixtures expose particular primitive
-representations. Every host wrapper has type `Int# -> Int#`; the host ABI still
-accepts machine integers only. Payloads include signed 64-bit extremes while
+representations. Every wrapper in this corpus has type `Int# -> Int#`; this fixture interface is
+not a description of every [managed embedding API](site/embedding.md). Payloads include signed 64-bit extremes while
 list lengths, tree depths and numeric loops stay bounded.
 
 ## What a passing entry establishes
@@ -157,9 +127,9 @@ Structural checks keep the fixtures honest about what survived GHC. They check
 actual callee arity and argument count for PAPs/overapplication, the dynamic
 list back edge, shared binding identities, captured functions, unforced list
 fields and recursive tree alternatives. Numeric entries require their intended
-primitives to remain reachable. In particular, the chooser had to remain an
-exported function to preserve its arity-one return boundary: `OPAQUE` alone
-allowed GHC to eta-expand it to three arguments.
+primitives to remain reachable. The chooser is exported to preserve its
+arity-one return boundary; a source annotation alone is not evidence that a
+particular application shape survived optimization.
 
 ## Narrow unsigned words
 
@@ -172,10 +142,10 @@ actual producer and consumers to retain all three unpacked field widths and
 both references to the shared list. Runtime checks require `records` to be
 evaluated exactly once per call.
 
-Actual GHC 9.14.1 Core required only these additional operations for each width
+The fixture's GHC 9.14.1 Core uses these operations for each width
 `N` in 8, 16 and 32: `wordToWordN#`, `wordNToWord#`, `plusWordN#`, `subWordN#`,
-`timesWordN#`, `ltWordN#` and `leWordN#`. Equality already lowered to `eqWord#`.
-The new `word8`, `word16` and `word32` literal forms accept canonical unsigned
+`timesWordN#`, `ltWordN#` and `leWordN#`. Equality lowers to `eqWord#`.
+The `word8`, `word16` and `word32` literal forms accept canonical unsigned
 decimal values in their exact ranges, including in case alternatives. Invalid
 values remain load errors even in diagnostic mode.
 
@@ -183,8 +153,8 @@ Both runtimes use zero-extended primitive `Long` carriers for narrow words;
 signed narrow integers retain their existing sign-extending behavior. Arithmetic
 is reduced modulo the declared width. In particular, `Word32` maximum times
 itself is 1, even though the full product exceeds signed 64-bit range, and
-widening `0xffffffff` yields 4294967295, not -1. Typed unpacked storage already
-supported these representations; no boxed numeric carrier was introduced.
+widening `0xffffffff` yields 4294967295, not -1. Unpacked fields store the
+primitive values without a separate numeric wrapper.
 
 The four entries add 140 native-oracle rows over signed-machine extremes and
 values around every narrow sign and wrap boundary. A separate arbitrary-precision
@@ -194,33 +164,24 @@ compile each primitive family, and reject malformed arities and literal values.
 The general corpus checker supplies the held-out cold paths and requires
 installed-code entry for every input after broad warmup and recompilation.
 
-At this narrow-word checkpoint, Linux x86-64 with GHC 9.14.1 and GraalVM
-25.3.4.1 passed 256 JVM tests in both default and opt-in handoff modes, plus
-12 capability-auditor tests. Corpus preparation verified 24 strict entries,
-458 native rows and 20 retained-structure facts. Existing library regressions
-also passed 7,572 comparisons each on AST, bytecode and AST handoff, retaining
-strict rejection of the Set frontier and the existing compiled-entry checks.
-
 Preparation fingerprints its Haskell sources, compiler and preparation inputs,
 exported Core, structural report and native oracle. A local test against stale
 inputs fails with a request to prepare again. Reports live in `build/corpus/`;
-CI retains them with the test results. The same checks run on Linux and macOS
-for pushes, pull requests and merge groups.
+CI retains them with the test results. The full Build workflow runs the corpus
+on Linux and macOS; focused PR checks select tests according to changed files.
 
-## Boundaries found by the corpus
+## Original library sources and aggregate boundaries
 
-The first ordinary list export found missing executable unfoldings for
-`GHC.Internal.Base.++` and `GHC.Internal.List.reverse1`. The list group now
-compiles the complete, unmodified, SHA256-verified `Base` and `List` sources
+The list group compiles the complete, unmodified, SHA256-verified `Base` and `List` sources
 from GHC's `ghc-9.14.1-release` tag under their original `ghc-internal` unit.
 Post-Tidy export preserves the exact identities referenced by the installed
 Prelude, so the fixtures use ordinary `(++)` and `reverse`. Both original
 recursive bodies must remain reachable in the strict structural audit.
-The missing-interface report is retained; the complete source modules resolve
-those identities without aliases or reconstructed algorithms. Sources, boot
+The complete source modules resolve those identities without aliases or
+reconstructed algorithms. Sources, boot
 dependencies and `boot-provenance.json` join the corpus fingerprints.
 
-`compiler/export-boot.py --frontier lists --build-dir build/corpus/groups/lists`
+`python3 compiler/export-boot.py --frontier lists --build-dir build/corpus/groups/lists`
 performs this source export using a private dynamic-interface overlay. It
 loads the compiled exporter with GHC's `-fplugin-library` option: normal plugin
 interface loading imports `GHC.Driver.Plugins` and its `Semigroup` instance,
@@ -230,22 +191,20 @@ Installed interfaces and sources remain unchanged.
 `map` and `filter` specialize/fuse into the tested pipeline; the test does not
 establish execution of separate library call targets with those names.
 
-Exact unboxed tuple results now execute on both backends with scalar/reference
-or [typed tuple inputs](tuple-inputs.md), including empty/singleton/nested results, lazy references, forwarding,
-PAPs and overapplication. The [result protocol](tuple-results.md) is independent
-of input storage. Aggregate captures, ordinary let bindings, join parameters/captures, sum arguments
-and unresolved layouts remain rejected, including unused and constructor-free
-boundaries. Physical register counts alone never establish an aggregate layout.
+Exact unboxed tuples support guest inputs/results, owned captures and local joins,
+including empty, singleton and nested layouts. Binary unboxed sums have separate
+supported input/result, join and owned-field paths. Ordinary aggregate
+let/global bindings and unresolved layouts remain rejected. Read the
+[aggregate layout](aggregate-layout.md), [tuple capture](tuple-captures.md),
+[tuple join](tuple-joins.md), and [sum input](sum-inputs.md) contracts for their
+exact restrictions. Physical register counts alone do not establish a layout.
+These semantic tests are separate from the library corpus.
 
-The earlier separate aggregate frontier reported three supported result-only entries and
-eight rejected entries at both native export stages. `TupleReturnAudit` supplies
-94 native rows for result-only boundary tests, including deep self/mutual tail
-calls. These semantic controls remain separate from the library corpus and
-provide no timing claim.
-
-Float/Double, Integer/Natural, mutable arrays, general IO and FFI remain major
-coverage work. The [coverage issue](https://github.com/ekmett/thc/issues/2) records concrete missing definitions and
-primops exposed by new programs.
+General boot-library closure, IO and FFI coverage remains incomplete. A supported
+primitive or aggregate representation does not supply a missing Haskell body.
+The [library guide](library-coverage.md) distinguishes tested consumers from
+source/provider frontiers; the [coverage issue](https://github.com/ekmett/thc/issues/2)
+tracks broader missing definitions and operations.
 
 ## Pointer identity
 
@@ -267,9 +226,12 @@ host `equals` methods agree, bottom thunks on either side, updated thunk aliases
 and full-width arithmetic on both outcomes. They check local forwarding before
 and after each alias is forced, selective forcing only in a chosen fallback,
 installed compiled execution, and strict arity rejection. These are identity
-controls, not cross-runtime allocation-identity claims. Set remains outside the
-supported execution corpus until its tuple and remaining cold paths are supported.
+controls, not cross-runtime allocation-identity claims. The library suite's Set
+bundle remains a strict missing-definition frontier; pointer identity and tuple
+support do not by themselves supply those cold Haskell bodies.
 
-Exact scalar primop applications also use a [shared pinned signature contract](scalar-primitive-signatures.md)
-to reject contradictory present argument/result proofs during lowering and audit.
-Absent/unknown legacy metadata and representation-preserving newtype casts remain compatible.
+Scalar primop applications use a [shared pinned signature contract](scalar-primitive-signatures.md).
+The exporter auditor checks source-level representations; lowering shares a
+`Long` carrier across integral annotations and lets the selected operation
+supply signedness and narrowing. Physical carrier, arity, aggregate and vector
+shape checks remain meaningful runtime boundaries.

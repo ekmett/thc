@@ -2425,8 +2425,20 @@ class FixturePreparationTest(unittest.TestCase):
         # Installed-interface overlays are not reusable fixture payload.
         overlay = self.root / 'build/bignat-literals/boot/interfaces/unused.hi'
         overlay.parent.mkdir(parents=True); overlay.symlink_to(self.root / 'not-present')
+        # Rechecks retain their own diagnostics, including fresh audit catalogue
+        # paths, without replacing the original manifest-bound command evidence.
+        verification = 'build/bignat-literals/verification-control/commands/pre-integerRoundTrip-audit.stderr'
+        recheck = self.root / verification
+        recheck.parent.mkdir(parents=True); recheck.write_text('Audit working catalogue: fresh/catalogue.sqlite\n')
+        self.assertFalse(cache.allowed_payload(verification, {}))
         with mock.patch.object(cache, 'vendor_pins', return_value=pins):
             self.assertEqual(cache.BIGNAT_OUTPUTS | cache.BIGNAT_VENDOR, set(fast_fixtures._output_hashes(self.root, group)))
+            original_log = self.root / 'build/bignat-literals/commands/pre-integerRoundTrip-audit.stderr'
+            original_bytes = original_log.read_bytes()
+            original_log.write_bytes(recheck.read_bytes())
+            with self.assertRaisesRegex(RuntimeError, 'Stale original artifact'):
+                fast_fixtures._output_hashes(self.root, group)
+            original_log.write_bytes(original_bytes)
             corrupted = self.root / 'build/bignat-literals/oracle.tsv'
             corrupted.write_text('corrupt\n')
             with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)

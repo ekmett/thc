@@ -1,16 +1,17 @@
 # Managed ByteArray coverage
 
-The bounded runtime supports the GHC 9.14.1 operations `newByteArray#`,
+The foundation fixtures exercise the GHC 9.14.1 operations `newByteArray#`,
 `writeWord8Array#`, `unsafeFreezeByteArray#`, `sizeofByteArray#`,
 `indexWord8Array#`, `copyByteArray#`, and `compareByteArrays#` on AST and bytecode. The ordinary public
 `Data.ByteString.Short.pack`, `length`, `unpack`, and repeated `uncons` workloads execute the
 installed bytestring `$wpack`/`$wgo`/`uncons`/`$wuncons` bodies and the original, source-exported
 `GHC.Internal.List.$wlenAcc`. Preparation requires those exact dependencies and
-all five original primitives to remain reachable, plus `copyByteArray#` in both
+the pack/unpack primitives to remain reachable, plus `copyByteArray#` in both
 the uncons roundtrip and direct copy workload; it does not substitute library bodies.
 The [Int-array extension](int-arrays.md) adds `readIntArray#`, `writeIntArray#`,
 and `indexIntArray#` over the same backing storage, with element rather than
-byte offsets.
+byte offsets. This fixture scope is not the complete
+[implemented operation inventory](primops.md).
 The [Double-array extension](double-arrays.md) uses the same backing storage and
 typed Double result destinations for `readDoubleArray#`, `writeDoubleArray#`,
 and `indexDoubleArray#`.
@@ -24,16 +25,18 @@ not unboxed tuples. Allocation and freeze return logical
 the State# component, and one physical reference destination. Saturated
 primitive expressions write that destination directly. Ordinary tuple return
 transport applies when a library worker returns the result across a call.
-Exact state/reference/word representations and saturation are checked at load
-time and by the strict auditor.
+Lowering checks State, unlifted references, physical carriers, saturation and
+logical result shape. Integral scalar annotations share `Long`; strict exporter
+audits independently check exact source-level representations.
 
 Writes and copies evaluate all their operands, including the state expression, before the
 effect. Core case evaluation preserves ordering. Freeze returns the same object
 without a copy, matching GHC's shared mutable/immutable heap representation.
 Array contents are never marked compilation-final. Word8 indexing reads one
 byte at a byte offset and returns a canonical unsigned value from 0 through 255;
-writes retain the low eight bits. Size is the requested byte count, independent
-of native heap allocation rounding.
+writes retain the low eight bits. Size is the owner's current logical byte count,
+independent of backing capacity and native allocation rounding. All managed
+accesses observe a shorter bound after [logical shrink](resize-bytearrays.md).
 
 `copyByteArray# :: ByteArray# -> Int# -> MutableByteArray# s -> Int# -> Int# -> State# s -> State# s`
 returns only the zero-width state token. Both references retain exact unlifted
@@ -126,5 +129,4 @@ active targets, and empty input/result loans. Synthetic controls cover every
 unsigned byte pair, contained small ranges, endpoint empties, operand failure,
 full-width invalid ranges, wrong storage carriers, and exact proof/saturation
 rejection. Invalid domains are tested only against THC, never by invoking native
-undefined behavior. This adds comparison coverage; it does not change the
-existing exception-library frontiers or permit mutable alias misuse.
+undefined behavior.

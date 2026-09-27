@@ -1,53 +1,41 @@
-# Local Int8X16 vectors
+# Int8X16 vectors
 
-This page records the original foundation and its retained evidence. Current
-execution uses raw `ByteVector.SPECIES_128` values, not an `Int8X16` JVM wrapper.
-The historical storage and local-only limits below are superseded by the
-[current SIMD representation and transport contract](simd.md).
+Both backends execute `VecRep 16 Int8ElemRep` with raw
+`ByteVector.SPECIES_128` values. An activation carries one exact vector
+reference; owned captures and boxed constructor fields store primitive lanes
+inside the enclosing heap object. Equal bit width does not make another vector
+shape compatible.
 
-The original runtime used sixteen final primitive `byte` fields for durable lanes
-(16 bytes of lane payload, not a 16-byte Java object). Transient
-`ByteVector.SPECIES_128` values performed arithmetic; no vector object, generic
-payload array or boxed lane was stored in that carrier. Pack reads sixteen
-primitive Long slots and narrows; unpack sign-extends each byte to a Long slot.
-AST and bytecode choose numeric operation dispatch while lowering Core.
-
-Canonical `int8` literals and literal alternatives are restricted to decimal
--128 through 127. Intrinsic literals refine absent or genuinely unconstrained
-metadata to `Int8Rep`; contradictory kind/width proofs remain errors. Exact
-unlifted operand flags, sixteen recursive tuple-leaf proofs and vector identity
-are checked before execution. No vector ABI restrictions are relaxed.
-
-The pinned x86-64 compilers do not have a single packed byte multiply opcode.
-GHC uses byte unpacking, two packed word multiplies, low-byte masking and
-packing. Graal reinterprets adjacent byte pairs as eight words, computes low and
-high byte products with two packed word multiplies, and reconstructs sixteen
-bytes with masks, shifts and OR. This is a packed-word implementation of byte
-semantics, not `VPMULLB`; actual graph/final-LIR evidence is a separate gate.
-
-`SimdInt8VectorTest` exhaustively checks all 65,536 byte operand pairs in each
-of sixteen lanes, using independent scalar masks and signed decoding. The
-native corpus is exercised at each available Core stage on AST and bytecode,
-with Truffle inlining enabled and disabled. Every measured invocation requires
-an exact 1/2 compiled guest-entry delta, unchanged actual target identities,
-valid last-tier code and released argument/result handoff pools. With native
-pre/post fixtures this is 73,344 checked invocations and 76,128 guest entries per
-handoff mode. No post-compilation settling calls, retries or limit increases
-are part of these checks.
-
-This bounded contract covers exactly seven GHC 9.14.1 primitives:
+The foundation fixture covers seven GHC 9.14.1 operations:
 `packInt8X16#`, `unpackInt8X16#`, `broadcastInt8X16#`,
-`plusInt8X16#`, `minusInt8X16#`, `negateInt8X16#`, and
-`timesInt8X16#`. The vector representation is exactly
-`VecRep 16 Int8ElemRep`; each scalar lane is `Int8#`/`Int8Rep`.
-Equal total bit width does not make another vector or scalar type compatible.
+`plusInt8X16#`, `minusInt8X16#`, `negateInt8X16#`, `timesInt8X16#`.
+This is a fixture scope, not the complete operation inventory; see
+[SIMD families](simd-families.md) and the [primop checklist](primops.md).
 
-Pack takes **one logical sixteen-component unboxed tuple** and unpack returns
-that scalar-lane tuple. Each arithmetic operation wraps modulo 256, including
-low-byte multiplication and negation of -128. Widening sign-extends. These
-fixtures keep vectors local: no vector formal, function result, capture, heap
-field, or vector-containing tuple ABI is enabled. The explicit `vectorArgument`
-negative control is rejected specifically for its vector formal.
+Pack takes one logical 16-component unboxed tuple; unpack returns that
+scalar-lane tuple with exact `Int8Rep` leaves. Arithmetic wraps modulo
+256, including low-8-bit multiplication and minimum-value negation.
+Unpack sign-extends each lane to -128..127.
+
+Guest vector arguments/results, PAP prefixes, joins, tuple fields, nonrecursive
+unlifted lets, owned captures and boxed constructor fields are supported.
+Public host vector arguments/results, recursive or lifted vector lets, and
+sum fields remain unsupported; see the [SIMD transport contract](simd.md).
+The scalar-observation fixtures below keep vectors local. Their
+`vectorArgument` negative tests the public host boundary, not guest calls.
+
+Canonical `int8` literals use -128..127. After lowering, integral
+annotations share a `Long` carrier and the literal tag supplies narrowing.
+Wrong physical carriers, malformed literal values, lifted operand flags, tuple
+lane proofs and vector shapes are checked separately. The strict exporter audit
+also checks exact source-level representations; it is not the runtime's scalar
+carrier contract.
+
+`SimdInt8VectorTest` checks the raw carrier, lane arithmetic, exact shape and
+literal controls on both loaders. Native/Core tests require exact per-call
+compiled guest-entry counts, stable active targets, valid last-tier code and
+released argument/result handoff pools, with Truffle inlining on and off.
+No post-compilation settling calls or retries are part of those checks.
 
 ## Genuine Core and independently observable lanes
 
@@ -141,11 +129,11 @@ malformed tuple widths/leaf types, and hidden or changed guest-root boundaries.
 
 Preparation regenerates original pre/post-Tidy Core, requires every positive
 audit to have zero issues and zero missing globals, and requires each negative
-audit to have precisely one vector-formal issue and no missing globals. It
+audit to have precisely one public-host-vector issue and no missing globals. It
 compiles `SimdInt8X16Native.hs` using GHC's native code generator and compares
-complete unique native rows against the independent model. This path, including
-`timesInt8X16#` and the sixteen-lane scalar tuple return, succeeds with pinned
-GHC 9.14.1 on x86-64. No primop is silently dropped or substituted.
+complete unique native rows against the independent model, including
+`timesInt8X16#` and the sixteen-lane scalar tuple return. No primop may be
+silently dropped or substituted.
 
 `build/simd-int8x16/provenance.json` records the original entry names, arities,
 cases, actual Core root proofs/counts, literal and vector inventories, toolchain
@@ -160,27 +148,4 @@ starting. A successful export-only run is not native conformance.
 Native agreement and strict static audits do not establish JVM compiled
 execution, allocation elimination, packed machine instructions, or performance.
 Those require the separate runtime tests and retained graph/final-LIR evidence.
-In particular, byte multiplication may lower through wider lanes or scalar
-operations; the presence of `timesInt8X16#` is not proof of packed byte multiply.
-
-## Retained x86-64 runtime evidence
-
-The [graph harness](../bench/experiments/int8x16-foundation/README.md) and
-[retained evidence](../bench/experiments/int8x16-foundation/evidence-x86_64/README.md)
-verify this slice on the pinned x86-64 host. Both full JVM modes pass 460 tests
-in 96 suites, with zero failures, errors or skips. All sixteen pre/post ×
-AST/bytecode × arithmetic captures pass with 5,568 postcompile native comparisons.
-
-Actual graphs retain all sixteen result-connected byte lanes. Final allocated
-LIR uses XMM `VPADDB`/`VPSUBB`, and multiplication uses exactly two XMM `VPMULLW`
-instructions plus the verified masks, shifts and OR reconstruction. Temporary
-carrier/vector/payload allocations and lane boxing are eliminated in those
-inlined graphs; the public Long result box remains allowed. This is not a
-throughput, globally allocation-free, no-spill or non-x86 execution claim.
-
-Two diagnostic-reader false positives were corrected using the same immutable
-captures: virtual bytecode frame tags were mistaken for vector payload arrays,
-and a 128-bit view of a wider zero register was mistaken for wider arithmetic.
-The exact frame ownership/state-only use and zero-definition proofs are now
-checked explicitly. Original reader sources and failure status are retained;
-no guest execution, compilation, settling calls or compiler limits changed.
+Byte-lane multiplication uses `ByteVector.mul`, with results wrapping modulo 256.

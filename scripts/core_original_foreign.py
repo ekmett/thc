@@ -10,6 +10,13 @@ These declarations alone do not enable complete decoding or remote capture.
 import re
 
 STACK_CLONE = 'stg_cloneMyStackzh'
+PROCESS_OPERATIONS = {
+    'runInteractiveProcess': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'AddrRep', 'Int32Rep', 'Int32Rep',
+        'Int32Rep', 'AddrRep', 'AddrRep', 'AddrRep', 'AddrRep', 'AddrRep', 'Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    'getProcessExitCode': ('ccall', 'unsafe', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    'waitForProcess': ('ccall', 'interruptible', ('Int32Rep', 'AddrRep', None), (None, 'Int32Rep')),
+    'terminateProcess': ('ccall', 'unsafe', ('Int32Rep', None), (None, 'Int32Rep')),
+}
 WINDOWS_DIRECTORY_OPERATIONS = {
     'FindFirstFileW': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'AddrRep')),
     'FindNextFileW': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'IntRep')),
@@ -110,6 +117,7 @@ TCSETATTR_SYMBOL = 'ghczuwrapperZC9ZCghczminternalZCGHCziInternalziSystemziPosix
 TCGETATTR_SYMBOL = 'ghczuwrapperZC10ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCtcgetattr'
 
 OPERATIONS = {
+    **PROCESS_OPERATIONS,
     **DIRECTORY_STREAM_OPERATIONS,
     **WINDOWS_DIRECTORY_OPERATIONS,
     **TEXT_OPERATIONS,
@@ -324,6 +332,10 @@ def unix_libc_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'unix-2\.8\.8\.0-(?:inplace|[0-9a-f]+)', unit) is not None
 
 
+def process_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'process-1\.6\.26\.1-(?:inplace|[0-9a-f]+)', unit) is not None
+
+
 DIRECTORY_FSTATAT = 'ghczuwrapperZC1ZCdirectoryzm1zi3zi10zi0zminplaceZCSystemziDirectoryziInternalziPosixZCfstatat'
 
 UNIX_LSTAT = 'ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat'
@@ -450,6 +462,8 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol not in OPERATIONS:
         return None
     convention, safety, expected, output = operation(target)
+    if symbol in PROCESS_OPERATIONS:
+        require(process_unit(target.get('unit')), 'supported installed process unit')
     if symbol in BYTESTRING_DECIMAL_OPERATIONS:
         require(bytestring_unit(target.get('unit')), 'pinned original bytestring decimal unit')
     if symbol in ('memchr', 'memset', 'bytestring_is_valid_utf8', 'fps_sort'):
@@ -497,6 +511,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
+                 symbol in PROCESS_OPERATIONS and process_unit(target.get('unit')) or
                  symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in WINDOWS_DIRECTORY_OPERATIONS and win32_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'memset', 'strlen', 'bytestring_is_valid_utf8', 'fps_sort', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or

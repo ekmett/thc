@@ -1,39 +1,43 @@
-# Local Word16X8 vectors
+# Word16X8 vectors
 
-This page records the original foundation and its retained evidence. Current
-execution uses raw `ShortVector.SPECIES_128` values with unsigned `VecRep`
-metadata, not a `Word16X8` JVM wrapper. Historical storage and local-only limits
-below are superseded by the [current SIMD contract](simd.md).
+Both backends execute `VecRep 8 Word16ElemRep` with raw
+`ShortVector.SPECIES_128` values. An activation carries one exact vector
+reference; owned captures and boxed constructor fields store primitive lanes
+inside the enclosing heap object. Equal bit width does not make another vector
+shape compatible.
 
-The bounded contract is exactly six pinned GHC 9.14.1 primitives:
+The foundation fixture covers six GHC 9.14.1 operations:
 `packWord16X8#`, `unpackWord16X8#`, `broadcastWord16X8#`,
-`plusWord16X8#`, `minusWord16X8#`, and `timesWord16X8#`.
-GHC provides no `negateWord16X8#`. The exact representation is
-`VecRep 8 Word16ElemRep`, with eight `Word16#`/`Word16Rep` lanes.
-Signed `Int16Rep` or `VecRep 8 Int16ElemRep` metadata is incompatible even
-though its payload has the same bit width.
+`plusWord16X8#`, `minusWord16X8#`, `timesWord16X8#`.
+GHC provides no unsigned vector negation primitive.
+This is a fixture scope, not the complete operation inventory; see
+[SIMD families](simd-families.md) and the [primop checklist](primops.md).
 
-Pack takes one logical eight-component unboxed tuple; unpack returns that
-scalar-lane tuple. Lane arithmetic wraps modulo 65,536, including unsigned
-subtraction underflow and low-16-bit multiplication. Unpacked lanes widen to
-0..65,535; 65,535 must not become -1. Vectors remain local: vector formals,
-function results, captures, heap fields and vector-containing tuple ABIs remain
-unsupported. Machine `Int#` seeds and scalar results require a 64-bit host.
+Pack takes one logical 8-component unboxed tuple; unpack returns that
+scalar-lane tuple with exact `Word16Rep` leaves. Arithmetic wraps modulo
+65,536, including low-16-bit multiplication and subtraction underflow.
+Unpack zero-extends each lane to 0..65,535.
+A high unsigned lane must not become a negative scalar.
 
-The original runtime used a distinct `Word16X8` carrier with exactly eight final primitive
-`short` fields: sixteen bytes of lane payload, not total object size. Transient
-`ShortVector.SPECIES_128` values implemented wrapping arithmetic; that carrier stored no
-vector object, payload array or lane box. Pack narrows eight Long slots; both AST
-and bytecode unpack every field with `& 0xffffL`. Operation selection happens
-during Core lowering, with no vector ABI expansion.
+Guest vector arguments/results, PAP prefixes, joins, tuple fields, nonrecursive
+unlifted lets, owned captures and boxed constructor fields are supported.
+Public host vector arguments/results, recursive or lifted vector lets, and
+sum fields remain unsupported; see the [SIMD transport contract](simd.md).
+The scalar-observation fixtures below keep vectors local. Their
+`vectorArgument` negative tests the public host boundary, not guest calls.
 
-Existing canonical Word16 literal and aggregate-aware representation guards are
-unchanged. JVM tests cover every 16-bit encoding in each lane and independent
-Cartesian boundary pairs, plus malformed literal, signedness and frontier
-controls. Full binary-pair exhaustiveness is not claimed. Native tests require
-exact +1/+2 compiled guest-entry deltas after every measured call, stable actual
-target identities, valid last-tier code and empty argument/result handoff pools
-under both inlining policies. No retries, settling or compiler-limit changes.
+Canonical `word16` literals use 0..65,535. After lowering, integral
+annotations share a `Long` carrier and the literal tag supplies narrowing.
+Wrong physical carriers, malformed literal values, lifted operand flags, tuple
+lane proofs and vector shapes are checked separately. The strict exporter audit
+also checks exact source-level representations; it is not the runtime's scalar
+carrier contract.
+
+`SimdWord16VectorTest` checks the raw carrier, lane arithmetic, exact shape and
+literal controls on both loaders. Native/Core tests require exact per-call
+compiled guest-entry counts, stable active targets, valid last-tier code and
+released argument/result handoff pools, with Truffle inlining on and off.
+No post-compilation settling calls or retries are part of those checks.
 
 ## Genuine Core and independent observations
 
@@ -103,7 +107,7 @@ compiled calls and 45,216 guest entries per handoff mode, with exact per-call
 deltas, unchanged targets and empty pools required separately from static proof.
 
 The genuine `vectorArgument` negative has a Word16X8 formal and must fail each
-stage's audit with exactly one vector-formal issue and no missing globals.
+stage's audit with exactly one public-host-vector issue and no missing globals.
 Two additional controls deliberately mutate separate metadata copies of
 `plusCase`: an eight-lane `Int16Rep` tuple and an `Int16ElemRep` vector operand.
 These are clearly labeled non-genuine controls, never native oracle inputs or
@@ -143,22 +147,3 @@ Fixture/model/native evidence alone establishes no JVM compilation, packed
 machine instructions, allocation elimination, throughput, vector calling
 conventions or cross-architecture execution. Those require separately retained
 runtime tests and graph/LIR evidence.
-
-## Retained compiled-code evidence
-
-The [x86-64 evidence](../bench/experiments/word16x8-foundation/evidence-x86_64/README.md)
-retains twelve actual pre/post × AST/bytecode × plus/minus/times captures at
-runtime `5bbdb040a26ef98c784c2772e5eae0466a534123`. All pass on their first check.
-Every one of the eight result lanes feeds an exact unsigned 16-to-64-bit
-extension. Each add/subtract/multiply uses one packed XMM word instruction.
-No local vector payload, carrier or lane box survives in these selected inlined
-graphs. The public Long result box and precisely checked virtual frame-tag
-deoptimization metadata are allowed; no globally allocation-free or throughput
-claim follows. The native oracle is checked 6,432 times across these captures,
-with installed-entry validity and active-target identity checked on every input.
-
-The complete JVM suite passes 474 tests in each of default and dense-handoff
-modes with zero failures, errors or skips. Both complete logs and all 196 suite
-reports are retained alongside the native and compiled-code evidence. Classes,
-seven focused tests, both full modes and all twelve captures pass first time;
-there was no reader correction or guest replay.

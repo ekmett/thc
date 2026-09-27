@@ -34,7 +34,56 @@ no-statistics behavior, not evidence of zero guest allocation.
 Monotonic time has an arbitrary JVM origin and nanosecond units, not guaranteed
 nanosecond resolution. Compare elapsed differences within a process; it is not
 wall-clock UTC and is not synchronized with another JVM or native GHC. The
-existing original `clock_gettime` CPU-time route is unchanged.
+original `clock_gettime` CPU-time route uses the separately linked base CAPI ABI.
+
+## Original time package clock module
+
+On native 64-bit Linux, installed acquisition links the three original CAPI
+wrappers in `time-1.15`'s `Data.Time.Clock.Internal.CTimespec`: the configured
+`HS_CLOCK_REALTIME` constant, `clock_getres`, and `clock_gettime`. Their clock
+argument and status use `CInt`; the existing base CPU-clock argument uses
+`Word64`. Both original libraries can coexist in one context. Linking retains
+the original stubs, exact unit-qualified wrapper indices and selected compiler
+`HsFFI.h`, `HsTime.h`, and `HsTimeConfig.h` hashes. Cache hits revalidate these
+native inputs. Native execution still requires the context's native permission.
+
+Time output uses a checked writable 16-byte timespec with 64-bit seconds and
+nanoseconds. THC holds allocation ownership through the native call and copies
+the staged image only after success. Failure captures errno from that library
+on the same thread; success preserves the guest's previous errno. A null
+`clock_getres` destination is valid. A null `clock_gettime` destination is rejected
+before invoking libc. Invalid destination capacity, lifetime, context, or opaque
+pointer cells are rejected before native observation.
+
+This route supports fixed nonnegative clock identifiers and the reserved
+invalid identifier `-1` for libc error behavior. Other negative identifiers
+encode native descriptors or process/thread CPU clocks on Linux. They are
+explicitly unsupported until guest-owned descriptors and guest CPU identities
+can be translated; THC does not pass those encodings to unrelated host objects.
+This is not general POSIX clock or timer support.
+
+The full-Core fixture recovers the unchanged FCallIds from the installed time
+interface, typechecks native and guest consumers, and retains the original base
+clock module for a coexistence control. Native observations cover resolution,
+`getres(NULL)`, valid time and invalid IDs with errno and guard bytes. Runtime
+tests compare resolution exactly and bracket live realtime with wall-clock
+samples; a clock adjustment outside that enclosing interval is an environmental
+limit of the live comparison. Failure buffer nonpublication is a THC guarantee,
+independent of unspecified libc failure-buffer contents.
+
+```sh
+cabal run exe:thc-fixtures -- original-time-clock
+./gradlew --continue originalTimeClockDefault originalTimeClockDense
+```
+
+These named tests require the complete installed GHC 9.14.1 interfaces and fail
+when the native fixture is missing. They retain AST/bytecode pre/post-Tidy and
+first-installed-call checks in both handoff modes.
+The ignored-argument adapter also retains an ordinary `-O2` worker that receives
+a first-class FCallId. That shape remains an explicit negative regression: THC
+does not yet lower foreign import identifiers as callable values. The positive
+constant consumer uses the genuine installed `clock_REALTIME` binding and its
+unchanged saturated foreign call.
 
 Admission preserves the original `ccall`, `ghc-internal` unit, saturated arity,
 State/result tuple and primitive ABI. The statistics and GC calls are `safe`;

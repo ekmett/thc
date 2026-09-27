@@ -202,6 +202,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
+        CoreProcessForeign.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
         CoreRtsShutdown.validateHeads(bindings)
         CoreMainThreadForeign.validateHeads(bindings)
@@ -511,7 +512,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     }
 
     /** The cold Yield carries the exact bytecode frame; ordinary polls allocate no packet. */
-    private fun emitAsyncPoll(e: Emission) {
+    private fun emitAsyncPoll(e: Emission, processResult: BytecodeLocal? = null, processErrno: BytecodeLocal? = null) {
         val b = e.builder
         b.beginBlock()
         val request = b.createLocal("pending async request", "object")
@@ -523,7 +524,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginStoreLocal(local); b.emitLoadNull(); b.endStoreLocal()
         }
         b.beginUnprofiledIfThen()
-        b.emitPollAsync(request)
+        if (processResult == null) b.emitPollAsync(request)
+        else {
+            b.beginPollProcessCompleted(request)
+            b.emitLoadLocal(processResult); b.emitLoadLocal(checkNotNull(processErrno))
+            b.endPollProcessCompleted()
+        }
         b.beginBlock()
         b.beginReenterPendingAsyncMask(active)
         beginAnnotationYield(e, annotations)
@@ -1471,6 +1477,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val originalProcess = CoreProcessForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val capi = CoreCapiForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                 CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
@@ -1529,7 +1537,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && !memset && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
             if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
@@ -1623,6 +1631,29 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (stackInfo == OriginalStackInfoOp.ADVANCE) b.endOriginalStackAdvance()
                     else if (stackInfo == OriginalStackInfoOp.LOOKUP_IPE) b.endOriginalStackLookupIpe()
                     else b.endOriginalStackIncompatibleTupleGetter()
+                }
+            } else if (originalProcess != null) {
+                CoreProcessForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreProcessForeign.validateOperand(originalProcess, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                tupleExpression(tupleProof) { e, destination ->
+                    val b = e.builder
+                    val locals = operands.mapIndexed { index, operand ->
+                        b.createLocal("Original process operand $index", if (originalProcess.arguments[index] == "Int32Rep") "primitive" else "object").also {
+                            b.beginStoreLocal(it); operand.emit(e); b.endStoreLocal()
+                        }
+                    }
+                    val errno = b.createLocal("Completed process errno", "primitive")
+                    val arguments = BytecodeProcessArguments(originalProcess, locals.map(LocalAccessor::constantOf).toTypedArray())
+                    b.emitOriginalProcess(arguments, destination.single(), errno)
+                    if (enableAsync && originalProcess == ProcessOp.WAIT) {
+                        emitAsyncPoll(e, destination.single(), errno)
+                        b.beginRestoreProcessErrno(); b.emitLoadLocal(errno); b.endRestoreProcessErrno()
+                    }
                 }
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -1805,7 +1836,12 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
-                val operands = args.map { compile(it, scope, false) }
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreCapiForeign.validateOperand(capi, index, operand.proof,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
                 tupleExpression(tupleProof) { e, destination ->
                     val b = e.builder
                     if (capi.zeroArgument) b.beginLinkedCapiZero(destination.single(), capi)

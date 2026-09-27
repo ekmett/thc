@@ -97,24 +97,47 @@ public final class GraphInspect {
         }
         return out.append("}\n").toString();
     }
-    private static void writeJson(Path path,Object value) throws IOException { Files.writeString(path,json(value)+"\n"); }
-    private static String json(Object value) {
-        if(value==null)return "null";
-        if(value instanceof String || value instanceof Character) return quote(value.toString());
-        if(value instanceof Number || value instanceof Boolean)return value.toString();
-        if(value instanceof InputGraph graph)return json(Map.of("nestedGraphName",graph.getName(),"dumpId",graph.getDumpId()));
-        if(value instanceof Map<?,?> map) { List<String> items=new ArrayList<>(); for(var e:map.entrySet())items.add(quote(String.valueOf(e.getKey()))+":"+json(e.getValue()));return "{"+String.join(",",items)+"}"; }
-        if(value instanceof Iterable<?> iterable) { List<String> items=new ArrayList<>();for(Object v:iterable)items.add(json(v));return "["+String.join(",",items)+"]"; }
-        if(value.getClass().isArray()) { List<String> items=new ArrayList<>();for(int i=0;i<Array.getLength(value);i++)items.add(json(Array.get(value,i)));return "["+String.join(",",items)+"]"; }
-        return quote(value.toString());
+    private static void writeJson(Path path,Object value) throws IOException {
+        try(BufferedWriter out=Files.newBufferedWriter(path)) { json(out,value); out.append('\n'); }
     }
-    private static String quote(String s) {
-        StringBuilder result=new StringBuilder("\"");
+    private static String json(Object value) {
+        StringBuilder out=new StringBuilder();
+        try { json(out,value); } catch(IOException failure) { throw new UncheckedIOException(failure); }
+        return out.toString();
+    }
+    /** Graph properties can dwarf the BGV; never retain serialized child documents. */
+    private static void json(Appendable out,Object value) throws IOException {
+        if(value==null) { out.append("null"); return; }
+        if(value instanceof String || value instanceof Character) { quote(out,value.toString()); return; }
+        if(value instanceof Number || value instanceof Boolean) { out.append(value.toString()); return; }
+        if(value instanceof InputGraph graph) { json(out,Map.of("nestedGraphName",graph.getName(),"dumpId",graph.getDumpId())); return; }
+        if(value instanceof Map<?,?> map) {
+            out.append('{'); boolean first=true;
+            for(var e:map.entrySet()) {
+                if(!first)out.append(','); first=false;
+                quote(out,String.valueOf(e.getKey())); out.append(':'); json(out,e.getValue());
+            }
+            out.append('}'); return;
+        }
+        if(value instanceof Iterable<?> iterable) {
+            out.append('['); boolean first=true;
+            for(Object v:iterable) { if(!first)out.append(','); first=false; json(out,v); }
+            out.append(']'); return;
+        }
+        if(value.getClass().isArray()) {
+            out.append('[');
+            for(int i=0;i<Array.getLength(value);i++) { if(i!=0)out.append(','); json(out,Array.get(value,i)); }
+            out.append(']'); return;
+        }
+        quote(out,value.toString());
+    }
+    private static void quote(Appendable out,String s) throws IOException {
+        out.append('"');
         for(int i=0;i<s.length();i++) { char c=s.charAt(i);switch(c) {
-            case '\\':result.append("\\\\");break;case '"':result.append("\\\"");break;
-            case '\n':result.append("\\n");break;case '\r':result.append("\\r");break;case '\t':result.append("\\t");break;
-            default: if(c<32) result.append(String.format(Locale.ROOT,"\\u%04x",(int)c));else result.append(c);
+            case '\\':out.append("\\\\");break;case '"':out.append("\\\"");break;
+            case '\n':out.append("\\n");break;case '\r':out.append("\\r");break;case '\t':out.append("\\t");break;
+            default: if(c<32) out.append(String.format(Locale.ROOT,"\\u%04x",(int)c));else out.append(c);
         }}
-        return result.append('"').toString();
+        out.append('"');
     }
 }

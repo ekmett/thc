@@ -138,15 +138,17 @@ class ManagedProcessesTest {
     @Test fun failedCreationAndUnsupportedOptionsHaveNoChildOrPipeLeak() = service { processes, _, _ ->
         val before = fdCount()
         repeat(12) {
-            val failure = assertThrows(NativeFileException::class.java) {
+            val failure = assertThrows(ProcessSpawnException::class.java) {
                 processes.spawn(args("/definitely-missing-thc-command"), emptyList(),
                     input = ManagedProcesses.Stream.Pipe, output = ManagedProcesses.Stream.Pipe, error = ManagedProcesses.Stream.Pipe)
             }
             assertEquals(2, failure.errno)
-            val cwd = assertThrows(NativeFileException::class.java) {
+            assertEquals(ProcessFailureStage.SPAWN, failure.stage)
+            val cwd = assertThrows(ProcessSpawnException::class.java) {
                 processes.spawn(childArgs("exit", "0"), emptyList(), cwd = "missing".toByteArray())
             }
             assertEquals(2, cwd.errno)
+            assertEquals(ProcessFailureStage.SPAWN, cwd.stage)
         }
         assertThrows(UnsupportedOperationException::class.java) {
             processes.spawn(childArgs("exit", "0"), emptyList(), childUser = 0)
@@ -158,6 +160,28 @@ class ManagedProcessesTest {
             processes.spawn(listOf(byteArrayOf(47, 0, 98)), emptyList())
         }
         assertEquals(before, fdCount())
+    }
+
+    @Test fun creationFailureStagesMatchOriginalNativeImports() = service { processes, _, _ ->
+        val native = ProcessBuilder(oracle.toString(), "creation-oracle").redirectErrorStream(true).start()
+        try {
+            assertTrue(native.waitFor(10, TimeUnit.SECONDS))
+            val observed = native.inputStream.bufferedReader().readLines()
+            assertEquals(0, native.exitValue(), observed.toString())
+            assertEquals(listOf("missing-command -1 2 posix_spawnp 991 991 991",
+                "missing-cwd -1 2 posix_spawnp 991 991 991", "create-success positive 0 null 991 991 991"), observed)
+            for ((name, command, cwd) in listOf(Triple("missing-command", "/definitely-missing-thc-command", null),
+                Triple("missing-cwd", "/bin/true", "/definitely-missing-thc-directory"))) {
+                val failed = assertThrows(ProcessSpawnException::class.java) {
+                    processes.spawn(args(command), emptyList(), cwd = cwd?.toByteArray())
+                }
+                val fields = observed.first { it.startsWith(name) }.split(' ')
+                assertEquals(fields[2].toInt(), failed.errno)
+                assertEquals(fields[3], failed.stage.operation)
+            }
+        } finally {
+            if (native.isAlive) { native.destroyForcibly(); native.waitFor(5, TimeUnit.SECONDS) }
+        }
     }
 
     @Test fun processPermissionAndHandleOwnershipAreIndependentOfNativeAccess() {
@@ -183,6 +207,49 @@ class ManagedProcessesTest {
                 }
             } }
         }
+    }
+
+    @Test fun unpublishedRollbackClosesOnlyItsOwnChildAndNumericIdsKeepTombstones() = service { processes, _, _ ->
+        val child = launchHeld(processes)
+        val sibling = launchHeld(processes)
+        val pid = processes.publishProcessId(child.handle)
+        assertEquals(processes.processId(child.handle), pid)
+        assertSame(child.handle, processes.fromProcessId(pid))
+        val native = ProcessHandle.of(pid.toLong()).orElseThrow()
+        processes.abortUnpublished(child.handle)
+        assertFalse(native.isAlive)
+        assertThrows(ClosedChannelException::class.java) { child.input!!.duplicate() }
+        assertThrows(ClosedChannelException::class.java) { child.output!!.duplicate() }
+        assertSame(child.handle, processes.fromProcessId(pid), "Rollback must not release a reserved numeric identity")
+        assertEquals(0, processes.poll(sibling.handle).status)
+        val siblingPid = processes.publishProcessId(sibling.handle)
+        pipeWrite(sibling.input!!, "x")
+        assertEquals(23, processes.waitFor(sibling.handle).exitCode)
+        assertSame(sibling.handle, processes.fromProcessId(siblingPid))
+        assertEquals(ProcessResult(1, 0, 10), processes.poll(processes.fromProcessId(siblingPid)))
+        assertEquals(ProcessResult(0, null, 3), processes.terminate(processes.fromProcessId(siblingPid)))
+    }
+
+    @Test fun forcedNumericCollisionReapsNewExactHandleWithoutReplacingRetainedIdentity() = service { processes, _, _ ->
+        val old = processes.spawn(childArgs("exit", "7"), emptyList())
+        processes.publishProcessId(old.handle)
+        assertEquals(7, processes.waitFor(old.handle).exitCode)
+        val fresh = launchHeld(processes)
+        val pid = processes.processId(fresh.handle)
+        val native = ProcessHandle.of(pid.toLong()).orElseThrow()
+        // Exercise the collision branch deterministically without pretending to
+        // force Linux PID reuse or changing either child's actual native PID.
+        val ids = ManagedProcesses::class.java.getDeclaredField("processIds").also { it.isAccessible = true }
+        @Suppress("UNCHECKED_CAST")
+        val retained = ids.get(processes) as MutableMap<Int, ManagedProcesses.Handle>
+        retained[pid] = old.handle
+        val failure = assertThrows(NativeFileException::class.java) { processes.publishProcessId(fresh.handle) }
+        assertEquals(11, failure.errno)
+        assertFalse(native.isAlive, "Collision cleanup targets the new owned pidfd")
+        assertSame(old.handle, processes.fromProcessId(pid))
+        assertEquals(ProcessResult(1, 0, 10), processes.poll(old.handle))
+        assertThrows(ClosedChannelException::class.java) { fresh.input!!.duplicate() }
+        Unit
     }
 
     @Test fun waitCancellationDoesNotReapOrReplayAndASecondWaitCanFinish() {

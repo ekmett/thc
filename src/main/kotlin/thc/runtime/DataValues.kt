@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.CompilerDirectives.transferToInterpreter
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.BytecodeNode
 import com.oracle.truffle.api.bytecode.LocalAccessor
@@ -312,7 +313,11 @@ class DataLayout private constructor(
 
     /** The RTS selector in atomicModifyMutVar2# requires a lifted first field. */
     internal fun readFirstLifted(value: DataValue): Any? {
-        if (logicalFields?.logicalProofs?.firstOrNull()?.isAggregate == true || fields.firstOrNull()?.isLifted != true)
+        if (logicalFields?.logicalProofs?.firstOrNull()?.isAggregate == true || run {
+            val firstFields = fields
+            if (firstFields == null) transferToInterpreter()
+            firstFields.firstOrNull()?.isLifted != true
+        })
             fault("atomicModifyMutVar2# requires a lifted first record field")
         return read(value, 0)
     }

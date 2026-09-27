@@ -19,8 +19,13 @@ object NativeIO {
     enum class StandardEndpoint { INPUT, OUTPUT, ERROR }
 
     @JvmStatic fun createContext(standardEndpoints: Set<StandardEndpoint> = emptySet()): Context =
-        if (WindowsDirectoryStreams.supportedHost()) WindowsDirectoryStreams.createContext()
-        else NativeFileProvider.createContext(standardEndpoints.toSet())
+        createContext(standardEndpoints, allowProcesses = false)
+
+    @JvmStatic fun createContext(standardEndpoints: Set<StandardEndpoint> = emptySet(), allowProcesses: Boolean): Context =
+        if (WindowsDirectoryStreams.supportedHost()) {
+            require(!allowProcesses) { "Native subprocesses currently require Linux x86_64" }
+            WindowsDirectoryStreams.createContext()
+        } else NativeFileProvider.createContext(standardEndpoints.toSet(), allowProcesses = allowProcesses)
 
     internal fun supportedHost(): Boolean = supportedPosixHost() || WindowsDirectoryStreams.supportedHost()
 
@@ -29,5 +34,5 @@ object NativeIO {
 
     internal fun commandLineContext(ffiMode: FfiMode): Context =
         if (WindowsDirectoryStreams.supportedHost()) WindowsDirectoryStreams.createContext(ContextProfile.LAUNCHER, ffiMode)
-        else NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.LAUNCHER, ffiMode)
+        else NativeFileProvider.createContext(StandardEndpoint.entries.toSet(), ContextProfile.LAUNCHER, ffiMode, allowProcesses = true)
 }

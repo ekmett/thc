@@ -247,8 +247,14 @@ class AtomicIntArrayTest {
             assertThrows(RuntimeFault::class.java) { operation.execute(short, 1, 0, 1) }
             val empty = ManagedByteArray.allocateGuest(0)
             assertThrows(RuntimeFault::class.java) { operation.execute(empty, 0, 0, 1) }
-            for (bad in listOf(null, Any(), bytes, ManagedAllocation.immutable(bytes, 8)))
-                assertThrows(RuntimeFault::class.java) { operation.execute(bad, 1, -1, 1) }
+            for (bad in listOf(null, Any(), bytes)) {
+                val failure = assertThrows(RuntimeFault::class.java) { operation.execute(bad, 1, -1, 1) }
+                assertEquals("${operation.primitive} requires an owned MutableByteArray#", failure.message)
+                assertArrayEquals(bytes, owner.copyBytesOut(0, 32))
+            }
+            assertThrows(RuntimeFault::class.java) {
+                operation.execute(ManagedAllocation.immutable(bytes, 8), 1, -1, 1)
+            }
             val pointerOwner = ManagedByteArray.allocateGuest(16)
             val pointer = ManagedAddress.fromAllocation(pointerOwner)
             pointerOwner.writeAddressByteOffset(0, pointer)

@@ -229,6 +229,9 @@ tasks.withType<Test>().configureEach {
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
+            "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/core/logs/*.stdout", "process-lifecycle/core/logs/*.stderr",
+            "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
             "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",
@@ -438,6 +441,23 @@ configurations[fullCoreTests.implementationConfigurationName].extendsFrom(config
 configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+
+for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalTimeClockDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests the original time CAPI clock module with native and first-compiled controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
+        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/original-time-clock/manifest.json").isFile) {
+            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
+    }
+}
 
 for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
@@ -903,8 +923,8 @@ val foreignExceptionTests = listOf("foreignExceptionTest" to false, "foreignExce
         group = "verification"
         description = "Tests genuine automatic foreign exceptions with ${if (dense) "dense" else "default"} handoffs."
         maxHeapSize = "4g"
-        testClassesDirs = polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
-        classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime
         useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())

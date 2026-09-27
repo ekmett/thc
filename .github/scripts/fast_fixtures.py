@@ -24,13 +24,20 @@ STAMP_DIR = Path("build/fast/fixtures")
 FULL_STAMP = STAMP_DIR / "full.json"
 # The shebang and non-comment command body of reviewed prepare-tests.sh. A new
 # preparation command disables reuse until its output scope is reviewed.
-FULL_PREPARATION_PLAN = "13c0665c1b0dac5cd2f95c630150652b6126c6e47df3bf0040be920b3f6e6ed0"
+FULL_PREPARATION_PLAN = "8a2edf0f56c0bcc8f07731adc618db696accbcac21f8f395049652a2fe843e95"
+PROCESS_CORE_OUTPUTS = frozenset("build/process-lifecycle/core/" + name for name in (
+    "manifest.json", "source.json", "pre.json", "post.json", "pre.audit.json", "post.audit.json",
+    *[f"logs/{command}.{suffix}" for command in
+      ("version", "libdir", "source-extract", "source-build", "unit", "imports", "pre-audit", "post-audit")
+      for suffix in ("stdout", "stderr", "command.json")],
+))
 TEXT_CBITS_OUTPUTS = frozenset("build/text-cbits/" + name for name in (
     "manifest.json", "inputs.tsv", "oracle.tsv", "native/text-cbits-oracle", "exposed-text.conf",
     "logs/original-registration.stdout", "logs/native-oracle.command.json", "logs/native-build.command.json",
     *[f"{stage}-{suffix}" for stage in ("pre", "post") for suffix in ("core/TextCbitsAudit.json", "audit.json")],
 ))
 FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS) | frozenset({
+    "build/process-lifecycle/core",
     "build/text-cbits",
     "build/aligned-scalar-memory", "build/addr-identity", "build/io-main-pap", "build/managed-mvars", "build/managed-md5-native",
     "build/pinned-addresses", "build/pinned-pointer-cells", "build/address-array-copy", "build/simd-capability-smoke", "build/managed-address-reads",
@@ -40,6 +47,7 @@ FULL_OUTPUT_ROOTS = frozenset(f"build/{name}" for name in fast_inputs.BUILD_DIRS
     "build/original-fd-ready", "build/simd-calls", "build/sum-join", "build/record-fields",
 })
 FULL_REQUIRED = frozenset(fast_inputs.REQUIRED) | frozenset({
+    *(PROCESS_CORE_OUTPUTS if fast_inputs.GMP_NATIVE_HOST else ()),
     *TEXT_CBITS_OUTPUTS,
     *fast_inputs.BYTESTRING_UTF8_OUTPUTS,
     *fast_inputs.MEMSET_OUTPUTS,
@@ -357,6 +365,18 @@ def cache_key(root, group_id, group, toolchain):
 
 
 def _output_hashes(root, group):
+    if group["outputs"] == ["build/process-lifecycle/core"]:
+        if not fast_inputs.GMP_NATIVE_HOST:
+            return {}
+        name = "build/process-lifecycle/core/manifest.json"
+        manifest = json.loads(fast_inputs.file_path(root, name).read_text())
+        expected = manifest.get("artifactHashes")
+        if not isinstance(expected, dict) or set(expected) != PROCESS_CORE_OUTPUTS - {name}:
+            raise ValueError("Incomplete process Core artifact inventory")
+        source = json.loads(fast_inputs.file_path(root, "build/process-lifecycle/core/source.json").read_text())
+        if source.get("archiveSha256") != "b431d2ba77607986fa84b42ff3021505b8637b8d638ff664be3292dd44aba8f0":
+            raise ValueError("Wrong original process source archive")
+        return _manifest_output_hashes(root, name, expected)
     families = [output.removeprefix("build/") for output in group["outputs"]]
     if families and all(family in fast_inputs.INTEGER_SIMD_FAMILIES for family in families):
         result = {}
@@ -646,6 +666,9 @@ def _full_output_hashes(root):
             raise RuntimeError(f"Unexpected full fixture root: {name}")
         if name == "build/original-stack-formatter":
             files.update(_formatter_output_hashes(root))
+            continue
+        if name == "build/process-lifecycle/core":
+            files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name == "build/original-gmp":
             if fast_inputs.GMP_NATIVE_HOST:

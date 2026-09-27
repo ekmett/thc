@@ -71,6 +71,7 @@ import WindowsDirectoryFixtures (prepareWindowsDirectory)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
+import ProcessLifecycleFixtures (prepareProcessLifecycle)
 import SignalDispatchFixtures (prepareSignalDispatch)
 import RtsShutdownFixtures (prepareRtsShutdown)
 import OriginalGmpFixtures (prepareOriginalGmp)
@@ -82,6 +83,7 @@ import FileWaitFixtures (prepareFileWait)
 import OriginalRtsLocksFixtures (prepareOriginalRtsLocks)
 import CompilerRtsFixtures (prepareCompilerRts)
 import GcStatsFixtures (prepareGcStats)
+import OriginalTimeClockFixtures (prepareOriginalTimeClock)
 import RtsEventFixtures (prepareRtsEvent)
 import FloatForeignFixtures (prepareFloatForeign)
 import GhcApiFixtures (prepareGhcApi, prepareRecordFields)
@@ -1012,6 +1014,7 @@ main = do
     ["original-sigset"] -> prepareOriginalSigset root
     ["native-addresses"] -> prepareNativeAddress root
     ["process-signals"] -> prepareProcessSignals root
+    ["process-lifecycle"] -> prepareProcessLifecycle root
     ["signal-dispatch"] -> prepareSignalDispatch root
     ["rts-shutdown"] -> prepareRtsShutdown root
     ["original-gmp"] -> prepareOriginalGmp root False
@@ -1032,6 +1035,7 @@ main = do
     ["stable-pointers"] -> prepareStablePointers root
     ["compiler-rts"] -> prepareCompilerRts root
     ["gc-stats"] -> prepareGcStats root
+    ["original-time-clock"] -> prepareOriginalTimeClock root
     ["rts-event"] -> prepareRtsEvent root
     ["float-foreign"] -> prepareFloatForeign root
     "ghc-api" : probes -> prepareGhcApi root probes

@@ -15,9 +15,17 @@
 
 /* Linux/glibc transport only. No JVM fork child executes user code. All fd
  * arguments are owned duplicates supplied by the context, never guest ints.
- * Result: pid, pidfd, parent stdin, parent stdout, parent stderr. */
+ * Result: pid, pidfd, parent stdin, parent stdout, parent stderr, failure stage. */
 _Static_assert(sizeof(pid_t) == sizeof(int32_t), "process pid ABI");
 _Static_assert(sizeof(int) == sizeof(int32_t), "process status ABI");
+
+/* Kept in order with ProcessFailureStage. Zero is reserved for success. */
+enum failure_stage {
+    STAGE_NONE, STAGE_ARGUMENTS, STAGE_SIGCHLD, STAGE_PIDFD_OPEN, STAGE_PIDFD_WAIT,
+    STAGE_ACTION_INIT, STAGE_ATTR_INIT, STAGE_FCHDIR, STAGE_CHDIR, STAGE_PIPE,
+    STAGE_DUP_FD, STAGE_DUP2, STAGE_DUP2_PIPE, STAGE_CLOSE, STAGE_CLOSE_FROM,
+    STAGE_SIGMASK, STAGE_PGROUP, STAGE_SIGDEFAULT, STAGE_FLAGS, STAGE_SPAWN
+};
 
 static int high_fd(int fd) {
     if (fd < 0 || fd > 2) return fd;
@@ -76,8 +84,9 @@ static int spawn_path(pid_t *pid, char *const argv[], char *const env[], const c
 
 int thc_process_spawn(char *const argv[], char *const env[], int directory,
                       const char *cwd, const int streams[3], int flags,
-                      const char *search_path, int result[5]) {
+                      const char *search_path, int result[6]) {
     for (int i = 0; i < 5; ++i) result[i] = -1;
+    result[5] = STAGE_ARGUMENTS;
     if (!argv || !argv[0] || !argv[0][0] || !env || directory < 0) return EINVAL;
     /* process-1.6 flags: close_fds, create_group, new_session, reset INT/QUIT.
      * Windows console flags and credential changes are not silently ignored. */
@@ -87,12 +96,15 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
      * host policy; it cannot synchronize with an external reaper or concurrent
      * sigaction changes. The embedding host must exclude both for our children. */
     struct sigaction child_action;
+    result[5] = STAGE_SIGCHLD;
     if (sigaction(SIGCHLD, NULL, &child_action)) return errno;
     if (child_action.sa_handler == SIG_IGN || (child_action.sa_flags & SA_NOCLDWAIT))
         return ENOTSUP;
+    result[5] = STAGE_PIDFD_OPEN;
     int probe = (int) syscall(SYS_pidfd_open, getpid(), 0);
     if (probe < 0) return errno;
     siginfo_t probe_info;
+    result[5] = STAGE_PIDFD_WAIT;
     int probe_error = waitid(P_PIDFD, (id_t)probe, &probe_info, WEXITED | WNOHANG) ? errno : 0;
     close(probe);
     if (probe_error != ECHILD) return probe_error ? probe_error : EIO;
@@ -100,54 +112,60 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     int error = 0;
     posix_spawn_file_actions_t actions;
     posix_spawnattr_t attrs;
+    result[5] = STAGE_ACTION_INIT;
     error = posix_spawn_file_actions_init(&actions);
     if (error) return error;
+    result[5] = STAGE_ATTR_INIT;
     error = posix_spawnattr_init(&attrs);
     if (error) { posix_spawn_file_actions_destroy(&actions); return error; }
-#define ACTION(call) do { error = (call); if (error) goto done; } while (0)
-    ACTION(posix_spawn_file_actions_addfchdir_np(&actions, directory));
-    if (cwd) ACTION(posix_spawn_file_actions_addchdir_np(&actions, cwd));
+#define ACTION(stage, call) do { result[5] = (stage); error = (call); if (error) goto done; } while (0)
+    ACTION(STAGE_FCHDIR, posix_spawn_file_actions_addfchdir_np(&actions, directory));
+    if (cwd) ACTION(STAGE_CHDIR, posix_spawn_file_actions_addchdir_np(&actions, cwd));
     for (int i = 0; i < 3; ++i) {
         if (streams[i] == -1) {
             int pipefd[2];
+            result[5] = STAGE_PIPE;
             if (pipe2(pipefd, O_CLOEXEC)) { error = errno; goto done; }
+            result[5] = STAGE_DUP_FD;
             pipefd[0] = high_fd(pipefd[0]);
             if (pipefd[0] < 0) { error = errno; close(pipefd[1]); goto done; }
             pipefd[1] = high_fd(pipefd[1]);
             if (pipefd[1] < 0) { error = errno; close(pipefd[0]); goto done; }
             parent[i] = pipefd[i == 0 ? 1 : 0];
             child[i] = pipefd[i == 0 ? 0 : 1];
-            ACTION(posix_spawn_file_actions_adddup2(&actions, child[i], i));
+            ACTION(STAGE_DUP2_PIPE, posix_spawn_file_actions_adddup2(&actions, child[i], i));
         } else if (streams[i] == -2) {
             /* addclose on an already closed endpoint is permitted by glibc. */
-            ACTION(posix_spawn_file_actions_addclose(&actions, i));
+            ACTION(STAGE_CLOSE, posix_spawn_file_actions_addclose(&actions, i));
         } else if (streams[i] >= 0) {
+            result[5] = STAGE_DUP_FD;
             child[i] = fcntl(streams[i], F_DUPFD_CLOEXEC, 3);
             if (child[i] < 0) { error = errno; goto done; }
-            ACTION(posix_spawn_file_actions_adddup2(&actions, child[i], i));
-        } else { error = EBADF; goto done; }
+            ACTION(STAGE_DUP2, posix_spawn_file_actions_adddup2(&actions, child[i], i));
+        } else { result[5] = STAGE_ARGUMENTS; error = EBADF; goto done; }
     }
     /* Unregistered JVM descriptors are never inherited, even with close_fds
      * unset. Supplied authenticated endpoints have already been duplicated. */
-    ACTION(posix_spawn_file_actions_addclosefrom_np(&actions, 3));
+    ACTION(STAGE_CLOSE_FROM, posix_spawn_file_actions_addclosefrom_np(&actions, 3));
     short spawn_flags = POSIX_SPAWN_SETSIGMASK;
     sigset_t empty;
     sigemptyset(&empty);
-    ACTION(posix_spawnattr_setsigmask(&attrs, &empty));
+    ACTION(STAGE_SIGMASK, posix_spawnattr_setsigmask(&attrs, &empty));
     if (flags & 0x2) {
         spawn_flags |= POSIX_SPAWN_SETPGROUP;
-        ACTION(posix_spawnattr_setpgroup(&attrs, 0));
+        ACTION(STAGE_PGROUP, posix_spawnattr_setpgroup(&attrs, 0));
     }
     if (flags & 0x8) spawn_flags |= POSIX_SPAWN_SETSID;
     if (flags & 0x20) {
         sigset_t defaults;
         sigemptyset(&defaults); sigaddset(&defaults, SIGINT); sigaddset(&defaults, SIGQUIT);
-        ACTION(posix_spawnattr_setsigdefault(&attrs, &defaults));
+        ACTION(STAGE_SIGDEFAULT, posix_spawnattr_setsigdefault(&attrs, &defaults));
         spawn_flags |= POSIX_SPAWN_SETSIGDEF;
     }
-    ACTION(posix_spawnattr_setflags(&attrs, spawn_flags));
+    ACTION(STAGE_FLAGS, posix_spawnattr_setflags(&attrs, spawn_flags));
     pid_t pid;
-    ACTION(spawn_path(&pid, argv, env, search_path, &actions, &attrs));
+    ACTION(STAGE_SPAWN, spawn_path(&pid, argv, env, search_path, &actions, &attrs));
+    result[5] = STAGE_PIDFD_OPEN;
     int pidfd = (int) syscall(SYS_pidfd_open, pid, 0);
     if (pidfd < 0) {
         error = errno;
@@ -160,6 +178,7 @@ int thc_process_spawn(char *const argv[], char *const env[], int directory,
     }
     result[0] = pid; result[1] = pidfd;
     for (int i = 0; i < 3; ++i) { result[i + 2] = parent[i]; parent[i] = -1; }
+    result[5] = STAGE_NONE;
 done:
     for (int i = 0; i < 3; ++i) {
         if (parent[i] >= 0) close(parent[i]);

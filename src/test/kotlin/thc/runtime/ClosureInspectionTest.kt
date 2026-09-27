@@ -4,12 +4,14 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.bytecode.Instruction
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.DirectCallNode
 import com.oracle.truffle.api.nodes.NodeUtil
+import com.oracle.truffle.api.nodes.RootNode
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -24,6 +26,71 @@ import java.util.IdentityHashMap
 
 @Timeout(90)
 class ClosureInspectionTest {
+    @Test fun tupleOperationsRejectScalarEntryBeforeEvaluatingOperands() {
+        val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
+        var evaluations = 0
+        for (operation in ClosureInspectOp.entries.filter { it != ClosureInspectOp.SIZE }) {
+            val operand = object : Expr() {
+                override fun execute(frame: VirtualFrame): Any {
+                    evaluations++
+                    error("Rejected inspection evaluated its operand")
+                }
+            }
+            val expression = ClosureInspectExpression(operation, arrayOf(operand), CoreRepresentation.UNKNOWN)
+            val failure = assertThrows(RuntimeFault::class.java) { expression.executeLong(frame) }
+            assertEquals("${operation.primitive} requires a tuple destination", failure.message)
+            assertEquals(0, evaluations)
+        }
+    }
+
+    @Test fun scalarSizeKeepsItsFirstInstalledEntryAndEvaluatesOnlyTheOperand() {
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val never = object : GuestRoot(language, FrameLayout().build()) {
+                    override fun execute(frame: VirtualFrame): Any = error("size inspection forced a field")
+                    override fun bloom(frame: VirtualFrame): Long = 0
+                }
+                val thunk = Thunk(never.callTarget, null)
+                val layout = DataLayout(language, "test:Size.Payload", "Payload", arrayOf("IntRep", "LiftedRep"))
+                val values = listOf(layout.create(arrayOf(73L, thunk)), layout.create(arrayOf(-1L, thunk)))
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    var operandEntries = 0L
+                    @Child private var inspection = ClosureInspectExpression(ClosureInspectOp.SIZE,
+                        arrayOf(object : Expr() {
+                            override fun execute(frame: VirtualFrame): Any? {
+                                operandEntries++
+                                return frame.arguments[0]
+                            }
+                        }), CoreRepresentation.UNKNOWN)
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        return inspection.executeLong(frame)
+                    }
+                }
+                val target = root.callTarget
+                assertEquals(3L, target.call(values[0]))
+                assertEquals(1L, root.operandEntries)
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                valid(target)
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                for (value in values) {
+                    val before = root.compiledEntries
+                    val operandsBefore = root.operandEntries
+                    assertEquals(3L, target.call(value))
+                    assertEquals(before + 1, root.compiledEntries, "immediate installed size inspection")
+                    assertEquals(operandsBefore + 1, root.operandEntries)
+                    assertEquals(0, thunk.state)
+                    valid(target)
+                }
+            } finally { context.leave() }
+        }
+    }
+
     private val root = File(System.getProperty("thc.projectRoot"))
     private fun context() = Context.newBuilder("thc").allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")

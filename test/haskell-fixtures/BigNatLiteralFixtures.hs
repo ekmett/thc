@@ -15,6 +15,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import Data.String (fromString)
 import Data.Word (Word8, Word16)
+import Distribution.Simple.Utils (createTempDirectory)
 import FixtureSupport (CommandResult(..), hashes, run, runLogged, runLoggedExpect, runLoggedWithInput, writeJson)
 import Foreign (Ptr, alloca, castPtr, peek, poke)
 import System.Directory (createDirectoryIfMissing, doesDirectoryExist, doesFileExist, listDirectory, removeFile)
@@ -126,8 +127,8 @@ verifyBootSources root = do
 
 -- Re-run the existing auditor CLI on check-only too. Its proof implementation
 -- remains shared; no dynamic Python imports or replacement capability checker.
-inventory :: FilePath -> IO (Value,Value,Value)
-inventory root = do
+inventory :: FilePath -> FilePath -> IO (Value,Value,Value)
+inventory root auditDirectory = do
   original <- mapM (readJson . (root </>)) originals
   forM_ original $ \core -> do
     ghc <- field "ghc" core :: IO String
@@ -211,10 +212,15 @@ inventory root = do
     object [fromString name .= length bindings | (name,bindings) <- zip modules originalBindings])
   where
     audit stage name paths roots exitCode = do
-      let reportPath = directory </> stage ++ "-" ++ name ++ ".audit.json"
-      _ <- runLoggedExpect exitCode 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
+      let reportName = stage ++ "-" ++ name ++ ".audit.json"
+          reportPath = auditDirectory </> reportName
+      _ <- runLoggedExpect exitCode 120 root (auditDirectory </> "commands") (stage ++ "-" ++ name ++ "-audit") [] "python3"
         (["scripts/audit-core.py"] ++ paths ++ concat [["--entry","main:BigNatLiteralAudit." ++ entry] | entry <- roots] ++ ["--output",reportPath])
-      readJson (root </> reportPath)
+      report <- readJson (root </> reportPath)
+      when (auditDirectory /= directory) $ do
+        original <- readJson (root </> directory </> reportName)
+        check (report == original) ("Changed BigNat audit: " ++ reportName)
+      pure report
 
 prepareBigNatLiterals :: FilePath -> Bool -> IO ()
 prepareBigNatLiterals root checkOnly = do
@@ -250,7 +256,7 @@ prepareBigNatLiterals root checkOnly = do
         "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries ++ arithmetic] ++ ["compiler/test-fixtures/BigNatLiteralAudit.hs"])
       pure ()
-    (stages,coverage,counts) <- inventory root
+    (stages,coverage,counts) <- inventory root directory
     _ <- runLogged 300 root logs "native-build" [] ghc
       ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
        "-odir",root </> native,"-hidir",root </> native,"-o",root </> binary,"compiler/test-fixtures/BigNatLiteralAuditNative.hs"]
@@ -276,7 +282,13 @@ prepareBigNatLiterals root checkOnly = do
   verifyHashes
   verifyFiles
   verifyBootSources root
-  (stages,coverage,counts) <- inventory root
+  -- Rechecking must not overwrite the recorded audit reports or command logs.
+  -- In particular, stderr retains the auditor's fresh working-catalogue path.
+  -- Keep each verification attempt outside the hashed artifact subdirectories,
+  -- compare complete report values, and still recheck every original byte hash.
+  verification <- (directory </>) <$> createTempDirectory (root </> directory) "verification"
+  putStrLn ("BigNat verification: " ++ verification)
+  (stages,coverage,counts) <- inventory root verification
   forM_ [("stages",stages),("coverage",coverage),("sourceBindings",counts)] $ \(key,value) -> do
     saved <- field key manifest
     check (saved == value) ("Stale BigNat " ++ key)
