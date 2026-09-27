@@ -5,7 +5,11 @@
 package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
+import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.runtime.OptimizedCallTarget
+import com.oracle.truffle.runtime.OptimizedTruffleRuntime
+import com.oracle.truffle.runtime.OptimizedTruffleRuntimeListener
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -18,6 +22,8 @@ import thc.Json
 import thc.Language
 import java.io.File
 import java.security.MessageDigest
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.function.Supplier
 import java.util.stream.Stream
 
 class ScalarExceptionResultsNativeTest {
@@ -151,5 +157,22 @@ class ScalarExceptionResultsNativeTest {
                     assertEquals(0L, program.diagnostics()["blackholes"], label)
                 } finally { context.leave() }
             }
+    }
+
+    @Test fun bytecodeAsyncNestedMasksCompileWithoutDiagnosticRetry() {
+        val failures = CopyOnWriteArrayList<String>()
+        val runtime = Truffle.getRuntime() as OptimizedTruffleRuntime
+        val listener = object : OptimizedTruffleRuntimeListener {
+            override fun onCompilationFailed(target: OptimizedCallTarget, reason: String?, bailout: Boolean,
+                permanentBailout: Boolean, tier: Int, lazyStackTrace: Supplier<String>?) {
+                failures += "$target: $reason"
+            }
+        }
+        runtime.addListener(listener)
+        try {
+            nativeValuesAndMaskRestorationSurviveTheFirstInstalledCall("pre", "bytecode", "normalInt", true)
+            assertEquals(emptyList<String>(), failures.toList(),
+                "Successful installation must not conceal a failed compilation followed by a diagnostic retry")
+        } finally { runtime.removeListener(listener) }
     }
 }

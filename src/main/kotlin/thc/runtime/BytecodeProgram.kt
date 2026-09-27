@@ -188,7 +188,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
     private fun tupleExpression(proof: CoreRepresentation, action: (Emission, List<BytecodeLocal>) -> Unit): Expression =
         ProvenExpression(ResultExpression { e, destination -> action(e, destination ?: throw RuntimeFault("Tuple result requires a destination")) }, proof.copy(evaluated = true))
     private fun tupleSlots(shape: TupleShape, locals: List<BytecodeLocal>, capturesYield: Boolean = false) =
-        BytecodeTupleSlots(shape, locals.map(LocalAccessor::constantOf).toTypedArray(), capturesYield)
+        BytecodeTupleSlots(shape, locals.map(LocalAccessor::constantOf).toTypedArray(), capturesYield,
+            capturesFrame = resumable)
     private class LocalExpression(val local: Local, val resolve: Boolean) : Expression {
         override val proof get() = local.proof
         override fun emit(emission: Emission) {
