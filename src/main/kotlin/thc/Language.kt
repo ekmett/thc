@@ -887,8 +887,13 @@ class Language : TruffleLanguage<Language.State>() {
                 ?: throw IllegalArgumentException("Missing exact executable shutdown entry: $name")
             CoreRepresentations.ioUnitMainResult(shutdown, bindings)
         }
+        var hostSignature: Pair<List<CoreRepresentation>, CoreRepresentation>? = null
         val hostResultFault = if (ioResult != null) null else try {
-            thc.runtime.CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)?.let { (inputs, result) ->
+            hostSignature = CoreRepresentations.knownFunctionSignature(selectedExpression, bindings)
+                ?: if ((selected["arity"] as Number).toInt() == 0)
+                    emptyList<CoreRepresentation>() to CoreRepresentations.binder(selected)
+                        .refine(CoreRepresentations.expression(selectedExpression)) else null
+            hostSignature?.let { (inputs, result) ->
                 inputs.forEach { thc.runtime.CoreRepresentations.requireScalar(it, "host argument") }
                 thc.runtime.CoreRepresentations.requireScalar(result, "host result")
             }
@@ -921,7 +926,7 @@ class Language : TruffleLanguage<Language.State>() {
                     else BytecodeProgram(this@Language, linked, asyncExceptions)
                 val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), hostResultFault,
                     ioResult, this@Language, shutdownEntry, shutdownResult,
-                    bindings.any { it["id"] == thc.runtime.CoreSignalForeign.dispatcher })
+                    bindings.any { it["id"] == thc.runtime.CoreSignalForeign.dispatcher }, hostSignature)
                 owner.foreignRoots.retain(program, registrations)
                 return value
             }
@@ -953,14 +958,19 @@ class Language : TruffleLanguage<Language.State>() {
                         val definitions = program.signatureBindings(id)
                         CoreRepresentations.ioUnitMainResult(definitions.single { it["id"] == id }, definitions)
                     }
-                    if (io == null) CoreRepresentations.knownFunctionSignature(expression, bindings)?.let { (inputs, result) ->
+                    val hostSignature = if (io != null) null else
+                        CoreRepresentations.knownFunctionSignature(expression, bindings)
+                            ?: if ((selected["arity"] as Number).toInt() == 0)
+                                emptyList<CoreRepresentation>() to CoreRepresentations.binder(selected)
+                                    .refine(CoreRepresentations.expression(expression)) else null
+                    hostSignature?.let { (inputs, result) ->
                         inputs.forEach { CoreRepresentations.requireScalar(it, "host argument") }
                         CoreRepresentations.requireScalar(result, "host result")
                     }
                     val registrations = program.registerStartup()
                     val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), null,
                         io, this@Language, shutdown, shutdownResult,
-                        async && program.contains(thc.runtime.CoreSignalForeign.dispatcher))
+                        async && program.contains(thc.runtime.CoreSignalForeign.dispatcher), hostSignature)
                     owner.coreUnitPrograms += program
                     owner.foreignRoots.retain(program, registrations)
                     return value
@@ -975,7 +985,8 @@ class Language : TruffleLanguage<Language.State>() {
 internal class EntryValue(private val program: ExecutableProgram, private val entry: String, private val argumentCount: Int,
                  private val hostResultFault: String? = null, ioResult: CoreRepresentation? = null,
                  language: Language? = null, shutdownEntry: String? = null,
-                 shutdownResult: CoreRepresentation? = null, private val processSignals: Boolean = false) : TruffleObject {
+                 shutdownResult: CoreRepresentation? = null, private val processSignals: Boolean = false,
+                 private val hostSignature: Pair<List<CoreRepresentation>, CoreRepresentation>? = null) : TruffleObject {
     private val guestTarget = program.hostEntryTarget(argumentCount)
     private val guestEntry = program.entryValue(entry)
     private val ioTarget = ioResult?.let { IoMainRoot(language ?: error("Missing IO language"), it).callTarget }
@@ -1006,7 +1017,11 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
                     error("The prototype host ABI accepts signed 64-bit integer arguments only")
                 }
             }
-            val narrow = signature?.inputLayout?.proof(index + (closure?.suppliedCount ?: 0))?.narrowInteger
+            // Admission follows aliases/PAPs without forcing them. Its inputs
+            // are already the remaining public ABI, not the original formals.
+            val proof = if (hostSignature != null) hostSignature.first.getOrNull(index)
+                else signature?.inputLayout?.proof(index + (closure?.suppliedCount ?: 0))
+            val narrow = proof?.narrowInteger
             if (narrow == null) value else narrow.fromHost(value)
         }
         val threads = Language.currentState(dispatch).threads
@@ -1016,7 +1031,7 @@ internal class EntryValue(private val program: ExecutableProgram, private val en
             try {
                 val result = thc.runtime.AsyncContinuations.publicResult(
                     dispatch.executePublic(guestTarget, arrayOf(guestEntry, normalized)), dispatch)
-                val narrow = signature?.scalarResultProof?.narrowInteger
+                val narrow = (hostSignature?.second ?: signature?.scalarResultProof)?.narrowInteger
                 return if (narrow == null) result else narrow.widen(result as? Int
                     ?: throw thc.runtime.RuntimeFault("Expected narrow integer result at public boundary"))
             } catch (suspended: thc.runtime.ThunkSuspended) {
