@@ -67,8 +67,8 @@ class AstSelfCallTest {
                     val slots = intArrayOf(layout.bind("first"), layout.bind("second"))
                     val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), layout.build())
                     val self = AstSelfLayout(captures, slots, intArrayOf(), emptyArray(), booleanArrayOf(),
-                        environmentVectorSlots = arrayOfNulls<IntArray>(size))
-                    assertSame(AstSelfCall, assertThrows(AstSelfCall::class.java) {
+                        null, arrayOfNulls<IntArray>(size))
+                    assertSame(AstSelfCall.INSTANCE, assertThrows(AstSelfCall::class.java) {
                         self.transfer(frame, function, intArrayOf())
                     })
                     assertSame(first, FrameAccess.read(frame, slots[0]))

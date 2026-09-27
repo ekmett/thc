@@ -100,7 +100,7 @@ class DataLayout private constructor(
 
     private fun buildShape(language: TruffleLanguage<*>, properties: Array<Field>, fieldless: Boolean): StaticShape<DataValueFactory> {
         val builder = StaticShape.newBuilder(language).also { builder ->
-            builder.safetyChecks(!java.lang.Boolean.getBoolean(STATIC_SHAPE_UNCHECKED_PROPERTY))
+            builder.safetyChecks(!java.lang.Boolean.getBoolean(FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY))
             properties.forEach { it.register(builder) }
         }
         // Native Image registers each superclass/factory pair at this call site.

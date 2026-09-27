@@ -26,7 +26,7 @@ public final class EntryArguments extends Node {
                 int known = i - prefixSize;
                 if (strict[i] && (layout == null || !layout.isTuple(i) && !layout.isVector(i)) &&
                     (i < prefixSize || known >= knownEvaluated.length || !knownEvaluated[known]))
-                    selected[count++] = ArgumentLayout.Companion.offset(layout, i) + root.getEntryArgumentOffset();
+                    selected[count++] = ArgumentLayout.offset(layout, i) + root.getEntryArgumentOffset();
             }
             positions = Arrays.copyOf(selected, count);
         }

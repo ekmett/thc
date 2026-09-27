@@ -154,7 +154,7 @@ class SumInputLayoutTest {
 
         val target = object : RootNode(language) { override fun execute(frame: VirtualFrame): Any = Unit }.callTarget
         val captureLayout = CaptureLayout(language, booleanArrayOf(true, false, true),
-            exactLong = booleanArrayOf(true, false, true))
+            booleanArrayOf(true, false, true))
         val environment = captureLayout.captureValues(arrayOf(2L, null, 37L))
         val closure = Closure(environment, arity = 1, target = target)
         val image = ClosureInspection.image(closure)

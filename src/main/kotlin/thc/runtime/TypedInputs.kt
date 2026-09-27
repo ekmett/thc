@@ -785,7 +785,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
             function.arity == operands.layout.logicalArity && function.suppliedCount == 0 &&
             function.supplied.isEmpty() && function.typedSupplied == null && selfTarget!!.matches(function.target)) {
             (rootNode as FunctionRoot).transferTypedSelf(frame, function, operands.source, this)
-            throw AstSelfCall
+            throw AstSelfCall.INSTANCE
         }
     }
 }

@@ -59,7 +59,7 @@ class OperandRetentionTest {
             FrameAccess.write(frame, 6, unused)
             val kinds = temporaries.map { frame.frameDescriptor.getSlotKind(it) }
 
-            assertSame(AstSelfCall, assertThrows(AstSelfCall::class.java) {
+            assertSame(AstSelfCall.INSTANCE, assertThrows(AstSelfCall::class.java) {
                 layout.transfer(frame, function, temporaries)
             })
             assertSame(oldSecond, FrameAccess.read(frame, 0))

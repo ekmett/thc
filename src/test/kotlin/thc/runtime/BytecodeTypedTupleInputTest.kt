@@ -172,7 +172,7 @@ class BytecodeTypedTupleInputTest {
             val x = frame.arguments[1] as Long
             events += if (shape == null) x + 100L else x
             if (x < 0L) throw GuestException(x, this)
-            return shape?.finish(frame, EMPTY_TUPLE_SLOTS) ?: (x + 100L)
+            return shape?.finish(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS) ?: (x + 100L)
         }
     }
     @Test fun zeroWidthStateTupleOperandsExecuteBeforeLaterArgumentsAndLoanAcquisition() = withLanguage { _, language ->

@@ -209,12 +209,12 @@ class TupleRepresentationTest {
         }
     }
     @Test fun scalarHandoffCannotClaimSingletonReferenceTupleResults() {
-        val previous = System.getProperty(HANDOFF_PROPERTY)
-        System.setProperty(HANDOFF_PROPERTY, "true")
+        val previous = System.getProperty(HandoffKt.HANDOFF_PROPERTY)
+        System.setProperty(HandoffKt.HANDOFF_PROPERTY, "true")
         try { withLanguage { language ->
             val ref = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
             val result = CoreRepresentation(CoreKind.UNKNOWN, true, true, ref.primReps, listOf(ref))
             assertNull(HandoffEntry.create(language, FrameLayout(), emptyList(), result, false))
-        } } finally { if (previous == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, previous) }
+        } } finally { if (previous == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY) else System.setProperty(HandoffKt.HANDOFF_PROPERTY, previous) }
     }
 }

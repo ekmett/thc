@@ -1191,7 +1191,7 @@ private class Application(function: Expr,
     @ExplodeLoop private fun applyArguments(frame: VirtualFrame, fn: Closure, values: Array<Any?>, start: Int): Any? {
         for (i in start until arguments.size) {
             try {
-                if (inputLayout?.isEmpty(i) == true) arguments[i].executeTuple(frame, EMPTY_TUPLE_SLOTS, 0)
+                if (inputLayout?.isEmpty(i) == true) arguments[i].executeTuple(frame, ArgumentLayout.EMPTY_TUPLE_SLOTS, 0)
                 else values[ArgumentLayout.offset(inputLayout, i)] = arguments[i].execute(frame)
             } catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
@@ -1901,7 +1901,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             val reference = if (i < argumentReferences.size) argumentReferences[i] else null
             if (strictArguments[i]) FrameAccess.write(frame, argumentSlots[i], value)
             else if (reference != null)
-                FrameAccess.write(frame, argumentSlots[i], requireReferenceCarrier(value, reference))
+                FrameAccess.write(frame, argumentSlots[i], AstSelfCallsKt.requireReferenceCarrier(value, reference))
             else if (i < argumentProofs.size && argumentProofs[i].isInt)
                 FrameAccess.writeInt(frame, argumentSlots[i], value as? Int ?: fault("Expected primitive Int argument"))
             else if (i < argumentProofs.size && argumentProofs[i].isLong)
@@ -1947,7 +1947,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
     private fun writeStrict(frame: VirtualFrame, argument: Int, value: Any?) {
         val reference = argumentReferences.getOrNull(argument)
         FrameAccess.write(frame, argumentSlots[argument],
-            if (reference == null) value else requireReferenceCarrier(value, reference))
+            if (reference == null) value else AstSelfCallsKt.requireReferenceCarrier(value, reference))
     }
 
     private class ResumeBody(private val root: FunctionRoot) : AstResumeStep {
@@ -1986,7 +1986,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
             else {
                 val value = source.reference(frame, node, null, from)
                 val expected = argumentReferences.getOrNull(i)
-                writeInputReference(frame, to, if (expected == null) value else requireReferenceCarrier(value, expected))
+                writeInputReference(frame, to, if (expected == null) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
             }
         }
         if (captureLayout != null) restoreCaptured(frame, function.environment ?: fault("Invalid captured frame"))
@@ -2007,7 +2007,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else {
                     val value = entry.packet.getObject(input, from)
                     val expected = if (i < argumentReferences.size) argumentReferences[i] else null
-                    writeInputReference(frame, to, if (expected == null || strictArguments[i]) value else requireReferenceCarrier(value, expected))
+                    writeInputReference(frame, to, if (expected == null || strictArguments[i]) value else AstSelfCallsKt.requireReferenceCarrier(value, expected))
                 }
             }
             if (captureLayout != null) {
@@ -2035,7 +2035,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
                 else {
                     val value = entry.arguments.getObject(input, position)
                     val reference = argumentReferences.getOrNull(i)
-                    FrameAccess.write(frame, argumentSlots[i], if (reference != null) requireReferenceCarrier(value, reference) else value)
+                    FrameAccess.write(frame, argumentSlots[i], if (reference != null) AstSelfCallsKt.requireReferenceCarrier(value, reference) else value)
                 }
             }
             if (captureLayout != null) {
@@ -2138,7 +2138,7 @@ internal class FunctionRoot(language: TruffleLanguage<*>?, descriptor: FrameDesc
         when (transfer) {
             is TailCall -> restoreTail(frame, transfer)
             is HandoffTailCall -> restoreHandoff(frame, transfer.arguments, false)
-            AstSelfCall -> Unit // The self application already performed parallel local moves.
+            AstSelfCall.INSTANCE -> Unit // The self application already performed parallel local moves.
             else -> throw transfer
         }
         if (metrics.enabled) metrics.incrementSelfTailReentries()

@@ -145,15 +145,15 @@ class ManagedMVarContextTest {
 
     private fun variants(action: (Map<String, Any?>, String, String, Fixture) -> Unit) {
         val fixture = fixture()
-        val old = System.getProperty(HANDOFF_PROPERTY)
+        val old = System.getProperty(HandoffKt.HANDOFF_PROPERTY)
         try {
             for (handoff in listOf(false, true)) {
-                System.setProperty(HANDOFF_PROPERTY, handoff.toString())
+                System.setProperty(HandoffKt.HANDOFF_PROPERTY, handoff.toString())
                 for ((stage, module) in fixture.modules) for (backend in listOf("ast", "bytecode"))
                     action(module, backend, "$stage/$backend/handoff=$handoff", fixture)
             }
         } finally {
-            if (old == null) System.clearProperty(HANDOFF_PROPERTY) else System.setProperty(HANDOFF_PROPERTY, old)
+            if (old == null) System.clearProperty(HandoffKt.HANDOFF_PROPERTY) else System.setProperty(HandoffKt.HANDOFF_PROPERTY, old)
         }
     }
 

@@ -17,7 +17,7 @@ import java.lang.reflect.Modifier
 class ClassOwnedLayoutTest {
     private fun options(owned: Boolean, unchecked: Boolean = false, action: () -> Unit) {
         val settings = mapOf(CLASS_OWNED_LAYOUTS_PROPERTY to owned.toString(),
-            STATIC_SHAPE_UNCHECKED_PROPERTY to unchecked.toString())
+            FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY to unchecked.toString())
         val previous = settings.mapValues { System.getProperty(it.key) }
         try {
             settings.forEach { (key, value) -> System.setProperty(key, value) }
