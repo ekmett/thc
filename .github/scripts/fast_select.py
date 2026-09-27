@@ -30,7 +30,7 @@ SIMD_GENERATOR = "scripts/generate-simd-families.py"
 SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": "test/primop-tools/Main.hs",
-                 "json-index": "test/json-index/Main.hs"}
+                 "json-index": "test/json-index/Main.hs", "compact-core-tests": "test/compact-core/Main.hs"}
 DOCUMENTATION_PATHS = {"compiler/json-index/README.md", "compiler/json-index/LICENSE.succinctly"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle.kts", "settings.gradle.kts", "gradle.properties", "gradlew",

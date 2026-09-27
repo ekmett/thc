@@ -63,6 +63,7 @@ import ScalarMemoryUtilitiesFixtures (prepareScalarMemoryUtilities)
 import ThreadAsyncFixtures (prepareThreadAsync)
 import UncaughtSelfFixtures (prepareUncaughtSelf)
 import MaskFunctionFixtures (prepareMaskFunctions)
+import ScalarExceptionResultsFixtures (prepareScalarExceptionResults)
 import DeepEvaluationFixtures (prepareDeepEvaluation)
 import InterfaceFixtures (prepareInterfaceCore)
 import OriginalStdioFixtures (prepareOriginalStdio, prepareOriginalStdioRead, prepareOriginalFcntl, prepareOriginalErrno, prepareOriginalProcessIdentity)
@@ -1101,6 +1102,7 @@ main = do
     ["thread-async"] -> prepareThreadAsync root
     ["uncaught-self"] -> prepareUncaughtSelf root
     ["mask-functions"] -> prepareMaskFunctions root
+    ["scalar-exception-results"] -> prepareScalarExceptionResults root
     ["deep-evaluation"] -> prepareDeepEvaluation root
     ["interface-core"] -> prepareInterfaceCore root
     ["small-arrays"] -> prepareSmallArrays root

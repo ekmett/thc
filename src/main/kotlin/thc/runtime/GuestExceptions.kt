@@ -17,7 +17,7 @@ import thc.Language
 class GuestException @JvmOverloads constructor(val payload: Any?, location: Node, val someException: Boolean = false) :
     AbstractTruffleException("Haskell exception (payload retained lazily)", location)
 
-/** The observed GHC 9.14.1 synchronous IO contract, not polymorphic RuntimeRep. */
+/** Fixed GHC 9.14.1 IO result representations, not arbitrary RuntimeRep polymorphism. */
 internal object CoreSynchronousExceptions {
     private val lifted = listOf("BoxedRep (Just Lifted)")
     private fun state(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
@@ -25,6 +25,12 @@ internal object CoreSynchronousExceptions {
     private fun boxed(proof: CoreRepresentation) = !proof.isAggregate && !proof.isVector &&
         proof.kind in setOf(CoreKind.DATA, CoreKind.CLOSURE, CoreKind.OBJECT) && proof.primReps == lifted
     private fun closure(proof: CoreRepresentation) = boxed(proof) && proof.kind == CoreKind.CLOSURE
+    private fun resultValue(proof: CoreRepresentation) = boxed(proof) ||
+        !proof.isAggregate && !proof.isVector && when (proof.kind) {
+            CoreKind.LONG -> proof.primReps == listOf("IntRep") || proof.primReps == listOf("WordRep")
+            CoreKind.ADDRESS -> proof.primReps == listOf("AddrRep")
+            else -> false
+        }
     fun validate(name: String, arguments: List<CoreRepresentation>, flags: List<*>, result: CoreRepresentation) {
         val validArguments = when (name) {
             "raiseIO#" -> arguments.size == 2 && boxed(arguments[0]) && state(arguments[1]) && flags == listOf(true, false)
@@ -41,8 +47,8 @@ internal object CoreSynchronousExceptions {
             components?.size != 2 || !state(components[0]) ||
             (if (name == "getMaskingState#") components[1].kind != CoreKind.LONG ||
                 components[1].primReps != listOf("IntRep") || result.primReps != listOf("IntRep")
-             else !boxed(components[1]) || result.primReps != lifted))
-            throw RuntimeFault("$name: expected exact lifted exception, State# and boxed tuple contract")
+             else !resultValue(components[1]) || result.primReps != components[1].primReps))
+            throw RuntimeFault("$name: expected exact lifted exception, State# and supported result tuple contract")
     }
 }
 

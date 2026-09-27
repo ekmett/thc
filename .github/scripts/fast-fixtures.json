@@ -1135,6 +1135,19 @@
         "compiler/test-fixtures/DeepEvaluationNative.hs"
       ]
     },
+    "scalar-exception-results": {
+      "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-exception-results"]}],
+      "outputs": ["build/scalar-exception-results"],
+      "sources": [
+        "test/haskell-fixtures/ScalarExceptionResultsFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/ScalarExceptionResultsAudit.hs",
+        "compiler/test-fixtures/ScalarExceptionResultsNative.hs"
+      ]
+    },
     "mask-functions": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "mask-functions"]}],

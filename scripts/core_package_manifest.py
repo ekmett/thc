@@ -272,17 +272,22 @@ def managed_import_stubs(module):
         for item in value.values(): text(item)
         require(value['namespace'] in ('value', 'type', 'data'), 'name namespace')
         return value
-    def typ(value):
+    def typ(value, depth=0):
         require(isinstance(value, dict), 'type')
         kind = value.get('kind')
         if kind == 'tycon':
             record(value, 'kind name arguments'); identity(value['name'])
             require(isinstance(value['arguments'], list), 'type arguments')
-            for item in value['arguments']: typ(item)
+            for item in value['arguments']: typ(item, depth)
         elif kind in ('application', 'function'):
             fields = 'function argument' if kind == 'application' else 'multiplicity argument result'
             record(value, 'kind ' + fields)
-            for key in fields.split(): typ(value[key])
+            for key in fields.split(): typ(value[key], depth)
+        elif kind == 'forall':
+            record(value, 'kind binderKind body'); typ(value['binderKind'], depth); typ(value['body'], depth + 1)
+        elif kind == 'bound-variable':
+            record(value, 'kind index')
+            require(type(value['index']) is int and 0 <= value['index'] < depth, 'free import type variable')
         else: require(False, 'unknown type')
     def exact(value, expected):
         if type(value) is not type(expected): return False

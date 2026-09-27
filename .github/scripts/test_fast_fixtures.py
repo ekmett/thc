@@ -1668,6 +1668,26 @@ class FixturePreparationTest(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 fast_fixtures.fast_inputs.rts_diagnostic_artifact_hashes(dict(proof, artifactHashes=invalid))
 
+    def test_scalar_exception_result_fixture_registration(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['scalar-exception-results']
+        self.assertEqual('scalar-exception-results', owners['thc.runtime.ScalarExceptionResultsNativeTest'])
+        self.assertEqual(['build/scalar-exception-results'], group['outputs'])
+        self.assertTrue(all((project / name).is_file() for name in group['sources']))
+        self.assertIn('"$fixture_bin" scalar-exception-results', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
+        self.assertIn('build/scalar-exception-results', fast_fixtures.FULL_OUTPUT_ROOTS)
+        expected = {'build/scalar-exception-results/manifest.json',
+                    'build/scalar-exception-results/native/oracle',
+                    'build/scalar-exception-results/logs/native-oracle.stdout'}
+        expected.update(f'build/scalar-exception-results/{stage}/core/ScalarExceptionResultsAudit.json'
+                        for stage in ('pre', 'post'))
+        expected.update(f'build/scalar-exception-results/{stage}/{prefix}{suffix}-audit.json'
+                        for stage in ('pre', 'post') for prefix in ('normal', 'throw', 'interrupt')
+                        for suffix in ('Int', 'Word', 'Addr'))
+        self.assertTrue(expected <= fast_fixtures.FULL_REQUIRED)
+
     def test_rts_shutdown_exact_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)

@@ -23,6 +23,68 @@ from zipfile import ZipFile
 import core_package_manifest
 
 
+class ManagedImportTypeTest(unittest.TestCase):
+    """Scoped metadata controls, without registering or executing native code."""
+    @staticmethod
+    def tycon(name, *arguments):
+        return dict(kind='tycon', name=dict(unit='ghc-internal', module='GHC.Internal.Types',
+                    occurrence=name, namespace='type'), arguments=list(arguments))
+
+    def module(self, declared=None):
+        variable = dict(kind='bound-variable', index=0)
+        if declared is None:
+            declared = dict(kind='forall', binderKind=self.tycon('Type'), body=dict(kind='function',
+                multiplicity=self.tycon('Many'), argument=self.tycon('Ptr', variable), result=self.tycon('IO', self.tycon('Unit'))))
+        foreign = dict(schema=1, execution='not-linked', files=[], stubs=dict(header='',
+            source='void capi_wrapper(void *p) { free(p); }', initializers=[], finalizers=[]))
+        declaration = dict(binder=dict(unit='fixture', module='Imports', occurrence='capi_free', namespace='value'),
+            header='stdlib.h', symbol='free', unit=None, isFunction=True, convention='capi', safety='unsafe',
+            declaredType=declared, normalizedType=declared, normalizationRole='representational',
+            emitted=dict(symbol='capi_wrapper', unit=None, convention='capi', safety='unsafe',
+                         arguments=['AddrRep', 'void'], result=['void']))
+        return dict(schema=2, ghc='9.14.1', unit='fixture', module='Imports', foreign=foreign, bindings=[],
+            staticForeignImportStubs=dict(schema=1, scope='retained-static-import-products', execution='not-linked',
+                profile='ghc-9.14.1-thc-only-static-c-imports-v1', unit='fixture', module='Imports', status='verified',
+                wordBits=64, expectedForeign=foreign, imports=[declaration], expectedCalls=[]))
+
+    def test_scoped_forall_keeps_types_and_existing_scalar_provenance_checks(self):
+        original = self.module()
+        self.assertTrue(core_package_manifest.managed_import_stubs(original))
+        self.assertTrue(core_package_manifest.managed_import_stubs(self.module(dict(kind='forall',
+            binderKind=self.tycon('Type'), body=dict(kind='forall', binderKind=dict(kind='bound-variable', index=0),
+                body=self.tycon('Ptr', dict(kind='bound-variable', index=1)))))))
+        for change in ('role', 'owner', 'carrier', 'state', 'inventory'):
+            with self.subTest(change=change):
+                changed = json.loads(json.dumps(original))
+                proof = changed['staticForeignImportStubs']
+                item = proof['imports'][0]
+                if change == 'role': item['normalizationRole'] = 'phantom'
+                elif change == 'owner': item['binder']['unit'] = 'other'
+                elif change == 'carrier': item['emitted']['arguments'][0] = 'BoxedRep (Just Lifted)'
+                elif change == 'state': item['emitted']['arguments'].pop()
+                else: proof['expectedCalls'] = [{}]
+                with self.assertRaises(ValueError): core_package_manifest.managed_import_stubs(changed)
+
+    def test_malformed_kind_scopes_and_variable_records_are_not_erased(self):
+        typ = self.tycon('Type')
+        body = self.tycon('Ptr', dict(kind='bound-variable', index=0))
+        invalid = [dict(kind='bound-variable', index=0),
+            dict(kind='forall', body=body), dict(kind='forall', binderKind=typ, body=body, representation='AddrRep'),
+            dict(kind='forall', binderKind=dict(kind='bound-variable', index=0), body=body),
+            dict(kind='forall', binderKind=dict(kind='unknown'), body=body),
+            dict(kind='forall', binderKind='Type', body=body),
+            dict(kind='forall', binderKind=typ, body=dict(kind='cast', type=body))]
+        invalid += [dict(kind='forall', binderKind=typ, body=self.tycon('Ptr', dict(kind='bound-variable', index=index)))
+                    for index in (-1, 1, 2**63, True, 0.0, '0', None)]
+        invalid += [dict(kind='forall', binderKind=typ, body=dict(kind='bound-variable', index=0, representation='AddrRep'))]
+        for bad in invalid:
+            for field in ('declaredType', 'normalizedType'):
+                with self.subTest(bad=bad, field=field):
+                    changed = self.module()
+                    changed['staticForeignImportStubs']['imports'][0][field] = bad
+                    with self.assertRaises(ValueError): core_package_manifest.managed_import_stubs(changed)
+
+
 class TimeClockLinkTest(unittest.TestCase):
     """Closed metadata controls; structural placeholder bytes are never executed."""
     def module(self):

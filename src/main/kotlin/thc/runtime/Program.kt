@@ -220,7 +220,7 @@ internal class Metrics(val enabled: Boolean) {
     @CompilerDirectives.TruffleBoundary fun recordThunk(target: RootCallTarget) {
         // Root names may perform host reflection/string formatting. Resolve
         // diagnostic metadata outside guest compilation and before the map lock.
-        val label = target.rootNode.name
+        val label = target.rootNode.name ?: "<unnamed>"
         synchronized(this) { thunkCounts[label] = (thunkCounts[label] ?: 0L) + 1L }
     }
     @CompilerDirectives.TruffleBoundary @Synchronized fun thunkCountsSnapshot(): Map<String, Long> = thunkCounts.toMap()

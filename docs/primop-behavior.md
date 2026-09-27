@@ -79,11 +79,11 @@ still apply.
 
 | Primop | Current behavior and consequence |
 | --- | --- |
-| `catch#` | Supports lifted boxed action results, but rejects valid single-word unboxed results such as `Int#`, `Word#` or `Addr#`. This is separate from the asynchronous-delivery restrictions below. |
-| `raiseIO#` | Accepts only lifted boxed exception payloads and lifted boxed result positions. The GHC signature also admits boxed-unlifted payloads and representation-polymorphic bottom results. |
-| `maskAsyncExceptions#` | Implements interruptible masking/restoration, but action results must be lifted boxed; valid single-word unboxed results reject. |
-| `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same lifted-boxed result restriction. |
-| `unmaskAsyncExceptions#` | Implements unmasking/restoration, with the same lifted-boxed result restriction. |
+| `catch#` | Supports lifted boxed and fixed `Int#`, `Word#`, `Addr#` action results through typed tuple destinations in both backends. Other unboxed result representations remain unsupported. This is separate from the asynchronous-delivery restrictions below. |
+| `raiseIO#` | Accepts lifted boxed exception payloads and lifted boxed or fixed `Int#`, `Word#`, `Addr#` result positions. Boxed-unlifted payloads and other representation-polymorphic bottom results remain unsupported. |
+| `maskAsyncExceptions#` | Implements interruptible masking/restoration for lifted boxed and fixed `Int#`, `Word#`, `Addr#` action results. Other unboxed results remain unsupported. |
+| `maskUninterruptible#` | Implements uninterruptible masking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
+| `unmaskAsyncExceptions#` | Implements unmasking/restoration, with the same supported result representations as `maskAsyncExceptions#`. |
 | `killThread#` | With `asyncExceptions: true`, both backends support `throwTo` through saved guest continuations. With `false`, AST supports self-delivery but rejects external sends and delivery; bytecode rejects `killThread#` during lowering, including self-delivery. Arbitrary Java/native foreign frames do not gain resumable interruption. Sends to host carriers outside guest invocations are no-ops, not messages queued for a later unrelated host call. |
 | `takeMVar#` | Blocking transfers and supported interruption work, but no GC-driven `BlockedIndefinitelyOnMVar` detection. A wait with no future producer needs supported interruption or embedding cancellation to end. |
 | `putMVar#` | Same missing deadlock exception for a blocked put; FIFO handoff and cancellation-before-commit are implemented. |

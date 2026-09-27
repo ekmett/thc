@@ -42,6 +42,8 @@ class FastRunnerTest(unittest.TestCase):
                          {"haskell": {"suites": ["primop-tools"], "count": 1}}))
         self.assertEqual(["json-index"], ci.haskell_suites(self.selection() |
                          {"haskell": {"suites": ["json-index"], "count": 1}}))
+        self.assertEqual(["compact-core-tests"], ci.haskell_suites(self.selection() |
+                         {"haskell": {"suites": ["compact-core-tests"], "count": 1}}))
         with self.assertRaisesRegex(RuntimeError, "Haskell"):
             ci.haskell_suites(self.selection() | {"haskell": {"suites": ["primop-tools", "primop-tools"], "count": 2}})
         with self.assertRaisesRegex(RuntimeError, "Haskell"):
@@ -474,7 +476,7 @@ class FastRunnerTest(unittest.TestCase):
     def test_non_driver_suites_run_without_building_driver_plugin(self):
         identity_path = self.root / "identity.json"
         identity_path.write_text(json.dumps({"platform": "linux", "toolchain": {}}))
-        for suite in ("primop-tools", "json-index"):
+        for suite in ("primop-tools", "json-index", "compact-core-tests"):
             selection = self.selection() | {"reasons": [], "python": {"commands": []},
                                             "haskell": {"suites": [suite], "count": 1}}
             for failed in (False, True):
