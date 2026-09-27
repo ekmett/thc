@@ -6,14 +6,70 @@ package thc.runtime
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.bytecode.BytecodeConfig
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
+import org.junit.jupiter.api.io.TempDir
 import java.io.ByteArrayOutputStream
+import java.nio.file.Files
+import java.nio.file.Path
 import thc.Language
 
 /** Synthetic lowering controls; authentic imported consumers are tested separately. */
 class OriginalStdioCallTest {
+    @TempDir lateinit var directory: Path
+
+    /** The shared instruction has CInt open/termios results but ssize_t IO
+     * results. Check actual JVM carriers at its destination, not Number coercion. */
+    @Test @EnabledOnOs(OS.LINUX)
+    fun sharedTransferInstructionKeepsDeclaredResultWidthsAndStateOrder() {
+        NativeFileProvider.createContext(emptySet()).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val state = Language.currentState()
+                val path = directory.resolve("input")
+                Files.write(path, byteArrayOf(41))
+                val address = ManagedAddress.fromByteArray(path.toString().toByteArray() + byteArrayOf(0))
+                val operations = listOf(OriginalStdioOp.OPEN, OriginalStdioOp.OPEN_SAFE,
+                    OriginalStdioOp.OPEN_INTERRUPTIBLE, OriginalStdioOp.TCSETATTR,
+                    OriginalStdioOp.READ_SAFE, OriginalStdioOp.READ_UNSAFE,
+                    OriginalStdioOp.WRITE_SAFE, OriginalStdioOp.WRITE_UNSAFE)
+                for (operation in operations) {
+                    val opening = operation in listOf(OriginalStdioOp.OPEN, OriginalStdioOp.OPEN_SAFE,
+                        OriginalStdioOp.OPEN_INTERRUPTIBLE)
+                    val input = if (operation == OriginalStdioOp.TCSETATTR) ManagedAddress.fromByteArray(
+                        ByteArray(TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS,
+                            ManagedAddress.nullAddress(), 0).toInt())) else address
+                    val target = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                        b.beginRoot()
+                        val result = b.createLocal("declared foreign result", "primitive")
+                        b.beginOriginalStdioTransfer(result, operation)
+                        b.emitLoadConstant(if (opening) 0L else -1L)
+                        b.emitLoadConstant(input); b.emitLoadConstant(0L)
+                        b.emitLoadArgument(1); b.endOriginalStdioTransfer()
+                        b.beginReturn(); b.emitLoadLocal(result); b.endReturn(); b.endRoot()
+                    }.getNode(0).callTarget
+                    assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, 17L)) }
+                    assertEquals(3L, state.files.duplicate(1), "Bad State must not acquire an open descriptor")
+                    assertEquals(0L, state.files.close(3))
+                    val result = Calls.target(target, arrayOf(0L, Unit))
+                    if (opening || operation == OriginalStdioOp.TCSETATTR) {
+                        assertInstanceOf(Int::class.javaObjectType, result, operation.name)
+                        assertEquals(if (opening) 3 else -1, result)
+                    } else {
+                        assertInstanceOf(Long::class.javaObjectType, result, operation.name)
+                        assertEquals(-1L, result)
+                    }
+                    if (opening) assertEquals(0L, state.files.close(3))
+                }
+            } finally { context.leave() }
+        }
+    }
+
     private fun context(out: ByteArrayOutputStream, err: ByteArrayOutputStream) = Context.newBuilder("thc")
         .out(out).err(err).allowExperimentalOptions(true)
         .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")

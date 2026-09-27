@@ -8,7 +8,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 /** IEEE values in managed, native-endian Addr# storage. Element offsets have their GHC widths. */
 internal object FloatingAddresses {
     @JvmStatic @JvmOverloads fun readFloat(address: ManagedAddress, index: Long, byteOffset: Boolean = false): Float =
-        java.lang.Float.intBitsToFloat((ManagedAddressRead.WORD32.read(address, index, byteOffset)).toInt())
+        java.lang.Float.intBitsToFloat(ManagedAddressRead.WORD32.readInt(address, index, byteOffset))
     @JvmStatic @JvmOverloads fun readDouble(address: ManagedAddress, index: Long, byteOffset: Boolean = false): Double =
         java.lang.Double.longBitsToDouble(ManagedAddressRead.WORD64.read(address, index, byteOffset))
     @JvmStatic @JvmOverloads fun writeFloat(address: ManagedAddress, index: Long, value: Float, byteOffset: Boolean = false) =

@@ -3820,6 +3820,7 @@ CoreStackForeign.validateHead(fn, defined)
         "plusAddr#", "indexCharOffAddr#", "indexWord8OffAddr#", "indexInt8OffAddr#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             if (name == "plusAddr#") PlusManagedAddress(args[0], args[1])
+            else if (name == "indexCharOffAddr#") IndexManagedScalarAddress(ManagedAddressRead.CHAR, args[0], args[1])
             else IndexManagedByte(name == "indexInt8OffAddr#", args[0], args[1])
         }
         "indexWord16OffAddr#", "indexInt16OffAddr#" -> {
