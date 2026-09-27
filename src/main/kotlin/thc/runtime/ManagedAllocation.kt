@@ -374,20 +374,27 @@ internal class ManagedAllocation private constructor(
             if (pointerBytes != source.pointerBytes) fault("Cannot copy between different target pointer widths")
             val from = source.range(sourceOffset, count)
             val to = range(destinationOffset, count)
-            val width = count.toInt()
-            source.requireWholePointerOverlaps(from, width)
-            requireWholePointerOverlaps(to, width)
-            val copied = source.pointers?.filterKeys {
-                it >= from && it.toLong() + pointerBytes <= from.toLong() + width
-            }?.mapKeys { (start, _) -> to + start - from } ?: emptyMap()
-            if (copied.isNotEmpty() && (exposedToNative || exposedAsRawBytes))
-                fault("Cannot copy managed pointers into a raw-exposed array")
-            if (copied.isNotEmpty()) pointerCapable = true
-            MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
-            invalidate(to, width)
-            if (copied.isNotEmpty()) {
-                cells().putAll(copied)
-            }
+            if (source.pointers == null && pointers == null)
+                MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
+            else copyPointerCellsFrom(source, from, to, count)
+        }
+    }
+
+    // Called with both ordered owner monitors held. Pointer-free copies stay inline.
+    @TruffleBoundary private fun copyPointerCellsFrom(source: ManagedAllocation, from: Int, to: Int, count: Long) {
+        val width = count.toInt()
+        source.requireWholePointerOverlaps(from, width)
+        requireWholePointerOverlaps(to, width)
+        val copied = source.pointers?.filterKeys {
+            it >= from && it.toLong() + pointerBytes <= from.toLong() + width
+        }?.mapKeys { (start, _) -> to + start - from } ?: emptyMap()
+        if (copied.isNotEmpty() && (exposedToNative || exposedAsRawBytes))
+            fault("Cannot copy managed pointers into a raw-exposed array")
+        if (copied.isNotEmpty()) pointerCapable = true
+        MemorySegment.copy(source.segment, from.toLong(), segment, to.toLong(), count)
+        invalidate(to, width)
+        if (copied.isNotEmpty()) {
+            cells().putAll(copied)
         }
     }
 
