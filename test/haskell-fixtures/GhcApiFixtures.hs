@@ -17,6 +17,7 @@ import Control.Monad (forM, forM_, unless, when)
 import Data.Aeson (Value, decodeStrict', object, (.=))
 import qualified Data.ByteString.Char8 as BS
 import FixtureSupport
+import GhcApiAudit (ghcApiOptions, ghcApiAuditArguments, ghcApiAuditEvidence)
 import InstalledCoreFixtures (field, readJson)
 import System.Directory (canonicalizePath, createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
@@ -85,13 +86,11 @@ prepareRecordFields root = do
 -- manifest. No replacement compiler bodies or edited package Core are used.
 prepareGhcApi :: FilePath -> [String] -> IO ()
 prepareGhcApi root requested = do
-  let probes = if null requested then ["faststring", "session", "load"] else requested
-      fixture = root </> "examples/standard-apps/ghc-api"
+  (auditRequested, probes) <- either die pure (ghcApiOptions requested)
+  let fixture = root </> "examples/standard-apps/ghc-api"
       nativeDist = root </> "build/ghc-api/native-control"
       common = "build/ghc-api/logs"
       execute = runLogged 3600 root
-  unless (all (`elem` ["faststring", "session", "load"]) probes)
-    (die "ghc-api: select faststring, session, or load")
   ghc <- selected "THC_INSTALLED_CORE_GHC" "GHC" "ghc"
   ghcPkg <- selected "THC_INSTALLED_CORE_GHC_PKG" "GHC_PKG" "ghc-pkg"
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
@@ -127,34 +126,36 @@ prepareGhcApi root requested = do
       (["run", "--project-dir", fixture, name, "--thc-root", root, "--runtime", runtime,
         "--dist-dir", root </> acquired, "--installed-core", "required",
         "--with-ghc", ghc, "--with-ghc-pkg", ghcPkg] ++
-        maybe [] (\path -> ["--ghc-source", path]) source ++ ["--"] ++ arguments)
+        maybe [] (\path -> ["--ghc-source", path]) source ++
+        ghcApiAuditArguments auditRequested ++ ["--"] ++ arguments)
     unless (commandStdout managed == commandStdout native)
       (die ("ghc-api: " ++ probe ++ " differs from native GHC; see " ++ logs))
-    audit <- readJson (root </> acquired </> "audit.json")
-    accepted <- field audit "accepted"
-    unless accepted (die "ghc-api: production strict audit did not accept")
+    (accepted, auditArtifacts) <- ghcApiAuditEvidence auditRequested (root </> acquired </> "audit.json")
     packages <- readJson (root </> acquired </> "packages.json")
     records <- field packages "units" :: IO [Value]
-    -- The production driver already validates each archive and its provenance.
-    -- Retain their content identities in addition to the command/output hashes.
+    -- Retain the producer's declared content identities. Full artifact checking
+    -- and the semantic audit are explicitly requested, not default launch work.
     let commands = [built, located, native, managed]
-    inputs <- hashes root (["test/haskell-fixtures/GhcApiFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs"] ++
+    inputs <- hashes root (["test/haskell-fixtures/GhcApiFixtures.hs", "test/haskell-fixtures/GhcApiAudit.hs",
+      "test/haskell-fixtures/FixtureSupport.hs"] ++
       ["examples/standard-apps/ghc-api" </> path | path <-
        ["cabal.project", "ghc-api-thc-check.cabal", probe </> "Main.hs", "subjects/Probe.hs"]])
-    artifacts <- hashes root ([acquired </> "audit.json", acquired </> "packages.json",
+    artifacts <- hashes root (auditArtifacts ++ [acquired </> "packages.json",
       acquired </> "native/cache/plan.json"] ++ concatMap commandArtifacts commands)
     driverHash <- hashFile driver
     nativeHash <- hashFile binary
     backend <- lookupEnv "THC_BACKEND"
     javaOptions <- lookupEnv "JAVA_TOOL_OPTIONS"
     writeJson manifest $ object
-      ["schema" .= (1 :: Int), "probe" .= probe, "strictAccepted" .= True,
+      ["schema" .= (2 :: Int), "probe" .= probe, "auditRequested" .= auditRequested,
+       "strictAccepted" .= accepted,
        "nativeMatched" .= True, "driver" .= driver, "driverSha256" .= driverHash,
        "nativeExecutable" .= binary, "nativeExecutableSha256" .= nativeHash,
        "runtime" .= runtime, "backendEnvironment" .= backend, "javaToolOptions" .= javaOptions,
        "inputHashes" .= inputs, "artifactHashes" .= artifacts, "packages" .= records,
        "commands" .= map commandRecord commands]
-    putStrLn ("ghc-api: " ++ probe ++ " strict-audit accepted and native output matched")
+    putStrLn ("ghc-api: " ++ probe ++ " native output matched; " ++
+      if auditRequested then "requested strict audit accepted" else "strict audit not requested")
   where
     selected preferred ordinary fallback = do
       override <- lookupEnv preferred

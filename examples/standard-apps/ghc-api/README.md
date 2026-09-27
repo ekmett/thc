@@ -31,8 +31,8 @@ thc run ghc-faststring --project-dir examples/standard-apps/ghc-api \
   -- "THC λ" "GHC API"
 ```
 
-The Haskell fixture runner retains native output, the ordinary THC run, strict
-audit and provenance together. From the repository root, select the pinned GHC
+The Haskell fixture runner retains native output, the ordinary THC run and
+provenance together. Strict auditing is opt-in. From the repository root, select the pinned GHC
 9.14.1 installation with complete Core for `ghc` and its dependencies, its
 matching configured source tree, and GraalVM 25.3.4.1 / JDK 25. Build the runtime
 with `./gradlew installDist`; see the [full-Core build guide](../../../docs/ghc-core.md).
@@ -44,14 +44,20 @@ cabal run exe:thc-fixtures -- ghc-api faststring
 # explicitly relinquish the JVM's INT/QUIT/HUP/TERM handlers:
 export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Xrs"
 cabal run exe:thc-fixtures -- ghc-api session load
+# Explicitly request the production audit and artifact verification:
+cabal run exe:thc-fixtures -- ghc-api --audit faststring
 ```
 
 `THC_TEST_DRIVER` may select an already-built production driver and
 `THC_TEST_RUNTIME` an installed runtime launcher. This permits runtime-only
 iteration without unnecessarily changing acquisition-tool identities. A failed
 probe retains its command logs under `build/ghc-api/guest-PROBE/logs` and does
-not publish a success manifest. Successful probes require a strict audit and
-byte-for-byte native stdout equality. The default runs all three probes in order.
+not publish a success manifest. Successful probes require byte-for-byte native
+stdout equality. The schema-2 manifest records `auditRequested: false` and
+`strictAccepted: null` by default, without reading or hashing any stale
+`audit.json`. With `--audit`, a current accepting production report is required
+and retained. The default runs all three probes in order. The bounded audit
+bookkeeping controls run with `cabal test ghc-api-fixture-policy`.
 
 On 2026-09-26, `ghc-faststring` passed the complete ordinary THC workflow on
 Linux x86_64 with the bytecode runtime: all 822 compiler interfaces acquired,
