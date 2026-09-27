@@ -29,7 +29,9 @@ data AuditExpectation = RequireAccepted | ExpectFourWayRejection deriving (Eq)
 
 entries :: [String]
 entries = ["roundtripPayload", "roundtripTag", "formatTag", "defaultArm",
-  "retainedFirst", "retainedSecond", "retainedTags", "residualProducer", "residualConsumer"]
+  "retainedFirst", "retainedSecond", "retainedTags", "residualProducer", "residualConsumer",
+  "nestedRoundtrip", "nestedResidualProducer", "nestedResidualConsumer", "nestedHeap",
+  "mixedNested", "mixedNestedCapture", "mixedNestedHeap"]
 
 selectors, payloads :: [Integer]
 selectors = [-5, -1, 0, 1, 2, 3, 4, 5, 6, 7, 0, 3, 1, 2, 2, 0]
@@ -99,11 +101,32 @@ constructorProofs core = do
       "consumeDefault", "applyProducer", "consumeWithSalt", "applyConsumer"]) $ \name ->
     check (length [() | binding <- bindings, field "id" binding == Just (toJSON (qualified name))] == 1)
       ("missing retained binding " ++ name)
-  forM_ [("residualProducer", "makeOriginal"), ("residualConsumer", "consumeWithSalt")] $ \(owner, target) -> do
+  forM_ [("residualProducer", "makeOriginal"), ("residualConsumer", "consumeWithSalt"),
+      ("nestedResidualProducer", "makeNested"), ("nestedResidualConsumer", "consumeNested"),
+      ("mixedNestedCapture", "consumeMixedNested")] $ \(owner, target) -> do
     let bodies = [body | binding <- bindings, field "name" binding == Just (toJSON owner),
                         Just body <- [field "expr" binding]]
     check (any (partialCall target) (concatMap walk bodies)) ("lost partial application in " ++ owner)
-  pure (object ["original" .= original, "sumConstructors" .= sums,
+  let tupleProof components = object ["kind" .= ("unknown" :: String), "evaluated" .= True,
+        "aggregate" .= ("unboxed-tuple" :: String), "components" .= components,
+        "primReps" .= concatMap (arrayField "primReps") components]
+      integer = object ["kind" .= ("long" :: String), "evaluated" .= True, "primReps" .= ["IntRep" :: String]]
+      state = object ["kind" .= ("void" :: String), "evaluated" .= True, "primReps" .= ([] :: [String])]
+      lazy = object ["kind" .= ("data" :: String), "evaluated" .= False,
+        "primReps" .= ["BoxedRep (Just Lifted)" :: String]]
+      mixed = object ["kind" .= ("unknown" :: String), "evaluated" .= True,
+        "aggregate" .= ("unboxed-sum" :: String), "primReps" .= ["WordRep" :: String, "BoxedRep (Just Lifted)", "Word64Rep"],
+        "alternatives" .= [lazy, leaf, tupleProof [], integer], "tagSlot" .= (0 :: Int),
+        "alternativeSlots" .= [[1 :: Int], [2], [], [2]]]
+      nested sumField = tupleProof [integer, tupleProof [state, tupleProof [], sumField, lazy], leaf]
+  nestedProofs <- forM [("NestedBox", [integer, nested sumProof, leaf]),
+      ("MixedBox", [nested mixed, leaf])] $ \(name, expected) -> do
+    con <- case [value | value <- arrayField "constructors" core, field "name" value == Just (toJSON (name :: String))] of
+      [value] -> pure value
+      _ -> die ("fourway-aggregate: missing nested heap constructor " ++ name)
+    check (field "fieldTypes" con == Just (toJSON expected)) ("changed nested logical/physical tree " ++ name)
+    pure con
+  pure (object ["original" .= original, "sumConstructors" .= sums, "nestedConstructors" .= nestedProofs,
     "residualProducer" .= True, "residualConsumer" .= True])
 
 validateAudit :: AuditExpectation -> Value -> IO ()
@@ -202,7 +225,7 @@ prepareFourWayAggregate root expectation = do
   artifactHashes <- hashes root $ [directory </> "oracle.tsv", binary] ++
     concat [paths | (_, _, _, paths) <- stages] ++ concatMap commandArtifacts [version, info, compiled, observed]
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),
-    "wordBits" .= (64 :: Int), "entries" .= entries, "selectors" .= selectors, "payloads" .= payloads,
+    "wordBits" .= (64 :: Int), "entries" .= entries, "selectors" .= selectors, "payloads" .= map show payloads,
     "nativeRows" .= length rows, "strictAccepted" .= accepted,
     "constructorProofs" .= Map.fromList [(stage, proof) | (stage, proof, _, _) <- stages],
     "auditSummaries" .= Map.fromList [(stage, summary) | (stage, _, summary, _) <- stages],

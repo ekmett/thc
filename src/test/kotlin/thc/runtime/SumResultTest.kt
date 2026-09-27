@@ -55,8 +55,11 @@ class SumResultTest {
     @Test fun extendedNativeResultsResidual() = native(false, true)
     @Test fun originalFrontierResultsInline() = native(true, frontier = true)
     @Test fun originalFrontierResultsResidual() = native(false, frontier = true)
-    private fun native(inlining: Boolean, extended: Boolean = false, frontier: Boolean = false) {
-        val supported = setOf("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase")
+    @Test fun expandedLayoutResultsInline() = native(true, expanded = true)
+    @Test fun expandedLayoutResultsResidual() = native(false, expanded = true)
+    private fun native(inlining: Boolean, extended: Boolean = false, frontier: Boolean = false, expanded: Boolean = false) {
+        val supported = if (expanded) setOf("narrowWideCase", "threeWayCase") else
+            setOf("sumCase", "directCase", "lazyCase", "zeroCase", "unitCase", "boxedKindsCase", "floatDoubleCase")
         val rows = File(root, "build/${if (frontier) "aggregate-native" else if (extended) "sum-result" else "sum-layout"}/oracle.tsv").readLines().map { it.split('\t') }.filter { if (frontier) it[0] in setOf("sumPayload", "sumZeroLazy", "coldSum") else extended || it[0] in supported }.groupBy { it[0] }
         for (stage in listOf("pre", "post")) for (backend in listOf("ast", "bytecode")) context(inlining).use { context ->
             context.initialize("thc"); context.enter()

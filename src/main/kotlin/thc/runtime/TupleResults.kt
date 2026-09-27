@@ -25,11 +25,10 @@ internal fun requireVoidCarrier(value: Any?) {
 internal class TupleShape(val proof: CoreRepresentation, val language: Language) {
     init { if (!proof.isTypedTransport) fault("Typed result shape requires an aggregate or vector proof") }
     @field:CompilationFinal(dimensions = 1) val components = (proof.components ?: emptyList()).toTypedArray()
-    @field:CompilationFinal(dimensions = 1) val leaves = (if (proof.isSum) SumShape.storage(proof) else flatten(proof)).toTypedArray()
+    @field:CompilationFinal(dimensions = 1) val leaves = flatten(proof).toTypedArray()
     @field:CompilationFinal(dimensions = 1)
     private val vectors = leaves.map { if (it.isVector) VectorLayout(it) else null }.toTypedArray()
-    val layout = language.handoffLayouts.intern(if (proof.isSum) leaves.map { it.primReps!!.single() }
-        else VectorLayout.storageReps(proof))
+    val layout = language.handoffLayouts.intern(VectorLayout.storageReps(proof))
     @field:CompilationFinal(dimensions = 1) val offsets = IntArray(components.size).also { offsets ->
         var next = 0
         components.forEachIndexed { index, component -> offsets[index] = next; next += flatten(component).size }
@@ -91,8 +90,12 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
     }
     fun inlineResult(): Boolean = CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot()
     companion object {
-        fun flatten(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::flatten)
-            ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
+        fun flatten(proof: CoreRepresentation): List<CoreRepresentation> = when {
+            proof.components != null -> proof.components.flatMap(::flatten)
+            proof.isSum -> SumShape.storage(proof)
+            proof.kind == CoreKind.VOID -> emptyList()
+            else -> listOf(proof)
+        }
         /** Logical GHC fields and transport both keep VecRep atomic. */
         fun logicalLeaves(proof: CoreRepresentation): List<CoreRepresentation> = proof.components?.flatMap(::logicalLeaves)
             ?: if (proof.kind == CoreKind.VOID) emptyList() else listOf(proof)
@@ -115,6 +118,7 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
             if (proof.kind != CoreKind.UNKNOWN) throw RuntimeFault("Tuple proof must retain its aggregate kind")
             if (proof.primReps == null)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unresolved fields")
+            proof.components?.filter { it.isTuple }?.forEach(::validate)
             val fields = flatten(proof)
             fields.filter { it.isVector }.forEach { VectorLayout.validate(it) }
             if (fields.any { !it.isVector && ((it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT, CoreKind.DOUBLE,
@@ -123,7 +127,7 @@ internal class TupleShape(val proof: CoreRepresentation, val language: Language)
                 throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-tuple has unsupported fields")
             if (fields.any { it.kind == CoreKind.ADDRESS && !it.evaluated })
                 throw UnsupportedCore("Unsupported Core aggregate representation: AddrRep tuple field needs an evaluated carrier")
-            val reps = logicalLeaves(proof).map { it.primReps!!.single() }
+            val reps = fields.map { it.primReps!!.single() }
             if (proof.primReps != reps) throw RuntimeFault("Tuple components disagree with primitive representations")
         }
     }
@@ -513,7 +517,7 @@ internal class TupleConstruct(private val shape: TupleShape, @field:Children pri
         for (index in fields.indices) {
             val component = shape.components[index]
             val target = offset + shape.offsets[index]
-            if (component.isTuple || component.isVector) fields[index].executeTuple(frame, slots, target)
+            if (component.isTypedTransport) fields[index].executeTuple(frame, slots, target)
             else if (component.isLong) FrameAccess.writeLong(frame, slots[target], fields[index].executeRequiredLong(frame))
             else if (component.isFloat) FrameAccess.writeFloat(frame, slots[target], fields[index].executeRequiredFloat(frame))
             else if (component.isDouble) FrameAccess.writeDouble(frame, slots[target], fields[index].executeRequiredDouble(frame))

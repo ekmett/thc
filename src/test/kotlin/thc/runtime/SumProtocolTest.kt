@@ -67,7 +67,12 @@ class SumProtocolTest {
             val proof=shape(module(),"returnedSum"); mutate(proof)
             assertThrows(RuntimeFault::class.java) { CoreRepresentations.parse(proof) }
         }
-        for (name in listOf("nestedSum","narrowWideSum","threeWaySum","runtimePolymorphic","levityPolymorphic",
+        for (name in listOf("narrowWideSum", "threeWaySum")) {
+            val exact = CoreRepresentations.parse(shape(module(), name))
+            assertTrue(exact.isSum)
+            assertTrue(SumShape.storage(exact).all { it.isLong })
+        }
+        for (name in listOf("nestedSum","runtimePolymorphic","levityPolymorphic",
                 "abstractSumIdentity","abstractRuntimeSum","abstractAlternative","addressResult","vectorResult"))
             assertThrows(UnsupportedCore::class.java) { CoreRepresentations.parse(shape(module(),name)) }
         val proof=shape(module(),"returnedSum"); proof["alternativeSlots"]=null

@@ -112,6 +112,7 @@ internal class VectorLayout(val proof: CoreRepresentation) {
         /** Physical vector kinds share signed/unsigned lane classes, but retain species. */
         fun storageReps(proof: CoreRepresentation): List<String> = when {
             proof.components != null -> proof.components.flatMap(::storageReps)
+            proof.isSum -> { SumShape.validate(proof); proof.primReps!! }
             proof.kind == CoreKind.VOID -> emptyList()
             proof.isVector -> {
                 validate(proof)

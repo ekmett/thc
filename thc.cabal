@@ -792,6 +792,7 @@ executable thc-fixtures
   other-modules:
     AggregateFixtures
     AggregateHeapFixtures
+    FourWayAggregateFixtures
     GraphFixtures
     IntegerCompletionFixtures
     ContinuationFixtures

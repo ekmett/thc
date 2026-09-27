@@ -15,6 +15,10 @@ entries =
   , ("retainedFirst", retainedFirst), ("retainedSecond", retainedSecond)
   , ("retainedTags", retainedTags), ("residualProducer", residualProducer)
   , ("residualConsumer", residualConsumer)
+  , ("nestedRoundtrip", nestedRoundtrip), ("nestedResidualProducer", nestedResidualProducer)
+  , ("nestedResidualConsumer", nestedResidualConsumer), ("nestedHeap", nestedHeap)
+  , ("mixedNested", mixedNested), ("mixedNestedCapture", mixedNestedCapture)
+  , ("mixedNestedHeap", mixedNestedHeap)
   ]
 
 -- Include noncanonical selectors and repeated alternatives in one process.

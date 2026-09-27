@@ -510,6 +510,25 @@ for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregat
         doFirst { check(file("build/aggregate-heap/manifest.json").isFile) { "Run thc-fixtures aggregate-heap" } }
     }
 }
+for ((taskName, dense) in listOf("fourwayAggregateFullCoreTest" to false, "fourwayAggregateFullCoreDenseTest" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests original GHC four-way sums and nested tuple transport against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter {
+            includeTestsMatching("thc.runtime.FourWayAggregateNativeTest")
+            includeTestsMatching("thc.runtime.FourWayAggregateStorageTest")
+            includeTestsMatching("thc.runtime.FourWayAggregateProtocolTest")
+        }
+        inputs.files(fileTree("build/fourway-aggregate") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original four-way aggregate native/first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/fourway-aggregate/manifest.json").isFile) { "Run thc-fixtures fourway-aggregate" } }
+    }
+}
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
 for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {

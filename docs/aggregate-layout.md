@@ -3,10 +3,10 @@
 The exporter preserves logical unboxed tuple components and sum alternatives in
 addition to GHC 9.14.1's physical `primReps` vector. Both runtime backends support
 [exact tuple results](tuple-results.md) and [typed tuple inputs](tuple-inputs.md).
-Sum arguments, aggregate join arguments/captures, ordinary aggregate captures and
-unresolved layouts remain explicit boundaries. [Binary sum results](sum-results.md)
-use the placement evidence below. Exact tuple join results use local destination
-slots within the same root.
+Supported [sum inputs and captures](sum-inputs.md), aggregate joins and owned
+aggregate captures retain the same logical proofs. Unresolved layouts remain an
+explicit boundary. [Sum results](sum-results.md) use the placement evidence below.
+Exact tuple join results use local destination slots within the same root.
 Saturated boxed constructors also support [aggregate fields](aggregate-heap-fields.md),
 including the original compiler's unpacked `BoxedRep` payload.
 The metadata fixtures below test these boundaries independently of execution.
@@ -127,8 +127,9 @@ Constructor tags remain one-based; slot indices are zero-based.
 The exporter calls pinned GHC 9.14.1 `ubxSumRepType`, `primRepSlot`, and
 `layoutUbxSum`, matching the layout computation in `GHC.Stg.Unarise.mkUbxSum`.
 It checks the resulting `slotPrimRep` vector against `typePrimRep_maybe` before
-publishing projections. Address, narrow/wide integer, and fixed vector slots are
-valid metadata even though those alternatives are outside current THC sum
+publishing projections. Narrow/machine integral leaves use Word slots, while
+explicit Int64/Word64 leaves use Word64 slots; merging Word and Word64 selects
+Word64. Address and fixed vector slots remain valid metadata outside THC sum
 execution support. The only partial `primRepSlot` case in this pinned API is
 `BoxedRep Nothing`; it is rejected before calling either placement API.
 Unknown physical representations, and abstract sum types with unknown logical
@@ -149,10 +150,18 @@ package, command and artifact hashes in `build/sum-layout/provenance.json`;
 running it without `--prepare` verifies those hashes before checking the exports.
 Normal test preparation and CI include these checks.
 
-[Bounded binary sum lowering](sum-results.md) validates the complete logical
+[Sum lowering](sum-results.md) validates the complete logical
 alternatives, family arity, physical storage classes and projection before using
-typed destinations. The metadata suite accepts six retained-sum consumers and
-the optimized scalar direct-case control; all unsupported families and boundaries
+typed destinations for exact families with at least two alternatives. The metadata
+suite accepts eight retained-sum consumers and the optimized scalar direct-case
+control; all unsupported families and boundaries
 still reject before execution on both backends and both export stages. This
 metadata does not define a hardware call-register ABI or permit generic
 object-array sum payloads.
+
+Physical tuple flattening recursively expands a supported sum's storage slots,
+while the logical tree still distinguishes sums, tuples, erased State tokens and
+empty tuples. A sum inside another sum's payload remains unsupported. The genuine
+`VirtualRegWithFormat` worker has two logical fields but three physical fields:
+Word tag, shared Word64 payload, then lifted Format at offset 2. See the
+[native four-way fixture](aggregate-heap-fields.md#four-way-and-nested-aggregate-fixture).

@@ -1,10 +1,11 @@
-# Typed binary-sum inputs and captures
+# Typed unboxed sum inputs and captures
 
-Both backends accept ordinary guest binary-sum parameters through direct and
-higher-order calls, partial applications, overapplication and tail transfers.
+Both backends accept ordinary guest sums with two or more alternatives through
+direct and higher-order calls, partial applications, overapplication and tail transfers.
 The supported payloads are the existing [sum result layouts](sum-results.md):
-machine Int/Word, Float, Double, known references, void and tuples of these.
-One sum is one logical argument, independently of its physical width. Exact
+lowered integral carriers (including Int64/Word64), Float, Double, known
+references, void and tuples of these. One sum is one logical argument,
+independently of its physical width. Exact
 alternatives and projections distinguish sums sharing the same physical fields.
 
 The existing typed input packet carries the tag and concrete payload fields.
@@ -28,9 +29,11 @@ therefore preserve both operands. Completed transfers clear scratch references.
 A closure escaping a join owns its captured sum fields independently of that
 activation. Logical alternatives remain checked even when physical layouts match.
 
-Nested/nonbinary sums, tuples containing sums, address/vector or unresolved sum
-payloads, ordinary sum let/global storage and public
-host sum parameters/results remain excluded. Scalar host roots may use all the
+Tuples may recursively contain supported sums; physical tag/payload slots expand
+at the sum's logical position without losing surrounding tuple boundaries or
+zero-width components. Sums inside sum payloads, address/vector or unresolved sum
+payloads, ordinary sum let/global storage and public host sum parameters/results
+remain excluded. Scalar host roots may use all the
 supported sum operations internally. Unsaturated sum constructors remain excluded.
 
 ## Reproduce

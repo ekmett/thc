@@ -4537,7 +4537,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginBlock()
             fields.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
             scrutinee.emitTuple(e, fields.map { e.locals.getValue(it.id) })
-            b.beginStoreLocal(e.locals.getValue(fields[0].id)); b.beginCheckSumTag()
+            b.beginStoreLocal(e.locals.getValue(fields[0].id)); b.beginCheckSumTag(proof.alternatives!!.size)
             read(fields[0]).emit(e); b.endCheckSumTag(); b.endStoreLocal()
             val explicit = arms.filter { it.tag != null }
             val fallback = arms.singleOrNull { it.tag == null }

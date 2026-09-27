@@ -719,8 +719,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = int.class, name = "arity")
     public static final class CheckSumTag {
-        @Specialization public static long execute(long value) { return SumShape.INSTANCE.checkedTag(value); }
+        @Specialization public static long execute(int arity, long value) { return SumShape.INSTANCE.checkedTag(value, arity); }
     }
 
     @Operation
