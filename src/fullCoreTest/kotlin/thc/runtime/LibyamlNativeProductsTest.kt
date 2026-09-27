@@ -77,6 +77,16 @@ class LibyamlNativeProductsTest {
                             observed += "unsigned-result\t${call("get_buffer_used", returnSlot)}"
                         }
                     } finally { owner.nativeAllocations.free(returnSlot) }
+                    fun marks(mark: ManagedAddress): String = listOf("get_mark_index", "get_mark_line", "get_mark_column")
+                        .joinToString(",") { call(it, mark).toString() }
+                    val markSlot = owner.nativeAllocations.malloc(24)
+                    try {
+                        for (value in listOf(0L, 2147483647L, 2147483648L, 4294967295L, 4294967296L, -1L)) {
+                            for (offset in listOf(0, 8, 16)) for (byte in 0..7)
+                                markSlot.writeWord8((offset + byte).toLong(), value ushr (byte * 8) and 255)
+                            observed += "mark-result\t${marks(markSlot)}"
+                        }
+                    } finally { owner.nativeAllocations.free(markSlot) }
                     // Pinned input is intentionally retained between many calls;
                     // a temporary per-call copy cannot satisfy libyaml's API.
                     val storage = PinnedMemory.allocate(input.size.toLong(), 8)
@@ -108,6 +118,8 @@ class LibyamlNativeProductsTest {
                             success("yaml_parser_parse", parser, event)
                             val kind = call("get_event_type", event) as Long
                             try {
+                                observed += "marks\t${marks(call("get_start_mark", event) as ManagedAddress)}\t" +
+                                    marks(call("get_end_mark", event) as ManagedAddress)
                                 val bytes = if (kind != 6L) byteArrayOf() else inspect(
                                     call("get_scalar_value", event) as ManagedAddress, call("get_scalar_length", event) as Long)
                                 observed += "$kind\t${bytes.size}\t${HexFormat.of().formatHex(bytes)}"

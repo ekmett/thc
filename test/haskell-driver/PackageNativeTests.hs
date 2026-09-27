@@ -46,6 +46,27 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "no return adaptation on other targets" Nothing
         (nativeArgumentBridge "aarch64-unknown-linux-gnu" "result" "entry" (caller ++ callee ++ body))
   , TestCase $ do
+      let caller = "define i64 @entry(ptr %0) {\n  %1 = call i64 @result(ptr %0)\n  ret i64 %1\n}\n"
+          callee = "define i32 @result(ptr nocapture noundef readonly %0) {\n"
+          load pointer = "  %3 = load i64, ptr " ++ pointer ++ ", align 8, !tbaa !31\n"
+          narrowed = "  %4 = trunc i64 %3 to i32\n  ret i32 %4\n}\n"
+          bridge body = nativeArgumentBridge "x86_64-unknown-linux-gnu" "result" "entry" (caller ++ callee ++ body)
+      forM_ [load "%0" ++ narrowed,
+          "  %2 = getelementptr inbounds nuw i8, ptr %0, i64 8\n" ++ load "%2" ++ narrowed,
+          "  %2 = getelementptr inbounds nuw i8, ptr %0, i64 16\n" ++ load "%2" ++ narrowed] $ \body ->
+        case bridge body of
+          Just (_,generated,witness) -> do
+            assertBool "mark leaf explicitly zero extends its truncated value" ("zext i32 %r to i64" `isInfixOf` generated)
+            assertBool "mark truncation remains in the witness" ("%4 = trunc i64 %3 to i32" `elem` witness)
+          Nothing -> assertFailure "missing constrained mark return bridge"
+      forM_ [load "%0" ++ "  %4 = trunc i64 %other to i32\n  ret i32 %4\n}\n",
+          load "%0" ++ "  %4 = trunc i64 %3 to i16\n  ret i32 %4\n}\n",
+          "  %2 = getelementptr inbounds i8, ptr %0, i64 -8\n" ++ load "%2" ++ narrowed,
+          "  %2 = getelementptr inbounds i8, ptr %0, i64 8\n" ++ load "%other" ++ narrowed,
+          "  store i64 0, ptr %0\n" ++ load "%0" ++ narrowed,
+          "  %3 = load volatile i64, ptr %0, align 8\n" ++ narrowed] $ \body ->
+        assertEqual "only the exact side-effect-free load/trunc/return shape adapts" Nothing (bridge body)
+  , TestCase $ do
       let validate = validateNativeLibcIR "x86_64-unknown-linux-gnu" ["realloc"]
       assertEqual "original libc allocation declaration" (Right ())
         (validate "declare noalias noundef ptr @realloc(ptr allocptr nocapture noundef, i64 noundef) local_unnamed_addr #5")

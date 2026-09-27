@@ -18,6 +18,7 @@ import Control.Exception (bracket, finally)
 import Control.Monad (forM_, unless)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as B8
+import Data.List (intercalate)
 import Foreign
 import Foreign.C.Types
 import Numeric (showHex)
@@ -31,6 +32,11 @@ foreign import ccall unsafe "yaml_event_delete" eventDelete :: Ptr () -> IO ()
 foreign import ccall unsafe "get_event_type" eventType :: Ptr () -> IO CInt
 foreign import ccall unsafe "get_scalar_value" scalarValue :: Ptr () -> IO (Ptr CUChar)
 foreign import ccall unsafe "get_scalar_length" scalarLength :: Ptr () -> IO CULong
+foreign import ccall unsafe "get_start_mark" startMark :: Ptr () -> IO (Ptr ())
+foreign import ccall unsafe "get_end_mark" endMark :: Ptr () -> IO (Ptr ())
+foreign import ccall unsafe "get_mark_index" markIndex :: Ptr () -> IO CULong
+foreign import ccall unsafe "get_mark_line" markLine :: Ptr () -> IO CULong
+foreign import ccall unsafe "get_mark_column" markColumn :: Ptr () -> IO CULong
 foreign import ccall unsafe "yaml_emitter_initialize" emitterInitialize :: Ptr () -> IO CInt
 foreign import ccall unsafe "yaml_emitter_delete" emitterDelete :: Ptr () -> IO ()
 foreign import ccall unsafe "yaml_emitter_emit" emitterEmit :: Ptr () -> Ptr () -> IO CInt
@@ -48,6 +54,10 @@ main = do
     pokeByteOff buffer 12 value
     actual <- bufferUsed buffer
     putStrLn ("unsigned-result\t" ++ show actual)
+  allocaBytes 24 $ \mark -> forM_ [0,2147483647,2147483648,4294967295,4294967296,maxBound :: Word64] $ \value -> do
+    forM_ [0,8,16] $ \offset -> pokeByteOff mark offset value
+    actual <- marks mark
+    putStrLn ("mark-result\t" ++ actual)
   forM_ [1..3 :: Int] $ \iteration -> withParser input $ \parser ->
     allocaBytes 104 $ \event -> do
       putStrLn ("parse\t" ++ show iteration)
@@ -55,6 +65,9 @@ main = do
             success =<< parserParse parser event
             kind <- eventType event
             flip finally (eventDelete event) $ do
+              start <- marks =<< startMark event
+              end <- marks =<< endMark event
+              putStrLn ("marks\t" ++ start ++ "\t" ++ end)
               bytes <- if kind /= 6 then pure B.empty else do
                 pointer <- scalarValue event
                 size <- scalarLength event
@@ -90,6 +103,9 @@ withParser input body = bracket (mallocBytes 480) free $ \parser -> do
 
 success :: CInt -> IO ()
 success result = unless (result == 1) (fail "Original libyaml operation failed")
+
+marks :: Ptr () -> IO String
+marks mark = intercalate "," . map show <$> sequence [markIndex mark,markLine mark,markColumn mark]
 
 hex :: B.ByteString -> String
 hex = concatMap (\byte -> let digits = showHex byte "" in if length digits == 1 then '0':digits else digits) . B.unpack

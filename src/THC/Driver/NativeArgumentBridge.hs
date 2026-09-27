@@ -20,7 +20,7 @@ import Data.List (isPrefixOf, nub)
 -- definition. GHC's x86_64 ccall ABI uses the low bits of each integer slot,
 -- whereas Sulong requires matching Java scalar carriers. Recognize only
 -- ordinary C functions in verified LLVM and make those truncations explicit.
--- A constrained leaf i32 memory load also admits the observed zero-extended
+-- A constrained leaf memory load producing i32 also admits the observed zero-extended
 -- x86_64 result when GHC expects i64. This is not a general assertion about
 -- unspecified upper return bits. Other return mismatches never adapt.
 -- Pointer types, varargs and non-C calling conventions never adapt.
@@ -81,29 +81,35 @@ nativeArgumentBridge target symbol entry source = do
     width "i16" = 16
     width _ = 8
 
--- Original libyaml's helper returns an unsigned int loaded from buffer_t.used,
--- while its retained Haskell import requests CULong. The captured native code
--- is mov offset(%rdi),%eax; ret: the 32-bit load clears RAX's high bits. Admit
--- only this side-effect-free leaf shape, not arbitrary i32 callees, casts,
+-- Original libyaml's helpers return unsigned int from buffer_t.used or a
+-- truncated size_t mark field, while their Haskell imports request CULong.
+-- Both captured native shapes are mov offset(%rdi),%eax; ret: the 32-bit load
+-- clears RAX's high bits. Admit only these side-effect-free leaf shapes, not
+-- arbitrary i32 callees, other casts,
 -- constants, inline assembly, calls or branches. Retain its complete definition
 -- as the witness; native controls include bit31 and UINT32_MAX.
 leafWord32Load :: Definition -> [String] -> Bool
 leafWord32Load callee statements = case (parameters callee,argumentNames callee,map words statements) of
-  ([Parameter "ptr" ""],[argument],[gep,load,returned]) ->
-    case (gep,load) of
-      (pointer:"=":"getelementptr":rest,value:"=":"load":"i32,":"ptr":source:attributes) ->
-        let withoutFlags = dropWhile (`elem` ["inbounds","nuw"]) rest
-            validOffset text = case reads text :: [(Integer,String)] of [(n,"")] -> n >= 0 && n <= 2147483647; _ -> False
-            address = case withoutFlags of
-              ["i8,","ptr",base,"i64",offset] -> base == argument ++ "," && validOffset offset
-              _ -> False
-            metadata = case attributes of
-              ["align","4"] -> True
-              ["align","4,","!tbaa",tag] -> "!" `isPrefixOf` tag && all (`elem` ['0'..'9']) (drop 1 tag)
-              _ -> False
-        in address && source == pointer ++ "," && metadata && returned == ["ret","i32",value]
-      _ -> False
+  ([Parameter "ptr" ""],[argument],body) -> case body of
+    (pointer:"=":"getelementptr":rest):remaining ->
+      case dropWhile (`elem` ["inbounds","nuw"]) rest of
+        ["i8,","ptr",base,"i64",offset] -> base == argument ++ "," && validOffset offset && loaded pointer remaining
+        _ -> False
+    _ -> loaded argument body
   _ -> False
+  where
+    validOffset text = case reads text :: [(Integer,String)] of [(n,"")] -> n >= 0 && n <= 2147483647; _ -> False
+    metadata alignment attributes = case attributes of
+      ["align",size] -> size == alignment
+      ["align",size,"!tbaa",'!':digits] -> size == alignment ++ "," && not (null digits) && all (`elem` ['0'..'9']) digits
+      _ -> False
+    loaded pointer body = case body of
+      [value:"=":"load":"i32,":"ptr":source:attributes,returned] ->
+        source == pointer ++ "," && metadata "4" attributes && returned == ["ret","i32",value]
+      [value:"=":"load":"i64,":"ptr":source:attributes,
+          [narrowed,"=","trunc","i64",operand,"to","i32"],returned] ->
+        source == pointer ++ "," && metadata "8" attributes && operand == value && returned == ["ret","i32",narrowed]
+      _ -> False
 
 data Parameter = Parameter { scalar :: String, extension :: String } deriving Eq
 data Definition = Definition { result :: Parameter, parameters :: [Parameter], argumentNames :: [String] }
