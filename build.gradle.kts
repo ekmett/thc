@@ -26,6 +26,12 @@ kapt {
 tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
 // The Windows runtime validates HSC receipts against the producer's same pinned catalog.
 tasks.processResources { from("compiler/windows-ghc-internal.json") { into("thc") } }
+tasks.processResources {
+    from("third-party-licenses") {
+        include("*.txt")
+        into("META-INF/licenses")
+    }
+}
 
 // Documentation reads handwritten sources; it does not compile the runtime,
 // generate Truffle DSL classes, or prepare native/Core fixtures.
