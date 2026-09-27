@@ -46,6 +46,8 @@ and its dependency closure. A sole bridge is unambiguous; otherwise the package
 manifest must select its exact unit. Programs requiring automatic foreign
 conversion fail to link when that support is missing or ambiguous. There is no
 process-global default dictionary or explicit `liftForeign` scope.
+The legacy Windows simple-package backend does not yet generate this sidecar;
+the compiler-free linking requirement applies there too.
 
 The default pinned provider runs a raw `Main.main :: IO ()` action.
 The complete installed-Core provider instead runs GHC's generated

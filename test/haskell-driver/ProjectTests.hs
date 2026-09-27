@@ -66,6 +66,17 @@ exceptionBridgeTests env = TestLabel "automatic exact exception dictionary linki
     assertEqual "warm acquisition retains exact bridge unit" bridge (selected warm)
     assertEqual "warm acquisition reuses the content-keyed runtime bundle"
       (field record "bundle") (field (runtimeRecord warm) "bundle")
+    forM_ ["ast", "bytecode"] $ \backend -> do
+      executed <- run env base (Just backend) 300
+        ["run", "--project-dir", project, "completed", "--thc-root", thcRoot env,
+         "--runtime", runtime env, "--dist-dir", sidecarOutput]
+      assertSuccess executed
+      assertNoStdout executed
+      audit <- readJson (sidecarOutput </> "audit.json")
+      assertBool "ordinary app remains strictly accepted with the added runtime bundle"
+        (bool $ field audit "accepted")
+      copyFile (sidecarOutput </> "audit.json")
+        (scratch env </> ("exception-bridge-ordinary-" ++ backend ++ "-audit.json"))
     -- Link the real runtime through Cabal as a dependency. The driver must reuse
     -- that unit even though its inplace name differs from a store installation.
     writeText (project </> "run-pure.cabal")
