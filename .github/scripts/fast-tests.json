@@ -479,7 +479,7 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
-      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest"], "python": []
+      "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.ProcessSignalsTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/StableNames.kt": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},

@@ -1234,6 +1234,17 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
 
+    def test_thread_inventory_evidence_helper_selects_all_consumers(self):
+        group = self.policy["owners"]["src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt"]
+        consumers = set()
+        for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
+            source = path.read_text()
+            if "ThreadInventoryCoreEvidence" in source:
+                consumers.update(select.junit_info(source)[0])
+        self.assertIn("thc.runtime.ProcessSignalsTest", consumers)
+        self.assertEqual(consumers, set(group["junit"]))
+        self.assertEqual([], group["python"])
+
     def test_control_and_owner_targets_exist_and_are_runnable(self):
         checked_python = set()
         for group in [*self.policy["owners"].values(), *self.policy["primopFamilies"].values(),
