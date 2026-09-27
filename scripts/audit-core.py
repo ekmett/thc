@@ -779,35 +779,6 @@ class Audit:
                 core_original_foreign.validate_head(function, defined)
                 if symbol == 'stg_sig_install':
                     self.reference('ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr', owner, path + '/signal-dispatcher')
-                if (symbol in ('eventfd', 'eventfd_write', 'pipe') or symbol in core_original_foreign.TEXT_OPERATIONS
-                        or symbol in core_original_foreign.WAIT_STATUS_OPERATIONS
-                        or symbol in core_original_foreign.STACK_INFO or symbol in core_original_foreign.SEEK_CONSTANTS
-                        or symbol in core_original_foreign.STAT_IMAGE
-                        or symbol in core_original_foreign.GMP_SYMBOLS
-                        or symbol in core_original_foreign.LIBDW_UNAVAILABLE
-                        or symbol in core_original_foreign.TERMIOS_SYMBOLS
-                        or symbol in (core_original_foreign.TCGETATTR_SYMBOL, core_original_foreign.TCSETATTR_SYMBOL)
-                        or symbol in core_original_foreign.SIGSET_OPERATIONS
-                        or symbol == 'ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask'
-                        or symbol in ('isFloatNaN', 'isFloatInfinite', 'isFloatFinite', 'isFloatDenormalized', 'isFloatNegativeZero',
-                                      'isDoubleNaN', 'isDoubleInfinite', 'isDoubleFinite', 'isDoubleDenormalized', 'isDoubleNegativeZero',
-                                      'rintFloat', 'rintDouble')
-                        or symbol in ('getRTSStatsEnabled', 'getRTSStats', 'performGC', 'performMajorGC',
-                                      'performBlockingMajorGC', 'getMonotonicNSec')
-                        or symbol in ('getNumberOfProcessors', 'setNumCapabilities', '__hscore_sizeof_siginfo_t',
-                                      '__hscore_f_setfd', '__hscore_fd_cloexec',
-                                      'getOrSetSystemEventThreadIOManagerThreadStore',
-                                      'getOrSetSystemTimerThreadEventManagerStore',
-                                      'getOrSetSystemTimerThreadIOManagerThreadStore')
-                        or symbol in ('getOrSetSystemEventThreadEventManagerStore',
-                                      'getOrSetGHCConcSignalSignalHandlerStore',
-                                      'getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
-                                      'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack',
-                                      'keepCAFsForGHCi')
-                        or symbol in ('shutdownHaskellAndExit', 'shutdownHaskellAndSignal', 'stg_sig_install', 'reportStackOverflow', 'reportHeapOverflow', 'errorBelch2', 'malloc', 'realloc', 'free', 'rts_setMainThread', 'rtsSupportsBoundThreads', 'rts_isThreaded', 'lockFile', 'unlockFile', '__hscore_fstat', '__hscore_open', 'dup', 'dup2', 'fdReady', 'localeEncoding', 'hs_iconv_open', 'hs_iconv_close', 'hs_iconv',
-                                      'stg_getThreadAllocationCounterzh', 'base_strerror_r', 'memmove', 'memcpy', 'memset', 'strlen', 'getProgArgv', 'setProgArgv', 'getenv', 'putenv', '__hsbase_unsetenv', '__hscore_environ', 'unlink')):
-                    for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.operation(target)[2])):
-                        self.original_stack_operand(argument, primitive, bound, index)
                 if symbol == core_original_foreign.STACK_CLONE:
                     state = arguments[0]
                     if state[0] == 'var':
@@ -817,6 +788,12 @@ class Audit:
                     # Lowering knows these producers cannot yield State even if
                     # an occurrence falsely claims the zero-width certificate.
                     core_original_foreign.require(state[0] not in ('lit', 'lam', 'con'), 'lowered State argument')
+                # Every closed original signature takes scalar or unlifted-object
+                # carriers handled by this checker. The catalog regression guards
+                # new carrier kinds; do not maintain a second symbol whitelist.
+                # Select the validated unit-specific ABI (e.g. array's memcpy).
+                for index, (argument, primitive) in enumerate(zip(arguments, core_original_foreign.operation(target)[2])):
+                    self.original_stack_operand(argument, primitive, bound, index)
                 if symbol not in self.cap.get('managedForeignCalls', []):
                     raise ValueError('Original foreign-call capability disabled')
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
