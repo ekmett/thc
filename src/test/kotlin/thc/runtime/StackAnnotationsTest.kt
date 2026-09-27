@@ -79,7 +79,7 @@ class StackAnnotationsTest {
     @Test fun lazyPayloadIsVisibleInSnapshotAndReturnsOnSuccessAndException() = entered { language ->
         val shape = TupleShape(CoreRepresentations.parse(tupleRep), language)
         val probe = Probe(language, shape)
-        val action = Closure(null, arity = 1, target = probe.callTarget)
+        val action = Closure(null, 1, probe.callTarget)
         val never = object : GuestRoot(language, FrameLayout().build()) {
             override fun execute(frame: VirtualFrame): Nothing = error("annotation was forced")
             override fun bloom(frame: VirtualFrame) = 0L
@@ -111,7 +111,7 @@ class StackAnnotationsTest {
     @Test fun oneShotActionsParkAnnotationsAndRestoreCapturedStateOnResume() = entered { language ->
         val shape = TupleShape(CoreRepresentations.parse(tupleRep), language)
         val probe = Probe(language, shape)
-        val action = Closure(null, arity = 1, target = probe.callTarget)
+        val action = Closure(null, 1, probe.callTarget)
         val outside = StackAnnotationState.EMPTY.push("original")
         val resumer = StackAnnotationState.EMPTY.push("resumer")
         StackAnnotations.set(null, outside)
@@ -163,7 +163,7 @@ class StackAnnotationsTest {
     @Test fun multiShotAnnotationReturnRebasesOnResumerAmbientAndRecapture() = entered { language ->
         val shape = TupleShape(CoreRepresentations.parse(tupleRep), language)
         val probe = Probe(language, shape)
-        val action = Closure(null, arity = 1, target = probe.callTarget)
+        val action = Closure(null, 1, probe.callTarget)
         val owner = object : GuestRoot(language, FrameLayout().build()) {
             @Child var site = DelimitedActionSite(language, Metrics(false))
             lateinit var stack: DelimitedStack
@@ -195,7 +195,7 @@ class StackAnnotationsTest {
                 throw DelimitedCut(PromptTag(Language.currentState()), action, shape, MaskingState.UNMASKED, this)
         }
         val second = assertThrows(DelimitedCut::class.java) {
-            Calls.target(owner.callTarget, arrayOf(0L, Closure(null, arity = 1, target = recapture.callTarget)))
+            Calls.target(owner.callTarget, arrayOf(0L, Closure(null, 1, recapture.callTarget)))
         }
         assertEquals(listOf("second"), StackAnnotations.current(null).values())
         owner.stack = DelimitedStack(second, shape)

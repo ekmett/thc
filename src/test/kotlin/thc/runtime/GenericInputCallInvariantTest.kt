@@ -117,7 +117,7 @@ class GenericInputCallInvariantTest {
     private fun dispatch(target: RootCallTarget, values: Array<Any?>): Any? {
         val call = GenericInputCall(ScalarArrayInputSource(null), 1, false, Metrics(false), null, 0)
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameLayout().build())
-        return call.execute(frame, Closure(null, arity = 1, target = target), values)
+        return call.execute(frame, Closure(null, 1, target), values)
     }
 
     @Test fun missingRootRetainsItsNullCastFailureBeforeInputPreparation() {
@@ -163,7 +163,7 @@ class GenericInputCallInvariantTest {
                 val source = AstInputSource(input.logical, slots)
                 val node = object : Node() {}
                 val failure = assertThrows(type) {
-                    prepareGenericInput(frame, node, Closure(null, arity = 1, target = target), input,
+                    GenericTypedInputsKt.prepareGenericInput(frame, node, Closure(null, 1, target), input,
                         source, null, 1, 0, 1, Force(Metrics(false)))
                 }
                 assertEquals(1, reads)

@@ -170,7 +170,7 @@ class AstTailSpillTest {
                 val expected: Any = when (kind) {
                     CoreKind.DATA, CoreKind.OBJECT -> DataLayout(language, "TailBox", "TailBox", arrayOf("LiftedRep"))
                         .create(arrayOf(payload))
-                    CoreKind.CLOSURE -> Closure(null, arity = 1, target = object : RootNode(language) {
+                    CoreKind.CLOSURE -> Closure(null, 1, object : RootNode(language) {
                         override fun execute(frame: VirtualFrame): Nothing = error("Returned closure was entered")
                     }.callTarget)
                     CoreKind.ADDRESS -> ManagedAddress.fromByteArray(bytes).plus(1)

@@ -46,7 +46,7 @@ class OperandRetentionTest {
         val target = object : RootNode(null) {
             override fun execute(frame: VirtualFrame): Any? = error("Self transfer must not call its target")
         }.callTarget
-        val function = Closure(null, arity = 4, target = target)
+        val function = Closure(null, 4, target)
         FrameAccess.write(frame, 0, first)
         FrameAccess.write(frame, 1, second)
         FrameAccess.writeLong(frame, 2, Long.MIN_VALUE)

@@ -29,7 +29,7 @@ class InputDispatchThreadTest {
 
     @Test fun concurrentColdArmsAndGenericFallbackPreserveAllTargets() {
         val host = CallerRoot().callTarget
-        val closures = (0L until 5L).map { Closure(null, arity = 1, target = AddRoot(it * 17L).callTarget) }
+        val closures = (0L until 5L).map { Closure(null, 1, AddRoot(it * 17L).callTarget) }
         val barrier = CyclicBarrier(5)
         val workers = Executors.newFixedThreadPool(5)
         try {

@@ -133,12 +133,12 @@ internal class CatchException(private val shape: TupleShape,
             catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                        actionCall!!.execute(frame, requireClosure(input), arrayOf(Unit))
+                        actionCall!!.execute(frame, ApplicationKt.requireClosure(input), arrayOf(Unit))
                         return null
                     }
                 })
             }
-            actionCall!!.execute(frame, requireClosure(closure), arrayOf(Unit))
+            actionCall!!.execute(frame, ApplicationKt.requireClosure(closure), arrayOf(Unit))
             null
         }
 
@@ -175,12 +175,12 @@ internal class CatchException(private val shape: TupleShape,
             catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                        handlerCall!!.execute(frame, requireClosure(input), arrayOf(payload, Unit))
+                        handlerCall!!.execute(frame, ApplicationKt.requireClosure(input), arrayOf(payload, Unit))
                         return null
                     }
                 })
             }
-            handlerCall!!.execute(frame, requireClosure(closure), arrayOf(payload, Unit))
+            handlerCall!!.execute(frame, ApplicationKt.requireClosure(closure), arrayOf(payload, Unit))
             null
         }
     }
@@ -276,12 +276,12 @@ internal class MaskAction(private val shape: TupleShape, private val target: Mas
             catch (cut: AstCapture) {
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? {
-                        actionCall!!.execute(frame, requireClosure(input), arrayOf(Unit))
+                        actionCall!!.execute(frame, ApplicationKt.requireClosure(input), arrayOf(Unit))
                         return null
                     }
                 })
             }
-            actionCall!!.execute(frame, requireClosure(closure), arrayOf(Unit))
+            actionCall!!.execute(frame, ApplicationKt.requireClosure(closure), arrayOf(Unit))
             null
         }
     }

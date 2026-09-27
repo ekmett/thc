@@ -264,7 +264,7 @@ class DelimitedContinuationsTest {
                 var failHandler = false
                 var redeliver = false
                 val handlerFailure = RuntimeFault("handler failure")
-                val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                val action = Closure(null, 1, object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any = try {
@@ -274,7 +274,7 @@ class DelimitedContinuationsTest {
                         throw delivered // Preserve the real async-origin control object.
                     }
                 }.callTarget)
-                val handler = Closure(null, arity = 2, target = object : GuestRoot(language, FrameLayout().build()) {
+                val handler = Closure(null, 2, object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any {
@@ -416,7 +416,7 @@ class DelimitedContinuationsTest {
                 val children = ArrayList<AstContinuation>()
                 var resumedChildren = 0
                 var handled = 0
-                val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                val action = Closure(null, 1, object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any {
@@ -437,7 +437,7 @@ class DelimitedContinuationsTest {
                         }).freeze(this, frame.materialize()).also { children += it }
                     }
                 }.callTarget)
-                val handler = Closure(null, arity = 2, target = object : GuestRoot(language, FrameLayout().build()) {
+                val handler = Closure(null, 2, object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any {
@@ -524,7 +524,7 @@ class DelimitedContinuationsTest {
                 var effects = 0
                 var handled = 0
                 var mode = 0
-                val handler = Closure(null, arity = 2, target = object : GuestRoot(language, FrameLayout().build()) {
+                val handler = Closure(null, 2, object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any {
@@ -593,7 +593,7 @@ class DelimitedContinuationsTest {
                     }
                     fun resume(image: DelimitedStack): Any? = image.resume(site,
                         Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor),
-                        Closure(null, arity = 1, target = callTarget))
+                        Closure(null, 1, callTarget))
                 }
                 threads.enterCurrent()
                 try {
@@ -643,7 +643,7 @@ class DelimitedContinuationsTest {
                     init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any = answer
-                    fun resume(image: DelimitedStack, action: Any? = Closure(null, arity = 1, target = callTarget)): Any? = image.resume(site,
+                    fun resume(image: DelimitedStack, action: Any? = Closure(null, 1, callTarget)): Any? = image.resume(site,
                         Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor),
                         action)
                     fun finish(result: Any?, target: com.oracle.truffle.api.RootCallTarget): Any? =
@@ -664,7 +664,7 @@ class DelimitedContinuationsTest {
                 cut.append(saved.frame, DelimitedBytecodeStep(saved, shape))
                 val image = DelimitedStack(cut, shape)
                 repeat(2) { assertSame(marker, shape.layout.getObject(owner.resume(image) as HandoffStorage, 0)) }
-                val closure = Closure(null, arity = 1, target = owner.callTarget)
+                val closure = Closure(null, 1, owner.callTarget)
                 val head = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
                     b.beginRoot()
                     repeat(2) { b.beginYield(); b.emitLoadConstant(Unit); b.endYield() }
@@ -773,7 +773,7 @@ class DelimitedContinuationsTest {
                     }
                 })
                 val image = DelimitedStack(cut, shape)
-                val action = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                val action = Closure(null, 1, object : GuestRoot(language, FrameLayout().build()) {
                     init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any = shape.layout.create().also { shape.layout.setLong(it, 0, 7L) }
@@ -826,7 +826,7 @@ class DelimitedContinuationsTest {
                     override fun execute(frame: VirtualFrame): Any = shape.layout.create().also { shape.layout.setLong(it, 0, 7L) }
                     fun resume(image: DelimitedStack): Any? = image.resume(site,
                         Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor),
-                        Closure(null, arity = 1, target = callTarget))
+                        Closure(null, 1, callTarget))
                 }
                 val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), function.frameDescriptor)
                 val cut = DelimitedCut(PromptTag(Language.currentState()), null, shape, MaskingState.UNMASKED, owner)
