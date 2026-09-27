@@ -160,9 +160,9 @@ accessor and rejects unknown processor versions or builder shapes.
 changing root identity, instructions or instruction arguments.
 
 Cold bytecode compilation uses the existing cached-node transition before
-partial evaluation. The compiler can attach `BytecodeStaticLocal` metadata to
+partial evaluation. The compiler can attach the `FrameSlotKind.Long` singleton to
 exact, evaluated wide-integer formals with one ingress store; cached-node
-construction initializes only those local carriers. Conflicting slot metadata
+construction recognizes only that approved marker. Conflicting slot metadata
 remains unknown, and ordinary writes retain the DSL's widening behavior. Async,
 captured, loop, typed-input and unknown formals keep the adaptive path. Selected
 wide add/subtract/multiply operations use stateless DSL declarations with actual

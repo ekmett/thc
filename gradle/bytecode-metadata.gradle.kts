@@ -238,7 +238,7 @@ class BytecodeStaticPreparation {
         "            int local = locals[at + LOCALS_OFFSET_LOCAL_INDEX];\n" +
         "            int index = locals[at + LOCALS_OFFSET_INFO];\n" +
         "            Object info = index < 0 ? null : constants[index];\n" +
-        "            byte tag = info instanceof BytecodeStaticLocal proof ? proof.getKind().tag : FrameSlotKind.Illegal.tag;\n" +
+        "            byte tag = info == FrameSlotKind.Long ? FrameSlotKind.Long.tag : FrameSlotKind.Illegal.tag;\n" +
         "            if (!seen[local]) { localTags[local] = tag; seen[local] = true; }\n" +
         "            else if (localTags[local] != tag) localTags[local] = FrameSlotKind.Illegal.tag;\n" +
         "        }\n" +
@@ -293,7 +293,7 @@ val testBytecodeStaticPreparation = tasks.register("testBytecodeStaticPreparatio
         rejects(before + before)
         rejects(before.replace("int numLocals", "long numLocals"))
         rejects(before.replace("createCachedTags(numLocals);", "createCachedTags(other);"))
-        rejects(after.replace("proof.getKind().tag", "FrameSlotKind.Object.tag"))
+        rejects(after.replace("info == FrameSlotKind.Long", "info instanceof FrameSlotKind"))
         rejects(after.replace("super.prepareForCompilation", "otherPreparation"))
         logger.lifecycle("Static cached-node/local metadata preparation: version, shape, clone, CRLF and idempotence controls passed.")
     }
