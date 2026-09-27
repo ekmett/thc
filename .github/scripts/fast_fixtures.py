@@ -361,6 +361,7 @@ def _output_hashes(root, group):
             ("build/original-path-stat", fast_inputs.original_path_stat_artifact_hashes),
             ("build/original-path-mode", fast_inputs.original_path_mode_artifact_hashes),
             ("build/original-path-link", fast_inputs.original_path_link_artifact_hashes),
+            ("build/original-directory-paths", fast_inputs.original_directory_paths_artifact_hashes),
             ("build/original-path-access", fast_inputs.original_path_access_artifact_hashes),
             ("build/original-unlinkat", fast_inputs.original_unlinkat_artifact_hashes),
             ("build/original-fstatat", fast_inputs.original_fstatat_artifact_hashes),
@@ -641,7 +642,7 @@ def _full_output_hashes(root):
             if fast_inputs.GMP_NATIVE_HOST:
                 files.update(_gmp_output_hashes(root))
             continue
-        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/unix-wait-status"):
+        if name in ("build/bytestring-utf8", "build/original-memset", "build/original-memory-search", "build/text-cbits", "build/original-path-stat", "build/original-path-mode", "build/original-path-link", "build/original-directory-paths", "build/original-path-access", "build/original-unlinkat", "build/original-fstatat", "build/original-current-directory", "build/original-directory-streams", "build/unix-wait-status"):
             files.update(_output_hashes(root, {"outputs": [name]}))
             continue
         if name.removeprefix("build/") in (fast_inputs.BYTEARRAY_FAMILIES | fast_inputs.SIMD_BYTEARRAY_FAMILIES) or name in ("build/float-decode", "build/pinned-addresses", "build/bignat-literals", "build/rts-diagnostics", "build/rts-shutdown", "build/original-rts-locks", "build/original-open", "build/original-fcntl", "build/original-errno", "build/original-process-identity", "build/original-termios", "build/original-tcsetattr", "build/original-tcgetattr", "build/original-sigprocmask", "build/original-sigset"):

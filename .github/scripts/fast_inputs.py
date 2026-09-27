@@ -101,6 +101,13 @@ ORIGINAL_PATH_LINK_OUTPUTS = frozenset("build/original-path-link/" + name for na
     *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
       *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_PATH_LINK_ENTRIES))
       for suffix in ("stdout", "stderr", "command.json"))))
+ORIGINAL_DIRECTORY_PATHS_ENTRIES = ("pathRemoveDirectory", "executableReadlink")
+ORIGINAL_DIRECTORY_PATHS_OUTPUTS = frozenset("build/original-directory-paths/" + name for name in (
+    "manifest.json", "pre.json", "post.json", "oracle.json",
+    *(f"{stage}-{entry}.audit.json" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_PATHS_ENTRIES),
+    *(f"logs/{command}.{suffix}" for command in ("version", "libdir", "imports", "unit", "ghc-imports",
+      *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ORIGINAL_DIRECTORY_PATHS_ENTRIES))
+      for suffix in ("stdout", "stderr", "command.json"))))
 ORIGINAL_PATH_ACCESS_ENTRIES = ("pathAccess",)
 ORIGINAL_PATH_ACCESS_OUTPUTS = frozenset("build/original-path-access/" + name for name in (
     "manifest.json", "pre.json", "post.json", "oracle.json",
@@ -467,6 +474,7 @@ REQUIRED = tuple(sorted({
     *(ORIGINAL_PATH_STAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_MODE_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_LINK_OUTPUTS if platform.system() == "Linux" else []),
+    *(ORIGINAL_DIRECTORY_PATHS_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_PATH_ACCESS_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_UNLINKAT_OUTPUTS if platform.system() == "Linux" else []),
     *(ORIGINAL_FSTATAT_OUTPUTS if platform.system() == "Linux" else []),
@@ -493,7 +501,7 @@ REQUIRED = tuple(sorted({
     *(f"build/cbv-post-core/{n}.json" for n in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit")),
     "build/source-core/SourceNotes.json", "build/source-core/RepresentationAudit.json",
 }))
-BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
+BUILD_DIRS = frozenset(MANIFEST_DIRS + PROVENANCE_DIRS + ["original-gmp", "original-path-stat", "original-path-mode", "original-path-link", "original-directory-paths", "original-path-access", "original-unlinkat", "original-fstatat", "original-current-directory", "original-directory-streams", "floating", "corpus",
     "scalar-signatures", "aggregate-native", "native", "map"] +
     [PurePosixPath(p).name for p in CORE_DIRS])
 FLOAT_DECODE_ENTRIES = (*tuple(family + suffix for family in ("float", "double") for suffix in ("Direct", "Call", "Exponent")),
@@ -1384,6 +1392,20 @@ def original_path_link_artifact_hashes(manifest):
             "Invalid original path link artifact hash")
     return artifacts
 
+def original_directory_paths_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
+            manifest.get("ghc") == "9.14.1" and isinstance(manifest.get("unixUnit"), str) and ORIGINAL_UNIX_UNIT.fullmatch(manifest["unixUnit"]) and
+            manifest.get("entries") == list(ORIGINAL_DIRECTORY_PATHS_ENTRIES) and
+            manifest.get("installedArtifactsHashed") is False and manifest.get("readlinkUnit") == "ghc-internal",
+            "Invalid original directory pathname fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            ORIGINAL_DIRECTORY_PATHS_OUTPUTS - {"build/original-directory-paths/manifest.json"},
+            "Incomplete/unreviewed original directory pathname artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid original directory pathname artifact hash")
+    return artifacts
+
 
 def original_current_directory_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and type(manifest.get("schema")) is int and manifest["schema"] == 1 and
@@ -1734,6 +1756,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_PATH_MODE_OUTPUTS
     if parts[1] == "original-path-link":
         return name in ORIGINAL_PATH_LINK_OUTPUTS
+    if parts[1] == "original-directory-paths":
+        return name in ORIGINAL_DIRECTORY_PATHS_OUTPUTS
     if parts[1] == "original-path-access":
         return name in ORIGINAL_PATH_ACCESS_OUTPUTS
     if parts[1] == "original-unlinkat":
@@ -2012,6 +2036,8 @@ def inventory(root, current, read, core_files, verified=None):
             original_path_mode_artifact_hashes(doc)
         if name == "build/original-path-link/manifest.json":
             original_path_link_artifact_hashes(doc)
+        if name == "build/original-directory-paths/manifest.json":
+            original_directory_paths_artifact_hashes(doc)
         if name == "build/original-path-access/manifest.json":
             original_path_access_artifact_hashes(doc)
         if name == "build/original-unlinkat/manifest.json":

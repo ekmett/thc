@@ -105,6 +105,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     FREE_DIRENT("__hscore_free_dirent", "ccall", "unsafe", listOf("AddrRep", null), null, "unix-2.8.8.0-inplace"),
     GETCWD("getcwd", "ccall", "unsafe", listOf("AddrRep", "Word64Rep", null), "AddrRep", "unix-2.8.8.0-inplace"),
     SYMLINK("symlink", "ccall", "unsafe", listOf("AddrRep", "AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    RMDIR("rmdir", "ccall", "unsafe", listOf("AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     READLINK("readlink", "ccall", "unsafe", listOf("AddrRep", "AddrRep", "Word64Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     MKDIR("mkdir", "ccall", "unsafe", listOf("AddrRep", "Word32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     FSTATAT("ghczuwrapperZC1ZCdirectoryzm1zi3zi10zi0zminplaceZCSystemziDirectoryziInternalziPosixZCfstatat", "capi", "safe", listOf("Int32Rep", "AddrRep", "AddrRep", "Int32Rep", null), "Int32Rep", "directory-1.3.10.0-inplace"),
@@ -149,9 +150,10 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
 
     // Only these reviewed declarations accept an installed identity of this release.
     fun acceptsUnit(value: Any?): Boolean = value == unit ||
+        this == READLINK && value == "ghc-internal" ||
         (this == UNLINKAT || this == FSTATAT) && value is String && directoryUnit.matches(value) ||
         isOriginalUnixUnit(value) && (this == CLOSE || this == DUP || this == ISATTY ||
-            this == UNIX_LSTAT || currentDirectory || directoryStream || waitStatus || this == MKDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
+            this == UNIX_LSTAT || currentDirectory || directoryStream || waitStatus || this == MKDIR || this == RMDIR || this == SYMLINK || this == READLINK || this == GET_EUID)
 
     fun matchesSymbol(value: Any?): Boolean = value == symbol ||
         this == FSTATAT && value is String && value.replace(directoryWrapperUnit, "directoryzm1zi3zi10zi0zminplaceZC") == symbol ||
@@ -184,6 +186,7 @@ internal enum class OriginalStdioOp(val symbol: String, val convention: String, 
     val directoryStream: Boolean get() = this == OPENDIR || this == FDOPENDIR || this == CLOSEDIR ||
         this == READDIR || this == DIRENT_NAME || this == FREE_DIRENT
     val directoryPointer: Boolean get() = this == OPENDIR || this == DIRENT_NAME
+    val pathRemoval: Boolean get() = this == UNLINK || this == RMDIR
     val pathLink: Boolean get() = this == SYMLINK || this == READLINK
     val pathMode: Boolean get() = this == MKDIR || this == CHMOD
     val pathStat: Boolean get() = this == STAT || this == LSTAT || this == UNIX_LSTAT
@@ -227,7 +230,7 @@ internal object CoreOriginalStdio {
     /** An occurrence certificate cannot relabel a stored foreign operand. */
     fun validateScalarOperand(operation: OriginalStdioOp, index: Int,
         lowered: CoreRepresentation, stored: CoreRepresentation?) {
-        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation == OriginalStdioOp.UNLINK || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.pathLink || operation.currentDirectory || operation.directoryStream || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
+        requireProof(operation.processIdentity || operation == OriginalStdioOp.SET_ERRNO || operation.eventDescriptor || operation.waitStatus || operation.pathRemoval || operation.flagConstant || operation.fcntl || operation == OriginalStdioOp.SIGPROCMASK || operation.readiness || operation.seekConstant || operation.stat || operation.termios || operation.sigset || operation.savedTermios || operation.readImage || operation.pathStat || operation.pathMode || operation == OriginalStdioOp.ACCESS || operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT || operation.pathLink || operation.currentDirectory || operation.directoryStream || operation == OriginalStdioOp.TCSETATTR || operation.opening || operation.iconv || operation.strerror || operation.duplication || operation.locking,
             "strict operand operation")
         val primitive = operation.arguments[index]
         val kind = when (primitive) { null -> CoreKind.VOID; "AddrRep" -> CoreKind.ADDRESS; else -> CoreKind.LONG }
