@@ -49,7 +49,7 @@ class FloatForeignNativeTest {
                 evaluated = true, present = true, primReps = listOf(if (operation.single) "DoubleRep" else "FloatRep"))
             assertThrows(RuntimeFault::class.java) { CoreFloatForeign.validateOperand(operation, 0, wrong, null) }
         }
-        assertEquals(FloatForeignOp.entries.map { it.symbol }.toSet(), seen)
+        assertEquals(FloatForeignOp.values().map { it.symbol }.toSet(), seen)
     }
 
     @Test fun originalFloatClassificationsAndRoundingMatchNativeRawBitsOnFirstCompiledCalls() {
