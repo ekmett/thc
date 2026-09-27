@@ -315,6 +315,7 @@ class FastSelectionTest(unittest.TestCase):
     def test_shared_core_and_frontend_changes_require_polyglot_but_leaf_does_not(self):
         for path in ("src/main/kotlin/thc/runtime/CoreRepresentations.kt",
                      "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
+                     "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
                      "scripts/audit-core.py", "build.gradle.kts", "Makefile",
                      "compiler/plugin.py", "gradlew", "gradle/wrapper/gradle-wrapper.properties"):
             with self.subTest(path=path):
@@ -1510,12 +1511,15 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
         owners = self.policy["owners"]
+        self.assertLessEqual({"thc.runtime.PosixStdioHostAbiModelTest", "thc.runtime.StdioHostAbiFailureTest"},
+                             set(owners["src/main/java/thc/runtime/StdioHostAbi.java"]["junit"]))
         native = {"thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest",
                   "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest",
                   "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest"}
         for name in ("ManagedFiles", "ManagedStdio", "StdioHostAbi", "CoreOriginalStdio",
                      "OriginalStdioExpression"):
-            path = "src/main/kotlin/thc/runtime/" + name + ".kt"
+            path = ("src/main/java/thc/runtime/" + name + ".java" if name == "StdioHostAbi"
+                    else "src/main/kotlin/thc/runtime/" + name + ".kt")
             with self.subTest(path=path):
                 self.assertLessEqual(native, set(owners[path]["junit"]))
                 self.assertNotIn(path, self.families)  # Preserve the foreign callback lane.
