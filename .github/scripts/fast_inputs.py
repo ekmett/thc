@@ -40,7 +40,7 @@ RUNTIME_INPUTS = ("src/main/kotlin/thc/runtime/CoreByteStringDecimal.kt",
                   "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
                   "src/main/kotlin/thc/runtime/VectorMemory.kt")
 MANIFEST_DIRS = """bytestring-decimal unix-libc proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
-bytestring-utf8 original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
+bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays
 int8-arrays integer-primops managed-address-reads mutable-bytearray-size mutable-bytearrays mutvar stable-pointers weak-explicit shrink-bytearrays fetch-add-int-array atomic-int-arrays
 narrow-literal-proofs native-addresses native-malloc libdw-unavailable original-stack original-stack-formatter original-stdio original-stdio-read original-stdio-close original-posix-dup original-open original-fcntl original-termios original-tcsetattr original-tcgetattr original-sigprocmask original-sigset original-stdio-seek original-stdio-truncate original-strerror original-fd-ready original-rts-locks rts-diagnostics rts-shutdown original-handle-readiness original-posix-stat resize-bytearrays scalar-bitcasts short-bytes-slices sqrt
@@ -467,6 +467,7 @@ NATIVE_EXECUTABLES = frozenset({"build/proxy-void/native/oracle", "build/proxy-v
     "build/original-posix-stat/native/oracle",
     "build/original-gmp/native/oracle",
     "build/bytestring-utf8/native/oracle",
+    "build/original-memset/native/oracle",
     "build/original-memory-search/native/oracle",
     *(f"build/{name}/native/{name}" for name in
       ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"))})
@@ -543,6 +544,16 @@ BYTESTRING_UTF8_OUTPUTS = frozenset("build/bytestring-utf8/" + name for name in 
     *(f"logs/{label}.{suffix}" for label in (
         "version", "original-registration", "package-init", "package-register", "native-build", "native-observations", "pre-export", "post-export",
         *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("validateUnsafe", "validateSafe")))
+      for suffix in ("stdout", "stderr", "command.json"))))
+
+MEMSET_OUTPUTS = frozenset("build/original-memset/" + name for name in (
+    "manifest.json", "oracle.json", "native/oracle",
+    *(f"{stage}/{name}" for stage in ("pre", "post") for name in (
+        "core/OriginalMemsetAudit.json", "core/THC.InterfaceClosure.json",
+        "originalFill.audit.json")),
+    *(f"logs/{label}.{suffix}" for label in (
+        "version", "native-build", "native-observations", "pre-export", "post-export",
+        *(f"{stage}-audit-{entry}" for stage in ("pre", "post") for entry in ("originalFill",)))
       for suffix in ("stdout", "stderr", "command.json"))))
 
 MEMORY_SEARCH_OUTPUTS = frozenset("build/original-memory-search/" + name for name in (
@@ -1137,6 +1148,20 @@ def bytestring_utf8_artifact_hashes(manifest):
     return artifacts
 
 
+def memset_artifact_hashes(manifest):
+    require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
+            manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
+            manifest.get("nativeRows") == 198 and manifest.get("entries") == ["originalFill"],
+            "Invalid original memset fixture receipt")
+    artifacts = manifest.get("artifactHashes")
+    require(isinstance(artifacts, dict) and set(artifacts) ==
+            MEMSET_OUTPUTS - {"build/original-memset/manifest.json"},
+            "Incomplete/unreviewed memset artifacts")
+    require(all(isinstance(value, str) and HEX.fullmatch(value) for value in artifacts.values()),
+            "Invalid memset artifact hash")
+    return artifacts
+
+
 def memory_search_artifact_hashes(manifest):
     require(isinstance(manifest, dict) and manifest.get("schema") == 1 and
             manifest.get("strictAccepted") is True and manifest.get("runtimeVerified") is False and
@@ -1420,6 +1445,8 @@ def allowed_payload(name, pins):
         return name in ORIGINAL_STDIO_OUTPUTS
     if parts[1] == "bytestring-utf8":
         return name in BYTESTRING_UTF8_OUTPUTS
+    if parts[1] == "original-memset":
+        return name in MEMSET_OUTPUTS
     if parts[1] == "original-memory-search":
         return name in MEMORY_SEARCH_OUTPUTS
     if parts[1] == "thread-inventory":
@@ -1659,6 +1686,8 @@ def inventory(root, current, read, core_files, verified=None):
             gmp_artifact_hashes(doc)
         if name == "build/bytestring-utf8/manifest.json":
             bytestring_utf8_artifact_hashes(doc)
+        if name == "build/original-memset/manifest.json":
+            memset_artifact_hashes(doc)
         if name == "build/original-memory-search/manifest.json":
             memory_search_artifact_hashes(doc)
         if name == "build/rts-diagnostics/manifest.json":

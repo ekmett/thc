@@ -227,6 +227,8 @@ tasks.withType<Test>().configureEach {
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
             "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",
+            "original-memset/**/*.json", "original-memset/native/oracle",
+            "original-memset/logs/*.stdout", "original-memset/logs/*.stderr",
             "original-memory-search/**/*.json", "original-memory-search/native/oracle",
             "original-memory-search/logs/*.stdout", "original-memory-search/logs/*.stderr",
             "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",

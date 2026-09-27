@@ -27,6 +27,9 @@ extra-source-files:
   test/fixtures/run-native-archive/provider/native-archive-provider.cabal
   test/fixtures/run-native-archive/provider/native.c
   test/fixtures/run-native-archive/provider/Provider.hs
+  compiler/test-fixtures/OriginalMemsetAudit.hs
+  compiler/test-fixtures/OriginalMemsetNative.hs
+  docs/original-memset.md
   compiler/test-fixtures/ByteStringUtf8Audit.hs
   compiler/test-fixtures/ByteStringUtf8Native.hs
   compiler/pinned-bytestring/0.12.2.0/README.md
@@ -826,6 +829,7 @@ executable thc-fixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures
     ByteStringUtf8Fixtures
+    MemsetFixtures
     MemorySearchFixtures
     LibdwUnavailableFixtures
     NativeAddressFixtures

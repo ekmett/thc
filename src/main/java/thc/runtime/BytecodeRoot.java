@@ -1421,6 +1421,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalMemset {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress target, long value, long count, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            target.fill(count, value);
+            destination.setObject(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, target);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     public static final class OriginalMemcpy {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress target, ManagedAddress source, long count, Object state, @Bind("$node") Node node) {

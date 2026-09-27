@@ -40,6 +40,25 @@ class FastInputTests(unittest.TestCase):
         for path in ('native/ByteStringUtf8Native.o', 'native/other-oracle', 'unreviewed.json'):
             self.assertFalse(cache.allowed_payload('build/bytestring-utf8/' + path, {}))
 
+    def test_memset_closed_receipt(self):
+        manifest_path = 'build/original-memset/manifest.json'
+        outputs = cache.MEMSET_OUTPUTS
+        self.assertEqual(30, len(outputs))
+        self.assertIn(manifest_path, DECLARED_REQUIRED)
+        artifacts = {name: 'a' * 64 for name in outputs - {manifest_path}}
+        good = dict(schema=1, entries=['originalFill'], nativeRows=198,
+                    strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.memset_artifact_hashes(good))
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(nativeRows=197), dict(strictAccepted=False), dict(runtimeVerified=True),
+                        dict(entries=['wrongEntry']), dict(artifactHashes={}),
+                        dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
+            with self.assertRaises(cache.CacheMiss):
+                cache.memset_artifact_hashes(dict(good, **changes))
+        for path in ('native/OriginalMemsetNative.o', 'native/other-oracle', 'unreviewed.json'):
+            self.assertFalse(cache.allowed_payload('build/original-memset/' + path, {}))
+
     def test_memory_search_closed_receipt(self):
         manifest_path = 'build/original-memory-search/manifest.json'
         outputs = cache.MEMORY_SEARCH_OUTPUTS

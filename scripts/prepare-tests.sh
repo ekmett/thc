@@ -98,6 +98,7 @@ python3 scripts/prepare-managed-md5.py
 "$fixture_bin" original-stdio --require-supported
 "$fixture_bin" original-stdio-read
 "$fixture_bin" bytestring-utf8
+"$fixture_bin" original-memset
 "$fixture_bin" original-memory-search
 "$fixture_bin" original-handle-readiness
 "$fixture_bin" original-posix-stat

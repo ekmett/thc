@@ -2069,7 +2069,7 @@ class OriginalMemorySearchDeclarationTest(unittest.TestCase):
         def scalar(rep, evaluated=False):
             kind = 'void' if rep is None else 'address' if rep == 'AddrRep' else 'long'
             return dict(kind=kind, primReps=[] if rep is None else [rep], evaluated=evaluated)
-        for symbol, second, result in [('memcmp', 'AddrRep', 'Int32Rep'), ('memchr', 'Int32Rep', 'AddrRep')]:
+        for symbol, second, result in [('memcmp', 'AddrRep', 'Int32Rep'), ('memchr', 'Int32Rep', 'AddrRep'), ('memset', 'Int32Rep', 'AddrRep')]:
             output = dict(kind='unknown', primReps=[result], evaluated=False, aggregate='unboxed-tuple',
                           components=[scalar(None, True), scalar(result, True)])
             declaration = dict(schema=1, target=dict(kind='static', symbol=symbol, unit='bytestring-0.12.2.0-inplace', isFunction=True),
