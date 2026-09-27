@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+set -euo pipefail
+[[ $# == 1 ]] || { echo 'Usage: JAVA_HOME=PINNED_JDK bash prepare.sh OUTPUT_DIR' >&2; exit 2; }
+: "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
+recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+mkdir -p "$1"
+output_dir=$(cd -- "$1" && pwd)
+builder_dir="$JAVA_HOME/lib/svm/builder"
+[[ "$("$JAVA_HOME/bin/native-image" --version)" == *25.3.4.1* ]] || exit 2
+check_hash() {
+    local actual
+    actual=$(sha256sum "$1")
+    [[ "${actual%% *}" == "$2" ]] || { echo "Pinned builder input hash mismatch: $1" >&2; exit 1; }
+}
+check_hash "$builder_dir/svm.src.zip" b10b638d654121fd60923fa86d10f17aaaa82ecd3c48628be885c2b83e006ee0
+check_hash "$builder_dir/svm.jar" 7558a5c20e347c0aa5af411472c76c908d15b2601d029b1a0b7d8ed15f5e086c
+work_dir=$(mktemp -d "$output_dir/work.XXXXXX")
+mkdir -p "$work_dir/source/com/oracle/svm/hosted/phases" "$work_dir/classes"
+source_file=com/oracle/svm/hosted/phases/SharedGraphBuilderPhase.java
+unzip -p "$builder_dir/svm.src.zip" "$source_file" > "$work_dir/source/$source_file"
+(
+    cd "$work_dir/source"
+    GIT_CEILING_DIRECTORIES="$work_dir" git apply --no-index "$recipe_dir/unchanged-local-stamps.patch"
+)
+"$JAVA_HOME/bin/javac" -J-Xmx1g -proc:none -Xmaxerrs 10 \
+    --module-path "$builder_dir" --add-modules org.graalvm.nativeimage.builder \
+    --patch-module "org.graalvm.nativeimage.builder=$work_dir/source" \
+    --add-exports java.base/jdk.internal.access=org.graalvm.nativeimage.builder \
+    --add-exports java.base/jdk.internal.foreign=org.graalvm.nativeimage.builder \
+    --add-exports jdk.internal.vm.ci/jdk.vm.ci.meta=org.graalvm.nativeimage.builder,org.graalvm.nativeimage.pointsto,org.graalvm.nativeimage.base,org.graalvm.nativeimage.guest.staging \
+    --add-exports jdk.internal.vm.ci/jdk.vm.ci.meta.annotation=org.graalvm.nativeimage.builder,org.graalvm.nativeimage.pointsto,org.graalvm.nativeimage.base \
+    --add-exports jdk.internal.vm.ci/jdk.vm.ci.code=org.graalvm.nativeimage.builder,org.graalvm.nativeimage.pointsto,org.graalvm.nativeimage.base \
+    -d "$work_dir/classes" "$work_dir/source/$source_file"
+mkdir -p "$work_dir/classes/META-INF/source/com/oracle/svm/hosted/phases"
+# Preserve the complete modified source and its original copyright/license header.
+cp "$work_dir/source/$source_file" "$work_dir/classes/META-INF/source/$source_file"
+cp "$JAVA_HOME/LICENSE.txt" "$work_dir/classes/META-INF/upstream-toolchain-LICENSE.txt"
+"$JAVA_HOME/bin/jar" --create --file "$work_dir/thc-svm-deopt-loop-stamps.jar" \
+    --date=2026-01-01T00:00:00Z -C "$work_dir/classes" .
+cp "$work_dir/thc-svm-deopt-loop-stamps.jar" "$output_dir/thc-svm-deopt-loop-stamps.jar"
+sha256sum "$builder_dir/svm.src.zip" "$builder_dir/svm.jar" "$JAVA_HOME/LICENSE.txt" "$recipe_dir/unchanged-local-stamps.patch" \
+    "$work_dir/source/$source_file" "$output_dir/thc-svm-deopt-loop-stamps.jar" > "$output_dir/provenance.sha256"
+printf 'Prepared isolated builder overlay: %s\n' "$output_dir/thc-svm-deopt-loop-stamps.jar"

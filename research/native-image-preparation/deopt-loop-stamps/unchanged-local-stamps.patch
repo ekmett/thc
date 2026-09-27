@@ -1,0 +1,19 @@
+diff --git a/com/oracle/svm/hosted/phases/SharedGraphBuilderPhase.java b/com/oracle/svm/hosted/phases/SharedGraphBuilderPhase.java
+--- a/com/oracle/svm/hosted/phases/SharedGraphBuilderPhase.java
++++ b/com/oracle/svm/hosted/phases/SharedGraphBuilderPhase.java
+@@ -1412,6 +1412,15 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance {
+             return isMethodDeoptTarget() || super.forceLoopPhis();
+         }
+
++        @Override
++        protected boolean stampFromValueForForcedPhis() {
++            /*
++             * FrameStateBuilder restricts this to locals unchanged in the loop.
++             * Keep their types while retaining the forced deoptimization phis.
++             */
++            return (isMethodDeoptTarget() && !graph.isOSR()) || super.stampFromValueForForcedPhis();
++        }
++
+         @Override
+         public boolean allowDeoptInPlugins() {
+             return super.allowDeoptInPlugins();

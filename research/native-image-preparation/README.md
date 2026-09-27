@@ -38,6 +38,12 @@ Optional `THC_NATIVE_IMAGE_METHOD_FILTER` enables a filtered Graal graph dump;
 `THC_NATIVE_IMAGE_DUMP_PATH` selects its directory. Leave the filter unset for a
 normal build. Neither option changes compilation acceptance checks.
 
+The optional [deoptimization loop-stamp overlay](deopt-loop-stamps/README.md)
+is enabled only with `THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1`. It recompiles one
+hash-pinned builder source family into an isolated module patch and runs its
+focused controls before image construction; the installed toolchain remains
+unchanged. This experiment is separate from initialization inventory preparation.
+
 ## Inventory contract
 
 The script combines the existing

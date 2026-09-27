@@ -48,11 +48,20 @@ done < "$recipe_dir/prepared-initialization.txt"
 initialization_args="$inventory_dir/prepared-initialization.args"
 printf '%s\n' "--initialize-at-build-time=$initialization" > "$initialization_args"
 [[ "$mode" == prepare-only ]] && exit 0
+builder_patch=()
+if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
+    [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
+    overlay_dir="$repo_dir/build/native-image/deopt-loop-stamps"
+    bash "$recipe_dir/deopt-loop-stamps/prepare.sh" "$overlay_dir"
+    bash "$recipe_dir/deopt-loop-stamps/check.sh" "$overlay_dir/checks" "$overlay_dir/thc-svm-deopt-loop-stamps.jar"
+    builder_patch=("-J--patch-module=org.graalvm.nativeimage.builder=$overlay_dir/thc-svm-deopt-loop-stamps.jar")
+fi
 diagnostics=()
 if [[ -n "${THC_NATIVE_IMAGE_METHOD_FILTER:-}" ]]; then
     diagnostics=(-H:Dump=:2 -H:MethodFilter="$THC_NATIVE_IMAGE_METHOD_FILTER")
 fi
 exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
+    "${builder_patch[@]}" \
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
