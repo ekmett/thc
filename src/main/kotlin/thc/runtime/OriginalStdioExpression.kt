@@ -4,6 +4,7 @@
 package thc.runtime
 
 import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.CompilerDirectives
 
 /** Preserve typed addresses and numeric carriers; validate State before effects. */
 internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
@@ -11,7 +12,30 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("Original stdio call requires a State/result tuple destination")
 
+    private object ResumeCompleted : AstResumeStep {
+        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+            if (input !== Unit) fault("Original unlinkat continuation expected a completed async poll")
+            return null
+        }
+    }
+
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        if (operation == OriginalStdioOp.UNLINKAT) {
+            val fd = operands[0].executeRequiredLong(frame)
+            val path = operands[1].executeRequiredAddress(frame)
+            val flags = operands[2].executeRequiredLong(frame)
+            requireVoidCarrier(operands[3].execute(frame))
+            FrameAccess.writeLong(frame, slots[offset], CoreOriginalStdio.current(this).unlinkAt(fd, path, flags))
+            // A safe-call poll resumes after the saved result, never at the effect.
+            if (AstControl.enabled(this)) {
+                val compiled = CompilerDirectives.inCompiledCode()
+                GuestThreads.pollCurrent(this, false)?.let { request ->
+                    request.compiledCapture = compiled
+                    throw AstCapture(request, SynchronousMasking.current(this)).append(ResumeCompleted)
+                }
+            }
+            return null
+        }
         if (operation == OriginalStdioOp.SET_ERRNO) {
             val value = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))

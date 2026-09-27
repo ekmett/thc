@@ -3421,6 +3421,54 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
 
 
 
+class OriginalUnlinkAtDeclarationTest(unittest.TestCase):
+    """Synthetic rejection controls; native fixtures retain the actual directory Id."""
+
+    def declaration(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
+        integer = dict(kind='long', primReps=['Int32Rep'], evaluated=True)
+        return dict(schema=1, target=dict(kind='static', symbol='unlinkat', isFunction=True,
+            unit='directory-1.3.10.0-inplace'), convention='ccall', safety='safe', arity=4, suppliedArity=4,
+            argumentReps=[dict(rep, evaluated=False) for rep in (integer, address, integer, state)],
+            resultRep=dict(tuple_rep(state, integer), evaluated=False))
+
+    def test_exact_directory_owner_safe_call_and_cint_signature(self):
+        fixture = LibdwUnavailableAuditTest()
+        for unit in ('directory-1.3.10.0-inplace', 'directory-1.3.10.0-02fc'):
+            declaration = self.declaration(); declaration['target']['unit'] = unit
+            report = fixture.audit(fixture.fixture(declaration))
+            self.assertTrue(report['accepted'], report)
+        declaration = self.declaration()
+        for unit in ('ghc-internal', 'main', 'unix-2.8.8.0-inplace', 'directory-1.3.9.0-inplace',
+                     'directory-1.3.10.0-', 'directory-1.3.10.0-ABCD', 'directory-1.3.10.0-02fc:forged',
+                     'directory-1.3.10.0-inplace\n'):
+            wrong = copy.deepcopy(declaration); wrong['target']['unit'] = unit
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], unit)
+        for key, value in (('convention', 'capi'), ('safety', 'unsafe'), ('safety', 'interruptible'),
+                           ('arity', 3), ('suppliedArity', 3), ('resultRep', LONG)):
+            wrong = copy.deepcopy(declaration); wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], key)
+        self.assertFalse(fixture.audit(fixture.fixture(declaration), dict(CAP, managedForeignCalls=[]))['accepted'])
+
+    def test_unlinkat_declared_stored_and_lowered_operands_are_checked(self):
+        fixture = LibdwUnavailableAuditTest()
+        declaration = self.declaration()
+        for index in (0, 2):
+            for rep in ('IntRep', 'Word32Rep', 'Word64Rep'):
+                wrong = copy.deepcopy(declaration); wrong['argumentReps'][index]['primReps'] = [rep]
+                self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'])
+        for index in range(4):
+            module = fixture.fixture(declaration)
+            module['bindings'][0]['expr'][1][index]['rep'] = LONG
+            self.assertFalse(fixture.audit(module)['accepted'], (index, 'stored'))
+            module = fixture.fixture(declaration)
+            call = module['bindings'][0]['expr'][2][1]
+            producer = ['lit', 'string-bytes', '41'] if index in (0, 2) else lit(9)
+            call[2][index] = [*producer, call[2][index][2]]
+            self.assertFalse(fixture.audit(module)['accepted'], (index, 'producer'))
+
+
 class OriginalPathAccessDeclarationTest(unittest.TestCase):
     """Synthetic rejection controls; native fixtures preserve the original Id."""
 

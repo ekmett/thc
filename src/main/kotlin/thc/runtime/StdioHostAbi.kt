@@ -5,7 +5,7 @@ package thc.runtime
 
 /** Actual C errno constants from the build host, not the private service categories. */
 internal class StdioHostAbi private constructor(private val errors: Map<String, Long>, private val seek: Map<String, Long>,
-    private val open: Map<String, Long>, val siginfoBytes: Long) {
+    private val open: Map<String, Long>, val atFdcwd: Long, val atRemoveDir: Long, val siginfoBytes: Long) {
     fun requireOpenAbi() { if (open.getValue("modeBytes") != 4L) fault("Original open requires the Linux Word32 mode_t ABI") }
     fun openReadable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
         it == open.getValue("O_RDONLY") || it == open.getValue("O_RDWR") }
@@ -103,9 +103,15 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
             val mask = open.getValue("O_ACCMODE")
             requireAbi(mask != 0L && access.toSet().size == 3 && access.all { it and mask == it } &&
                 open.getValue("O_APPEND") != 0L && open.getValue("O_APPEND") and mask == 0L, "open access/status bits")
+            val at = manifest["at"] as? Map<*, *>
+            requireAbi(at != null && at.keys == setOf("AT_FDCWD", "AT_REMOVEDIR"), "at fields")
+            val atFdcwd = exactInteger(at!!["AT_FDCWD"])
+            val atRemoveDir = exactInteger(at["AT_REMOVEDIR"])
+            requireAbi(atFdcwd != null && atFdcwd in Int.MIN_VALUE.toLong()..-1L, "negative CInt AT_FDCWD")
+            requireAbi(atRemoveDir != null && atRemoveDir in 1L..Int.MAX_VALUE.toLong(), "positive CInt AT_REMOVEDIR")
             val siginfoBytes = exactInteger(manifest["siginfoBytes"])
             requireAbi(siginfoBytes != null && siginfoBytes in 1L..Int.MAX_VALUE.toLong(), "siginfo_t size")
-            return StdioHostAbi(errors, seek, open, siginfoBytes!!)
+            return StdioHostAbi(errors, seek, open, atFdcwd!!, atRemoveDir!!, siginfoBytes!!)
         }
         fun load(): StdioHostAbi {
             val document = StdioHostAbi::class.java.getResourceAsStream("/thc/native/stdio-host-abi.json")?.use {

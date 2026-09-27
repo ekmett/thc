@@ -1620,7 +1620,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { operand ->
-                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio.pathLink || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
+                        if (originalStdio.processIdentity || originalStdio == OriginalStdioOp.SET_ERRNO || originalStdio.eventDescriptor || originalStdio.waitStatus || originalStdio == OriginalStdioOp.UNLINK || originalStdio.flagConstant || originalStdio.fcntl || originalStdio == OriginalStdioOp.SIGPROCMASK || originalStdio.readiness || originalStdio.seekConstant || originalStdio.stat || originalStdio.termios || originalStdio.sigset || originalStdio.savedTermios || originalStdio.readImage || originalStdio.pathStat || originalStdio.pathMode || originalStdio == OriginalStdioOp.ACCESS || originalStdio == OriginalStdioOp.UNLINKAT || originalStdio.pathLink || originalStdio == OriginalStdioOp.TCSETATTR || originalStdio.opening ||
                             originalStdio.iconv || originalStdio.strerror || originalStdio.duplication || originalStdio.locking)
                             CoreOriginalStdio.validateScalarOperand(originalStdio, index,
                             operand.proof, if (argument[0] == "var")
@@ -1681,6 +1681,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.SYMLINK) b.beginOriginalSymlink(result)
                     else if (originalStdio == OriginalStdioOp.READLINK) b.beginOriginalReadlink(result)
                     else if (originalStdio == OriginalStdioOp.ACCESS) b.beginOriginalPathAccess(result)
+                    else if (originalStdio == OriginalStdioOp.UNLINKAT) b.beginOriginalUnlinkAt(result)
                     else if (originalStdio.pathMode) b.beginOriginalPathMode(result, originalStdio)
                     else if (originalStdio.pathStat) b.beginOriginalPathStat(result, originalStdio)
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.beginOriginalIconvOpen(result)
@@ -1754,6 +1755,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.SYMLINK) b.endOriginalSymlink()
                     else if (originalStdio == OriginalStdioOp.READLINK) b.endOriginalReadlink()
                     else if (originalStdio == OriginalStdioOp.ACCESS) b.endOriginalPathAccess()
+                    else if (originalStdio == OriginalStdioOp.UNLINKAT) b.endOriginalUnlinkAt()
                     else if (originalStdio.pathMode) b.endOriginalPathMode()
                     else if (originalStdio.pathStat) b.endOriginalPathStat()
                     else if (originalStdio == OriginalStdioOp.ICONV_OPEN) b.endOriginalIconvOpen()
@@ -1764,6 +1766,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     else if (originalStdio == OriginalStdioOp.SEEK) b.endFileSeek()
                     else if (originalStdio == OriginalStdioOp.TRUNCATE || originalStdio == OriginalStdioOp.DUP2) b.endFileSetSize()
                     else if (status) b.endOriginalStdioStatus() else b.endOriginalStdioTransfer()
+                    if (enableAsync && originalStdio == OriginalStdioOp.UNLINKAT) emitAsyncPoll(e)
                 }
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
