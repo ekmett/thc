@@ -522,7 +522,9 @@ internal class TailCallLoop(metrics: Metrics) : Node() {
         TailCallRepeatingNode(FrameLayout().build(), metrics))
 
     fun execute(tail: TailCall): Any? {
-        val repeating = loop.repeatingNode as TailCallRepeatingNode
+        val repeatingValue = loop.repeatingNode
+        if (repeatingValue == null) CompilerDirectives.transferToInterpreter()
+        val repeating = repeatingValue as TailCallRepeatingNode
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), repeating.descriptor)
         repeating.setNext(frame, tail)
         loop.execute(frame)

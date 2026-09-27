@@ -6,6 +6,7 @@
 
 import hashlib
 import json
+from contextlib import closing
 from pathlib import Path
 import platform
 import re
@@ -19,19 +20,28 @@ BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
 
 
-def capi_kind(call, unit, symbol):
+def time_clock_symbols(unit):
+    owner = unit.replace('-', 'zm').replace('.', 'zi')
+    return {f'ghczuwrapperZC{index}ZC{owner}ZCDataziTimeziClockziInternalziCTimespecZC{name}': kind
+            for index, name, kind in ((0, 'HSzuCLOCKzuREALTIME', 'time-clock-id'),
+                                     (1, 'clockzugetres', 'time-clock-resolution'),
+                                     (2, 'clockzugettime', 'time-clock-time'))}
+
+
+def capi_kind(call, unit, symbol, time=False):
     def scalar(primitive, evaluated):
         return dict(kind='void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long',
                     primReps=[] if primitive is None else [primitive], evaluated=evaluated)
 
     def expected(kind):
-        zero = kind == 'clock-id'
-        output = 'Word64Rep' if zero else 'Int32Rep'
+        zero = kind in ('clock-id', 'time-clock-id')
+        word = 'Int32Rep' if time else 'Word64Rep'
+        output = word if zero else 'Int32Rep'
         return dict(schema=1, target=dict(kind='static', symbol=symbol, unit=unit, isFunction=True),
                     convention='capi', safety='unsafe', arity=1 if zero else 3,
                     suppliedArity=1 if zero else 3,
                     argumentReps=([scalar(None, False)] if zero else
-                                  [scalar('Word64Rep', False), scalar('AddrRep', False), scalar(None, False)]),
+                                  [scalar(word, False), scalar('AddrRep', False), scalar(None, False)]),
                     resultRep=dict(kind='unknown', primReps=[output], aggregate='unboxed-tuple',
                                    components=[scalar(None, True), scalar(output, True)], evaluated=False))
 
@@ -44,22 +54,33 @@ def capi_kind(call, unit, symbol):
             return len(value) == len(wanted) and all(exact(a, b) for a, b in zip(value, wanted))
         return value == wanted
 
-    return next((kind for kind in ('clock-id', 'clock-buffer') if exact(call, expected(kind))), None)
+    kinds = (time_clock_symbols(unit).get(symbol),) if time else ('clock-id', 'clock-buffer')
+    return next((kind for kind in kinds if kind is not None and exact(call, expected(kind))), None)
 
 
 def linked_foreign(module):
-    """Verify the one fully linked, callback-free CAPI archive admitted so far."""
+    """Verify an exact fully linked, callback-free clock CAPI archive."""
     link = module.get('foreignLink')
     if link is None:
         return False
-    if (not isinstance(link, dict) or set(link) != {'schema', 'format', 'unit', 'module',
-            'target', 'symbols', 'abi', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} or
-            type(link['schema']) is not int or link['schema'] != 2 or
+    time = isinstance(link, dict) and link.get('module') == 'Data.Time.Clock.Internal.CTimespec'
+    if (not isinstance(link, dict) or set(link) != ({'schema', 'format', 'unit', 'module',
+            'target', 'symbols', 'abi', 'sourceSha256', 'bitcodeSha256', 'bitcodeHex'} |
+            ({'headerHashes'} if time else set())) or
+            type(link['schema']) is not int or link['schema'] != (3 if time else 2) or
             link['format'] != 'llvm-bitcode' or link['unit'] != module.get('unit') or
             link['module'] != module.get('module') or
-            link['module'] != 'System.CPUTime.Posix.ClockGetTime' or
-            not isinstance(link['unit'], str) or not link['unit'].startswith('base-')):
+            not isinstance(link['unit'], str) or not (
+                re.fullmatch(r'time-1\.15-(?:inplace|[0-9a-f]+)', link['unit']) and platform.system() == 'Linux'
+                if time else link['module'] == 'System.CPUTime.Posix.ClockGetTime' and link['unit'].startswith('base-'))):
         raise ValueError('invalid linked foreign owner/schema')
+    if time:
+        headers = link['headerHashes']
+        if (not isinstance(headers, list) or len(headers) != 3 or
+                any(not isinstance(header, dict) or set(header) != {'name', 'sha256'} or
+                    not isinstance(header['sha256'], str) or not SHA256.fullmatch(header['sha256']) for header in headers) or
+                [header['name'] for header in headers] != ['HsFFI.h', 'HsTime.h', 'HsTimeConfig.h']):
+            raise ValueError('invalid selected time header provenance')
     target = link['target']
     machine = platform.machine().lower()
     host_arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(machine, machine)
@@ -101,11 +122,13 @@ def linked_foreign(module):
     if (not isinstance(entries, list) or len(entries) != 3 or
             any(not isinstance(entry, dict) or set(entry) != {'symbol', 'kind'} or
                 type(entry['symbol']) is not str or type(entry['kind']) is not str or
-                entry['kind'] not in ('clock-id', 'clock-buffer') for entry in entries)):
+                entry['kind'] not in (('time-clock-id', 'time-clock-resolution', 'time-clock-time') if time
+                                      else ('clock-id', 'clock-buffer')) for entry in entries)):
         raise ValueError('invalid linked CAPI ABI inventory')
     abi = {entry['symbol']: entry['kind'] for entry in entries}
     if (set(abi) != set(symbols) or len(abi) != 3 or
-            list(abi.values()).count('clock-id') != 1 or list(abi.values()).count('clock-buffer') != 2):
+            (abi != time_clock_symbols(link['unit']) if time else
+             list(abi.values()).count('clock-id') != 1 or list(abi.values()).count('clock-buffer') != 2)):
         raise ValueError('linked CAPI ABI differs from original symbols')
     found = set()
     def inspect(value):
@@ -114,10 +137,11 @@ def linked_foreign(module):
             if isinstance(call, dict):
                 target = call.get('target')
                 symbol = target.get('symbol') if isinstance(target, dict) else None
-                if not isinstance(symbol, str) or symbol not in abi or \
-                        capi_kind(call, link['unit'], symbol) != abi[symbol]:
-                    raise ValueError('original CAPI call disagrees with linked symbol ABI')
-                found.add(symbol)
+                if not time or isinstance(target, dict) and target.get('unit') == link['unit']:
+                    if not isinstance(symbol, str) or symbol not in abi or \
+                            capi_kind(call, link['unit'], symbol, time) != abi[symbol]:
+                        raise ValueError('original CAPI call disagrees with linked symbol ABI')
+                    found.add(symbol)
             for item in value.values():
                 inspect(item)
         elif isinstance(value, list):
@@ -834,6 +858,12 @@ def zip_member(name):
 
 
 def bundle_modules(path, unit, records):
+    """Compatibility list API; streaming consumers use open_modules instead."""
+    with closing(_iter_bundle_modules(path, unit, records)) as modules:
+        return [(artifact, data) for _, artifact, data in modules]
+
+
+def _iter_bundle_modules(path, unit, records):
     bundle = unit['bundle']
     if (not isinstance(bundle, dict) or set(bundle) != {'path', 'sha256'} or
             not isinstance(bundle['path'], str) or not Path(bundle['path']).is_absolute() or
@@ -886,22 +916,93 @@ def bundle_modules(path, unit, records):
                             record.get('buildKey') != inner['buildKey'] or
                             record.get('exportKey') != inner['exportKey']):
                         raise ValueError(f'{path}: build-inputs record disagrees with unit {unit["id"]}')
-                return [(str(archive_path) + '!/' + item['path'], archive.read(item['path']))
-                        for item in records]
+                    del inputs, record
+                del inner
+                # Keep the verified archive open, but never retain all its
+                # decompressed members beside the caller's parsed Core.
+                for item in records:
+                    yield item, str(archive_path) + '!/' + item['path'], archive.read(item['path'])
     except (BadZipFile, RuntimeError, EOFError, zlib.error) as error:
         raise ValueError(f'{path}: invalid ZIP bundle {archive_path}: {error}') from error
 
 
 def load(path):
-    return _load(path, audit_archives=False)
+    with open_modules(path) as modules:
+        return list(modules)
 
 
 def load_for_audit(path):
     """Read verified archive-only foreign Core for diagnostics, never execution."""
-    return _load(path, audit_archives=True)
+    with open_modules(path, audit_archives=True) as modules:
+        return list(modules)
 
 
-def _load(path, audit_archives):
+def open_modules(path, *, audit_archives=False):
+    """Open a one-shot stream of (source, validated module) pairs.
+
+    Use as a context manager and exhaust it before publishing any result:
+    later modules can still reject the manifest. Normal context exit before
+    exhaustion raises ValueError. complete becomes true only after successful
+    exhaustion; cancellation, close and validation failure never set it.
+
+    audit_archives permits verified archive-only foreign Core for diagnostics,
+    not execution. Completion establishes the same manifest/module checks as
+    load_for_audit, not whole-program admission or cross-module audit proofs.
+    Consumers own any modules they retain; this reader retains no past ASTs.
+    """
+    return _ModuleStream(path, audit_archives)
+
+
+class _ModuleStream:
+    def __init__(self, path, audit_archives):
+        self._path = path
+        self._iterator = _iter_load(path, audit_archives)
+        self._complete = False
+        self._closed = False
+
+    @property
+    def complete(self):
+        return self._complete
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self._closed:
+            raise StopIteration
+        try:
+            return next(self._iterator)
+        except StopIteration:
+            self._complete = True
+            self.close()
+            raise
+        except BaseException:
+            self.close()
+            raise
+
+    def close(self):
+        if not self._closed:
+            self._closed = True
+            self._iterator.close()
+
+    def __enter__(self):
+        if self._closed:
+            raise ValueError(f'{self._path}: Core module stream is closed')
+        return self
+
+    def __exit__(self, exception_type, exception, traceback):
+        self.close()
+        if exception_type is None and not self._complete:
+            raise ValueError(f'{self._path}: Core module stream was not fully consumed')
+
+
+def _iter_loose_modules(root, records):
+    for item in records:
+        artifact = (root / item['path']).resolve()
+        yield item, str(artifact), artifact.read_bytes()
+
+
+def _iter_load(path, audit_archives):
     path = Path(path)
     root = path.resolve().parent
     manifest = strict_json(path.read_text())
@@ -912,7 +1013,7 @@ def _load(path, audit_archives):
         raise ValueError(f'{path}: requires {FORMAT} schema 1 / GHC 9.14.1')
     units = set()
     module_keys = set()
-    documents = []
+    found = False
     for unit in manifest['units']:
         if not isinstance(unit, dict):
             raise ValueError(f'{path}: invalid unit record')
@@ -949,52 +1050,60 @@ def _load(path, audit_archives):
                 if not artifact.is_relative_to(root):
                     raise ValueError(f'{path}: module path escapes manifest root: {relative!r}')
             records.append(item)
-        artifacts = (bundle_modules(path, unit, records) if 'bundle' in unit else
-                     [(str((root / item['path']).resolve()),
-                       (root / item['path']).resolve().read_bytes()) for item in records])
-        for item, (artifact, data) in zip(records, artifacts):
-            name, boundary = item['name'], item['boundary']
-            relative, expected = item['path'], item['sha256']
-            if hashlib.sha256(data).hexdigest() != expected:
-                raise ValueError(f'{path}: content hash mismatch: {relative!r}')
-            module = strict_json(data.decode('utf-8'))
-            if (not isinstance(module, dict) or module.get('unit') != unit_id or
-                    module.get('module') != name or module.get('boundary') != boundary):
-                raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')
-            if module.get('ghc') != '9.14.1':
-                raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
-            executable = (type(module.get('schema')) is int and module['schema'] == 1 and
-                          'foreign' not in module)
-            if (type(module.get('schema')) is int and module['schema'] == 2 and
-                    'foreignLink' in module):
-                validate_archive_only_foreign(module)
-                executable = linked_foreign(module)
-            if 'packageScalarLink' in module or 'packageNativeLink' in module:
-                executable = bool(package_scalar_link(module)) or executable
-            elif 'staticForeignImportStubs' in module:
-                executable = managed_import_stubs(module) or executable
-            if 'packageNativeArchive' in module:
-                package_native_archive(module)
-                executable = False
-            if not executable:
-                detail = foreign_execution_issue(module)
-                if audit_archives and detail:
-                    try:
-                        validate_archive_only_foreign(module)
-                    except ValueError as error:
-                        raise ValueError(f'{path}: malformed foreign archive in {unit_id}:{name}: {error}') from error
-                else:
-                    raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
-            bindings = module.get('bindings')
-            if not isinstance(bindings, list):
-                raise ValueError(f'{path}: missing bindings: {relative!r}')
-            prefix = unit_id + ':' + name + '.'
-            alias = 'main::' + name + '.main'
-            for binding in bindings:
-                key = binding.get('id') if isinstance(binding, dict) else None
-                if not isinstance(key, str) or not (key.startswith(prefix) or key == alias):
-                    raise ValueError(f'{path}: foreign binding owner in {relative!r}: {key!r}')
-            documents.append((str(artifact), module))
-    if not documents:
+        artifacts = (_iter_bundle_modules(path, unit, records) if 'bundle' in unit else
+                     _iter_loose_modules(root, records))
+        with closing(artifacts):
+            for item, artifact, data in artifacts:
+                module = _validated_module(path, unit_id, item, data, audit_archives)
+                del data
+                found = True
+                yield artifact, module
+                # Release this AST before reading/parsing the next member.
+                del module
+    if not found:
         raise ValueError(f'{path}: no Core modules')
-    return documents
+
+
+def _validated_module(path, unit_id, item, data, audit_archives):
+    name, boundary = item['name'], item['boundary']
+    relative, expected = item['path'], item['sha256']
+    if hashlib.sha256(data).hexdigest() != expected:
+        raise ValueError(f'{path}: content hash mismatch: {relative!r}')
+    module = strict_json(data.decode('utf-8'))
+    if (not isinstance(module, dict) or module.get('unit') != unit_id or
+            module.get('module') != name or module.get('boundary') != boundary):
+        raise ValueError(f'{path}: unit/module/boundary mismatch: {relative!r}')
+    if module.get('ghc') != '9.14.1':
+        raise ValueError(f'{path}: GHC version mismatch: {relative!r}')
+    executable = (type(module.get('schema')) is int and module['schema'] == 1 and
+                  'foreign' not in module)
+    if (type(module.get('schema')) is int and module['schema'] == 2 and
+            'foreignLink' in module):
+        validate_archive_only_foreign(module)
+        executable = linked_foreign(module)
+    if 'packageScalarLink' in module or 'packageNativeLink' in module:
+        executable = bool(package_scalar_link(module)) or executable
+    elif 'staticForeignImportStubs' in module:
+        executable = managed_import_stubs(module) or executable
+    if 'packageNativeArchive' in module:
+        package_native_archive(module)
+        executable = False
+    if not executable:
+        detail = foreign_execution_issue(module)
+        if audit_archives and detail:
+            try:
+                validate_archive_only_foreign(module)
+            except ValueError as error:
+                raise ValueError(f'{path}: malformed foreign archive in {unit_id}:{name}: {error}') from error
+        else:
+            raise ValueError(f'{path}: {detail or "unsupported Core module schema/foreign metadata"}: {relative!r}')
+    bindings = module.get('bindings')
+    if not isinstance(bindings, list):
+        raise ValueError(f'{path}: missing bindings: {relative!r}')
+    prefix = unit_id + ':' + name + '.'
+    alias = 'main::' + name + '.main'
+    for binding in bindings:
+        key = binding.get('id') if isinstance(binding, dict) else None
+        if not isinstance(key, str) or not (key.startswith(prefix) or key == alias):
+            raise ValueError(f'{path}: foreign binding owner in {relative!r}: {key!r}')
+    return module

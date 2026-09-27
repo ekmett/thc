@@ -11,9 +11,14 @@
   "runtimeServiceCalls": {
     "thc_runtime_v1_query": ["Int32Rep", "Int64Rep", "Int64Rep", null],
     "thc_runtime_v1_control": ["Int32Rep", "Int64Rep", null],
-    "thc_runtime_v1_trace": ["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null]
+    "thc_runtime_v1_trace": ["Int32Rep", "Int64Rep", "AddrRep", "Int64Rep", null],
+    "thc_exception_v1_text": ["AddrRep", "Int32Rep", "Int64Rep", null]
   },
   "managedForeignCalls": [
+    "runInteractiveProcess",
+    "getProcessExitCode",
+    "waitForProcess",
+    "terminateProcess",
     "fps_sort",
     "_hs_bytestring_long_long_int_dec",
     "_hs_bytestring_long_long_int_dec_padded18",

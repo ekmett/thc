@@ -48,12 +48,13 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
          * The factory knows the exact final provider whose channel it authenticates. */
         internal fun createContext(endpoints: Set<StandardEndpoint>,
                                    profile: ContextProfile = ContextProfile.NATIVE,
-                                   ffiMode: FfiMode = FfiMode.NATIVE): Context {
+                                   ffiMode: FfiMode = FfiMode.NATIVE,
+                                   allowProcesses: Boolean = false): Context {
             if (!NativeIO.supportedPosixHost())
                 throw UnsupportedOperationException("Native files are currently verified only on Linux x86_64")
             val filesystem = NativeFileSystem(endpoints)
             val context = try {
-                Context.newBuilder("thc").allowNativeAccess(true)
+                Context.newBuilder("thc").allowNativeAccess(true).allowCreateProcess(allowProcesses)
                     .allowIO(IOAccess.newBuilder().fileSystem(filesystem).build())
                     .withContextProfile(profile).withFfiMode(ffiMode).build()
             } catch (failure: Throwable) {
@@ -87,6 +88,13 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
     private val leases = linkedSetOf<NativeFileLease>()
     private var disposed = false
     internal val directoryStreams = NativeDirectoryStreams(directory)
+    private var processService: ManagedProcesses? = null
+    internal val processes: ManagedProcesses
+        @Synchronized get() {
+            current()
+            if (disposed) throw ClosedChannelException()
+            return processService ?: ManagedProcesses(directory).also { processService = it }
+        }
     private val statSize: Int
     private val termiosSize: Int
 
@@ -398,6 +406,28 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
     }
 
+    /** Adopts only a capability issued by our context's process registry; no
+     * guest-supplied native descriptor enters the provider. */
+    internal fun adoptProcessPipe(pipe: ManagedProcesses.Pipe, readable: Boolean, writable: Boolean): NativeFileResource {
+        current()
+        val lease = synchronized(this) {
+            if (disposed) throw ClosedChannelException()
+            pipe.takeLease()
+        }
+        try {
+            synchronized(this) {
+                if (disposed) throw ClosedChannelException()
+                leases.add(lease)
+            }
+            lease.requireOpen()
+            synchronized(this) { if (disposed) throw ClosedChannelException() }
+            return NativeResource(lease, readable, writable)
+        } catch (failure: Throwable) {
+            try { retire(lease) } catch (closing: Throwable) { failure.addSuppressed(closing) }
+            throw failure
+        }
+    }
+
     private fun retire(lease: NativeFileLease) {
         try { lease.close() } finally { synchronized(this) { leases.remove(lease) } }
     }
@@ -409,7 +439,10 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
             leases.toList()
         }
         var failed: Throwable? = null
-        try { directoryStreams.close() } catch (failure: Throwable) { failed = failure }
+        try { processService?.close() } catch (failure: Throwable) { failed = failure }
+        try { directoryStreams.close() } catch (failure: Throwable) {
+            if (failed == null) failed = failure else if (failed !== failure) failed.addSuppressed(failure)
+        }
         for (lease in pending) try { retire(lease) } catch (failure: Throwable) {
             if (failed == null) failed = failure else if (failed !== failure) failed.addSuppressed(failure)
         }

@@ -22,6 +22,10 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
     @field:CompilationFinal internal var delimitedControlEnabled: Boolean = false
         private set
 
+    @field:CompilationFinal internal var foreignExceptionBridge: ForeignExceptionBridge? = null
+        private set
+    internal fun configureForeignExceptionBridge(bridge: ForeignExceptionBridge?) { foreignExceptionBridge = bridge }
+
     override fun prepareForCall() {
         super.prepareForCall()
         // Resolve the concrete root's control policy before target publication,

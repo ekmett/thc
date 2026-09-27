@@ -115,6 +115,9 @@ esac
 "$fixture_bin" original-fcntl
 "$fixture_bin" original-errno
 "$fixture_bin" original-process-identity
+case "$(uname -s)-$(uname -m)" in
+  Linux-x86_64) "$fixture_bin" process-lifecycle ;;
+esac
 "$fixture_bin" original-tcsetattr
 "$fixture_bin" original-tcgetattr
 "$fixture_bin" original-sigprocmask

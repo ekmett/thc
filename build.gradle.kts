@@ -225,6 +225,9 @@ tasks.withType<Test>().configureEach {
             "native-addresses/manifest.json", "native-addresses/oracle.json",
             "native-malloc/manifest.json", "native-malloc/oracle.txt",
             "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
+            "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/core/logs/*.stdout", "process-lifecycle/core/logs/*.stderr",
+            "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
             "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
             "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
             "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",
@@ -401,7 +404,7 @@ tasks.withType<Test>().configureEach {
     testLogging { events("failed", "skipped", "passed") }
 }
 tasks.test {
-    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
 }
 // Both forks consume the same testClasses/runtimeClasspath task graph. Native
 // compilation and ABI probes remain fresh, but execute only once per invocation.
@@ -412,7 +415,7 @@ val handoffModeTests = listOf("testDefault" to false, "testDense" to true).map {
         description = "Runs the ordinary test inventory with ${if (dense) "dense" else "default"} handoffs."
         testClassesDirs = sourceSets.test.get().output.classesDirs
         classpath = sourceSets.test.get().runtimeClasspath
-        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment") }
+        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
         maxParallelForks = 1
@@ -434,6 +437,23 @@ configurations[fullCoreTests.implementationConfigurationName].extendsFrom(config
 configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
 fullCoreTests.compileClasspath += sourceSets.test.get().output
 fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+
+for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalTimeClockDense" to true)) {
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests the original time CAPI clock module with native and first-compiled controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
+        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
+        doFirst { check(file("build/original-time-clock/manifest.json").isFile) {
+            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
+    }
+}
 
 for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
     tasks.register<Test>(taskName) {
@@ -865,13 +885,56 @@ tasks.register<Test>("simdFamiliesExperimentTest") {
 val polyglotTests = sourceSets.create("polyglotTest")
 configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
 configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
+polyglotTests.compileClasspath += sourceSets.test.get().output
+polyglotTests.runtimeClasspath += sourceSets.test.get().output
 kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
 tasks.register<Test>("polyglotTest") {
     group = "verification"
     description = "Tests THC's optional interop boundary against GraalJS."
+    maxHeapSize = "4g"
     testClassesDirs = polyglotTests.output.classesDirs
     classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+    useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
 }
+// Optional languages retain their separate classpath in both handoff forks.
+val polyglotModeTests = listOf("polyglotTestDefault" to false, "polyglotTestDense" to true).map { (taskName, dense) ->
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests optional interop with ${if (dense) "dense" else "default"} handoffs."
+        maxHeapSize = "4g"
+        testClassesDirs = polyglotTests.output.classesDirs
+        classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Interop evidence requires a fresh test process") { true }
+    }
+}
+polyglotModeTests[1].configure { mustRunAfter(polyglotModeTests[0]) }
+// Genuine automatic exception boxing uses the selected full-Core support unit.
+val foreignExceptionTests = listOf("foreignExceptionTest" to false, "foreignExceptionDenseTest" to true).map { (taskName, dense) ->
+    tasks.register<Test>(taskName) {
+        group = "verification"
+        description = "Tests genuine automatic foreign exceptions with ${if (dense) "dense" else "default"} handoffs."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Foreign exception evidence requires a fresh test process") { true }
+        doFirst {
+            check(file("build/foreign-exceptions/manifest.json").isFile) {
+                "Select full-Core GHC 9.14.1/configured source and run cabal run exe:thc-fixtures -- foreign-exceptions"
+            }
+        }
+    }
+}
+foreignExceptionTests[1].configure { mustRunAfter(foreignExceptionTests[0]) }
 tasks.register<Test>("jitStabilityTest") {
     group = "verification"
     description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."

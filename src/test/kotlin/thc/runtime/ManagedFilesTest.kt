@@ -310,7 +310,7 @@ class ManagedFilesTest {
                 id = threads.enterCurrent()
                 try {
                     request = threads.send(id, "stream callback")
-                    assertEquals(3L, state.files.write(1, bytes("abc"), 3))
+                    assertEquals(3L, state.files.write(1, bytes("abc"), 3, ForeignSafety.SAFE))
                     assertEquals(AsyncRequestState.PENDING, request.state)
                     assertSame(request, threads.poll(node), "The completed write returns to the original caller")
                     request.acknowledge()
@@ -323,23 +323,48 @@ class ManagedFilesTest {
         }
     }
 
-    @Test fun teardownFlushRetainsForeignOriginForAnotherContextCallback() {
-        val node = object : Node() {}
+    @Test fun unsafeStreamServiceDoesNotInheritAnOuterSafeDeclaration() {
+        lateinit var threads: GuestThreads
+        var callbacks = 0
+        val output = object : ByteArrayOutputStream() {
+            override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                threads.enterCurrent()
+                try { callbacks++; super.write(bytes, offset, length) } finally { threads.leaveCurrent() }
+            }
+        }
+        builder().out(output).build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val state = Language.currentState()
+                threads = state.threads
+                threads.enterCurrent()
+                val caller = threads.currentIdentity()
+                try {
+                    val safe = threads.enterForeign(ForeignSafety.SAFE)
+                    try {
+                        assertThrows(RuntimeFault::class.java) { state.files.write(1, bytes("abc"), 3) }
+                        assertEquals(0, callbacks)
+                        assertEquals(0, output.size())
+                        assertSame(caller, threads.currentIdentity())
+                        assertFalse(caller.allocationSuspended)
+                    } finally { threads.leaveForeign(safe) }
+                    assertEquals(3L, state.files.write(1, bytes("abc"), 3, ForeignSafety.SAFE))
+                    assertEquals(1, callbacks)
+                    assertEquals("abc", output.toString(Charsets.UTF_8))
+                } finally { threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun teardownFlushRejectsAnotherContextCallbackBeforeGuestMutation() {
         val other = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
         val armed = AtomicBoolean()
-        val observed = AtomicReference<ForeignCallbackAsyncFailure>()
+        val observed = AtomicReference<RuntimeFault>()
         val output = object : ByteArrayOutputStream() {
             override fun flush() {
                 if (armed.compareAndSet(true, false)) {
-                    val id = other.enterCurrent()
-                    try {
-                        val request = other.send(id, "teardown callback")
-                        val failure = assertThrows(ForeignCallbackAsyncFailure::class.java) {
-                            AsyncContinuations.uncaught(other.poll(node)!!, node)
-                        }
-                        assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
-                        observed.set(failure)
-                    } finally { other.leaveCurrent() }
+                    observed.set(assertThrows(RuntimeFault::class.java) { other.enterCurrent() })
+                    assertThrows(RuntimeFault::class.java) { other.currentIdentity() }
                 }
                 super.flush()
             }
@@ -348,7 +373,9 @@ class ManagedFilesTest {
         context.initialize("thc")
         armed.set(true)
         context.close()
-        assertEquals("teardown callback", observed.get().payload)
+        assertTrue(observed.get().message!!.contains("closed"))
+        other.enterCurrent()
+        try { assertFalse(other.isCurrentBound()) } finally { other.leaveCurrent(); other.close() }
     }
 
     @Test fun realFileRoundTripSupportsOffsetsUnicodeNamesEofAndNonReusedDescriptors() {

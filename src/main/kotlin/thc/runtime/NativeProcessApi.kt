@@ -10,6 +10,7 @@ import java.lang.foreign.SymbolLookup
 import java.lang.foreign.ValueLayout
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.io.IOException
 
 /** Machine-code process transport, including cleanup after LLVM disposal. */
 internal object NativeProcessApi {
@@ -79,3 +80,18 @@ internal object NativeProcessApi {
 /** errno == 0 means leave the guest's sticky errno unchanged. A null exitCode
  * means do not write the caller's output cell (not a fabricated exit status). */
 internal data class ProcessResult(val status: Int, val exitCode: Int?, val errno: Int)
+
+/** Checked native transport stages, not guesses about a fork/exec implementation. */
+internal enum class ProcessFailureStage(val operation: String) {
+    NONE(""), ARGUMENTS("process arguments"), SIGCHLD("SIGCHLD policy"), PIDFD_OPEN("pidfd_open"),
+    PIDFD_WAIT("waitid(P_PIDFD)"), ACTION_INIT("posix_spawn_file_actions_init"),
+    ATTR_INIT("posix_spawnattr_init"), FCHDIR("posix_spawn_file_actions_addfchdir_np"),
+    CHDIR("posix_spawn_file_actions_addchdir_np"), PIPE("pipe"), DUP_FD("fcntl(F_DUP_FD)"),
+    DUP2("posix_spawn_file_actions_adddup2"), DUP2_PIPE("posix_spawn_file_actions_adddup2(child_end)"),
+    CLOSE("posix_spawn_file_actions_addclose"), CLOSE_FROM("posix_spawn_file_actions_addclosefrom_np"),
+    SIGMASK("posix_spawnattr_setsigmask"), PGROUP("posix_spawnattr_setpgroup"),
+    SIGDEFAULT("posix_spawnattr_setsigdefault"), FLAGS("posix_spawnattr_setflags"), SPAWN("posix_spawnp")
+}
+
+internal class ProcessSpawnException(val errno: Int, val stage: ProcessFailureStage) :
+    IOException("${stage.operation} failed with errno $errno")

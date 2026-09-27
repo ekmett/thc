@@ -43,6 +43,51 @@ CLOSURE = dict(REFERENCE, kind='closure', evaluated=True)
 TUPLE_CAP = dict(CAP, aggregateResults=['unboxed-tuple'])
 
 
+class OriginalTimeClockOperandTest(unittest.TestCase):
+    def test_genuine_capi_lowered_and_stored_state(self):
+        fixture = ROOT.parent / 'build/original-time-clock'
+        if not (fixture / 'manifest.json').is_file():
+            self.skipTest('requires the explicit original-time-clock full-Core native fixture')
+        linked = json.loads((fixture / 'linked.json').read_text())
+        for stage in ('pre', 'post'):
+            module = json.loads((fixture / (stage + '.json')).read_text())
+            original = next(binding for binding in module['bindings'] if binding['name'] == 'originalTime')
+            def find_call(value):
+                if isinstance(value, list):
+                    if value and value[0] == 'app' and isinstance(value[-1], dict) and 'foreignCall' in value[-1]:
+                        return value
+                    for child in value:
+                        found = find_call(child)
+                        if found is not None:
+                            return found
+                elif isinstance(value, dict):
+                    for child in value.values():
+                        found = find_call(child)
+                        if found is not None:
+                            return found
+                return None
+            call = find_call(original['expr'])
+            self.assertIsNotNone(call)
+            declared = call[-1]['foreignCall']['argumentReps']
+            for malformed in ('valid', 'lowered-state', 'stored-state', 'stored-clock'):
+                expression = copy.deepcopy(call)
+                expression[2] = [['var', 'argument' + str(index), dict(rep=copy.deepcopy(rep))]
+                                 for index, rep in enumerate(declared)]
+                stored = {'argument' + str(index): copy.deepcopy(rep) for index, rep in enumerate(declared)}
+                if malformed == 'lowered-state':
+                    expression[2][2] = ['lit', 'int', '7', dict(rep=declared[2])]
+                elif malformed == 'stored-state':
+                    stored['argument2'] = LONG
+                elif malformed == 'stored-clock':
+                    stored['argument0'] = LONG
+                auditor = audit_core.Audit([('original-linked.json', linked)], CAP)
+                auditor.walk(expression, stored, 'clock-control', '/expr')
+                if malformed == 'valid':
+                    self.assertEqual([], auditor.issues)
+                else:
+                    self.assertTrue(any(issue['code'] == 'foreign-call' for issue in auditor.issues), malformed)
+
+
 class AggregateHeapFieldTest(unittest.TestCase):
     empty = dict(kind='unknown', evaluated=True, aggregate='unboxed-tuple', components=[], primReps=[])
     sum_rep = dict(kind='unknown', evaluated=True, aggregate='unboxed-sum',
@@ -250,6 +295,8 @@ class CpuAffinityQueryTest(unittest.TestCase):
 class RuntimeServicesQueryTest(unittest.TestCase):
     def calls(self):
         descriptors = json.loads((ROOT.parent / 'src/test/resources/core/runtime-services-descriptors.json').read_text())
+        metadata = json.loads((ROOT.parent / 'src/test/resources/core/foreign-exception-descriptor.json').read_text())
+        descriptors[metadata['target']['symbol']] = metadata
         self.assertEqual(set(CAP['runtimeServiceCalls']), set(descriptors))
         for symbol, primitives in CAP['runtimeServiceCalls'].items():
             declaration = descriptors[symbol]
@@ -274,13 +321,17 @@ class RuntimeServicesQueryTest(unittest.TestCase):
         for expression, bound in self.calls():
             for package in (False, True):
                 audit = self.inspect(expression, bound, package)
-                self.assertEqual([], audit.issues)
+                expected = (['foreign-exception-bridge'] if
+                    expression[6]['foreignCall']['target']['symbol'] == 'thc_exception_v1_text' else [])
+                self.assertEqual(expected, [issue['code'] for issue in audit.issues])
                 self.assertEqual(1, len(audit.foreign_calls))
 
     def test_foreign_abi_and_shadowed_names_reject(self):
         for expression, bound in self.calls():
             for key, value in (('schema', True), ('arity', True), ('suppliedArity', 0),
-                               ('convention', 'javascript'), ('safety', 'safe'), ('resultRep', LONG)):
+                               ('convention', 'javascript'),
+                               ('safety', 'unsafe' if expression[6]['foreignCall']['safety'] == 'safe' else 'safe'),
+                               ('resultRep', LONG)):
                 changed = copy.deepcopy(expression)
                 changed[6]['foreignCall'][key] = value
                 self.assertTrue(self.inspect(changed, bound).issues, key)
@@ -299,7 +350,8 @@ class RuntimeServicesQueryTest(unittest.TestCase):
 
 
 class PackageScalarOperandTest(unittest.TestCase):
-    """Call-proof controls only; no invented component or bitcode is executed."""
+    """Call-proof controls only. Valid calls still require a genuine runtime bridge;
+    no invented dictionary, component or bitcode is executed."""
     def call(self, primitive):
         scalar = lambda rep, evaluated=True: dict(kind=core_original_foreign.scalar_kind(rep),
             primReps=[] if rep is None else [rep], evaluated=evaluated)
@@ -324,7 +376,8 @@ class PackageScalarOperandTest(unittest.TestCase):
     def test_package_scalar_occurrences_cannot_hide_stored_or_intrinsic_carriers(self):
         for primitive in ('Int32Rep', 'Int64Rep', 'FloatRep', 'DoubleRep'):
             abi, expression, stored = self.call(primitive)
-            self.assertEqual([], self.inspect(abi, expression, stored), primitive)
+            self.assertEqual(['foreign-exception-bridge'],
+                [issue['code'] for issue in self.inspect(abi, expression, stored)], primitive)
             altered = dict(stored, primReps=['Word64Rep'])
             self.assertIn('stored operand', str(self.inspect(abi, expression, altered)), primitive)
             altered = copy.deepcopy(expression)
@@ -356,7 +409,8 @@ class PackageScalarOperandTest(unittest.TestCase):
             expression[6]['foreignCall'].update(convention='capi',
                 argumentReps=[dict(stored, evaluated=False), dict(state, evaluated=False)],
                 resultRep=dict(output, evaluated=False))
-            self.assertEqual([], self.inspect(abi, expression, stored), rep)
+            self.assertEqual(['foreign-exception-bridge'],
+                [issue['code'] for issue in self.inspect(abi, expression, stored)], rep)
             self.assertIn('stored operand', str(self.inspect(abi, expression,
                 dict(stored, primReps=['BoxedRep (Just Lifted)']))), rep)
             altered = copy.deepcopy(expression)
@@ -372,7 +426,8 @@ class PackageScalarOperandTest(unittest.TestCase):
                           primReps=['AddrRep'] if rep == 'AddrRep' else ['BoxedRep (Just Unlifted)'], evaluated=True)
             expression[2][0][2]['rep'] = stored
             expression[6]['foreignCall']['argumentReps'][0] = dict(stored, evaluated=False)
-            self.assertEqual([], self.inspect(variants, expression, stored), rep)
+            self.assertEqual(['foreign-exception-bridge'],
+                [issue['code'] for issue in self.inspect(variants, expression, stored)], rep)
         ambiguous = [variants[1], dict(variants[1], entry='mutable_adapter', arguments=['MutableByteArray#'])]
         self.assertIn('unique exact scalar/State ABI', str(self.inspect(ambiguous, expression, stored)))
 
@@ -2140,6 +2195,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
         targets += [('ghc-internal', symbol) for symbol in (
             'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr', '__hscore_set_errno', 'getpid')]
         targets += [('unix-2.8.8.0-inplace', 'geteuid')]
+        targets += [('process-1.6.26.1-inplace', symbol) for symbol in core_original_foreign.PROCESS_OPERATIONS]
         for unit, symbol in targets:
             target = dict(kind='static', symbol=symbol, unit=unit, isFunction=True)
             convention, safety, arguments, output = core_original_foreign.operation(target)

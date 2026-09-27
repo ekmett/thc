@@ -135,7 +135,7 @@ internal class CallSegment @JvmOverloads constructor(
     val monitor = java.lang.Object()
 }
 /** Keep immutable guest failure data, never a shared mutable Truffle stack trace. */
-private data class MemoizedGuestFailure(val payload: Any?, val location: Node)
+private data class MemoizedGuestFailure(val payload: Any?, val location: Node, val someException: Boolean)
 /** Async delivery must carry its origin separately from its guest payload. */
 internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
 /** Cold committed cut for one exact original catch# action, never supplied by Core. */
@@ -146,16 +146,16 @@ internal class PrivateIOUnwind @JvmOverloads constructor(
 internal class CapturedAsyncDelivery @JvmOverloads constructor(
     val payload: Any?, val request: CapturedAsyncRequest? = null) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Private captured IO-handler delivery", null, 0, null)
+        "Private captured IO-handler delivery", null, 0, null), InternalGuestControl
 /** A root-local bytecode yield hands the shared thunk to another evaluator. */
 internal class ThunkSuspended @JvmOverloads constructor(val thunk: Thunk, val asyncRequest: AsyncRequest? = null,
     val stackSpill: Boolean = false) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Internal bytecode thunk suspension", null, 0, null)
+        "Internal bytecode thunk suspension", null, 0, null), InternalGuestControl
 /** A call returned its own bytecode continuation; only that exact call edge may capture it. */
 internal class CapturedCallSuspension(val segment: CallSegment) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Internal bytecode call suspension", null, 0, null)
+        "Internal bytecode call suspension", null, 0, null), InternalGuestControl
 internal class CallSegmentSuspended @JvmOverloads constructor(
     val segment: CallSegment,
     /** Logical mask before a caller parked to its root-entry mask for Yield. */
@@ -164,7 +164,7 @@ internal class CallSegmentSuspended @JvmOverloads constructor(
     val stackSpill: Boolean = savedGuestContinuation(segment.value)?.stackSpill() == true
 ) :
     com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Internal bytecode call segment suspension", null, 0, null)
+        "Internal bytecode call segment suspension", null, 0, null), InternalGuestControl
 /** Cold caller-segment input distinguishes a child result from its guest failure. */
 internal class ChildResume(val value: Any?, val failure: GuestException?)
 internal class Metrics(val enabled: Boolean) {
@@ -769,7 +769,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 suspendCallOwned(segment)
                 throw IllegalStateException("Failed call segment did not restore its caller mask", e)
             }
-            publishCallFailure(segment, MemoizedGuestFailure(e.payload, e.location ?: this))
+            publishCallFailure(segment, MemoizedGuestFailure(e.payload, e.location ?: this, e.someException))
             throw e
         } catch (e: RuntimeFault) {
             publishCallFailure(segment, e)
@@ -815,7 +815,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     private fun rethrowCallFailure(segment: CallSegment): Nothing {
         CompilerDirectives.transferToInterpreterAndInvalidate()
         when (val failure = segment.value) {
-            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location)
+            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location, failure.someException)
             is Throwable -> throw failure
             else -> fault("Invalid failed call segment")
         }
@@ -898,7 +898,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             suspendOwned(thunk)
             throw e
         } catch (e: GuestException) {
-            publishFailure(thunk, MemoizedGuestFailure(e.payload, e.location ?: this))
+            publishFailure(thunk, MemoizedGuestFailure(e.payload, e.location ?: this, e.someException))
             throw e
         } catch (e: RuntimeFault) {
             publishFailure(thunk, e)
@@ -962,7 +962,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
     private fun rethrowFailure(thunk: Thunk): Nothing {
         CompilerDirectives.transferToInterpreterAndInvalidate()
         when (val failure = thunk.value) {
-            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location)
+            is MemoizedGuestFailure -> throw GuestException(failure.payload, failure.location, failure.someException)
             is Throwable -> throw failure
             else -> fault("Invalid failed thunk")
         }
@@ -2109,6 +2109,7 @@ private data class FunctionSpec(val target: RootCallTarget, val captureLayout: C
 class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String, Any?>,
               internal val enableAsync: Boolean = false) : ExecutableProgram {
     init { thc.CoreForeignArtifacts.requireExecutableInput(moduleData) }
+    private val foreignExceptionBridge = ForeignExceptionBridge.bind(moduleData, ::entryValue, ::dataLayout)
     private val rubbishLiterals = RubbishLiterals(language)
     private val foreignLinks = moduleData["foreignLinks"] as? List<thc.ForeignBitcode> ?: emptyList()
     private val packageScalarLinks = moduleData["packageScalarLinks"] as? List<thc.PackageScalarLink> ?: emptyList()
@@ -2172,6 +2173,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreStackForeign.validateHeads(bindings)
         CoreStackInfoForeign.validateHeads(bindings)
         CoreOriginalStdio.validateHeads(bindings)
+        CoreProcessForeign.validateHeads(bindings)
         CoreStablePointers.validateHeads(bindings)
         CoreRtsShutdown.validateHeads(bindings)
         CoreMainThreadForeign.validateHeads(bindings)
@@ -2349,6 +2351,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited)
+        root.configureForeignExceptionBridge(foreignExceptionBridge)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
         if (!enableAsync && body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
             resultProof, root.entryArgumentOffset, free.intersect(argumentIds), captures != null,
@@ -2506,6 +2509,8 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val originalStdio = CoreOriginalStdio.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
+            val originalProcess = CoreProcessForeign.validate(foreignMetadata,
+                args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val capi = CoreCapiForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags,
                 CoreRepresentations.metadata(expr)?.get("rep"), foreignLinks)
@@ -2564,9 +2569,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
             val libdw = CoreLibdwForeign.validate(foreignMetadata,
                 args.map { CoreRepresentations.metadata(it)?.get("rep") }, flags, CoreRepresentations.metadata(expr)?.get("rep"))
-            val polyglot = if (rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
+            val polyglot = if (originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && capi == null &&
                 !stableFree && shutdown == null && !mainThreadForeign && !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null && managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null && !memmove && !memcpy && !memset && processSignal == null)
                 CorePolyglot.validate(expr, defined) else null
+            if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
+                foreignExceptionBridge == null) fault("Foreign execution requires a linked genuine THC.Exception runtime bundle")
             if (runtimeService != null) {
                 val operands = args.mapIndexed { index, argument ->
                     compile(argument, scope, false).also { lowered ->
@@ -2578,6 +2585,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     RuntimeServiceCall.QUERY -> RuntimeQueryExpression(1, operands[0], operands[1], operands[2], operands[3])
                     RuntimeServiceCall.CONTROL -> RuntimeControlExpression(operands[0], operands[1], operands[2])
                     RuntimeServiceCall.TRACE -> RuntimeTraceExpression(operands[0], operands[1], operands[2], operands[3], operands[4])
+                    RuntimeServiceCall.EXCEPTION_TEXT -> ExceptionTextExpression(operands[0], operands[1], operands[2], operands[3])
                 }.proven(tupleProof.copy(evaluated = true))
             } else if (cpuAffinity != null) {
                 val state = compile(args.single(), scope, false)
@@ -2602,6 +2610,15 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     }
                 }
                 OriginalStackInfoExpression(stackInfo, layout, operands.toTypedArray(), tupleProof)
+            } else if (originalProcess != null) {
+                CoreProcessForeign.validateHead(fn, defined)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreProcessForeign.validateOperand(originalProcess, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                ProcessForeignExpression(originalProcess, operands.toTypedArray(), tupleProof)
             } else if (originalStdio != null) {
                 CoreOriginalStdio.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
                 val operands = args.mapIndexed { index, argument ->
@@ -2616,7 +2633,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 OriginalStdioExpression(originalStdio, operands.toTypedArray(), tupleProof)
             } else if (capi != null) {
                 CoreCapiForeign.validateHead(fn, defined)
-                CapiExpression(capi, args.map { compile(it, scope, false) }.toTypedArray(), tupleProof)
+                val operands = args.mapIndexed { index, argument ->
+                    compile(argument, scope, false).also { operand ->
+                        CoreCapiForeign.validateOperand(capi, index, operand.representation,
+                            if (argument[0] == "var") scope.locals[argument[1]]?.proof ?: globalProofs[argument[1]] else null)
+                    }
+                }
+                CapiExpression(capi, operands.toTypedArray(), tupleProof)
             } else if (packageScalar != null) {
                 CoreCapiForeign.validateHead(fn, defined)
                 val operands = args.mapIndexed { index, argument ->
@@ -2925,13 +2948,13 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 CoreArithmeticExceptions.validate(name, listOf(operand.representation), flags, tupleProof)
                 val id = CoreArithmeticExceptions.payload(name)!!
                 val payload = globals[id] ?: throw UnsupportedCore("Unresolved implicit exception binding $id")
-                RaiseArithmeticException(operand, RaiseException(GlobalRead(payload)))
+                RaiseArithmeticException(operand, RaiseException(GlobalRead(payload), true))
             } else if (fn[0] == "prim" && fn[1] in setOf("raiseIO#", "catch#", "getMaskingState#",
                     "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#")) {
                 val name = fn[1] as String
                 CoreSynchronousExceptions.validate(name, args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
-                if (name == "raiseIO#") RaiseIOException(operands[0], operands[1], tupleProof)
+                if (name == "raiseIO#") RaiseIOException(operands[0], operands[1], tupleProof, CoreExceptionPayload.validate(expr))
                 else if (delimited && name != "getMaskingState#") DelimitedIOBoundary(name,
                     TupleShape(tupleProof, language as thc.Language), operands.toTypedArray(), language as thc.Language, metrics)
                 else if (name == "catch#") CatchException(TupleShape(tupleProof, language as thc.Language),
@@ -3232,7 +3255,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 fn[0] == "prim" -> {
                     // The scalar lowering has no aggregate destination or vector carrier.
                     nodes.forEach { CoreRepresentations.requireScalar(it.representation, "argument") }
-                    primitive(fn[1] as String, nodes)
+                    primitive(fn[1] as String, nodes, CoreExceptionPayload.validate(expr))
                 }
                 constructorStrictFields != null -> {
                     val layout = dataLayout(fn[1] as String)
@@ -3433,6 +3456,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics,
                     argumentProofs.toTypedArray(), coreSourceLocation = rootSource(body),
                     entryStrict = strictConstructorFields(id, arity), inputLayout = inputLayout)
+                root.configureForeignExceptionBridge(foreignExceptionBridge)
                 if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, false))
                 val target = root.callTarget
                 MakeClosure(target, arity, null, intArrayOf())
@@ -3641,14 +3665,14 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         DataLayout.fromFields(language ?: throw RuntimeFault("Constructor layout requires a guest language"),
             id, info["name"] as String, fields)
     }
-    private fun primitive(name: String, args: Array<Expr>): Expr = floatingPrimitive(name, args) ?: when (name) {
+    private fun primitive(name: String, args: Array<Expr>, someException: Boolean = false): Expr = floatingPrimitive(name, args) ?: when (name) {
         "reallyUnsafePtrEquality#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             PointerEquality(args[0], args[1])
         }
         "raise#" -> {
             if (args.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")
-            RaiseException(args[0])
+            RaiseException(args[0], someException)
         }
         "addr2Int#", "int2Addr#" -> {
             if (args.size != 1) throw RuntimeFault("Primitive arity mismatch: $name")

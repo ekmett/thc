@@ -5,16 +5,73 @@
 """Package manifests reject stale, mismatched and pre-Tidy Core artifacts."""
 
 import hashlib
+import gc
 import json
+from contextlib import closing
+import os
 from pathlib import Path
 import platform
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 import warnings
+import weakref
 from zipfile import ZipFile
 
 import core_package_manifest
+
+
+class TimeClockLinkTest(unittest.TestCase):
+    """Closed metadata controls; structural placeholder bytes are never executed."""
+    def module(self):
+        unit = 'time-1.15-01ab'
+        abi = core_package_manifest.time_clock_symbols(unit)
+        def scalar(rep):
+            return dict(kind='void' if rep is None else 'address' if rep == 'AddrRep' else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=False)
+        calls = []
+        for symbol, kind in abi.items():
+            zero = kind == 'time-clock-id'
+            result = dict(kind='unknown', primReps=['Int32Rep'], aggregate='unboxed-tuple',
+                          components=[scalar(None) | dict(evaluated=True),
+                                      scalar('Int32Rep') | dict(evaluated=True)], evaluated=False)
+            calls.append(dict(foreignCall=dict(schema=1, target=dict(kind='static', symbol=symbol,
+                unit=unit, isFunction=True), convention='capi', safety='unsafe', arity=1 if zero else 3,
+                suppliedArity=1 if zero else 3, argumentReps=[scalar(None)] if zero else
+                [scalar('Int32Rep'), scalar('AddrRep'), scalar(None)], resultRep=result)))
+        source, bitcode = 'retained clock C source', b'BC'
+        arch = {'amd64': 'x86_64', 'arm64': 'aarch64'}.get(platform.machine().lower(), platform.machine().lower())
+        name = 'Data.Time.Clock.Internal.CTimespec'
+        return dict(unit=unit, module=name, bindings=calls,
+            foreign=dict(stubs=dict(header='', source=source, initializers=[], finalizers=[]), files=[]),
+            foreignLink=dict(schema=3, format='llvm-bitcode', unit=unit, module=name,
+                target=arch + '-unknown-linux-gnu', symbols=list(abi),
+                abi=[dict(symbol=symbol, kind=kind) for symbol, kind in abi.items()],
+                headerHashes=[dict(name=name, sha256='a' * 64) for name in ['HsFFI.h', 'HsTime.h', 'HsTimeConfig.h']],
+                sourceSha256=hashlib.sha256(source.encode()).hexdigest(),
+                bitcodeSha256=hashlib.sha256(bitcode).hexdigest(), bitcodeHex=bitcode.hex()))
+
+    def test_exact_time_owner_wrapper_index_header_and_cint_contract(self):
+        module = self.module()
+        if platform.system() != 'Linux':
+            with self.assertRaises(ValueError):
+                core_package_manifest.linked_foreign(module)
+            return
+        self.assertTrue(core_package_manifest.linked_foreign(module))
+        link = module['foreignLink']
+        for bad in (link | dict(schema=2), link | dict(headerHashes=[]),
+                    link | dict(headerHashes=link['headerHashes'][::-1]),
+                    link | dict(abi=list(reversed(link['abi']))[:2]),
+                    link | dict(unit='time-1.16-01ab')):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                core_package_manifest.linked_foreign(module | dict(foreignLink=bad))
+        original = module['bindings'][1]['foreignCall']
+        for bad in (original | dict(safety='safe'), original | dict(convention='ccall'),
+                    original | dict(argumentReps=[original['argumentReps'][0] | dict(primReps=['Word64Rep'])] + original['argumentReps'][1:]),
+                    original | dict(target=original['target'] | dict(symbol=list(core_package_manifest.time_clock_symbols(link['unit']))[2]))):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                core_package_manifest.linked_foreign(module | dict(bindings=[module['bindings'][0], dict(foreignCall=bad)] + module['bindings'][2:]))
 
 
 class PackageNativeVariantsTest(unittest.TestCase):
@@ -275,6 +332,245 @@ class PackageManifestTest(unittest.TestCase):
                 archive.writestr(name, value)
         unit['bundle'] = dict(path=str(bundle), sha256=hashlib.sha256(bundle.read_bytes()).hexdigest())
         return self.manifest([unit])
+
+    def two_module_bundle(self, second=None):
+        unit = self.unit('first')
+        if second is None:
+            second = json.dumps(dict(schema=1, ghc='9.14.1', unit='first', module='Other',
+                boundary=self.boundary, bindings=[dict(id='first:Other.value', expr=['lit', 'int', '7'])],
+                constructors=[])).encode()
+        unit['modules'].append(dict(name='Other', boundary=self.boundary, path='core/Other.json',
+                                    sha256=hashlib.sha256(second).hexdigest()))
+        return self.bundled(unit, members={'core/Shared.json': (self.root / 'first.json').read_bytes(),
+                                          'core/Other.json': second})
+
+    def test_stream_matches_list_apis_and_completes_only_after_exhaustion(self):
+        for bundled in (False, True):
+            with self.subTest(bundled=bundled):
+                path = self.two_module_bundle() if bundled else self.manifest([self.unit('first'), self.unit('second')])
+                expected = core_package_manifest.load(path)
+                self.assertEqual(expected, core_package_manifest.load_for_audit(path))
+                for diagnostic in (False, True):
+                    with core_package_manifest.open_modules(path, audit_archives=diagnostic) as modules:
+                        self.assertFalse(modules.complete)
+                        self.assertIs(modules, iter(modules))
+                        self.assertEqual(expected[0], next(modules))
+                        self.assertFalse(modules.complete)
+                        self.assertEqual(expected[1], next(modules))
+                        self.assertFalse(modules.complete)
+                        self.assertEqual([], list(modules))
+                        self.assertTrue(modules.complete)
+                    self.assertEqual([], list(modules))
+                    self.assertTrue(modules.complete)
+                    modules.close()
+                    with self.assertRaisesRegex(ValueError, 'stream is closed'):
+                        with modules:
+                            pass
+
+    def test_stream_reads_one_member_at_a_time_and_drops_previous_ast(self):
+        path = self.two_module_bundle()
+        reads, references, buffers = [], [], []
+        parse = core_package_manifest.strict_json
+        read = ZipFile.read
+
+        class WeakModule(dict):
+            pass
+
+        class WeakBytes(bytearray):
+            pass
+
+        def tracked_json(data):
+            value = parse(data)
+            if isinstance(value, dict) and 'bindings' in value:
+                value = WeakModule(value)
+                references.append(weakref.ref(value))
+            return value
+
+        def tracked_read(archive, name, *args, **kwargs):
+            if name == 'core/Other.json':
+                gc.collect()
+                self.assertIsNone(references[0](), 'previous parsed module survived the next member read')
+            reads.append(name)
+            value = read(archive, name, *args, **kwargs)
+            if name.startswith('core/'):
+                value = WeakBytes(value)
+                buffers.append(weakref.ref(value))
+            return value
+
+        with patch.object(core_package_manifest, 'strict_json', side_effect=tracked_json), \
+                patch.object(ZipFile, 'read', tracked_read):
+            with core_package_manifest.open_modules(path) as modules:
+                first = next(modules)
+                self.assertEqual(['manifest.json', 'core/Shared.json'], reads)
+                self.assertIsNone(buffers[0](), 'raw JSON survived delivery of its parsed module')
+                del first
+                second = next(modules)
+                self.assertEqual(['manifest.json', 'core/Shared.json', 'core/Other.json'], reads)
+                del second
+                self.assertEqual([], list(modules))
+            gc.collect()
+            self.assertTrue(all(reference() is None for reference in references))
+            self.assertTrue(all(reference() is None for reference in buffers))
+
+    def test_loose_stream_reads_only_the_current_module(self):
+        path = self.manifest([self.unit('first'), self.unit('second')])
+        reads = []
+        read = Path.read_bytes
+
+        def tracked_read(source):
+            reads.append(source.name)
+            return read(source)
+
+        with patch.object(Path, 'read_bytes', tracked_read):
+            with core_package_manifest.open_modules(path) as modules:
+                next(modules)
+                self.assertEqual(['first.json'], reads)
+                next(modules)
+                self.assertEqual(['first.json', 'second.json'], reads)
+                self.assertEqual([], list(modules))
+
+    def test_stream_closes_verified_archive_on_completion_early_exit_and_consumer_error(self):
+        path = self.two_module_bundle()
+        for mode in ('complete', 'break', 'close', 'consumer-error'):
+            with self.subTest(mode=mode):
+                opened = []
+
+                def tracked_open(stream):
+                    archive = ZipFile(stream)
+                    opened.append((archive, stream))
+                    return archive
+
+                with patch.object(core_package_manifest, 'ZipFile', side_effect=tracked_open):
+                    modules = core_package_manifest.open_modules(path)
+                    if mode == 'complete':
+                        with modules:
+                            list(modules)
+                    elif mode == 'close':
+                        next(modules)
+                        modules.close()
+                    elif mode == 'break':
+                        with self.assertRaisesRegex(ValueError, 'not fully consumed'):
+                            with modules:
+                                for _ in modules:
+                                    break
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, 'consumer failed'):
+                            with modules:
+                                next(modules)
+                                raise RuntimeError('consumer failed')
+                    self.assertEqual(mode == 'complete', modules.complete)
+                    self.assertEqual([], list(modules))
+                    self.assertEqual(mode == 'complete', modules.complete)
+                    self.assertEqual(1, len(opened), 'archive should be verified/opened once')
+                    self.assertIsNone(opened[0][0].fp)
+                    self.assertTrue(opened[0][1].closed)
+
+    def test_late_invalid_module_closes_stream_and_never_completes(self):
+        for bad, message in ((b'{"schema":1,"schema":1}', 'Duplicate JSON key'),
+                             (b'{"value":NaN}', 'Invalid JSON constant'),
+                             (b'{"value":Infinity}', 'Invalid JSON constant'),
+                             (b'{"value":-Infinity}', 'Invalid JSON constant'),
+                             (b'{}', 'unit/module/boundary mismatch'),
+                             (b'{"value":', 'Expecting value')):
+            with self.subTest(bad=bad):
+                path = self.two_module_bundle(bad)
+                opened = []
+
+                def tracked_open(stream):
+                    opened.append(stream)
+                    return ZipFile(stream)
+
+                with patch.object(core_package_manifest, 'ZipFile', side_effect=tracked_open):
+                    modules = core_package_manifest.open_modules(path, audit_archives=True)
+                    with self.assertRaisesRegex(ValueError, message):
+                        with modules:
+                            self.assertEqual('Shared', next(modules)[1]['module'])
+                            next(modules)
+                    self.assertFalse(modules.complete)
+                    self.assertEqual([], list(modules))
+                    self.assertFalse(modules.complete)
+                    self.assertTrue(opened[0].closed)
+                for loader in (core_package_manifest.load, core_package_manifest.load_for_audit):
+                    with self.assertRaisesRegex(ValueError, message):
+                        loader(path)
+
+    def test_stream_rejects_late_unit_and_module_hash_errors(self):
+        unit = self.unit('first')
+        path = self.manifest([unit, unit])
+        with self.assertRaisesRegex(ValueError, 'duplicate unit'):
+            with core_package_manifest.open_modules(path) as modules:
+                next(modules)
+                self.assertFalse(modules.complete)
+                next(modules)
+        self.assertFalse(modules.complete)
+        path = self.two_module_bundle()
+        manifest = json.loads(path.read_text())
+        unit = manifest['units'][0]
+        with ZipFile(unit['bundle']['path']) as archive:
+            contents = {item.filename: archive.read(item.filename) for item in archive.infolist()}
+        inner = json.loads(contents['manifest.json'])
+        inner['modules'][1]['sha256'] = unit['modules'][1]['sha256'] = '0' * 64
+        contents['manifest.json'] = json.dumps(inner).encode()
+        with ZipFile(unit['bundle']['path'], 'w') as archive:
+            for name, data in contents.items():
+                archive.writestr(name, data)
+        unit['bundle']['sha256'] = hashlib.sha256(Path(unit['bundle']['path']).read_bytes()).hexdigest()
+        path.write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(ValueError, 'content hash mismatch'):
+            with core_package_manifest.open_modules(path) as modules:
+                next(modules)
+                next(modules)
+        self.assertFalse(modules.complete)
+
+    def test_empty_or_unused_stream_cannot_complete(self):
+        path = self.manifest([])
+        modules = core_package_manifest.open_modules(path)
+        with self.assertRaisesRegex(ValueError, 'no Core modules'):
+            with modules:
+                list(modules)
+        self.assertFalse(modules.complete)
+        with self.assertRaisesRegex(ValueError, 'not fully consumed'):
+            with core_package_manifest.open_modules(path) as unused:
+                pass
+        self.assertFalse(unused.complete)
+
+    def test_stream_archive_diagnostic_mode_keeps_execution_and_proof_boundaries(self):
+        unit = self.unit('first')
+        source = self.root / 'first.json'
+        module = json.loads(source.read_text())
+        module.update(schema=2, foreign=dict(schema=1, execution='not-linked', files=[],
+            stubs=dict(header='', source='original CAPI stub', initializers=[], finalizers=[])))
+        source.write_text(json.dumps(module))
+        unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+        path = self.bundled(unit)
+        with self.assertRaisesRegex(ValueError, 'Unsupported foreign execution'):
+            with core_package_manifest.open_modules(path) as modules:
+                list(modules)
+        self.assertFalse(modules.complete)
+        with core_package_manifest.open_modules(path, audit_archives=True) as modules:
+            self.assertEqual(core_package_manifest.load_for_audit(path), list(modules))
+        self.assertTrue(modules.complete)
+
+        module = PackageNativeVariantsTest().module(['WordRep'])
+        module['boundary'] = self.boundary
+        source = self.root / 'variants.json'
+        for corrupt in (False, True):
+            if corrupt:
+                module['packageNativeLink']['bitcodeHex'] = '4342'
+            unit = self.unit('variants', 'Variants')
+            source.write_text(json.dumps(module))
+            unit['modules'][0]['sha256'] = hashlib.sha256(source.read_bytes()).hexdigest()
+            path = self.bundled(unit)
+            for diagnostic in (False, True):
+                if corrupt:
+                    with self.assertRaisesRegex(ValueError, 'bitcode'):
+                        with core_package_manifest.open_modules(path, audit_archives=diagnostic) as modules:
+                            list(modules)
+                    self.assertFalse(modules.complete)
+                else:
+                    with core_package_manifest.open_modules(path, audit_archives=diagnostic) as modules:
+                        self.assertEqual(1, len(list(modules)))
+                    self.assertTrue(modules.complete)
 
     def test_same_module_name_in_distinct_units_is_unambiguous(self):
         path = self.manifest([self.unit('first'), self.unit('second')])
@@ -639,6 +935,70 @@ class PackageManifestTest(unittest.TestCase):
         self.assertFalse(report['accepted'])
         self.assertEqual(1, report['summary']['missingGlobals'])
         self.assertEqual('second:Other.absent', report['missingGlobals'][0]['id'])
+
+
+class RetainedModuleProbeTest(unittest.TestCase):
+    @unittest.skipUnless(os.environ.get('THC_LOADER_PROBE_MANIFEST'), 'retained package probe not requested')
+    def test_largest_retained_module_validation_only(self):
+        """Opt-in loader component probe, never a manifest or reachability audit.
+
+        Run under an external memory limit/resource lease. Preserve the entire
+        source manifest and catalogue; do not manufacture a one-module manifest.
+        The output explicitly records that all other modules remain unaudited.
+        """
+        manifest_path = Path(os.environ['THC_LOADER_PROBE_MANIFEST'])
+        output = Path(os.environ['THC_LOADER_PROBE_OUTPUT'])
+        self.assertFalse(output.exists(), 'preserve previous probe evidence')
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = core_package_manifest.strict_json(manifest_bytes.decode('utf-8'))
+        self.assertEqual(core_package_manifest.FORMAT, manifest['format'])
+        self.assertEqual('9.14.1', manifest['ghc'])
+        inventory, candidates = [], []
+        root = manifest_path.resolve().parent
+        for unit in manifest['units']:
+            bundle = unit.get('bundle')
+            if bundle is not None:
+                with ZipFile(bundle['path']) as archive:
+                    sizes = {record['path']: archive.getinfo(record['path']).file_size for record in unit['modules']}
+            else:
+                sizes = {}
+                for record in unit['modules']:
+                    relative = Path(record['path'])
+                    self.assertFalse(relative.is_absolute() or '..' in relative.parts)
+                    artifact = (root / relative).resolve()
+                    self.assertTrue(artifact.is_relative_to(root))
+                    sizes[record['path']] = artifact.stat().st_size
+            inventory.append(dict(unit=unit['id'], bundle=bundle,
+                modules=[dict(record, bytes=sizes[record['path']]) for record in unit['modules']]))
+            candidates.extend((sizes[record['path']], unit, record) for record in unit['modules'])
+        size, unit, selected = max(candidates, key=lambda entry: entry[0])
+        receipt = dict(schema=1, phase='largest-module-validation-only', accepted=False,
+            manifestComplete=False, reachabilityAudited=False,
+            manifest=dict(path=str(manifest_path), sha256=hashlib.sha256(manifest_bytes).hexdigest()),
+            inventory=inventory, selected=dict(unit=unit['id'], module=selected, bytes=size),
+            selectedModuleValidated=False)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(receipt, indent=2) + '\n')
+        # This component verifies the selected bundle's *whole* hash, inventory
+        # and build-input proof. It is deliberately not a partially accepted
+        # open_modules stream. No normal loader/auditor completion is claimed.
+        selected_members = (core_package_manifest._iter_bundle_modules(manifest_path, unit, unit['modules'])
+                            if 'bundle' in unit else core_package_manifest._iter_loose_modules(root, unit['modules']))
+        with closing(selected_members) as members:
+            for record, source, data in members:
+                self.assertEqual(record['sha256'], hashlib.sha256(data).hexdigest())
+                if record != selected:
+                    del data
+                    continue
+                self.assertEqual(size, len(data))
+                module = core_package_manifest._validated_module(manifest_path, unit['id'], record, data, True)
+                receipt.update(selectedModuleValidated=True, source=source,
+                    bindingCount=len(module['bindings']), constructorCount=len(module.get('constructors', [])))
+                del data, module
+                break
+        self.assertTrue(receipt['selectedModuleValidated'])
+        output.write_text(json.dumps(receipt, indent=2) + '\n')
+        print(json.dumps({key: value for key, value in receipt.items() if key != 'inventory'}))
 
 
 if __name__ == '__main__':

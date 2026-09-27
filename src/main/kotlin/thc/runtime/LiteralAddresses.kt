@@ -5,6 +5,7 @@ package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
+import com.oracle.truffle.api.CompilerDirectives.transferToInterpreter
 import com.oracle.truffle.api.frame.VirtualFrame
 import thc.Language
 import java.lang.ref.Reference
@@ -327,7 +328,11 @@ internal class ManagedAddress private constructor(
         owner?.let { return it.readByte(index.toLong()) }
         // Keep the immutable and mutable loads distinct: only the former may fold.
         val literal = literalBytes
-        return (if (literal != null) literal[index] else mutableBytes!![index]).toLong() and 0xffL
+        return (if (literal != null) literal[index] else {
+            val mutable = mutableBytes
+            if (mutable == null) transferToInterpreter()
+            mutable!![index]
+        }).toLong() and 0xffL
     }
 
     /** Original libc strlen over a live, bounded byte address. The native

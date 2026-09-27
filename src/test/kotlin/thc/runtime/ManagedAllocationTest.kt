@@ -15,6 +15,99 @@ import thc.Language
 import thc.primopTestContext
 
 class ManagedAllocationTest {
+    @Test fun firstInstalledScalarWritesInvalidateOnlyWholeOverlappingPointerCells() {
+        primopTestContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        val storage = frame.arguments[0] as ManagedAllocation
+                        storage.writeNativeScalarByteOffset(frame.arguments[1] as Long,
+                            frame.arguments[2] as Int, frame.arguments[3] as Long, true)
+                        return Unit
+                    }
+                }
+                val target = root.callTarget
+                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, pinned = true))
+                val pointer = ManagedAddress.fromByteArray(byteArrayOf(42))
+                for (owner in storage) {
+                    owner.writeAddressByteOffset(0, pointer)
+                    target.call(owner, 0L, 8, 0x11223344L)
+                    owner.writeAddressByteOffset(0, pointer)
+                    owner.writeAddressByteOffset(8, pointer)
+                }
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                for (owner in storage) for (offset in listOf(0L, 8L, 16L)) {
+                    val before = root.compiledEntries
+                    target.call(owner, offset, 8, 0x11223344L)
+                    assertEquals(before + 1, root.compiledEntries, "immediate installed scalar overwrite at $offset")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    assertThrows(RuntimeFault::class.java) { owner.readAddressByteOffset(offset) }
+                    if (offset == 0L) assertSame(pointer, owner.readAddressByteOffset(8))
+                    assertEquals(0x44L, owner.readByte(offset))
+                    assertFalse(Thread.holdsLock(owner))
+                }
+                for (owner in storage) {
+                    owner.writeAddressByteOffset(8, pointer)
+                    assertThrows(RuntimeFault::class.java) { target.call(owner, 9L, 2, -1L) }
+                    assertSame(pointer, owner.readAddressByteOffset(8))
+                    assertEquals(0x44L, owner.readByte(16))
+                    assertFalse(Thread.holdsLock(owner))
+                }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun installingPointerCellsKeepsTheNextCompiledDisjointAtomicAndScalarAccess() {
+        primopTestContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        val storage = frame.arguments[0] as ManagedAllocation
+                        storage.atomicInt(2, 1, 0, AtomicIntArrayOp.ADD)
+                        return ManagedByteArray.readIntGuest(storage, 2)
+                    }
+                }
+                val target = root.callTarget
+                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, pinned = true))
+                for (owner in storage) {
+                    ManagedByteArray.writeIntGuest(owner, 2, 40)
+                    assertEquals(41L, target.call(owner))
+                }
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                for (owner in storage) {
+                    var before = root.compiledEntries
+                    assertEquals(42L, target.call(owner))
+                    assertEquals(before + 1, root.compiledEntries, "first installed pointer-free atomic/scalar access")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    val address = ManagedAddress.fromAllocation(owner).plus(16)
+                    owner.writeAddressByteOffset(0, address)
+                    before = root.compiledEntries
+                    assertEquals(43L, target.call(owner))
+                    assertEquals(before + 1, root.compiledEntries, "first installed access after pointer installation")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                    assertSame(address, owner.readAddressByteOffset(0))
+                    assertFalse(Thread.holdsLock(owner))
+                }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun pointerWritesAndReadsKeepTheFirstInstalledCallAndReferenceIdentity() {
         primopTestContext().use { context ->
             context.initialize("thc"); context.enter()

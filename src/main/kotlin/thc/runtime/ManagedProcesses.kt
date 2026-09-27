@@ -23,6 +23,7 @@ import thc.NativeIO
 internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : Closeable {
     private val context = Language.currentState()
     private val children = IdentityHashMap<Handle, Child>()
+    private val processIds = mutableMapOf<Int, Handle>()
     private var disposed = false
 
     /** Identity capability, never a guest-supplied host PID. Numeric FFI handle
@@ -38,10 +39,13 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
     /** Until transferred to ManagedFiles, the context retains cleanup ownership.
      * A transfer is one-way; the receiver must install/close the returned lease. */
     class Pipe internal constructor() : Closeable {
+        private val context = Language.currentState()
         private var owned: NativeFileLease? = NativeFileLease()
         internal fun slot() = owned!!.openSlot()
-        @Synchronized fun takeLease(): NativeFileLease =
-            (owned ?: throw ClosedChannelException()).also { owned = null }
+        @Synchronized fun takeLease(): NativeFileLease {
+            if (Language.currentState() !== context) fault("Process pipe belongs to another context")
+            return (owned ?: throw ClosedChannelException()).also { owned = null }
+        }
         @Synchronized fun duplicate(): Int = (owned ?: throw ClosedChannelException()).duplicateForWait()
         @Synchronized override fun close() {
             val lease = owned ?: return
@@ -109,9 +113,14 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
                 }
             } }.toIntArray()
             directory.borrow().use { anchor -> Arena.ofConfined().use { arena ->
-                val slots = arena.allocate(20, 4)
+                val slots = arena.allocate(24, 4)
                 val errno = NativeProcessApi.spawn(arguments, environment, anchor.descriptor, cwd, descriptors, flags, searchPath, slots)
-                if (errno != 0) throw NativeFileException("process spawn", errno)
+                if (errno != 0) {
+                    val stage = ProcessFailureStage.entries.getOrNull(slots.get(ValueLayout.JAVA_INT, 20))
+                        ?: fault("Invalid native process failure stage")
+                    if (stage == ProcessFailureStage.NONE) fault("Missing native process failure stage")
+                    throw ProcessSpawnException(errno, stage)
+                }
                 child.pid = slots.get(ValueLayout.JAVA_INT, 0)
                 child.descriptor = slots.get(ValueLayout.JAVA_INT, 4)
                 pidSlot.set(ValueLayout.JAVA_INT, 0, child.descriptor)
@@ -144,6 +153,33 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
         if (child.closed) throw ClosedChannelException()
         child.pid
     } }
+
+    /** Reserve the real CPid for the original ABI. Retired identities are never
+     * replaced: a reused PID rejects and cleans only the newly launched child. */
+    @Synchronized @TruffleBoundary fun publishProcessId(handle: Handle): Int {
+        val pid = processId(handle)
+        val previous = processIds[pid]
+        if (previous != null && previous !== handle) {
+            val failure = NativeFileException("process PID identity collision", 11)
+            try { abortUnpublished(handle) } catch (cleanup: Throwable) { failure.addSuppressed(cleanup) }
+            throw failure
+        }
+        processIds[pid] = handle
+        return pid
+    }
+
+    @Synchronized @TruffleBoundary fun fromProcessId(pid: Int): Handle {
+        current()
+        return processIds[pid] ?: fault("Unknown or cross-context process ID")
+    }
+
+    /** Roll back a launch not yet returned to the guest. Transferred pipes are
+     * the receiver's responsibility; all remaining owners are retired here.
+     * A registered numeric identity stays reserved even after rollback. */
+    @Synchronized @TruffleBoundary fun abortUnpublished(handle: Handle) {
+        val child = child(handle)
+        dispose(child)
+    }
 
     private fun query(child: Child): ProcessResult {
         if (child.closed) throw ClosedChannelException()
@@ -186,7 +222,7 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
         try {
             while (true) {
                 beforeBlock?.invoke()
-                val readiness = wait.await(node, -1)[0].toInt()
+                val readiness = wait.await(node, -1, beforeBlock)[0].toInt()
                 synchronized(child) {
                     if (child.closed || readiness and 32 != 0) throw ClosedChannelException()
                     val result = query(child)
@@ -224,6 +260,7 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
             if (failure == null) failure = error else failure.addSuppressed(error)
         }
         children.clear()
+        processIds.clear()
         failure?.let { throw it }
     }
 }

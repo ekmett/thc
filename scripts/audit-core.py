@@ -48,7 +48,7 @@ ARITHMETIC_EXCEPTIONS = {name: 'ghc-internal:GHC.Internal.Exception.Type.' + pay
 
 
 class Audit:
-    def __init__(self, modules, capabilities):
+    def __init__(self, modules, capabilities, foreign_exception_bridge_unit=None):
         self.cap = capabilities
         self.bindings = {}
         self.constructors = {}
@@ -68,7 +68,29 @@ class Audit:
         self.package_scalar_proofs = {}
         self.archive_bindings = {}
         self.retained_exports = []
+        self.exception_bridges = {}
+        self.exception_bridge_unit = foreign_exception_bridge_unit
+        if foreign_exception_bridge_unit is not None and (not isinstance(foreign_exception_bridge_unit, str) or not foreign_exception_bridge_unit):
+            self.issue('foreign-exception-bridge', None, 'manifest', 'Invalid foreignExceptionBridgeUnit')
         for source, module in modules:
+            bridge = module.get('foreignExceptionBridge')
+            if bridge is not None:
+                unit = module.get('unit')
+                prefix = str(unit) + ':THC.Internal.Exception.'
+                expected = dict(schema=1, unit=unit, module='THC.Internal.Exception',
+                    box=prefix + 'boxForeign', project=prefix + 'projectForeign',
+                    payloadType=prefix + 'ForeignException',
+                    exceptionType='ghc-internal:GHC.Internal.Exception.Type.SomeException')
+                ids = {b.get('id') for b in module.get('bindings', [])}
+                if (not isinstance(bridge, dict) or bridge != expected or type(bridge.get('schema')) is not int or
+                        module.get('module') != 'THC.Internal.Exception' or not isinstance(unit, str) or not unit or
+                        expected['box'] not in ids or expected['project'] not in ids):
+                    self.issue('foreign-exception-bridge', None, source, 'Invalid genuine bridge module/identity/helpers')
+                elif unit in self.exception_bridges:
+                    self.issue('foreign-exception-bridge', None, source, 'Duplicate bridge unit')
+                else:
+                    self.exception_bridges[unit] = bridge
+
             scalar_link = None
             native_archive = None
             try:
@@ -153,6 +175,18 @@ class Audit:
         for unit, link in self.package_scalar_links.items():
             if self.package_scalar_proofs[unit] != {entry['entry'] for entry in link['abi']}:
                 self.issue('module-format', None, unit, 'Package C ABI lacks complete typed import provenance')
+
+    def require_exception_bridge(self, owner, path):
+        if self.exception_bridge_unit is not None:
+            bridge = self.exception_bridges.get(self.exception_bridge_unit)
+        else:
+            bridge = next(iter(self.exception_bridges.values())) if len(self.exception_bridges) == 1 else None
+        if bridge is None:
+            self.issue('foreign-exception-bridge', owner, path,
+                       'Foreign execution requires an exact or unambiguous genuine THC.Exception runtime bundle')
+            return
+        self.reference(bridge['box'], owner, path + '/foreign-exception-box')
+        self.reference(bridge['project'], owner, path + '/foreign-exception-project')
 
     def issue(self, code, owner, path, detail):
         self.issues.append(dict(code=code, owner=owner, path=path, detail=detail))
@@ -264,6 +298,13 @@ class Audit:
         if not isinstance(metadata, dict):
             self.issue('expression-metadata', owner, path, 'Expected metadata record')
             return
+        if 'exceptionPayload' in metadata:
+            proof = metadata['exceptionPayload']
+            if (expr[0] != 'app' or not isinstance(expr[1], list) or expr[1][:1] != ['prim'] or
+                    expr[1][1] not in ('raise#', 'raiseIO#') or not isinstance(proof, dict) or
+                    type(proof.get('schema')) is not int or
+                    proof != {'schema': 1, 'type': 'ghc-internal:GHC.Internal.Exception.Type.SomeException'}):
+                self.issue('exception-payload', owner, path, 'Invalid SomeException raise provenance')
         self.representation(metadata.get('rep'), owner, path + '/rep')
         if expr[0] == 'lam':
             self.representation(metadata.get('resultRep'), owner, path + '/resultRep')
@@ -710,7 +751,8 @@ class Audit:
                 core_original_foreign.validate_head(function, function[1] in bound or function[1] in self.bindings)
                 require = core_original_foreign.require
                 require(set(call) == core_original_foreign.DESCRIPTOR_KEYS and type(call['schema']) is int and
-                        call['schema'] == 1 and call['convention'] == 'ccall' and call['safety'] == 'unsafe',
+                        call['schema'] == 1 and call['convention'] == 'ccall' and
+                        call['safety'] == ('safe' if symbol == 'thc_exception_v1_text' else 'unsafe'),
                         'THC runtime service exact v1 C ABI')
                 require(set(target) == {'kind', 'symbol', 'unit', 'isFunction'} and target['kind'] == 'static' and
                         target['isFunction'] is True and (target['unit'] is None or isinstance(target['unit'], str)),
@@ -729,6 +771,8 @@ class Audit:
                         core_original_foreign.result(core_original_foreign.raw_rep(expr), (None, 'Int64Rep')),
                         'THC runtime service State#/CLLong result')
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+                if symbol == 'thc_exception_v1_text':
+                    self.require_exception_bridge(owner, path)
             except (ValueError, KeyError, TypeError, IndexError) as error:
                 self.issue('foreign-call', owner, path, str(error))
             return True
@@ -766,6 +810,7 @@ class Audit:
                 for index, (argument, primitive) in enumerate(zip(arguments, package_abi['arguments'] + [None])):
                     self.original_stack_operand(argument, 'BoxedRep (Just Unlifted)' if primitive in ('ByteArray#', 'MutableByteArray#') else primitive, bound, index)
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path, linkedUnit=package_link['unit']))
+                self.require_exception_bridge(owner, path)
             except (ValueError, KeyError, TypeError) as error:
                 self.issue('foreign-call', owner, path, str(error))
             return True
@@ -843,9 +888,10 @@ class Audit:
                     raise ValueError('Linked CAPI call lacks its exact original FCallId')
                 declared = call['argumentReps']
                 abi = {entry['symbol']: entry['kind'] for entry in link['abi']}
-                zero = abi[symbol] == 'clock-id'
-                wanted = [None] if zero else ['Word64Rep', 'AddrRep', None]
-                output = 'Word64Rep' if zero else 'Int32Rep'
+                zero = abi[symbol] in ('clock-id', 'time-clock-id')
+                word = 'Int32Rep' if link['module'] == 'Data.Time.Clock.Internal.CTimespec' else 'Word64Rep'
+                wanted = [None] if zero else [word, 'AddrRep', None]
+                output = word if zero else 'Int32Rep'
                 def exact(rep, primitive):
                     kind = 'void' if primitive is None else 'address' if primitive == 'AddrRep' else 'long'
                     return (isinstance(rep, dict) and set(rep) == {'kind', 'primReps', 'evaluated'} and
@@ -864,6 +910,8 @@ class Audit:
                             for proof, argument, primitive in zip(declared, arguments, wanted)) or
                         not tuple_rep(call['resultRep']) or not tuple_rep(self.expression_rep(expr))):
                     raise ValueError('Linked CAPI call has wrong actual or declared primitive ABI')
+                for index, (argument, primitive) in enumerate(zip(arguments, wanted)):
+                    self.original_stack_operand(argument, primitive, bound, index)
                 self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path,
                                                linkedModule=link['module']))
             except (TypeError, KeyError, ValueError) as error:
@@ -937,6 +985,7 @@ class Audit:
                 return reject('JavaScript result requires exact State# singleton or State#/Int#/Double# tuple')
             self.foreign_calls.append(dict(symbol=symbol, javascriptSource=source,
                                            result=output, owner=owner, path=path))
+            self.require_exception_bridge(owner, path)
             return True
         spec = POLYGLOT_ABI['operations'].get(symbol)
         if spec is None:
@@ -976,6 +1025,7 @@ class Audit:
                 self.shape(self.expression_rep(expr)) != self.shape(result)):
             return reject('GHC declared State# tuple result differs from polyglot ABI')
         self.foreign_calls.append(dict(symbol=symbol, owner=owner, path=path))
+        self.require_exception_bridge(owner, path)
         return True
 
     def free_variables(self, expr):
@@ -2212,7 +2262,9 @@ def main():
             parser.error('Supply modules or --module-list')
         modules = (core_package_manifest.load_for_audit(args.package_manifest) if args.package_manifest else [])
         modules += [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)]
-        report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
+        bridge_unit = (json.loads(args.package_manifest.read_text()).get('foreignExceptionBridgeUnit')
+                       if args.package_manifest else None)
+        report = Audit(modules, json.loads(args.capabilities.read_text()), bridge_unit).run(args.entry, io_main=args.io_main)
     except (OSError, ValueError, TypeError) as error:
         parser.error(str(error))
     if args.output:

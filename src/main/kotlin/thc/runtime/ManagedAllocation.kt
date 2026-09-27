@@ -88,7 +88,11 @@ internal class ManagedAllocation private constructor(
         if (!writable) fault("Cannot write through an immutable managed allocation")
     }
 
-    private fun intersectsPointer(offset: Int, count: Int): Boolean = count > 0 &&
+    private fun intersectsPointer(offset: Int, count: Int): Boolean =
+        count > 0 && pointers != null && intersectsPointerCells(offset, count)
+
+    // Keep pointer-free scalar/atomic access inline; only scan an actual registry on the host.
+    @TruffleBoundary private fun intersectsPointerCells(offset: Int, count: Int): Boolean =
         pointers?.keys?.any { it.toLong() < offset.toLong() + count && it.toLong() + pointerBytes > offset } == true
 
     private fun requireWholePointerOverlaps(offset: Int, count: Int) {
@@ -101,7 +105,11 @@ internal class ManagedAllocation private constructor(
     }
 
     private fun invalidate(offset: Int, count: Int) {
-        if (count == 0) return
+        if (count == 0 || pointers == null) return
+        invalidatePointerCells(offset, count)
+    }
+
+    @TruffleBoundary private fun invalidatePointerCells(offset: Int, count: Int) {
         requireWholePointerOverlaps(offset, count)
         pointers?.keys?.removeIf { it.toLong() < offset.toLong() + count && it.toLong() + pointerBytes > offset }
         if (pointers?.isEmpty() == true) pointers = null

@@ -37,6 +37,7 @@ internal fun packageCInteger(rep: String, value: Long): Any = when (rep) {
 
 /** One adopted call site for an exact component ABI in the current EXCLUSIVE context policy. */
 internal class PackageScalarAccess(private val call: PackageScalarCall) : Node() {
+    @Child private var foreignExceptions = ForeignExceptionAccess()
     @field:CompilationFinal(dimensions = 1) private val argumentReps = call.arguments.copyOf()
     @Volatile @CompilationFinal private var cached: PackageScalarFunction? = null
     @Child private var calls = InteropLibrary.getFactory().createDispatched(1)
@@ -93,14 +94,16 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
 
     private fun invoke(entry: PackageScalarFunction, arguments: Array<Any?>): Any? {
         val threads = entry.owner.threads
-        val previous = threads.enterForeign()
+        val previous = threads.enterForeign(call.safety)
         try {
-            return if (pointers) invokePointers(entry, arguments)
-                else normalizeResult(entry, Calls.interop(calls, entry.receiver, arguments))
-        } finally {
-            threads.leaveForeign(previous)
-            Reference.reachabilityFence(arguments)
-        }
+            try {
+                return if (pointers) invokePointers(entry, arguments)
+                    else normalizeResult(entry, Calls.interop(calls, entry.receiver, arguments))
+            } finally {
+                threads.leaveForeign(previous)
+                Reference.reachabilityFence(arguments)
+            }
+        } catch (error: com.oracle.truffle.api.exception.AbstractTruffleException) { foreignExceptions.raise(error) }
     }
 
     @TruffleBoundary

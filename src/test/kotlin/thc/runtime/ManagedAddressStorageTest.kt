@@ -4,12 +4,56 @@
 package thc.runtime
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal
+import com.oracle.truffle.api.CompilerDirectives
+import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.TruffleLanguage
+import com.oracle.truffle.api.frame.VirtualFrame
+import com.oracle.truffle.api.nodes.RootNode
 import java.lang.reflect.Modifier
 import java.math.BigInteger
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import thc.Language
+import thc.primopTestContext
 
 class ManagedAddressStorageTest {
+    @Test fun firstInstalledByteReadsKeepLiteralAndMutableStorageDistinct() {
+        primopTestContext().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val root = object : RootNode(language) {
+                    var compiledEntries = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        if (CompilerDirectives.inCompiledCode()) compiledEntries++
+                        return (frame.arguments[0] as ManagedAddress).readWord8(frame.arguments[1] as Long)
+                    }
+                }
+                val bytes = byteArrayOf(0, 127, 128.toByte(), 255.toByte())
+                val mutable = ManagedAddress.fromByteArray(bytes)
+                val literal = ManagedAddress.fromHex("007f80ff")
+                val target = root.callTarget
+                for (address in listOf(literal, mutable)) for (index in bytes.indices)
+                    assertEquals(bytes[index].toLong() and 255L, target.call(address, index.toLong()))
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
+                bytes[2] = 0xa5.toByte()
+                for ((address, expected) in listOf(mutable to 165L, literal to 128L)) {
+                    val before = root.compiledEntries
+                    assertEquals(expected, target.call(address, 2L))
+                    assertEquals(before + 1, root.compiledEntries, "first installed byte read")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                }
+                assertThrows(RuntimeFault::class.java) { target.call(ManagedAddress.nullAddress(), 0L) }
+                assertThrows(RuntimeFault::class.java) { target.call(mutable, 4L) }
+                assertArrayEquals(byteArrayOf(0, 127, 0xa5.toByte(), 255.toByte()), bytes)
+            } finally { context.leave() }
+        }
+    }
+
     private fun position(size: Int, base: Int, displacement: Long, onePast: Boolean): Int? {
         val target = BigInteger.valueOf(base.toLong()).add(BigInteger.valueOf(displacement))
         val limit = BigInteger.valueOf(size.toLong())

@@ -3,10 +3,10 @@
 
 {-# LANGUAGE OverloadedStrings #-}
 
-module THC.Driver.ForeignBitcode (linkClockGetTime) where
+module THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders) where
 
 import Control.Exception (finally)
-import Control.Monad (forM, unless)
+import Control.Monad (filterM, forM, unless)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
@@ -15,23 +15,30 @@ import qualified Data.ByteString.Lazy as BL
 import Data.Char (intToDigit)
 import Data.List (isInfixOf, isSuffixOf, nub)
 import Data.Maybe (catMaybes, isJust)
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as TextEncoding
-import System.Directory (createDirectory, createDirectoryIfMissing, doesDirectoryExist,
+import GHC.Utils.Encoding (zEncodeString)
+import System.Directory (createDirectory, createDirectoryIfMissing, doesDirectoryExist, doesFileExist,
                          listDirectory, removePathForcibly)
 import System.Environment (lookupEnv)
 import System.Exit (ExitCode(..))
-import System.FilePath ((</>), takeDirectory)
+import System.FilePath ((</>), takeDirectory, takeFileName)
 import System.IO (hClose, openTempFile)
 import System.Process (readCreateProcessWithExitCode, proc)
 
 -- A complete no-callback CAPI module is the first executable archive. The
 -- compiler recipe is reusable, but no other module gains execution permission
 -- merely because it has an apparently similar C symbol.
-linkClockGetTime :: FilePath -> FilePath -> String -> String -> String -> BS.ByteString -> IO BS.ByteString
-linkClockGetTime libdir staging platform unit name original
-  | name /= "System.CPUTime.Posix.ClockGetTime" = pure original
+linkClockGetTime :: FilePath -> [FilePath] -> FilePath -> String -> String -> String -> BS.ByteString -> IO BS.ByteString
+linkClockGetTime libdir includes staging platform unit name original
+  | name `notElem` ["System.CPUTime.Posix.ClockGetTime", "Data.Time.Clock.Internal.CTimespec"] = pure original
+  | timeClock && not ("-linux" `isSuffixOf` platform) = pure original
   | otherwise = do
+      unless (not timeClock || unit == "time-1.15-inplace" ||
+        case splitAt (length ("time-1.15-" :: String)) unit of
+          ("time-1.15-", suffix) -> not (null suffix) && all (`elem` ("0123456789abcdef" :: String)) suffix
+          _ -> False) (fail "CTimespec requires the original time-1.15 unit")
       value <- either fail pure (eitherDecodeStrict' original)
       fields <- case value of
         Object objectFields -> pure objectFields
@@ -54,17 +61,19 @@ linkClockGetTime libdir staging platform unit name original
               KeyMap.lookup "initializers" stubs == Just (Array mempty) &&
               KeyMap.lookup "finalizers" stubs == Just (Array mempty))
         (fail "ClockGetTime requires unsupported callbacks or initialization")
-      let calls = collectCalls value
-          classified = map (capiAbi unit) calls
+      let calls = (if timeClock then filter (ownedCall unit) else id) (collectCalls value)
+          classified = map (capiAbi timeClock unit) calls
           abi = nub (catMaybes classified)
           symbols = map fst abi
       unless (all isJust classified && length abi == 3 &&
-              length [() | (_, kind) <- abi, kind == "clock-id"] == 1 &&
-              length [() | (_, kind) <- abi, kind == "clock-buffer"] == 2 &&
+              (if timeClock then sortAbi abi == sortAbi (timeSymbols unit)
+               else length [() | (_, kind) <- abi, kind == "clock-id"] == 1 &&
+                    length [() | (_, kind) <- abi, kind == "clock-buffer"] == 2) &&
               length symbols == length (nub symbols))
         (fail "ClockGetTime CAPI contract differs from its three generated wrappers")
       -- Find the selected GHC's HsFFI.h, not a different compiler on PATH.
       header <- findHeader libdir
+      headers <- if timeClock then timeClockHeaders libdir includes else pure []
       clang <- maybe "clang" id <$> lookupEnv "THC_CLANG"
       defaultTarget <- output clang ["-dumpmachine"]
       let cpu = takeWhile (/= '-') platform
@@ -88,23 +97,58 @@ linkClockGetTime libdir staging platform unit name original
           bitcode = temporary </> "clock.bc"
           cleanup = removePathForcibly temporary
       bytes <- (do
-        writeFile cfile ("#include \"HsFFI.h\"\n#include <errno.h>\n#include <time.h>\n" ++
+        writeFile cfile ("#include \"HsFFI.h\"\n#include <errno.h>\n#include <time.h>\n#include <stddef.h>\n" ++
           Text.unpack source ++ "\n" ++ unlines
           ["_Static_assert(sizeof(struct timespec) == 16, \"unsupported timespec ABI\");",
+           "_Static_assert(offsetof(struct timespec, tv_sec) == 0 && offsetof(struct timespec, tv_nsec) == 8, \"unsupported timespec offsets\");",
+           "_Static_assert(sizeof(((struct timespec *)0)->tv_sec) == 8 && sizeof(((struct timespec *)0)->tv_nsec) == 8, \"unsupported timespec fields\");",
            "HsInt32 thc_capi_errno(void) { return errno; }"])
         run clang (targetFlags ++ ["-O1", "-emit-llvm", "-c", "-I", takeDirectory header,
-                   cfile, "-o", bitcode])
+                   cfile, "-o", bitcode] ++ concatMap (\path -> ["-I", path]) includes)
         BS.readFile bitcode) `finally` cleanup
-      let linked = object ["schema" .= (2 :: Int), "format" .= ("llvm-bitcode" :: String),
+      after <- if timeClock then timeClockHeaders libdir includes else pure []
+      unless (after == headers) (fail "Selected clock headers changed during CAPI compilation")
+      let linked = object (["schema" .= (if timeClock then 3 else 2 :: Int), "format" .= ("llvm-bitcode" :: String),
                            "unit" .= unit, "module" .= name,
                            "sourceSha256" .= sha (TextEncoding.encodeUtf8 source),
                            "bitcodeSha256" .= sha bytes, "bitcodeHex" .= hex bytes,
                            "target" .= target,
                            "symbols" .= symbols,
-                           "abi" .= [object ["symbol" .= symbol, "kind" .= kind] | (symbol, kind) <- abi]]
+                           "abi" .= [object ["symbol" .= symbol, "kind" .= kind] | (symbol, kind) <- abi]] ++
+                           ["headerHashes" .= [object ["name" .= takeFileName path, "sha256" .= digest] |
+                             (path, digest) <- headers] | timeClock])
       pure (BL.toStrict (encode (Object (KeyMap.insert "foreignLink" linked fields))))
   where
     sha = hex . SHA.hash
+    timeClock = name == "Data.Time.Clock.Internal.CTimespec"
+    sortAbi = Map.fromList
+
+-- The installed registration supplies the configured package headers; never
+-- replace HS_CLOCK_REALTIME with a guessed constant or a fixture declaration.
+timeClockHeaders :: FilePath -> [FilePath] -> IO [(FilePath, String)]
+timeClockHeaders libdir includes = do
+  ffi <- findHeader libdir
+  paths <- forM ["HsTime.h", "HsTimeConfig.h"] $ \name -> do
+    found <- filterM doesFileExist [directory </> name | directory <- includes]
+    case nub found of
+      [path] -> pure path
+      _ -> fail ("Selected time unit must provide exactly one " ++ name)
+  forM (ffi : paths) $ \path -> do
+    digest <- hex . SHA.hash <$> BS.readFile path
+    pure (path, digest)
+
+timeSymbols :: String -> [(String, String)]
+timeSymbols unit = [(prefix 0 ++ "HSzuCLOCKzuREALTIME", "time-clock-id"),
+                    (prefix 1 ++ "clockzugetres", "time-clock-resolution"),
+                    (prefix 2 ++ "clockzugettime", "time-clock-time")]
+  where prefix index = "ghczuwrapperZC" ++ show (index :: Int) ++ "ZC" ++ zEncodeString unit ++
+          "ZCDataziTimeziClockziInternalziCTimespecZC"
+
+ownedCall :: String -> Value -> Bool
+ownedCall unit (Object fields) = case KeyMap.lookup "target" fields of
+  Just (Object target) -> KeyMap.lookup "unit" target == Just (String (Text.pack unit))
+  _ -> False
+ownedCall _ _ = False
 
 output :: FilePath -> [String] -> IO String
 output tool arguments = do
@@ -121,24 +165,29 @@ collectCalls value = case value of
   Array values -> concatMap collectCalls values
   _ -> []
 
-capiAbi :: String -> Value -> Maybe (String, String)
-capiAbi unit call = do
+capiAbi :: Bool -> String -> Value -> Maybe (String, String)
+capiAbi timeClock unit call = do
   Object fields <- Just call
   Object target <- KeyMap.lookup "target" fields
   String symbol <- KeyMap.lookup "symbol" target
-  let expected :: String -> Value
+  let zeroKind = if timeClock then "time-clock-id" else "clock-id"
+      wordRep = if timeClock then "Int32Rep" else "Word64Rep"
+      expected :: String -> Value
       expected kind = object
         ["schema" .= (1 :: Int),
          "target" .= object ["kind" .= ("static" :: String), "symbol" .= symbol,
                               "unit" .= unit, "isFunction" .= True],
          "convention" .= ("capi" :: String), "safety" .= ("unsafe" :: String),
-         "arity" .= (if kind == "clock-id" then (1 :: Int) else 3),
-         "suppliedArity" .= (if kind == "clock-id" then (1 :: Int) else 3),
-         "argumentReps" .= (if kind == "clock-id" then [scalar Nothing False]
-                            else [scalar (Just "Word64Rep") False,
+         "arity" .= (if kind == zeroKind then (1 :: Int) else 3),
+         "suppliedArity" .= (if kind == zeroKind then (1 :: Int) else 3),
+         "argumentReps" .= (if kind == zeroKind then [scalar Nothing False]
+                            else [scalar (Just wordRep) False,
                                   scalar (Just "AddrRep") False, scalar Nothing False]),
-         "resultRep" .= tuple (if kind == "clock-id" then "Word64Rep" else "Int32Rep") False]
-  if call == expected "clock-id" then Just (Text.unpack symbol, "clock-id")
+         "resultRep" .= tuple (if kind == zeroKind then wordRep else "Int32Rep") False]
+  if timeClock then do
+    kind <- lookup (Text.unpack symbol) (timeSymbols unit)
+    if call == expected kind then Just (Text.unpack symbol, kind) else Nothing
+  else if call == expected "clock-id" then Just (Text.unpack symbol, "clock-id")
   else if call == expected "clock-buffer" then Just (Text.unpack symbol, "clock-buffer")
   else Nothing
   where
