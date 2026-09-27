@@ -92,7 +92,7 @@ internal object GhcBCO {
                 fault("BCO jump does not name an instruction boundary")
         }
         val root = GhcBCORoot(language, Language.currentState(node), metrics, instructions, data, refs, nonPointers)
-        return Closure(null, arity = arity.toInt(), target = root.callTarget)
+        return Closure(null, arity.toInt(), root.callTarget)
     }
 
     @JvmStatic fun updating(node: Node, value: Any?): Thunk {

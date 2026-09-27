@@ -239,7 +239,7 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
         scalarPrefixSource.copy(frame, node, function.supplied, 0, storage, 0, prefixWidth, layout)
     }
     source.copy(frame, node, values, sourceOffset, storage, prefixWidth, sourceWidth, layout)
-    return Closure(function.environment, NO_PAP_ARGUMENTS, remainingArity - count, function.target, oldCount + count, storage)
+    return Closure(function.environment, Closure.NO_PAP_ARGUMENTS, remainingArity - count, function.target, oldCount + count, storage)
 }
 
 /** The loan is consumed by entry before any guest continuation. Failed entry and
@@ -253,7 +253,7 @@ internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarg
     try { return action(arrayOf(input)) }
     // Trampoline targets vary at runtime. Cleanup receives only storage and
     // metadata; it must not explode a dynamic layout or retain a caller frame.
-    finally { releaseGenericInput(layout, input, generation) }
+    finally { GenericTypedInputsKt.releaseGenericInput(layout, input, generation) }
 }
 
 internal inline fun invokeTypedInput(layout: TypedInputLayout, input: HandoffStorage,
@@ -365,7 +365,7 @@ private class InputCallArm(private val source: InputSource, private val count: I
     @field:CompilationFinal(dimensions = 1)
     private val strictPositions = input?.let { strictInputPositions(root, it) } ?: IntArray(0)
     @Child private var direct = com.oracle.truffle.api.nodes.DirectCallNode.create(target)
-    @Child private var legacy = DirectCallerNode(target, metrics, prefixSize = prefixCount)
+    @Child private var legacy = DirectCallerNode(target, metrics, booleanArrayOf(), prefixCount)
     @Child private var force = Force(metrics)
     @Child private var loop = TailCallLoop(metrics)
     @Child private var tupleBounce: TupleBounce? = destination?.let { TupleBounce(it, metrics) }
@@ -416,13 +416,13 @@ private class InputCallArm(private val source: InputSource, private val count: I
     }
     private fun finish(frame: VirtualFrame, result: Any?, values: Array<Any?>?): Any? {
         if (arity < count) {
-            val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
+            val closure = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, result)) }
             catch (cut: AstCapture) {
                 CompilerDirectives.transferToInterpreter()
                 val savedValues = values?.copyOf()
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                        remainder!!.execute(frame, requireClosure(input), savedValues)
+                        remainder!!.execute(frame, ApplicationKt.requireClosure(input), savedValues)
                 })
             }
             val rest = remainder
@@ -452,11 +452,11 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             val root = rootValue as GuestRoot
             val input = root.typedInput
             val used = minOf(function.arity, remaining)
-            validateGenericInput(root, function.suppliedCount, source.layout, offset, used, destination, function.arity == remaining, function.arity > remaining)
+            GenericTypedInputsKt.validateGenericInput(root, function.suppliedCount, source.layout, offset, used, destination, function.arity == remaining, function.arity > remaining)
             if (function.arity > remaining) {
                 if (destination != null) fault("Aggregate result application is under-saturated")
                 if (metrics.enabled) metrics.incrementPapAllocations()
-                return if (input != null) genericTypedPap(function, input, source, frame, this, values, count + start, offset, remaining)
+                return if (input != null) GenericTypedInputsKt.genericTypedPap(function, input, source, frame, this, values, count + start, offset, remaining)
                     else legacyGenericPap(frame, this, function, source, values, count + start, offset, remaining)
             }
             val exact = function.arity == remaining
@@ -468,7 +468,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                 } else {
                     if (metrics.enabled) metrics.incrementIndirectCalls()
                     try {
-                        val storage = prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force)
+                        val storage = GenericTypedInputsKt.prepareGenericInput(frame, this, function, input, source, values, count + start, offset, function.arity, force)
                         val generation = storage.generation
                         var transferred = false
                         try {
@@ -476,7 +476,7 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                             catch (transfer: TailCall) { transferred = transfer.input === storage; throw transfer }
                             if (metrics.enabled) input.state().calls++
                             Calls.indirect(indirect, target, arrayOf(storage))
-                        } finally { if (!transferred) releaseGenericInput(input, storage, generation) }
+                        } finally { if (!transferred) GenericTypedInputsKt.releaseGenericInput(input, storage, generation) }
                     } catch (transfer: TailCall) {
                         if (isTail) throw transfer
                         if (exact && tupleBounce != null && !AstControl.captures(this)) {
@@ -502,13 +502,13 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                 return result
             }
             offset = next
-            function = try { requireClosure(AstControl.force(frame, this, force, result)) }
+            function = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, result)) }
             catch (cut: AstCapture) {
                 CompilerDirectives.transferToInterpreter()
                 val savedValues = values?.copyOf()
                 throw cut.append(object : AstResumeStep {
                     override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                        execute(frame, requireClosure(input), savedValues, next)
+                        execute(frame, ApplicationKt.requireClosure(input), savedValues, next)
                 })
             }
         }
@@ -518,11 +518,11 @@ internal class GenericInputCall(private val source: InputSource, private val cou
             if (destination != null) { destination.consume(frame, this, result); return null }
             return result
         }
-        val closure = try { requireClosure(AstControl.force(frame, this, force, result)) }
+        val closure = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, result)) }
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                    execute(frame, requireClosure(input), values, next)
+                    execute(frame, ApplicationKt.requireClosure(input), values, next)
             })
         }
         return execute(frame, closure, values, next)
@@ -553,7 +553,7 @@ private fun checkTypedTail(frame: VirtualFrame, node: Node, target: com.oracle.t
         // A tail transfer deliberately materializes this carrier in a control
         // exception. It remains unpooled, but is no longer an inline-only input.
         if (loan.inputMode == 2) loan.inputMode = 3
-        throw TailCall(target, NO_PAP_ARGUMENTS, loan)
+        throw TailCall(target, Closure.NO_PAP_ARGUMENTS, loan)
     }
     packet.setLong(loan, 0, mask)
 }
@@ -580,7 +580,7 @@ private fun scalarValues(frame: VirtualFrame, node: Node, source: InputSource, v
 private fun scalarPacket(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
     values: Array<Any?>?, start: Int, count: Int, genericMaximum: Int = -1): Array<Any?> {
     check(function.typedSupplied == null)
-    val args = if (genericMaximum >= 0) genericScalarValues(frame, node, source, values, genericMaximum, start, count)
+    val args = if (genericMaximum >= 0) GenericTypedInputsKt.genericScalarValues(frame, node, source, values, genericMaximum, start, count)
         else scalarValues(frame, node, source, values, start, count)
     val skip = if (function.environment == null) 1 else 2
     return arrayOfNulls<Any>(skip + function.supplied.size + args.size).also { packet ->
@@ -597,7 +597,7 @@ private fun legacyPap(frame: VirtualFrame, node: Node, function: Closure, source
 
 private fun legacyGenericPap(frame: VirtualFrame, node: Node, function: Closure, source: InputSource,
     values: Array<Any?>?, maximum: Int, offset: Int, count: Int): Closure {
-    val args = genericScalarValues(frame, node, source, values, maximum, offset, count)
+    val args = GenericTypedInputsKt.genericScalarValues(frame, node, source, values, maximum, offset, count)
     return function.papCompact(args, 0, args.size, count)
 }
 
@@ -719,7 +719,7 @@ internal class AstTypedApplication(function: Expr, arguments: Array<Expr>, frame
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
                 override fun resume(frame: VirtualFrame, input: Any?): Any? =
-                    invokeAsync(frame, requireClosure(input), slots, offset)
+                    invokeAsync(frame, ApplicationKt.requireClosure(input), slots, offset)
             })
         }
         return invokeAsync(frame, closure, slots, offset)

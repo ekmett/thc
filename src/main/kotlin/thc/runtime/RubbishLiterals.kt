@@ -18,7 +18,7 @@ internal class RubbishLiterals(private val language: TruffleLanguage<*>?) {
     // A known function type still uses the runtime's checked closure carrier.
     // Calling an absent function is outside LitRubbish's contract; this inert
     // target merely gives it a well-formed carrier, without a guest call now.
-    private val closure by lazy { Closure(null, arity = 1, target = RootNode.createConstantNode(boxed).callTarget) }
+    private val closure by lazy { Closure(null, 1, RootNode.createConstantNode(boxed).callTarget) }
 
     fun decode(proof: CoreRepresentation): Any = when (proof.kind) {
         CoreKind.LONG -> if (proof.isInt) 0 else 0L

@@ -108,8 +108,8 @@ class EmptyArgumentRuntimeTest {
                 call("worker", listOf(call("effect", listOf(v("x")), empty)), closure), closure)))
         for (backend in listOf("ast", "bytecode")) {
             val p = program(language, backend, data); val events = arrayListOf<Long>()
-            val effect = Closure(null, arity = 1, target = EffectRoot(language, events, TupleShape(CoreRepresentations.parse(empty), language)).callTarget)
-            val later = Closure(null, arity = 1, target = EffectRoot(language, events, null).callTarget)
+            val effect = Closure(null, 1, EffectRoot(language, events, TupleShape(CoreRepresentations.parse(empty), language)).callTarget)
+            val later = Closure(null, 1, EffectRoot(language, events, null).callTarget)
             assertEquals(7L, run(p, "entry", effect, later, 7L)); assertEquals(listOf(7L, 107L), events); released(language)
             events.clear(); val pap = run(p, "pap", effect, 11L) as Closure
             assertEquals(listOf(11L), events); assertEquals(1, pap.suppliedCount); assertEquals(0, pap.supplied.size); released(language)
@@ -256,7 +256,7 @@ class EmptyArgumentRuntimeTest {
         val data = module(producer, bind("entry", lam(listOf(arg("effect", closure), arg("x"), arg("ref", reference)), body)))
         for (backend in listOf("ast", "bytecode")) {
             val p = program(language, backend, data); val events = arrayListOf<Long>()
-            val effect = Closure(null, arity = 1, target = EffectRoot(language, events, TupleShape(CoreRepresentations.parse(empty), language)).callTarget)
+            val effect = Closure(null, 1, EffectRoot(language, events, TupleShape(CoreRepresentations.parse(empty), language)).callTarget)
             val bottom = Thunk(EffectRoot(language, events, null).callTarget, null)
             assertEquals(17L, run(p, "entry", effect, 17L, bottom)); released(language)
             assertTrue(language.handoffState.get().results.allocations > 0)

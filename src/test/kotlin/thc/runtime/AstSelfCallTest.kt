@@ -57,11 +57,11 @@ class AstSelfCallTest {
                 val target = object : RootNode(language) {
                     override fun execute(frame: VirtualFrame): Any = error("Frame restoration must not invoke a target")
                 }.callTarget
-                val first = Closure(null, arity = 0, target = target)
+                val first = Closure(null, 0, target)
                 val second = Any()
                 val captures = CaptureLayout(language, booleanArrayOf(false, false))
                 val environment = captures.captureValues(arrayOf(first, second))
-                val function = Closure(environment, arity = 0, target = target)
+                val function = Closure(environment, 0, target)
                 for (size in 0..2) {
                     val layout = FrameLayout()
                     val slots = intArrayOf(layout.bind("first"), layout.bind("second"))

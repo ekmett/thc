@@ -108,8 +108,8 @@ internal class ForeignExceptionAccess : Node() {
         if (bridge == null || owner.foreignExceptionNormalization.get() || !eligible(error)) throw error
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray<Any?>(), descriptor)
         val payload = withoutLifting {
-            val box = requireClosure(force.execute(frame, bridge.box()))
-            val project = requireClosure(force.execute(frame, bridge.project()))
+            val box = ApplicationKt.requireClosure(force.execute(frame, bridge.box()))
+            val project = ApplicationKt.requireClosure(force.execute(frame, bridge.project()))
             val retained = bridge.projector(project)
             owner.foreignExceptionRegistry.register(retained)
             invoke(frame, box, ForeignFailure(owner, error, retained))

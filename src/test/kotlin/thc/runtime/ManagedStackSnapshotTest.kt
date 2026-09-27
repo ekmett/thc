@@ -148,7 +148,7 @@ class ManagedStackSnapshotTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val program: ExecutableProgram = if (backend == "ast") Program(language, module()) else BytecodeProgram(language, module())
                 val probe = Probe(language, location())
-                val callback = Closure(null, arity = 1, target = probe.callTarget)
+                val callback = Closure(null, 1, probe.callTarget)
                 val entry = program.entryTarget("entry")
                 fun invoke(): ManagedStackSnapshot {
                     assertEquals(9L, Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("entry"), arrayOf<Any?>(callback))))
@@ -202,7 +202,7 @@ class ManagedStackSnapshotTest {
                         else BytecodeProgram(language, module(named = true))
                     // Even a plausible qualified debug name is not binding provenance.
                     val probe = Probe(language, location()).also { it.label = "invented-unit:Fake.Module.capture" }
-                    val callback = Closure(null, arity = 1, target = probe.callTarget)
+                    val callback = Closure(null, 1, probe.callTarget)
                     val entry = program.entryTarget(entryIdentity.bindingId)
                     fun invoke(): ManagedStackSnapshot {
                         assertEquals(9L, Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue(entryIdentity.bindingId),
@@ -251,7 +251,7 @@ class ManagedStackSnapshotTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val program: ExecutableProgram = if (backend == "ast") Program(language, module(false)) else BytecodeProgram(language, module(false))
                 val probe = Probe(language, null)
-                assertEquals(9L, Calls.target(program.entryTarget("entry"), arrayOf(0L, Closure(null, arity = 1, target = probe.callTarget))))
+                assertEquals(9L, Calls.target(program.entryTarget("entry"), arrayOf(0L, Closure(null, 1, probe.callTarget))))
                 val snapshot = requireNotNull(probe.body.snapshot)
                 assertEquals(3, snapshot.frames.size)
                 assertTrue(snapshot.frames.all { it.location == null && it.sections.isEmpty() && it.notes.isEmpty() })
@@ -310,7 +310,7 @@ class ManagedStackSnapshotTest {
                     probe.body.throwAfterCapture = true
                     val failure = assertThrows(GuestException::class.java) {
                         Calls.target(program.hostEntryTarget(1), arrayOf(program.entryValue("entry"),
-                            arrayOf<Any?>(Closure(null, arity = 1, target = probe.callTarget))))
+                            arrayOf<Any?>(Closure(null, 1, probe.callTarget))))
                     }
                     retained = requireNotNull(probe.body.snapshot)
                     assertSame(retained, failure.payload)

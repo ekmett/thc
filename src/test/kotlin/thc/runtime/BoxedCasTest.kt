@@ -264,7 +264,7 @@ class BoxedCasTest {
                 val target = p.entryTarget("operation")
                 val old = Any(); val replacement = Any(); val payload = Any(); val entered = AtomicInteger()
                 for (failure in listOf(false, true)) {
-                    val modifier = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+                    val modifier = Closure(null, 1, object : GuestRoot(language, FrameLayout().build()) {
                         override fun bloom(frame: VirtualFrame) = frame.arguments[0] as Long
                         override fun execute(frame: VirtualFrame): Any? {
                             assertSame(old, frame.arguments[1]); entered.incrementAndGet()
@@ -310,7 +310,7 @@ class BoxedCasTest {
             val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
             val metrics = Metrics(false); val entered = AtomicInteger()
             val counter = DataLayout(language, "Counter", "Counter", arrayOf("IntRep"))
-            val modifier = Closure(null, arity = 1, target = object : GuestRoot(language, FrameLayout().build()) {
+            val modifier = Closure(null, 1, object : GuestRoot(language, FrameLayout().build()) {
                 @Child private var evaluator = Force(metrics)
                 override fun bloom(frame: VirtualFrame) = frame.arguments[0] as Long
                 override fun execute(frame: VirtualFrame): Any? {

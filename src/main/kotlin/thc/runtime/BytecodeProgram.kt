@@ -342,7 +342,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             val fn = function("lambda ${args.joinToString { it["name"].toString() }}", args,
                 expr[2] as List<Any?>, scope, CoreRepresentations.lambdaResult(expr), CoreEntries.lambda(expr))
             check(fn.captureLayout == null && fn.captures.isEmpty()) { "Top-level closure has lexical captures" }
-            Closure(null, arity = args.size, target = fn.target)
+            Closure(null, args.size, fn.target)
         } else {
             val fn = function(binding["name"] as String, emptyList(), expr, scope)
             (fn.target.rootNode as GuestRoot).tupleResult?.let { CoreRepresentations.requireScalar(it.proof, "thunk") }

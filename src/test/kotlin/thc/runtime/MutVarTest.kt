@@ -278,7 +278,7 @@ class MutVarTest {
                     override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
                 }.callTarget
                 val cell = ManagedMutVar(old)
-                val function = Closure(null, arity = 1, target = modifier.callTarget)
+                val function = Closure(null, 1, modifier.callTarget)
                 fun constant(value: Any?) = object : Expr() {
                     override fun execute(frame: VirtualFrame): Any? = value
                 }
@@ -331,7 +331,7 @@ class MutVarTest {
                     override fun execute(frame: VirtualFrame): Any? = evaluator.execute(frame, frame.arguments[0])
                 }.callTarget
                 val cell = ManagedMutVar(old)
-                val modified = cell.modify(Closure(null, arity = 1, target = modifier.callTarget),
+                val modified = cell.modify(Closure(null, 1, modifier.callTarget),
                     MutVarModifySite(language, metrics, false))
                 assertSame(old, modified.old)
                 assertEquals(0, calls.get())
@@ -415,7 +415,7 @@ class MutVarTest {
                 val field = Thunk(pausing(leaf(replacement), counts[2]).callTarget, null)
                 val record = layout.create(arrayOf(field, 7L))
                 val body = pausing(leaf(record), counts[1], old)
-                val closure = Closure(null, arity = 1, target = body.callTarget)
+                val closure = Closure(null, 1, body.callTarget)
                 val modifier = Thunk(pausing(leaf(closure), counts[0]).callTarget, null)
                 cell = ManagedMutVar(old)
                 modified = cell.modify(modifier, MutVarModifySite(language, metrics, true))
@@ -480,7 +480,7 @@ class MutVarTest {
                         return pair.create(arrayOf(counter.createLong(n + 1), n))
                     }
                 }
-                val closure = Closure(null, arity = 1, target = modifier.callTarget)
+                val closure = Closure(null, 1, modifier.callTarget)
                 val cell = ManagedMutVar(counter.createLong(0))
                 val site = MutVarModifySite(language, metrics, false)
                 val start = CountDownLatch(1)

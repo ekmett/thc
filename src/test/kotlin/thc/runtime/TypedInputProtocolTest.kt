@@ -138,7 +138,7 @@ class TypedInputProtocolTest {
                 FrameAccess.writeLong(frame, slots[0], 11L); FrameAccess.writeLong(frame, slots[1], 7L)
                 val source = AstInputSource(ArgumentLayout.fromProofs(listOf(input.logical.proof(1)))!!, slots)
                 val node = object : Node() {}
-                fun prepare() = prepareGenericInput(frame, node, pap, input, source, null, 1, 0, 1, Force(Metrics(false)))
+                fun prepare() = GenericTypedInputsKt.prepareGenericInput(frame, node, pap, input, source, null, 1, 0, 1, Force(Metrics(false)))
                 assertEquals(0, thunkRoot.calls); clear(language)
                 if (strict && fail) {
                     assertThrows(GuestException::class.java) { prepare() }
@@ -151,7 +151,7 @@ class TypedInputProtocolTest {
                         else assertSame(thunk, input.packet.getObject(storage, input.header))
                         assertEquals(11L, input.packet.getLong(storage, input.header + 1))
                         assertEquals(7L, input.packet.getLong(storage, input.header + 2))
-                    } finally { releaseGenericInput(input, storage, storage.generation) }
+                    } finally { GenericTypedInputsKt.releaseGenericInput(input, storage, storage.generation) }
                 }
                 assertEquals(if (strict) 1 else 0, thunkRoot.calls)
                 assertSame(thunk, prefix.layout.getObject(prefix, 0))

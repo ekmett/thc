@@ -29,7 +29,7 @@ public final class AstTailApplication extends Expr {
             operands[i] = new LocalBinding(temporaries[i + suppliedCount], arguments[i], true, null);
             evaluated[i] = arguments[i].getRepresentation().getEvaluated();
         }
-        dispatch = Dispatch.Companion.create(arguments.length, true, metrics, evaluated);
+        dispatch = Dispatch.create(arguments.length, true, metrics, evaluated);
         boolean[] strict = layout.getEntryStrict();
         int[] positions = new int[strict.length];
         int count = 0;

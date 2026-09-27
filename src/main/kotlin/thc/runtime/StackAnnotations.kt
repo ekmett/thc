@@ -105,10 +105,10 @@ internal class AnnotatedAction(private val shape: TupleShape,
     override fun execute(frame: VirtualFrame): Nothing = fault("annotateStack# requires a tuple destination")
 
     private fun invoke(frame: VirtualFrame, action: Any?): Any? {
-        val closure = try { requireClosure(AstControl.force(frame, this, force, action)) }
+        val closure = try { ApplicationKt.requireClosure(AstControl.force(frame, this, force, action)) }
         catch (cut: AstCapture) {
             throw cut.append(object : AstResumeStep {
-                override fun resume(frame: VirtualFrame, input: Any?): Any? = call(frame, requireClosure(input))
+                override fun resume(frame: VirtualFrame, input: Any?): Any? = call(frame, ApplicationKt.requireClosure(input))
             })
         }
         return call(frame, closure)
