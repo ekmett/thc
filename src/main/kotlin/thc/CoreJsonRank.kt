@@ -33,10 +33,7 @@ internal class JsonRankDirectory private constructor(
         require(end >= 0 && end <= bitLength) { "rank position is outside the bitmap" }
         if (end == bitLength) return totalOnes
 
-        val header = (end ushr 11).toInt() shl 1
-        val quarter = ((end ushr 9) and 3L).toInt()
-        val result = supers[(end ushr 32).toInt()] + (directory[header].toLong() and 0xffffffffL) +
-            jsonRankRunPrefix(directory[header + 1], quarter)
+        val result = jsonRankQuarterPrefix(directory, supers, end)
         val firstWord = ((end ushr 9) shl 3).toInt()
         return result + jsonRankPrefix512(bitmap, firstWord, (end and 511L).toInt())
     }
@@ -84,6 +81,14 @@ internal class JsonRankDirectory private constructor(
             return JsonRankDirectory(bitmap, bitLength, directory, supers, total)
         }
     }
+}
+
+/** Source-derived directory portion of rank; excludes the local512-bit prefix. */
+internal fun jsonRankQuarterPrefix(directory: IntArray, supers: LongArray, position: Long): Long {
+    val header = (position ushr 11).toInt() shl 1
+    val quarter = ((position ushr 9) and 3L).toInt()
+    return supers[(position ushr 32).toInt()] + (directory[header].toLong() and 0xffffffffL) +
+        jsonRankRunPrefix(directory[header + 1], quarter)
 }
 
 /** Caller supplies a quarter index in 0..3 and three independent populations in 0..512. */

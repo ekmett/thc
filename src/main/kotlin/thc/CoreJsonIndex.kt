@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
-// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause AND BSD-2-Clause
 
 package thc
 
@@ -15,19 +15,19 @@ import java.security.DigestInputStream
 /**
  * A structural index of an owned, immutable UTF-8 snapshot, not a parsed JSON tree.
  *
- * Only containers contribute balanced-parenthesis pairs. One monotone Elias--Fano
- * sequence maps every opening AND closing event to its byte position. Containers
- * can be skipped without rescanning their contents. Keys/scalars require local
- * source scanning, but no conversion of unused values or strings. No index entry
- * is an object, token, or pair of full-width offsets.
+ * Full SimpleBP topology is paired with source-backed interest rank/select.
+ * Interest masks are regenerated from saved lexer states for at most512 source
+ * bytes; no input-sized bitmap or position sequence is retained. Containers can
+ * be skipped without scanning their contents. Keys/scalars require local source
+ * handling, but no conversion of unused values or strings.
  *
- * The topology follows the standard cursor described in rust-works/succinctly
- * (MIT), revision 6ee3210413d1f180fd6a93ab30c5bc6aaad29b78, json/standard.rs and
- * json/light.rs. Sparse positions are the approach used by Ottaviano's semi_index
- * (Apache-2.0), revision f00811737917707896cce8fb40be5d07ea42956f. This independent
- * Kotlin implementation indexes only container boundaries; it is not either project's wire
- * format and makes no claim to their space or throughput results.
- * https://github.com/rust-works/succinctly / https://github.com/ot/semi_index
+ * The topology follows the Simple Cursor described in rust-works/succinctly
+ * (MIT), revision6ee3210413d1f180fd6a93ab30c5bc6aaad29b78, json/simple.rs.
+ * Rank support uses the supplied Everett port, revision
+ * eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca, include/everett/rank.h;
+ * see third-party-licenses/everett-BSD-2-Clause.txt. The source-backed extension
+ * retains its exact Poppy prefix layout. This is THC's wire format, not an
+ * upstream compatibility or performance claim.
  *
  * Building checks container grammar, matching delimiters and quoted boundaries.
  * It does NOT decode strings/numbers, check nested duplicate keys, or validate
@@ -43,7 +43,10 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         val serializedByteSize: Long?, val sourceFileBytesRead: Long, val sourceSnapshotBytesCopied: Long,
         val sourceHashBytesScanned: Long,
         val structuralBytesScanned: Long, val decodedSpanCount: Long, val decodedByteCount: Long,
-        val navigationByteReads: Long, val balancedParenthesisBitsExamined: Long)
+        val navigationByteReads: Long, val balancedParenthesisBitsExamined: Long,
+        val interestDirectoryBytes: Long, val lexerCheckpointBytes: Long, val topologyBytes: Long,
+        val topologyNavigationBytes: Long, val scratchBytes: Long, val indexSourceBytesScanned: Long,
+        val regeneratedSourceBytes: Long, val regeneratedBlockCount: Long)
     data class Member(val name: String, val value: Span)
 
     private val decoded = HashMap<Int, Result<Any?>>()
@@ -57,11 +60,17 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
     fun statistics(): Statistics = synchronized(this) {
         val s = live()
         Statistics(s.bytes.size, s.indexBytes, s.serializedBytes, s.fileBytesRead, s.snapshotBytesCopied,
-            s.hashBytesScanned, s.scanBytes, decodeCount, decodeBytes, navigationBytes, bpExamined)
+            s.hashBytesScanned, s.scanBytes, decodeCount, decodeBytes, navigationBytes, bpExamined,
+            s.interest.directoryBytes, s.interest.checkpointBytes, s.bp.bits.data.size.toLong() * 8,
+            s.bp.byteSize - s.bp.bits.data.size.toLong() * 8, s.interest.scratchBytes,
+            s.interest.indexSourceBytesScanned, s.interest.regeneratedSourceBytes, s.interest.regeneratedBlockCount)
     }
     /** Hashes the exact original bytes, never normalized or reserialized JSON. */
     fun sha256(): String = synchronized(this) { live().hash.joinToString("") { "%02x".format(it) } }
     fun validateDocument(): Any? = root.decode()
+    /** Structural coordinates, primarily for producer/reader parity and diagnostics. */
+    internal fun rankInterest(endExclusive: Int): Int = synchronized(this) { live().interest.rank1(endExclusive) }
+    internal fun selectInterest(ordinal: Int): Int = synchronized(this) { live().interest.select(ordinal) }
     override fun close() = synchronized(this) { decoded.clear(); storage = null }
 
     class Span internal constructor(private val owner: CoreJsonIndex, internal val begin: Int, internal val end: Int) {
@@ -69,6 +78,8 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         val start: Int get() = synchronized(owner) { owner.live(); begin }
         val endExclusive: Int get() = synchronized(owner) { owner.live(); end }
         fun decode(): Any? = owner.decode(this)
+        /** The adapter may canonicalize and memoize the result without retaining a duplicate here. */
+        fun decodeUncached(): Any? = owner.decodeUncached(this)
         fun stringEquals(expected: String): Boolean = owner.stringEquals(this, expected)
         fun elements(): List<Span> = owner.elements(this)
         /** Object names are decoded on demand, never their values; duplicates are rejected here. */
@@ -92,40 +103,38 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         live().bytes.copyOfRange(span.begin, span.end)
     }
     private fun decode(span: Span): Any? = synchronized(this) {
-        val s = live()
+        live()
         decoded[span.begin]?.let { return@synchronized it.getOrThrow() }
-        decodeCount++; decodeBytes += span.end - span.begin
         val result = try {
-            val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT)
-                .decode(ByteBuffer.wrap(s.bytes, span.begin, span.end - span.begin)).toString()
-            Result.success(Json.parse(text))
+            Result.success(decodeUncached(span))
         } catch (failure: Exception) { Result.failure(failure) }
         decoded[span.begin] = result
         result.getOrThrow()
     }
+    private fun decodeUncached(span: Span): Any? = synchronized(this) {
+        val s = live()
+        decodeCount++; decodeBytes += span.end - span.begin
+        val text = Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+            .decode(ByteBuffer.wrap(s.bytes, span.begin, span.end - span.begin)).toString()
+        Json.parse(text)
+    }
 
-    /** Source is structurally validated; container positions are exact, scalar boundaries are scanned. */
+    /** Validated grammar makes the next marker a scalar's delimiter; only intervening whitespace is scanned. */
     private fun endAt(s: Storage, start: Int, limit: Int): Int = when (read(s, start)) {
         123, 91 -> {
-            val event = s.positions.lowerBound(start)
-            check(event < s.positions.count && s.positions.select(event) == start && s.bp.bits[event])
-            s.positions.select(s.bp.close(event) { bpExamined++ }) + 1
-        }
-        34 -> {
-            var at = start + 1
-            while (at < limit) {
-                when (read(s, at++)) {
-                    34 -> break
-                    92 -> { check(at < limit); read(s, at++) }
-                }
-            }
-            at
+            val marker = s.interest.rank1(start)
+            val open = Math.multiplyExact(marker, 2)
+            check(open < s.bp.bits.size && s.bp.bits[open] && s.bp.bits[open + 1])
+            val close = s.bp.close(open) { bpExamined++ }
+            Math.addExact(s.interest.select(close / 2), 1)
         }
         else -> {
-            var at = start + 1
-            while (at < limit && !delimiter(read(s, at))) at++
-            at
+            val marker = s.interest.rank1(start)
+            var end = s.interest.select(marker)
+            check(end in (start + 1)..limit)
+            while (end > start && whitespace(read(s, end - 1))) end--
+            end
         }
     }
 
@@ -231,7 +240,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
         matched == expected.length
     }
 
-    private class Storage(val bytes: ByteArray, val positions: Positions,
+    private class Storage(val bytes: ByteArray, val interest: SourceInterest,
                           val bp: Parentheses, val scanBytes: Long, val rootStart: Int, val rootEnd: Int,
                           val fileBytesRead: Long, val snapshotBytesCopied: Long,
                           val serializedBytes: Long? = null, initialHash: ByteArray? = null) {
@@ -244,7 +253,7 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
                 sourceHash = it; hashBytesScanned += bytes.size
             }
         }
-        val indexBytes: Long get() = positions.byteSize + bp.byteSize
+        val indexBytes: Long get() = interest.byteSize + bp.byteSize
     }
     companion object {
         /** Load a verified navigation cache over a defensive snapshot; the caller owns [input]. */
@@ -265,57 +274,56 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             require(header.copyOfRange(0, 8).contentEquals("THCJSIX1".toByteArray(Charsets.US_ASCII))) { "Unknown JSON index magic" }
             val fields = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
             fields.position(8)
-            require(fields.int == 1 && fields.int == 0) { "Unsupported JSON index version or flags" }
+            require(fields.int == 2 && fields.int == 0) { "Unsupported JSON index version or flags" }
             val sourceLength = fields.long
-            val eventCount = fields.long
-            require(sourceLength > 0 && sourceLength == bytes.size.toLong()) { "JSON index source length mismatch" }
-            require(eventCount >= 0 && eventCount <= sourceLength && eventCount and 1L == 0L) { "Invalid JSON container event count" }
-            val count = Math.toIntExact(eventCount)
-            val shape = JsonIndexShape(sourceLength, eventCount)
+            val markerCount = fields.long
+            require(sourceLength == bytes.size.toLong()) { "JSON index source length mismatch" }
+            val shape = JsonIndexShape(sourceLength, markerCount)
+            val count = Math.toIntExact(markerCount)
             val sourceHash = MessageDigest.getInstance("SHA-256").digest(bytes)
             require(MessageDigest.isEqual(header.copyOfRange(32, 64), sourceHash)) { "JSON index source identity mismatch" }
             val chunk = ByteArray(8192)
-            fun section(bitCount: Int): LongArray {
-                val result = LongArray(words(bitCount))
+            fun sectionWords(wordCount: Int): LongArray {
+                val result = LongArray(wordCount)
                 var word = 0
                 while (word < result.size) {
-                    val wordCount = minOf(chunk.size / 8, result.size - word)
-                    val size = wordCount * 8
+                    val words = minOf(chunk.size / 8, result.size - word)
+                    val size = words * 8
                     require(checked.readNBytes(chunk, 0, size) == size) { "Truncated JSON index section" }
                     val buffer = ByteBuffer.wrap(chunk, 0, size).order(ByteOrder.LITTLE_ENDIAN)
-                    repeat(wordCount) { result[word++] = buffer.long }
+                    repeat(words) { result[word++] = buffer.long }
                 }
-                if (bitCount and 63 != 0) require(result.last() ushr (bitCount and 63) == 0L) { "Nonzero JSON index padding" }
                 return result
             }
-            val low = section(shape.lowSize)
-            val high = section(shape.highSize)
-            val bpWords = section(count)
+            fun sectionInts(intCount: Int): IntArray {
+                val result = IntArray(intCount)
+                var word = 0
+                while (word < result.size) {
+                    val words = minOf(chunk.size / 4, result.size - word)
+                    val size = words * 4
+                    require(checked.readNBytes(chunk, 0, size) == size) { "Truncated JSON index directory" }
+                    val buffer = ByteBuffer.wrap(chunk, 0, size).order(ByteOrder.LITTLE_ENDIAN)
+                    repeat(words) { result[word++] = buffer.int }
+                }
+                return result
+            }
+            val supers = sectionWords(shape.epochCount)
+            val directory = sectionInts(Math.multiplyExact(shape.blockCount, 2))
+            val states = sectionWords(words(shape.checkpointBits))
+            val bpWords = sectionWords(words(shape.bpBits))
+            checkPadding(states, shape.checkpointBits)
+            checkPadding(bpWords, shape.bpBits)
             val expectedDigest = digest.digest()
             val trailer = input.readNBytes(32)
             require(trailer.size == 32 && MessageDigest.isEqual(trailer, expectedDigest)) { "JSON index integrity mismatch" }
             require(input.read() == -1) { "Trailing JSON index bytes" }
 
-            val highBits = Bits(high, shape.highSize)
-            require(highBits.ones == count) { "JSON index high population mismatch" }
-            val positions = Positions(count, shape.width, low, highBits)
-            var previous = -1
-            for (event in 0 until count) {
-                val position = positions.select(event)
-                require(position > previous && position < bytes.size) { "Invalid JSON index event position" }
-                previous = position
-            }
-            val bp = Bits(bpWords, count)
-            var event = 0
-            fun verify(position: Int, opening: Boolean) {
-                require(event < count && positions.select(event) == position && bp[event] == opening) { "JSON index structural mismatch at $position" }
-                event++
-            }
-            val (start, end) = scan(bytes, { verify(it, true) }, { verify(it, false) })
-            require(event == count) { "Extra JSON index events" }
-            val serializedBytes = 96L + (low.size.toLong() + high.size + bpWords.size) * 8
-            return CoreJsonIndex(Storage(bytes, positions, Parentheses(bp), bytes.size.toLong(), start, end,
-                fileBytesRead, copiedBytes, serializedBytes, sourceHash))
+            val interest = SourceInterest(bytes, count, directory, supers, states)
+            val bp = Bits(bpWords, shape.bpBits)
+            interest.verify(bp)
+            val (start, end) = scan(bytes, {}, {})
+            return CoreJsonIndex(Storage(bytes, interest, Parentheses(bp), bytes.size.toLong(), start, end,
+                fileBytesRead, copiedBytes, shape.serializedBytes, sourceHash))
         }
 
         /** Scalar reference builder for tests/parity; not the production sidecar producer. */
@@ -326,18 +334,13 @@ internal class CoreJsonIndex private constructor(private var storage: Storage?) 
             return build(bytes, bytes.size.toLong(), 0)
         }
         private fun build(bytes: ByteArray, fileBytesRead: Long, copiedBytes: Long): CoreJsonIndex {
-            var count = 0
-            scan(bytes, { count = Math.incrementExact(count) }, { count = Math.incrementExact(count) })
-            val positions = Positions.Builder(bytes.size, count)
-            val bp = LongArray(words(count)); var bit = 0
-            val (start, end) = scan(bytes, { positions.add(it); bp[bit ushr 6] = bp[bit ushr 6] or (1L shl (bit and 63)); bit++ },
-                { positions.add(it); bit++ })
-            check(bit == count)
-            return CoreJsonIndex(Storage(bytes, positions.finish(), Parentheses(Bits(bp, bit)),
-                bytes.size.toLong() * 2, start, end, fileBytesRead, copiedBytes))
+            val (start, end) = scan(bytes, {}, {})
+            val (interest, bp) = SourceInterest.build(bytes)
+            return CoreJsonIndex(Storage(bytes, interest, Parentheses(bp),
+                bytes.size.toLong(), start, end, fileBytesRead, copiedBytes))
         }
 
-        /** Two passes allocate no token/value objects; scalar contents are never converted. */
+        /** Iterative structural grammar check; scalar contents are never converted. */
         private fun scan(bytes: ByteArray, open: (Int) -> Unit, close: (Int) -> Unit): Pair<Int, Int> {
             var at = 0; var depth = 0; var states = ByteArray(32); var root = false; var rootStart = 0
             fun push(state: Int) {
@@ -406,68 +409,187 @@ private fun words(bits: Int): Int = ((bits.toLong() + 63) / 64).toInt()
 /** All derived extents are checked before narrowing or allocating a section. */
 internal class JsonIndexShape(universe: Long, count: Long) {
     init {
-        require(universe in 1..Int.MAX_VALUE.toLong() && count in 0..universe && count and 1L == 0L) { "Unsupported JSON index shape" }
+        require(universe in 0..Int.MAX_VALUE.toLong() && count in 0..universe) { "Unsupported JSON index shape" }
     }
-    val width = if (count == 0L) 0 else 63 - java.lang.Long.numberOfLeadingZeros(maxOf(1L, universe / count))
-    val lowSize = Math.toIntExact(count * width)
-    val highSize = if (count == 0L) 0 else Math.toIntExact(((universe - 1) ushr width) + count + 1)
+    val epochCount = Math.toIntExact((universe + 0xffffffffL) ushr 32)
+    val blockCount = Math.toIntExact((universe + 2047) ushr 11)
+    val quarterCount = Math.toIntExact((universe + 511) ushr 9)
+    val checkpointBits = Math.toIntExact(quarterCount.toLong() * 2)
+    val bpBits = Math.toIntExact(count * 2)
+    val serializedBytes = 96L + epochCount.toLong() * 8 + blockCount.toLong() * 8 +
+        words(checkpointBits).toLong() * 8 + words(bpBits).toLong() * 8
 }
 
-/** Select bisects rank at 512-bit boundaries, then scans at most eight words. */
+private fun checkPadding(data: LongArray, bits: Int) {
+    if (bits and 63 != 0) require(data.last() ushr (bits and 63) == 0L) { "Nonzero JSON index padding" }
+}
+
+/** Supplied Poppy rank support over retained topology, not an input-sized interest bitmap. */
 private class Bits(val data: LongArray, val size: Int) {
     private val directory = JsonRankDirectory.build(data, size.toLong())
     val byteSize: Long get() = data.size.toLong() * 8 + directory.directoryBytes
-    val ones: Int get() = rank(size)
     operator fun get(bit: Int): Boolean = data[bit ushr 6] and (1L shl (bit and 63)) != 0L
     fun rank(end: Int): Int = Math.toIntExact(directory.rank1(end.toLong()))
-    fun select(ordinal: Int): Int {
-        require(ordinal in 0 until ones)
-        var lo = 0; var hi = (data.size + 7) / 8
-        while (lo + 1 < hi) { val mid = (lo + hi) ushr 1; if (rank(mid * 512) <= ordinal) lo = mid else hi = mid }
-        var remaining = ordinal - rank(lo * 512); var word = lo * 8
-        while (true) {
-            var value = data[word]; val count = java.lang.Long.bitCount(value)
-            if (remaining < count) {
-                repeat(remaining) { value = value and (value - 1) }
-                return word * 64 + java.lang.Long.numberOfTrailingZeros(value)
-            }
-            remaining -= count; word++
-        }
-    }
 }
 
-/** Monotone offsets: packed low bits plus unary high bits; no full-width offset per node. */
-private class Positions(val count: Int, val lowBits: Int, val low: LongArray, val high: Bits) {
-    val byteSize: Long get() = low.size.toLong() * 8 + high.byteSize
-    fun lowerBound(value: Int): Int {
-        var lo = 0; var hi = count
-        while (lo < hi) { val mid = (lo + hi) ushr 1; if (select(mid) < value) lo = mid + 1 else hi = mid }
-        return lo
+/**
+ * Original-byte interest masks are regenerated only in the selected512-byte block.
+ * All calls after publication occur under the CoreJsonIndex owner monitor. The
+ * fixed scratch mask cache is included in resident primitive-array accounting.
+ */
+private class SourceInterest(
+    private val source: ByteArray,
+    private var count: Int,
+    private val directory: IntArray,
+    private val supers: LongArray,
+    private val states: LongArray,
+) {
+    private val quarters = ((source.size.toLong() + 511) / 512).toInt()
+    private val masks = LongArray(8)
+    private val opens = LongArray(8)
+    private val closes = LongArray(8)
+    private var cachedQuarter = -1
+    var indexSourceBytesScanned = 0L
+        private set
+    var regeneratedSourceBytes = 0L
+        private set
+    var regeneratedBlockCount = 0L
+        private set
+    val directoryBytes: Long get() = directory.size.toLong() * 4 + supers.size.toLong() * 8
+    val checkpointBytes: Long get() = states.size.toLong() * 8
+    val scratchBytes: Long get() = (masks.size + opens.size + closes.size).toLong() * 8
+    val byteSize: Long get() = directoryBytes + checkpointBytes + scratchBytes
+
+    private fun state(quarter: Int): Int = ((states[quarter ushr 5] ushr ((quarter and 31) * 2)) and 3).toInt()
+    private fun prefix(quarter: Int): Int = if (quarter == quarters) count else
+        Math.toIntExact(jsonRankQuarterPrefix(directory, supers, quarter.toLong() * 512))
+
+    private fun regenerate(quarter: Int) {
+        if (cachedQuarter == quarter) return
+        val start = Math.multiplyExact(quarter, 512)
+        val length = minOf(512, source.size - start)
+        jsonMaskBlock(source, start, length, state(quarter), masks, opens, closes)
+        cachedQuarter = quarter
+        regeneratedSourceBytes += length
+        regeneratedBlockCount++
+    }
+    fun rank1(end: Int): Int {
+        require(end in 0..source.size)
+        if (end == source.size) return count
+        val quarter = end ushr 9
+        val before = prefix(quarter)
+        val bits = end and 511
+        if (bits == 0) return before
+        regenerate(quarter)
+        return Math.addExact(before, jsonRankPrefix512(masks, 0, bits))
     }
     fun select(ordinal: Int): Int {
-        val bit = ordinal.toLong() * lowBits; val word = (bit ushr 6).toInt(); val shift = (bit and 63).toInt()
-        var lower = if (lowBits == 0) 0L else low[word] ushr shift
-        if (shift + lowBits > 64) lower = lower or (low[word + 1] shl (64 - shift))
-        lower = lower and ((1L shl lowBits) - 1)
-        return Math.toIntExact(((high.select(ordinal) - ordinal).toLong() shl lowBits) or lower)
-    }
-    class Builder(universe: Int, val count: Int) {
-        private val shape = JsonIndexShape(universe.toLong(), count.toLong())
-        private val width = shape.width
-        private val low = LongArray(words(shape.lowSize))
-        private val highSize = shape.highSize
-        private val high = LongArray(words(highSize))
-        private var next = 0
-        fun add(value: Int) {
-            val bit = next.toLong() * width; val word = (bit ushr 6).toInt(); val shift = (bit and 63).toInt()
-            val lower = value.toLong() and ((1L shl width) - 1)
-            if (width != 0) low[word] = low[word] or (lower shl shift)
-            if (shift + width > 64) low[word + 1] = low[word + 1] or (lower ushr (64 - shift))
-            val upper = (value ushr width) + next
-            high[upper ushr 6] = high[upper ushr 6] or (1L shl (upper and 63))
-            next++
+        require(ordinal in 0 until count)
+        var lo = 0; var hi = quarters
+        while (lo + 1 < hi) {
+            val mid = (lo + hi) ushr 1
+            if (prefix(mid) <= ordinal) lo = mid else hi = mid
         }
-        fun finish(): Positions { check(next == count); return Positions(count, width, low, Bits(high, highSize)) }
+        var remaining = ordinal - prefix(lo)
+        regenerate(lo)
+        for (word in masks.indices) {
+            var value = masks[word]
+            val population = java.lang.Long.bitCount(value)
+            if (remaining < population) {
+                repeat(remaining) { value = value and (value - 1) }
+                val position = lo.toLong() * 512 + word * 64 + java.lang.Long.numberOfTrailingZeros(value)
+                require(position < source.size) { "Invalid JSON interest position" }
+                return Math.toIntExact(position)
+            }
+            remaining -= population
+        }
+        error("Missing JSON interest bit")
+    }
+
+    /** One complete classifier pass, separate from grammar, hashing, and demand navigation. */
+    private inline fun walk(visit: (quarter: Int, initialState: Int) -> Unit) {
+        var lexer = 0
+        for (quarter in 0 until quarters) {
+            val start = quarter * 512
+            val before = lexer
+            lexer = jsonMaskBlock(source, start, minOf(512, source.size - start), lexer, masks, opens, closes)
+            visit(quarter, before)
+        }
+        indexSourceBytesScanned += source.size
+        cachedQuarter = -1
+    }
+    private inline fun markers(visit: (opening: Boolean, closing: Boolean) -> Unit) {
+        for (word in masks.indices) {
+            var value = masks[word]
+            while (value != 0L) {
+                val bit = value and -value
+                visit(opens[word] and bit != 0L, closes[word] and bit != 0L)
+                value = value and (value - 1)
+            }
+        }
+    }
+
+    /** Imported directory contents are verified against immutable source, never trusted by shape/hash alone. */
+    fun verify(bp: Bits) {
+        val cursor = JsonRankDirectoryCursor()
+        var total = 0L; var packed = 0
+        walk { quarter, before ->
+            require(state(quarter) == before) { "JSON lexer checkpoint mismatch" }
+            val block = quarter ushr 2; val run = quarter and 3
+            if (run == 0) {
+                packed = 0
+                val relative = cursor.before(block.toLong(), total)
+                require(directory[block * 2] == relative) { "JSON relative rank mismatch" }
+                if (JsonRankDirectoryCursor.startsEpoch(block.toLong()))
+                    require(supers[block ushr 21] == cursor.epochBase) { "JSON epoch rank mismatch" }
+            }
+            val population = jsonRankPrefix512(masks, 0, 512)
+            if (run < 3) packed = packed or (population shl (run * 11))
+            markers { opening, closing ->
+                require(total < count) { "Extra JSON source marker" }
+                val bit = Math.toIntExact(total * 2)
+                val expected = if (opening) 3L else if (closing) 0L else 2L
+                require((bp.data[bit ushr 6] ushr (bit and 63)) and 3L == expected) { "JSON topology mismatch" }
+                total++
+            }
+            if (run == 3 || quarter == quarters - 1)
+                require(directory[block * 2 + 1] == packed) { "JSON quarter rank mismatch" }
+        }
+        require(total == count.toLong()) { "JSON marker count mismatch" }
+    }
+
+    companion object {
+        fun build(source: ByteArray): Pair<SourceInterest, Bits> {
+            val shape = JsonIndexShape(source.size.toLong(), 0)
+            val result = SourceInterest(source, 0, IntArray(shape.blockCount * 2),
+                LongArray(shape.epochCount), LongArray(words(shape.checkpointBits)))
+            val cursor = JsonRankDirectoryCursor()
+            var total = 0L
+            result.walk { quarter, before ->
+                result.states[quarter ushr 5] = result.states[quarter ushr 5] or (before.toLong() shl ((quarter and 31) * 2))
+                val block = quarter ushr 2; val run = quarter and 3
+                if (run == 0) {
+                    result.directory[block * 2] = cursor.before(block.toLong(), total)
+                    if (JsonRankDirectoryCursor.startsEpoch(block.toLong())) result.supers[block ushr 21] = cursor.epochBase
+                }
+                val population = jsonRankPrefix512(result.masks, 0, 512)
+                if (run < 3) result.directory[block * 2 + 1] = result.directory[block * 2 + 1] or (population shl (run * 11))
+                total += population
+            }
+            result.count = Math.toIntExact(total)
+            val bitCount = Math.toIntExact(total * 2)
+            val bp = LongArray(words(bitCount))
+            var marker = 0
+            result.walk { _, _ ->
+                result.markers { opening, closing ->
+                    val pair = if (opening) 3L else if (closing) 0L else 2L
+                    val bit = marker++ * 2
+                    bp[bit ushr 6] = bp[bit ushr 6] or (pair shl (bit and 63))
+                }
+            }
+            check(marker == result.count)
+            return result to Bits(bp, bitCount)
+        }
     }
 }
 
