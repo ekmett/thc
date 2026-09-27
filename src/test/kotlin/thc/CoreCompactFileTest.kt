@@ -24,7 +24,7 @@ class CoreCompactFileTest {
         CoreFileMappings(0, 0).use { cache ->
             CoreCompactFile(path, sha(bytes), mappings = cache).use { file ->
                 assertEquals(0L, file.header().bindingCount)
-                assertEquals(42, file.facts { it.byte() })
+                assertEquals(42, file.facts { it.readByte() })
             }
         }
     }
@@ -120,7 +120,7 @@ class CoreCompactFileTest {
                 assertEquals(1L, file.header().bindingCount)
                 file.close()
                 assertThrows(IllegalStateException::class.java) { file.string(0, 1) }
-                assertThrows(IllegalStateException::class.java) { file.data(0) { it.byte() } }
+                assertThrows(IllegalStateException::class.java) { file.data(0) { it.readByte() } }
             }
             assertEquals(1L, cache.statistics().failedOpens)
         }
@@ -133,8 +133,8 @@ class CoreCompactFileTest {
             CoreCompactFile(path, sha(bytes), mappings = cache).use { file ->
                 assertThrows(IllegalArgumentException::class.java) { file.lookup("unit:M.f") }
                 assertThrows(IllegalArgumentException::class.java) { file.string(5, 2) }
-                assertThrows(IllegalArgumentException::class.java) { file.data(1) { it.byte() } }
-                assertThrows(IllegalArgumentException::class.java) { file.debug(CoreCompactFormat.Segment.DATA) { it.byte() } }
+                assertThrows(IllegalArgumentException::class.java) { file.data(1) { it.readByte() } }
+                assertThrows(IllegalArgumentException::class.java) { file.debug(CoreCompactFormat.Segment.DATA) { it.readByte() } }
             }
         }
     }

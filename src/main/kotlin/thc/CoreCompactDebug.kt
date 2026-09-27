@@ -48,7 +48,7 @@ internal class CoreCompactDebug(private val file: CoreCompactFile) {
     private fun <T> payload(segment: Segment, selection: Selection?, read: (CoreCompactCursor) -> T): T? {
         if (selection == null) return null
         return file.debugAt(segment, selection.payload, selection.directory.start - selection.payload) { cursor ->
-            when (val tag = cursor.byte()) {
+            when (val tag = cursor.readByte()) {
                 0 -> null
                 1 -> read(cursor)
                 else -> error("Invalid compact Core source payload tag: $tag")
@@ -58,7 +58,7 @@ internal class CoreCompactDebug(private val file: CoreCompactFile) {
 
     private fun text(cursor: CoreCompactCursor): String = cursor.text(cursor.count())
     private fun common(cursor: CoreCompactCursor): String = file.string(cursor.unsigned(), cursor.unsigned())
-    private fun <T> optional(cursor: CoreCompactCursor, read: () -> T): T? = when (val tag = cursor.byte()) {
+    private fun <T> optional(cursor: CoreCompactCursor, read: () -> T): T? = when (val tag = cursor.readByte()) {
         0, 1 -> null
         2 -> read()
         else -> error("Invalid compact Core debug presence tag: $tag")

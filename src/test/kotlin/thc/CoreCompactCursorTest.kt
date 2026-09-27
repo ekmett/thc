@@ -45,7 +45,7 @@ class CoreCompactCursorTest {
         assertEquals(0x12345678L, input.u32())
         assertEquals(0x0102030405060708L, input.offset())
         input.expectEnd()
-        assertThrows(IllegalArgumentException::class.java) { input.byte() }
+        assertThrows(IllegalArgumentException::class.java) { input.readByte() }
         assertThrows(IllegalArgumentException::class.java) { cursor(0, 0, 0, 0, 0, 0, 0, 128).offset() }
         assertThrows(IllegalArgumentException::class.java) { CoreCompactCursor(bytes(0), 1, 2) }
         assertThrows(IllegalArgumentException::class.java) { cursor(0).expectEnd() }
@@ -57,9 +57,9 @@ class CoreCompactCursorTest {
         assertEquals(2, cursor(2, 0, 1, 2, 3).count(2))
         assertThrows(IllegalArgumentException::class.java) { cursor(3, 0).count() }
         assertThrows(IllegalArgumentException::class.java) { cursor(2, 0, 1).count(2) }
-        assertFalse(cursor(0).boolean())
-        assertTrue(cursor(1).boolean())
-        assertThrows(IllegalArgumentException::class.java) { cursor(2).boolean() }
+        assertFalse(cursor(0).readBoolean())
+        assertTrue(cursor(1).readBoolean())
+        assertThrows(IllegalArgumentException::class.java) { cursor(2).readBoolean() }
     }
 
     @Test fun utf8UsesOnlySelectedSpanAndRejectsMalformedSequences() {

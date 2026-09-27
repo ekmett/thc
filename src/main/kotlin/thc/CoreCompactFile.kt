@@ -99,7 +99,7 @@ internal class CoreCompactFile(private val path: Path, private val identity: Str
             archive = CoreCbdArchive.open(lease, slabs)
             counters.directoryBytesRead += archive.directoryBytesRead
             val head = archive.read("header").also { handles["header"] = it; account(it) }
-            val header = CoreCompactFormat.read(head.bytes, CoreCompactFormat.Segment.entries.map { archive.member(it.member).length })
+            val header = CoreCompactFormat.read(head.bytes, CoreCompactFormat.Segment.values().map { archive.member(it.member).length })
             counters.headerBytesRead += CoreCompactFormat.HEADER_BYTES
             val result = Mapped(archive, header, handles)
             if (verifyArtifacts) for (name in CoreCbdArchive.NAMES) {
