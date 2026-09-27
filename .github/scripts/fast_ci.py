@@ -96,10 +96,10 @@ class Recorder:
 
 
 def validate_xml(directory, expected):
-    """Require fresh nonempty successful suites for exactly the requested classes."""
+    """Require fresh suites; only the Windows-only suite may be disabled on Linux."""
     files = sorted(directory.glob("TEST-*.xml"))
     require(bool(files), "No fresh JUnit XML")
-    classes, cases = set(), []
+    classes, cases, platform_skips = set(), [], []
     totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
     for path in files:
         suite = ET.parse(path).getroot()
@@ -114,17 +114,29 @@ def validate_xml(directory, expected):
             number = int(suite.attrib.get(key, "0"))
             require(number >= 0, f"Invalid JUnit {key}: {name}")
             totals[key] += number
-        require(not any(suite.findall(".//" + tag) for tag in ("failure", "error", "skipped")),
+        require(not any(suite.findall(".//" + tag) for tag in ("failure", "error")),
                 f"Unsuccessful testcase in {name}")
+        skipped = suite.findall(".//skipped")
+        if skipped:
+            # Fast checks run on Linux; this entire suite is @EnabledOnOs(WINDOWS)
+            # and has its own native Windows workflow. Never accept an arbitrary
+            # assumption abort, partial suite or missing Windows run as a pass.
+            require(sys.platform == "linux" and name == "thc.WindowsDistributionTest"
+                    and len(skipped) == count and int(suite.attrib.get("skipped", "0")) == count
+                    and all(len(case.findall("skipped")) == 1 for case in children),
+                    f"Unsuccessful testcase in {name}")
         for case in children:
             require(case.attrib.get("classname") == name, f"Mismatched testcase class: {name}")
             require(bool(case.attrib.get("name")), f"Unnamed testcase: {name}")
-            cases.append([name, case.attrib["name"]])
+            (platform_skips if skipped else cases).append([name, case.attrib["name"]])
     require(classes == set(expected),
             f"JUnit class mismatch: missing={sorted(set(expected) - classes)}, extra={sorted(classes - set(expected))}")
-    require(not any(totals[key] for key in ("failures", "errors", "skipped")),
+    require(not any(totals[key] for key in ("failures", "errors"))
+            and totals["skipped"] == len(platform_skips),
             "JUnit reports failures/errors/skips: " + repr(totals))
-    return {**totals, "classes": sorted(classes), "cases": sorted(cases), "xmlFiles": len(files)}
+    require(bool(cases), "No executed JUnit testcases")
+    return {**totals, "classes": sorted(classes), "cases": sorted(cases),
+            "platformSkippedCases": sorted(platform_skips), "xmlFiles": len(files)}
 
 
 def gradle_command(selection, *, install_dist=False):
@@ -242,7 +254,8 @@ def run_modes(recorder, selection, *, install_dist=False):
             write_json(directory / mode / "summary.json", summary)
         except (RuntimeError, ValueError, ET.ParseError) as error:
             failures.append(f"{mode}: {error}")
-    if len(summaries) == 2 and summaries["default"]["cases"] != summaries["dense"]["cases"]:
+    if len(summaries) == 2 and any(summaries["default"][key] != summaries["dense"][key]
+                                    for key in ("cases", "platformSkippedCases")):
         failures.append("Default and dense handoff executed different testcase sets")
     return summaries, failures
 
