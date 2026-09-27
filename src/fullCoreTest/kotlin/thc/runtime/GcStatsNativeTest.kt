@@ -67,7 +67,7 @@ class GcStatsNativeTest {
                 }
             }
         }
-        assertEquals(GcForeignOp.entries.filter { it.unit == "ghc-internal" }.map { it.symbol }.toSet(), seen)
+        assertEquals(GcForeignOp.values().filter { it.unit == "ghc-internal" }.map { it.symbol }.toSet(), seen)
     }
 
     @Test fun originalGcAndClockCallsMatchNativeFromTheFirstCompiledInvocation() {
