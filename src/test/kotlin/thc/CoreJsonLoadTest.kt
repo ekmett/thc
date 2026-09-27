@@ -32,6 +32,22 @@ class CoreJsonLoadTest {
     private fun digest(path: Path) = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(path))
         .joinToString("") { "%02x".format(it) }
 
+    @Test fun requestHashesCompleteFilesAcrossBufferBoundariesWithoutParsingBodies() {
+        val json = directory.resolve("source.json")
+        val index = directory.resolve("source.idx")
+        for (size in listOf(0, 1, 8191, 8192, 8193, 16384, 16387)) {
+            // Request construction authenticates bytes only. Deliberately not
+            // JSON/index documents: actual format validation belongs to admission.
+            Files.write(json, ByteArray(size) { (it * 31 + 7).toByte() })
+            Files.write(index, ByteArray(size + 3) { (it * 17 + 11).toByte() })
+            val input = Json.parse(request(json, index, "bytecode")) as Map<String, Any?>
+            val descriptor = (input["indexedModuleFiles"] as List<Map<String, Any?>>).single()
+            assertEquals(digest(json), descriptor["sha256"], "source size $size")
+            assertEquals(digest(index), descriptor["sidecarSha256"], "index size ${size + 3}")
+            assertEquals(setOf("path", "sha256", "sidecar", "sidecarSha256", "capability"), descriptor.keys)
+        }
+    }
+
     @Test fun nativeSidecarLoadsEntryThenPreparesEachUntouchedCalleeOnce() {
         val json = fixture("lazy-json-module.json")
         val index = fixture("lazy-json-module.idx")

@@ -431,6 +431,19 @@ object CoreModules {
 
     private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { "%02x".format(it) }
+    /** Request identity needs every byte, but does not retain a source snapshot.
+     * Admission still reads, pins and verifies its own immutable byte snapshot.
+     */
+    private fun sha256(path: Path): String = Files.newInputStream(path).use { input ->
+        val digest = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        while (true) {
+            val size = input.read(buffer)
+            if (size < 0) break
+            digest.update(buffer, 0, size)
+        }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }
     private fun indexedCapability(path: String, sha: String, sidecar: String, sidecarSha: String): String =
         packageCapability("indexed-json:" + Json.stringify(listOf(path, sidecar, sidecarSha)), sha)
 
@@ -446,8 +459,8 @@ object CoreModules {
         val files = paths.map { raw ->
             val path = Path.of(raw).toRealPath().toString()
             val sidecar = Path.of(sidecars.getValue(raw)).toRealPath().toString()
-            val sha = sha256(Files.readAllBytes(Path.of(path)))
-            val sidecarSha = sha256(Files.readAllBytes(Path.of(sidecar)))
+            val sha = sha256(Path.of(path))
+            val sidecarSha = sha256(Path.of(sidecar))
             mapOf("path" to path, "sha256" to sha, "sidecar" to sidecar, "sidecarSha256" to sidecarSha,
                 "capability" to indexedCapability(path, sha, sidecar, sidecarSha))
         }
