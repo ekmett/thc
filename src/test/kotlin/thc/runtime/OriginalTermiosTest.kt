@@ -113,6 +113,22 @@ class OriginalTermiosTest {
                         val linked = CoreModules.reachable(source, name) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked) else BytecodeProgram(language, linked)
                         val entry = program.entryTarget(name)
+                        val executedRoots = if (index < constantCount) 1 else {
+                            val evidence = ArrayCoreEvidence(source, name)
+                            val outer = evidence.root["expr"] as List<Any?>
+                            assertEquals(1, evidence.bindings.size)
+                            assertTrue(evidence.globalReferences(outer).isEmpty())
+                            assertEquals("lam", outer[0])
+                            assertEquals(if (name == "originalPokeLflag") listOf("AddrRep", "WordRep") else listOf("AddrRep"),
+                                (outer[1] as List<Map<String, Any?>>).map {
+                                    ((it["rep"] as Map<*, *>)["primReps"] as List<*>).single()
+                                })
+                            val state = evidence.immediateStateLambda(outer[2])
+                            assertEquals(listOf(outer, state), evidence.guestLambdas(outer))
+                            val lowered = evidence.loweredGuestLambdas(outer)
+                            assertEquals(listOf(outer), lowered, "$name: the State# redex executes in-frame")
+                            lowered.size
+                        }
                         var active = emptyList<RootCallTarget>()
                         val installed = Collections.newSetFromMap(IdentityHashMap<RootCallTarget, Boolean>())
                         fun install(target: RootCallTarget) {
@@ -131,9 +147,9 @@ class OriginalTermiosTest {
                             val result = Calls.target(entry, arrayOf(0L, *arguments))
                             if (compiled) {
                                 // CAF constants are already memoized; the direct size helper
-                                // also executes one entry. Memory consumers execute their entry
-                                // and the immediate runRW State lambda.
-                                assertEquals(before + if (index < constantCount) 1 else 2,
+                                // also executes one entry. Memory consumers use the exact
+                                // lowered Core inventory proved before execution.
+                                assertEquals(before + executedRoots,
                                     (program.diagnostics().getValue("compiledEntries") as Number).toLong(), "$stage/$backend/$name")
                                 assertEquals(active, targets(entry)); active.forEach(::valid)
                             }
@@ -222,7 +238,8 @@ class OriginalTermiosTest {
                         exercise(false)
                         active = targets(entry)
                         assertEquals(if (index < constantCount) 1 else 2, OriginalStdioChecks.nodes(binding["expr"]).count { it.firstOrNull() == "lam" })
-                        assertEquals(if (directConstant) 1 else 2, active.size, "$stage/$backend/$name")
+                        val expectedTargets = if (index < constantCount && !directConstant) 2 else executedRoots
+                        assertEquals(expectedTargets, active.size, "$stage/$backend/$name")
                         active.forEach { if (it !in installed) install(it) else valid(it) }
                         exercise(true)
                     }

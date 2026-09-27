@@ -110,7 +110,7 @@ jobs:
             test "$major" = 18
           done
       - name: Build and test both handoff modes from source
-        run: scripts/try.sh --handoff-modes --fail-fast
+        run: scripts/try.sh --handoff-modes
       - name: Check original aggregate constructor fields against native GHC
         run: |
           cabal run exe:thc-fixtures --offline -- aggregate-heap

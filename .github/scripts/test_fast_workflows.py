@@ -28,6 +28,14 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_full_build_collects_both_handoff_modes_without_fail_fast(self):
+        workflow = (WORKFLOW.parent / "build.yml").read_text()
+        block = workflow.split("name: Build and test both handoff modes from source", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("run: scripts/try.sh --handoff-modes\n", block)
+        self.assertNotIn("--fail-fast", block)
+        self.assertNotIn("continue-on-error", block)
+        self.assertNotIn("|| true", block)
+
     def test_tuple_join_ci_uses_stock_core_subset_and_both_modes(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Check tuple join arguments and bottoming tuple cases", 1)[1].split("      - name:", 1)[0]
