@@ -1,0 +1,189 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc.runtime;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicLong;
+import static thc.runtime.RuntimeServiceStatus.fault;
+
+/** Context-owned structured diagnostics, independent of GHC's trace primops.
+ *
+ * Sink 0 is disabled, 1 is the embedding context's stderr, 2 is JFR, and 3 is
+ * both. Selecting JFR neither creates a recording nor enables an event in an
+ * existing recording. JFR-only emission returns Disabled when no recording
+ * enables thc.RuntimeTrace. With both sinks, a successful stderr write suffices
+ * when JFR is disabled. An I/O error returns Unavailable (a stream may already
+ * have accepted part of the record); the caller must not retry a span end.
+ *
+ * Span IDs are process-unique positive tokens, accepted only by their creating
+ * context. Ends consume the token even when diagnostics were disabled meanwhile.
+ * Each emission uses the current sink; changing it can leave unmatched records
+ * in an individual sink. Close discards open spans without emitting fake ends.
+ * Names are exact UTF-8, including embedded NUL, limited to 1 MiB per input.
+ * Live span names are additionally bounded to 16 MiB / 4096 spans per context.
+ */
+public final class RuntimeTraceServices implements AutoCloseable {
+    public static final long MAX_INPUT_BYTES = 1024L * 1024;
+    private static final AtomicLong contextIds = new AtomicLong();
+    private static final AtomicLong spanIds = new AtomicLong();
+    private record Span(String name, long byteLength, long started) {}
+
+    private final OutputStream output;
+    private final RuntimeTraceJfr jfr;
+    private final int maxActiveSpans;
+    private final long maxRetainedNameBytes;
+    private final long contextId = nextPositive(contextIds, "trace context");
+    private final HashMap<Long, Span> spans = new HashMap<>();
+    private long retainedNameBytes;
+    private int sink;
+    private boolean closed;
+
+    public RuntimeTraceServices(OutputStream output) { this(output, JvmRuntimeTraceJfr.INSTANCE); }
+    public RuntimeTraceServices(OutputStream output, RuntimeTraceJfr jfr) {
+        this(output, jfr, 4096, 16L * 1024 * 1024);
+    }
+    public RuntimeTraceServices(OutputStream output, RuntimeTraceJfr jfr,
+                                int maxActiveSpans, long maxRetainedNameBytes) {
+        this.output = output;
+        this.jfr = jfr;
+        this.maxActiveSpans = maxActiveSpans;
+        this.maxRetainedNameBytes = maxRetainedNameBytes;
+    }
+
+    @TruffleBoundary
+    public synchronized long query(int selector, long index, long detail) {
+        if (index != 0L || detail != 0L) throw fault("Trace queries require zero indices");
+        if (selector < 500 || selector > 501) throw fault("Unknown runtime trace query " + selector);
+        if (closed) return RuntimeServiceStatus.UNAVAILABLE;
+        return selector == 500 ? sink : jfr.support() == 0L ? 3L : 1L;
+    }
+
+    @TruffleBoundary
+    public synchronized long control(int selector, long setting) {
+        if (selector != 500) throw fault("Unknown runtime trace control " + selector);
+        if (setting < 0L || setting > 3L) throw fault("Trace sink must be between zero and three");
+        if (closed) return RuntimeServiceStatus.UNAVAILABLE;
+        if ((setting & 2L) != 0L) {
+            long support = jfr.support();
+            if (support != 0L) return support;
+        }
+        sink = (int) setting;
+        return 0L;
+    }
+
+    @TruffleBoundary
+    public long emit(int operation, long token, ManagedAddress address, long length) {
+        if (operation < 0 || operation > 3) throw fault("Unknown runtime trace operation " + operation);
+        if ((operation <= 1 && token != 0L) || (operation >= 2 && token <= 0L))
+            throw fault("Invalid runtime trace span token");
+        if (length < 0L || length > MAX_INPUT_BYTES) throw fault("Runtime trace text exceeds the 1 MiB input limit");
+        if (operation >= 2 && length != 0L) throw fault("Ending a trace span requires an empty payload");
+        // Decode the entire payload before output, token allocation or registry
+        // mutation, including when the configured sink is disabled.
+        String name = decode(address, length);
+        synchronized (this) {
+            if (closed) return RuntimeServiceStatus.UNAVAILABLE;
+            if (operation >= 2) {
+                var span = spans.remove(token);
+                if (span == null) throw fault("Trace span belongs to another context or was already ended");
+                retainedNameBytes -= span.byteLength();
+                if (sink == 0) return RuntimeServiceStatus.DISABLED;
+                return publish(operation == 2 ? "end" : "exception", token, span.name(),
+                    Math.max(System.nanoTime() - span.started(), 0L));
+            }
+            if (sink == 0) return RuntimeServiceStatus.DISABLED;
+            if (operation == 0) return publish("event", 0L, name, 0L);
+            if (spans.size() >= maxActiveSpans || length > maxRetainedNameBytes - retainedNameBytes)
+                return RuntimeServiceStatus.UNAVAILABLE;
+            long id = nextPositive(spanIds, "trace span");
+            var span = new Span(name, length, System.nanoTime());
+            long result = publish("begin", id, name, 0L);
+            if (result != 0L) return result;
+            spans.put(id, span);
+            retainedNameBytes += length;
+            return id;
+        }
+    }
+
+    private long publish(String phase, long token, String name, long elapsedNanos) {
+        if ((sink & 1) != 0) {
+            String record = "{\"thc\":\"trace\",\"context\":" + contextId + ",\"thread\":" + Thread.currentThread().threadId() +
+                ",\"phase\":\"" + phase + "\",\"span\":" + token + ",\"name\":" + jsonString(name) +
+                ",\"elapsedNanos\":" + elapsedNanos + "}\n";
+            try {
+                synchronized (output) {
+                    output.write(record.getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                }
+            } catch (IOException ignored) { return RuntimeServiceStatus.UNAVAILABLE; }
+            catch (SecurityException ignored) { return RuntimeServiceStatus.DENIED; }
+        }
+        if ((sink & 2) != 0) {
+            long result = jfr.emit(contextId, phase, token, name, elapsedNanos);
+            if (result != 0L && !(result == RuntimeServiceStatus.DISABLED && (sink & 1) != 0)) return result;
+        }
+        return 0L;
+    }
+
+    @Override
+    @TruffleBoundary
+    public synchronized void close() {
+        closed = true;
+        sink = 0;
+        spans.clear();
+        retainedNameBytes = 0L;
+    }
+
+    private static long nextPositive(AtomicLong counter, String what) {
+        // Never wrap and accidentally accept an old token after exhaustion.
+        while (true) {
+            long previous = counter.get();
+            if (previous == Long.MAX_VALUE) throw fault("Runtime " + what + " identifiers exhausted");
+            if (counter.compareAndSet(previous, previous + 1)) return previous + 1;
+        }
+    }
+
+    private static String decode(ManagedAddress address, long length) {
+        if (length == 0L) return "";
+        byte[] bytes = new byte[(int) length];
+        var nativeAllocation = address.nativeAllocation$org_intelligence_thc();
+        // Keep the complete checked copy inside one native lifetime, without
+        // a capturing callback for the borrow body.
+        try (var borrow = nativeAllocation == null ? null : nativeAllocation.borrow()) {
+            address.requireByteRegion$org_intelligence_thc(length, false);
+            address.copyToByteArray(bytes, 0L, length);
+        }
+        try {
+            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException ignored) { throw fault("Invalid UTF-8 at the runtime trace boundary"); }
+    }
+
+    private static String jsonString(String value) {
+        var result = new StringBuilder();
+        result.append('"');
+        for (int i = 0; i < value.length(); i++) {
+            char character = value.charAt(i);
+            switch (character) {
+                case '"' -> result.append("\\\"");
+                case '\\' -> result.append("\\\\");
+                default -> {
+                    if (character <= '\u001f' || character == '\u007f' || character == '\u2028' || character == '\u2029') {
+                        result.append("\\u");
+                        String hex = Integer.toHexString(character);
+                        for (int padding = hex.length(); padding < 4; padding++) result.append('0');
+                        result.append(hex);
+                    } else result.append(character);
+                }
+            }
+        }
+        return result.append('"').toString();
+    }
+}

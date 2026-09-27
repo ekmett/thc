@@ -13,13 +13,14 @@ carrier, aggregate, ABI, ownership and memory-safety distinctions.
 
 Production runtime code uses Java. Migrate remaining Kotlin implementation in
 coherent tested groups, including generated code and production library
-dependencies. Kotlin fixtures, tests and Gradle build scripts may remain.
+dependencies. Migrate Kotlin fixtures, tests and Gradle build scripts gradually
+as well, until the project no longer requires Kotlin.
 Preserve Truffle child annotations, typed execution paths, cold error boundaries
 and first-compiled-call checks during conversion. Source translation alone does
 not establish a performance improvement.
 
 Use Haskell for GHC-facing fixture generation and native-oracle tooling, and
-Kotlin for JVM checks and independent runtime models. Introduce Python only for
+Java for JVM checks and independent runtime models. Introduce Python only for
 a concrete Python-specific need. Migrations must preserve native comparisons,
 negative controls, strict Core audits, provenance, and all active CI callers.
 

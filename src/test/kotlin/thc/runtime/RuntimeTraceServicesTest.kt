@@ -152,7 +152,7 @@ class RuntimeTraceServicesTest {
 
     @Test fun activeSpansAndRetainedNamesAreBoundedAndEndReleasesCapacity() {
         val output = ByteArrayOutputStream()
-        RuntimeTraceServices(output, Jfr(), maxActiveSpans = 2, maxRetainedNameBytes = 5).use { trace ->
+        RuntimeTraceServices(output, Jfr(), 2, 5).use { trace ->
             trace.control(500, 1)
             val first = emit(trace, 1, "1234")
             assertEquals(RuntimeServiceStatus.UNAVAILABLE, emit(trace, 1, "12"))

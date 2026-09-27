@@ -286,7 +286,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
         System.arraycopy(arguments, 0, packet, skip + prefixSize, physicalCount)
         if (arity < argsSize) {
             val scalarCall = scalar ?: fault("Missing tuple overapplication scalar caller")
-            if (AstControl.enabled(this)) {
+            if (AstControl.captures(this)) {
                 val result = try { scalarCall.call(frame, packet, false) }
                 catch (cut: AstCapture) {
                     val remaining = arguments.copyOfRange(physicalCount, arguments.size)
@@ -415,7 +415,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
             System.arraycopy(function.supplied, 0, packet, skip, function.supplied.size)
             System.arraycopy(arguments, physicalOffset, packet, skip + function.supplied.size, physicalCount)
             if (!exact) {
-                if (AstControl.enabled(this)) {
+                if (AstControl.captures(this)) {
                     val next = offset + count
                     val result = try { scalar.call(frame, function.target, packet, false) }
                     catch (cut: AstCapture) {

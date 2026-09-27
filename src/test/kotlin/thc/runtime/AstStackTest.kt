@@ -11,6 +11,94 @@ import org.junit.jupiter.api.Test
 import thc.Language
 
 class AstStackTest {
+    @Test fun synchronousCaptureCapabilityDrainsSpillsWithoutEnablingDeliveryOrReplayingPrefixes() {
+        Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val state = Language.currentState()
+                state.threads.enterCurrent(externalAsync = false)
+                try {
+                    state.maskingState.set(MaskingState.MASKED_INTERRUPTIBLE)
+                    val proof = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
+                    val layout = FrameLayout(); val argument = layout.bind("depth")
+                    var prefixes = 0
+                    var suffixes = 0
+                    val body = object : Expr() {
+                        @field:Child private var caller: DirectCallerNode? = null
+                        init { representation = proof }
+                        fun install(target: com.oracle.truffle.api.RootCallTarget) {
+                            caller = insert(DirectCallerNode(target, Metrics(false)))
+                        }
+                        override fun execute(frame: VirtualFrame): Any = executeLong(frame)
+                        override fun executeLong(frame: VirtualFrame): Long {
+                            assertTrue(AstControl.captures(this))
+                            assertFalse(AstControl.enabled(this), "Internal spilling does not grant external delivery")
+                            assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this))
+                            prefixes++
+                            val n = frame.getLong(argument)
+                            if (n == 0L) return 1L
+                            val result = try { caller!!.call(frame, arrayOf(0L, n - 1), false) }
+                            catch (cut: AstCapture) {
+                                throw cut.append(object : AstResumeStep {
+                                    override fun resume(frame: VirtualFrame, input: Any?): Any {
+                                        suffixes++
+                                        return (input as Long) + 1
+                                    }
+                                })
+                            }
+                            suffixes++
+                            return (result as Long) + 1
+                        }
+                    }
+                    val root = FunctionRoot(language, layout.build(), "sync spilled suffix", null, intArrayOf(),
+                        intArrayOf(argument), intArrayOf(0), body, Metrics(false), arrayOf(proof), proof,
+                        stackCapture = true)
+                    body.install(root.callTarget)
+                    assertFalse(root.enableAsync)
+                    assertEquals(4097L, Calls.target(root.callTarget, arrayOf(0L, 4096L)))
+                    assertEquals(4097, prefixes); assertEquals(4096, suffixes)
+                    val stack = state.threadPollState.get().astStack
+                    assertTrue(stack.spills > 0); assertEquals(0, stack.depth); assertFalse(stack.driving)
+                    assertEquals(MaskingState.MASKED_INTERRUPTIBLE, state.maskingState.get())
+                    assertEquals(0, language.handoffState.get().results.depth)
+                } finally { state.threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun synchronousPassThroughEntrySpillResumesOnceWithoutInstallingATailCatcher() {
+        Context.newBuilder("thc").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val body = object : Expr() {
+                    lateinit var transfer: TailCall
+                    var entries = 0
+                    override fun execute(frame: VirtualFrame): Nothing {
+                        entries++
+                        check(entries == 1) { "Pass-through resume installed a loop" }
+                        throw transfer
+                    }
+                }
+                val root = FunctionRoot(language, FrameLayout().build(), "sync parked side exit", null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
+                    role = FunctionRootRole.PASS_THROUGH, stackCapture = true)
+                body.transfer = TailCall(root.callTarget, arrayOf(0L))
+                val stack = astStackScope(root)
+                stack.depth = AstStackScope.MAX_DEPTH - 1
+                stack.driving = true
+                val saved = try { Calls.target(root.callTarget, arrayOf(0L)) as AstContinuation }
+                    finally { stack.depth = 0; stack.driving = false }
+                assertTrue(saved.stackSpill()); assertNull(saved.asyncRequest())
+                assertEquals(0, body.entries, "Entry spill precedes the side body's effects")
+                assertSame(body.transfer, assertThrows(TailCall::class.java) { saved.continueWith(Unit) })
+                assertEquals(1, body.entries); assertEquals(0, stack.depth); assertFalse(stack.driving)
+                assertThrows(RuntimeFault::class.java) { saved.continueWith(Unit) }
+            } finally { context.leave() }
+        }
+    }
+
     @Test fun stackSpillRecognizesOnlyThePrivateIdentityAndTypedSuspensions() {
         fun saved(marker: Any?) = object : SavedGuestContinuation {
             override val identity: Any get() = this

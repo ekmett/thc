@@ -342,7 +342,7 @@ class FloatDecodeTest {
         val descriptor = FrameDescriptor.newBuilder()
         val slots = IntArray(4) { descriptor.addSlot(FrameSlotKind.Long, null, null) }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor.build())
-        for (operation in FloatDecodeOp.entries) {
+        for (operation in FloatDecodeOp.values()) {
             val proof = CoreRepresentation(CoreKind.UNKNOWN, evaluated = true, present = true,
                 components = List(operation.fields) { CoreRepresentation(CoreKind.LONG, evaluated = true, present = true) })
             var calls = 0

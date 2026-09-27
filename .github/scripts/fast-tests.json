@@ -78,7 +78,7 @@
       "junit": ["thc.runtime.AddressArrayCopyTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/FloatDecodePrimitives.kt": {
+    "src/main/java/thc/runtime/FloatDecodeExpression.java": {
       "junit": ["thc.runtime.FloatDecodeTest", "thc.runtime.FloatingRemainderTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -147,13 +147,13 @@
       "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/BitPrimitives.kt": {
+    "src/main/java/thc/runtime/BitPrimitives.java": {
       "junit": [
         "thc.runtime.BitPrimopsTest"
       ],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/RawBitCasts.kt": {
+    "src/main/java/thc/runtime/RawBitCasts.java": {
       "junit": [
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FloatingAddressTest",
@@ -196,7 +196,7 @@
         "scripts/test-tuple-inputs.py"
       ]
     },
-    "src/main/kotlin/thc/runtime/FloatingPrimitives.kt": {
+    "src/main/java/thc/runtime/FloatingPrimitives.java": {
       "junit": [
         "thc.runtime.FloatingRemainderTest",
         "thc.runtime.FusedFloatingTest",
@@ -238,7 +238,7 @@
         "scripts/test-tuple-inputs.py"
       ]
     },
-    "src/main/kotlin/thc/runtime/IntegerVectorPrimitives.kt": {
+    "src/main/java/thc/runtime/VectorPack.java": {
       "junit": [
         "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdWideArrayNativeTest",
@@ -271,7 +271,883 @@
         "scripts/test-word8x16-model.py"
       ]
     },
-    "src/main/kotlin/thc/runtime/FloatingVectorPrimitives.kt": {
+    "src/main/java/thc/runtime/VectorUnpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorOperation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector32Pack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector32Unpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector32Operation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector16Pack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector16Unpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector16Operation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector8Pack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector8Unpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/Vector8Operation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord32Pack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord32Unpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord32Operation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord16Pack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord16Unpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord16Operation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord8Pack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord8Unpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorWord8Operation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.Simd128AddressNativeTest",
+        "thc.runtime.Simd128AddressTest",
+        "thc.runtime.Simd128ArrayNativeTest",
+        "thc.runtime.Simd128ArrayProofTest",
+        "thc.runtime.Int32VectorMemoryProofTest",
+        "thc.runtime.Int32VectorStorageTest",
+        "thc.runtime.SimdInt16VectorTest",
+        "thc.runtime.SimdInt32ByteArrayTest",
+        "thc.runtime.SimdInt32MultiplyTest",
+        "thc.runtime.SimdInt32VectorTest",
+        "thc.runtime.SimdInt8VectorTest",
+        "thc.runtime.SimdVectorTest",
+        "thc.runtime.SimdWord16VectorTest",
+        "thc.runtime.IntegerSimdModelTest",
+        "thc.runtime.SimdWord32ByteArrayTest",
+        "thc.runtime.SimdWord32VectorTest",
+        "thc.runtime.SimdWord8VectorTest",
+        "thc.runtime.Word32VectorMemoryProofTest",
+        "thc.runtime.Word32VectorStorageTest"
+      ],
+      "python": [
+        "scripts/test-core-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-core-word32-vector-memory.py",
+        "scripts/test-int32x4-multiply-model.py",
+        "scripts/test-word8x16-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorFloatPack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorFloatUnpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorFloatOperation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorDoublePack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorDoubleUnpack.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorDoubleOperation.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorFloat8Fused.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorDouble4Fused.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorFloat16Fused.java": {
+      "junit": [
+        "thc.runtime.SimdArithmeticTest",
+        "thc.runtime.SimdWideArrayNativeTest",
+        "thc.runtime.SimdWideArrayProofTest",
+        "thc.runtime.DoubleVectorMemoryProofTest",
+        "thc.runtime.DoubleVectorStorageTest",
+        "thc.runtime.FloatVectorMemoryProofTest",
+        "thc.runtime.FloatVectorStorageTest",
+        "thc.runtime.SimdDoubleByteArrayTest",
+        "thc.runtime.SimdDoubleVectorTest",
+        "thc.runtime.SimdFloatByteArrayTest",
+        "thc.runtime.SimdFloatVectorTest",
+        "thc.runtime.SimdFloatFmaTest",
+        "thc.runtime.SimdWideFloatFmaTest"
+      ],
+      "python": [
+        "scripts/test-core-double-vector-memory.py",
+        "scripts/test-core-float-vector-memory.py",
+        "scripts/test-core-vectors.py",
+        "scripts/test-doublex2-model.py",
+        "scripts/test-floatx4-model.py"
+      ]
+    },
+    "src/main/java/thc/runtime/VectorDouble8Fused.java": {
       "junit": [
         "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdWideArrayNativeTest",
