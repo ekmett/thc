@@ -378,6 +378,12 @@
     "test/primop-tools/Main.hs": {
       "junit": [], "python": [], "haskell": ["primop-tools"]
     },
+    "compact-core/THC/Compact/Wire.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "compact-core/THC/Compact/Writer.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/Main.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/integers-v1.json": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/header-v1.hex": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "test/compact-core/golden/footer-v1.hex": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
     "json-index/THC/JsonIndex.hs": {
       "junit": [], "python": [], "haskell": ["driver-tests", "json-index"]
     },
