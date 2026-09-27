@@ -42,6 +42,9 @@ thc.runtime.TermiosImage
 # Only a fieldless companion and a private Object lock are initialized here.
 # WindowsCodePages$Abi/$Api native resources and context instances stay runtime.
 thc.runtime.WindowsCodePages
+# Fieldless singleton and an uninitialized, capture-free lazy lookup. Native
+# library extraction/loading and finalizer handles remain deferred until runtime.
+thc.runtime.WindowsLibdwFinalizers
 # Runtime/deoptimization graph validation requires initialized declaring types.
 # These exception classes and FunctionRoot have no own class initializer.
 kotlin.NoWhenBranchMatchedException
