@@ -14,6 +14,10 @@ internal enum class TextForeignOp(val symbol: String, val lastRep: String) {
 }
 
 internal object CoreTextForeign {
+    // Installation hashes are provenance, not a different release or ABI.
+    // Preserve the complete FCall unit instead of rewriting it to "inplace".
+    private val installedUnit = Regex("text-2\\.1\\.3-(?:inplace|[0-9a-f]+)")
+    internal fun supportedUnit(unit: Any?): Boolean = unit is String && installedUnit.matches(unit)
     private val scalarKeys = setOf("kind", "primReps", "evaluated")
     private val tupleKeys = scalarKeys + setOf("aggregate", "components")
     private val descriptorKeys = setOf("schema", "target", "convention", "safety", "arity", "suppliedArity", "argumentReps", "resultRep")
@@ -46,7 +50,7 @@ internal object CoreTextForeign {
         val operation = TextForeignOp.entries.firstOrNull { it.symbol == target["symbol"] } ?: return null
         requireProof(call.keys == descriptorKeys && exact(call["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "text-2.1.3-inplace" && target["isFunction"] == true,
+            target["kind"] == "static" && supportedUnit(target["unit"]) && target["isFunction"] == true,
             "exact original installed text target")
         requireProof(call["convention"] == "ccall" && call["safety"] == "unsafe" &&
             exact(call["arity"], 5) && exact(call["suppliedArity"], 5), "convention, safety or arity")

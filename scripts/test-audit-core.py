@@ -3523,6 +3523,19 @@ class OriginalTextForeignAuditTests(unittest.TestCase):
                 report = audit_core.Audit([('text-control.json', module)], CAP).run(['root'])
                 self.assertFalse(report['accepted'], (symbol, mutation))
 
+    def test_installed_text_suffix_preserves_the_exact_release(self):
+        accepted = ('text-2.1.3-inplace', 'text-2.1.3-e182', 'text-2.1.3-119b')
+        rejected = (None, 'text-2.1.3', 'text-2.1.3-', 'text-2.1.2-e182', 'text-2.1.4-e182',
+                    'text-2.1.3-e182-extra', 'text-2.1.3-e182\n', 'text-2.1.3-e182 ',
+                    'other-text-2.1.3-e182', 'text-2.1.3-foreign', 'text-2.1.3-e182:forged')
+        for symbol in ('_hs_text_memchr', '_hs_text_measure_off', '_hs_text_reverse'):
+            for unit in accepted + rejected:
+                module = self.fixture(symbol)
+                call = module['bindings'][0]['expr'][2][1]
+                call[6]['foreignCall']['target']['unit'] = unit
+                report = audit_core.Audit([('text-control.json', module)], CAP).run(['root'])
+                self.assertEqual(unit in accepted, report['accepted'], (symbol, unit, report['issues']))
+
 
 class OriginalWaitStatusAuditTests(unittest.TestCase):
     def fixture(self, symbol):

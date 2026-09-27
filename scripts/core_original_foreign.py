@@ -285,6 +285,10 @@ def ram_unit(unit):
     return isinstance(unit, str) and re.fullmatch(r'ram-0\.22\.1(?:-[A-Za-z0-9]+)?', unit) is not None
 
 
+def text_unit(unit):
+    return isinstance(unit, str) and re.fullmatch(r'text-2\.1\.3-(?:inplace|[0-9a-f]+)', unit) is not None
+
+
 def operation(target):
     unit, symbol = target.get('unit'), target['symbol']
     if symbol == 'strlen' and bytestring_unit(unit):
@@ -378,7 +382,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol in ('memchr', 'bytestring_is_valid_utf8'):
         require(bytestring_unit(target.get('unit')), 'supported installed bytestring unit')
     if symbol in TEXT_OPERATIONS:
-        require(target.get('unit') == 'text-2.1.3-inplace', 'exact text unit')
+        require(text_unit(target.get('unit')), 'supported installed text unit')
     if symbol in WAIT_STATUS_OPERATIONS:
         require(target.get('unit') == 'unix-2.8.8.0-inplace', 'exact unix wait-status unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
@@ -389,6 +393,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     require(target.keys() == {'kind', 'symbol', 'unit', 'isFunction'} and target.get('kind') == 'static'
             and target.get('isFunction') is True
             and (target.get('unit') == 'ghc-internal' or
+                 symbol in TEXT_OPERATIONS and text_unit(target.get('unit')) or
                  symbol in ('memcmp', 'memchr', 'strlen', 'bytestring_is_valid_utf8', *BYTESTRING_DECIMAL_OPERATIONS) and bytestring_unit(target.get('unit')) or
                  symbol in ('close', 'dup', 'isatty', 'getenv') and unix_libc_unit(target.get('unit')) or
                  symbol == 'memcpy' and ram_unit(target.get('unit')) or
