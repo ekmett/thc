@@ -457,7 +457,9 @@ internal class GenericInputCall(private val source: InputSource, private val cou
                     } catch (transfer: TailCall) {
                         if (isTail) throw transfer
                         if (exact && tupleBounce != null && !AstControl.enabled(this)) {
-                            tupleBounce!!.execute(frame, transfer); return null
+                            val bounce = tupleBounce
+                            if (bounce == null) CompilerDirectives.transferToInterpreter()
+                            bounce!!.execute(frame, transfer); return null
                         }
                         loop.execute(transfer)
                     }
