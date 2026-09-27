@@ -3825,6 +3825,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
     @Operation
+    public static final class IgnoreHeapSizeHint {
+        @Specialization public static void ignore(long heapBytes, Object state) {
+            // The native compiler heap-size advisory has no per-context JVM
+            // equivalent. Evaluate both arguments but leave global VM policy alone.
+            TupleResultsKt.requireVoidCarrier(state);
+        }
+    }
+    @Operation
     public static final class UnavailableRtsStats {
         @Specialization public static void unavailable(ManagedAddress address, Object state) {
             TupleResultsKt.requireVoidCarrier(state);

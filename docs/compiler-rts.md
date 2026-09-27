@@ -21,6 +21,13 @@ support for the native GHC object loader or a claim that every GHC API works.
   cells, and THC does not perform native RTS CAF reversion. This does not load
   GHC's constructor function, mutate a native RTS, promise permanent retention
   beyond the program/context lifetime, or implement native object unloading.
+* `setHeapSize` is an ignored JVM heap-size advisory. The original compiler call
+  evaluates its `Int#` byte count and state token and returns the singleton state
+  tuple. Native GHC uses it to suggest a heap size, potentially raising its native
+  maximum; THC cannot resize a context's share of the process-wide JVM heap. It
+  does not change JVM-global heap settings, request collection, record unused
+  state, or fabricate an RTS flag image. The adjacent `enableTimingStats` call
+  remains unsupported.
 * `ghc_unique_counter64` and `ghc_unique_inc` are mutable eight-byte data cells,
   initially zero and one, shared by compiler sessions in one THC context. The
   original GHC code reads/writes the increment and uses the ordinary atomic

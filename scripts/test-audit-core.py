@@ -2479,6 +2479,34 @@ class OriginalGcStatsDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(wrong)['accepted'], (symbol, index))
 
 
+class CompilerHeapHintDeclarationTest(unittest.TestCase):
+    """Synthetic closed-ABI controls; actual GHC binding preparation is separate."""
+    def test_only_the_exact_original_compiler_heap_hint_is_admitted(self):
+        fixture = LibdwUnavailableAuditTest()
+        def scalar(rep, evaluated=False):
+            return dict(kind='void' if rep is None else 'long',
+                        primReps=[] if rep is None else [rep], evaluated=evaluated)
+        declaration = dict(schema=1, target=dict(kind='static', symbol='setHeapSize',
+            unit='ghc-9.14.1-inplace', isFunction=True), convention='ccall', safety='unsafe',
+            arity=2, suppliedArity=2, argumentReps=[scalar('IntRep'), scalar(None)],
+            resultRep=dict(kind='unknown', primReps=[], evaluated=False,
+                           aggregate='unboxed-tuple', components=[scalar(None, True)]))
+        report = fixture.audit(fixture.fixture(declaration))
+        self.assertTrue(report['accepted'], report)
+        self.assertEqual(['setHeapSize'], [call['symbol'] for call in report['foreignCalls']])
+        disabled = dict(CAP, managedForeignCalls=[s for s in CAP['managedForeignCalls'] if s != 'setHeapSize'])
+        self.assertFalse(fixture.audit(fixture.fixture(declaration), disabled)['accepted'])
+        for key, value in [('unit', 'ghc-internal'), ('unit', 'main'), ('unit', 'ghc-9.14.1-other'),
+                           ('symbol', 'setHeapSize_alias'), ('symbol', 'enableTimingStats'), ('isFunction', False)]:
+            wrong = copy.deepcopy(declaration); wrong['target'][key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (key, value))
+        for key, value in [('safety', 'safe'), ('safety', 'interruptible'), ('convention', 'capi'),
+                           ('arity', 1), ('suppliedArity', 1), ('schema', True), ('resultRep', LONG),
+                           ('argumentReps', [scalar('WordRep'), scalar(None)])]:
+            wrong = copy.deepcopy(declaration); wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], (key, value))
+
+
 class OriginalLibraryMemoryDeclarationTest(unittest.TestCase):
     def test_bytestring_strlen_keeps_csize_abi_for_installed_units(self):
         fixture = LibdwUnavailableAuditTest()

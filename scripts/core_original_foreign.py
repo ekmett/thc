@@ -175,6 +175,7 @@ OPERATIONS = {
     **{symbol: ('ccall', 'safe', (None,), (None,))
        for symbol in ('performGC', 'performMajorGC', 'performBlockingMajorGC')},
     'getMonotonicNSec': ('ccall', 'unsafe', (None,), (None, 'Word64Rep')),
+    'setHeapSize': ('ccall', 'unsafe', ('IntRep', None), (None,)),
     'getNumberOfProcessors': ('ccall', 'unsafe', (None,), (None, 'Word32Rep')),
     'setNumCapabilities': ('ccall', 'safe', ('Word32Rep', None), (None,)),
     '__hscore_sizeof_siginfo_t': ('ccall', 'safe', (None,), (None, 'Word64Rep')),
@@ -328,6 +329,7 @@ LIBRARY_OPERATIONS = {
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasNoDebugOutput'): OPERATIONS['getOrSetLibHSghcGlobalHasNoDebugOutput'],
     ('ghc-9.14.1-inplace', 'getOrSetLibHSghcGlobalHasNoStateHack'): OPERATIONS['getOrSetLibHSghcGlobalHasNoStateHack'],
     ('ghc-9.14.1-inplace', 'keepCAFsForGHCi'): OPERATIONS['keepCAFsForGHCi'],
+    ('ghc-9.14.1-inplace', 'setHeapSize'): OPERATIONS['setHeapSize'],
     ('array-0.5.8.0-inplace', 'memcpy'):
         ('ccall', 'unsafe', (GMP_ARRAY, GMP_ARRAY, 'Word64Rep', None), (None, 'AddrRep')),
     ('bytestring-0.12.2.0-inplace', 'strlen'):
@@ -520,7 +522,7 @@ def validate(metadata, argument_reps, flags, result_rep):
     if symbol in WINDOWS_ENCODING_OPERATIONS:
         require(target.get('unit') == 'ghc-internal', 'original ghc-internal Windows encoding unit')
     if symbol in ('getOrSetLibHSghcFastStringTable', 'getOrSetLibHSghcGlobalHasPprDebug',
-                  'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi'):
+                  'getOrSetLibHSghcGlobalHasNoDebugOutput', 'getOrSetLibHSghcGlobalHasNoStateHack', 'keepCAFsForGHCi', 'setHeapSize'):
         require(target.get('unit') == 'ghc-9.14.1-inplace', 'exact compiler unit')
     require(descriptor.keys() == DESCRIPTOR_KEYS and type(descriptor.get('schema')) is int and descriptor['schema'] == 1,
             'descriptor schema')

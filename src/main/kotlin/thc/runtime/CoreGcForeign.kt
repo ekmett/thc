@@ -13,14 +13,23 @@ internal enum class GcForeignOp(val symbol: String, val result: String?, val saf
     MINOR("performGC", null),
     MAJOR("performMajorGC", null),
     BLOCKING("performBlockingMajorGC", null),
-    MONOTONIC("getMonotonicNSec", "Word64Rep", "unsafe");
+    MONOTONIC("getMonotonicNSec", "Word64Rep", "unsafe"),
+    HEAP_HINT("setHeapSize", null, "unsafe");
 
-    val arguments: List<String?> get() = if (this == STATS) listOf("AddrRep", null) else listOf(null)
+    val unit: String get() = if (this == HEAP_HINT) "ghc-9.14.1-inplace" else "ghc-internal"
+    val arguments: List<String?> get() = when (this) {
+        STATS -> listOf("AddrRep", null)
+        HEAP_HINT -> listOf("IntRep", null)
+        else -> listOf(null)
+    }
 
     @TruffleBoundary fun invoke(): Long = when (this) {
         ENABLED -> 0L
         STATS -> fault("GHC RTS statistics are unavailable on the JVM; getRTSStatsEnabled is false")
         MONOTONIC -> System.nanoTime()
+        // The compiler's native heap suggestion cannot resize a context's share
+        // of the JVM heap. Ignore the advisory; do not change global VM policy.
+        HEAP_HINT -> 0L
         else -> { System.gc(); 0L } // Advisory; JVM flags/collector decide when and what to collect.
     }
 }
@@ -57,7 +66,7 @@ internal object CoreGcForeign {
         val op = GcForeignOp.entries.firstOrNull { it.symbol == target["symbol"] } ?: return null
         requireProof(call.keys == descriptorKeys && exact(call["schema"], 1), "descriptor schema")
         requireProof(target.keys == setOf("kind", "symbol", "unit", "isFunction") &&
-            target["kind"] == "static" && target["unit"] == "ghc-internal" && target["isFunction"] == true,
+            target["kind"] == "static" && target["unit"] == op.unit && target["isFunction"] == true,
             "exact installed target")
         requireProof(call["convention"] == "ccall" && call["safety"] == op.safety &&
             exact(call["arity"], op.arguments.size) && exact(call["suppliedArity"], op.arguments.size),
@@ -99,6 +108,7 @@ internal class GcForeignExpression(private val op: GcForeignOp,
     override fun execute(frame: VirtualFrame): Nothing = fault("GC/clock call requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         if (op == GcForeignOp.STATS) operands[0].executeRequiredAddress(frame)
+        if (op == GcForeignOp.HEAP_HINT) operands[0].executeLong(frame)
         requireVoidCarrier(operands.last().execute(frame))
         val value = op.invoke()
         if (op.result != null) FrameAccess.writeLong(frame, slots[offset], value)

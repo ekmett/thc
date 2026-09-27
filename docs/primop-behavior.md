@@ -318,6 +318,9 @@ setter primops above. Context disposal is not GHC shutdown-finalizer execution.
 Compiler-library shared FastStrings, CAF retention and unique-counter data cells
 are documented separately in [compiler RTS services](compiler-rts.md); their
 support does not imply a native GHC object loader or complete GHC API coverage.
+The compiler's original `setHeapSize` evaluates its byte-count/state operands and
+returns, ignoring the heap-size advisory: THC does not resize the process-wide
+JVM heap, request GC, or invent mutable native RTS sizing flags.
 Original `performGC`, `performMajorGC` and `performBlockingMajorGC` request JVM
 collection without GHC generation or completion guarantees. `getRTSStatsEnabled`
 is false, and direct `getRTSStats` rejects without modifying its buffer; original

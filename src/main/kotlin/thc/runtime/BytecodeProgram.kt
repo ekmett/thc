@@ -2105,6 +2105,11 @@ CoreStackForeign.validateHead(fn, defined)
                         e.builder.beginGcForeignQuery(destination.single(), gcForeign)
                         operands.single().emit(e)
                         e.builder.endGcForeignQuery()
+                    } else if (gcForeign == GcForeignOp.HEAP_HINT) {
+                        check(destination.isEmpty())
+                        e.builder.beginIgnoreHeapSizeHint()
+                        operands.forEach { it.emit(e) }
+                        e.builder.endIgnoreHeapSizeHint()
                     } else if (gcForeign == GcForeignOp.STATS) {
                         check(destination.isEmpty())
                         e.builder.beginUnavailableRtsStats()
