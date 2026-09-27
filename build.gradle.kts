@@ -1141,7 +1141,7 @@ kotlin.target.compilations.getByName("examples").associateWith(kotlin.target.com
 tasks.register<JavaExec>("probe") {
     group = "verification"
     classpath = diagnostics.runtimeClasspath
-    mainClass.set("thc.ProbeKt")
+    mainClass.set("thc.Probe")
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)
 }

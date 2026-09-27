@@ -12,5 +12,5 @@ DIAGNOSTIC="${THC_DIAGNOSTIC_UNSUPPORTED:-false}"
 ./gradlew --no-daemon test installDist toolsJar "$@"
 THC_JAVA="$JAVA_HOME/bin/java"
 "$THC_JAVA" --add-modules=jdk.incubator.vector --enable-native-access=ALL-UNNAMED -Xss2m -XX:+UseCompactObjectHeaders -Dthc.traceCompilation=true "-Dthc.diagnosticUnsupported=$DIAGNOSTIC" \
-  -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.MapCheckKt build/map/modules.txt build/map/oracle.tsv \
+  -cp 'build/install/thc/lib/*:build/diagnostics/thc-tools.jar' thc.MapCheck build/map/modules.txt build/map/oracle.tsv \
   2>&1 | tee build/map/check.log

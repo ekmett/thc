@@ -238,6 +238,10 @@ def main():
     parser.add_argument('candidate_libdir', type=Path, help='immutable candidate installDist lib directory')
     parser.add_argument('--baseline-tools-jar', type=Path, help='separate frozen diagnostics JAR; omit for historical runtimes with bundled Probe')
     parser.add_argument('--candidate-tools-jar', type=Path, help='separate frozen diagnostics JAR; required for current runtimes')
+    parser.add_argument('--baseline-probe-class', default='thc.Probe',
+                        help='explicit entrypoint in the frozen baseline; use thc.ProbeKt for historical Kotlin tools')
+    parser.add_argument('--candidate-probe-class', default='thc.Probe',
+                        help='explicit entrypoint in the frozen candidate (default: thc.Probe)')
     parser.add_argument('native_binary', type=Path, help='immutable native oracle with scalar and --bench-steady modes')
     parser.add_argument('modules_manifest', type=Path, help='one Core JSON path per line; relative paths resolve beside this manifest')
     parser.add_argument('outdir', type=Path, help='new or empty output directory; existing results are never overwritten')
@@ -316,7 +320,7 @@ def main():
                 command = [str(java), '--add-modules=jdk.incubator.vector', '--enable-native-access=ALL-UNNAMED', '-Xss2m', '-Dthc.traceCompilation=true',
                            '-Dthc.diagnosticUnsupported=true', f'-Dthc.minimumWarmCalls={args.minimum_warm_calls}',
                            f'-Dthc.backend={getattr(args, engine + "_backend")}',
-                           '-cp', os.pathsep.join(map(str, libraries[engine])), 'thc.ProbeKt', ','.join(map(str, modules_by_engine[engine])),
+                           '-cp', os.pathsep.join(map(str, libraries[engine])), getattr(args, engine + '_probe_class'), ','.join(map(str, modules_by_engine[engine])),
                            ENTRY, '--steady', str(args.jvm_warm_seconds), str(SAMPLE_SECONDS), str(SAMPLES), str(args.input_base)]
             if engine != 'native':
                 command[1:1] = compact_header_options(getattr(args, engine + '_jvm_option'))

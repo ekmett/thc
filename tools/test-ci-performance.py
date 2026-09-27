@@ -68,7 +68,7 @@ class ConfigurationTest(unittest.TestCase):
             root = Path(directory) / 'repo'
             files = {
                 'src/main/Runtime.kt': b'runtime',
-                'src/diagnostics/kotlin/thc/Probe.kt': b'probe source',
+                'src/diagnostics/java/thc/Probe.java': b'probe source',
                 'src/test/Test.kt': b'test',
                 'build/install/thc/lib/thc.jar': b'runtime jar',
                 'build/diagnostics/thc-tools.jar': b'tools jar',
@@ -95,7 +95,7 @@ class ConfigurationTest(unittest.TestCase):
             tools = out / 'frozen/current/tools/thc-tools.jar'
             self.assertEqual(tools.read_bytes(), b'tools jar')
             self.assertEqual([p.name for p in (out / 'frozen/current/lib').iterdir()], ['thc.jar'])
-            self.assertEqual((out / 'frozen/current/src/diagnostics/kotlin/thc/Probe.kt').read_bytes(), b'probe source')
+            self.assertEqual((out / 'frozen/current/src/diagnostics/java/thc/Probe.java').read_bytes(), b'probe source')
             (root / 'build/diagnostics/thc-tools.jar').write_bytes(b'new live tools')
             ci.verify(out)
             tools.chmod(0o600)
@@ -125,6 +125,8 @@ class ConfigurationTest(unittest.TestCase):
                 if runtime == 'current':
                     expected.append(str(out / 'frozen/current/tools/thc-tools.jar'))
                 self.assertEqual(paths, expected)
+                self.assertEqual(command[command.index('-cp') + 2],
+                                 'thc.MapCheck' if runtime == 'current' else 'thc.MapCheckKt')
 
     def test_standard_controls_are_explicit_and_distinct(self):
         chosen = selection('standard')
@@ -241,6 +243,24 @@ class ConfigurationTest(unittest.TestCase):
                 self.assertEqual(actual, ci.POLICY + chosen['configurations'][name][1])
                 self.assertEqual(command[command.index('--' + side + '-tools-jar') + 1],
                                  out / 'frozen/current/tools/thc-tools.jar')
+                self.assertEqual(command[command.index('--' + side + '-probe-class') + 1], 'thc.Probe')
+
+    def test_frozen_original_comparison_selects_historical_entrypoint_explicitly(self):
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory)
+            ci.write_json(out / 'checks.json', {'passed': True})
+            ci.write_json(out / 'run.json', {'currentCommit': 'fixed-commit'})
+            result = out / 'comparisons/original-vs-current'
+            result.mkdir(parents=True)
+            ci.write_json(result / 'validation.json', {'passed': True, 'validatedWindows': 45})
+            with patch.object(ci, 'suite_config', return_value=selection('standard')), \
+                 patch.object(ci, 'verify'), patch.object(ci, 'run') as run:
+                ci.compare(out, 'original-vs-current', Path('/fake-java'))
+            command = run.call_args.args[1]
+            self.assertEqual(command[command.index('--baseline-probe-class') + 1], 'thc.ProbeKt')
+            self.assertEqual(command[command.index('--candidate-probe-class') + 1], 'thc.Probe')
+            self.assertNotIn('--baseline-tools-jar', command)
+            self.assertIn('--candidate-tools-jar', command)
 
 
 if __name__ == '__main__':
