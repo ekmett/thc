@@ -148,11 +148,4 @@ starting. A successful export-only run is not native conformance.
 Native agreement and strict static audits do not establish JVM compiled
 execution, allocation elimination, packed machine instructions, or performance.
 Those require the separate runtime tests and retained graph/final-LIR evidence.
-In particular, byte multiplication may lower through wider lanes or scalar
-operations; the presence of `timesInt8X16#` is not proof of packed byte multiply.
-
-## Research history
-
-The [foundation checkpoint](../research/int8x16-checkpoint.md) preserves the
-original representation discussion, measurements and graph evidence at their
-recorded revisions. Those results are not a validation run of the current tree.
+Byte-lane multiplication uses `ByteVector.mul`, with results wrapping modulo 256.

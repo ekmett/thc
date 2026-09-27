@@ -106,9 +106,6 @@ After preparation, run both handoff modes with:
   testDense --tests thc.runtime.ManagedAddressReadTest
 ```
 
-The [earlier producer checkpoint](../research/memory-fixture-checkpoints.md#managed-address-read-producer)
-is retained separately from these current instructions.
-
 `cabal run exe:thc-fixtures -- pinned-pointer-cells` exports the genuine
 `newPinnedByteArray#`/freeze/contents/`keepAlive#` sequence at both Core stages,
 with strict representation audits and seven native oracle inputs.

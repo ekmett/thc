@@ -141,9 +141,3 @@ Fixture/model/native evidence alone establishes no JVM compilation, packed
 machine instructions, allocation elimination, throughput, vector calling
 conventions or cross-architecture execution. Those require separately retained
 runtime tests and graph/LIR evidence.
-
-## Research history
-
-The [foundation checkpoint](../research/word32x4-checkpoint.md) preserves the
-original representation discussion, measurements and graph evidence at their
-recorded revisions. Those results are not a validation run of the current tree.

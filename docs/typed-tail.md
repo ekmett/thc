@@ -69,7 +69,3 @@ A tail-transfer protocol does not make arbitrary non-tail recursion stack-safe.
 [Async-enabled AST execution](async-exceptions.md) has a separate saved-continuation
 driver and explicit transaction limits. Typed tuple, sum and vector inputs and
 results also retain their distinct [layout and ownership contracts](aggregate-layout.md).
-
-The [typed-tail investigation](../research/typed-tail-checkpoint.md) retains
-the original graph comparisons, test counts and measured Map results. Those
-captures describe their frozen builds, not the current cost of these protocols.
