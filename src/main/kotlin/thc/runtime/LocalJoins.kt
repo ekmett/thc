@@ -290,6 +290,10 @@ internal class LocalJoinRegion(private val group: Any, private val selector: Int
                     FrameAccess.writeLong(frame, region.selector, jump.target.index.toLong())
                     region.loop!!.execute(frame)
                 }
+            } catch (cut: AstCapture) {
+                // This saved jump still owns the region's result destination
+                // and any later lexical jump after the one-shot child resumes.
+                throw cut.enclose { ResumeAsyncRegion(region, it, slots, offset) }
             } catch (cut: DelimitedCut) { throw cut.append(frame, this) }
             return finish(frame)
         }

@@ -249,3 +249,37 @@ externalSaved token = runRW# $ \s0 -> case newMVar# s0 of
                                 (# s19, Box answer #) -> case readMutVar# counter s19 of
                                   (# s20, Box count #) -> case getMaskingState# s20 of
                                     (# _, outside #) -> answer *# 10000# +# count +# outside *# 100000000# +# token
+
+-- Each recursive level performs distinct pre/post effects and observes its
+-- logical mask. OPAQUE retains real non-tail calls past the AST spill budget.
+{-# OPAQUE savedDeepAction #-}
+savedDeepAction :: MutVar# RealWorld Box -> Int# -> State# RealWorld -> (# State# RealWorld, Int# #)
+savedDeepAction count depth s0 = case readMutVar# count s0 of
+  (# s1, Box before #) -> case writeMutVar# count (Box (before +# 1#)) s1 of
+    s2 -> case (case depth of
+      0# -> (# s2, 7# #)
+      _ -> case savedDeepAction count (depth -# 1#) s2 of
+        (# st, value #) -> case getMaskingState# st of
+          (# st1, mask #) -> (# st1, value +# 1# +# mask *# 1000# #)) of
+            (# s3, answer #) -> case readMutVar# count s3 of
+              (# s4, Box after #) -> case writeMutVar# count (Box (after +# 1#)) s4 of
+                s5 -> (# s5, answer #)
+
+{-# OPAQUE scheduledSaved #-}
+scheduledSaved :: Int# -> Int#
+scheduledSaved token = runRW# $ \s0 -> case newMutVar# (Box 0#) s0 of
+  (# s1, count #) -> case newPromptTag# s1 of
+    (# s2, tag #) -> case prompt# tag (\s3 ->
+      case writeMutVar# count (Box 100#) s3 of
+        s4 -> case maskUninterruptible# (\s5 ->
+          case control0# tag (\k s6 ->
+            case k (savedDeepAction count (96# +# token)) s6 of
+              (# s7, Box first #) -> case k (savedDeepAction count (96# +# token)) s7 of
+                (# s8, Box second #) -> (# s8, Box (first *# 1000000# +# second *# 1000#) #)) s5 of
+                  (# s9, value #) -> case readMutVar# count s9 of
+                    (# s10, Box before #) -> case writeMutVar# count (Box (before +# 1#)) s10 of
+                      s11 -> (# s11, Box (value +# 3#) #)) s4 of
+                        (# s12, answer #) -> (# s12, answer #)) s2 of
+                          (# s13, Box encoded #) -> case readMutVar# count s13 of
+                            (# s14, Box total #) -> case getMaskingState# s14 of
+                              (# _, outside #) -> encoded +# total +# outside *# 1000000000000#

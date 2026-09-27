@@ -6,6 +6,7 @@ package thc.runtime
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary
 import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.exception.AbstractTruffleException
 import com.oracle.truffle.api.frame.FrameDescriptor
@@ -27,6 +28,7 @@ internal class DelimitedResume(val value: Any?, val failure: AbstractTruffleExce
 internal interface DelimitedStep {
     fun resume(frame: MaterializedFrame, input: DelimitedResume, ambient: MaskingState,
                outerMask: DelimitedStep?): Any?
+    fun finish(result: Any?, site: DelimitedActionSite): Any? = result
 }
 
 /** A pending application already owns the destination that its outer dispatcher
@@ -47,12 +49,9 @@ internal class DelimitedRootStep(private val root: FunctionRoot) : DelimitedTran
                         outerMask: DelimitedStep?): Any? = input.get()
     override fun accepts(transfer: ControlFlowException): Boolean =
         transfer === AstSelfCall || transfer is TailCall || transfer is HandoffTailCall
-    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
-        val result = root.resumeDelimited(frame, transfer, site)
-        DelimitedControl.captureBytecode(result, root.tupleResult)
-        DelimitedControl.asyncResult(result, site)
-        return root.tupleResult?.let { ownedTupleResult(result, it) } ?: result
-    }
+    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? =
+        root.resumeDelimited(frame, transfer, site)
+    override fun finish(result: Any?, site: DelimitedActionSite): Any? = site.finish(result, root.tupleResult)
 }
 
 internal class DelimitedFrame(val frame: MaterializedFrame, val step: DelimitedStep)
@@ -87,16 +86,12 @@ internal class DelimitedBytecodeStep(private val saved: ContinuationResult,
                         outerMask: DelimitedStep?): Any? {
         val answer = ContinuationResult.create(saved.continuationRootNode, frame, saved.result).continueWith(input)
         DelimitedControl.captureBytecode(answer, shape)
-        DelimitedControl.asyncResult(answer, saved.continuationRootNode)
-        return if (shape == null) answer else ownedTupleResult(answer, shape)
+        return answer
     }
+    override fun finish(result: Any?, site: DelimitedActionSite): Any? = site.finish(result, shape)
     override fun accepts(transfer: ControlFlowException): Boolean = transfer is TailCall
-    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? {
-        val result = site.tail(transfer as TailCall)
-        DelimitedControl.captureBytecode(result, shape)
-        DelimitedControl.asyncResult(result, site)
-        return if (shape == null) result else ownedTupleResult(result, shape)
-    }
+    override fun transfer(frame: MaterializedFrame, transfer: ControlFlowException, site: DelimitedActionSite): Any? =
+        site.tail(transfer as TailCall)
 }
 
 internal class DelimitedTupleStep(private val destination: TupleDestination, private val node: Node) : DelimitedStep {
@@ -185,7 +180,9 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
                     ambient: MaskingState, outerMask: DelimitedStep?): Any? {
         var input = initial
         active.forEachIndexed { index, entry ->
-            input = try { DelimitedResume(entry.step.resume(entry.frame, input, ambient, outerMask)) }
+            input = try { DelimitedResume(entry.step.finish(site.captured(entry.frame, null) {
+                entry.step.resume(entry.frame, input, ambient, outerMask)
+            }, site)) }
             catch (failure: GuestException) { DelimitedResume(null, failure) }
             catch (failure: AsyncDelivery) {
                 DelimitedResume(null, failure)
@@ -205,9 +202,14 @@ internal class DelimitedStack(cut: DelimitedCut, private val outputShape: TupleS
         val owner = remaining.indexOfFirst { it.step is DelimitedTransferStep && it.step.accepts(flow) }
         if (owner < 0) throw flow
         val entry = remaining[owner]
+        val step = entry.step as DelimitedTransferStep
         remaining.take(owner).forEach { if (it.step is DelimitedAnnotationStep) it.step.unwind() }
         val after = remaining.drop(owner + 1)
-        val input = try { DelimitedResume((entry.step as DelimitedTransferStep).transfer(entry.frame, flow, site)) }
+        // Completion belongs after a suspended transfer too. In particular, a
+        // root's tuple loan must be detached before any outer saved step runs.
+        val input = try { DelimitedResume(step.finish(site.captured(entry.frame, null) {
+            step.transfer(entry.frame, flow, site)
+        }, site)) }
         catch (failure: GuestException) { DelimitedResume(null, failure) }
         catch (failure: AsyncDelivery) {
             DelimitedResume(null, failure)
@@ -269,15 +271,60 @@ internal class DelimitedActionSite(private val language: Language, private val m
     @Child private var force = Force(metrics)
     @Child private var trampoline = TailCallLoop(metrics)
     fun tail(transfer: TailCall): Any? = trampoline.execute(transfer)
+    /** Every call creates a fresh one-shot owner. It is consumed here, never
+     * appended to a DelimitedCut or installed in the reusable frame graph. */
+    fun finish(result: Any?, shape: TupleShape?, expectedTarget: RootCallTarget? = null): Any? {
+        DelimitedControl.captureBytecode(result, shape)
+        val saved = when (result) {
+            is TailYield -> savedGuestContinuation(result.continuation)
+            is AstTailYield -> result.continuation
+            else -> savedGuestContinuation(result)
+        }
+        val answer = if (saved == null) result else {
+            val target = when (result) {
+                is TailYield -> result.target
+                is AstTailYield -> result.target
+                else -> expectedTarget
+            }
+            if (target != null) {
+                val root = saved.sourceRoot as? GuestRoot ?: fault("Non-guest delimited invocation cut")
+                if (!root.isSelf(target)) fault("Delimited invocation returned an unrelated continuation")
+                if (shape != null && !root.hasTupleResult(shape))
+                    fault("Delimited invocation changed its tuple result shape")
+            }
+            saved.asyncRequest()?.let { throw AsyncDelivery(it, this) }
+            if (!AsyncContinuations.isYieldMarker(saved.yielded)) fault("Unsupported delimited invocation cut")
+            val drained = force.drainStack(saved, shape, delimitedInvocation = true)
+            DelimitedControl.asyncResult(drained, this)
+            drained
+        }
+        return if (shape == null) answer else ownedTupleResult(answer, shape)
+    }
+
+    /** A cut in a saved AST step belongs to that invocation's active frame,
+     * not to the action site's outer activation or the immutable image. */
+    inline fun captured(frame: VirtualFrame, shape: TupleShape?, body: () -> Any?): Any? =
+        try { body() }
+        catch (cut: AstCapture) {
+            cut.asyncRequest()?.let { throw AsyncDelivery(it, this) }
+            finish(cut.freeze(rootNode as? GuestRoot ?: fault("Missing delimited invocation root"), frame.materialize()), shape)
+        }
+
+    private fun forceAction(frame: VirtualFrame, action: Any?): Any? = try { force.execute(frame, action) }
+        catch (cut: ThunkSuspended) {
+            cut.asyncRequest?.let { throw AsyncDelivery(it, this) }
+            force.drainDelimitedBoundary(cut.thunk)
+        } catch (cut: CallSegmentSuspended) {
+            cut.asyncRequest?.let { throw AsyncDelivery(it, this) }
+            force.drainDelimitedBoundary(cut.segment)
+        }
+
     fun invoke(frame: VirtualFrame, action: Any?, arguments: Array<Any?>, shape: TupleShape): Any? {
         try {
-            val closure = requireClosure(force.execute(frame, action))
-            val result = (if (arguments.size == 1) one else two).execute(frame, closure, arguments)
-            DelimitedControl.captureBytecode(result, shape)
-            DelimitedControl.asyncResult(result, this)
-            return ownedTupleResult(result, shape)
-        } catch (cut: AstCapture) {
-            throw DelimitedControl.asyncFailure(cut, this)
+            val closure = requireClosure(forceAction(frame, action))
+            return captured(frame, shape) {
+                finish((if (arguments.size == 1) one else two).execute(frame, closure, arguments), shape, closure.target)
+            }
         } catch (cut: ThunkSuspended) {
             cut.asyncRequest?.let { throw AsyncDelivery(it, this) }
             throw UnsupportedCore("Delimited action encountered a non-delivery thunk scheduling cut")

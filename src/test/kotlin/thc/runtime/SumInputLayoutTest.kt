@@ -23,6 +23,99 @@ class SumInputLayoutTest {
         finally { context.leave() }
     }
 
+    @Test fun resumedScalarSumArmsUpdateTheirOriginalProfilesWithoutReplay() = resumedArmProfiles(false)
+    @Test fun resumedTupleSumArmsUpdateTheirOriginalProfilesWithoutReplay() = resumedArmProfiles(true)
+
+    private fun resumedArmProfiles(tuple: Boolean) = withLanguage { language ->
+        val layout = FrameLayout()
+        val tag = layout.bind("sum tag")
+        val destination = layout.bind("narrow tuple result")
+        val narrow = CoreRepresentation(CoreKind.LONG, true, true, listOf("Int32Rep"))
+        val events = ArrayList<String>()
+        val scrutinee = object : Expr() {
+            override fun execute(frame: VirtualFrame): Nothing = error("sum scrutinee needs a destination")
+            override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+                events += "prefix"
+                if (frame.arguments[2] == false) {
+                    FrameAccess.writeLong(frame, slots[offset], frame.arguments[1] as Long)
+                    return null
+                }
+                throw AstCapture(Unit, MaskingState.UNMASKED).append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                        assertSame(Unit, input)
+                        events += "suffix"
+                        FrameAccess.writeLong(frame, slots[offset], frame.arguments[1] as Long)
+                        return null
+                    }
+                })
+            }
+        }
+        val arms = Array<Expr>(2) { index -> object : Expr() {
+            override fun execute(frame: VirtualFrame): Nothing = error("sum branch lost its narrow result route")
+            override fun executeInt(frame: VirtualFrame): Int {
+                events += "arm$index"
+                return if (index == 0) Int.MIN_VALUE else Int.MAX_VALUE
+            }
+            override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+                FrameAccess.writeInt(frame, slots[offset], executeInt(frame))
+                return null
+            }
+        } }
+        val choice = SumCase(scrutinee, intArrayOf(tag), arms, intArrayOf(0, 1, 0, -1),
+            if (tuple) CoreRepresentation(CoreKind.UNKNOWN, true, true, narrow.primReps, listOf(narrow)) else narrow)
+        val root = object : GuestRoot(language, layout.build()) {
+            @field:Child private var branch = choice
+            override fun bloom(frame: VirtualFrame): Long = 0L
+            override fun execute(frame: VirtualFrame): Any? = try {
+                if (tuple) {
+                    branch.executeTuple(frame, intArrayOf(destination), 0)
+                    frame.getInt(destination)
+                } else branch.executeInt(frame)
+            } catch (cut: AstCapture) {
+                if (tuple) cut.append(object : AstResumeStep {
+                    override fun resume(frame: VirtualFrame, input: Any?): Any {
+                        assertNull(input)
+                        return frame.getInt(destination)
+                    }
+                })
+                cut.freeze(this, frame.materialize())
+            }
+        }
+        // Inspect the existing pinned profiles, not a second test-only seen-state.
+        val profiles = SumCase::class.java.getDeclaredField("armProfiles").also { it.isAccessible = true }
+            .get(choice) as Array<*>
+        fun counts(): List<Pair<Int, Int>> = profiles.map { profile ->
+            fun count(name: String) = profile!!.javaClass.getDeclaredMethod(name).also { it.isAccessible = true }
+                .invoke(profile) as Int
+            count("getTrueCount") to count("getFalseCount")
+        }
+        val expectedEvents = ArrayList<String>()
+        val observations = listOf(listOf(1 to 0, 0 to 0), listOf(1 to 1, 1 to 0), listOf(2 to 1, 1 to 0))
+        for (selected in 1L..3L) {
+            val before = counts()
+            val saved = Calls.target(root.callTarget, arrayOf<Any?>(0L, selected, true)) as AstContinuation
+            assertEquals(before, counts(), "No arm is observed before the scrutinee resumes")
+            val expected = if (selected == 2L) Int.MAX_VALUE else Int.MIN_VALUE
+            assertEquals(expected, saved.continueWith(Unit))
+            assertEquals(observations[(selected - 1).toInt()], counts())
+            assertThrows(RuntimeFault::class.java) { saved.continueWith(Unit) }
+            expectedEvents += listOf("prefix", "suffix", "arm${if (selected == 2L) 1 else 0}")
+            assertEquals(expectedEvents, events)
+        }
+        assertEquals(Int.MAX_VALUE, Calls.target(root.callTarget, arrayOf<Any?>(0L, 2L, false)))
+        assertEquals(listOf(2 to 2, 2 to 0), counts(), "Ordinary and resumed arms share the same profiles")
+        expectedEvents += listOf("prefix", "arm1")
+        val missing = Calls.target(root.callTarget, arrayOf<Any?>(0L, 4L, true)) as AstContinuation
+        assertEquals("Non-exhaustive unboxed sum case", assertThrows(RuntimeFault::class.java) {
+            missing.continueWith(Unit)
+        }.message)
+        assertEquals(listOf(2 to 3, 2 to 1), counts())
+        expectedEvents += listOf("prefix", "suffix")
+        assertEquals(expectedEvents, events)
+        assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
+        assertEquals(0, language.handoffState.get().results.depth)
+    }
+
     @Test fun logicalSumIdentitySurvivesEqualPhysicalInputAndPrefixLayouts() = withLanguage { language ->
         val formal = ArgumentLayout.fromProofs(listOf(integer, sum, integer))!!
         assertEquals(3, formal.logicalArity); assertEquals(5, formal.physicalArity)

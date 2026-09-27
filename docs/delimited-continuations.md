@@ -54,6 +54,18 @@ current logical target and claimed state. The payload stays lazy. The native
 same image, verifies both sender acknowledgements and mask restoration, and
 counts shared prefix, replacement, handler and suffix effects without replay.
 
+Non-delivery scheduling cuts and AST stack spills in a replacement action or
+saved suffix use a fresh one-shot call owner for that invocation. The existing
+iterative driver completes its saved callers before the image advances; neither
+the owner nor its mutable completion state is copied into the reusable image.
+An async delivery reached while draining still unwinds the original request to
+its handler. The native `scheduledSaved` control runs a deep, non-tail action
+twice through the same image, checking each prefix/suffix effect and mask return.
+Saved local-join transfers retain their region around an interrupted body, so
+later lexical jumps and scalar/tuple result completion remain owned by that
+region. Transferred roots detach their tuple results after scheduling completes,
+before another saved step can execute guest code or acquire a result loan.
+
 Strict scalar-returning workers preserve their pending case caller, including
 its result destination. Capturing a resumed segment again freezes the mask
 return's already-rebased prior state: if another mask frame becomes outermost,
@@ -71,13 +83,12 @@ returned its function. Both scalar and tuple results work through direct and
 megamorphic calls. The captured tuple consumer runs once; bytecode receives an
 owned result at its saved call site. Neither path reruns the callee prefix.
 
-Applications with unboxed tuple/vector inputs remain unestablished. A
-non-delivery scheduling cut, such as AST stack spilling, across a delimited
-action or saved suffix still rejects: it needs a one-shot owner for the
-remaining invocation, distinct from the reusable image. Caught delivery does
-not resume the abandoned action or supply this general scheduling composition.
-This must not be
-described as complete delimited-continuation support. Capturing through a thunk
+Applications with unboxed tuple/vector inputs remain unestablished. A new
+`control0#` reached while draining a parked one-shot invocation chain rejects:
+its pending callers are not yet translated to a reusable frame graph. This is
+distinct from recapturing an ordinary saved suffix, which remains supported.
+Caught delivery abandons its interrupted child, rather than resuming it.
+This is not complete delimited-continuation support. Capturing through a thunk
 update rejects explicitly; GHC also excludes update/STM/foreign stack barriers
 from valid capture. Unmatched prompts are outside GHC's defined domain, not a
 portable exception API supplied here. Cross-context tags/resumptions reject.
@@ -165,5 +176,5 @@ passes in default (`20260926-061038-5bfxcdgw`) and dense
 (`20260926-060726-j00g5v3k`) supplies the same 51 native observations and 34
 strict Core audits to both runs. Its closed 154-file payload, 249 fast
 fixture/cache checks, and 13 coverage checks pass. Typed tuple/vector input
-capture and non-delivery asynchronous scheduling cuts remain outside this tested
-slice.
+capture and recapture across parked one-shot invocation chains remain outside
+this tested slice.
