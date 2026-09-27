@@ -1,0 +1,18 @@
+[
+  {"encoding":"uvar","value":"0","hex":"00"},
+  {"encoding":"uvar","value":"1","hex":"01"},
+  {"encoding":"uvar","value":"127","hex":"7f"},
+  {"encoding":"uvar","value":"128","hex":"8001"},
+  {"encoding":"uvar","value":"255","hex":"ff01"},
+  {"encoding":"uvar","value":"300","hex":"ac02"},
+  {"encoding":"uvar","value":"16383","hex":"ff7f"},
+  {"encoding":"uvar","value":"16384","hex":"808001"},
+  {"encoding":"uvar","value":"18446744073709551615","hex":"ffffffffffffffffff01"},
+  {"encoding":"svar","value":"0","hex":"00"},
+  {"encoding":"svar","value":"-1","hex":"01"},
+  {"encoding":"svar","value":"1","hex":"02"},
+  {"encoding":"svar","value":"-64","hex":"7f"},
+  {"encoding":"svar","value":"64","hex":"8001"},
+  {"encoding":"svar","value":"-9223372036854775808","hex":"ffffffffffffffffff01"},
+  {"encoding":"svar","value":"9223372036854775807","hex":"feffffffffffffffff01"}
+]
