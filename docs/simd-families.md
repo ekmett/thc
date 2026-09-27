@@ -40,7 +40,7 @@ an integer SIMD-divide instruction claim.
 Pack/unpack with at least sixteen lanes groups immutable local-slot metadata
 into one bytecode operand. Lane values still use typed primitive reads/writes.
 Activation transport owns a raw reference; durable heap storage owns primitive
-lane fields. No named THC vector wrapper is part of the current API.
+lane fields.
 
 Refresh checked regions and verify pinned GHC machine contracts with:
 
