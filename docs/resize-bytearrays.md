@@ -94,5 +94,3 @@ python3 scripts/test-core-bytearrays.py
 These fixtures do not establish a complete public Text dependency closure.
 See [mutable size queries](mutable-bytearray-size.md) and
 [pinned/address ownership](pinned-memory.md) for related contracts.
-The [storage checkpoint archive](../research/bytearray-storage-checkpoint.md)
-preserves the earlier guide and commands, not current limitations.

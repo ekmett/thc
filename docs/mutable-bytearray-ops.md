@@ -72,5 +72,4 @@ complete ordered native corpus, all contained ranges, overlap snapshots and
 distinct-storage copy equivalence. Missing, duplicate, reordered and wrong rows,
 missing source/artifact hashes and corrupt receipts are rejected. The existing
 Python Core auditor, original-source exporter and primop inventory remain shared
-dependencies. The [storage checkpoint archive](../research/bytearray-storage-checkpoint.md)
-preserves the earlier carrier description and commands.
+dependencies.

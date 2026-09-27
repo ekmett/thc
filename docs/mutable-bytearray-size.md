@@ -50,5 +50,4 @@ python3 scripts/test-core-bytearrays.py
 
 This size-query fixture does not replace the dedicated
 [shrink checks](resize-bytearrays.md#fixture-and-runtime-checks) or establish
-public Text closure. The [storage checkpoint archive](../research/bytearray-storage-checkpoint.md)
-preserves the earlier guide and command sequence.
+public Text closure.
