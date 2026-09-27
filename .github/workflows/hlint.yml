@@ -1,0 +1,71 @@
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+name: Haskell lint
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: hlint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hlint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        cpp: [posix, windows]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned HLint
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error --retry 3 \
+            https://github.com/ndmitchell/hlint/releases/download/v3.10/hlint-3.10-x86_64-linux.tar.gz \
+            --output "$RUNNER_TEMP/hlint.tar.gz"
+          echo "ccabc8802a58154699a3583b8dddc5ea2e6d65753a62c45c0e80088ebb16b42b  $RUNNER_TEMP/hlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/hlint.tar.gz" -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/hlint-3.10/hlint" --version
+      - name: Check Haskell and report style hints
+        shell: bash
+        env:
+          CPP_PROFILE: ${{ matrix.cpp }}
+        run: |
+          mkdir -p build/hlint
+          flags=(--json)
+          if [ "$CPP_PROFILE" = windows ]; then
+            flags+=(--cpp-define=mingw32_HOST_OS)
+          fi
+          status=0
+          HLINT="$RUNNER_TEMP/hlint-3.10/hlint" bash scripts/lint-haskell.sh \
+            "${flags[@]}" > build/hlint/report.json || status=$?
+          # Preserve the tool's exit status: 1 denotes findings, while launch or
+          # configuration failures must not be folded into Make's exit status.
+          test "$status" -eq 0 || test "$status" -eq 1
+          jq -e 'type == "array" and all(.[];
+            type == "object" and (.severity == "Warning" or .severity == "Suggestion")
+            and (.file | type == "string") and (.hint | type == "string")
+            and (.startLine | type == "number"))' build/hlint/report.json
+          hints=$(jq length build/hlint/report.json)
+          echo "HLint ($CPP_PROFILE): $hints advisory hints; see the report artifact." >> "$GITHUB_STEP_SUMMARY"
+          if [ "$hints" -gt 0 ]; then
+            echo "::warning::HLint reported $hints advisory hints ($CPP_PROFILE); see the report artifact."
+          fi
+      - name: Preserve lint reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: hlint-${{ matrix.cpp }}
+          path: build/hlint/
+          if-no-files-found: warn

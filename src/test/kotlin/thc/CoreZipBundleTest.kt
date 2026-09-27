@@ -62,6 +62,13 @@ class CoreZipBundleTest {
     // Follow the actual producer catalog, not a synthetic fixed-cardinality list:
     // a newly pinned HSC must exercise the production bundle/receipt boundary.
     private fun generatedReceipts(): List<Map<String, String>> {
+        if (hostPlatform() == "x86_64-windows") {
+            val catalog = Json.parse(Files.readString(Path.of(System.getProperty("thc.projectRoot"),
+                "compiler/windows-ghc-internal.json"))) as Map<*, *>
+            return (catalog["files"] as List<*>).map { (it as Map<*, *>)["path"] as String }
+                .filter { it.endsWith(".hsc") }.map { mapOf("path" to it, "sha256" to "a".repeat(64)) }
+                .also { assertEquals(27, it.size) }
+        }
         val catalog = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/THC/Driver/Wired.hs"))
             .substringAfter("moduleSources =").substringBefore("sourceHashes ::")
         return Regex("\\(\"([^\"]+\\.hsc)\", \"[^\"]+\"\\)").findAll(catalog)
@@ -73,7 +80,7 @@ class CoreZipBundleTest {
                      omit: Boolean = false, extra: Boolean = false,
                      innerUnit: String = id, inputs: ByteArray? = null,
                      layout: Map<String, Any?>? = null, abi: String = "bcbf",
-                     platform: String = hostPlatform(), way: String = "dynamic-nonprofiling",
+                     platform: String = hostPlatform(), way: String = hostWay(),
                      generated: List<Any?>? = generatedReceipts(),
                      inputGenerated: List<Any?>? = generated): Map<String, Any?> {
         val core = "core/Shared.json"
@@ -109,9 +116,15 @@ class CoreZipBundleTest {
 
     private fun hostPlatform(): String {
         val arch = if (System.getProperty("os.arch").lowercase() in setOf("arm64", "aarch64")) "aarch64" else "x86_64"
-        val os = if (System.getProperty("os.name").startsWith("Mac")) "osx" else "linux"
+        val os = when {
+            System.getProperty("os.name").startsWith("Mac") -> "osx"
+            System.getProperty("os.name").startsWith("Windows") -> "windows"
+            else -> "linux"
+        }
         return "$arch-$os"
     }
+
+    private fun hostWay() = if (hostPlatform().endsWith("-windows")) "vanilla-nonprofiling" else "dynamic-nonprofiling"
 
     private fun targetLayout(): Map<String, Any?> = mapOf(
         "schema" to 1, "profiled" to false, "wordBytes" to 8,
@@ -219,7 +232,7 @@ class CoreZipBundleTest {
                 "format" to "thc-core-build-inputs", "schema" to 1, "unit" to "pkg-a",
                 "buildKey" to "0".repeat(64), "exportKey" to "1".repeat(64),
                 "compiler" to mapOf("id" to "ghc-9.14.1", "abi" to "bcbf",
-                    "platform" to hostPlatform(), "way" to "dynamic-nonprofiling"),
+                    "platform" to hostPlatform(), "way" to hostWay()),
                 "component" to mapOf("kind" to "installed-interface", "registration" to "selected"),
                 "targetLayout" to receiptLayout,
             )
@@ -301,6 +314,51 @@ class CoreZipBundleTest {
             Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
                 assertEquals(51L, context.eval("thc", request).execute().asLong(), backend)
             }
+        }
+    }
+
+    @Test fun looseConsumersUseCheckedSmallAndStreamedDependenciesWithoutLosingConflictChecks() {
+        for (large in listOf(false, true)) {
+            @Suppress("UNCHECKED_CAST")
+            val dependency = Json.parse(module("dependency").toString(Charsets.UTF_8)) as Map<String, Any?>
+            val source = Json.stringify(dependency + if (large) mapOf("sourceFiles" to listOf(mapOf(
+                "id" to "large-source", "path" to "Shared.hs", "content" to "x".repeat(2 * 1024 * 1024)))) else emptyMap()).toByteArray()
+            val path = manifest(listOf(unit("dependency", source, layout = targetLayout())))
+            val consumer = temporary.resolve("loose consumer.json").also {
+                Files.write(it, module("consumer", "dependency:Shared.entry"))
+            }
+            for (backend in listOf("ast", "bytecode")) {
+                val request = CoreModules.request(listOf(consumer.toString(), "@$path"), "consumer:Shared.entry", backend = backend)
+                val input = Json.parse(request) as Map<*, *>
+                assertEquals(true, input["strictLink"])
+                assertEquals(large, input.containsKey("consumerModules"))
+                Context.newBuilder("thc").allowExperimentalOptions(true).build().use { context ->
+                    assertEquals(51L, context.eval("thc", request).execute().asLong())
+                    val duplicate = CoreModules.request(listOf(consumer.toString(), consumer.toString(), "@$path"),
+                        "consumer:Shared.entry", backend = backend)
+                    assertTrue(assertThrows(RuntimeException::class.java) { context.eval("thc", duplicate) }
+                        .message!!.contains("Duplicate"))
+                }
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                CoreModules.request(listOf("@$path", "@$path"), "dependency:Shared.entry")
+            }
+            // Transport the parent's exact bridge selection to loose consumers
+            // in both request shapes. This metadata control does not execute a
+            // fabricated bridge or replace the genuine native dictionary test.
+            @Suppress("UNCHECKED_CAST")
+            val manifestDocument = Json.parse(Files.readString(path)) as Map<String, Any?>
+            Files.writeString(path, Json.stringify(manifestDocument + ("foreignExceptionBridgeUnit" to "selected-runtime")))
+            @Suppress("UNCHECKED_CAST")
+            val selected = Json.parse(CoreModules.request(listOf(consumer.toString(), "@$path"),
+                "consumer:Shared.entry")) as Map<String, Any?>
+            val visited = mutableListOf<Map<String, Any?>>()
+            CoreModules.visitRequestModules(selected, visited::add)
+            assertEquals(listOf("dependency", "consumer"), visited.map { it["unit"] })
+            assertTrue(visited.all { it["foreignExceptionBridgeUnit"] == "selected-runtime" })
+            if (large) assertTrue(assertThrows(IllegalArgumentException::class.java) {
+                CoreModules.visitRequestModules(selected + ("foreignExceptionBridgeUnit" to "another-runtime")) {}
+            }.message!!.contains("bridge selection changed"))
         }
     }
 

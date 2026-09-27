@@ -22,17 +22,24 @@ import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe)
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
-import GHC (getSessionDynFlags, getSession, parseDynamicFlags, setSessionDynFlags, runGhc, noLoc)
+import GHC (getSessionDynFlags, getSession, parseDynamicFlags, setSessionDynFlags, runGhc, noLoc,
+            guessTarget, setTargets, depanal)
 import GHC.Plugins (HscEnv, Module, Unit, hsc_logger, mkModule, mkModuleName, moduleUnit,
-                    unitString, stringToUnit, stringToUnitId, liftIO)
+                    unitString, stringToUnit, stringToUnitId, liftIO, moduleNameString)
+import GHC.Data.Graph.Directed (SCC(..))
 import GHC.Driver.Env (hsc_units)
+import GHC.Driver.Make (topSortModuleGraph)
 import GHC.Driver.DynFlags (DynFlags(ghcMode), GhcMode(OneShot))
+import GHC.Types.SourceFile (HscSource(HsBootFile))
 import GHC.Types.Unique.Map (lookupUniqMap)
 import GHC.Unit.Info (mkUnit)
+import GHC.Unit.Module.Graph (ModuleGraphNode(..), ModuleNodeInfo(..))
+import GHC.Unit.Module.ModSummary (ms_mod_name, ms_hsc_src)
 import GHC.Unit.State (wireMap, lookupUnitId, unwireUnit)
 import System.Environment (getArgs)
 import System.Exit (ExitCode(..), exitWith)
 import System.IO (hSetEncoding, stdout, utf8)
+import System.FilePath ((</>))
 import THC.Interface
 
 data Options = Options
@@ -78,6 +85,12 @@ main :: IO ()
 main = do
   hSetEncoding stdout utf8
   arguments <- getArgs
+  case arguments of
+    "--windows-ghc-source-graph":lib:source:objects:includes@(_:_) -> do
+      graph <- windowsSourceGraph lib source objects includes
+      BL.putStrLn (encode graph)
+      exitWith ExitSuccess
+    _ -> pure ()
   if arguments == ["--help"] then putStrLn usage else do
     options <- case parseOptions arguments of
       Left message -> report 2 $ object
@@ -102,6 +115,31 @@ main = do
     synchronous failure = case Exception.fromException failure :: Maybe Exception.SomeAsyncException of
       Just _ -> Nothing
       Nothing -> Just (failure :: Exception.SomeException)
+
+-- Private protocol for the genuine vanilla ghc-internal build. GHC's own
+-- dependency analysis preserves SOURCE imports and hs-boot ordering. Prim is
+-- compiler-provided: its generated Haddock source has dummy bodies and must
+-- never enter the executable source graph.
+windowsSourceGraph :: FilePath -> FilePath -> FilePath -> [FilePath] -> IO Value
+windowsSourceGraph lib source objects includes = runGhc (Just lib) $ do
+  initial <- getSessionDynFlags
+  environment <- getSession
+  let arguments = ["-hide-all-packages", "-package", "rts", "-this-unit-id", "ghc-internal",
+        "-XNoImplicitPrelude", "-XNoPolyKinds", "-DBIGNUM_GMP", "-D_WIN32_WINNT=0x06010000",
+        "-i", "-i" ++ source, "-outputdir", objects] ++ map ("-I" ++) includes
+  (flags, leftovers, _) <- parseDynamicFlags (hsc_logger environment) initial (map noLoc arguments)
+  unless (null leftovers) (liftIO (fail "Unconsumed source graph options"))
+  _ <- setSessionDynFlags flags
+  targets <- mapM (\path -> guessTarget (source </> "GHC/Internal" </> path) Nothing Nothing)
+    ["Data/Typeable/Internal.hs", "IO/Encoding/CodePage/API.hs", "IO/Encoding/CodePage.hs",
+     "Exception.hs", "IO.hs", "Stack.hs", "Bignum/BigNat.hs"]
+  setTargets targets
+  graph <- depanal [mkModuleName "GHC.Internal.Prim"] False
+  nodes <- forM (topSortModuleGraph False graph Nothing) $ \component -> case component of
+    AcyclicSCC (ModuleNode _ (ModuleNodeCompile summary)) -> pure $ object
+      ["module" .= moduleNameString (ms_mod_name summary), "boot" .= (ms_hsc_src summary == HsBootFile)]
+    _ -> liftIO (fail "Unbroken cycle or unexpected node in ghc-internal source graph")
+  pure $ object ["schema" .= (1 :: Int), "unit" .= ("ghc-internal" :: String), "nodes" .= nodes]
 
 loadSelected :: Options -> IO (Maybe BS.ByteString)
 loadSelected options = withSelected options $ \environment -> do

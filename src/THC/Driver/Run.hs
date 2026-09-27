@@ -85,8 +85,8 @@ runtimeLaunchArguments mode entry program arguments =
 -- | Internal simple-package backend retained for Windows after Cabal resolves
 -- the public positional target. This is not a second command-line selector.
 -- Native build output is never executed; the exported GHC Core is.
-runResolvedPackage :: RunOptions -> FilePath -> FilePath -> IO ()
-runResolvedPackage opts working target = do
+runResolvedPackage :: RunOptions -> FilePath -> FilePath -> (FilePath -> IO ([String], FilePath)) -> IO ()
+runResolvedPackage opts working target prepareRuntime = do
   unless (runGhcSource opts == Nothing) $
     fail "the Windows simple-package backend does not support --ghc-source"
   unless (not (null (runTarget opts))) $ fail "resolved runnable component has no name"
@@ -129,18 +129,22 @@ runResolvedPackage opts working target = do
   let windows = os == "mingw32"
       launcher = if windows then "thc.bat" else "thc"
       exporter = thcRoot </> "compiler" </> if windows then "export.ps1" else "export.sh"
+      hostEntrySource = thcRoot </> "compiler/WindowsRunMain.hs"
+      entry = if windows then "main:THC.WindowsRunMain.thcRunMain" else "main:Main.main"
   runtime <- maybe (pure (thcRoot </> "build/install/thc/bin" </> launcher)) makeAbsolute (runRuntime opts)
   python <- maybe (if windows then "python" else "python3") id <$> lookupEnv "THC_PYTHON"
   let output = packageRoot </> dist </> "thc-run" </> selectedName
       core = output </> "core"
       objects = output </> "ghc"
   ensureFile exporter
+  when windows (ensureFile hostEntrySource)
   ensureFile (thcRoot </> "scripts/audit-core.py")
   ensureFile runtime
   createDirectoryIfMissing True core
   createDirectoryIfMissing True objects
   oldCore <- filter ((== ".json") . takeExtension) <$> listDirectory core
   mapM_ (removeFile . (core </>)) oldCore
+  (supportOptions, supportManifest) <- prepareRuntime output
   inherited <- getEnvironment
   let overrides = [("THC_CORE_OUT", core), ("THC_GHC_OUT", objects)] ++
         maybe [] (\path -> [("GHC", path)]) (ghcPath (runPlan opts)) ++
@@ -156,11 +160,12 @@ runResolvedPackage opts working target = do
       -- GHC's optimizer and plugin active under -fno-code, including source
       -- notes, without sending source filenames through its assembler.
       exportArgs = ["-hide-all-packages", "-no-user-package-db", "-package-env", "-",
-                    "-fplugin-opt=THC.Plugin:closure=main",
+                    "-fplugin-opt=THC.Plugin:closure=" ++ (if windows then "thcRunMain" else "main"),
                     "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++
                    packages ++ concatMap (\directory -> ["-i" ++ directory]) dirs ++
-                   extensions ++ cpp ++ hcOptions GHC info ++
-                   ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source]
+                   extensions ++ cpp ++ hcOptions GHC info ++ supportOptions ++
+                   ["-fno-code", "-fwrite-interface", "-fwrite-if-simplified-core", source] ++
+                   [hostEntrySource | windows]
   if windows
     then do
       -- Windows PowerShell -File consumes a lone "-" and splits colon-bearing
@@ -175,10 +180,12 @@ runResolvedPackage opts working target = do
   files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory core
   let modules = [core </> file | file <- files, file /= "audit.json"]
   unless (not (null modules)) $ fail "GHC plugin exported no Core modules"
-  checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", "main:Main.main", "--io-main",
+  let linked = modules ++ ["@" ++ supportManifest]
+  checked True python ([thcRoot </> "scripts/audit-core.py", "--entry", entry, "--io-main",
+                      "--package-manifest", supportManifest,
                       "--output", output </> "audit.json"] ++ modules) thcRoot inherited
   checked False runtime (runtimeLaunchArguments (runFfiMode opts)
-    ["--run-io", intercalate "," modules, "main:Main.main"] selectedName (runArguments opts)) working inherited
+    ["--run-io", intercalate "," linked, entry] selectedName (runArguments opts)) working inherited
 
 filterMFile :: (a -> IO Bool) -> [a] -> IO [a]
 filterMFile predicate items = do

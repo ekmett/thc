@@ -24,6 +24,8 @@ kapt {
 
 // The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
 tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
+// The Windows runtime validates HSC receipts against the producer's same pinned catalog.
+tasks.processResources { from("compiler/windows-ghc-internal.json") { into("thc") } }
 
 // Documentation reads handwritten sources; it does not compile the runtime,
 // generate Truffle DSL classes, or prepare native/Core fixtures.

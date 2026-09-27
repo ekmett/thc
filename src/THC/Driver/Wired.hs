@@ -1,6 +1,8 @@
 -- SPDX-FileCopyrightText: 2026 Edward Kmett
 -- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 
+{-# LANGUAGE OverloadedStrings #-}
+
 -- |
 -- Module      : THC.Driver.Wired
 -- Copyright   : (C) 2026 Edward Kmett
@@ -12,17 +14,25 @@
 -- Produce wired-module and source artifacts used by project Core acquisition.
 module THC.Driver.Wired
   ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes
-  , exportPinnedCore, probeTargetLayout ) where
+  , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout ) where
 
-import Control.Monad (forM, forM_, when)
+import Control.Monad (forM, forM_, unless, when)
 import qualified Data.ByteString.Lazy.Char8 as BL
-import Data.Aeson (encode)
-import Data.List (isSuffixOf)
-import System.Directory (createDirectoryIfMissing, createFileLink, doesDirectoryExist, doesFileExist,
+import Data.Aeson (Value(..), encode, eitherDecodeStrict', object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
+import Data.List (isInfixOf, isSuffixOf, nub, sort)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import qualified Distribution.InstalledPackageInfo as Package
+import System.Directory (copyFile, createDirectoryIfMissing, createFileLink, doesDirectoryExist, doesFileExist,
                          findExecutable, listDirectory, removeFile)
 import System.Exit (ExitCode(..))
+import System.Environment (lookupEnv)
+import qualified System.Info as Host
 import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension)
 import System.Process (CreateProcess(..), createProcess, proc, readProcess, rawSystem, waitForProcess)
+import THC.Driver.Installed (boundedInterfaceProcess)
 
 -- These are the original GHC 9.14.1 sources. Boot interfaces are compiled
 -- first; the installed ghc-internal dynamic interfaces fill the remaining
@@ -183,11 +193,111 @@ sourceHashes =
 data WiredArtifacts = WiredArtifacts
   { generatedSources :: [(FilePath, FilePath)]
   , targetLayout :: FilePath
+  , sourceBuildReceipt :: Maybe Value
   }
 
 exportPinnedCore :: FilePath -> FilePath -> FilePath -> FilePath -> String ->
                     FilePath -> FilePath -> IO WiredArtifacts
-exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe staging = do
+exportPinnedCore = exportPinnedUsing
+
+-- The Windows compiler has no dynamic plugin way. Compile unchanged pinned
+-- sources with full Core and read their actual vanilla interfaces through GHC.
+exportPinnedWindowsCore :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> FilePath -> FilePath -> IO WiredArtifacts
+exportPinnedWindowsCore upstream ghc ghcPkg helper expected layoutRecipe staging = do
+  let source = staging </> "src"
+      overlay = staging </> "interfaces"
+      core = staging </> "core"
+  copyTree (upstream </> "src") source
+  createDirectoryIfMissing True overlay
+  createDirectoryIfMissing True core
+  registration <- package "ghc-internal"
+  installed <- case Package.importDirs registration of
+    [path] -> pure path
+    _ -> fail "Windows ghc-internal requires one registered interface directory"
+  backend <- readProcess ghc ["--show-iface", installed </> "GHC/Internal/Bignum/Backend/Selected.hi"] ""
+  unless ("GHC.Internal.Bignum.Backend.GMP" `isInfixOf` backend)
+    (fail "Selected Windows GHC does not use the pinned GMP backend")
+  linkInterfaces True installed overlay installed
+  rts <- package "rts"
+  let includes = Package.includeDirs rts ++ Package.includeDirs registration ++ [upstream </> "include"]
+  let hsc2hs = takeDirectory ghc </> "hsc2hs.exe"
+      definitions = ["BIGNUM_GMP", "_WIN32_WINNT=0x06010000", "mingw32_HOST_OS", "x86_64_HOST_ARCH",
+                     "__GLASGOW_HASKELL__=914", "__IO_MANAGER_WINIO__=1", "__IO_MANAGER_MIO__=1"]
+  inputs <- treeFiles source
+  generated <- forM (filter ((== ".hsc") . takeExtension) inputs) $ \path -> do
+    let output = replaceExtension path "hs"
+    checked hsc2hs ([path, "-o", output] ++ map ("--cflag=-D" ++) definitions ++ map ("--cflag=-I" ++) includes)
+    pure ("src" </> makeRelative source path, output)
+  libdir <- oneLine <$> readProcess ghc ["--print-libdir"] ""
+  (status, bytes, diagnostic) <- boundedInterfaceProcess helper
+    (["--windows-ghc-source-graph", libdir, source, overlay] ++ includes)
+  graph <- case eitherDecodeStrict' bytes of
+    Right (Object fields) | status == ExitSuccess, Just nodes <- KeyMap.lookup "nodes" fields,
+      KeyMap.lookup "unit" fields == Just (String "ghc-internal") -> case Aeson.fromJSON nodes of
+        Aeson.Success values -> mapM graphNode values
+        Aeson.Error message -> fail message
+    _ -> fail ("GHC source graph failed: " ++ show diagnostic)
+  let names = [name | (name, False) <- graph]
+  unless (sort names == sort expected && length graph == length (nub graph))
+    (fail "Compiler source graph differs from the pinned Windows module inventory")
+  BL.writeFile (staging </> "source-graph.json") (encode graph)
+  let common = ["-c", "-O2", "-g", "-dcore-lint", "-fwrite-if-simplified-core", "-fforce-recomp",
+        "-XNoImplicitPrelude", "-XNoPolyKinds", "-DBIGNUM_GMP", "-D_WIN32_WINNT=0x06010000",
+        "-this-unit-id", "ghc-internal", "-package", "ghc-internal", "-i" ++ overlay,
+        "-odir", overlay, "-hidir", overlay] ++ map ("-I" ++) includes
+      relative name = map (\c -> if c == '.' then '/' else c) name
+      command (name, boot) = common ++ [source </> relative name ++ if boot then ".hs-boot" else ".hs"]
+  forM_ graph $ \node -> checked ghc (command node)
+  forM_ names $ \name -> do
+    (code, payload, errors) <- boundedInterfaceProcess helper
+      ["--libdir", libdir, "--unit", "ghc-internal", "--module", name,
+       "--interface", overlay </> relative name ++ ".hi", "--way", "vanilla", "--source-notes",
+       "--home-interfaces", overlay]
+    case eitherDecodeStrict' payload of
+      Right (Object fields) | code == ExitSuccess, KeyMap.lookup "status" fields == Just (String "loaded"),
+        Just value@(Object _) <- KeyMap.lookup "core" fields -> BL.writeFile (core </> name ++ ".json") (encode value)
+      _ -> fail ("Windows source interface lacks genuine complete Core: " ++ name ++ " " ++ show errors)
+  layout <- probeTargetLayout includes layoutRecipe staging
+  pure (WiredArtifacts generated layout (Just (object
+    ["schema" .= (1 :: Int), "compiler" .= ghc, "hsc2hs" .= hsc2hs,
+     "hscDefinitions" .= definitions, "includeDirectories" .= includes,
+     "graphCommand" .= ([helper, "--windows-ghc-source-graph", libdir, source, overlay] ++ includes),
+     "steps" .= [object ["module" .= name, "boot" .= boot, "arguments" .= command node,
+                          "exit" .= (0 :: Int)] | node@(name, boot) <- graph]])))
+  where
+    package name = do
+      description <- readProcess ghcPkg ["--expand-pkgroot", "describe", name] ""
+      (_, registered) <- either (fail . show) pure
+        (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)))
+      pure registered
+    oneLine = reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse
+    checked program arguments = do
+      status <- rawSystem program arguments
+      unless (status == ExitSuccess) (fail ("Windows source build failed: " ++ program ++ " " ++ show arguments))
+    graphNode (Object fields) | Just (String name) <- KeyMap.lookup "module" fields,
+      Just (Bool boot) <- KeyMap.lookup "boot" fields = case Aeson.fromJSON (String name) of
+        Aeson.Success value -> pure (value, boot)
+        Aeson.Error message -> fail message
+    graphNode _ = fail "Invalid source graph node"
+
+treeFiles :: FilePath -> IO [FilePath]
+treeFiles directory = do
+  names <- sort <$> listDirectory directory
+  concat <$> forM names (\name -> do
+    let path = directory </> name
+    isDirectory <- doesDirectoryExist path
+    if isDirectory then treeFiles path else pure [path])
+
+copyTree :: FilePath -> FilePath -> IO ()
+copyTree source destination = do
+  files <- treeFiles source
+  forM_ files $ \path -> do
+    let target = destination </> makeRelative source path
+    createDirectoryIfMissing True (takeDirectory target)
+    copyFile path target
+
+exportPinnedUsing :: FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> FilePath -> IO WiredArtifacts
+exportPinnedUsing sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe staging = do
   let overlay = staging </> "interfaces"
       core = staging </> "core"
   createDirectoryIfMissing True overlay
@@ -197,12 +307,12 @@ exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe sta
   installed <- case lines installedText of
     [path] | not (null path) -> pure path
     _ -> fail "ghc-internal must have one installed interface directory"
-  linkInterfaces installed overlay installed
+  linkInterfaces False installed overlay installed
   includeDirs <- concatMap words <$> mapM (\package ->
     readProcess ghcPkg ["field", package, "include-dirs", "--simple-output"] "")
     ["rts", "ghc-internal"]
   when (null includeDirs) (fail "GHC target include directories are unavailable")
-  let sibling = takeDirectory ghc </> "hsc2hs"
+  let sibling = takeDirectory ghc </> if Host.os == "mingw32" then "hsc2hs.exe" else "hsc2hs"
   siblingExists <- doesFileExist sibling
   hsc2hs <- if siblingExists then pure sibling else
     findExecutable "hsc2hs" >>= maybe (fail "hsc2hs is unavailable") pure
@@ -218,15 +328,14 @@ exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe sta
   let common = ["-c", "-dynamic", "-fforce-recomp", "-XNoPolyKinds",
                 "-this-unit-id", "ghc-internal", "-package", "ghc-internal",
                 "-odir", overlay, "-hidir", overlay, "-I" ++ (sourceRoot </> "include")]
-      plugin = "-fplugin-library=" ++ pluginLibrary ++ ";" ++ pluginUnit ++
-               ";THC.Plugin;" ++ BL.unpack
-                 (encode [core, "post-tidy", "source-notes", "foreign-import-provenance"])
+      exportFlags = ["-fplugin-library=" ++ pluginLibrary ++ ";" ++ pluginUnit ++ ";THC.Plugin;" ++ BL.unpack
+        (encode [core, "post-tidy", "source-notes", "foreign-import-provenance"])]
       compile boot path = do
         let target = overlay </> replaceExtension path (if boot then "hi-boot" else "hi")
         exists <- doesFileExist target
         when exists (removeFile target)
         let flags = if boot then [] else
-              ["-O2", "-dcore-lint", "-g", plugin] ++
+              ["-O2", "-dcore-lint", "-g"] ++ exportFlags ++
               ["-XNoImplicitPrelude" | path `elem`
                 ["GHC/Internal/Stack/Decode.hs", "GHC/Internal/ExecutionStack/Internal.hsc"]]
             source = maybe (sourceRoot </> path) id (lookup path generated)
@@ -234,13 +343,15 @@ exportPinnedCore sourceRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe sta
         when (status /= ExitSuccess) $ fail ("pinned GHC source export failed: " ++ path)
   forM_ bootSources (compile True)
   forM_ moduleSources (compile False . fst)
-  pure (WiredArtifacts generated layoutJson)
+  pure (WiredArtifacts generated layoutJson Nothing)
 
 probeTargetLayout :: [FilePath] -> FilePath -> FilePath -> IO FilePath
 probeTargetLayout includeDirs recipe staging = do
-  compiler <- findExecutable "cc" >>= maybe (fail "C compiler is unavailable") pure
+  selected <- if Host.os == "mingw32" then lookupEnv "THC_CLANG" else pure Nothing
+  compiler <- maybe (findExecutable (if Host.os == "mingw32" then "clang" else "cc") >>=
+    maybe (fail "C compiler is unavailable") pure) pure selected
   createDirectoryIfMissing True staging
-  let binary = staging </> "target-layout"
+  let binary = staging </> if Host.os == "mingw32" then "target-layout.exe" else "target-layout"
       receipt = staging </> "target-layout.json"
   status <- rawSystem compiler
     (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++ [recipe, "-o", binary])
@@ -248,14 +359,14 @@ probeTargetLayout includeDirs recipe staging = do
   writeFile receipt =<< readProcess binary [] ""
   pure receipt
 
-linkInterfaces :: FilePath -> FilePath -> FilePath -> IO ()
-linkInterfaces installed overlay directory = do
+linkInterfaces :: Bool -> FilePath -> FilePath -> FilePath -> IO ()
+linkInterfaces vanilla installed overlay directory = do
   names <- listDirectory directory
   forM_ names $ \name -> do
     let source = directory </> name
     isDirectory <- doesDirectoryExist source
-    if isDirectory then linkInterfaces installed overlay source
-    else when (".dyn_hi" `isSuffixOf` name) $ do
+    if isDirectory then linkInterfaces vanilla installed overlay source
+    else when ((if vanilla then ".hi" else ".dyn_hi") `isSuffixOf` name) $ do
       let target = overlay </> replaceExtension (makeRelative installed source) "hi"
       createDirectoryIfMissing True (takeDirectory target)
-      createFileLink source target
+      if vanilla then copyFile source target else createFileLink source target

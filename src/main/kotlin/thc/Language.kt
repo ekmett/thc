@@ -85,6 +85,8 @@ object CoreModules {
         private val exceptionBridges = linkedMapOf<String, Map<String, Any?>>()
         private var exceptionBridgeUnit: String? = null
         private val moduleKeys = hashSetOf<Pair<String, String>>()
+        private val providedModules = hashSetOf<String>()
+        private val completeModules = hashSetOf<String>()
         @Suppress("UNCHECKED_CAST")
         fun add(module: Map<String, Any?>, admission: ManagedExportAdmission? = CoreModules.admission(module)) {
             require(admission == null || admission.module === module) {
@@ -129,6 +131,14 @@ object CoreModules {
                 module["boundary"] == "actual-interface-unfoldings"
             if (unit != null && name != null && !interfaceFragment) {
                 require(moduleKeys.add(unit to name)) { "Duplicate GHC module: $unit:$name" }
+                if (module["boundary"] == "optimized-Core-after-Tidy-before-CorePrep")
+                    completeModules.add("$unit:$name")
+            }
+            module["providedModules"]?.let { supplied ->
+                require(interfaceFragment && supplied is List<*> && supplied.all { it is String && it.isNotBlank() }) {
+                    "Invalid provided-module interface closure"
+                }
+                providedModules.addAll(supplied.filterIsInstance<String>())
             }
             for ((key, table) in listOf("sourceFiles" to sourceFiles, "sourceSpans" to sourceSpans)) {
                 val records = module[key] ?: continue
@@ -166,6 +176,9 @@ object CoreModules {
         }
         fun finish(): Map<String, Any?> {
             require(count != 0) { "No Core modules supplied" }
+            require(completeModules.containsAll(providedModules)) {
+                "Interface closure lacks its exact complete provided modules: ${providedModules - completeModules}"
+            }
             packageScalarLinks.forEach { (unit, link) ->
                 require(packageScalarProofs[unit] == link.abi.map { it.entry }.toSet()) {
                     "Package C ABI lacks complete typed import provenance: $unit"
@@ -299,7 +312,7 @@ object CoreModules {
     }
 
     /**
-     * Serialize one load request from Core files or a singleton `@manifest` path.
+     * Serialize a load request from Core files and at most one `@manifest` path.
      * Manifest loading validates its archive and selects strict linking. This step
      * does not execute the entry or bypass the backend's support audit.
      * Large manifest requests are process-local capabilities; replay revalidates
@@ -311,12 +324,12 @@ object CoreModules {
         require(shutdownEntry == null || (ioMain && shutdownEntry.isNotBlank() && shutdownEntry != entry)) {
             "Executable shutdown requires a distinct IO entry"
         }
-        val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
+        val hasManifest = paths.any { it.startsWith("@") }
         val settings = linkedMapOf<String, Any>(
             "entry" to entry, "instrument" to instrument,
             "diagnosticUnsupported" to diagnosticUnsupported, "backend" to backend,
             "sourceNotesEnabled" to sourceNotesEnabled)
-        if (manifest != null) settings["strictLink"] = true
+        if (hasManifest) settings["strictLink"] = true
         if (ioMain) settings["ioMain"] = true
         if (shutdownEntry != null) settings["shutdownEntry"] = shutdownEntry
         if (asyncExceptions != null) settings["asyncExceptions"] = asyncExceptions
@@ -342,13 +355,20 @@ object CoreModules {
                 packageCapability(manifest, expected).toByteArray(Charsets.US_ASCII))) {
                 "Invalid package request capability"
             }
+            val consumers = input["consumerModules"]
+            require(consumers == null || consumers is List<*> && consumers.all { it is Map<*, *> }) {
+                "Invalid loose package consumers"
+            }
             val result = CorePackageManifest.visitModules(manifest, expected) { module, _ ->
                 accept(module + ("foreignExceptionBridgeUnit" to input["foreignExceptionBridgeUnit"]))
             }
             require(input["foreignExceptionBridgeUnit"] == result.foreignExceptionBridgeUnit) { "Package bridge selection changed after request" }
+            (consumers as? List<Map<String, Any?>>)?.forEach {
+                accept(it + ("foreignExceptionBridgeUnit" to result.foreignExceptionBridgeUnit))
+            }
             return result.targetLayout
         }
-        require(input["packageManifestSha256"] == null && input["packageCapability"] == null) {
+        require(input["packageManifestSha256"] == null && input["packageCapability"] == null && input["consumerModules"] == null) {
             "Orphan package manifest identity"
         }
         val modules = input["modules"] as? List<Map<String, Any?>> ?: error("Expected modules array")
@@ -357,10 +377,13 @@ object CoreModules {
     }
 
     private fun requestDocument(paths: List<String>, settings: Map<String, Any>): String {
-        val manifest = paths.singleOrNull()?.takeIf { it.startsWith("@") }?.drop(1)
+        val manifests = paths.filter { it.startsWith("@") }
+        require(manifests.size <= 1) { "A Core request accepts at most one package manifest" }
+        val manifest = manifests.singleOrNull()?.drop(1)
         val options = StringBuilder().also { Json.appendObjectDocument(it,
             Json.stringify(settings)) }
         if (manifest != null) {
+            val consumers = paths.filterNot { it.startsWith("@") }.map { File(it).readText() }
             // Small requests retain their established JSON shape. Large package
             // sets carry a content-bound manifest reference, never a combined
             // multi-gigabyte module document or raw modules array.
@@ -381,10 +404,16 @@ object CoreModules {
                 "packageManifest" to result.manifestPath,
                 "packageManifestSha256" to result.manifestSha256,
                 "packageCapability" to packageCapability(result.manifestPath, result.manifestSha256),
-                "foreignExceptionBridgeUnit" to result.foreignExceptionBridgeUnit))
+                "foreignExceptionBridgeUnit" to result.foreignExceptionBridgeUnit) +
+                (if (consumers.isEmpty()) emptyMap() else mapOf("consumerModules" to consumers.map(Json::parse))))
             return buildString {
                 append(options, 0, options.length - 1)
-                append(",\"modules\":[").append(inline).append(']')
+                append(",\"modules\":[").append(inline)
+                consumers.forEach { source ->
+                    if (count++ != 0) append(',')
+                    Json.appendObjectDocument(this, source)
+                }
+                append(']')
                 result.targetLayout?.let { append(",\"targetLayout\":").append(Json.stringify(it.document())) }
                 result.foreignExceptionBridgeUnit?.let { append(",\"foreignExceptionBridgeUnit\":").append(Json.stringify(it)) }
                 append('}')

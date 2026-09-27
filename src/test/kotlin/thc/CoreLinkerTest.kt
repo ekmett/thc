@@ -54,6 +54,27 @@ class CoreLinkerTest {
         assertEquals(2, files.map { (it as Map<*, *>)["id"] }.toSet().size)
     }
 
+    @Test fun providedInterfaceModulesRequireExactCompleteOwners() {
+        val complete = mapOf("schema" to 1, "ghc" to "9.14.1", "unit" to "pkg", "module" to "Library",
+            "boundary" to "optimized-Core-after-Tidy-before-CorePrep",
+            "bindings" to listOf(binding("pkg:Library.value", literal())), "constructors" to emptyList<Any?>())
+        val fragment = mapOf("schema" to 1, "ghc" to "9.14.1", "unit" to "dependency-closure",
+            "module" to "THC.InterfaceClosure", "boundary" to "actual-interface-unfoldings",
+            "providedModules" to listOf("pkg:Library"), "bindings" to emptyList<Any?>(), "constructors" to emptyList<Any?>())
+        CoreModules.merge(listOf(fragment, complete))
+        for (provider in listOf(complete + ("unit" to "other"), complete + ("module" to "Other"),
+                complete + ("boundary" to "actual-interface-unfoldings"))) {
+            assertTrue(assertThrows(IllegalArgumentException::class.java) {
+                CoreModules.merge(listOf(fragment, provider))
+            }.message!!.contains("exact complete provided modules"))
+        }
+        assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(fragment)) }
+        assertThrows(IllegalArgumentException::class.java) { CoreModules.merge(listOf(fragment, complete, complete)) }
+        assertThrows(IllegalArgumentException::class.java) {
+            CoreModules.merge(listOf(fragment + ("unit" to "forged"), complete))
+        }
+    }
+
     @Test fun constructorDisplayTypeMayRenameVariablesButRuntimeMetadataMustMatch() {
         val constructor: Map<String, Any?> = mapOf("id" to "pkg:Shared.C", "kind" to "boxed",
             "arity" to 1, "tag" to 2, "fieldReps" to listOf(listOf("IntRep")),

@@ -13,12 +13,14 @@
 --
 -- Plan project components and acquire reproducible, dependency-closed Core bundles.
 module THC.Driver.Project
-  (runProject, acquireProject, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
+  (runProject, acquireProject, prepareWindowsRuntime, Bundle(..), InstalledBundle(..), prepareInstalledBundle, installedRecords) where
 
 import Control.Exception (evaluate, finally)
 import Control.Monad (filterM, forM, forM_, unless, when)
 import Data.Char (isAlphaNum, isHexDigit)
 import Distribution.Types.Flag (mkFlagName, unFlagName)
+import qualified Distribution.InstalledPackageInfo as Package
+import Distribution.Pretty (prettyShow)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (FromJSON, Value(..), eitherDecodeStrict', encode, object, (.=))
 import qualified Data.Aeson as Aeson
@@ -40,7 +42,7 @@ import qualified System.Directory as Directory
 import System.Exit (ExitCode(..))
 import System.Environment (getEnvironment, getExecutablePath, lookupEnv)
 import System.FilePath ((</>), (<.>), pathSeparator, isAbsolute, makeRelative, normalise, splitDirectories,
-                        takeDirectory, takeExtension, takeFileName, joinPath, replaceExtension)
+                        takeDirectory, takeExtension, joinPath, replaceExtension)
 import System.IO (IOMode(ReadMode), hClose, hGetContents,
                   hSetEncoding, openTempFile, stderr, utf8, withBinaryFile, withFile)
 import System.IO.Error (tryIOError)
@@ -51,7 +53,7 @@ import System.Process (CreateProcess(..), StdStream(..), createProcess, proc, wa
 import THC.Driver.Cabal (PlanOptions(..))
 import THC.Driver.Cache (coreCacheDirectory)
 import THC.Driver.ForeignBitcode (linkClockGetTime, timeClockHeaders)
-import THC.Driver.GhcProxy (ghcProxyCommand)
+import THC.Driver.GhcProxy (ghcProxyCommand, ghcProxyWindowsCommand)
 import THC.Driver.NativeRecipe (NativeRecipe(..), componentRoots, componentNativeObjects,
   readNativeRecipe, ensureNativeRecipes, componentRuntimeShim, componentDeclaredModules)
 import THC.Driver.ScalarBitcode (ScalarBitcode, scalarBuildInputs, linkScalarBitcode)
@@ -63,7 +65,7 @@ import THC.Driver.InstalledForeign
 import THC.Driver.Run (RunOptions(..), FfiMode, runtimeLaunchArguments, runResolvedPackage)
 import THC.Driver.Zip (decodeZip, encodeZip)
 import THC.Driver.Wired (WiredArtifacts(..), moduleSources, sourceHashes,
-                         exportPinnedCore, probeTargetLayout)
+                         exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout)
 
 -- Cabal performs the project solve, preprocessing, host-tool/TH execution and
 -- native build. Its machine-readable plan and per-component build-info, rather
@@ -118,7 +120,7 @@ runWindowsProject :: RunOptions -> FilePath -> IO ()
 runWindowsProject opts working = do
   require (not (null (runThcRoot opts))) "run requires --thc-root DIR"
   let flags = runPlan opts
-  compiler <- maybe (findExecutable "ghc" >>= maybe (fail "GHC compiler not found") pure) pure (ghcPath flags)
+  compiler <- maybe (findExecutable "ghc" >>= maybe (fail "GHC compiler not found") pure) pure (ghcPath flags) >>= canonicalizePath
   packageTool <- selectedPackageTool compiler (ghcPkgPath flags)
   output <- makeAbsolute (distDirectory flags)
   let native = output </> "selection"
@@ -136,11 +138,97 @@ runWindowsProject opts working = do
     [file] -> pure (source </> file)
     _ -> fail "resolved Windows package must have exactly one Cabal declaration"
   selectedPackageFlags <- field (unitValue selected) "flags" :: IO (Map.Map String Bool)
+  driver <- getExecutablePath
   runResolvedPackage opts {runTarget = drop 1 (dropWhile (/= ':') component),
     runPlan = flags {distDirectory = output, ghcPath = Just compiler,
       ghcPkgPath = Just packageTool,
       selectedFlags = [(mkFlagName name, value) | (name, value) <- Map.toList selectedPackageFlags]}}
-    working cabalFile
+    working cabalFile (prepareWindowsRuntime (runThcRoot opts) compiler packageTool driver)
+
+-- Windows retains the simple-package raw-Core route. Acquire its support from
+-- the same real Cabal runtime unit and checked native/bundle cache as project
+-- exports, using vanilla interfaces and the selected compiler's plugin archive.
+-- This does not claim that arbitrary installed dependency Core is available.
+prepareWindowsRuntime :: FilePath -> FilePath -> FilePath -> FilePath -> FilePath -> IO ([String], FilePath)
+prepareWindowsRuntime repository selectedCompiler selectedPkg selectedDriver output = do
+  require (Host.os == "mingw32") "vanilla Windows runtime acquisition requires native Windows"
+  root <- canonicalizePath repository
+  compiler <- canonicalizePath selectedCompiler
+  pkg <- canonicalizePath selectedPkg
+  driver <- canonicalizePath selectedDriver
+  cache <- coreCacheDirectory
+  -- ghc-pkg still has bounded Windows temporary-file paths. Keep the native
+  -- build out of arbitrarily deep app output directories; the checked bundle
+  -- keys below retain the full source/native/exporter identities.
+  let workspaceKey = take 32 (shaHex (BL.toStrict (encode (root,compiler,pkg))))
+  native <- makeAbsolute (cache </> "win32" </> workspaceKey)
+  createDirectoryIfMissing True native
+  withLock (native </> "acquire.lock") $ do
+    cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
+    let selection = ["--disable-shared", "--with-compiler=" ++ compiler, "--with-hc-pkg=" ++ pkg]
+    runCommand True cabal (["build", "lib:thc", "--offline"] ++ selection) root
+    plan <- readJson (root </> "dist-newstyle/cache/plan.json")
+    compilerId <- field plan "compiler-id"
+    abi <- field plan "compiler-abi"
+    os <- field plan "os"
+    arch <- field plan "arch"
+    require (compilerId == "ghc-9.14.1" && os == "windows") "Windows runtime acquisition requires native GHC 9.14.1"
+    units <- field plan "install-plan" :: IO [Value]
+    let plugins = [value | value <- units, jsonField value "pkg-name" == Just ("thc" :: String),
+          jsonField value "component-name" == Just ("lib" :: String), jsonField value "style" == Just ("local" :: String)]
+    plugin <- case plugins of [value] -> pure value; _ -> fail "selected Cabal plan has no unique THC plugin"
+    pluginUnit <- field plugin "id"
+    sourceRoot <- field plugin "pkg-src" >>= (`field` "path") >>= canonicalizePath
+    require (sourceRoot == root) "Windows plugin plan belongs to another checkout"
+    let pluginDb = root </> "dist-newstyle/packagedb/ghc-9.14.1"
+    (status, description, diagnostic) <- readCreateProcessWithExitCode
+      (proc pkg ["--package-db",pluginDb,"--ipid","describe",pluginUnit]) ""
+    require (status == ExitSuccess) ("cannot read actual vanilla plugin registration: " ++ diagnostic)
+    (_, pluginRegistration) <- either (fail . show) pure (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)))
+    require (prettyShow (Package.installedUnitId pluginRegistration) == pluginUnit) "plugin registration owner differs"
+    archives <- filterM doesFileExist [directory </> ("lib" ++ library ++ ".a") |
+      directory <- Package.libraryDirs pluginRegistration, library <- Package.hsLibraries pluginRegistration]
+    archive <- case archives of [path] -> canonicalizePath path; _ -> fail "plugin has no unique vanilla archive"
+    driverHash <- digestFile driver
+    nativeTools <- nativeToolIdentity
+    let context = ExportContext compilerId abi (arch ++ "-" ++ os) pluginDb pluginUnit
+          archive native cache driverHash compiler (Just pkg) driver root [] nativeTools
+        proxy = nativeCompilerProxy context
+    createDirectoryIfMissing True (takeDirectory proxy)
+    writeFile proxy ghcProxyWindowsCommand
+    inherited <- getEnvironment
+    let overrides = [("THC_PROXY_DRIVER",driver),("THC_PROXY_GHC",compiler),
+          ("THC_PROXY_GLOBAL_UNITS",""),("THC_PROXY_NATIVE_RECIPES",native </> "cache/thc/native-recipes-v1")]
+        environment = overrides ++ filter ((`notElem` map fst overrides) . fst) inherited
+    wired <- wiredGhcInternal context root
+    (owner, records) <- linkForeignExceptionRuntime context environment "pinned" Nothing archive [wired]
+    let manifest = output </> "runtime-support/packages.json"
+    atomicJson manifest (object ["format" .= ("thc-core-packages" :: String),
+      "schema" .= (1::Int),"ghc" .= ("9.14.1" :: String),"foreignExceptionBridgeUnit" .= owner,"units" .= records])
+    selected <- either fail pure . foreignExceptionBridgeUnit =<< exceptionBridgeModules records
+    require (selected == Just owner) "Windows runtime dictionary identity differs from its manifest"
+    -- These exact module owners come from bundles validated above, never from
+    -- app-supplied names. Retain the checked manifest through audit and launch;
+    -- a long list of cache filenames would exceed cmd.exe's argument limit.
+    provided <- fmap concat $ forM records $ \record -> do
+      unit <- field record "id"
+      references <- field record "modules" :: IO [Value]
+      forM references $ \reference -> do
+        name <- field reference "name"
+        pure ("-fplugin-opt=THC.Plugin:closure-provided-module=" ++ unit ++ ":" ++ name)
+    pure (exportWayOptions ++ provided, manifest)
+
+nativeCompilerProxy :: ExportContext -> FilePath
+nativeCompilerProxy context = contextNative context </> "cache/thc/native-ghc" ++
+  if Host.os == "mingw32" then ".cmd" else ""
+
+exportWayOptions :: [String]
+-- Windows consumers must use the same declared module ABI as the private
+-- vanilla source build, not unstable workers from the stock thin interfaces.
+exportWayOptions = if Host.os == "mingw32" then ["-fignore-interface-pragmas"] else ["-dynamic"]
+
+exportInterfaceWay :: String
+exportInterfaceWay = if Host.os == "mingw32" then "vanilla" else "dynamic"
 
 cabalProjectOptions :: RunOptions -> [String]
 cabalProjectOptions opts =
@@ -477,7 +565,8 @@ linkForeignExceptionRuntime context environment installedPolicy ghcSource regist
           pkg = maybe (takeDirectory compiler </> "ghc-pkg") id (contextGhcPkg context)
           projectText = "packages: " ++ show (root </> "thc.cabal") ++ "\n"
           configuration = ["--project-file", project, "--builddir", dist,
-            "--with-compiler", native </> "cache/thc/native-ghc", "--with-hc-pkg", pkg]
+            "--with-compiler", nativeCompilerProxy context, "--with-hc-pkg", pkg] ++
+            ["--disable-shared" | Host.os == "mingw32"]
       createDirectoryIfMissing True directory
       exists <- doesFileExist project
       previous <- if exists then readFile project else pure ""
@@ -546,7 +635,8 @@ prepareInterfaceHelper context root = do
   cabal <- maybe "cabal" id <$> lookupEnv "CABAL"
   let ghc = contextGhc context
       pkg = maybe (takeDirectory ghc </> "ghc-pkg") id (contextGhcPkg context)
-      selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg]
+      selection = ["exe:thc-interface", "--offline", "--with-compiler=" ++ ghc, "--with-hc-pkg=" ++ pkg] ++
+        ["--disable-shared" | Host.os == "mingw32"]
   runCommand True cabal ("build" : selection) root
   (status, output, diagnostic) <- readCreateProcessWithExitCode
     (proc cabal ("list-bin" : selection)) {cwd = Just root} ""
@@ -559,7 +649,7 @@ prepareInterfaceHelper context root = do
   -- A store/source component continues to use its existing Cabal build path.
   installedContext ghc pkg helper [] (object
     ["id" .= contextCompiler context, "abi" .= contextAbi context,
-     "platform" .= contextPlatform context, "way" .= ("dynamic-nonprofiling" :: String)])
+     "platform" .= contextPlatform context, "way" .= (exportInterfaceWay ++ "-nonprofiling")])
 
 -- The optional index avoids hydration on proven hits, but never replaces the
 -- existing JSON-derived bundle identity or its complete archive validation.
@@ -785,51 +875,64 @@ installedRecords registrationUnit artifact =
 -- rejects unsupported RTS stack-snapshot operations until they are implemented.
 wiredGhcInternal :: ExportContext -> FilePath -> IO Value
 wiredGhcInternal context thcRoot = do
+  when (Host.os == "mingw32") $ require (contextPlatform context == "x86_64-windows")
+    "The pinned native Windows source recipe requires x86_64-windows"
+  windowsSpec <- if Host.os == "mingw32" then Just <$> readJson (thcRoot </> "compiler/windows-ghc-internal.json") else pure Nothing
+  names <- maybe (pure (map snd moduleSources)) (`field` "modules") windowsSpec
+  sources <- maybe (pure sourceHashes) (\spec -> do
+    files <- field spec "files"
+    forM files $ \item -> (,) <$> field item "path" <*> field item "sha256") windowsSpec
   let pinned = thcRoot </> "compiler/pinned-ghc-internal"
       layoutRecipe = thcRoot </> "compiler/target-layout.c"
       unit = "ghc-internal" :: String
-      names = map snd moduleSources
       sourceArtifact (name, digest) = object
-        ["path" .= ("compiler/pinned-ghc-internal/" ++ name), "sha256" .= digest]
-  forM_ sourceHashes $ \(name, expected) -> do
-    let path = pinned </> name
-    requireFile path
-    actual <- digestFile path
-    require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
+        ["path" .= (if Host.os == "mingw32" then name else "compiler/pinned-ghc-internal/" ++ name), "sha256" .= digest]
+      generatedPaths = sort [path | (path, _) <- sources, takeExtension path == ".hsc"]
+  when (Host.os /= "mingw32") $ forM_ sources $ \(name, expected) -> do
+      let path = pinned </> name
+      requireFile path
+      actual <- digestFile path
+      require (actual == expected) ("pinned GHC 9.14.1 source changed: " ++ name)
   requireFile layoutRecipe
   recipeHash <- digestFile layoutRecipe
   pluginHash <- digestFile (contextPluginLibrary context)
+  helper <- if Host.os == "mingw32" then Just <$> prepareInterfaceHelper context thcRoot else pure Nothing
+  helperHash <- traverse (digestFile . installedHelper) helper
   let inputFields = ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
                      "unit" .= unit,
                      "compiler" .= object ["id" .= contextCompiler context,
                                            "abi" .= contextAbi context,
                                            "platform" .= contextPlatform context,
-                                           "way" .= ("dynamic-nonprofiling" :: String)],
-                     "component" .= object ["kind" .= ("pinned-wired-source" :: String),
-                                             "modules" .= names],
+                                           "way" .= (exportInterfaceWay ++ "-nonprofiling")],
+                     "component" .= object (["kind" .= ("pinned-wired-source" :: String),
+                                             "modules" .= names, "generatedSources" .= generatedPaths] ++
+                       ["sourceGraph" .= spec | Just spec <- [windowsSpec]]),
                      "nativeArtifacts" .= ([] :: [Value]),
-                     "sourceArtifacts" .= map sourceArtifact sourceHashes,
+                     "sourceArtifacts" .= map sourceArtifact sources,
                      "recipeArtifacts" .= [object
                        ["path" .= ("compiler/target-layout.c" :: String),
                         "sha256" .= recipeHash]],
                      "dependencies" .= ([] :: [Value])]
       buildKey = shaHex (BL.toStrict (encode (object inputFields)))
-      exporter = object ["pluginUnit" .= contextPluginUnit context,
+      exporter = object (["pluginUnit" .= contextPluginUnit context,
                          "pluginDb" .= contextPluginDb context,
                          "pluginHash" .= pluginHash,
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["ghc-internal-source-closure-v2", "post-tidy",
                                         "source-notes", "foreign-import-provenance",
-                                        "hsc2hs", "-g", "-dynamic", "-dcore-lint",
-                                        "-XNoPolyKinds"] :: [String])]
+                                        "hsc2hs", "-g"] ++
+                           (if Host.os == "mingw32" then ["compiler-source-graph", "-O2", "-fwrite-if-simplified-core"]
+                            else exportWayOptions) ++ ["-dcore-lint", "-XNoPolyKinds"])] ++
+                         ["vanillaInterfaceHelperHash" .= value | Just value <- [helperHash]])
       exportKey = shaHex (BL.toStrict (encode ("thc-wired-ghc-internal-v2" :: String,
                                              buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey, "exporter" .= exporter])
-      directory = contextCache context </> "core-bundles/v1" </>
-                  (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++
-                   contextPlatform context) </> exportKey
-      destination = directory </> ("ghc-internal-" ++ buildKey ++ ".zip")
+      directory = (if Host.os == "mingw32" then contextNative context </> "bundles"
+                   else contextCache context </> "core-bundles/v1" </>
+                     (contextCompiler context ++ "-" ++ contextAbi context ++ "-" ++ contextPlatform context)) </> exportKey
+      destination = directory </> if Host.os == "mingw32" then "unit.zip"
+                    else "ghc-internal-" ++ buildKey ++ ".zip"
   createDirectoryIfMissing True directory
   bundle <- withLock (destination ++ ".lock") $ do
     cached <- doesFileExist destination
@@ -851,16 +954,21 @@ wiredGhcInternal context thcRoot = do
           let packageTool = maybe (takeDirectory (contextGhc context) </> "ghc-pkg") id
                               (contextGhcPkg context)
           requireFile packageTool
-          artifacts <- exportPinnedCore pinned (contextGhc context) packageTool
-                           (contextPluginLibrary context) (contextPluginUnit context)
-                           layoutRecipe staging
+          artifacts <- case helper of
+            Nothing -> exportPinnedCore pinned (contextGhc context) packageTool
+              (contextPluginLibrary context) (contextPluginUnit context) layoutRecipe staging
+            Just selectedHelper -> do
+              spec <- maybe (fail "Missing Windows source specification") pure windowsSpec
+              source <- acquireWindowsGhcSources context spec sources
+              exportPinnedWindowsCore source (contextGhc context) packageTool
+                (installedHelper selectedHelper) names layoutRecipe staging
           layout <- readJson (targetLayout artifacts)
           require (validTargetLayout layout &&
                    jsonField layout "targetPlatform" == Just (contextPlatform context))
                   "GHC target layout receipt differs from compiler target"
           generated <- forM (generatedSources artifacts) $ \(name, path) -> do
             digest <- digestFile path
-            pure (object ["path" .= name, "sha256" .= digest])
+            pure (object ["path" .= map (\c -> if c == '\\' then '/' else c) name, "sha256" .= digest])
           members <- forM names $ \name -> do
             let core = staging </> "core" </> (name ++ ".json")
                 member = "core/" ++ name ++ ".json"
@@ -876,7 +984,8 @@ wiredGhcInternal context thcRoot = do
                               "path" .= ("core/" ++ name ++ ".json"),
                               "sha256" .= shaHex bytes]
                      | (name, (_, bytes)) <- zip names members]
-              derived = ["targetLayout" .= layout, "generatedSources" .= generated]
+              derived = ["targetLayout" .= layout, "generatedSources" .= generated] ++
+                ["sourceBuild" .= value | Just value <- [sourceBuildReceipt artifacts]]
               inputsBytes = BL.toStrict (encode (object
                 (inputFields ++ ["buildKey" .= buildKey, "exportKey" .= exportKey,
                                  "exporter" .= exporter] ++ derived)))
@@ -895,10 +1004,122 @@ wiredGhcInternal context thcRoot = do
           atomicBytes destination (BL.toStrict archive)
           pure (Bundle destination (shaHex (BL.toStrict archive)) refs buildKey []))
           `finally` cleanup
+  selected <- maybe (pure bundle) (projectWindowsWiredBundle directory bundle) windowsSpec
   pure (object ["id" .= unit, "depends" .= ([] :: [String]),
-                "modules" .= bundleModules bundle,
-                "bundle" .= object ["path" .= bundlePath bundle,
-                                   "sha256" .= bundleHash bundle]])
+                "modules" .= bundleModules selected,
+                "bundle" .= object ["path" .= bundlePath selected,
+                                   "sha256" .= bundleHash selected]])
+
+-- Compilation dependencies do not implicitly load native registration code.
+-- Keep the complete genuine archive, and make a separately hashed module-level
+-- support projection. No binding, branch, foreign artifact or audit is edited.
+-- Loading the excluded complete module still encounters its unsupported
+-- registration boundary; it is never advertised as a complete supplied module.
+projectWindowsWiredBundle :: FilePath -> Bundle -> Value -> IO Bundle
+projectWindowsWiredBundle directory full specification = do
+  exclusions <- field specification "archiveOnlyModules" :: IO [Value]
+  excluded <- mapM (`field` "module") exclusions :: IO [String]
+  let refs = [ref | ref <- bundleModules full, (jsonField ref "name" :: Maybe String) `notElem` map Just excluded]
+      names = [name | Just name <- map (`jsonField` "name") refs] :: [String]
+      fullNames = [name | Just name <- map (`jsonField` "name") (bundleModules full)] :: [String]
+      source = object ["path" .= bundlePath full, "sha256" .= bundleHash full]
+      key = shaHex (BL.toStrict (encode ("windows-runtime-module-projection-v1" :: String, source, refs, exclusions)))
+      path = directory </> "support.zip"
+  require (length excluded == length (nub excluded) && all (`elem` fullNames) excluded)
+    "Windows source projection has an invalid excluded-module inventory"
+  bytes <- BS.readFile (bundlePath full)
+  require (shaHex bytes == bundleHash full) "Complete source bundle changed before projection"
+  entries <- either fail pure =<< decodeZip bytes
+  inner <- maybe (fail "Complete source bundle has no manifest") (either fail pure . eitherDecodeStrict') (lookup "manifest.json" entries)
+  layout <- field inner "targetLayout" :: IO Value
+  originalInputs <- maybe (fail "Complete source bundle has no build inputs") (either fail pure . eitherDecodeStrict')
+    (lookup "inplace-manifest.json" entries)
+  compiler <- field originalInputs "compiler" :: IO Value
+  component <- field originalInputs "component" :: IO Value
+  generated <- field originalInputs "generatedSources" :: IO [Value]
+  let inputs = object ["format" .= ("thc-core-build-inputs" :: String), "schema" .= (1 :: Int),
+        "unit" .= ("ghc-internal" :: String), "buildKey" .= key, "exportKey" .= key, "compiler" .= compiler,
+        "component" .= component,
+        "completeSourceBundle" .= source, "archiveOnlyModules" .= exclusions, "modules" .= names]
+  -- Exclusions are explicit native lifecycle boundaries, not a convenient way
+  -- to hide an ordinary missing dependency or unsupported primop.
+  forM_ excluded $ \name -> do
+    ref <- case [value | value <- bundleModules full, jsonField value "name" == Just name] of
+      [value] -> pure value
+      _ -> fail "Ambiguous archived module"
+    member <- field ref "path"
+    body <- maybe (fail "Missing archived module") pure (lookup member entries)
+    value <- either fail pure (eitherDecodeStrict' body)
+    foreignCode <- field value "foreign"
+    stubs <- field foreignCode "stubs"
+    initializers <- field stubs "initializers" :: IO [Value]
+    require (not (null initializers)) "Excluded Windows module lacks its recorded native registration obligation"
+  withLock (path ++ ".lock") $ do
+    cached <- doesFileExist path
+    hit <- if cached then readBundle PinnedSourceBundle path "ghc-internal" key key inputs (sort names) else pure Nothing
+    case hit of
+      Just value -> pure value
+      Nothing -> do
+        members <- forM refs $ \ref -> do
+          member <- field ref "path"
+          expected <- field ref "sha256"
+          body <- maybe (fail "Missing projected module") pure (lookup member entries)
+          require (shaHex body == expected) "Projected module differs from genuine source archive"
+          pure (member, body)
+        let inputBytes = BL.toStrict (encode (case inputs of
+              Object fields -> Object (KeyMap.insert "generatedSources" (Aeson.toJSON generated) (KeyMap.insert "targetLayout" layout fields))
+              _ -> inputs))
+            manifest = object ["format" .= ("thc-core-bundle" :: String), "schema" .= (1 :: Int),
+              "unit" .= ("ghc-internal" :: String), "buildKey" .= key, "exportKey" .= key,
+              "targetLayout" .= layout, "generatedSources" .= generated, "modules" .= refs,
+              "buildInputs" .= object ["path" .= ("inplace-manifest.json" :: String), "sha256" .= shaHex inputBytes]]
+        archive <- either fail pure (encodeZip (("manifest.json", BL.toStrict (encode manifest)) :
+          ("inplace-manifest.json", inputBytes) : members))
+        atomicBytes path (BL.toStrict archive)
+        pure (Bundle path (shaHex (BL.toStrict archive)) refs key [])
+
+-- The stock Windows interfaces omit full Core. Acquire the exact upstream
+-- source archive only on a bundle-cache miss, then verify each selected source
+-- against the repository's immutable inventory. An offline archive override
+-- changes location, never compiler version or expected bytes.
+acquireWindowsGhcSources :: ExportContext -> Value -> [(FilePath, String)] -> IO FilePath
+acquireWindowsGhcSources context specification files = do
+  archive <- field specification "archive"
+  url <- field archive "url"
+  digest <- field archive "sha256"
+  prefix <- field archive "root"
+  require (url == ("https://downloads.haskell.org/~ghc/9.14.1/ghc-9.14.1-src.tar.xz" :: String) &&
+    prefix == ("ghc-9.14.1/libraries/ghc-internal" :: String) &&
+    digest == ("2a83779c9af86554a3289f2787a38d6aa83d00d136aa9f920361dd693c101e77" :: String))
+    "Unsupported Windows GHC source archive"
+  forM_ files $ \(path, _) -> require (not (isAbsolute path) &&
+    all (`notElem` [".", ".."]) (splitDirectories path)) "Unsafe GHC source member path"
+  let directory = contextCache context </> "sources/ghc-9.14.1"
+      source = directory </> prefix
+      verify = forM_ files $ \(path, expected) -> do
+        actual <- digestFile (source </> path)
+        require (actual == expected) ("Pinned Windows GHC source changed: " ++ path)
+  createDirectoryIfMissing True (takeDirectory directory)
+  withLock (directory ++ ".lock") $ do
+    exists <- doesDirectoryExist source
+    unless exists $ do
+      override <- lookupEnv "THC_GHC_SOURCE_ARCHIVE"
+      let downloaded = contextCache context </> "sources/ghc-9.14.1-src.tar.xz"
+          path = maybe downloaded id override
+      present <- doesFileExist path
+      unless present $ case override of
+        Just _ -> fail ("THC_GHC_SOURCE_ARCHIVE does not exist: " ++ path)
+        Nothing -> do
+          curl <- findExecutable "curl.exe" >>= maybe (fail "curl.exe is required to acquire pinned GHC source") pure
+          runCommand True curl ["--fail", "--location", "--output", path, url] (contextRoot context)
+      actual <- digestFile path
+      require (actual == digest) "GHC source archive SHA-256 mismatch"
+      tar <- findExecutable "tar.exe" >>= maybe (fail "tar.exe is required to extract pinned GHC source") pure
+      createDirectoryIfMissing True directory
+      runCommand True tar ["-xJf", path, "-C", directory, prefix ++ "/src", prefix ++ "/include",
+        prefix ++ "/LICENSE", prefix ++ "/ghc-internal.cabal.in"] (contextRoot context)
+    verify
+    pure source
 
 -- Cabal locks its own build tree; this also keeps the THC cache and the
 -- published package manifest coherent for concurrent runs of one project.
@@ -1290,16 +1511,18 @@ exportConfiguredUnit context keys unit component scalar runtimeShim nativeObject
                          "driverHash" .= contextDriverHash context,
                          "options" .= (["post-tidy", "unit-qualified", "source-notes",
                                          "foreign-import-provenance",
-                                         "native-debug-info", "-dynamic", "-dcore-lint",
-                                         "-fplugin-trustworthy"] :: [String])] ++
+                                         "native-debug-info"] ++ exportWayOptions ++
+                                        ["-dcore-lint", "-fplugin-trustworthy"])] ++
                      maybe [] (\digest -> ["scalarInterfaceHelperSha256" .= digest,
                        "scalarInterfaceOptions" .= (["-fwrite-if-simplified-core", "-hisuf", "hi"] :: [String])]) helperHash
       exportKey = shaHex (BL.toStrict (encode ("thc-core-export-v1" :: String, buildKey, exporter)))
       buildInputs = object (inputFields ++ ["buildKey" .= buildKey,
                                            "exportKey" .= exportKey,
                                            "exporter" .= exporter])
-      directory = contextNative context </> "cache/thc/core-bundles/v1" </> exportKey
-      destination = directory </> (unitId unit ++ "-" ++ buildKey ++ ".zip")
+      directory = contextNative context </>
+        (if Host.os == "mingw32" then "bundles" else "cache/thc/core-bundles/v1") </> exportKey
+      destination = directory </> if Host.os == "mingw32" then "unit.zip"
+        else unitId unit ++ "-" ++ buildKey ++ ".zip"
   expected <- expectedModuleNames (componentValue component)
   createDirectoryIfMissing True directory
   withLock (destination ++ ".lock") $ do
@@ -1365,8 +1588,8 @@ freshExport context component unit scalar runtimeShim helper nativeObjects build
            "-fplugin=THC.Plugin", "-fplugin-trustworthy", "-fplugin-opt=THC.Plugin:" ++ core,
            "-fplugin-opt=THC.Plugin:post-tidy", "-fplugin-opt=THC.Plugin:unit-qualified",
            "-fplugin-opt=THC.Plugin:source-notes",
-           "-fplugin-opt=THC.Plugin:foreign-import-provenance",
-           "-dynamic", "-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
+           "-fplugin-opt=THC.Plugin:foreign-import-provenance"] ++ exportWayOptions ++
+          ["-fforce-recomp", "-dcore-lint", "-fwrite-if-simplified-core", "-hisuf", "hi"] ++
           map snd (componentSources component)
     sourceDir <- field (componentValue component) "src-dir"
     runCommand True (componentCompiler component) arguments sourceDir
@@ -1430,7 +1653,7 @@ scalarInterfaceModules helper component unit objects names = do
   forM names $ \name -> do
     let interface = objects </> map (\c -> if c == '.' then pathSeparator else c) name <.> "hi"
         arguments = ["--libdir",installedLibdir helper,"--unit",unitId unit,"--module",name,
-          "--interface",interface,"--way","dynamic","--source-notes"] ++
+          "--interface",interface,"--way",exportInterfaceWay,"--source-notes"] ++
           concatMap (\database -> ["--package-db",database]) databases
     requireFile interface
     (status,output,diagnostic) <- readCreateProcessWithExitCode
@@ -1460,8 +1683,8 @@ readBundle receipt path unit buildKey exportKey buildInputs expected = do
     inputBytes <- lookup inputPath entries
     storedInputs <- either (const Nothing) Just (eitherDecodeStrict' inputBytes)
     let storedBase = case storedInputs of
-          Object fields -> Object (KeyMap.delete "generatedSources"
-            (KeyMap.delete "targetLayout" fields))
+          Object fields -> Object (KeyMap.delete "sourceBuild" (KeyMap.delete "generatedSources"
+            (KeyMap.delete "targetLayout" fields)))
           value -> value
         layout = jsonField storedInputs "targetLayout" :: Maybe Value
         innerLayout = jsonField inner "targetLayout" :: Maybe Value
@@ -1498,7 +1721,7 @@ readBundle receipt path unit buildKey exportKey buildInputs expected = do
           PinnedSourceBundle -> storedBase == buildInputs && layout == innerLayout &&
             generated == innerGenerated && maybe False validTargetLayout layout &&
             layoutPlatform == platform &&
-            maybe False validGeneratedSources generated) &&
+            maybe False (validGeneratedSources buildInputs) generated) &&
         length names == length modules && length paths == length modules &&
         length names == length (nub names) && sort names == expected &&
         sort (map fst entries) == sort ("manifest.json" : inputPath : paths) &&
@@ -1531,13 +1754,13 @@ validTargetLayout layout =
      ("closureRetFun", 32), ("closureStopFrame", 36), ("closureStack", 53),
      ("closureAnnFrame", 65)]
 
-validGeneratedSources :: [Value] -> Bool
-validGeneratedSources generated =
+validGeneratedSources :: Value -> [Value] -> Bool
+validGeneratedSources inputs generated =
   let paths = map (`jsonField` "path") generated :: [Maybe FilePath]
       digests = map (`jsonField` "sha256") generated :: [Maybe String]
-      expected = sort [path | (path, _) <- moduleSources, takeExtension path == ".hsc"]
-  in sort [path | Just path <- paths] == expected &&
-     length paths == length expected &&
+      expected = (jsonField inputs "component" :: Maybe Value) >>= (`jsonField` "generatedSources") :: Maybe [FilePath]
+  in Just (sort [normalise path | Just path <- paths]) == fmap (sort . map normalise) expected &&
+     Just (length paths) == fmap length expected &&
      all (maybe False (\digest -> length digest == 64 && all isHexDigit digest)) digests
 
 jsonField :: FromJSON a => Value -> String -> Maybe a
@@ -1550,7 +1773,7 @@ jsonField _ _ = Nothing
 
 atomicBytes :: FilePath -> BS.ByteString -> IO ()
 atomicBytes path bytes = do
-  (temporary, handle) <- openTempFile (takeDirectory path) ".core-zip-"
+  (temporary, handle) <- openTempFile (takeDirectory path) ".core-"
   let cleanup = do exists <- doesFileExist temporary
                    when exists (removeFile temporary)
   (BS.hPut handle bytes >> hClose handle >> renameFile temporary path) `finally` cleanup
@@ -1585,8 +1808,10 @@ readComponentMetadata selected unit context = do
   require (flavour == ("ghc" :: String) && actualCompilerId == contextCompiler context)
     ("unsupported compiler in build-info for " ++ unitId unit)
   compilerPath <- canonicalizePath =<< field compiler "path"
-  require (not selected || compilerPath == contextNative context </> "cache/thc/native-ghc")
-    "Cabal build-info does not identify the transparent native compiler"
+  when selected $ do
+    expectedCompiler <- canonicalizePath (nativeCompilerProxy context)
+    require (compilerPath == expectedCompiler)
+      "Cabal build-info does not identify the transparent native compiler"
   components <- field info "components" :: IO [Value]
   componentName <- field (unitValue unit) "component-name" :: IO String
   matches <- filterM (\value -> do
@@ -1666,10 +1891,9 @@ recursiveFiles root = do
 atomicJson :: FilePath -> Value -> IO ()
 atomicJson path value = do
   createDirectoryIfMissing True (takeDirectory path)
-  (temporary, handle) <- openTempFile (takeDirectory path) (takeFileName path ++ ".")
-  BS.hPut handle (BL.toStrict (encode value) <> BS.pack [10])
-  hClose handle
-  renameFile temporary path
+  -- A trailing-dot template is normalized on creation by Win32, but not by
+  -- GHC's extended-path rename. Share the portable atomic bundle writer.
+  atomicBytes path (BL.toStrict (encode value) <> BS.pack [10])
 
 field :: FromJSON a => Value -> String -> IO a
 field value name = case value of

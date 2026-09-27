@@ -16,6 +16,29 @@ Kotlin for JVM checks and independent runtime models. Introduce Python only for
 a concrete Python-specific need. Migrations must preserve native comparisons,
 negative controls, strict Core audits, provenance, and all active CI callers.
 
+## Haskell lint
+
+Install [HLint 3.10](https://github.com/ndmitchell/hlint/releases/tag/v3.10), then
+run `make lint-haskell` (or set `HLINT=/path/to/hlint`). It checks tracked `.hs`
+and `.lhs` sources, including tools, examples and tests, using `.hlint.yaml`.
+Vendored compiler sources and frozen benchmark snapshots are excluded; build
+products and untracked files are not traversed. Stage new modules to include them.
+HLint does not preprocess `.hsc` templates or check `.hs-boot` declarations;
+their native GHC build remains the check for those files.
+
+`HLINT_FLAGS` accepts ordinary HLint options, for example
+`make lint-haskell HLINT_FLAGS='--report=build/hlint.html'` after creating `build`.
+To inspect Windows CPP branches, also run
+`make lint-haskell HLINT_FLAGS=--cpp-define=mingw32_HOST_OS`.
+The lint-only `ghcautoconf.h` selects `USE_LIBDW=0` for the two oracle modules
+that require that configuration. It is never a native compiler include path.
+
+The command exits nonzero for hints. The Haskell lint workflow retains JSON
+reports for both CPP profiles: parse/tool errors fail the job, while style
+hints are advisory and remain visible. Review useful suggestions individually;
+fixture expressions often deliberately exercise a particular Core shape.
+Keep suppressions narrow and explain them rather than hiding all existing hints.
+
 ## Build and test
 
 Use proportionate verification for a compiler/JIT with reasonable GHC semantics:

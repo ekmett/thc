@@ -13,7 +13,7 @@
 -- and private store builds.
 -- The native command is unchanged; a second invocation exports Core while
 -- Cabal's unpacked source and generated files still exist.
-module THC.Driver.GhcProxy (runGhcProxy, ghcProxyCommand) where
+module THC.Driver.GhcProxy (runGhcProxy, ghcProxyCommand, ghcProxyWindowsCommand) where
 
 import Control.Monad (unless, when)
 import System.Directory (createDirectoryIfMissing)
@@ -29,6 +29,11 @@ import System.Process (rawSystem)
 -- options, and must reach both the native compile and Core replay unchanged.
 ghcProxyCommand :: String
 ghcProxyCommand = "exec \"$THC_PROXY_DRIVER\" --RTS ghc-proxy \"$@\"\n"
+
+-- System.Process/Cabal execute .cmd programs through the native Windows
+-- command processor. Keep compiler RTS options behind the driver's --RTS.
+ghcProxyWindowsCommand :: String
+ghcProxyWindowsCommand = "@echo off\n@\"%THC_PROXY_DRIVER%\" --RTS ghc-proxy %*\nexit /b %errorlevel%\n"
 
 runGhcProxy :: [String] -> IO ()
 runGhcProxy arguments = do

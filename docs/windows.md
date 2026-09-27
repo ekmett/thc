@@ -72,6 +72,48 @@ preserves lone dashes and drive-letter colons that Windows PowerShell's external
 -File argument binder would otherwise reinterpret. External automation calling
 export.ps1 should likewise pass one @response-file token for complex GHC options.
 
+The Windows driver acquires the unchanged THC runtime library through the selected
+compiler's actual Cabal registration and native build receipts. It keeps the
+runtime's exact unit identity and passes a checked package manifest alongside the
+application Core, avoiding the batch launcher's command-length limit.
+
+Stock Windows GHC interfaces do not contain all executable Core needed by this
+support library. On a cold cache, THC acquires the official GHC 9.14.1 source
+archive, checks its SHA-256 and the file inventory in
+`compiler/windows-ghc-internal.json`, and builds a private source graph. Native
+`hsc2hs` uses the selected Windows headers; GHC orders 211 modules and 24 boot
+interfaces. The compiler-provided virtual `GHC.Internal.Prim` has no source body
+in this graph. The selected x86_64 Windows compiler must use its GMP backend.
+Compilation retains ordinary `-O2`, imported optimizations, source notes, Core
+lint and complete-Core interfaces. The installed package database is unchanged.
+
+The first acquisition needs `curl.exe` and `tar.exe` and can take several minutes.
+For offline use, set `THC_GHC_SOURCE_ARCHIVE` to a local copy of
+`ghc-9.14.1-src.tar.xz`; the same fixed SHA-256 remains mandatory. Source and Core
+caches live under `THC_CACHE_HOME` when set. Bundle inputs retain source hashes,
+native target layout, generated-source hashes, compiler commands and graph order.
+
+The complete source ZIP retains every compiled module. A separate checked runtime
+ZIP selects complete modules without changing their bytes. `GHC.Internal.Conc.Bound`
+stays archived because its original native `forkOS` export initializers need
+callback registration. Loading that archive still rejects; this is not native
+`forkOS` support. Supplied-module declarations require the exact complete unit
+and module, and missing or conflicting providers are errors.
+
+Windows application and runtime exports use `-fignore-interface-pragmas` after
+their optimization flags. This keeps them from importing private optimized
+workers from the stock compiler build into the separately rebuilt support unit.
+Local optimization remains enabled; the support source graph itself uses normal
+interface pragmas. This choice is recorded in cache inputs. Linux and macOS keep
+their existing dynamic export path.
+
+Without imported optimizations, the user's `main :: IO ()` can remain a thunk
+producing an action. `compiler/WindowsRunMain.hs` supplies a real Haskell host-entry
+adapter, compiled by GHC with the application. Its opaque state-transformer
+function leaves a genuine partial application with the existing strict IO entry
+ABI. The original `Main.main` binding and its laziness remain unchanged; neither
+the auditor nor the JVM accepts a weaker IO signature.
+
 The Gradle distribution is relocatable; regression tests
 copy it and its Core inputs to paths containing spaces and invoke the actual
 batch launcher from a different working directory.
@@ -177,6 +219,14 @@ repository's entire fixture/test suite.
   The command deliberately fails when Core is unavailable. Local CString
   recompilation does not make that compiler a full-Core installation.
   See [the compiler build requirements](ghc-core.md).
+* Acquiring the runtime library is separate from executing its complete exception
+  dictionary. The real `windows-bridge` Haskell fixture currently stops at strict
+  audit on the original Windows code-page and error APIs: GetConsoleCP, GetACP,
+  GetCPInfo, IsDBCSLeadByteEx, MultiByteToWideChar, WideCharToMultiByte,
+  maperrno_func, base_getErrorMessage and LocalFree, plus GetLastError's distinct
+  ghc-internal declaration. This checkpoint does not admit those calls or claim
+  automatic exception conversion. Failed native-oracle/export/audit evidence is
+  retained under build/windows-bridge.
 * The Unix project-capture/shared-plugin/provider pipeline is not ported by
   this checkpoint. A single Cabal executable without internal library/build-tool
   dependencies uses the Windows exporter/launcher path after Cabal resolves the
