@@ -21,7 +21,10 @@
     "src/main/kotlin/thc/runtime/RubbishLiterals.kt": {
       "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/CoreCpuAffinity.kt": {
+    "src/main/java/thc/runtime/CoreCpuAffinity.java": {
+      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CpuAffinityQuery.java": {
       "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/GuestEnvironment.java": {
@@ -62,7 +65,10 @@
     "src/main/kotlin/thc/runtime/HeapAddresses.kt": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreCompactImages.kt": {
+    "src/main/java/thc/runtime/CompactImageOp.java": {
+      "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/CompactImageExpression.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/HintTracePrimops.kt": {
@@ -106,7 +112,7 @@
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest", "thc.runtime.AtomicAddressTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreDataLabels.kt": {
+    "src/main/java/thc/runtime/CoreDataLabels.java": {
       "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -114,12 +120,20 @@
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreMainThreadForeign.kt": {
+    "src/main/java/thc/runtime/CoreMainThreadForeign.java": {
+      "junit": ["thc.runtime.CoreMainThreadForeignTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/RegisterMainThread.java": {
       "junit": ["thc.runtime.CoreMainThreadForeignTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreRtsShutdown.kt": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/CoreBoundThreadForeign.kt": {
+    "src/main/java/thc/runtime/CoreBoundThreadForeign.java": {
+      "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/BoundThreadSupport.java": {
       "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
       "python": ["scripts/test-audit-core.py"]
     },

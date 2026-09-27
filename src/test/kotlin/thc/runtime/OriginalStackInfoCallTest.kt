@@ -111,11 +111,11 @@ class OriginalStackInfoCallTest {
                     assertTrue(standard.plus(layout.offset("infoTableBytes").toLong()).sameLocation(key))
                     val storage = ManagedAllocation.mutable(89, 8)
                     val output = ManagedAddress.fromAllocation(storage).plus(5)
-                    assertEquals(1L, call("lookup", key, output, Unit))
+                    assertEquals(1, call("lookup", key, output, Unit))
                     assertTrue(key.sameLocation(storage.readAddressByteOffset(5)))
                     assertEquals("THC managed diagnostic frame", storage.readAddressByteOffset(13).utf8())
                     val before = storage.readAddressByteOffset(13)
-                    assertEquals(0L, call("lookup", ManagedAddress.nullAddress(), output, Unit))
+                    assertEquals(0, call("lookup", ManagedAddress.nullAddress(), output, Unit))
                     assertSame(before, storage.readAddressByteOffset(13))
                 }
                 repeat(3) { exercise() }
