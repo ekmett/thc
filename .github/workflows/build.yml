@@ -93,7 +93,7 @@ jobs:
         run: |
           cabal run exe:thc-primops -- coverage --check
           cabal run exe:thc-primops -- scalars
-          cabal test primop-tools -fdevelopment --test-show-details=direct
+          cabal test primop-tools interface-json core-store -fdevelopment --test-show-details=direct
       - name: Resolve Cabal driver dependencies
         run: cabal build exe:thc
       - name: Install Linux native and LLVM build dependencies

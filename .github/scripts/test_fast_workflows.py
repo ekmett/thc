@@ -28,6 +28,13 @@ def embedded_python(delimiter):
 
 
 class FastWorkflowGuardsTest(unittest.TestCase):
+    def test_full_build_keeps_shared_core_and_legacy_json_controls(self):
+        workflow = (WORKFLOW.parent / "build.yml").read_text()
+        block = workflow.split("name: Check the primop checklist", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("cabal test primop-tools interface-json core-store -fdevelopment --test-show-details=direct", block)
+        self.assertNotIn("continue-on-error", block)
+        self.assertNotIn("|| true", block)
+
     def test_full_build_collects_both_handoff_modes_without_fail_fast(self):
         workflow = (WORKFLOW.parent / "build.yml").read_text()
         block = workflow.split("name: Build and test both handoff modes from source", 1)[1].split("      - name:", 1)[0]
