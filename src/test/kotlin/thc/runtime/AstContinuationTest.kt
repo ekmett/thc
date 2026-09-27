@@ -144,6 +144,7 @@ class AstContinuationTest {
                 assertEquals(before + 1,
                     (program.diagnostics().getValue("compiledEntries") as Number).toLong(),
                     "The admitted AST entry must be compiled at the captured cut")
+                val retainedAfterCapture = target.javaClass.getMethod("isValidLastTier").invoke(target)
 
                 context.enter()
                 try {
@@ -157,6 +158,10 @@ class AstContinuationTest {
                     assertEquals(0, handoff.results.depth)
                     assertEquals(0, handoff.results.retainedReferences())
                     assertNull(handoff.pending)
+                    assertSame(target, program.entryTarget("direct"), "Capture must retain the original guest target")
+                    assertEquals(true, retainedAfterCapture, "The first MVar capture must retain installed guest code")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target),
+                        "Resuming the MVar tuple must retain the same installed guest code")
                 } finally { context.leave() }
             } finally {
                 if (thread.isAlive) context.close(true)
@@ -212,6 +217,7 @@ class AstContinuationTest {
                 thread.join(5000)
                 assertFalse(thread.isAlive)
                 assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                val retainedAfterCapture = target.javaClass.getMethod("isValidLastTier").invoke(target)
                 context.enter()
                 try {
                     assertTrue(cell.tryPut("unused"))
@@ -220,11 +226,48 @@ class AstContinuationTest {
                     val handoff = TruffleLanguage.LanguageReference.create(Language::class.java).get(null).handoffState.get()
                     assertEquals(0, handoff.results.depth)
                     assertEquals(0, handoff.results.retainedReferences())
+                    assertSame(target, program.entryTarget("direct"), "Capture must retain the original guest target")
+                    assertEquals(true, retainedAfterCapture, "The first MVar capture must retain installed guest code")
+                    assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target),
+                        "Resuming the MVar suffix must retain the same installed guest code")
                 } finally { context.leave() }
             } finally {
                 if (thread.isAlive) context.close(true)
                 thread.join(5000)
             }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = ["ast", "bytecode"])
+    fun synchronousMVarTakePreservesItsPayloadThroughTheFirstCompiledCall(backend: String) {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw")
+            .build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val module = directMVarModule(casePayload = true)
+                val program: ExecutableProgram = if (backend == "ast") Program(language, module)
+                    else BytecodeProgram(language, module, false)
+                val target = program.entryTarget("direct")
+                val payloadLayout = DataLayout(language, "MVarPayload", "MVarPayload", arrayOf("LiftedRep"))
+                fun take() {
+                    val payload = payloadLayout.create(arrayOf(Any()))
+                    val cell = ManagedMVar()
+                    assertTrue(cell.tryPut(payload))
+                    assertSame(payload, Calls.target(target, arrayOf(0L, cell, Unit)))
+                    assertTrue(cell.isEmpty(), "The completed take must consume exactly one value")
+                }
+                repeat(5) { take() }
+                target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+                val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
+                take()
+                assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
+                assertSame(target, program.entryTarget("direct"))
+                assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
+            } finally { context.leave() }
         }
     }
 

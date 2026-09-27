@@ -35,7 +35,9 @@ internal class ManagedMVar {
         private val awaitRequest = TruffleSafepoint.InterruptibleFunction<Request, Any?> { it.await() }
     }
 
-    @JvmOverloads @TruffleBoundary fun take(node: Node, async: Boolean = false): Any? =
+    // AsyncBlocked is an expected pre-commit cut, handled by the compiled caller.
+    @JvmOverloads @TruffleBoundary(transferToInterpreterOnException = false)
+    fun take(node: Node, async: Boolean = false): Any? =
         awaitAt(Request(Operation.TAKE, checkpoint = if (async) node else null), node)
 
     @JvmOverloads @TruffleBoundary fun read(node: Node, async: Boolean = false): Any? =
