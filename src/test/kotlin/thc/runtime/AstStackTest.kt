@@ -51,9 +51,12 @@ class AstStackTest {
                             return (result as Long) + 1
                         }
                     }
-                    val root = FunctionRoot(language, layout.build(), "sync spilled suffix", null, intArrayOf(),
-                        intArrayOf(argument), intArrayOf(0), body, Metrics(false), arrayOf(proof), proof,
-                        stackCapture = true)
+                    val root = FunctionRoot(language, layout.build(), "sync spilled suffix", null,
+                        intArrayOf(), intArrayOf(argument), intArrayOf(0), body,
+                        Metrics(false), arrayOf(proof), proof, body.coreSourceLocation,
+                        booleanArrayOf(), null, null, intArrayOf(),
+                        null, false, emptyArray(), false,
+                        FunctionRootRole.FUNCTION, true)
                     body.install(root.callTarget)
                     assertFalse(root.enableAsync)
                     assertEquals(4097L, Calls.target(root.callTarget, arrayOf(0L, 4096L)))
@@ -82,8 +85,11 @@ class AstStackTest {
                     }
                 }
                 val root = FunctionRoot(language, FrameLayout().build(), "sync parked side exit", null,
-                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
-                    role = FunctionRootRole.PASS_THROUGH, stackCapture = true)
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(false), emptyArray(), body.representation, body.coreSourceLocation,
+                    booleanArrayOf(), null, null, intArrayOf(),
+                    null, false, emptyArray(), false,
+                    FunctionRootRole.PASS_THROUGH, true)
                 body.transfer = TailCall(root.callTarget, arrayOf(0L))
                 val stack = AstStackKt.astStackScope(root)
                 stack.depth = AstStackScope.MAX_DEPTH - 1
@@ -123,7 +129,7 @@ class AstStackTest {
         val segment = CallSegment(saved(null))
         for (spill in listOf(false, true)) {
             assertEquals(spill, saved(ThunkSuspended(thunk, null, spill)).stackSpill())
-            assertEquals(spill, saved(CallSegmentSuspended(segment, null, savedGuestContinuation(segment.value)?.asyncRequest(), spill)).stackSpill())
+            assertEquals(spill, saved(CallSegmentSuspended(segment, null, SavedGuestContinuationKt.savedGuestContinuation(segment.value)?.asyncRequest(), spill)).stackSpill())
         }
     }
 

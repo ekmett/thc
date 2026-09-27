@@ -21,9 +21,12 @@ class ColdFunctionFrameTest {
         val body = object : Expr() {
             override fun execute(frame: VirtualFrame): Any? = error("Preparation must not execute the body")
         }
-        return FunctionRoot(null, descriptor, "cold frame", null, intArrayOf(), intArrayOf(argument),
-            intArrayOf(0), body, Metrics(true), arrayOf(proof), entryStrict = booleanArrayOf(asyncStrict),
-            enableAsync = asyncStrict) to argument
+        return FunctionRoot(null, descriptor, "cold frame", null,
+            intArrayOf(), intArrayOf(argument), intArrayOf(0), body,
+            Metrics(true), arrayOf(proof), body.representation, body.coreSourceLocation,
+            booleanArrayOf(asyncStrict), null, null, intArrayOf(),
+            null, asyncStrict, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false) to argument
     }
 
     @Test fun exactArgumentCarriersAreEstablishedBeforeTargetPublicationWithoutExecutingCode() {
@@ -83,8 +86,12 @@ class ColdFunctionFrameTest {
                 val body = object : Expr() {
                     override fun execute(frame: VirtualFrame): Any? = error("No guest entry during preparation")
                 }
-                val root = FunctionRoot(language, layout.build(), "dense cold frame", null, intArrayOf(),
-                    intArrayOf(), intArrayOf(), body, Metrics(true), handoff = entry)
+                val root = FunctionRoot(language, layout.build(), "dense cold frame", null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(true), emptyArray(), body.representation, body.coreSourceLocation,
+                    booleanArrayOf(), entry, null, intArrayOf(),
+                    null, false, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, false)
                 assertEquals(FrameSlotKind.Long, root.frameDescriptor.getSlotKind(slots[0]))
                 assertEquals(FrameSlotKind.Object, root.frameDescriptor.getSlotKind(slots[1]))
                 assertEquals(FrameSlotKind.Long, root.frameDescriptor.getSlotKind(destination))
