@@ -40,7 +40,7 @@ def main():
         out.mkdir(parents=True, exist_ok=False)
         classes.mkdir()
         revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
-        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle.kts', 'settings.gradle.kts',
+        paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'build.gradle.kts', 'buildSrc', 'settings.gradle', 'settings.gradle.kts',
                                         'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
         sources = {p: digest(ROOT / p) for p in paths}
         for path, sha in sources.items():

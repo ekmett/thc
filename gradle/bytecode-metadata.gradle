@@ -1,0 +1,60 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+import thc.buildlogic.BytecodeNormalizers
+import thc.buildlogic.BytecodeNormalizerChecks
+
+// Keep the task names and controls stable through the Kotlin-to-Java build migration.
+def checks = [
+    testBytecodeMetadataSplit: { task ->
+        def path = providers.gradleProperty('thc.metadataFixture').orNull
+        BytecodeNormalizerChecks.metadata(task.temporaryDir.toPath(), path == null ? null : file(path).toPath())
+        logger.lifecycle('Argument metadata split: 192 opcode paths and invalid-opcode controls match; shape/version/idempotence controls passed.')
+    },
+    testBytecodeSourceModeAccessor: { task ->
+        BytecodeNormalizerChecks.sourceMode(task.temporaryDir.toPath())
+        logger.lifecycle('Source-mode accessor: compiled false/true controls, version/shape/newline/idempotence checks passed.')
+    },
+    testBytecodeStaticPreparation: { task ->
+        BytecodeNormalizerChecks.staticPreparation()
+        logger.lifecycle('Static cached-node/local metadata preparation: version, shape, clone, CRLF and idempotence controls passed.')
+    },
+    testBytecodeHandlerPreparation: { task ->
+        BytecodeNormalizerChecks.handlers(task.temporaryDir.toPath())
+        logger.lifecycle('Nonadaptive capture handlers: range/order/profile semantics, version/shape/CRLF/idempotence passed.')
+    },
+    testBytecodeUnprofiledBranchPreparation: { task ->
+        BytecodeNormalizerChecks.unprofiledBranch()
+        logger.lifecycle('Stateless unprofiled Boolean branch: exact method/cast/clear/jump, version, CRLF and idempotence controls passed.')
+    }
+]
+checks.each { name, runCheck ->
+    tasks.register(name) {
+        group = 'verification'
+        if (name == 'testBytecodeMetadataSplit') {
+            description = 'Check lossless, fail-closed splitting of generated Truffle instruction argument metadata.'
+        } else if (name == 'testBytecodeSourceModeAccessor') {
+            description = "Check the pinned generated builder's read-only lazy source-mode accessor."
+        }
+        inputs.files('gradle/bytecode-metadata.gradle', fileTree('buildSrc/src/main/java/thc/buildlogic'))
+        doLast { runCheck(delegate) }
+    }
+}
+tasks.named('check') { dependsOn(checks.keySet()) }
+
+// Mixed-stage compilation still owns generated output in KAPT. The later pure-Java
+// cutover moves this exact operation between proc:only and proc:none compilation.
+tasks.matching { it.name == 'kaptKotlin' }.configureEach {
+    inputs.files('gradle/bytecode-metadata.gradle', fileTree('buildSrc/src/main/java/thc/buildlogic'))
+    doLast {
+        def dependencies = configurations.getByName('protocolProcessorSources').dependencies.findAll {
+            it.group == 'org.graalvm.truffle' && it.name == 'truffle-dsl-processor'
+        }
+        if (dependencies.size() != 1 || dependencies[0].version == null) {
+            throw new IllegalStateException('Expected exactly one pinned Truffle processor version')
+        }
+        def source = layout.buildDirectory.file('generated/source/kapt/main/thc/runtime/BytecodeRootGen.java').get().asFile
+        def before = source.getText('UTF-8')
+        def after = BytecodeNormalizers.all(before, dependencies[0].version)
+        if (before != after) source.setText(after, 'UTF-8')
+    }
+}

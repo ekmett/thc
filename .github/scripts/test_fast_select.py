@@ -316,7 +316,8 @@ class FastSelectionTest(unittest.TestCase):
         for path in ("src/main/kotlin/thc/runtime/CoreRepresentations.kt",
                      "compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
                      "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
-                     "scripts/audit-core.py", "build.gradle.kts", "Makefile",
+                     "scripts/audit-core.py", "build.gradle", "Makefile",
+                     "buildSrc/src/main/java/thc/buildlogic/BytecodeNormalizers.java", "gradle/bytecode-metadata.gradle",
                      "compiler/plugin.py", "gradlew", "gradle/wrapper/gradle-wrapper.properties"):
             with self.subTest(path=path):
                 self.write(path, "changed\n")
@@ -587,7 +588,7 @@ private val text = "class FakeString { @Test }"
 
     def test_unknown_production_configuration_resources_and_compiler_widen(self):
         for path in ("src/main/kotlin/Critical.kt", "src/main/kotlin/ArgumentLayout.kt", "compiler/THC/Plugin.hs",
-                     "build.gradle.kts", "src/main/resources/proof.json", "scripts/helper.py"):
+                     "build.gradle", "src/main/resources/proof.json", "scripts/helper.py"):
             with self.subTest(path=path):
                 self.write(path, "changed")
                 self.commit()
@@ -1460,7 +1461,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertLessEqual(expected, set(self.policy["owners"]["test/haskell-fixtures/Main.hs"]["junit"]))
         self.assertIn("    IntegerSimdFixtures", (self.root / "thc.cabal").read_text())
         callers = [(self.root / path).read_text() for path in ("scripts/prepare-tests.sh",
-                   "scripts/test-core-vectors.py", "build.gradle.kts", ".github/workflows/build.yml")]
+                   "scripts/test-core-vectors.py", "build.gradle", ".github/workflows/build.yml")]
         for family in ("int8x16", "int16x8", "word16x8", "word32x4"):
             for name in (f"prepare-{family}-audit.py", f"{family}_model.py", f"test-{family}-model.py"):
                 self.assertFalse((self.root / "scripts" / name).exists(), name)

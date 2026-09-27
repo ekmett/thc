@@ -11,7 +11,7 @@ same-directory lookup and all actual loading/permission checks remain upstream
 code. No filesystem permission, DLL name allowlist, pointer representation or
 context ownership is changed.
 
-`gradle/windows-sulong.gradle.kts` follows the existing pinned Truffle patch
+`gradle/windows-sulong.gradle` follows the existing pinned Truffle patch
 workflow. It validates both Maven source/binary archives, compiles the one patched
 upstream Java ABI class, and replaces the original runtime artifact only on
 Windows. Java is retained because this is the upstream Sulong binary boundary.

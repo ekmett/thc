@@ -1,29 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+import static thc.buildlogic.BuildChecks.*
 
 import java.security.MessageDigest
 
 // This distinct build artifact adds only an explicitly unprofiled protocol
 // conditional. API/runtime declarations are built by their separate pinned tasks.
-val protocolProcessorVersion = "25.3.4.1"
-val protocolProcessorSources = configurations.create("protocolProcessorSources") {
-    isCanBeConsumed = false
-    isTransitive = false
+def protocolProcessorVersion = "25.3.4.1"
+def protocolProcessorSources = configurations.create("protocolProcessorSources") {
+    canBeConsumed = false
+    transitive = false
 }
-val protocolProcessorUpstream = configurations.create("protocolProcessorUpstream") {
-    isCanBeConsumed = false
-    isTransitive = false
+def protocolProcessorUpstream = configurations.create("protocolProcessorUpstream") {
+    canBeConsumed = false
+    transitive = false
 }
 dependencies {
     add(protocolProcessorSources.name, "org.graalvm.truffle:truffle-dsl-processor:$protocolProcessorVersion:sources")
     add(protocolProcessorUpstream.name, "org.graalvm.truffle:truffle-dsl-processor:$protocolProcessorVersion")
 }
-fun checkArchive(file: File, expected: String) {
-    val actual = MessageDigest.getInstance("SHA-256").digest(file.readBytes())
-        .joinToString("") { "%02x".format(it) }
-    check(actual == expected) { "Pinned processor archive hash mismatch: ${file.name}" }
+def checkArchive = { File file, String expected ->
+    def actual = MessageDigest.getInstance("SHA-256").digest(file.bytes)
+        .encodeHex().toString()
+    checkBuild(actual == expected) { "Pinned processor archive hash mismatch: ${file.name}" }
 }
-val prepareProtocolProcessor = tasks.register<Sync>("prepareProtocolProcessor") {
+def prepareProtocolProcessor = tasks.register("prepareProtocolProcessor", Sync) {
     from(provider { zipTree(protocolProcessorSources.singleFile) })
     into(layout.buildDirectory.dir("protocol-processor/source"))
     inputs.file("tools/truffle-protocol/unprofiled-if-then.patch")
@@ -39,11 +40,11 @@ val prepareProtocolProcessor = tasks.register<Sync>("prepareProtocolProcessor") 
             environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
             commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/unprofiled-if-then.patch").absolutePath)
         }.result.get().assertNormalExitValue()
-        check(destinationDir.resolve("com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java")
-            .readText().contains("m.unprofiledIfThenOperation")) { "Processor patch was not applied" }
+        checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/dsl/processor/bytecode/model/BytecodeDSLBuiltins.java").toFile()
+            .getText("UTF-8").contains("m.unprofiledIfThenOperation")) { "Processor patch was not applied" }
     }
 }
-val compileProtocolProcessor = tasks.register<JavaCompile>("compileProtocolProcessor") {
+def compileProtocolProcessor = tasks.register("compileProtocolProcessor", JavaCompile) {
     source(prepareProtocolProcessor)
     include("**/*.java")
     classpath = files()
@@ -51,14 +52,14 @@ val compileProtocolProcessor = tasks.register<JavaCompile>("compileProtocolProce
     options.release.set(21)
     options.compilerArgs.add("-proc:none")
 }
-tasks.register<Jar>("protocolProcessorJar") {
+tasks.register("protocolProcessorJar", Jar) {
     group = "build"
     description = "Build the pinned source processor with the explicit protocol-branch extension."
     archiveBaseName.set("thc-truffle-dsl-processor")
     archiveVersion.set("$protocolProcessorVersion-protocol1")
     destinationDirectory.set(layout.buildDirectory.dir("protocol-processor"))
-    isPreserveFileTimestamps = false
-    isReproducibleFileOrder = true
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
     from(compileProtocolProcessor.flatMap { it.destinationDirectory })
     // The source artifact omits these two non-class resources. Retain their
     // exact upstream bytes; every Java class is rebuilt from the source jar.
@@ -73,7 +74,7 @@ tasks.register<Jar>("protocolProcessorJar") {
         checkArchive(protocolProcessorUpstream.singleFile,
             "3c6e191eea09fd2ffa6c35c22abc5722c9950409de3f2d3c99e66eeeffdf669c")
     }
-    manifest.attributes("Implementation-Title" to "THC explicit protocol-branch Truffle DSL processor",
-        "Implementation-Version" to "$protocolProcessorVersion-protocol1",
-        "Upstream-Source-SHA256" to "5098f0923e52f26ef4ce49060663982a2f7028d87b17317088860fb88b0d5b2a")
+    manifest.attributes(["Implementation-Title": "THC explicit protocol-branch Truffle DSL processor",
+        "Implementation-Version": "$protocolProcessorVersion-protocol1",
+        "Upstream-Source-SHA256": "5098f0923e52f26ef4ce49060663982a2f7028d87b17317088860fb88b0d5b2a"])
 }
