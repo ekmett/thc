@@ -17,7 +17,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.lang.ref.Reference
 import java.lang.foreign.MemorySegment
-import java.util.function.LongSupplier
 
 /** Component C globals and entrypoints live in one owning Truffle context. */
 internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
@@ -105,7 +104,7 @@ internal class PackageScalarLibraries(private val env: TruffleLanguage.Env) {
         if (address.hasNativeStorage() || address.nativeImageKey() != null)
             return PackageNativePointer(address.toNativeBits(), null)
         return pointer(CbitsBuffer(address.cbitsBuffer(), address.cbitsWritable(),
-            LongSupplier { address.cbitsSize() }, identity = address.cbitsStorageKey()), address.cbitsOffset())
+            CbitsBufferSize { address.cbitsSize() }, identity = address.cbitsStorageKey()), address.cbitsOffset())
     }
 
     /** Numeric comparison grants no byte access. Only genuine native pointers
