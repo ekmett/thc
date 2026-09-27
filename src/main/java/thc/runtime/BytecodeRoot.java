@@ -635,7 +635,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    public enum ThreadPrimitiveKind { MY, FORK, FORK_ON, BEGIN_KILL, FINISH_KILL }
+    public enum ThreadPrimitiveKind { MY, FORK, FORK_ON, BEGIN_KILL, FINISH_KILL, SELF_KILL }
 
     /** One cold instruction keeps the generated interpreter below its partition limit. */
     @Operation
@@ -666,6 +666,10 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 case FINISH_KILL -> {
                     GuestThreadOps.finishKill(node, (AsyncRequest) first);
                     yield kotlin.Unit.INSTANCE;
+                }
+                case SELF_KILL -> {
+                    TupleResultsKt.requireVoidCarrier(third);
+                    yield GuestThreadOps.killSelf(node, first, second);
                 }
             };
         }
@@ -3040,7 +3044,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         }
     }
 
-    /** Only the private captured catch# path may handle an async-origin payload. */
+    /** catch# acknowledges both direct self-delivery and captured async delivery. */
     @Operation public static final class RequireCaughtIOFailure {
         @Specialization public static Object payload(AbstractTruffleException failure) {
             if (failure instanceof AsyncDelivery delivered) {

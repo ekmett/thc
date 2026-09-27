@@ -373,6 +373,20 @@ internal object GuestThreadOps {
         return threads.send(target, payload)
     }
 
+    /** Without a saved caller continuation only the current logical guest may
+     * receive this send. Reject an external target before creating its request. */
+    @JvmStatic fun killSelf(node: Node, id: Any?, payload: Any?): Any {
+        if (id !== myThreadId(node))
+            throw UnsupportedCore("Bytecode external killThread# requires a captured sender continuation")
+        val sent = beginKill(node, id, payload)
+        val compiled = CompilerDirectives.inCompiledCode()
+        val incoming = GuestThreads.pollCurrent(node, false)
+        if (!sent.forceSelf || incoming !== sent)
+            fault("Self-directed killThread# did not claim its own request")
+        sent.compiledCapture = compiled
+        throw AsyncDelivery(sent, node)
+    }
+
     /** A self-target returns for the immediately following poll; it must not await itself. */
     @JvmStatic @TruffleBoundary fun finishKill(node: Node, request: AsyncRequest) {
         if (request.target === Thread.currentThread()) return
