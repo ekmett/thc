@@ -630,7 +630,7 @@ ORIGINAL_TERMIOS_OUTPUTS = frozenset("build/original-termios/" + name for name i
 ))
 
 ORIGINAL_FCNTL_ENTRIES = ("originalAppend", "originalCreat", "originalNoctty", "originalNonblock", "originalRdonly",
-    "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalGetFlags", "originalSetFlags")
+    "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalExcl", "originalBinary", "originalTrunc", "originalGetFlags", "originalSetFlags")
 ORIGINAL_FCNTL_OUTPUTS = frozenset("build/original-fcntl/" + name for name in (
     "manifest.json", "oracle.json", "native/oracle",
     *(f"logs/{label}.{suffix}" for label in (

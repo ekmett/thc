@@ -185,7 +185,8 @@ OPERATIONS = {
         ('capi', 'unsafe', ('Int32Rep', 'AddrRep', 'Word64Rep', None), (None, 'Int64Rep')),
     '__hscore_get_errno': ('ccall', 'unsafe', (None,), (None, 'Int32Rep')),
     **{symbol: ('ccall', 'unsafe', (None,), (None, 'Int32Rep')) for symbol in (
-        '__hscore_o_append', '__hscore_o_creat', '__hscore_o_noctty', '__hscore_o_nonblock',
+        '__hscore_o_append', '__hscore_o_creat', '__hscore_o_excl', '__hscore_o_binary', '__hscore_o_trunc',
+        '__hscore_o_noctty', '__hscore_o_nonblock',
         '__hscore_o_rdonly', '__hscore_o_rdwr', '__hscore_o_wronly', '__hscore_f_getfl', '__hscore_f_setfl')},
     'ghczuwrapperZC17ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCfcntl':
         ('capi', 'unsafe', ('Int32Rep', 'Int32Rep', None), (None, 'Int32Rep')),

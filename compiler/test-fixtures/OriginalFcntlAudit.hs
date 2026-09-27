@@ -10,7 +10,7 @@ import qualified GHC.Internal.System.Posix.Internals as P
 
 -- Actual unchanged installed declarations supply every FCall and its width.
 originalAppend, originalCreat, originalNoctty, originalNonblock,
-  originalRdonly, originalRdwr, originalWronly, originalGetfl, originalSetfl :: Int# -> Int#
+  originalExcl, originalBinary, originalTrunc, originalRdonly, originalRdwr, originalWronly, originalGetfl, originalSetfl :: Int# -> Int#
 originalAppend extra = case fromIntegral P.o_APPEND :: Int of I# value -> value +# extra
 originalCreat extra = case fromIntegral P.o_CREAT :: Int of I# value -> value +# extra
 originalNoctty extra = case fromIntegral P.o_NOCTTY :: Int of I# value -> value +# extra
@@ -20,6 +20,10 @@ originalRdwr extra = case fromIntegral P.o_RDWR :: Int of I# value -> value +# e
 originalWronly extra = case fromIntegral P.o_WRONLY :: Int of I# value -> value +# extra
 originalGetfl extra = case fromIntegral P.const_f_getfl :: Int of I# value -> value +# extra
 originalSetfl extra = case fromIntegral P.const_f_setfl :: Int of I# value -> value +# extra
+
+originalExcl extra = case fromIntegral P.o_EXCL :: Int of I# value -> value +# extra
+originalBinary extra = case fromIntegral P.o_BINARY :: Int of I# value -> value +# extra
+originalTrunc extra = case fromIntegral P.o_TRUNC :: Int of I# value -> value +# extra
 
 originalGetFlags :: Int# -> Int#
 originalGetFlags fd = runRW# (\state ->

@@ -31,10 +31,10 @@ class OriginalFcntlTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val prefix = "build/original-fcntl"
     private val names = listOf("originalAppend", "originalCreat", "originalNoctty", "originalNonblock", "originalRdonly",
-        "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalGetFlags", "originalSetFlags")
+        "originalRdwr", "originalWronly", "originalGetfl", "originalSetfl", "originalExcl", "originalBinary", "originalTrunc", "originalGetFlags", "originalSetFlags")
     private val constants = listOf(OriginalStdioOp.O_APPEND, OriginalStdioOp.O_CREAT, OriginalStdioOp.O_NOCTTY,
         OriginalStdioOp.O_NONBLOCK, OriginalStdioOp.O_RDONLY, OriginalStdioOp.O_RDWR, OriginalStdioOp.O_WRONLY,
-        OriginalStdioOp.F_GETFL, OriginalStdioOp.F_SETFL)
+        OriginalStdioOp.F_GETFL, OriginalStdioOp.F_SETFL, OriginalStdioOp.O_EXCL, OriginalStdioOp.O_BINARY, OriginalStdioOp.O_TRUNC)
     private fun json(path: String) = Json.parse(File(root, path).readText()) as Map<String, Any?>
     private fun source(stage: String) = CoreModules.merge(listOf("OriginalFcntlAudit", "THC.InterfaceClosure")
         .map { json("$prefix/$stage/core/$it.json") })
@@ -124,7 +124,7 @@ class OriginalFcntlTest {
                         return result
                     }
                     fun exercise() {
-                        names.take(9).forEachIndexed { index, name -> assertEquals(expected[index] + 7L, call(name, 7L)) }
+                        names.take(constants.size).forEachIndexed { index, name -> assertEquals(expected[index] + 7L, call(name, 7L)) }
                         for (row in rows) {
                             assertEquals(row[1], call("originalSetFlags", fd, row[0]))
                             assertEquals(row[2], call("originalGetFlags", alias), "status belongs to the shared open description")
@@ -157,6 +157,12 @@ class OriginalFcntlTest {
             for ((key, replacement) in listOf("safety" to "safe", "convention" to "prim")) {
                 val changed = Json.parse(Json.stringify(call)) as MutableList<Any?>
                 ((changed[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)[key] = replacement
+                assertThrows(RuntimeFault::class.java) { validate(changed) }
+            }
+            if (original.flagConstant) for (unit in listOf("main", "unix-2.8.8.0-inplace", "ghc-internal-9.1401.0-inplace")) {
+                val changed = Json.parse(Json.stringify(call)) as MutableList<Any?>
+                (((changed[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)["target"]
+                    as MutableMap<String, Any?>)["unit"] = unit
                 assertThrows(RuntimeFault::class.java) { validate(changed) }
             }
             for (backend in listOf("ast", "bytecode")) context().use { context ->
@@ -201,10 +207,10 @@ class OriginalFcntlTest {
                         assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, *badWidth)) }
                         val wrongCommand = args.copyOf().also { it[1] = -7L }
                         assertThrows(RuntimeFault::class.java) { Calls.target(target, arrayOf(0L, *wrongCommand)) }
-                        for (index in original.arguments.indices) {
-                            assertThrows(RuntimeFault::class.java) {
-                                program(backend, language, OriginalStdioChecks.rawModule(call, module, index))
-                            }
+                    }
+                    for (index in original.arguments.indices) {
+                        assertThrows(RuntimeFault::class.java) {
+                            program(backend, language, OriginalStdioChecks.rawModule(call, module, index))
                         }
                     }
                     assertEquals(stable, state.stdio.fcntl(fd, abi.flagConstant(OriginalStdioOp.F_GETFL), 0, false))

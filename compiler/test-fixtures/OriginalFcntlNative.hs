@@ -20,7 +20,8 @@ main = do
   writeFile path "abc"
   let constants = [I# (originalAppend 0#), I# (originalCreat 0#), I# (originalNoctty 0#),
         I# (originalNonblock 0#), I# (originalRdonly 0#), I# (originalRdwr 0#),
-        I# (originalWronly 0#), I# (originalGetfl 0#), I# (originalSetfl 0#)]
+        I# (originalWronly 0#), I# (originalGetfl 0#), I# (originalSetfl 0#),
+        I# (originalExcl 0#), I# (originalBinary 0#), I# (originalTrunc 0#)]
   -- IO sequencing is real: repeated runRW observers must not be CSE'd by GHC.
   rows <- bracket (openFd path ReadWrite defaultFileFlags) closeFd $ \fd@(Fd number) ->
     bracket (dup fd) closeFd $ \(Fd alias) -> do
