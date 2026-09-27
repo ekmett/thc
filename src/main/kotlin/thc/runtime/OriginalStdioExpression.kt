@@ -123,6 +123,11 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             val capacity = operands[2].executeRequiredLong(frame)
             requireVoidCarrier(operands[3].execute(frame))
             CoreOriginalStdio.current(this).readlink(path, output, capacity)
+        } else if (operation == OriginalStdioOp.ACCESS) {
+            val path = operands[0].executeRequiredAddress(frame)
+            val mode = operands[1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            CoreOriginalStdio.current(this).access(path, mode)
         } else if (operation.pathMode) {
             val path = operands[0].executeRequiredAddress(frame)
             val mode = operands[1].executeRequiredLong(frame)

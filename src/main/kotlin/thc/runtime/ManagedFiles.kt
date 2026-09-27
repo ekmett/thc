@@ -683,6 +683,17 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         }
     }
 
+    @TruffleBoundary internal fun accessOriginal(path: ManagedAddress, mode: Int): Long {
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original access requires the explicit native filesystem")
+            }
+            provider.accessRaw(bytes, mode)
+        }
+    }
+
     @TruffleBoundary internal fun pathModeOriginal(path: ManagedAddress, mode: Long, createDirectory: Boolean): Long {
         val bytes = originalPathBytes(path)
         return result {

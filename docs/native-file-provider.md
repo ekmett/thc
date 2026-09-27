@@ -200,3 +200,20 @@ destination canaries. Malformed State/ABI, short or immutable destinations and
 pointer-bearing storage reject before native observation. No full Handle, RTS lock,
 arbitrary native pointer, or acquisition-cancellation guarantee follows from this
 bounded Linux x86_64 admission.
+
+### Original access checks
+
+Linux x86_64 supports the original `ghc-internal` unsafe `access` declaration
+with exact `Addr#/Int32#/State# -> (# State#, Int32# #)` metadata. The explicit
+native filesystem applies libc's real-user/group permission rules, including
+mode combinations and invalid-mode errors. It does not use Java permission
+predicates or treat a successful check as a guarantee that a later open succeeds.
+
+The pathname is a checked, borrowed NUL-terminated byte snapshot, anchored to
+the context filesystem's current directory without decoding or normalizing
+guest path bytes. State and the canonical signed CInt mode are checked before
+observation. Errors update guest errno immediately; success retains its previous
+value. Context ownership and freed-storage checks apply to native path aliases.
+The native GHC oracle supplies expected results for files, directories, symlinks,
+raw-byte names, denied traversal, invalid modes and missing paths without
+assuming whether the process has root privileges.

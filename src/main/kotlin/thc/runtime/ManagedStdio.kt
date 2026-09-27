@@ -189,6 +189,13 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun access(path: ManagedAddress, mode: Long): Long {
+        if (mode != mode.toInt().toLong()) fault("Original access requires a canonical signed CInt mode")
+        val result = files.accessOriginal(path, mode.toInt())
+        if (result < 0) lastError.set(fileError(hostAbi))
+        return result
+    }
+
     @TruffleBoundary fun pathMode(operation: OriginalStdioOp, path: ManagedAddress, mode: Long): Long {
         check(operation.pathMode)
         if (mode !in 0L..0xffff_ffffL) fault("Original pathname mode requires a canonical CMode")

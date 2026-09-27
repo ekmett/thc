@@ -93,6 +93,12 @@ int64_t thc_file_readlink(const char *path, void *output, uint64_t capacity, int
   return (int32_t)result;
 }
 
+int64_t thc_file_access(const char *path, int mode, int64_t *error) {
+  int result = access(path, mode);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
 int64_t thc_file_mkdir(const char *path, uint32_t mode, int64_t *error) {
   int result = mkdir(path, (mode_t)mode);
   *error = result < 0 ? errno : 0;
