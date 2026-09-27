@@ -3,13 +3,20 @@
 ## Implementation style
 
 Follow the [agent and contributor guidance](../AGENTS.md). Keep simple primop
-behavior in its JVM implementation, normally Kotlin, and inline forwarding-only
+behavior in its Java JVM implementation, and inline forwarding-only
 helpers instead of adding wrapper layers or temporary carrier objects. Retain
 real compiler/ABI boundaries and ownership, lifetime, and synchronization rules;
 verify allocation and call elimination rather than inferring it from source size.
 Trust GHC's type checking: use lowered scalar carrier types where they suffice,
 without redundant integral `RuntimeRep` identity checks. Preserve meaningful
 carrier, aggregate, ABI, ownership and memory-safety distinctions.
+
+Production runtime code uses Java. Migrate remaining Kotlin implementation in
+coherent tested groups, including generated code and production library
+dependencies. Kotlin fixtures, tests and Gradle build scripts may remain.
+Preserve Truffle child annotations, typed execution paths, cold error boundaries
+and first-compiled-call checks during conversion. Source translation alone does
+not establish a performance improvement.
 
 Use Haskell for GHC-facing fixture generation and native-oracle tooling, and
 Kotlin for JVM checks and independent runtime models. Introduce Python only for
