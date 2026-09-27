@@ -3773,7 +3773,8 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
                 val operands = args.mapIndexed { index, arg ->
                     TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
-                    if (shape.components[index].isVector && flags[index] != false) throw RuntimeFault("Vector tuple field cannot be lifted")
+                    if (shape.components[index].isTypedTransport && flags[index] != false)
+                        throw RuntimeFault("Typed tuple field cannot be lifted")
                     if (shape.components[index].isTypedTransport) compile(arg, scope, false)
                     else argument(arg, scope, flags[index] as? Boolean ?: throw UnsupportedCore("Unknown tuple field levity"))
                 }
@@ -4671,7 +4672,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
             b.beginBlock()
             fields.forEach { e.locals[it.id] = b.createLocal(it.name, if (it.primitive) "primitive" else "object") }
             scrutinee.emitTuple(e, fields.map { e.locals.getValue(it.id) })
-            b.beginStoreLocal(e.locals.getValue(fields[0].id)); b.beginCheckSumTag()
+            b.beginStoreLocal(e.locals.getValue(fields[0].id)); b.beginCheckSumTag(proof.alternatives!!.size)
             read(fields[0]).emit(e); b.endCheckSumTag(); b.endStoreLocal()
             val explicit = arms.filter { it.tag != null }
             val fallback = arms.singleOrNull { it.tag == null }

@@ -5016,6 +5016,7 @@ class RetainedAuditStoreTest(unittest.TestCase):
         self.assertFalse(output.exists(), 'preserve previous equivalence evidence')
         manifest_bytes = manifest_path.read_bytes()
         manifest = core_package_manifest.strict_json(manifest_bytes.decode('utf-8'))
+        self.assertIs(manifest.get('strictAccepted'), True, 'requires freshly accepted genuine four-way Core')
         checked = 0
         for group in ['inputHashes', 'artifactHashes']:
             for path, expected in manifest[group].items():
@@ -5042,13 +5043,13 @@ class RetainedAuditStoreTest(unittest.TestCase):
                 options = ['--eager'] if mode == 'eager' else ['--store', str(output / (phase + '.sqlite'))]
                 result = subprocess.run([*common, *options, '--output', str(report_path)], text=True, capture_output=True)
                 (output / (phase + '-' + mode + '.stderr')).write_text(result.stderr)
-                self.assertEqual(1, result.returncode, result.stderr)  # Existing known boundary rejection.
+                self.assertEqual(0, result.returncode, result.stderr)
                 reports.append(report_path.read_bytes())
             self.assertEqual(*reports)
             report = json.loads(reports[0])
-            self.assertFalse(report['accepted'])
+            self.assertTrue(report['accepted'])
             self.assertEqual(manifest['auditSummaries'][phase], report['summary'])
-            receipt['phases'][phase] = dict(completeReportsEqual=True, accepted=False,
+            receipt['phases'][phase] = dict(completeReportsEqual=True, accepted=True,
                 summary=report['summary'], bytes=len(reports[0]), sha256=hashlib.sha256(reports[0]).hexdigest())
         (output / 'equivalence.json').write_text(json.dumps(receipt, indent=2) + '\n')
         print(json.dumps(receipt))

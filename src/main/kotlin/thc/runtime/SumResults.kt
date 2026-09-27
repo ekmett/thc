@@ -8,23 +8,48 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.ExplodeLoop
 import java.util.concurrent.Callable
 
-/** Binary sums retain their logical alternatives and exact GHC storage projections.
- * This first slice deliberately needs no integer-width conversion. */
+/** Logical alternatives stay distinct from GHC's shared physical slots.
+ * Integral leaves already have their lowered Long carrier; no boxing or width
+ * conversion is introduced when WordSlot and Word64Slot share storage. */
 internal object SumShape {
     private const val lifted = "BoxedRep (Just Lifted)"
     private const val unlifted = "BoxedRep (Just Unlifted)"
-    private val order = listOf(lifted, unlifted, "WordRep", "FloatRep", "DoubleRep")
+    private val order = listOf(lifted, unlifted, "WordRep", "Word64Rep", "FloatRep", "DoubleRep")
     private fun slot(rep: String): String = when (rep) {
-        "IntRep", "WordRep" -> "WordRep"
+        "IntRep", "WordRep", "Int8Rep", "Word8Rep", "Int16Rep", "Word16Rep", "Int32Rep", "Word32Rep" -> "WordRep"
+        "Int64Rep", "Word64Rep" -> "Word64Rep"
         lifted, unlifted, "FloatRep", "DoubleRep" -> rep
         else -> throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum field $rep")
+    }
+    private fun fits(left: String, right: String): String? = when {
+        left == right -> left
+        left in setOf("WordRep", "Word64Rep") && right in setOf("WordRep", "Word64Rep") -> "Word64Rep"
+        else -> null
+    }
+    // GHC.Types.RepType.ubxSumRepType merges each sorted alternative in order.
+    // Counting each slot class independently is wrong for mixed Word/Word64.
+    private fun merge(existing: List<String>, needed: List<String>): List<String> {
+        val result = ArrayList<String>()
+        var left = 0
+        var right = 0
+        while (left < existing.size && right < needed.size) {
+            val common = fits(existing[left], needed[right])
+            when {
+                common != null -> { result += common; left++; right++ }
+                order.indexOf(needed[right]) < order.indexOf(existing[left]) -> result += needed[right++]
+                else -> result += existing[left++]
+            }
+        }
+        result.addAll(existing.drop(left))
+        result.addAll(needed.drop(right))
+        return result
     }
     fun validate(proof: CoreRepresentation) {
         val alternatives = proof.alternatives ?: fault("Missing sum alternatives")
         if (proof.kind != CoreKind.UNKNOWN || proof.components != null || proof.vector != null)
             fault("Sum proof must retain its aggregate kind")
-        if (alternatives.size != 2)
-            throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum requires two alternatives")
+        if (alternatives.size < 2)
+            throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum requires at least two alternatives")
         val fields = alternatives.map { alternative ->
             val leaves = TupleShape.logicalLeaves(alternative)
             if (leaves.any { it.isSum || it.isVector || it.kind !in setOf(CoreKind.LONG, CoreKind.FLOAT,
@@ -33,23 +58,28 @@ internal object SumShape {
             leaves.map { slot(it.primReps?.singleOrNull()
                 ?: throw UnsupportedCore("Unsupported Core aggregate representation: unboxed-sum unresolved field")) }
         }
-        val physical = listOf("WordRep") + order.flatMap { rep ->
-            List(fields.maxOf { row -> row.count { it == rep } }) { rep }
+        val physical = listOf("WordRep") + fields.fold(emptyList<String>()) { slots, row ->
+            merge(slots, row.sortedBy(order::indexOf))
         }
         if (proof.primReps != physical || proof.tagSlot != 0) fault("Sum physical representation or tag slot mismatch")
         val expected = fields.map { row ->
             val used = mutableSetOf<Int>()
-            row.map { rep -> physical.indices.first { it > 0 && it !in used && physical[it] == rep }.also(used::add) }
+            row.map { rep -> physical.indices.first {
+                it > 0 && it !in used && fits(rep, physical[it]) == physical[it]
+            }.also(used::add) }
         }
         if (proof.alternativeSlots != expected) fault("Sum alternative projection mismatch")
     }
-    fun storage(proof: CoreRepresentation): List<CoreRepresentation> = proof.primReps!!.map { rep ->
-        CoreRepresentation(when (rep) {
-            "WordRep" -> CoreKind.LONG
-            "FloatRep" -> CoreKind.FLOAT
-            "DoubleRep" -> CoreKind.DOUBLE
-            else -> CoreKind.OBJECT
-        }, true, true, listOf(rep))
+    fun storage(proof: CoreRepresentation): List<CoreRepresentation> {
+        validate(proof)
+        return proof.primReps!!.map { rep ->
+            CoreRepresentation(when (rep) {
+                "WordRep", "Int64Rep", "Word64Rep" -> CoreKind.LONG
+                "FloatRep" -> CoreKind.FLOAT
+                "DoubleRep" -> CoreKind.DOUBLE
+                else -> CoreKind.OBJECT
+            }, true, true, listOf(rep))
+        }
     }
     fun constructor(proof: CoreRepresentation, info: Map<String, Any?>?, arity: Any?): Int {
         fun exact(value: Any?, expected: Int) = (value is Long || value is Int) && (value as Number).toLong() == expected.toLong()
@@ -68,8 +98,8 @@ internal object SumShape {
         if (liftedFlag != null && liftedFlag != (!expected.isAggregate && expected.primReps == listOf(lifted)))
             fault("Sum payload levity mismatch")
     }
-    fun checkedTag(value: Long): Int {
-        if (value != 1L && value != 2L) fault("Invalid unboxed sum tag")
+    fun checkedTag(value: Long, arity: Int): Int {
+        if (arity < 2 || value < 1L || value > arity.toLong()) fault("Invalid unboxed sum tag")
         return value.toInt()
     }
 }
@@ -117,10 +147,14 @@ internal class SumConstruct(private val shape: TupleShape, private val tag: Int,
 
 internal class SumCase(@Child private var scrutinee: Expr,
     @field:CompilationFinal(dimensions = 1) private val slots: IntArray,
-    @Children private var alternatives: Array<Expr>, private val first: Int, private val second: Int,
+    @Children private var alternatives: Array<Expr>,
+    @field:CompilationFinal(dimensions = 1) private val tagToArm: IntArray,
     proof: CoreRepresentation) : Expr() {
     init { representation = proof }
-    private val tagProfile = com.oracle.truffle.api.profiles.CountingConditionProfile.create()
+    // Probability injection belongs on the actual control edges below, not
+    // on tag-to-arm array indexing (which Graal lowers as a data selection).
+    @field:CompilationFinal(dimensions = 1)
+    private val armProfiles = Array(alternatives.size) { com.oracle.truffle.api.profiles.CountingConditionProfile.create() }
 
     private enum class Route { GENERIC, LONG, FLOAT, DOUBLE, CLOSURE, DATA, ADDRESS, TUPLE }
 
@@ -132,19 +166,21 @@ internal class SumCase(@Child private var scrutinee: Expr,
         }
     }
 
-    private fun isFirst(frame: VirtualFrame): Boolean =
-        tagProfile.profile(SumShape.checkedTag(frame.getLong(slots[0])) == 1)
+    private fun selected(frame: VirtualFrame): Int {
+        val tag = SumShape.checkedTag(frame.getLong(slots[0]), tagToArm.size)
+        return tagToArm[tag - 1]
+    }
 
     private fun prepare(frame: VirtualFrame, route: Route,
-                        destination: IntArray? = null, offset: Int = 0): Boolean {
+                        destination: IntArray? = null, offset: Int = 0): Int {
         try { scrutinee.executeTuple(frame, slots, 0) }
         catch (cut: AstCapture) { throw cut.append(ResumeBranch(this, route, destination, offset)) }
-        return isFirst(frame)
+        return selected(frame)
     }
 
     /** The scrutinee has already populated this activation's sum slots. */
     private fun resumeBranch(frame: VirtualFrame, route: Route, destination: IntArray?, offset: Int): Any? {
-        val selected = if (isFirst(frame)) first else second
+        val selected = selected(frame)
         if (selected < 0) fault("Non-exhaustive unboxed sum case")
         val branch = alternatives[selected]
         return when (route) {
@@ -158,68 +194,44 @@ internal class SumCase(@Child private var scrutinee: Expr,
             Route.TUPLE -> branch.executeTuple(frame, destination!!, offset)
         }
     }
-    override fun execute(frame: VirtualFrame): Any? {
-        if (prepare(frame, Route.GENERIC)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].execute(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].execute(frame)
+    @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
+        val selected = prepare(frame, Route.GENERIC)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].execute(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeLong(frame: VirtualFrame): Long {
-        if (prepare(frame, Route.LONG)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeLong(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeLong(frame)
+    @ExplodeLoop override fun executeLong(frame: VirtualFrame): Long {
+        val selected = prepare(frame, Route.LONG)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeLong(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeFloat(frame: VirtualFrame): Float {
-        if (prepare(frame, Route.FLOAT)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeFloat(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeFloat(frame)
+    @ExplodeLoop override fun executeFloat(frame: VirtualFrame): Float {
+        val selected = prepare(frame, Route.FLOAT)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeFloat(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeDouble(frame: VirtualFrame): Double {
-        if (prepare(frame, Route.DOUBLE)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeDouble(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeDouble(frame)
+    @ExplodeLoop override fun executeDouble(frame: VirtualFrame): Double {
+        val selected = prepare(frame, Route.DOUBLE)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeDouble(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeClosure(frame: VirtualFrame): Closure {
-        if (prepare(frame, Route.CLOSURE)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeClosure(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeClosure(frame)
+    @ExplodeLoop override fun executeClosure(frame: VirtualFrame): Closure {
+        val selected = prepare(frame, Route.CLOSURE)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeClosure(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeDataValue(frame: VirtualFrame): DataValue {
-        if (prepare(frame, Route.DATA)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeDataValue(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeDataValue(frame)
+    @ExplodeLoop override fun executeDataValue(frame: VirtualFrame): DataValue {
+        val selected = prepare(frame, Route.DATA)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeDataValue(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeAddress(frame: VirtualFrame): ManagedAddress {
-        if (prepare(frame, Route.ADDRESS)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeAddress(frame)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeAddress(frame)
+    @ExplodeLoop override fun executeAddress(frame: VirtualFrame): ManagedAddress {
+        val selected = prepare(frame, Route.ADDRESS)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeAddress(frame)
+        fault("Non-exhaustive unboxed sum case")
     }
-    override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        if (prepare(frame, Route.TUPLE, slots, offset)) {
-            if (first < 0) fault("Non-exhaustive unboxed sum case")
-            return alternatives[first].executeTuple(frame, slots, offset)
-        }
-        if (second < 0) fault("Non-exhaustive unboxed sum case")
-        return alternatives[second].executeTuple(frame, slots, offset)
+    @ExplodeLoop override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
+        val selected = prepare(frame, Route.TUPLE, slots, offset)
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) return alternatives[index].executeTuple(frame, slots, offset)
+        fault("Non-exhaustive unboxed sum case")
     }
 }
