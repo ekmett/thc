@@ -121,8 +121,8 @@ class AstStackTest {
         }.callTarget, null)
         val segment = CallSegment(saved(null))
         for (spill in listOf(false, true)) {
-            assertEquals(spill, saved(ThunkSuspended(thunk, stackSpill = spill)).stackSpill())
-            assertEquals(spill, saved(CallSegmentSuspended(segment, stackSpill = spill)).stackSpill())
+            assertEquals(spill, saved(ThunkSuspended(thunk, null, spill)).stackSpill())
+            assertEquals(spill, saved(CallSegmentSuspended(segment, null, savedGuestContinuation(segment.value)?.asyncRequest(), spill)).stackSpill())
         }
     }
 

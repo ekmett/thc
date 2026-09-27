@@ -67,7 +67,7 @@ class CallMaskSegmentsTest {
                 // A later evaluator may replace a segment's mutable answer. A
                 // missing immutable delivery token must not be recovered from it.
                 val changed = CallSegment(Calls.target(target, arrayOf(0L)) as ContinuationResult)
-                val noToken = CallSegmentSuspended(changed, asyncRequest = null)
+                val noToken = CallSegmentSuspended(changed, null, null)
                 changed.value = Calls.target(target, arrayOf(0L)) as ContinuationResult
                 assertThrows(RuntimeFault::class.java) {
                     AsyncContinuations.publicSuspension(noToken, Driver())

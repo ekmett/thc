@@ -25,7 +25,7 @@ internal object AstControl {
             if (input.child !== child) fault("AST caller received an unrelated child cut")
             val marker = when (child) {
                 is Thunk -> ThunkSuspended(child, input.request)
-                is CallSegment -> CallSegmentSuspended(child, asyncRequest = input.request, stackSpill = false)
+                is CallSegment -> CallSegmentSuspended(child, null, input.request, false)
                 else -> fault("Invalid AST suspended child")
             }
             throw AstCapture(marker, SynchronousMasking.current(node)).append(step)
@@ -106,7 +106,7 @@ internal object AstControl {
         }
         val parkedMask = (saved.yielded as? CallSegmentSuspended)?.parkedActiveMask
         val segment = CallSegment(saved.identity, parkedMask ?: callerMask, callerMask, tupleShape ?: root.tupleResult)
-        val suspended = CallSegmentSuspended(segment, asyncRequest = saved.asyncRequest(), stackSpill = saved.stackSpill())
+        val suspended = CallSegmentSuspended(segment, null, saved.asyncRequest(), saved.stackSpill())
         throw AstCapture(suspended, callerMask).append(ResumeChild(segment, node))
     }
 }

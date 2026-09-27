@@ -31,9 +31,6 @@ import com.oracle.truffle.api.source.SourceSection
  * restoration follow Cadenza. See NOTICE.md and LICENSE.txt. Haskell thunks
  * supply the additional lazy update/blackhole protocol. Async-capable AST
  * roots spill bounded non-tail activation chains to saved continuations. */
-open class RuntimeFault(message: String) : RuntimeException(message)
-/** A known implementation gap, distinct from malformed Core or runtime errors. */
-internal class UnsupportedCore(message: String) : RuntimeFault(message)
 internal fun fault(message: String): Nothing {
     CompilerDirectives.transferToInterpreterAndInvalidate()
     throw RuntimeFault(message)
@@ -80,248 +77,7 @@ internal fun int64Literal(value: String): Long {
     if (number == null || number.toString() != value) throw RuntimeFault("Invalid int64 literal: $value")
     return number
 }
-/** Cadenza's recursive indirection: captured by identity, initialized once. */
-internal class RecCell {
-    @Volatile var initialized = false
-    @Volatile var value: Any? = null
-}
-/** Program linkage is fixed before guest execution; code and CAF contents may be lazy. */
-internal class GlobalBinding(val name: String) {
-    @CompilationFinal private var initialized = false
-    @CompilationFinal private var value: Any? = null
-    // Mode is fixed before any guest target can observe this cell. A late value
-    // must NOT be compilation-final: compiling a caller before its first cold
-    // global read must neither freeze null nor require invalidating that caller.
-    @CompilationFinal private var preparationLock: Any? = null
-    @Volatile private var prepared = false
-    private var preparedValue: Any? = null
-    private var prepare: (() -> Any?)? = null
-    private var preparing = false
-    private var preparationFailure: Exception? = null
-    fun initialize(value: Any?) {
-        check(!initialized && preparationLock == null)
-        this.value = value
-        initialized = true
-    }
-    fun defer(lock: Any, action: () -> Any?) {
-        check(!initialized && preparationLock == null)
-        preparationLock = lock
-        prepare = action
-    }
-    fun read(): Any? {
-        if (preparationLock != null) return if (prepared) preparedValue else prepareValue()
-        if (!initialized) fault("Uninitialized global binding")
-        return value
-    }
-
-    /** The shared program lock protects lowering's mutable builders, not guest
-     * thunk evaluation. The published value retains the ordinary closure/thunk
-     * identity and call ABI. No forwarding guest root is installed here. */
-    @CompilerDirectives.TruffleBoundary
-    private fun prepareValue(): Any? = synchronized(preparationLock ?: fault("Uninitialized global binding")) {
-        if (prepared) return@synchronized preparedValue
-        preparationFailure?.let { throw it }
-        check(!preparing) { "Recursive Core preparation for $name" }
-        preparing = true
-        try {
-            val result = checkNotNull(prepare) { "Uninitialized global binding" }.invoke()
-            preparedValue = result
-            prepared = true
-            prepare = null
-            result
-        } catch (cancelled: java.util.concurrent.CancellationException) {
-            throw cancelled
-        } catch (interrupted: InterruptedException) {
-            Thread.currentThread().interrupt()
-            throw interrupted
-        } catch (failure: Exception) {
-            preparationFailure = failure
-            prepare = null
-            throw failure
-        } finally {
-            preparing = false
-        }
-    }
-}
-internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
-    // Updated thunks retain only their answer (or memoized guest failure).
-    var target: RootCallTarget? = target
-    // 0 = unevaluated, 1 = owned, 2 = WHNF, 3 = ordinary failure,
-    // 4 = interrupted without a resumable continuation, 5 = cooperatively
-    // yielded guest root with a captured continuation. State publishes the
-    // value/continuation and release of ownership to all waiting guest threads.
-    @Volatile var state = 0
-    var value: Any? = null
-    var owner: Thread? = null
-    // Thunks are internal runtime values, not host-interoperable lock objects.
-    // Keep one stable monitor per thunk without allocating a second object.
-    @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
-    val monitor: java.lang.Object get() = this as java.lang.Object
-}
-/** A cold, one-shot call continuation. Unlike a thunk update, its answer may itself be lazy. */
-internal class CallSegment @JvmOverloads constructor(
-    continuation: Any,
-    var logicalMask: MaskingState = MaskingState.UNMASKED,
-    val callerMask: MaskingState = MaskingState.UNMASKED,
-    val tupleShape: TupleShape? = null,
-    /** This cold token was captured inside a real catch# action boundary. */
-    val caughtIOAction: Boolean = false,
-    /** A newly captured identity-tail edge; ordinary calls retain their trampoline barrier. */
-    val tailSpill: Boolean = false
-) {
-    init { check(savedGuestContinuation(continuation) != null) { "Call segment needs a saved continuation" } }
-    @Volatile var state = 5 // owned=1, completed=2, failure=3, unsupported unwind=4, parked=5
-    var value: Any? = continuation
-    var owner: Thread? = null
-    val monitor = java.lang.Object()
-}
-/** Keep immutable guest failure data, never a shared mutable Truffle stack trace. */
 private data class MemoizedGuestFailure(val payload: Any?, val location: Node, val someException: Boolean)
-/** Async delivery must carry its origin separately from its guest payload. */
-internal class AsyncThunkUnwind(val payload: Any?) : RuntimeException("Asynchronous guest unwind")
-/** Cold committed cut for one exact original catch# action, never supplied by Core. */
-internal class PrivateIOUnwind @JvmOverloads constructor(
-    val action: CallSegment, val payload: Any?, val request: CapturedAsyncRequest? = null) :
-    RuntimeException("Private captured IO-handler unwind", null, false, false)
-/** Private origin tag; only checkpointed catch# may unwrap it for its handler. */
-internal class CapturedAsyncDelivery @JvmOverloads constructor(
-    val payload: Any?, val request: CapturedAsyncRequest? = null) :
-    com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Private captured IO-handler delivery", null, 0, null), InternalGuestControl
-/** A root-local bytecode yield hands the shared thunk to another evaluator. */
-internal class ThunkSuspended @JvmOverloads constructor(val thunk: Thunk, val asyncRequest: AsyncRequest? = null,
-    val stackSpill: Boolean = false) :
-    com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Internal bytecode thunk suspension", null, 0, null), InternalGuestControl
-/** A call returned its own bytecode continuation; only that exact call edge may capture it. */
-internal class CapturedCallSuspension(val segment: CallSegment) :
-    com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Internal bytecode call suspension", null, 0, null), InternalGuestControl
-internal class CallSegmentSuspended @JvmOverloads constructor(
-    val segment: CallSegment,
-    /** Logical mask before a caller parked to its root-entry mask for Yield. */
-    val parkedActiveMask: MaskingState? = null,
-    val asyncRequest: AsyncRequest? = savedGuestContinuation(segment.value)?.asyncRequest(),
-    val stackSpill: Boolean = savedGuestContinuation(segment.value)?.stackSpill() == true
-) :
-    com.oracle.truffle.api.exception.AbstractTruffleException(
-        "Internal bytecode call segment suspension", null, 0, null), InternalGuestControl
-/** Cold caller-segment input distinguishes a child result from its guest failure. */
-internal class ChildResume(val value: Any?, val failure: GuestException?)
-internal class Metrics(val enabled: Boolean) {
-    private val thunkCounts = linkedMapOf<String, Long>()
-    @CompilerDirectives.TruffleBoundary fun recordThunk(target: RootCallTarget) {
-        // Root names may perform host reflection/string formatting. Resolve
-        // diagnostic metadata outside guest compilation and before the map lock.
-        val label = target.rootNode.name ?: "<unnamed>"
-        synchronized(this) { thunkCounts[label] = (thunkCounts[label] ?: 0L) + 1L }
-    }
-    @CompilerDirectives.TruffleBoundary @Synchronized fun thunkCountsSnapshot(): Map<String, Long> = thunkCounts.toMap()
-    private val compiledEntriesCounter = java.util.concurrent.atomic.AtomicLong()
-    val compiledEntries: Long get() = compiledEntriesCounter.get()
-    fun incrementCompiledEntries() { compiledEntriesCounter.incrementAndGet() }
-    private val leadingCaseReturnsCounter = java.util.concurrent.atomic.AtomicLong()
-    val leadingCaseReturns: Long get() = leadingCaseReturnsCounter.get()
-    fun incrementLeadingCaseReturns() { leadingCaseReturnsCounter.incrementAndGet() }
-    private val thunkEvaluationsCounter = java.util.concurrent.atomic.AtomicLong()
-    val thunkEvaluations: Long get() = thunkEvaluationsCounter.get()
-    fun incrementThunkEvaluations() { thunkEvaluationsCounter.incrementAndGet() }
-    private val thunkHitsCounter = java.util.concurrent.atomic.AtomicLong()
-    val thunkHits: Long get() = thunkHitsCounter.get()
-    fun incrementThunkHits() { thunkHitsCounter.incrementAndGet() }
-    private val blackholesCounter = java.util.concurrent.atomic.AtomicLong()
-    val blackholes: Long get() = blackholesCounter.get()
-    fun incrementBlackholes() { blackholesCounter.incrementAndGet() }
-    private val directCacheMissesCounter = java.util.concurrent.atomic.AtomicLong()
-    val directCacheMisses: Long get() = directCacheMissesCounter.get()
-    fun incrementDirectCacheMisses() { directCacheMissesCounter.incrementAndGet() }
-    private val indirectCallsCounter = java.util.concurrent.atomic.AtomicLong()
-    val indirectCalls: Long get() = indirectCallsCounter.get()
-    fun incrementIndirectCalls() { indirectCallsCounter.incrementAndGet() }
-    private val tailBouncesCounter = java.util.concurrent.atomic.AtomicLong()
-    val tailBounces: Long get() = tailBouncesCounter.get()
-    fun incrementTailBounces() { tailBouncesCounter.incrementAndGet() }
-    private val selfTailReentriesCounter = java.util.concurrent.atomic.AtomicLong()
-    val selfTailReentries: Long get() = selfTailReentriesCounter.get()
-    fun incrementSelfTailReentries() { selfTailReentriesCounter.incrementAndGet() }
-    private val localJoinTransfersCounter = java.util.concurrent.atomic.AtomicLong()
-    val localJoinTransfers: Long get() = localJoinTransfersCounter.get()
-    fun incrementLocalJoinTransfers() { localJoinTransfersCounter.incrementAndGet() }
-    private val trampolineIterationsCounter = java.util.concurrent.atomic.AtomicLong()
-    val trampolineIterations: Long get() = trampolineIterationsCounter.get()
-    fun incrementTrampolineIterations() { trampolineIterationsCounter.incrementAndGet() }
-    private val papAllocationsCounter = java.util.concurrent.atomic.AtomicLong()
-    val papAllocations: Long get() = papAllocationsCounter.get()
-    fun incrementPapAllocations() { papAllocationsCounter.incrementAndGet() }
-    private val unsupportedTrapsCounter = java.util.concurrent.atomic.AtomicLong()
-    val unsupportedTraps: Long get() = unsupportedTrapsCounter.get()
-    fun incrementUnsupportedTraps() { unsupportedTrapsCounter.incrementAndGet() }
-}
-@TypeSystemReference(RuntimeTypes::class)
-internal abstract class Expr : Node() {
-    // Assigned during lowering, before adoption. Evaluatedness describes our stored value.
-    @CompilationFinal var representation: CoreRepresentation = CoreRepresentation.UNKNOWN
-        set(value) {
-            field = value
-            vectorLayout = if (value.isVector) VectorLayout(value) else null
-        }
-    @CompilationFinal private var vectorLayout: VectorLayout? = null
-    protected val typedVectorLayout: VectorLayout? get() = vectorLayout
-    @CompilationFinal var coreSourceLocation: CoreSourceLocation? = null
-    fun located(location: CoreSourceLocation?): Expr { coreSourceLocation = location; return this }
-    override fun getSourceSection(): SourceSection? = coreSourceLocation.let {
-        if (it == null) parent?.encapsulatingSourceSection else it.section
-    }
-    fun proven(proof: CoreRepresentation): Expr { representation = proof; return this }
-    open fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int = 0): Any? {
-        val layout = vectorLayout
-        if (layout != null) {
-            layout.write(frame, slots, offset, execute(frame))
-            return null
-        }
-        fault("Expression does not produce a tuple")
-    }
-    abstract fun execute(frame: VirtualFrame): Any?
-    @Throws(UnexpectedResultException::class)
-    open fun executeInt(frame: VirtualFrame): Int = RuntimeTypesGen.expectInteger(execute(frame))
-    fun executeRequiredInt(frame: VirtualFrame): Int = try { executeInt(frame) }
-    catch (_: UnexpectedResultException) { fault("Expected primitive Int") }
-    @Throws(UnexpectedResultException::class)
-    open fun executeLong(frame: VirtualFrame): Long {
-        return RuntimeTypesGen.expectLong(execute(frame))
-    }
-
-    @Throws(UnexpectedResultException::class)
-    open fun executeFloat(frame: VirtualFrame): Float = RuntimeTypesGen.expectFloat(execute(frame))
-    @Throws(UnexpectedResultException::class)
-    open fun executeDouble(frame: VirtualFrame): Double = RuntimeTypesGen.expectDouble(execute(frame))
-    fun executeRequiredFloat(frame: VirtualFrame): Float = try { executeFloat(frame) }
-    catch (_: UnexpectedResultException) { fault("Expected primitive Float") }
-    fun executeRequiredDouble(frame: VirtualFrame): Double = try { executeDouble(frame) }
-    catch (_: UnexpectedResultException) { fault("Expected primitive Double") }
-
-    @Throws(UnexpectedResultException::class)
-    open fun executeClosure(frame: VirtualFrame): Closure = RuntimeTypesGen.expectClosure(execute(frame))
-
-    @Throws(UnexpectedResultException::class)
-    open fun executeDataValue(frame: VirtualFrame): DataValue = RuntimeTypesGen.expectDataValue(execute(frame))
-
-    @Throws(UnexpectedResultException::class)
-    open fun executeAddress(frame: VirtualFrame): ManagedAddress = RuntimeTypesGen.expectManagedAddress(execute(frame))
-
-    /** Primitive consumers reject an unexpected value; forwarding nodes preserve it. */
-    fun executeRequiredLong(frame: VirtualFrame): Long = try { executeLong(frame) }
-    catch (_: UnexpectedResultException) { fault("Expected primitive Long") }
-
-    fun executeRequiredClosure(frame: VirtualFrame): Closure = try { executeClosure(frame) }
-    catch (_: UnexpectedResultException) { fault("Application of a non-function") }
-
-    fun executeRequiredDataValue(frame: VirtualFrame): DataValue = try { executeDataValue(frame) }
-    catch (_: UnexpectedResultException) { fault("Expected constructor value") }
-
-    fun executeRequiredAddress(frame: VirtualFrame): ManagedAddress = try { executeAddress(frame) }
-    catch (_: UnexpectedResultException) { fault("Expected a managed literal Addr#") }
-}
 private class Literal(private val value: Any?) : Expr() {
     init { representation = CoreRepresentation(when (value) {
         is Int, is Long -> CoreKind.LONG; is Float -> CoreKind.FLOAT; is Double -> CoreKind.DOUBLE
@@ -333,47 +89,6 @@ private class Literal(private val value: Any?) : Expr() {
     override fun executeFloat(frame: VirtualFrame) = RuntimeTypesGen.expectFloat(value)
     override fun executeDouble(frame: VirtualFrame) = RuntimeTypesGen.expectDouble(value)
 }
-internal class LocalRead(private val slot: Int, private val cell: Boolean = true) : Expr() {
-    override fun executeInt(frame: VirtualFrame): Int =
-        if ((!cell && representation.isInt) || frame.isInt(slot)) frame.getInt(slot) else super.executeInt(frame)
-    override fun executeFloat(frame: VirtualFrame): Float =
-        if ((!cell && representation.isFloat) || frame.isFloat(slot)) frame.getFloat(slot) else super.executeFloat(frame)
-    override fun executeDouble(frame: VirtualFrame): Double =
-        if ((!cell && representation.isDouble) || frame.isDouble(slot)) frame.getDouble(slot) else super.executeDouble(frame)
-    override fun executeLong(frame: VirtualFrame): Long =
-        if ((!cell && representation.isLong) || frame.isLong(slot)) frame.getLong(slot) else super.executeLong(frame)
-
-    override fun execute(frame: VirtualFrame): Any? {
-        val value = if (!cell && representation.isEvaluatedReference) frame.getObject(slot) else FrameAccess.read(frame, slot)
-        // A proved, nonrecursive unlifted reference can carry the null sentinel
-        // returned by original foreign protocols (the terminal stack location).
-        // It is already bound; unlike unknown locals or unpublished RecCells,
-        // null here describes the value, not its initialization state.
-        if (!cell && representation.isEvaluatedUnliftedObject) return value
-        if (!cell || value !is RecCell) return value ?: fault("Uninitialized local binding")
-        if (!value.initialized) fault("Recursive binding read before initialization")
-        return value.value
-    }
-
-    override fun executeDataValue(frame: VirtualFrame): DataValue =
-        if (!cell && representation.evaluated && representation.kind == CoreKind.DATA)
-            RuntimeTypesGen.expectDataValue(frame.getObject(slot)) else super.executeDataValue(frame)
-
-    override fun executeClosure(frame: VirtualFrame): Closure =
-        if (!cell && representation.evaluated && representation.kind == CoreKind.CLOSURE)
-            RuntimeTypesGen.expectClosure(frame.getObject(slot)) else super.executeClosure(frame)
-
-    override fun executeAddress(frame: VirtualFrame): ManagedAddress =
-        if (!cell && representation.evaluated && representation.kind == CoreKind.ADDRESS)
-            RuntimeTypesGen.expectManagedAddress(frame.getObject(slot)) else super.executeAddress(frame)
-
-    /** Recursive captures retain their cell identity until the whole group is published. */
-    fun writeForced(frame: VirtualFrame, original: Thunk, result: Any?) {
-        val binding = FrameAccess.read(frame, slot)
-        if (binding === original) FrameAccess.write(frame, slot, result)
-        else if (cell && binding is RecCell) updateForcedCell(binding, original, result)
-    }
-}
 /** Replace only the successfully forced link; aliases may already have updated this cell. */
 internal fun updateForcedCell(cell: RecCell, original: Thunk, result: Any?) {
     synchronized(cell) {
@@ -381,23 +96,6 @@ internal fun updateForcedCell(cell: RecCell, original: Thunk, result: Any?) {
     }
 }
 
-private class GlobalRead(private val binding: GlobalBinding) : Expr() {
-    override fun execute(frame: VirtualFrame) = binding.read()
-}
-private class MakeClosure(private val target: RootCallTarget, private val arity: Int,
-                          private val captureLayout: CaptureLayout?,
-                          @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
-    init { representation = CoreRepresentation(CoreKind.CLOSURE, evaluated = true) }
-    // Cadenza's closed-lambda optimization: immutable code needs no allocation.
-    private val constantClosure = if (captureLayout == null) Closure(environment = null, arity = arity, target = target) else null
-    override fun execute(frame: VirtualFrame): Closure = constantClosure ?: Closure(
-        environment = captureLayout!!.capture(frame, captures), arity = arity, target = target)
-    override fun executeClosure(frame: VirtualFrame): Closure = execute(frame)
-}
-private class Delay(private val target: RootCallTarget, private val captureLayout: CaptureLayout?,
-                    @field:CompilationFinal(dimensions = 1) private val captures: IntArray) : Expr() {
-    override fun execute(frame: VirtualFrame): Thunk = Thunk(target, captureLayout?.capture(frame, captures))
-}
 internal class Force @JvmOverloads constructor(private val metrics: Metrics, private val asyncMode: Boolean = false) : Node() {
     private object Retry
     private class Parked(val boundary: Any, val continuation: SavedGuestContinuation)
@@ -713,7 +411,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         when (original) {
             is Thunk -> if (original.state == 5) throw ThunkSuspended(original, request, stackSpill)
             is CallSegment -> if (original.state == 5)
-                throw CallSegmentSuspended(original, asyncRequest = request, stackSpill = stackSpill)
+                throw CallSegmentSuspended(original, null, request, stackSpill)
         }
     }
 
@@ -725,7 +423,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         val mask = SynchronousMasking.current(this)
         val root = initial.sourceRoot as? GuestRoot ?: fault("AST stack cut has no guest root")
         val parkedMask = (initial.yielded as? CallSegmentSuspended)?.parkedActiveMask ?: mask
-        val segment = CallSegment(initial.identity, parkedMask, mask, resultShape, tailSpill = tailSpill)
+        val segment = CallSegment(initial.identity, parkedMask, mask, resultShape, false, tailSpill)
         while (true) {
             try { return resumeChain(segment, drainSpills = true, delimitedInvocation = delimitedInvocation) }
             catch (cut: CallSegmentSuspended) {
@@ -822,7 +520,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                     throw IllegalStateException("Parked call segment did not restore its caller mask")
                 val request = saved.asyncRequest()
                 publishCallContinuation(segment, saved, parkedMask ?: SynchronousMasking.current(this))
-                throw CallSegmentSuspended(segment, asyncRequest = request, stackSpill = saved.stackSpill())
+                throw CallSegmentSuspended(segment, null, request, saved.stackSpill())
             }
             // A completed tuple may still be a producer-thread slab loan.
             // Release that loan even if the callee returned under a wrong mask.
@@ -833,7 +531,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 segment.value = answer // A scalar call may return an unforced thunk; never enter it here.
                 segment.owner = null
                 segment.state = 2
-                segment.monitor.notifyAll()
+                (segment.monitor as java.lang.Object).notifyAll()
             }
             return answer
         } catch (e: CallSegmentSuspended) {
@@ -874,7 +572,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 segment.logicalMask = logicalMask
                 segment.owner = null
                 segment.state = 5
-                segment.monitor.notifyAll()
+                (segment.monitor as java.lang.Object).notifyAll()
             }
         } finally { safepoint.setAllowSideEffects(previous) }
     }
@@ -883,14 +581,14 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         segment.value = failure
         segment.owner = null
         segment.state = 3
-        segment.monitor.notifyAll()
+        (segment.monitor as java.lang.Object).notifyAll()
     }
 
     private fun suspendCallOwned(segment: CallSegment) = synchronized(segment.monitor) {
         if (segment.state != 1 || segment.owner !== Thread.currentThread()) return@synchronized
         segment.owner = null
         segment.state = 4
-        segment.monitor.notifyAll()
+        (segment.monitor as java.lang.Object).notifyAll()
     }
 
     private fun rethrowCallFailure(segment: CallSegment): Nothing {
@@ -908,7 +606,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             synchronized(waiting.monitor) {
                 if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
                     if (asyncMode || AstControl.enabled(this)) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
-                    GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { waiting.monitor.wait() }
+                    GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { (waiting.monitor as java.lang.Object).wait() }
                 }
             }
         }, segment)
@@ -968,7 +666,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 thunk.environment = null
                 thunk.owner = null
                 thunk.state = 2
-                thunk.monitor.notifyAll()
+                (thunk.monitor as java.lang.Object).notifyAll()
             }
             return result
         } catch (e: DelimitedCut) {
@@ -1013,7 +711,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 thunk.environment = null
                 thunk.owner = null
                 thunk.state = 5
-                thunk.monitor.notifyAll()
+                (thunk.monitor as java.lang.Object).notifyAll()
             }
         } finally {
             safepoint.setAllowSideEffects(previous)
@@ -1030,7 +728,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         thunk.environment = null
         thunk.owner = null
         thunk.state = 3
-        thunk.monitor.notifyAll()
+        (thunk.monitor as java.lang.Object).notifyAll()
     }
 
     // As with memoized failure, ownership release is an exceptional exit.
@@ -1042,7 +740,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
         // effects by silently returning this thunk to state 0.
         thunk.owner = null
         thunk.state = 4
-        thunk.monitor.notifyAll()
+        (thunk.monitor as java.lang.Object).notifyAll()
     }
 
     private fun rethrowFailure(thunk: Thunk): Nothing {
@@ -1060,7 +758,7 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
             synchronized(waiting.monitor) {
                 if (waiting.state == 1 && waiting.owner !== Thread.currentThread()) {
                     if (asyncMode || AstControl.enabled(this)) GuestThreads.pollCurrent(this, true)?.let { throw AsyncBlocked(it, this) }
-                    GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { waiting.monitor.wait() }
+                    GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE).use { (waiting.monitor as java.lang.Object).wait() }
                 }
             }
         }, thunk)
@@ -1577,145 +1275,6 @@ private class DefaultCase(scrutinee: Expr, binder: Int, alternatives: Array<Alte
     override fun executeClosure(frame: VirtualFrame): Closure { prepare(frame); return alternatives.last().body.executeClosure(frame) }
     override fun executeDataValue(frame: VirtualFrame): DataValue { prepare(frame); return alternatives.last().body.executeDataValue(frame) }
     override fun executeAddress(frame: VirtualFrame): ManagedAddress { prepare(frame); return alternatives.last().body.executeAddress(frame) }
-}
-private class Construct(private val layout: DataLayout,
-                        @field:Children private var fields: Array<Expr>,
-                        @field:CompilationFinal(dimensions = 2) private val vectorSlots: Array<IntArray?> = emptyArray()) : Expr() {
-    init { representation = CoreRepresentation(CoreKind.DATA, evaluated = true) }
-    @ExplodeLoop override fun execute(frame: VirtualFrame): DataValue {
-        if (layout.hasBoxedValueCache) return layout.createLong(fields[0].executeRequiredLong(frame))
-        val value = layout.allocate()
-        for (i in fields.indices) {
-            val physical = layout.fieldOffset(i)
-            if (layout.logicalProof(i)?.isAggregate == true) {
-                val slots = vectorSlots[i] ?: fault("Missing aggregate constructor slots")
-                fields[i].executeTuple(frame, slots, 0)
-                for (leaf in slots.indices) {
-                    val index = physical + leaf
-                    if (layout.isVector(index)) layout.initializeVector(value, index, frame, slots, leaf)
-                    else if (layout.isInt(index)) layout.initializeInt(value, index, frame.getInt(slots[leaf]))
-                    else if (layout.isLong(index)) layout.initializeLong(value, index, frame.getLong(slots[leaf]))
-                    else if (layout.isFloat(index)) layout.initializeFloat(value, index, frame.getFloat(slots[leaf]))
-                    else if (layout.isDouble(index)) layout.initializeDouble(value, index, frame.getDouble(slots[leaf]))
-                    else layout.initialize(value, index, frame.getObject(slots[leaf]))
-                }
-                for (slot in slots) frame.clear(slot)
-            } else if (layout.isVector(physical)) {
-                val lanes = vectorSlots[i] ?: fault("Missing vector constructor lane slots")
-                fields[i].executeTuple(frame, lanes, 0)
-                layout.initializeVector(value, physical, frame, lanes, 0)
-                for (slot in lanes) frame.clear(slot)
-            } else if (layout.isInt(physical)) layout.initializeInt(value, physical, fields[i].executeRequiredInt(frame))
-            else if (layout.isLong(physical)) layout.initializeLong(value, physical, fields[i].executeRequiredLong(frame))
-            else if (layout.isFloat(physical)) layout.initializeFloat(value, physical, fields[i].executeRequiredFloat(frame))
-            else if (layout.isDouble(physical)) layout.initializeDouble(value, physical, fields[i].executeRequiredDouble(frame))
-            else layout.initialize(value, physical, fields[i].execute(frame))
-        }
-        return value
-    }
-    override fun executeDataValue(frame: VirtualFrame): DataValue = execute(frame)
-}
-/** Compare the operand references themselves, including untouched or updated thunks. */
-private class PointerEquality(@field:Child private var left: Expr, @field:Child private var right: Expr) : Expr() {
-    init { representation = CoreRepresentation(CoreKind.LONG, evaluated = true) }
-    override fun execute(frame: VirtualFrame): Long = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long = if (left.execute(frame) === right.execute(frame)) 1L else 0L
-}
-private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
-    private val operation = scalar64PrimitiveOperation(name)
-    private val wordMask = narrowWordPrimitiveMask(name)
-    private val bitShift = scalarBitPrimitiveShift(name)
-    private val bitMask = -1L ushr bitShift
-    init {
-        representation = CoreRepresentation(CoreKind.LONG, evaluated = true)
-        val arity = when (operation) {
-            "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> 1
-            "clz8#", "clz16#", "clz32#", "clz64#" -> 1
-            "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> 1
-            "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> 1
-            "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> 1
-            "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#",
-            "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> 2
-
-            "mulIntMayOflo#" -> 2
-
-            "quotWord#" -> 2
-            "remWord#" -> 2
-            "gtWord#" -> 2
-            "geWord#" -> 2
-
-            "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
-            "narrow8Int#", "narrow16Int#", "narrow32Int#", "intToInt64#", "int64ToInt#",
-            "narrow8Word#", "narrow16Word#", "narrow32Word#" -> 1
-            "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
-            "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
-            ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
-            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2
-            else -> throw UnsupportedCore("Unsupported primitive $name")
-        }
-        if (arguments.size != arity) throw RuntimeFault("Primitive arity mismatch: $name")
-        if (operation == "mulIntMayOflo#" &&
-            arguments.any { !it.representation.isLong })
-            throw RuntimeFault("Primitive requires Long operands: $name")
-    }
-    override fun execute(frame: VirtualFrame): Any = executeLong(frame)
-    override fun executeLong(frame: VirtualFrame): Long {
-        val x = arguments[0].executeRequiredLong(frame)
-        val y = if (arguments.size == 2) arguments[1].executeRequiredLong(frame) else 0L
-        fun b(value: Boolean) = if (value) 1L else 0L
-        return when (operation) {
-            "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> java.lang.Long.bitCount(x and bitMask).toLong()
-            "clz8#", "clz16#", "clz32#", "clz64#" -> (java.lang.Long.numberOfLeadingZeros(x and bitMask) - bitShift).toLong()
-            "ctz8#", "ctz16#", "ctz32#", "ctz64#" -> minOf(java.lang.Long.numberOfTrailingZeros(x and bitMask), 64 - bitShift).toLong()
-            "byteSwap16#", "byteSwap32#", "byteSwap64#", "byteSwap#" -> java.lang.Long.reverseBytes(x) ushr bitShift
-            "bitReverse8#", "bitReverse16#", "bitReverse32#", "bitReverse64#", "bitReverse#" -> java.lang.Long.reverse(x) ushr bitShift
-            "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#" ->
-                java.lang.Long.expand(x and bitMask, y and bitMask) and bitMask
-            "pext8#", "pext16#", "pext32#", "pext64#", "pext#" ->
-                java.lang.Long.compress(x and bitMask, y and bitMask) and bitMask
-
-            "mulIntMayOflo#" -> b(Math.multiplyHigh(x, y) != ((x * y) shr 63))
-
-            "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
-            "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
-            "gtWord#" -> b(java.lang.Long.compareUnsigned(x, y) > 0)
-            "geWord#" -> b(java.lang.Long.compareUnsigned(x, y) >= 0)
-
-            "+#", "plusWord#" -> x + y
-            "-#", "minusWord#" -> x - y
-            "*#", "timesWord#" -> x * y
-
-            "negateInt#" -> -x
-            "quotInt#" -> x / y
-            "remInt#" -> x % y
-            "==#", "eqWord#", "eqChar#" -> b(x == y)
-            "/=#", "neWord#", "neChar#" -> b(x != y)
-            "<#", "ltChar#" -> b(x < y)
-            "ltWord#" -> b(java.lang.Long.compareUnsigned(x, y) < 0)
-            "<=#", "leChar#" -> b(x <= y)
-            "leWord#" -> b(java.lang.Long.compareUnsigned(x, y) <= 0)
-
-            ">#", "gtChar#" -> b(x > y)
-            ">=#", "geChar#" -> b(x >= y)
-            "and#", "andI#" -> x and y
-            "or#", "orI#" -> x or y
-            "xor#", "xorI#" -> x xor y
-            "not#", "notI#" -> x.inv()
-            "clz#" -> java.lang.Long.numberOfLeadingZeros(x).toLong()
-            "ctz#" -> java.lang.Long.numberOfTrailingZeros(x).toLong()
-            "popCnt#" -> java.lang.Long.bitCount(x).toLong()
-            "uncheckedIShiftL#", "uncheckedShiftL#" -> x shl y.toInt()
-            "uncheckedIShiftRA#" -> x shr y.toInt()
-            "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
-            // These primops narrow machine Int# without changing its Long carrier.
-            "narrow8Int#" -> x.toByte().toLong()
-            "narrow16Int#" -> x.toShort().toLong()
-            "narrow32Int#" -> x.toInt().toLong()
-            "narrow8Word#", "narrow16Word#", "narrow32Word#" -> x and wordMask
-            "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> x
-            else -> fault("Unsupported primitive")
-        }
-    }
 }
 private class FunctionBody(expression: Expr, metrics: Metrics, result: CoreRepresentation,
     private val tuple: TupleShape?, @field:CompilationFinal(dimensions = 1) private val tupleSlots: IntArray) : Node() {
@@ -3679,7 +3238,7 @@ CoreStackForeign.validateHead(fn, defined)
                         argumentSlots += slot
                         argumentIndices += ArgumentLayout.offset(inputLayout, index)
                         argumentProofs += proofs[index]
-                        LocalRead(slot, cell = false).proven(proofs[index])
+                        LocalRead(slot, false).proven(proofs[index])
                     } else {
                         val lanes = IntArray(1) { layout.bind("field$index vector") }
                         TupleShape.flatten(vector).forEachIndexed { lane, proof ->
