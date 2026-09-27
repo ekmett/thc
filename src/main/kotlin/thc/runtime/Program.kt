@@ -32,27 +32,13 @@ internal fun fault(message: String): Nothing {
     CompilerDirectives.transferToInterpreterAndInvalidate()
     throw RuntimeFault(message)
 }
-/** Narrow unsigned carriers are zero-extended Longs, unlike signed Int8/16/32 carriers. */
+/** Machine-word narrowing retains the Word# Long carrier. */
 internal fun narrowWordPrimitiveMask(name: String): Long = when (name) {
-    "wordToWord8#", "word8ToWord#", "int8ToWord8#", "narrow8Word#", "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
-    "quotWord8#", "remWord8#", "eqWord8#", "neWord8#", "gtWord8#", "geWord8#", "andWord8#", "orWord8#", "xorWord8#", "notWord8#", "uncheckedShiftLWord8#", "uncheckedShiftRLWord8#" -> 0xffL
-    "wordToWord16#", "word16ToWord#", "int16ToWord16#", "narrow16Word#", "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
-    "quotWord16#", "remWord16#", "eqWord16#", "neWord16#", "gtWord16#", "geWord16#", "andWord16#", "orWord16#", "xorWord16#", "notWord16#", "uncheckedShiftLWord16#", "uncheckedShiftRLWord16#" -> 0xffffL
-    "wordToWord32#", "word32ToWord#", "int32ToWord32#", "narrow32Word#", "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#",
-    "quotWord32#", "remWord32#", "eqWord32#", "neWord32#", "gtWord32#", "geWord32#", "andWord32#", "orWord32#", "xorWord32#", "notWord32#", "uncheckedShiftLWord32#", "uncheckedShiftRLWord32#" -> 0xffff_ffffL
+    "narrow8Word#" -> 0xffL
+    "narrow16Word#" -> 0xffffL
+    "narrow32Word#" -> 0xffff_ffffL
     else -> 0L
 }
-/** Fixed-width signed arithmetic retains canonical sign-extended Long carriers. */
-internal fun narrowIntPrimitiveShift(name: String): Int = when (name) {
-    "uncheckedShiftRLInt8#" -> 56
-    "uncheckedShiftRLInt16#" -> 48
-    "uncheckedShiftRLInt32#" -> 32
-    "word8ToInt8#", "negateInt8#", "plusInt8#", "subInt8#", "timesInt8#", "quotInt8#", "remInt8#", "eqInt8#", "neInt8#", "ltInt8#", "leInt8#", "gtInt8#", "geInt8#", "uncheckedShiftLInt8#", "uncheckedShiftRAInt8#" -> 56
-    "word16ToInt16#", "negateInt16#", "plusInt16#", "subInt16#", "timesInt16#", "quotInt16#", "remInt16#", "eqInt16#", "neInt16#", "ltInt16#", "leInt16#", "gtInt16#", "geInt16#", "uncheckedShiftLInt16#", "uncheckedShiftRAInt16#" -> 48
-    "word32ToInt32#", "negateInt32#", "plusInt32#", "subInt32#", "timesInt32#", "quotInt32#", "remInt32#", "eqInt32#", "neInt32#", "ltInt32#", "leInt32#", "gtInt32#", "geInt32#", "uncheckedShiftLInt32#", "uncheckedShiftRAInt32#" -> 32
-    else -> 0
-}
-private fun signedNarrow(value: Long, shift: Int): Long = (value shl shift) shr shift
 internal fun narrowWordLiteral(kind: String, value: String): Int {
     val maximum = when (kind) {
         "word8" -> 0xffL; "word16" -> 0xffffL; "word32" -> 0xffff_ffffL
@@ -1599,7 +1585,6 @@ private class PointerEquality(@field:Child private var left: Expr, @field:Child 
 private class Primitive(private val name: String, @field:Children private var arguments: Array<Expr>) : Expr() {
     private val operation = scalar64PrimitiveOperation(name)
     private val wordMask = narrowWordPrimitiveMask(name)
-    private val intShift = narrowIntPrimitiveShift(name)
     private val bitShift = scalarBitPrimitiveShift(name)
     private val bitMask = -1L ushr bitShift
     init {
@@ -1613,56 +1598,25 @@ private class Primitive(private val name: String, @field:Children private var ar
             "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#",
             "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> 2
 
-            "negateInt8#", "negateInt16#", "negateInt32#" -> 1
-            "plusInt8#", "plusInt16#", "plusInt32#" -> 2
-            "subInt8#", "subInt16#", "subInt32#" -> 2
-            "timesInt8#", "timesInt16#", "timesInt32#" -> 2
-            "quotInt8#", "quotInt16#", "quotInt32#" -> 2
-            "remInt8#", "remInt16#", "remInt32#" -> 2
-            "eqInt8#", "eqInt16#", "eqInt32#" -> 2
-            "neInt8#", "neInt16#", "neInt32#" -> 2
-            "ltInt8#", "ltInt16#", "ltInt32#" -> 2
-            "leInt8#", "leInt16#", "leInt32#" -> 2
-            "gtInt8#", "gtInt16#", "gtInt32#" -> 2
-            "geInt8#", "geInt16#", "geInt32#" -> 2
-            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#",
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#",
-            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#", "mulIntMayOflo#" -> 2
+            "mulIntMayOflo#" -> 2
 
             "quotWord#" -> 2
             "remWord#" -> 2
             "gtWord#" -> 2
             "geWord#" -> 2
-            "quotWord8#", "quotWord16#", "quotWord32#" -> 2
-            "remWord8#", "remWord16#", "remWord32#" -> 2
-            "eqWord8#", "eqWord16#", "eqWord32#" -> 2
-            "neWord8#", "neWord16#", "neWord32#" -> 2
-            "gtWord8#", "gtWord16#", "gtWord32#" -> 2
-            "geWord8#", "geWord16#", "geWord32#" -> 2
-            "andWord8#", "andWord16#", "andWord32#" -> 2
-            "orWord8#", "orWord16#", "orWord32#" -> 2
-            "xorWord8#", "xorWord16#", "xorWord32#" -> 2
-            "notWord8#", "notWord16#", "notWord32#" -> 1
-            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> 2
-            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> 2
+
             "negateInt#", "not#", "notI#", "clz#", "ctz#", "popCnt#", "int2Word#", "word2Int#", "ord#", "chr#",
             "narrow8Int#", "narrow16Int#", "narrow32Int#", "intToInt64#", "int64ToInt#",
-            "intToInt8#", "int8ToInt#", "intToInt16#", "int16ToInt#", "intToInt32#", "int32ToInt#",
-            "int8ToWord8#", "word8ToInt8#", "int16ToWord16#", "word16ToInt16#", "int32ToWord32#", "word32ToInt32#",
-            "wordToWord8#", "word8ToWord#", "wordToWord16#", "word16ToWord#", "wordToWord32#", "word32ToWord#",
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> 1
             "+#", "plusWord#", "-#", "minusWord#", "*#", "timesWord#", "quotInt#", "remInt#",
             "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
             ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
-            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#",
-            "plusWord8#", "subWord8#", "timesWord8#", "ltWord8#", "leWord8#",
-            "plusWord16#", "subWord16#", "timesWord16#", "ltWord16#", "leWord16#",
-            "plusWord32#", "subWord32#", "timesWord32#", "ltWord32#", "leWord32#" -> 2
+            "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
         if (arguments.size != arity) throw RuntimeFault("Primitive arity mismatch: $name")
-        if (operation in setOf("uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#", "mulIntMayOflo#") &&
-            arguments.any { it.representation.kind != CoreKind.LONG || it.representation.isTypedTransport })
+        if (operation == "mulIntMayOflo#" &&
+            arguments.any { !it.representation.isLong })
             throw RuntimeFault("Primitive requires Long operands: $name")
     }
     override fun execute(frame: VirtualFrame): Any = executeLong(frame)
@@ -1680,48 +1634,18 @@ private class Primitive(private val name: String, @field:Children private var ar
                 java.lang.Long.expand(x and bitMask, y and bitMask) and bitMask
             "pext8#", "pext16#", "pext32#", "pext64#", "pext#" ->
                 java.lang.Long.compress(x and bitMask, y and bitMask) and bitMask
-            "negateInt8#", "negateInt16#", "negateInt32#" -> signedNarrow(-x, intShift)
-            "plusInt8#", "plusInt16#", "plusInt32#" -> signedNarrow(x + y, intShift)
-            "subInt8#", "subInt16#", "subInt32#" -> signedNarrow(x - y, intShift)
-            "timesInt8#", "timesInt16#", "timesInt32#" -> signedNarrow(x * y, intShift)
-            "quotInt8#", "quotInt16#", "quotInt32#" -> signedNarrow(signedNarrow(x, intShift) / signedNarrow(y, intShift), intShift)
-            "remInt8#", "remInt16#", "remInt32#" -> signedNarrow(signedNarrow(x, intShift) % signedNarrow(y, intShift), intShift)
-            "eqInt8#", "eqInt16#", "eqInt32#" -> b(signedNarrow(x, intShift) == signedNarrow(y, intShift))
-            "neInt8#", "neInt16#", "neInt32#" -> b(signedNarrow(x, intShift) != signedNarrow(y, intShift))
-            "ltInt8#", "ltInt16#", "ltInt32#" -> b(signedNarrow(x, intShift) < signedNarrow(y, intShift))
-            "leInt8#", "leInt16#", "leInt32#" -> b(signedNarrow(x, intShift) <= signedNarrow(y, intShift))
-            "gtInt8#", "gtInt16#", "gtInt32#" -> b(signedNarrow(x, intShift) > signedNarrow(y, intShift))
-            "geInt8#", "geInt16#", "geInt32#" -> b(signedNarrow(x, intShift) >= signedNarrow(y, intShift))
-            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" ->
-                signedNarrow(x shl y.toInt(), intShift)
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" ->
-                signedNarrow(x, intShift) shr y.toInt()
-            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#" ->
-                signedNarrow((x and (-1L ushr intShift)) ushr y.toInt(), intShift)
+
             "mulIntMayOflo#" -> b(Math.multiplyHigh(x, y) != ((x * y) shr 63))
 
             "quotWord#" -> java.lang.Long.divideUnsigned(x, y)
             "remWord#" -> java.lang.Long.remainderUnsigned(x, y)
             "gtWord#" -> b(java.lang.Long.compareUnsigned(x, y) > 0)
             "geWord#" -> b(java.lang.Long.compareUnsigned(x, y) >= 0)
-            "quotWord8#", "quotWord16#", "quotWord32#" -> (x and wordMask) / (y and wordMask)
-            "remWord8#", "remWord16#", "remWord32#" -> (x and wordMask) % (y and wordMask)
-            "eqWord8#", "eqWord16#", "eqWord32#" -> b((x and wordMask) == (y and wordMask))
-            "neWord8#", "neWord16#", "neWord32#" -> b((x and wordMask) != (y and wordMask))
-            "gtWord8#", "gtWord16#", "gtWord32#" -> b((x and wordMask) > (y and wordMask))
-            "geWord8#", "geWord16#", "geWord32#" -> b((x and wordMask) >= (y and wordMask))
-            "andWord8#", "andWord16#", "andWord32#" -> (x and y) and wordMask
-            "orWord8#", "orWord16#", "orWord32#" -> (x or y) and wordMask
-            "xorWord8#", "xorWord16#", "xorWord32#" -> (x xor y) and wordMask
-            "notWord8#", "notWord16#", "notWord32#" -> x.inv() and wordMask
-            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> (x shl y.toInt()) and wordMask
-            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> (x and wordMask) ushr y.toInt()
+
             "+#", "plusWord#" -> x + y
             "-#", "minusWord#" -> x - y
             "*#", "timesWord#" -> x * y
-            "plusWord8#", "plusWord16#", "plusWord32#" -> (x + y) and wordMask
-            "subWord8#", "subWord16#", "subWord32#" -> (x - y) and wordMask
-            "timesWord8#", "timesWord16#", "timesWord32#" -> (x * y) and wordMask
+
             "negateInt#" -> -x
             "quotInt#" -> x / y
             "remInt#" -> x % y
@@ -1731,9 +1655,7 @@ private class Primitive(private val name: String, @field:Children private var ar
             "ltWord#" -> b(java.lang.Long.compareUnsigned(x, y) < 0)
             "<=#", "leChar#" -> b(x <= y)
             "leWord#" -> b(java.lang.Long.compareUnsigned(x, y) <= 0)
-            // These masks fit below Long's sign bit, so signed order is unsigned order.
-            "ltWord8#", "ltWord16#", "ltWord32#" -> b((x and wordMask) < (y and wordMask))
-            "leWord8#", "leWord16#", "leWord32#" -> b((x and wordMask) <= (y and wordMask))
+
             ">#", "gtChar#" -> b(x > y)
             ">=#", "geChar#" -> b(x >= y)
             "and#", "andI#" -> x and y
@@ -1746,13 +1668,10 @@ private class Primitive(private val name: String, @field:Children private var ar
             "uncheckedIShiftL#", "uncheckedShiftL#" -> x shl y.toInt()
             "uncheckedIShiftRA#" -> x shr y.toInt()
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> x ushr y.toInt()
-            // Narrow signed values use sign-normalized Long carriers. Truncation
-            // and signed widening therefore share the width-specific conversion.
-            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> x.toByte().toLong()
-            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> x.toShort().toLong()
-            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> x.toInt().toLong()
-            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
-            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            // These primops narrow machine Int# without changing its Long carrier.
+            "narrow8Int#" -> x.toByte().toLong()
+            "narrow16Int#" -> x.toShort().toLong()
+            "narrow32Int#" -> x.toInt().toLong()
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> x and wordMask
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> x
             else -> fault("Unsupported primitive")

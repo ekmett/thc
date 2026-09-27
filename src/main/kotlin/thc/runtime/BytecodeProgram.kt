@@ -5358,7 +5358,6 @@ CoreStackForeign.validateHead(fn, defined)
         }
         floatingPrimitive(name, args)?.let { return it }
         val wordMask = narrowWordPrimitiveMask(name)
-        val intShift = narrowIntPrimitiveShift(name)
         val bitShift = scalarBitPrimitiveShift(name)
         val operation = when (scalar64PrimitiveOperation(name)) {
             "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#" -> "PopulationCountWidth"
@@ -5369,45 +5368,17 @@ CoreStackForeign.validateHead(fn, defined)
             "pdep8#", "pdep16#", "pdep32#", "pdep64#", "pdep#" -> "BitDepositWidth"
             "pext8#", "pext16#", "pext32#", "pext64#", "pext#" -> "BitExtractWidth"
 
-            "negateInt8#", "negateInt16#", "negateInt32#" -> "NegateNarrowInt"
-            "plusInt8#", "plusInt16#", "plusInt32#" -> "AddNarrowInt"
-            "subInt8#", "subInt16#", "subInt32#" -> "SubtractNarrowInt"
-            "timesInt8#", "timesInt16#", "timesInt32#" -> "MultiplyNarrowInt"
-            "quotInt8#", "quotInt16#", "quotInt32#" -> "QuotientNarrowInt"
-            "remInt8#", "remInt16#", "remInt32#" -> "RemainderNarrowInt"
-            "eqInt8#", "eqInt16#", "eqInt32#" -> "EqualNarrowInt"
-            "neInt8#", "neInt16#", "neInt32#" -> "NotEqualNarrowInt"
-            "ltInt8#", "ltInt16#", "ltInt32#" -> "LessThanNarrowInt"
-            "leInt8#", "leInt16#", "leInt32#" -> "LessEqualNarrowInt"
-            "gtInt8#", "gtInt16#", "gtInt32#" -> "GreaterThanNarrowInt"
-            "geInt8#", "geInt16#", "geInt32#" -> "GreaterEqualNarrowInt"
-            "uncheckedShiftLInt8#", "uncheckedShiftLInt16#", "uncheckedShiftLInt32#" -> "ShiftLeftNarrowInt"
-            "uncheckedShiftRAInt8#", "uncheckedShiftRAInt16#", "uncheckedShiftRAInt32#" -> "ShiftRightNarrowInt"
-            "uncheckedShiftRLInt8#", "uncheckedShiftRLInt16#", "uncheckedShiftRLInt32#" -> "ShiftRightLogicalNarrowInt"
             "mulIntMayOflo#" -> "MultiplyIntMayOverflow"
 
             "quotWord#" -> "QuotientUnsigned"
             "remWord#" -> "RemainderUnsigned"
             "gtWord#" -> "GreaterThanUnsigned"
             "geWord#" -> "GreaterEqualUnsigned"
-            "quotWord8#", "quotWord16#", "quotWord32#" -> "QuotientNarrowWord"
-            "remWord8#", "remWord16#", "remWord32#" -> "RemainderNarrowWord"
-            "eqWord8#", "eqWord16#", "eqWord32#" -> "EqualNarrowWord"
-            "neWord8#", "neWord16#", "neWord32#" -> "NotEqualNarrowWord"
-            "gtWord8#", "gtWord16#", "gtWord32#" -> "GreaterThanNarrowWord"
-            "geWord8#", "geWord16#", "geWord32#" -> "GreaterEqualNarrowWord"
-            "andWord8#", "andWord16#", "andWord32#" -> "BitAndNarrowWord"
-            "orWord8#", "orWord16#", "orWord32#" -> "BitOrNarrowWord"
-            "xorWord8#", "xorWord16#", "xorWord32#" -> "BitXorNarrowWord"
-            "notWord8#", "notWord16#", "notWord32#" -> "BitNotNarrowWord"
-            "uncheckedShiftLWord8#", "uncheckedShiftLWord16#", "uncheckedShiftLWord32#" -> "ShiftLeftNarrowWord"
-            "uncheckedShiftRLWord8#", "uncheckedShiftRLWord16#", "uncheckedShiftRLWord32#" -> "ShiftRightNarrowWord"
+
             "+#", "plusWord#" -> "Add"
             "-#", "minusWord#" -> "Subtract"
             "*#", "timesWord#" -> "Multiply"
-            "plusWord8#", "plusWord16#", "plusWord32#" -> "AddNarrowWord"
-            "subWord8#", "subWord16#", "subWord32#" -> "SubtractNarrowWord"
-            "timesWord8#", "timesWord16#", "timesWord32#" -> "MultiplyNarrowWord"
+
             "negateInt#" -> "Negate"
             "quotInt#" -> "Quotient"
             "remInt#" -> "Remainder"
@@ -5418,8 +5389,7 @@ CoreStackForeign.validateHead(fn, defined)
             "ltWord#" -> "LessThanUnsigned"
             "<=#", "leChar#" -> "LessEqual"
             "leWord#" -> "LessEqualUnsigned"
-            "ltWord8#", "ltWord16#", "ltWord32#" -> "LessThanNarrowWord"
-            "leWord8#", "leWord16#", "leWord32#" -> "LessEqualNarrowWord"
+
             ">#", "gtChar#" -> "GreaterThan"
             ">=#", "geChar#" -> "GreaterEqual"
             "and#", "andI#" -> "BitAnd"
@@ -5432,12 +5402,10 @@ CoreStackForeign.validateHead(fn, defined)
             "uncheckedIShiftL#", "uncheckedShiftL#" -> "ShiftLeft"
             "uncheckedIShiftRA#" -> "ShiftRight"
             "uncheckedIShiftRL#", "uncheckedShiftRL#" -> "ShiftRightUnsigned"
-            // Match AST sign-normalized Long carriers in both conversion directions.
-            "narrow8Int#", "intToInt8#", "int8ToInt#", "word8ToInt8#" -> "Narrow8"
-            "narrow16Int#", "intToInt16#", "int16ToInt#", "word16ToInt16#" -> "Narrow16"
-            "narrow32Int#", "intToInt32#", "int32ToInt#", "word32ToInt32#" -> "Narrow32"
-            "wordToWord8#", "word8ToWord#", "int8ToWord8#", "wordToWord16#", "word16ToWord#", "int16ToWord16#",
-            "wordToWord32#", "word32ToWord#", "int32ToWord32#",
+            // Machine Int# narrowing preserves its Long computation carrier.
+            "narrow8Int#" -> "Narrow8"
+            "narrow16Int#" -> "Narrow16"
+            "narrow32Int#" -> "Narrow32"
             "narrow8Word#", "narrow16Word#", "narrow32Word#" -> "NarrowWord"
             "int2Word#", "word2Int#", "ord#", "chr#", "intToInt64#", "int64ToInt#" -> "Identity"
             "raise#" -> "Raise"
@@ -5453,11 +5421,11 @@ CoreStackForeign.validateHead(fn, defined)
             "indexWord16OffAddr#", "indexInt16OffAddr#" -> "AddressIndexManagedScalar"
             else -> throw UnsupportedCore("Unsupported primitive $name")
         }
-        val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "NegateNarrowInt", "BitNotNarrowWord", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
+        val unary = operation in setOf("PopulationCountWidth", "CountLeadingZerosWidth", "CountTrailingZerosWidth", "ByteSwapWidth", "BitReverseWidth", "Negate", "BitNot", "CountLeadingZeros", "CountTrailingZeros", "PopulationCount",
             "Narrow8", "Narrow16", "Narrow32", "NarrowWord", "Identity", "Raise", "AddressToInt", "IntToAddress")
         if (args.size != if (unary) 1 else 2) throw RuntimeFault("Primitive arity mismatch: $name")
-        if (operation in setOf("ShiftRightLogicalNarrowInt", "MultiplyIntMayOverflow") &&
-            args.any { it.proof.kind != CoreKind.LONG || it.proof.isTypedTransport })
+        if (operation == "MultiplyIntMayOverflow" &&
+            args.any { !it.proof.isLong })
             throw RuntimeFault("Primitive requires Long operands: $name")
         if (operation == "Identity") return evaluated(Expression { e -> e.builder.beginToLong(); args[0].emit(e); e.builder.endToLong() })
         if (operation in setOf("Add", "Subtract", "Multiply") && args.all { staticWideLong(it.proof) })
@@ -5469,48 +5437,18 @@ CoreStackForeign.validateHead(fn, defined)
         return evaluated(Expression { e ->
             val b = e.builder
             when (operation) {
-                "NegateNarrowInt" -> b.beginNegateNarrowInt(intShift)
-                "AddNarrowInt" -> b.beginAddNarrowInt(intShift)
-                "SubtractNarrowInt" -> b.beginSubtractNarrowInt(intShift)
-                "MultiplyNarrowInt" -> b.beginMultiplyNarrowInt(intShift)
-                "QuotientNarrowInt" -> b.beginQuotientNarrowInt(intShift)
-                "RemainderNarrowInt" -> b.beginRemainderNarrowInt(intShift)
-                "EqualNarrowInt" -> b.beginEqualNarrowInt(intShift)
-                "NotEqualNarrowInt" -> b.beginNotEqualNarrowInt(intShift)
-                "LessThanNarrowInt" -> b.beginLessThanNarrowInt(intShift)
-                "LessEqualNarrowInt" -> b.beginLessEqualNarrowInt(intShift)
-                "GreaterThanNarrowInt" -> b.beginGreaterThanNarrowInt(intShift)
-                "GreaterEqualNarrowInt" -> b.beginGreaterEqualNarrowInt(intShift)
-                "ShiftLeftNarrowInt" -> b.beginShiftLeftNarrowInt(intShift)
-                "ShiftRightNarrowInt" -> b.beginShiftRightNarrowInt(intShift)
-                "ShiftRightLogicalNarrowInt" -> b.beginShiftRightLogicalNarrowInt(intShift)
                 "MultiplyIntMayOverflow" -> b.beginMultiplyIntMayOverflow()
                 "QuotientUnsigned" -> b.beginQuotientUnsigned()
                 "RemainderUnsigned" -> b.beginRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.beginGreaterThanUnsigned()
                 "GreaterEqualUnsigned" -> b.beginGreaterEqualUnsigned()
-                "QuotientNarrowWord" -> b.beginQuotientNarrowWord(wordMask)
-                "RemainderNarrowWord" -> b.beginRemainderNarrowWord(wordMask)
-                "EqualNarrowWord" -> b.beginEqualNarrowWord(wordMask)
-                "NotEqualNarrowWord" -> b.beginNotEqualNarrowWord(wordMask)
-                "GreaterThanNarrowWord" -> b.beginGreaterThanNarrowWord(wordMask)
-                "GreaterEqualNarrowWord" -> b.beginGreaterEqualNarrowWord(wordMask)
-                "BitAndNarrowWord" -> b.beginBitAndNarrowWord(wordMask)
-                "BitOrNarrowWord" -> b.beginBitOrNarrowWord(wordMask)
-                "BitXorNarrowWord" -> b.beginBitXorNarrowWord(wordMask)
-                "BitNotNarrowWord" -> b.beginBitNotNarrowWord(wordMask)
-                "ShiftLeftNarrowWord" -> b.beginShiftLeftNarrowWord(wordMask)
-                "ShiftRightNarrowWord" -> b.beginShiftRightNarrowWord(wordMask)
                 "Add" -> b.beginAdd(); "Subtract" -> b.beginSubtract(); "Multiply" -> b.beginMultiply()
-                "AddNarrowWord" -> b.beginAddNarrowWord(wordMask); "SubtractNarrowWord" -> b.beginSubtractNarrowWord(wordMask)
-                "MultiplyNarrowWord" -> b.beginMultiplyNarrowWord(wordMask)
                 "Negate" -> b.beginNegate(); "Quotient" -> b.beginQuotient(); "Remainder" -> b.beginRemainder()
                 "Equal" -> b.beginEqual(); "NotEqual" -> b.beginNotEqual(); "LessThan" -> b.beginLessThan()
                 "PointerEqual" -> b.beginPointerEqual()
                 "LessThanUnsigned" -> b.beginLessThanUnsigned()
                 "LessEqual" -> b.beginLessEqual(); "GreaterThan" -> b.beginGreaterThan(); "GreaterEqual" -> b.beginGreaterEqual()
                 "LessEqualUnsigned" -> b.beginLessEqualUnsigned()
-                "LessThanNarrowWord" -> b.beginLessThanNarrowWord(wordMask); "LessEqualNarrowWord" -> b.beginLessEqualNarrowWord(wordMask)
                 "BitAnd" -> b.beginBitAnd(); "BitOr" -> b.beginBitOr(); "BitXor" -> b.beginBitXor(); "BitNot" -> b.beginBitNot()
                 "PopulationCountWidth" -> b.beginPopulationCountWidth(bitShift)
                 "CountLeadingZerosWidth" -> b.beginCountLeadingZerosWidth(bitShift)
@@ -5540,48 +5478,18 @@ CoreStackForeign.validateHead(fn, defined)
             }
             args.forEach { it.emit(e) }
             when (operation) {
-                "NegateNarrowInt" -> b.endNegateNarrowInt()
-                "AddNarrowInt" -> b.endAddNarrowInt()
-                "SubtractNarrowInt" -> b.endSubtractNarrowInt()
-                "MultiplyNarrowInt" -> b.endMultiplyNarrowInt()
-                "QuotientNarrowInt" -> b.endQuotientNarrowInt()
-                "RemainderNarrowInt" -> b.endRemainderNarrowInt()
-                "EqualNarrowInt" -> b.endEqualNarrowInt()
-                "NotEqualNarrowInt" -> b.endNotEqualNarrowInt()
-                "LessThanNarrowInt" -> b.endLessThanNarrowInt()
-                "LessEqualNarrowInt" -> b.endLessEqualNarrowInt()
-                "GreaterThanNarrowInt" -> b.endGreaterThanNarrowInt()
-                "GreaterEqualNarrowInt" -> b.endGreaterEqualNarrowInt()
-                "ShiftLeftNarrowInt" -> b.endShiftLeftNarrowInt()
-                "ShiftRightNarrowInt" -> b.endShiftRightNarrowInt()
-                "ShiftRightLogicalNarrowInt" -> b.endShiftRightLogicalNarrowInt()
                 "MultiplyIntMayOverflow" -> b.endMultiplyIntMayOverflow()
                 "QuotientUnsigned" -> b.endQuotientUnsigned()
                 "RemainderUnsigned" -> b.endRemainderUnsigned()
                 "GreaterThanUnsigned" -> b.endGreaterThanUnsigned()
                 "GreaterEqualUnsigned" -> b.endGreaterEqualUnsigned()
-                "QuotientNarrowWord" -> b.endQuotientNarrowWord()
-                "RemainderNarrowWord" -> b.endRemainderNarrowWord()
-                "EqualNarrowWord" -> b.endEqualNarrowWord()
-                "NotEqualNarrowWord" -> b.endNotEqualNarrowWord()
-                "GreaterThanNarrowWord" -> b.endGreaterThanNarrowWord()
-                "GreaterEqualNarrowWord" -> b.endGreaterEqualNarrowWord()
-                "BitAndNarrowWord" -> b.endBitAndNarrowWord()
-                "BitOrNarrowWord" -> b.endBitOrNarrowWord()
-                "BitXorNarrowWord" -> b.endBitXorNarrowWord()
-                "BitNotNarrowWord" -> b.endBitNotNarrowWord()
-                "ShiftLeftNarrowWord" -> b.endShiftLeftNarrowWord()
-                "ShiftRightNarrowWord" -> b.endShiftRightNarrowWord()
                 "Add" -> b.endAdd(); "Subtract" -> b.endSubtract(); "Multiply" -> b.endMultiply()
-                "AddNarrowWord" -> b.endAddNarrowWord(); "SubtractNarrowWord" -> b.endSubtractNarrowWord()
-                "MultiplyNarrowWord" -> b.endMultiplyNarrowWord()
                 "Negate" -> b.endNegate(); "Quotient" -> b.endQuotient(); "Remainder" -> b.endRemainder()
                 "Equal" -> b.endEqual(); "NotEqual" -> b.endNotEqual(); "LessThan" -> b.endLessThan()
                 "PointerEqual" -> b.endPointerEqual()
                 "LessThanUnsigned" -> b.endLessThanUnsigned()
                 "LessEqual" -> b.endLessEqual(); "GreaterThan" -> b.endGreaterThan(); "GreaterEqual" -> b.endGreaterEqual()
                 "LessEqualUnsigned" -> b.endLessEqualUnsigned()
-                "LessThanNarrowWord" -> b.endLessThanNarrowWord(); "LessEqualNarrowWord" -> b.endLessEqualNarrowWord()
                 "BitAnd" -> b.endBitAnd(); "BitOr" -> b.endBitOr(); "BitXor" -> b.endBitXor(); "BitNot" -> b.endBitNot()
                 "PopulationCountWidth" -> b.endPopulationCountWidth()
                 "CountLeadingZerosWidth" -> b.endCountLeadingZerosWidth()
