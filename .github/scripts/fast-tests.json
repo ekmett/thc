@@ -692,7 +692,7 @@
     "test/haskell-fixtures/RtsDiagnosticFixtures.hs": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/RtsFileLocks.kt": {
+    "src/main/java/thc/runtime/RtsFileLocks.java": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"], "python": []
     },
     "compiler/test-fixtures/OriginalRtsLocksAudit.hs": {

@@ -137,7 +137,7 @@ class RtsEventNativeTest {
                 // Isolate this genuine lowered safe-return cut from entry polls.
                 // Replacing its input lets us observe evaluation/replay separately.
                 (leaf.children.first() as Expr).replace(object : Expr() {
-                    override fun execute(frame: VirtualFrame): Any { evaluations++; return 3L }
+                    override fun execute(frame: VirtualFrame): Any { evaluations++; return 3 }
                 })
                 val threads = Language.currentState().threads
                 threads.enterCurrent()
@@ -194,7 +194,7 @@ class RtsEventNativeTest {
                     descriptor + ("arity" to 99L), descriptor + ("suppliedArity" to 0L),
                     descriptor + ("resultRep" to mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to false))))
                     assertThrows(RuntimeFault::class.java) { validate(metadata + ("foreignCall" to bad)) }
-                if (RtsEventForeignOp.entries.any { it.symbol == symbol }) {
+                if (RtsEventForeignOp.values().any { it.symbol == symbol }) {
                     CoreRtsEventForeign.validateHead(call[1] as List<Any?>, false)
                     assertThrows(RuntimeFault::class.java) { CoreRtsEventForeign.validateHead(call[1] as List<Any?>, true) }
                 }
@@ -236,7 +236,7 @@ class RtsEventNativeTest {
                             assertEquals(input, threads.capabilityCount())
                             val address = CoreDataLabels.fromCore("enabled_capabilities", CoreRepresentation(
                                 CoreKind.ADDRESS, evaluated = true, present = true, primReps = listOf("AddrRep")))
-                            assertEquals(input, ManagedAddressRead.WORD32.read(address, 0))
+                            assertEquals(input, Integer.toUnsignedLong(ManagedAddressRead.WORD32.readInt(address, 0)))
                             assertEquals(physicalCount, threads.cpuAffinity.count.toLong())
                         }
                         released(language)
