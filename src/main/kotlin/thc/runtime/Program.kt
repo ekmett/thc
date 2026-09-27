@@ -94,14 +94,62 @@ internal class RecCell {
     @Volatile var initialized = false
     @Volatile var value: Any? = null
 }
-/** Program linkage is fixed before guest execution; CAF contents remain lazy. */
+/** Program linkage is fixed before guest execution; code and CAF contents may be lazy. */
 internal class GlobalBinding(val name: String) {
     @CompilationFinal private var initialized = false
     @CompilationFinal private var value: Any? = null
-    fun initialize(value: Any?) { check(!initialized); this.value = value; initialized = true }
+    // Mode is fixed before any guest target can observe this cell. A late value
+    // must NOT be compilation-final: compiling a caller before its first cold
+    // global read must neither freeze null nor require invalidating that caller.
+    @CompilationFinal private var preparationLock: Any? = null
+    @Volatile private var prepared = false
+    private var preparedValue: Any? = null
+    private var prepare: (() -> Any?)? = null
+    private var preparing = false
+    private var preparationFailure: Exception? = null
+    fun initialize(value: Any?) {
+        check(!initialized && preparationLock == null)
+        this.value = value
+        initialized = true
+    }
+    fun defer(lock: Any, action: () -> Any?) {
+        check(!initialized && preparationLock == null)
+        preparationLock = lock
+        prepare = action
+    }
     fun read(): Any? {
+        if (preparationLock != null) return if (prepared) preparedValue else prepareValue()
         if (!initialized) fault("Uninitialized global binding")
         return value
+    }
+
+    /** The shared program lock protects lowering's mutable builders, not guest
+     * thunk evaluation. The published value retains the ordinary closure/thunk
+     * identity and call ABI. No forwarding guest root is installed here. */
+    @CompilerDirectives.TruffleBoundary
+    private fun prepareValue(): Any? = synchronized(preparationLock ?: fault("Uninitialized global binding")) {
+        if (prepared) return@synchronized preparedValue
+        preparationFailure?.let { throw it }
+        check(!preparing) { "Recursive Core preparation for $name" }
+        preparing = true
+        try {
+            val result = checkNotNull(prepare) { "Uninitialized global binding" }.invoke()
+            preparedValue = result
+            prepared = true
+            prepare = null
+            result
+        } catch (cancelled: java.util.concurrent.CancellationException) {
+            throw cancelled
+        } catch (interrupted: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw interrupted
+        } catch (failure: Exception) {
+            preparationFailure = failure
+            prepare = null
+            throw failure
+        } finally {
+            preparing = false
+        }
     }
 }
 internal class Thunk(target: RootCallTarget, var environment: CapturedFrame?) {
@@ -2118,7 +2166,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = Metrics(moduleData["instrument"] != false)
-    private val delimited = DelimitedControl.contains(moduleData["bindings"])
+    private val delimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
+        val body = (binding as? Map<*, *>)?.get("expr")
+        if (body is thc.CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(binding)
+    } ?: DelimitedControl.contains(moduleData["bindings"])
     private val sources = CoreSources(moduleData)
     private var currentSource: CoreSourceLocation? = null
     private var operandBuilder: OperandBuilder? = null
@@ -2142,6 +2193,9 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         fun finish(body: Expr): Expr = if (bindings.isEmpty()) body else AstOperands(bindings.toTypedArray(), temporaries.toIntArray(), body)
     }
     private var attachedRootCount = 0
+    private var constructedRootCount = 0
+    private var initializedBindingCount = 0
+    private val preparationLock = Any()
     private fun <T> withSource(location: CoreSourceLocation?, action: () -> T): T {
         val previous = currentSource
         currentSource = location
@@ -2167,50 +2221,78 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val hostEntries = mutableMapOf<Int, RootCallTarget>()
     private val globalEntries = bindings.associate { it["id"] as String to CoreEntries.binding(it) }
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
+    private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors)
     init {
         if (enableAsync && delimited)
             throw UnsupportedCore("Delimited continuations do not yet preserve AST async captures")
-        if (enableAsync) AstAsyncAdmission.validate(bindings)
-        ArrayOp.validateApplications(bindings)
-        CoreStackForeign.validateHeads(bindings)
-        CoreStackInfoForeign.validateHeads(bindings)
-        CoreOriginalStdio.validateHeads(bindings)
-        CoreProcessForeign.validateHeads(bindings)
-        CoreStablePointers.validateHeads(bindings)
-        CoreRtsShutdown.validateHeads(bindings)
-        CoreMainThreadForeign.validateHeads(bindings)
-        CoreBoundThreadForeign.validateHeads(bindings)
-        CoreStringRtsForeign.validateHeads(bindings)
-        CoreEnvironmentForeign.validateHeads(bindings)
-        CoreRtsDiagnosticForeign.validateHeads(bindings)
-        CoreRtsArgumentsForeign.validateHeads(bindings)
-        CoreManagedFiles.validateHeads(bindings)
-        CoreMd5Foreign.validateHeads(bindings)
-        CoreGmpForeign.validateHeads(bindings)
-        CoreLibdwForeign.validateHeads(bindings)
-        CoreNativeAllocationForeign.validateHeads(bindings)
-        CoreMemmoveForeign.validateHeads(bindings)
-        CoreMemcpyForeign.validateHeads(bindings)
-        CoreSignalForeign.validateHeads(bindings)
-        if (!diagnosticUnsupported) {
-            CoreRepresentations.validateAggregates(bindings, constructors)
-            CoreInputCalls.validate(bindings, constructors)
-        }
-        val scope = Scope(FrameLayout())
-        val initializers = bindings.map { binding ->
-            CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
-            withSource(sources.binding(binding)) {
-                val expr = binding["expr"] as List<Any?>
-                CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
-                if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
-                else argument(expr, scope, representation(binding), binding["name"] as String)
+        val eager = ArrayList<Map<String, Any?>>()
+        for (binding in bindings) {
+            // Strict global initialization retains its original scheduling.
+            val source = binding["expr"] as? thc.CoreBindingBody
+            if (source == null || !representation(binding) || source.header.tag in listOf("lit", "con", "void")) {
+                eager += binding
+                continue
+            }
+            globals.getValue(binding["id"] as String).defer(preparationLock) {
+                validateBindings(listOf(binding))
+                val scope = Scope(FrameLayout())
+                val initializer = initializer(binding, scope)
+                val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
+                initializer.execute(frame).also { value ->
+                    CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
+                    initializedBindingCount++
+                }
             }
         }
+        validateBindings(eager)
+        val scope = Scope(FrameLayout())
+        val initializers = eager.map { initializer(it, scope) }
         val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), scope.layout.build())
-        bindings.forEachIndexed { index, binding ->
+        eager.forEachIndexed { index, binding ->
             val value = initializers[index].execute(frame)
             CoreFunctionIdentity.install(moduleData, binding, value, globalArityCertificates)
             globals.getValue(binding["id"] as String).initialize(value)
+            initializedBindingCount++
+        }
+    }
+
+    private fun validateBindings(requested: List<Map<String, Any?>>) {
+        if (requested.isEmpty()) return
+        if (enableAsync) AstAsyncAdmission.validate(requested)
+        ArrayOp.validateApplications(requested)
+        CoreStackForeign.validateHeads(requested)
+        CoreStackInfoForeign.validateHeads(requested)
+        CoreOriginalStdio.validateHeads(requested)
+        CoreProcessForeign.validateHeads(requested)
+        CoreStablePointers.validateHeads(requested)
+        CoreRtsShutdown.validateHeads(requested)
+        CoreMainThreadForeign.validateHeads(requested)
+        CoreBoundThreadForeign.validateHeads(requested)
+        CoreStringRtsForeign.validateHeads(requested)
+        CoreEnvironmentForeign.validateHeads(requested)
+        CoreRtsDiagnosticForeign.validateHeads(requested)
+        CoreRtsArgumentsForeign.validateHeads(requested)
+        CoreManagedFiles.validateHeads(requested)
+        CoreMd5Foreign.validateHeads(requested)
+        CoreGmpForeign.validateHeads(requested)
+        CoreLibdwForeign.validateHeads(requested)
+        CoreNativeAllocationForeign.validateHeads(requested)
+        CoreMemmoveForeign.validateHeads(requested)
+        CoreMemcpyForeign.validateHeads(requested)
+        CoreSignalForeign.validateHeads(requested)
+        if (!diagnosticUnsupported) {
+            CoreRepresentations.validateAggregates(requested, constructors)
+            checkNotNull(validateInputs).invoke(requested)
+        }
+    }
+
+    private fun initializer(binding: Map<String, Any?>, scope: Scope): Expr {
+        CoreRepresentations.requireNoSum(CoreRepresentations.binder(binding), "global binding")
+        return withSource(sources.binding(binding)) {
+            val expr = binding["expr"] as List<Any?>
+            CoreRepresentations.requireNoSum(CoreRepresentations.expression(expr), "global binding")
+            if (representation(binding) && expr[0] !in listOf("lam", "lit", "con", "void")) delay(expr, scope, binding["name"] as String)
+            else argument(expr, scope, representation(binding), binding["name"] as String)
         }
     }
     private fun bindingIndex(name: String): Int = indices[name] ?: names[name]?.singleOrNull()
@@ -2227,7 +2309,10 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     }
     override fun diagnostics(): Map<String, Any> = linkedMapOf(
         "backend" to "ast", "asyncExceptions" to enableAsync, "sourceNotesEnabled" to sources.enabled, "sourceSpanCount" to sources.spanCount,
-        "sourceRootCount" to attachedRootCount, "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkCountsSnapshot(),
+        "sourceRootCount" to attachedRootCount, "loweredRootCount" to constructedRootCount,
+        "hostEntryRootCount" to hostEntries.size,
+        "initializedBindingCount" to initializedBindingCount,
+        "instrumented" to metrics.enabled, "thunkEvaluationsByLabel" to metrics.thunkCountsSnapshot(),
         "compiledEntries" to metrics.compiledEntries, "leadingCaseReturns" to metrics.leadingCaseReturns, "thunkEvaluations" to metrics.thunkEvaluations,
         "thunkHits" to metrics.thunkHits, "blackholes" to metrics.blackholes, "directCacheMisses" to metrics.directCacheMisses,
         "indirectCalls" to metrics.indirectCalls, "tailBounces" to metrics.tailBounces, "papAllocations" to metrics.papAllocations,
@@ -2353,6 +2438,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val root = FunctionRoot(language, scope.layout.build(), label, captures, environmentSlots,
             argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics, argumentProofs.toTypedArray(), resultProof,
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots, delimited)
+        constructedRootCount++
         root.configureForeignExceptionBridge(foreignExceptionBridge)
         if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, captures != null))
         if (!enableAsync && body is Case && inputLayout == null) root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression,
@@ -2455,6 +2541,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         val body = UnsupportedExpression(message, metrics).located(currentSource)
         val target = FunctionRoot(language, FrameLayout().build(), "unsupported: $message", null,
             intArrayOf(), intArrayOf(), intArrayOf(), body, metrics, coreSourceLocation = rootSource(body)).callTarget
+        constructedRootCount++
         DiagnosticUnavailable(target, message, metrics)
     }
     private fun compileSupported(expr: List<Any?>, scope: Scope, tail: Boolean): Expr = when (expr[0]) {
@@ -3458,6 +3545,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                     argumentSlots.toIntArray(), argumentIndices.toIntArray(), body, metrics,
                     argumentProofs.toTypedArray(), coreSourceLocation = rootSource(body),
                     entryStrict = strictConstructorFields(id, arity), inputLayout = inputLayout)
+                constructedRootCount++
                 root.configureForeignExceptionBridge(foreignExceptionBridge)
                 if (language is thc.Language) root.configureTypedInput(TypedInputLayout.create(language, inputLayout, false))
                 val target = root.callTarget

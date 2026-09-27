@@ -9,6 +9,14 @@ package thc.runtime
 internal object CoreInputCalls {
     private data class Binding(val proof: CoreRepresentation, val inputs: List<CoreRepresentation>?)
     fun validate(bindings: List<Map<String, Any?>>, constructors: Map<String, Map<String, Any?>> = emptyMap()) {
+        validator(bindings, constructors)(bindings)
+    }
+
+    /** Reserve the complete definition-site environment once, while admission
+     * can walk one demanded body at a time. No callee body is traversed merely
+     * to index its binding header; known input proofs still resolve normally. */
+    fun validator(bindings: List<Map<String, Any?>>,
+                  constructors: Map<String, Map<String, Any?>> = emptyMap()): (List<Map<String, Any?>>) -> Unit {
         val globals = bindings.associateBy { it["id"] as String }
         fun inputs(expr: List<Any?>, scope: Map<String, Binding>, seen: Set<String> = emptySet()): List<CoreRepresentation>? = when (expr[0]) {
             "lam" -> (expr[1] as List<Map<String, Any?>>).map(CoreRepresentations::binder)
@@ -101,6 +109,6 @@ internal object CoreInputCalls {
                 }
             }
         }
-        bindings.forEach { visit(it["expr"] as List<Any?>, emptyMap()) }
+        return { requested -> requested.forEach { visit(it["expr"] as List<Any?>, emptyMap()) } }
     }
 }
