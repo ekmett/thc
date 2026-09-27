@@ -14,7 +14,9 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
     data class UnitRecord(val id: String, val json: Artifact, val symbols: Artifact,
         val modules: List<ModuleRecord>)
     data class ModuleRecord(val unit: String, val name: String, val span: CoreJsonSymbols.ModuleSpan,
-        val containsDelimitedControl: Boolean, val registrationObligations: Boolean, val mainAlias: Boolean) {
+        val metadata: CoreJsonSymbols.ValueSpan, val sourceMetadata: CoreJsonSymbols.ValueSpan?,
+        val containsDelimitedControl: Boolean, val registrationObligations: Boolean, val mainAlias: Boolean,
+        val packageScalarDeclarations: Boolean) {
         val prefix = "$unit:$name."
     }
     val modules = units.flatMap { it.modules }
@@ -33,10 +35,11 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
         return null
     }
 
-    fun open(verifyArtifacts: Boolean, admitted: (CoreJsonSymbols.Counters) -> Unit = {}) = Sources(this, verifyArtifacts, admitted)
+    fun open(verifyArtifacts: Boolean, sourceNotes: Boolean = true,
+             admitted: (CoreJsonSymbols.Counters) -> Unit = {}) = Sources(this, verifyArtifacts, sourceNotes, admitted)
 
     class Sources(private val directory: CoreUnitDirectory, private val verifyArtifacts: Boolean,
-                  private val admitted: (CoreJsonSymbols.Counters) -> Unit) : AutoCloseable {
+                  private val sourceNotes: Boolean, private val admitted: (CoreJsonSymbols.Counters) -> Unit) : AutoCloseable {
         private var closed = false
         private val readers = HashMap<String, CoreJsonSymbols>()
         private val metadata = HashMap<ModuleRecord, Map<String, Any?>>()
@@ -51,7 +54,15 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
         @Synchronized fun metadata(module: ModuleRecord): Map<String, Any?> {
             check(!closed) { "Core unit sources are closed" }
             return metadata.getOrPut(module) {
-                reader(module.unit).moduleMetadata(module.span).also {
+                val reader = reader(module.unit)
+                val required = reader.metadata(module.metadata, true)
+                require(required.keys.all { it in METADATA_FIELDS }) { "Unexpected Core admission metadata field" }
+                val notes = if (sourceNotes) module.sourceMetadata?.let {
+                    reader.metadata(it, false).also { source ->
+                        require(source.keys.all { it in setOf("sourceFiles", "sourceSpans") }) { "Unexpected Core source metadata field" }
+                    }
+                } ?: emptyMap() else emptyMap()
+                (required + notes + ("bindings" to emptyList<Any>())).also {
                     require(it["unit"] == module.unit && it["module"] == module.name &&
                         it["ghc"] == "9.14.1" && it["boundary"] == BOUNDARY) {
                         "Core module identity differs from package directory: ${module.prefix}"
@@ -75,6 +86,10 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
 
     companion object {
         private const val BOUNDARY = "optimized-Core-after-Tidy-before-CorePrep"
+        private val METADATA_FIELDS = setOf("schema", "ghc", "unit", "module", "boundary", "providedModules", "constructors",
+            "foreign", "foreignLink", "staticForeignImportStubs", "staticForeignImports", "staticForeignExports",
+            "staticForeignExportRegistration", "packageScalarLink", "packageNativeLink", "packageNativeArchive",
+            "foreignExceptionBridge", "foreignExceptionBridgeUnit")
         private val SHA = Regex("[0-9a-f]{64}")
         /** Null selects the unchanged legacy package protocol, not a silent
          * sidecar discovery or conversion. New unit pairs are explicit. */
@@ -118,11 +133,19 @@ internal class CoreUnitDirectory private constructor(val units: List<UnitRecord>
                         offset("bindingsStart"), offset("bindingsEnd"))
                     require(span.start >= previousEnd && span.start < span.bindingsStart &&
                         span.bindingsStart < span.bindingsEnd && span.bindingsEnd < span.end) { "Invalid module extents" }
-                    previousEnd = span.end
-                    ModuleRecord(id, name, span,
+                    val metadata = CoreJsonSymbols.ValueSpan(offset("metadataStart"), offset("metadataEnd"))
+                    require(metadata.start >= span.end && metadata.end > metadata.start) { "Invalid Core admission metadata extent" }
+                    require(module.containsKey("sourceMetadataStart") == module.containsKey("sourceMetadataEnd")) { "Incomplete Core source metadata extent" }
+                    val notes = if (module.containsKey("sourceMetadataStart"))
+                        CoreJsonSymbols.ValueSpan(offset("sourceMetadataStart"), offset("sourceMetadataEnd")).also {
+                            require(it.start >= metadata.end && it.end > it.start) { "Invalid Core source metadata extent" }
+                        } else null
+                    previousEnd = notes?.end ?: metadata.end
+                    ModuleRecord(id, name, span, metadata, notes,
                         module["containsDelimitedControl"] as? Boolean ?: error("Missing delimited-control summary"),
                         module["registrationObligations"] as? Boolean ?: error("Missing registration summary"),
-                        module["mainAlias"] as? Boolean ?: error("Missing main-alias summary"))
+                        module["mainAlias"] as? Boolean ?: error("Missing main-alias summary"),
+                        module["packageScalarDeclarations"] as? Boolean ?: error("Missing package declaration summary"))
                 }
                 unit["targetLayout"]?.let { rawLayout ->
                     val candidate = TargetLayout.fromDocument(rawLayout)

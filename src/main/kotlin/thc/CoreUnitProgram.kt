@@ -16,7 +16,7 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     override val hasBytecode get() = backend == "bytecode"
     override fun bytecodeDump(): String = demand.preparedPrograms().joinToString("\n\n") { it.bytecodeDump() }
     private val totals = ArrayList<CoreJsonSymbols.Counters>()
-    private val sources = directory.open(input["verifyArtifacts"] == true, totals::add)
+    private val sources = directory.open(input["verifyArtifacts"] == true, input["sourceNotesEnabled"] != false, totals::add)
     private val constructors = HashMap<String, Map<String, Any?>>()
     private val admittedModules = HashMap<CoreUnitDirectory.ModuleRecord, Map<String, Any?>>()
     private val linkedModules = HashSet<CoreUnitDirectory.ModuleRecord>()

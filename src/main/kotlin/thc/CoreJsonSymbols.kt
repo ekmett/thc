@@ -52,6 +52,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
     }
 
     data class ModuleSpan(val start: Long, val end: Long, val bindingsStart: Long, val bindingsEnd: Long)
+    data class ValueSpan(val start: Long, val end: Long)
     val counters = Counters()
 
     private var closed = false
@@ -60,6 +61,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
     private data class Selected(val start: Long, val end: Long, val binding: Map<String, Any?>)
     private val selected = HashMap<String, Result<Selected?>>()
     private val modules = HashMap<ModuleSpan, Result<Map<String, Any?>>>()
+    private val metadata = HashMap<ValueSpan, Result<Map<String, Any?>>>()
 
     fun statistics() = counters.statistics()
 
@@ -194,6 +196,23 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         return Json.parse(text) as? Map<String, Any?> ?: error("Expected Core object")
     }
 
+    /** Producer-filtered metadata lives in its own object in the same unit
+     * mapping. Unused original groups/pretty Core are not copied or scanned. */
+    fun metadata(span: ValueSpan, module: Boolean): Map<String, Any?> = synchronized(counters) {
+        check(!closed) { "Core symbol source is closed" }
+        metadata.getOrPut(span) { cacheable {
+            val mapped = source()
+            require(span.start >= 0 && span.start < span.end && span.end <= mapped.size &&
+                sourceByte(mapped, span.start) == 123 && sourceByte(mapped, span.end - 1) == 125) { "Invalid Core metadata extent" }
+            val length = Math.toIntExact(span.end - span.start)
+            val bytes = mapped.bytes.asSlice(span.start, length.toLong()).toArray(ValueLayout.JAVA_BYTE)
+            counters.sourceByteReads += length
+            counters.metadataBytes += length
+            if (module) counters.decodedModules++
+            parseObject(bytes)
+        } }.getOrThrow()
+    }
+
     /** The manifest locates the binding array, including its brackets. Read only
      * this demanded module's metadata on either side, not its binding bodies. */
     fun moduleMetadata(span: ModuleSpan): Map<String, Any?> = synchronized(counters) {
@@ -240,7 +259,12 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
      * this cache. Cancellation is a caller event, not a shared format failure. */
     fun binding(id: String, module: ModuleSpan? = null): Map<String, Any?>? = synchronized(counters) {
         check(!closed) { "Core symbol source is closed" }
-        val result = selected.getOrPut(id) { cacheable { lookup(id)?.let { decode(id, it) } } }.getOrThrow()
+        val result = selected.getOrPut(id) { cacheable { lookup(id)?.let {
+            if (module != null) require(it > module.bindingsStart && it < module.bindingsEnd) {
+                "Core symbol lies outside its declared module: $id"
+            }
+            decode(id, it)
+        } } }.getOrThrow()
         if (module != null && result != null) require(result.start > module.bindingsStart && result.end < module.bindingsEnd) {
             "Core symbol lies outside its declared module: $id"
         }
@@ -252,6 +276,7 @@ internal class CoreJsonSymbols(private val sourcePath: Path, private val directo
         closed = true
         selected.clear()
         modules.clear()
+        metadata.clear()
         try { source?.close() } finally { source = null; directory?.close(); directory = null }
     }
 }

@@ -32,7 +32,10 @@ class CoreUnitLoadTest {
         val prefix = "{\"schema\":1,\"ghc\":\"9.14.1\",\"unit\":\"u$name\",\"module\":\"$name\",\"boundary\":\"$boundary\",\"bindings\":"
         val expr = Json.stringify(listOf(binding(id, body), binding("u$name:$name.unused", listOf("unsupported", padding))))
         val suffix = ",\"constructors\":[]}"
-        val bytes = (prefix + expr + suffix).toByteArray()
+        val original = (prefix + expr + suffix).toByteArray()
+        val metadata = Json.stringify(mapOf("schema" to 1, "ghc" to "9.14.1", "unit" to "u$name",
+            "module" to name, "boundary" to boundary, "constructors" to emptyList<Any>())).toByteArray()
+        val bytes = original + byteArrayOf(10) + metadata + byteArrayOf(10)
         val json = directory.resolve("$name.jsons")
         val symbols = directory.resolve("$name.symbols")
         Files.write(json, bytes)
@@ -43,11 +46,13 @@ class CoreUnitLoadTest {
         return mapOf("id" to "u$name", "depends" to emptyList<String>(),
             "json" to mapOf("path" to json.toString(), "sha256" to hash(bytes)),
             "symbols" to mapOf("path" to symbols.toString(), "sha256" to hash(rows)),
-            "modules" to listOf(mapOf("name" to name, "path" to "$name.json", "sha256" to hash(bytes),
-                "boundary" to boundary, "start" to 0, "end" to bytes.size,
+            "modules" to listOf(mapOf("name" to name, "path" to "$name.json", "sha256" to hash(original),
+                "boundary" to boundary, "start" to 0, "end" to original.size,
                 "bindingsStart" to prefix.toByteArray().size,
                 "bindingsEnd" to prefix.toByteArray().size + expr.toByteArray().size,
-                "containsDelimitedControl" to false, "registrationObligations" to false, "mainAlias" to false)))
+                "metadataStart" to original.size + 1, "metadataEnd" to original.size + 1 + metadata.size,
+                "containsDelimitedControl" to false, "registrationObligations" to false, "mainAlias" to false,
+                "packageScalarDeclarations" to false)))
     }
     private fun fixture(badB: Boolean = false, cycle: Boolean = false): Path {
         val a = unit("A", choice(literal(7), call("uB:B.entry", listOf("var", "x"))))
