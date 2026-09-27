@@ -1,106 +1,101 @@
-# Bounded FloatX4 ByteArray access
+# FloatX4 ByteArray operations
 
-This page retains the original memory-operation checkpoint and its measurements.
-Current execution uses raw `FloatVector.SPECIES_128` values, not a `FloatX4`
-wrapper. Historical transport restrictions below are superseded by the
-[current SIMD contract](simd.md); the old graphs do not certify the new runtime.
-
-This slice adds exactly six local GHC9.14.1 operations, without a vector ABI:
+Both backends implement these six GHC 9.14.1 operations with exact
+`VecRep 4 FloatElemRep` metadata and raw `FloatVector.SPECIES_128` values.
 
 | Operations | Index stride | Access width |
 | --- | ---: | ---: |
-| indexFloatX4Array#, readFloatX4Array#, writeFloatX4Array# | 16 bytes | 16 bytes |
-| indexFloatArrayAsFloatX4#, readFloatArrayAsFloatX4#, writeFloatArrayAsFloatX4# | 4 bytes | 16 bytes |
+| `indexFloatX4Array#`, `readFloatX4Array#`, `writeFloatX4Array#` | 16 bytes | 16 bytes |
+| `indexFloatArrayAsFloatX4#`, `readFloatArrayAsFloatX4#`, `writeFloatArrayAsFloatX4#` | 4 bytes | 16 bytes |
 
-Index accepts an immutable ByteArray# and Int#, returning the exact
-`VecRep 4 FloatElemRep`. Read accepts a mutable byte array, Int# and State#,
-returning `(# State#, FloatX4# #)` only to an immediate validated case. Write
-accepts the mutable array, Int#, exact local vector and State#, returning State#.
-There are two logical read fields, not State plus four unpacked scalar lanes.
-Whole-tuple escape, vector function/join/capture/constructor transport and
-foreign/Addr memory remain unsupported.
+Index takes `ByteArray#` and `Int#`, returning `FloatX4#`. Read takes
+`MutableByteArray# s`, `Int#` and `State# s`, returning
+`(# State# s, FloatX4# #)`. Write takes the mutable array, index, exact
+vector and State token, returning State. The read result has two logical
+fields, not State plus 4 scalar lanes.
 
-The closed family mapping keeps signed Int32, unsigned Word32 and Float32
-identities distinct. Raw aggregate annotations are accepted only at the read
-producer and whole-binder structural sites; exact integer lane/constructor
-counts, unlifted/non-coercion binders, State order and lexical identities remain
-required. Generic aggregate rules are unchanged.
+## Memory and lowering contract
 
-Memory is native-endian ordinary non-atomic byte-array storage. Full Long
-bounds are checked before scaling or narrowing:
-`size >= 16 && index >= 0 && index <= (size - 16) / stride`.
-Invalid stores leave all bytes unchanged; invalid ranges deoptimize before
-exception allocation. State is checked before access or result publication.
+Access is native-endian and non-atomic. The complete sixteen-byte range must
+fit the array's current logical size; scalar-element offsets need not be
+vector-aligned. Negative indices, scaling overflow and out-of-range accesses
+fail before memory access. Invalid-range stores cannot partially change bytes.
+Native GHC behavior outside its valid-index preconditions is not an oracle for
+managed bounds failures. Both backends evaluate and check State before reading,
+writing or publishing a result.
 
-The storage path preserves raw immutable FloatVector values,
-using ByteVector128 transfers and reinterpretation, with per-int byte reversal
-on big-endian hosts. It performs no numeric conversion, lane extraction/repack,
-NaN canonicalization or floating arithmetic. Packed-code survival is verified
-on the pinned little-endian x86-64 host; big-endian behavior is not tested here.
+The runtime uses the Vector API's typed `fromMemorySegment` and
+`intoMemorySegment` operations with native byte order. Owned heap and pinned
+allocations share this route, with owner locking, lifetime, mutability and
+managed-pointer-cell checks. Reads cannot overlap a managed pointer cell;
+stores invalidate completely overwritten cells and reject partial overlaps.
+The raw `ByteArray` compatibility path uses an array-backed segment. Logical
+bounds still apply after an owned allocation shrinks.
 
-Raw-bit witnesses use existing Word32/Float scalar-array aliases, not additional
-scalar bitcast primops. Exact portable assertions cover finite values, signed
-zeros, subnormals, infinities and selected quiet-NaN payloads. Selected signaling
-NaN movement is recorded separately on tested hosts: Java permits quieting when
-copying floating scalars, so no cross-platform scalar sNaN bit guarantee or
-arithmetic NaN-payload guarantee is made. Native invalid offsets are not an oracle.
+Mutable vector reads have a specific lowering restriction: the primitive must
+be consumed by one immediate, exact registered tuple case. Its ordered
+State/vector pattern binders and unused whole-tuple binder must be unlifted,
+non-coercion values. Exact integer lane counts, constructor arity, lexical
+identities and the producer/whole-binder annotations are checked. Returning
+the primitive's whole read tuple directly remains unsupported.
 
-Finite graph witnesses consume all four lanes separately from raw-bit semantic
-tests. Graph acceptance must prove live packed caller-array memory operations
-and reject private vector/carrier/payload allocations and unexpected calls;
-public result boxes and exact deoptimization metadata remain distinguished.
+That intrinsic rule is distinct from the [guest SIMD transport contract](simd.md):
+guest vector arguments/results, tuple leaves, joins, PAP prefixes, captures
+and owned heap fields are supported. Public host vector arguments/results and
+unboxed-tuple results remain unsupported. Corresponding address operations
+have their own [memory contract](simd128-address-memory.md); this byte-array
+fixture is not their validation.
 
-## Fixture production
+## Fixtures and checks
 
-The four 128-bit byte-array families share the Haskell
-`SimdByteArrayFixtures` producer and integer/byte model. Run
-`cabal run exe:thc-fixtures -- floatx4-bytearray`; the independent Kotlin
-`SimdByteArrayCorpus` controls run in the existing native test class.
-The shared Python `audit-core.py` remains the exact Core proof mechanism;
-the family-specific Python producer, model and test entry points are removed.
-Fresh pre/post audits and retained historical Core mutation controls both run.
-Receipts include closed source/artifact inventories and command exit records;
-failed attempts and prior receipts are preserved, never resealed.
+The genuine GHC fixture exercises all six operations, every safe offset in
+64-byte storage, and every output byte after stores. No mutable access follows
+`unsafeFreeze`. Coupled rotations cover the declared offset and lane domains;
+they are not an exhaustive Cartesian product of all lane bit patterns.
 
-`--export-only` records only pre-Tidy/model evidence, with native fields
-explicitly null. This remains the default ARM CI policy. Repeatable
-`--ghc-option=OPTION` records and forwards explicit code-generation options
-to exports and native builds (for example `--ghc-option=-fllvm`).
-Availability of LLVM and native arithmetic evidence on a host does not by
-itself establish this byte-array corpus or JVM/graph support.
-The historical results below are not new migration performance measurements.
+Raw-bit fixtures use existing Word32/Float scalar-array aliases to observe
+finite values, signed zeros, subnormals, infinities and selected quiet-NaN
+payloads. Their 6,720 portable rows are separate from
+640 selected native signaling-NaN observations. Java permits signaling
+NaNs to quiet during scalar movement; neither scalar copy/pack/unpack nor
+floating arithmetic promises portable signaling-NaN payload preservation.
+Finite graph witnesses are separate from these raw-bit observations.
 
-## Verified checkpoint
+Use the pinned toolchain and the [shared resource gate](contributing.md):
 
-Runtime `4281921` passes 15 focused tests and the full 530 default + 530
-dense-handoff tests (109 suites each, zero failures/errors/skips). Fresh native
-and independent model output match all 6,720 portable rows. Each full mode
-checks 53,760 compiled calls and 160,256 exact guest entries across pre/post
-Core, AST/bytecode and inlining on/off, with no settling calls or retries.
-All safe offsets and all output bytes are covered by coupled rotations, not
-an exhaustive bit-pattern-by-offset product. The 640 native-only signaling-NaN
-observations remain separate from the portable corpus.
+```sh
+cabal run exe:thc-fixtures -- floatx4-bytearray
+./gradlew --max-workers=2 --continue \
+  testDefault --tests 'thc.runtime.SimdFloatByteArrayTest' --tests 'thc.runtime.FloatVectorMemoryProofTest' \
+  testDense --tests 'thc.runtime.SimdFloatByteArrayTest' --tests 'thc.runtime.FloatVectorMemoryProofTest'
+```
 
-Sixteen Float graph/LIR records prove one packed 128-bit caller-array access,
-all four live Float32 load lanes or store inputs, and no live private vector
-payload. The 1,024 installed-target comparisons check fresh arrays, every byte
-and returned store-array identity. Allocated LIR contains eight XMM VMOVDQU32
-loads and eight XMM VMOVUPS stores. Graph counters are disabled; instrumented
-correctness tests provide the separate exact compiled-entry evidence.
+The Haskell `SimdByteArrayFixtures` producer exports genuine pre/post-Tidy
+Core, checks exact positive roots and frontier diagnostics, compares native
+rows with its independent integer/byte model, and records source/artifact
+hashes and command exits. `SimdByteArrayCorpus` supplies independent Kotlin
+inventory and model controls in the native test class. Strict Core audits use
+`audit-core.py`; the fixture's deliberately mutated metadata controls are
+labeled separately from original Core and native inputs.
 
-The first campaign exposed real AST specialization failure from Kotlin's enum
-switch-map array. Direct exact-family identity predicates fixed that shared
-node without restoring an unsigned-versus-everything-else fallback. Fresh
-Int32 and Word32 regression campaigns each pass 16 graph/LIR checks on the
-same runtime. The original AST failure is preserved.
+`--export-only` emits pre-Tidy/model evidence with native fields explicitly
+null; it is the ARM policy in `scripts/prepare-tests.sh`, not a native-success
+fallback. Repeatable `--ghc-option=OPTION` records and forwards explicit
+code-generation options to exports and native builds, for example
+`--ghc-option=-fllvm`. Previous receipts and recorded artifacts are retained
+before canonical outputs are replaced.
 
-A separate reader-only correction recognizes exact Float-tagged frame
-reconstruction from pinned compiler source, with strict ownership, kind,
-snapshot and non-escape checks. Its original failed check is retained and
-the offline recheck does not repeat guest execution or relax live-code gates.
-Final Python checks pass 220 normally and 220 under `-O`, without skips.
+The JVM suite selects stages from provenance, tests AST and bytecode with
+inlining on/off, and checks exact source-proven guest-entry deltas, installed
+target identity and validity. First-compiled-call checks do not use settling
+calls or retries. Model agreement alone does not establish JVM compilation,
+packed instructions, allocation elimination or performance.
 
-The [compact evidence package](../bench/experiments/floatx4-bytearray/evidence-x86_64/README.md)
-contains provenance, native observations, graph/LIR records, all failure
-history and exact JUnit archives. No throughput, no-spill, globally
-allocation-free execution, general vector ABI or non-x86 claim is made.
+## Historical evidence
+
+The [archived FloatX4 memory checkpoint](../research/floatx4-bytearray-checkpoint.md)
+preserves the original command descriptions, source revisions, failures and
+graph/LIR results. Those results apply to their recorded sources and hosts,
+not automatically to the current segment-backed runtime. Current use of the
+Vector API does not by itself prove packed-code survival, absence of spills,
+allocation-free execution or behavior on another architecture.

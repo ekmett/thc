@@ -1,167 +1,99 @@
-# Bounded Int32X4 ByteArray access
+# Int32X4 ByteArray operations
 
-This slice implements six pinned GHC 9.14.1 operations. Existing
-vector arithmetic and managed byte-array identity stay unchanged.
+Both backends implement these six GHC 9.14.1 operations with exact
+`VecRep 4 Int32ElemRep` metadata and raw `IntVector.SPECIES_128` values.
 
-| Operations | Offset unit | Access width |
+| Operations | Index stride | Access width |
 | --- | ---: | ---: |
 | `indexInt32X4Array#`, `readInt32X4Array#`, `writeInt32X4Array#` | 16 bytes | 16 bytes |
 | `indexInt32ArrayAsInt32X4#`, `readInt32ArrayAsInt32X4#`, `writeInt32ArrayAsInt32X4#` | 4 bytes | 16 bytes |
 
-Index takes immutable ByteArray# and machine Int#, returning Int32X4#.
-Read takes mutable ByteArray#, Int# and State#, returning (# State#, Int32X4# #).
-Write takes mutable ByteArray#, Int#, Int32X4# and State#, returning State#.
-Vector identity is exactly `VecRep 4 Int32ElemRep`, distinct from Word32. Memory is
-native-order, ordinary non-atomic byte-array storage; scalar offsets 1/2/3 need
-not be vector-aligned. All sixteen bytes must fit before any access or store.
-The checked condition is `size >= 16 && index >= 0 && index <= (size - 16) / stride`,
-before multiplying or narrowing the machine-width index. Invalid writes cannot
-partially modify storage. Invalid-input native GHC behavior is not an oracle.
-An invalid range transfers to the interpreter before constructing the existing
-RuntimeFault; the compiled valid path need not allocate the bounds exception.
+Index takes `ByteArray#` and `Int#`, returning `Int32X4#`. Read takes
+`MutableByteArray# s`, `Int#` and `State# s`, returning
+`(# State# s, Int32X4# #)`. Write takes the mutable array, index, exact
+vector and State token, returning State. The read result has two logical
+fields, not State plus 4 scalar lanes.
 
-Mutable reads require a dedicated immediate primitive-case path: one exact
-registered two-field tuple alternative, erased State binder and concrete local
-vector binder. The original whole-tuple binder cannot be used or transported.
-The producer and whole-binder aggregate annotations are validated at those two
-structural sites only; shared or equal metadata elsewhere gains no exception.
-Both pattern binders and the whole binder must be unlifted non-coercion values.
-Vector lane counts at both exceptional raw annotation sites, their vector
-components/pattern, and the tuple constructor arity must be JSON integers;
-floating-point, Boolean and string counts are rejected before normalization.
-The shared vector parser applies the same integer-count rule to ordinary vector
-proofs, including direct index results and write operands. Genuine Int/Long
-metadata and all supported vector identities remain unchanged.
-Generic tuple validation, result handoff storage and vector function/join/
-capture/constructor boundaries are not broadened. Addr and foreign memory remain
-unsupported. State is evaluated and checked before memory or local publication.
+## Memory and lowering contract
 
-The pinned JDK 25 route uses `ByteVector.SPECIES_128` array access and IntVector bit
-reinterpretation. Reinterpretation groups bytes little-endian, so native-order
-conversion must reverse bytes within each int on a big-endian host. No temporary
-segment wrapper or durable vector/payload array is needed. Packed load/store
-survival, however, requires actual selected graph/LIR evidence; it is not implied
-by using the Vector API or passing a semantic model.
+Access is native-endian and non-atomic. The complete sixteen-byte range must
+fit the array's current logical size; scalar-element offsets need not be
+vector-aligned. Negative indices, scaling overflow and out-of-range accesses
+fail before memory access. Invalid-range stores cannot partially change bytes.
+Native GHC behavior outside its valid-index preconditions is not an oracle for
+managed bounds failures. Both backends evaluate and check State before reading,
+writing or publishing a result.
 
-The native fixture exercises all six operations, before/after alias snapshots,
-all safe offsets in 64-byte storage, signed lane boundaries, and observation of
-all 64 bytes after each write pattern. Opaque helpers exercise residual calls
-using existing scalar/reference/State boundaries. A mutable array is never used
-again after unsafeFreeze; selected store graph roots freeze as their last action
-and return the same byte-array reference. Each graph invocation needs fresh
-caller-owned storage.
+The runtime uses the Vector API's typed `fromMemorySegment` and
+`intoMemorySegment` operations with native byte order. Owned heap and pinned
+allocations share this route, with owner locking, lifetime, mutability and
+managed-pointer-cell checks. Reads cannot overlap a managed pointer cell;
+stores invalidate completely overwritten cells and reject partial overlaps.
+The raw `ByteArray` compatibility path uses an array-backed segment. Logical
+bounds still apply after an owned allocation shrinks.
 
-## Corpus and execution gates
+Mutable vector reads have a specific lowering restriction: the primitive must
+be consumed by one immediate, exact registered tuple case. Its ordered
+State/vector pattern binders and unused whole-tuple binder must be unlifted,
+non-coercion values. Exact integer lane counts, constructor arity, lexical
+identities and the producer/whole-binder annotations are checked. Returning
+the primitive's whole read tuple directly remains unsupported.
 
-The independent model uses explicit little-endian bytes and integer reduction,
-not runtime SIMD helpers. Its ten tests separately spell bit formulas, check
-every declared lane boundary and offset, and observe every byte after stores.
-Native evidence is limited to a 64-bit little-endian host. Native undefined
-behavior on invalid offsets is never used to justify managed bounds behavior.
+That intrinsic rule is distinct from the [guest SIMD transport contract](simd.md):
+guest vector arguments/results, tuple leaves, joins, PAP prefixes, captures
+and owned heap fields are supported. Public host vector arguments/results and
+unboxed-tuple results remain unsupported. Corresponding address operations
+have their own [memory contract](simd128-address-memory.md); this byte-array
+fixture is not their validation.
 
-| Scalar entry families | Logical arity | Rows | Guest entries per call |
-| --- | ---: | ---: | ---: |
-| `vectorUnitCase` / `scalarUnitCase` | 2 | 72 / 234 | 2 |
-| `vectorIndexCase` / `scalarIndexCase` | 5 | 36 each | 3 |
-| `vectorReadCase` / `scalarReadCase` | 5 | 36 each | 3 |
-| `vectorWriteCase` / `scalarWriteCase` | 6 | 2,304 each | 3 |
-| `vectorStoreCase` / `scalarStoreCase` | 6 | 2,304 each | 3 |
+## Fixtures and checks
 
-Actual Core contains an outer scalar lambda and an immediately called `runRW#`
-state lambda. The eight helper wrappers additionally call one retained OPAQUE
-worker. Across pre/post Core, AST/bytecode and inlining on/off, strict validation
-requires 77,328 compiled calls and 229,536 guest entries per handoff mode. It
-checks active target identities, last-tier validity and exact entry counters
-after every row, with no settling or retry calls. The current native test uses
-the ordinary automatic-compilation trigger. Only the separate cold-failure
-transition control disables automatic compilation to preserve its interpreted
-host bridge. Ordinary read/write workers
-return only the existing `(# State#, Int# #)` residual-call representation;
-these tuple results remain rejected at the host entry boundary.
+The genuine GHC fixture exercises all six operations, every safe offset in
+64-byte storage, and every output byte after stores. No mutable access follows
+`unsafeFreeze`. Coupled rotations cover the declared offset and lane domains;
+they are not an exhaustive Cartesian product of all lane bit patterns.
 
-The four selected graph roots have one actual lambda each. Index roots take
-an immutable array and offset, returning a weighted signed checksum. Store
-roots take a mutable array, offset, four machine-Int lanes and State token
-(logical arity 7), returning the frozen input array itself. Provenance supplies
-36 cases per root with exact initial and expected bytes and native-row keys.
-Packed-code evidence must distinguish the intentional caller-array access
-from unwanted private vector payload arrays or materialized carriers.
+The raw int lanes preserve all 32 bits. Explicit unpack sign-extends
+each lane to the scalar carrier, so signed and unsigned observations remain
+distinct. The independent model assembles bytes and reduces integers without
+calling runtime SIMD helpers. Its 9,666 rows cover signed or high-bit
+boundaries, aliases, loaded snapshots and all bytes after stores.
 
-`cabal run exe:thc-fixtures -- int32x4-bytearray` generates fresh pre/post Core,
-strict audits, native/model TSVs and source/artifact hashes. Each stage checks
-14 positive roots, seven exact frontier negatives and six deliberately unsigned
-metadata mutations. `--export-only` retains pre-Tidy/model evidence without a
-native-execution claim, matching the existing AArch64 CI path.
+Use the pinned toolchain and the [shared resource gate](contributing.md):
 
-## Fixture production
+```sh
+cabal run exe:thc-fixtures -- int32x4-bytearray
+./gradlew --max-workers=2 --continue \
+  testDefault --tests 'thc.runtime.SimdInt32ByteArrayTest' --tests 'thc.runtime.Int32VectorMemoryProofTest' \
+  testDense --tests 'thc.runtime.SimdInt32ByteArrayTest' --tests 'thc.runtime.Int32VectorMemoryProofTest'
+```
 
-The four 128-bit byte-array families share the Haskell
-`SimdByteArrayFixtures` producer and integer/byte model. Run
-`cabal run exe:thc-fixtures -- int32x4-bytearray`; the independent Kotlin
-`SimdByteArrayCorpus` controls run in the existing native test class.
-The shared Python `audit-core.py` remains the exact Core proof mechanism;
-the family-specific Python producer, model and test entry points are removed.
-Fresh pre/post audits and retained historical Core mutation controls both run.
-Receipts include closed source/artifact inventories and command exit records;
-failed attempts and prior receipts are preserved, never resealed.
+The Haskell `SimdByteArrayFixtures` producer exports genuine pre/post-Tidy
+Core, checks exact positive roots and frontier diagnostics, compares native
+rows with its independent integer/byte model, and records source/artifact
+hashes and command exits. `SimdByteArrayCorpus` supplies independent Kotlin
+inventory and model controls in the native test class. Strict Core audits use
+`audit-core.py`; the fixture's deliberately mutated metadata controls are
+labeled separately from original Core and native inputs.
 
-`--export-only` records only pre-Tidy/model evidence, with native fields
-explicitly null. This remains the default ARM CI policy. Repeatable
-`--ghc-option=OPTION` records and forwards explicit code-generation options
-to exports and native builds (for example `--ghc-option=-fllvm`).
-Availability of LLVM and native arithmetic evidence on a host does not by
-itself establish this byte-array corpus or JVM/graph support.
-The historical results below are not new migration performance measurements.
+`--export-only` emits pre-Tidy/model evidence with native fields explicitly
+null; it is the ARM policy in `scripts/prepare-tests.sh`, not a native-success
+fallback. Repeatable `--ghc-option=OPTION` records and forwards explicit
+code-generation options to exports and native builds, for example
+`--ghc-option=-fllvm`. Previous receipts and recorded artifacts are retained
+before canonical outputs are replaced.
 
-## Verified checkpoint
+The JVM suite selects stages from provenance, tests AST and bytecode with
+inlining on/off, and checks exact source-proven guest-entry deltas, installed
+target identity and validity. First-compiled-call checks do not use settling
+calls or retries. Model agreement alone does not establish JVM compilation,
+packed instructions, allocation elimination or performance.
 
-The pinned x86 native/model corpus has 9,666 matching rows, with 19 source and
-seven artifact hashes verified. Python checks pass normally and under `-O`:
-65 auditor, 22 vector, 14 vector-memory proof, ten byte-model, nine byte-array,
-and four coverage tests. The graph reader has 30 separate adversarial tests;
-those synthetic tests are not compiler evidence.
+## Historical evidence
 
-The bounds-path runtime fix and final regression checkpoint pass 501 tests in
-each of the default and dense handoff configurations, with no failures, errors
-or skips. The focused suite has fourteen tests. Its cold-failure regression
-covers 96 transitions: six operations, both backends, and eight
-invalid size/index cases. Each starts with a verified installed valid call,
-requires bounds failure to invalidate that same target without changing bytes
-or publishing a result, then checks successful recovery without recompilation.
-Each transition uses forty fixed interpreted warm calls and one requested guest
-compile, with an interpreted host bridge. Its high test-only compilation-trigger
-threshold prevents automatic compilation; it is not a compiler graph-budget
-increase or a production runtime setting change.
-These historical source-matched captures retain the earlier native-test trigger
-setting. The later integer-proof and default-trigger follow-up does not relabel
-those results; its validation must be recorded separately.
-Both full configurations include that regression. Their exact test identity sets
-match; the earlier 498- and 500-test checkpoints remain separately archived.
-
-The first sixteen actual-Core captures passed every semantic comparison but
-failed graph acceptance: the invalid-bounds path still constructed RuntimeFault
-and called `Throwable.fillInStackTrace` in compiled code. These failed graphs
-and original checker output are preserved, not reclassified as a success.
-The runtime now transfers to the interpreter before constructing the exception,
-matching the scalar managed-array policy. All sixteen separately recorded new
-captures pass: eight packed loads with 32 signed lane extensions, eight packed
-stores with 32 exact lane inputs, and sixteen physical XMM `VMOVDQU32` memory
-instructions. There are 1,152 installed-target comparisons, with fresh caller
-arrays, all bytes checked and identical store results. The corrected graphs have
-no live exception call/allocation or private vector/carrier/payload allocation.
-
-The new capture's first reader rejected four AST store graphs for their extra
-host bloom-header unbox. A narrow offline correction proves that slot-zero
-unbox feeds only the constant-mask OR and frame primitive-slot-zero deopt
-metadata. Offset and four lane inputs remain independently required. No guest
-was rerun, and all 75 source, eleven installed JAR and four JDK hashes were
-checked, permitting changes only to the reader and its tests. Both original
-checker failures and archived reader versions are retained.
-
-See the [hash-sealed x86 evidence](../bench/experiments/int32x4-bytearray/evidence-x86_64/README.md).
-These selected graph controls exercise immutable indexing and stores; strict
-semantic compiled-entry tests additionally cover immediate mutable reads.
-Public host Long results may still box, interpreted/deoptimized vectors may
-allocate, and graph probes do not instrument entry counters. This is not a
-throughput, globally allocation-free ABI, big-endian, AArch64 or general vector
-transport claim.
+The [archived Int32X4 memory checkpoint](../research/int32x4-bytearray-checkpoint.md)
+preserves the original command descriptions, source revisions, failures and
+graph/LIR results. Those results apply to their recorded sources and hosts,
+not automatically to the current segment-backed runtime. Current use of the
+Vector API does not by itself prove packed-code survival, absence of spills,
+allocation-free execution or behavior on another architecture.

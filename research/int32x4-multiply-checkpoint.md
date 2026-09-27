@@ -1,22 +1,40 @@
-# Signed Int32X4 multiplication
+# Historical int32x4-multiply checkpoint
 
-Both backends implement `timesInt32X4# :: Int32X4# -> Int32X4# -> Int32X4#`
-using raw `IntVector.SPECIES_128` values. Genuine fixtures also use
-`packInt32X4#` and `unpackInt32X4#`: packing consumes one logical
-four-`Int32#` tuple, and unpacking returns the corresponding scalar tuple.
+This is the complete guide preserved from revision
+`8bf993d744e57f2c314102c7b9f58d26e6c8788b`. It records historical implementation
+stages and source-matched evidence; its superseded restrictions and command
+narratives are not current guidance. See the [current guide](../docs/int32x4-multiply.md).
+No original result is reattributed to the current runtime.
+
+---
+
+# Local signed Int32X4 multiplication
+
+This page retains the original multiplication checkpoint and its measurements.
+Current execution uses raw `IntVector.SPECIES_128` values, not an `Int32X4`
+wrapper. Historical local-only restrictions below are superseded by the
+[current SIMD representation and transport contract](../docs/simd.md).
+
+This bounded slice adds only `timesInt32X4#` to the existing local signed
+Int32X4 contract. Pinned GHC 9.14.1 gives the exact signature
+`Int32X4# -> Int32X4# -> Int32X4#`. Genuine fixtures also use existing
+`packInt32X4#` and `unpackInt32X4#`, with one logical four-`Int32#` tuple for
+packing and the corresponding scalar tuple result for unpacking.
 
 The vector proof remains `VecRep 4 Int32ElemRep`; each scalar lane is exactly
 `Int32Rep`, not `Word32Rep`. Products retain the low 32 bits and interpret them
 as signed two's-complement values before widening to the required 64-bit host
 `Int#`. In particular, MIN * -1 yields MIN, MAX * MAX yields 1, and MIN * MIN
-yields 0. The [SIMD transport contract](simd.md) covers guest arguments/results,
-tuple leaves, joins, PAP prefixes, captures and owned heap fields. Public host
-vector arguments/results remain unsupported.
+yields 0. No vector function arguments, results, captures, heap fields or
+vector-containing tuple ABIs are enabled.
 
-Multiplication uses `IntVector.mul` and retains the raw vector result; scalar
-extraction belongs to explicit unpack or durable heap storage. Both the AST
-loader and a dedicated bytecode operation enforce two exact, unlifted signed
-vector operands. Loader tests reject
+The original runtime reused the four final `int` fields of `Int32X4` and its
+fixed 128-bit `IntVector` species. Its multiplication used `IntVector.mul`,
+extracting four signed low-word results. Current multiplication retains the raw
+vector result; scalar extraction belongs to explicit unpack or heap storage.
+Both the AST loader and a dedicated bytecode
+operation enforce two exact, unlifted signed vector operands. The existing
+scalar-literal and aggregate policies are unchanged. Loader tests reject
 wrong signedness, width, arity, liftedness and malformed signed literals;
 direct arithmetic tests compare independent lane products with a masked
 arbitrary-precision oracle, including MIN * -1 and MAX * 2.
@@ -75,30 +93,19 @@ invocations and 21,232 guest entries per handoff mode, excluding the host bridge
 Actual JVM tests separately require the exact per-call increments, stable active
 target identities, valid installed code and released handoff pools.
 
-The genuine `vectorArgument` negative must yield exactly one public host vector-argument
-issue and no missing globals; it is not a rejection of guest vector formals. Two separately labeled metadata mutations change a
+The genuine `vectorArgument` negative must yield exactly one vector-formal issue
+and no missing globals. Two separately labeled metadata mutations change a
 `timesCase` pack tuple to `Word32Rep` or its first vector operand to
 `VecRep 4 Word32ElemRep`. They are not original Core or native oracle inputs.
-`unsignedLaneTuple` requires one vector-shape, five aggregate-shape and four
-scalar-representation issues. `unsignedVectorOperand` requires two vector-shape
-and two aggregate-shape issues. These are exact primitive argument/result proof
-failures, not public host admission failures. Both require zero missing globals.
+`unsignedLaneTuple` requires one vector-argument, five aggregate-proof and four
+scalar-proof issues. `unsignedVectorOperand` requires one vector-argument, two
+aggregate-proof and one vector-result issue. Both require zero missing globals.
 
 ## Preparation and limits
 
-Use the pinned environment and [shared resource gate](contributing.md):
-
-```sh
-python3 scripts/test-int32x4-multiply-model.py
-python3 scripts/prepare-int32x4-multiply-audit.py
-./gradlew --max-workers=2 --continue \
-  testDefault --tests 'thc.runtime.SimdInt32MultiplyTest' \
-  testDense --tests 'thc.runtime.SimdInt32MultiplyTest'
-```
-
-The existing model test uses hash-verified retained genuine pre/post Core and
-also checks fresh exports when present. It can run before preparation.
-Preparation exports real pre/post Core, requires all
+Run `python3 scripts/test-int32x4-multiply-model.py` and
+`python3 scripts/prepare-int32x4-multiply-audit.py` with the pinned environment
+and shared resource gate. Preparation exports real pre/post Core, requires all
 eight positive audits to have zero issues and missing globals, checks the exact
 negatives and closure counts, then compiles/runs the genuine GHC NCG oracle.
 The complete keyed output must equal the independent model; duplicate or
@@ -107,22 +114,36 @@ wrong-arity rows fail.
 `build/simd-int32x4-multiply/provenance.json` uses vector identity
 `int32x4-multiply`, records commands/toolchain/entry cases/actual root counts,
 and retains `signedUnsignedNegativeControls` separately from genuine Core.
-Source and artifact hashes cover both Core stages, their audits, expected/native
-rows and `native/int32x4-multiply-oracle`.
+Seventeen source hashes and seven artifact hashes cover both Core stages,
+their audits, expected/native rows and `native/int32x4-multiply-oracle`.
 
 `--export-only` provides pre-Tidy Core and model rows only, with null native
 row/match fields and no native or post-Tidy claim. It removes stale oracle and
 provenance outputs; it is not a fallback after a native failure. A fresh full
 preparation restores native evidence after testing this mode.
 
-The fixture producer establishes native/model agreement, not JVM compilation,
-packed instructions, allocation elimination or performance. The JVM suite
-checks both backends, inlining modes and handoff configurations separately.
-ARM preparation in `scripts/prepare-tests.sh` uses export-only mode.
+These fixtures alone establish no JVM compilation, packed instructions,
+allocation elimination, performance, vector ABI support or execution on other
+architectures. Those require independently retained runtime and graph/LIR checks.
 
-## Historical evidence
+## Compiled-code evidence
 
-The [archived multiplication checkpoint](../research/int32x4-multiply-checkpoint.md)
-preserves the original commands and source-matched x86-64 graph/LIR results,
-including unsigned negative controls. Those captures describe their recorded
-runtime, not current raw-vector code generation or a cross-platform guarantee.
+The [x86-64 evidence](../bench/experiments/int32x4-multiply/evidence-x86_64/README.md)
+retains four actual pre/post × AST/bytecode multiplication captures at runtime
+`597ed24ee8835606437a7cdeb313e28b726d4762`. Each observes all four signed result
+lanes and checks 466 native rows twice after compilation. Every selected graph
+has one live i32x4 multiply and four result-connected SignExtend32-to-64 chains;
+final allocated LIR has one physical XMM `VPMULLD`. All four captures pass the
+original checker, without correction or guest replay.
+
+No local carrier, vector payload allocation, field traffic, fallback call or
+intermediate lane box survives in these selected inlined graphs. The public
+Long result box remains; both bytecode graphs also retain precisely checked
+virtual frame-tag metadata. These are bounded code-generation observations,
+not throughput, no-spill, globally allocation-free or cross-platform claims.
+Instrumented tests separately retain the exact compiled-entry checks above.
+
+Four original committed unsigned Word32 multiplication graphs have the same
+host arity. Each passes its unsigned checker but fails the full signed checker
+specifically because the result lanes zero-extend rather than sign-extend.
+They are independent negative controls, not signed native execution evidence.
