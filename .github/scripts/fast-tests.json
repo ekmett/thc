@@ -1241,9 +1241,11 @@
     "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
     "compiler/test-fixtures/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/CoreTextForeign.kt": {
+    "src/main/java/thc/runtime/CoreTextForeign.java": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/main/java/thc/runtime/TextForeignOp.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/TextForeignExpression.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/kotlin/thc/runtime/ManagedText.kt": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": []
     },
@@ -1572,7 +1574,7 @@
     "src/main/kotlin/thc/runtime/RtsDiagnostics.kt": {
       "junit": ["thc.runtime.RtsDiagnosticsTest", "thc.runtime.HintTraceTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreRtsDiagnosticForeign.kt": {
+    "src/main/java/thc/runtime/RtsDiagnosticExpression.java": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
     },
     "compiler/test-fixtures/RtsDiagnosticsNative.hs": {
