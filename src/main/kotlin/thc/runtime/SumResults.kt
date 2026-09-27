@@ -261,21 +261,24 @@ internal class SumCase(@Child private var scrutinee: Expr,
     }
 
     /** The scrutinee has already populated this activation's sum slots. */
-    private fun resumeBranch(frame: VirtualFrame, route: Route, destination: IntArray?, offset: Int): Any? {
+    @ExplodeLoop private fun resumeBranch(frame: VirtualFrame, route: Route, destination: IntArray?, offset: Int): Any? {
         val selected = selected(frame)
-        if (selected < 0) fault("Non-exhaustive unboxed sum case")
-        val branch = alternatives[selected]
-        return when (route) {
-            Route.GENERIC -> branch.execute(frame)
-            Route.INT -> branch.executeInt(frame)
-            Route.LONG -> branch.executeLong(frame)
-            Route.FLOAT -> branch.executeFloat(frame)
-            Route.DOUBLE -> branch.executeDouble(frame)
-            Route.CLOSURE -> branch.executeClosure(frame)
-            Route.DATA -> branch.executeDataValue(frame)
-            Route.ADDRESS -> branch.executeAddress(frame)
-            Route.TUPLE -> branch.executeTuple(frame, destination!!, offset)
+        // A resumed scrutinee observes the same arm edges as ordinary entry.
+        for (index in alternatives.indices) if (armProfiles[index].profile(selected == index)) {
+            val branch = alternatives[index]
+            return when (route) {
+                Route.GENERIC -> branch.execute(frame)
+                Route.INT -> branch.executeInt(frame)
+                Route.LONG -> branch.executeLong(frame)
+                Route.FLOAT -> branch.executeFloat(frame)
+                Route.DOUBLE -> branch.executeDouble(frame)
+                Route.CLOSURE -> branch.executeClosure(frame)
+                Route.DATA -> branch.executeDataValue(frame)
+                Route.ADDRESS -> branch.executeAddress(frame)
+                Route.TUPLE -> branch.executeTuple(frame, destination!!, offset)
+            }
         }
+        fault("Non-exhaustive unboxed sum case")
     }
     @ExplodeLoop override fun execute(frame: VirtualFrame): Any? {
         val selected = prepare(frame, Route.GENERIC)
