@@ -902,8 +902,8 @@ val foreignExceptionTests = listOf("foreignExceptionTest" to false, "foreignExce
         group = "verification"
         description = "Tests genuine automatic foreign exceptions with ${if (dense) "dense" else "default"} handoffs."
         maxHeapSize = "4g"
-        testClassesDirs = polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
-        classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime
         useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())

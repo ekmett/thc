@@ -95,6 +95,7 @@ class PolyglotFFITest {
             val validated = CoreJavaScript.validate(javascriptCall(source, arguments, result, safety), false)
             assertNotNull(validated)
             assertEquals(source, validated!!.source)
+            assertEquals(ForeignSafety.synchronous(safety), validated.safety)
             assertEquals(arguments.map { if (it == "IntRep") CoreKind.LONG else CoreKind.DOUBLE },
                 validated.arguments.toList())
             assertEquals(when (result) {
@@ -263,9 +264,10 @@ class PolyglotFFITest {
         return AccessRoot(language)
     }
 
-    private fun javascriptRoot(source: String, input: List<String>, output: String): JavaScriptRoot {
+    private fun javascriptRoot(source: String, input: List<String>, output: String,
+                               safety: String = "unsafe"): JavaScriptRoot {
         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-        val declaration = CoreJavaScript.validate(javascriptCall(source, input, output), false)!!
+        val declaration = CoreJavaScript.validate(javascriptCall(source, input, output, safety), false)!!
         return JavaScriptRoot(language, declaration)
     }
 
@@ -303,7 +305,7 @@ class PolyglotFFITest {
         }
     }
 
-    @Test fun javascriptCallDefersSelfDeliveryUntilReentrantGuestCallback() {
+    @Test fun safeJavascriptCallbackKeepsCallerDeliveryAndStartsFreshUnmasked() {
         context().use { context ->
             context.initialize("thc")
             context.enter()
@@ -311,18 +313,24 @@ class PolyglotFFITest {
                 val state = Language.currentState()
                 val threads = state.threads
                 val node = object : Node() {}
-                val javaId = threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+                val callerId = threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+                val caller = threads.currentIdentity()
+                val javaId = Thread.currentThread().threadId()
                 try {
-                    val request = threads.send(javaId, "callback payload")
+                    val request = threads.send(callerId, "callback payload")
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                     val callback = context.asValue(publicEntry(language) {
                         assertEquals(javaId, Thread.currentThread().threadId())
-                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, state.maskingState.get())
+                        assertEquals(MaskingState.UNMASKED, state.maskingState.get())
+                        assertNotSame(caller, threads.currentIdentity())
+                        assertTrue(threads.isCurrentBound())
                         val nestedForeign = threads.enterForeign()
                         try { assertNull(threads.poll(node)) }
                         finally { threads.leaveForeign(nestedForeign) }
-                        assertSame(request, threads.poll(node), "A public guest callback admits self delivery")
-                        request.acknowledge()
+                        assertNull(threads.poll(node), "A callback cannot claim the suspended caller request")
+                        val own = threads.send(threads.currentIdentity(), "callback self")
+                        assertSame(own, threads.poll(node))
+                        own.acknowledge()
                         42L
                     })
                     context.getBindings("js").putMember("thcReentry", ProxyExecutable { _ ->
@@ -332,11 +340,13 @@ class PolyglotFFITest {
                         assertNull(threads.poll(node), "Callback exit restores JavaScript execution")
                         answer
                     })
-                    val target = javascriptRoot("globalThis.thcReentry", emptyList(), "IntRep").callTarget
+                    val target = javascriptRoot("globalThis.thcReentry", emptyList(), "IntRep", "safe").callTarget
                     assertEquals(42L, Calls.target(target, arrayOf<Any?>(Unit)) as Long)
-                    assertEquals(AsyncRequestState.ACKNOWLEDGED, request.state)
+                    assertEquals(AsyncRequestState.PENDING, request.state)
+                    assertSame(request, threads.poll(node))
+                    request.acknowledge()
                     assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, state.maskingState.get())
-                    val after = threads.send(javaId, "after foreign return")
+                    val after = threads.send(callerId, "after foreign return")
                     assertSame(after, threads.poll(node), "The outer guest cut is restored after JavaScript returns")
                     after.acknowledge()
                 } finally { threads.leaveCurrent() }
@@ -355,7 +365,8 @@ class PolyglotFFITest {
                 val payload = Any()
                 val effects = AtomicInteger()
                 val request = AtomicReference<AsyncRequest>()
-                val id = outerThreads.enterCurrent()
+                outerThreads.enterCurrent()
+                val outerId = outerThreads.currentIdentity()
                 try {
                     Context.newBuilder("thc").allowExperimentalOptions(true).build().use { guest ->
                         guest.initialize("thc"); guest.enter()
@@ -367,7 +378,9 @@ class PolyglotFFITest {
                             }.callTarget, null)
                             guest.asValue(publicEntry(innerLanguage) {
                                 val innerId = innerThreads.currentId()
-                                assertEquals(id, innerId, "Cross-context callback keeps the Java ThreadId#")
+                                assertNotEquals(outerId, innerThreads.currentIdentity())
+                                assertEquals(outerId.javaId, innerThreads.currentIdentity().javaId)
+                                assertTrue(innerThreads.isCurrentBound())
                                 val pending = innerThreads.send(innerId, payload)
                                 request.set(pending)
                                 val claimed = innerThreads.poll(node)!!
@@ -382,7 +395,7 @@ class PolyglotFFITest {
                             callback.execute().asLong()
                         })
                         val declaration = CoreJavaScript.validate(
-                            javascriptCall("globalThis.thcUncaught", emptyList(), "IntRep"), false)!!
+                            javascriptCall("globalThis.thcUncaught", emptyList(), "IntRep", "safe"), false)!!
                         val body = object : RootNode(language) {
                             @Child private var access = JavaScriptAccess(declaration)
                             override fun execute(frame: VirtualFrame): Any {
@@ -405,6 +418,38 @@ class PolyglotFFITest {
                         assertEquals(1, effects.get(), "The abandoned foreign call must not run twice")
                     }
                 } finally { outerThreads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun cachedJavascriptCodeRetainsEachCallSitesCallbackAuthority() {
+        context().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val owner = Language.currentState()
+                val callbacks = AtomicInteger()
+                val callback = context.asValue(publicEntry(language) {
+                    assertTrue(owner.threads.isCurrentBound())
+                    callbacks.incrementAndGet(); 42L
+                })
+                context.getBindings("js").putMember("thcAuthority", ProxyExecutable { callback.execute().asLong() })
+                // Source/arity caches code identity, while each declaration keeps its authority.
+                val unsafe = javascriptRoot("globalThis.thcAuthority", emptyList(), "IntRep", "unsafe").callTarget
+                val safe = javascriptRoot("globalThis.thcAuthority", emptyList(), "IntRep", "safe").callTarget
+                owner.threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE)
+                val caller = owner.threads.currentIdentity()
+                try {
+                    for (expectedCallbacks in 0..1) {
+                        val denied = assertThrows(RuntimeException::class.java) { Calls.target(unsafe, arrayOf(Unit)) }
+                        assertTrue(denied.message.orEmpty().contains("Unsafe foreign call"), denied.message)
+                        assertEquals(expectedCallbacks, callbacks.get())
+                        assertSame(caller, owner.threads.currentIdentity())
+                        assertFalse(caller.allocationSuspended)
+                        assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, owner.maskingState.get())
+                        if (expectedCallbacks == 0) assertEquals(42L, Calls.target(safe, arrayOf(Unit)))
+                    }
+                } finally { owner.threads.leaveCurrent() }
             } finally { context.leave() }
         }
     }

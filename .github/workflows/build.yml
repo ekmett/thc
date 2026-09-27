@@ -537,6 +537,74 @@ jobs:
             build/map/provenance.json
             build/map/reproduction-provenance.json
 
+  foreign-exceptions:
+    # Complete original Core is provisioned on this trusted runner. Keep this a
+    # required Build job; stock hosted tests cannot replace these program lanes.
+    runs-on: [self-hosted, Linux, X64, thc-fast]
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+        working-directory: work/foreign-exceptions
+    env:
+      THC_FULL_CORE_ENVIRONMENT: ${{ vars.THC_FULL_CORE_ENVIRONMENT }}
+    steps:
+      - name: Require a trusted repository branch
+        working-directory: .
+        run: |
+          test "$GITHUB_EVENT_NAME" = push || test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          case "$GITHUB_REF" in refs/heads/*) ;; *) exit 1 ;; esac
+          if [ "$GITHUB_EVENT_NAME" = push ]; then test "$GITHUB_REF" = refs/heads/main; fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          path: work/foreign-exceptions
+      - name: Check dispatched revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$EXPECTED_SHA" || test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - name: Prepare genuine exception support and test both handoff modes
+        run: |
+          set -euo pipefail
+          test -n "$THC_FULL_CORE_ENVIRONMENT" && test -f "$THC_FULL_CORE_ENVIRONMENT"
+          source "$THC_FULL_CORE_ENVIRONMENT"
+          test -n "${THC_FOREIGN_EXCEPTION_GHC_SOURCE:-}" && test -d "$THC_FOREIGN_EXCEPTION_GHC_SOURCE"
+          test "$("$GHC" --numeric-version)" = 9.14.1
+          test "$("$GHC_PKG" --version)" = 'GHC package manager version 9.14.1'
+          # Never share mutable Gradle/THC acquisition caches with Fast checks or
+          # development worktrees, even if the provisioned environment sets them.
+          export GRADLE_USER_HOME="$RUNNER_TEMP/thc-foreign-exceptions/gradle"
+          export THC_GRADLE_USER_HOME="$GRADLE_USER_HOME"
+          export THC_CACHE_HOME="$RUNNER_TEMP/thc-foreign-exceptions/core"
+          make foreign-exception-test-modes GRADLE_FLAGS='--no-daemon --max-workers=2'
+      - name: Retain portable source and artifact hashes
+        if: always()
+        run: |
+          if [ -f build/foreign-exceptions/manifest.json ]; then
+            mkdir -p build/foreign-exception-ci
+            node <<'JS'
+          const fs = require('fs');
+          const {schema, ghc, entries, inputHashes, artifactHashes} =
+            JSON.parse(fs.readFileSync('build/foreign-exceptions/manifest.json', 'utf8'));
+          fs.writeFileSync('build/foreign-exception-ci/provenance.json',
+            JSON.stringify({schema, ghc, entries, inputHashes, artifactHashes}, null, 2) + '\n');
+          JS
+          fi
+      - name: Preserve genuine exception correctness results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: foreign-exception-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            work/foreign-exceptions/build/foreign-exception-ci/provenance.json
+            work/foreign-exceptions/build/test-results/foreignExceptionTest/*.xml
+            work/foreign-exceptions/build/test-results/foreignExceptionDenseTest/*.xml
+            work/foreign-exceptions/build/foreign-exceptions/logs/native-oracle.stdout
+          if-no-files-found: warn
+          retention-days: 14
+
   library:
     name: library (${{ matrix.os }}, ${{ matrix.backend }}, handoff=${{ matrix.handoff }})
     needs: build
