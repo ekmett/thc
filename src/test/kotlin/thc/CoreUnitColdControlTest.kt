@@ -138,4 +138,30 @@ class CoreUnitColdControlTest {
             }
         }
     }
+
+    @Test fun directAndCrossModulePromptRejectAnActiveTransactionBeforeTheAction() {
+        val manifest = fixture(callControl = true)
+        for (backend in listOf("ast", "bytecode")) for (selected in listOf("uA:A.entry", "uB:B.entry")) {
+            Context.create("thc").use { context ->
+                val entry = context.eval("thc", request("@$manifest", selected, backend, false))
+                context.enter()
+                try {
+                    val stm = Language.currentState().stm
+                    var completed = false
+                    val failure = assertThrows(PolyglotException::class.java) {
+                        stm.atomically(null, { error("unexpected nested transaction") }) {
+                            entry.execute(2)
+                            completed = true
+                        }
+                    }
+                    assertTrue(failure.message.orEmpty().contains("STM transaction frames do not support explicit delimited capture"), failure.message)
+                    assertFalse(completed)
+                    assertFalse(stm.hasTransaction())
+                } finally { context.leave() }
+                // A failed transactional attempt does not poison the prepared
+                // definition or prevent its supported nontransactional use.
+                assertEquals(if (selected == "uA:A.entry") 18L else 13L, entry.execute(2).asLong())
+            }
+        }
+    }
 }

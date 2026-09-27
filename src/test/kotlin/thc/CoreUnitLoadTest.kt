@@ -77,6 +77,64 @@ class CoreUnitLoadTest {
             asyncExceptions = async, verifyArtifacts = verify)
     private fun count(value: Value, field: String) = ((Json.parse(value.getMember("diagnostics").asString()) as Map<*, *>)[field] as Number).toLong()
 
+    @Test fun explicitLooseConsumersKeepPairedDependenciesCold() {
+        val manifest = fixture()
+        val plain = directory.resolve("Main.json")
+        Files.writeString(plain, Json.stringify(mapOf("schema" to 1, "ghc" to "9.14.1", "unit" to "main",
+            "module" to "Main", "boundary" to boundary, "constructors" to emptyList<Any>(),
+            "bindings" to listOf(binding("main:Main.entry", choice(literal(41), call("uB:B.entry", listOf("var", "x"))))))))
+        val nativeJson = directory.resolve("native.json")
+        val nativeIndex = directory.resolve("native.idx")
+        javaClass.getResourceAsStream("/core/lazy-json-module.json")!!.use { Files.copy(it, nativeJson) }
+        javaClass.getResourceAsStream("/core/lazy-json-module.idx")!!.use { Files.copy(it, nativeIndex) }
+        for (backend in listOf("ast", "bytecode")) for (async in listOf(false, true)) {
+            for (order in listOf(listOf(plain.toString(), "@$manifest"), listOf("@$manifest", plain.toString()))) {
+                executionContext().use { context ->
+                    val entry = context.eval("thc", CoreModules.request(order, "main:Main.entry", backend = backend,
+                        asyncExceptions = async, sourceNotesEnabled = false))
+                    assertEquals(0L, count(entry, "coreUnitSourceOpens"))
+                    assertEquals(41L, entry.execute(0).asLong())
+                    assertEquals(0L, count(entry, "coreUnitSourceOpens"))
+                    assertEquals(2L, entry.execute(1).asLong())
+                    assertEquals(1L, count(entry, "coreUnitDecodedBindings"))
+                    val reads = count(entry, "coreUnitSourceByteReads")
+                    assertEquals(3L, entry.execute(2).asLong())
+                    assertEquals(reads, count(entry, "coreUnitSourceByteReads"))
+                }
+            }
+            executionContext().use { context ->
+                // This is the actual native-produced sidecar used by the loose
+                // loader controls, not a runtime reference-index fallback.
+                val entry = context.eval("thc", CoreModules.request(listOf(nativeJson.toString(), "@$manifest"),
+                    "synthetic:LazyJson.entry", backend = backend, asyncExceptions = async, sourceNotesEnabled = false,
+                    jsonSidecars = mapOf(nativeJson.toString() to nativeIndex.toString())))
+                assertEquals(0L, count(entry, "coreUnitSourceOpens"))
+                assertEquals(1L, count(entry, "jsonBodyMaterializations"))
+                assertEquals(7L, entry.execute(5).asLong())
+                assertEquals(2L, count(entry, "jsonBodyMaterializations"))
+                assertEquals(1L, entry.execute(0).asLong())
+                assertEquals(3L, count(entry, "jsonBodyMaterializations"))
+                assertEquals(0L, count(entry, "coreUnitSourceOpens"))
+            }
+        }
+    }
+
+    @Test fun looseModuleCollisionsFailWithoutOpeningPackageSources() {
+        val manifest = fixture()
+        val loose = directory.resolve("duplicate.json")
+        Files.writeString(loose, Json.stringify(mapOf("schema" to 1, "ghc" to "9.14.1", "unit" to "uA",
+            "module" to "A", "boundary" to boundary, "bindings" to listOf(binding("uA:A.entry", literal(99))))))
+        Files.delete(directory.resolve("A.jsons"))
+        for (backend in listOf("ast", "bytecode")) executionContext().use { context ->
+            val failure = assertThrows(org.graalvm.polyglot.PolyglotException::class.java) {
+                context.eval("thc", CoreModules.request(listOf(loose.toString(), "@$manifest"), "uA:A.entry", backend = backend))
+            }
+            assertTrue(failure.message.orEmpty().contains("Duplicate GHC module"), failure.message)
+            context.enter()
+            try { assertTrue(Language.currentState().coreUnitPrograms.isEmpty()) } finally { context.leave() }
+        }
+    }
+
     @Test fun projectedMetadataSkipsOriginalPrettyCoreGroupsAndDisabledSourceTables() {
         val unit = unit("A", literal(7), diagnostics = true)
         val document = Json.parse(Json.stringify(mapOf("format" to "thc-core-packages", "schema" to 1,

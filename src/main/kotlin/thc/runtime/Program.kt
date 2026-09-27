@@ -2172,10 +2172,11 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
     private val metrics = demand?.metrics ?: Metrics(moduleData["instrument"] != false)
     private val loadingStatistics = moduleData["coreLoadingStatistics"] as? (() -> Map<String, Any>)
-    private val delimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
+    private val containsDelimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
         val body = (binding as? Map<*, *>)?.get("expr")
         if (body is thc.CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(binding)
     } ?: DelimitedControl.contains(moduleData["bindings"])
+    private val delimited = containsDelimited || demand != null && moduleData["captureDelimited"] == true
     private val sources = CoreSources(moduleData)
     private var currentSource: CoreSourceLocation? = null
     private var operandBuilder: OperandBuilder? = null
@@ -2231,7 +2232,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
     private val globalArityCertificates = bindings.associate { it["id"] as String to CoreApplicationCertificates.binding(it) }
     private val validateInputs = if (diagnosticUnsupported) null else CoreInputCalls.validator(bindings, constructors, demand)
     init {
-        if (enableAsync && delimited)
+        if (enableAsync && containsDelimited)
             throw UnsupportedCore("Delimited continuations do not yet preserve AST async captures")
         val eager = ArrayList<Map<String, Any?>>()
         for (binding in bindings) {
@@ -3145,7 +3146,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
                 GetCurrentCCS(argument(args[0], scope, true), argument(args[1], scope, false), tupleProof)
             } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
                 val operation = STMOp.named(fn[1] as String)!!
-                if (delimited && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                if (containsDelimited && operation != STMOp.NEW && operation != STMOp.READ_IO)
                     throw UnsupportedCore("STM transaction frames do not support explicit delimited capture")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }

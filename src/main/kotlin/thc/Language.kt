@@ -110,7 +110,7 @@ object CoreModules {
     }.finish()
 
     /** Retain only linked definitions, never the complete raw package request. */
-    internal class Merger {
+    internal class Merger(private val availableModules: Set<String> = emptySet()) {
         private var count = 0
         private val admissions = arrayListOf<ManagedExportAdmission>()
         private val bindings = linkedMapOf<String, Map<String, Any?>>()
@@ -232,8 +232,8 @@ object CoreModules {
         }
         fun finish(): Map<String, Any?> {
             require(count != 0) { "No Core modules supplied" }
-            require(completeModules.containsAll(providedModules)) {
-                "Interface closure lacks its exact complete provided modules: ${providedModules - completeModules}"
+            require((completeModules + availableModules).containsAll(providedModules)) {
+                "Interface closure lacks its exact complete provided modules: ${providedModules - completeModules - availableModules}"
             }
             packageScalarLinks.forEach { (unit, link) ->
                 require(packageScalarProofs[unit] == link.abi.map { it.entry }.toSet()) {
@@ -546,10 +546,22 @@ object CoreModules {
         val document = Json.parse(bytes.toString(Charsets.UTF_8)) as? Map<*, *> ?: error("Invalid Core package manifest")
         val directory = CoreUnitDirectory.read(document) ?: return null
         require(input["foreignExceptionBridgeUnit"] == directory.foreignExceptionBridgeUnit) { "Package bridge selection changed after request" }
-        require(input["consumerModules"] == null && input["indexedModuleFiles"] == null) {
-            "Unit-pair demand loading currently requires package-owned consumers"
-        }
         return directory
+    }
+
+    /** Replay only explicitly supplied consumers. Package definitions stay in
+     * their unit directory; an interface closure never becomes a package unit. */
+    internal fun visitUnitConsumers(input: Map<String, Any?>,
+        indexed: (CoreJsonIndex, CoreJsonBindings) -> Unit, accept: (Map<String, Any?>) -> Unit) {
+        val files = input["indexedModuleFiles"]
+        val consumers = input["consumerModules"]
+        require(files == null || consumers == null) { "Mixed loose consumer protocols" }
+        val loose = input - setOf("packageManifest", "packageManifestSha256", "packageCapability", "consumerModules")
+        if (files != null) visitRequestModules(loose, indexed, accept)
+        else if (consumers != null) {
+            require(consumers is List<*> && consumers.all { it is Map<*, *> }) { "Invalid loose package consumers" }
+            visitRequestModules(loose + ("modules" to consumers), indexed, accept)
+        }
     }
 
     /** Opt-in host path: exact loose JSON and explicit producer sidecars, without
@@ -916,9 +928,6 @@ class Language : TruffleLanguage<Language.State>() {
         require(backend == "ast" || backend == "bytecode") { "Unknown THC backend: $backend" }
         require(input["asyncExceptions"] == null || input["asyncExceptions"] is Boolean) { "asyncExceptions must be a Boolean" }
         val async = input["asyncExceptions"] as? Boolean ?: (backend == "bytecode")
-        require(directory.modules.none { it.containsDelimitedControl }) {
-            "Delimited-control unit pairs require the exhaustive compatibility loader"
-        }
         require(input["ioMain"] != true || input["diagnosticUnsupported"] != true) { "IO main requires strict unsupported-Core rejection" }
         return object : RootNode(this) {
             override fun execute(frame: VirtualFrame): Any {
@@ -940,7 +949,7 @@ class Language : TruffleLanguage<Language.State>() {
                     val registrations = program.registerStartup()
                     val value = EntryValue(program, entry, (selected["arity"] as Number).toInt(), null,
                         io, this@Language, shutdown, shutdownResult,
-                        async && directory.owner(thc.runtime.CoreSignalForeign.dispatcher) != null)
+                        async && program.contains(thc.runtime.CoreSignalForeign.dispatcher))
                     owner.coreUnitPrograms += program
                     owner.foreignRoots.retain(program, registrations)
                     return value

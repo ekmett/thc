@@ -37,10 +37,11 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         this(language, moduleData, null, enableAsync)
     internal constructor(language: Language, moduleData: Map<String, Any?>, checkpoint: BytecodeCheckpoint) :
         this(language, moduleData, checkpoint, false)
-    private val delimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
+    private val containsDelimited = (moduleData["bindings"] as? List<*>)?.any { binding ->
         val body = (binding as? Map<*, *>)?.get("expr")
         if (body is thc.CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(binding)
     } ?: DelimitedControl.contains(moduleData["bindings"])
+    private val delimited = containsDelimited || demand != null && moduleData["captureDelimited"] == true
     private val resumable = checkpoint != null || enableAsync || delimited
     private val stackTargetLayout = moduleData["targetLayout"]
     private val callDemandsEnabled = java.lang.Boolean.getBoolean(CALL_DEMANDS_PROPERTY)
@@ -3045,7 +3046,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                 }
             } else if (fn[0] == "prim" && STMOp.named(fn[1] as String) != null) {
                 val operation = STMOp.named(fn[1] as String)!!
-                if ((checkpoint != null || delimited) && operation != STMOp.NEW && operation != STMOp.READ_IO)
+                if ((checkpoint != null || containsDelimited) && operation != STMOp.NEW && operation != STMOp.READ_IO)
                     throw UnsupportedCore("STM transaction frames do not support explicit checkpoint/delimited capture")
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }

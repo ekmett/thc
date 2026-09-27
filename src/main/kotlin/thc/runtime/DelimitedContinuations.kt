@@ -342,7 +342,9 @@ internal object DelimitedControl {
     }
     @JvmStatic fun tag(node: Node, value: Any?): PromptTag {
         val tag = value as? PromptTag ?: fault("Expected PromptTag# carrier")
-        if (Language.currentState(node) !== tag.owner) fault("Prompt tag belongs to another context")
+        val owner = Language.currentState(node)
+        if (owner !== tag.owner) fault("Prompt tag belongs to another context")
+        if (owner.stm.hasTransaction()) fault("STM transaction frames do not support explicit delimited capture")
         return tag
     }
     @JvmStatic fun captureBytecode(result: Any?, shape: TupleShape?) {

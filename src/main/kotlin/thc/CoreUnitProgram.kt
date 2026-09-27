@@ -5,6 +5,8 @@
 package thc
 
 import com.oracle.truffle.api.RootCallTarget
+import java.util.Collections
+import java.util.IdentityHashMap
 import thc.runtime.*
 
 /** One context's admitted definitions. A compiled reference to another module
@@ -21,30 +23,92 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     private val admittedModules = HashMap<CoreUnitDirectory.ModuleRecord, Map<String, Any?>>()
     private val admissions = HashMap<CoreUnitDirectory.ModuleRecord, CoreModuleAdmission>()
     private val packageProvenance = HashMap<String, List<PackageScalarAdmission>>()
-    private val linkedModules = HashSet<CoreUnitDirectory.ModuleRecord>()
+    private val linkedAdmissions = Collections.newSetFromMap(IdentityHashMap<CoreModuleAdmission, Boolean>())
+    private val consumerSources = ArrayList<CoreJsonIndex>()
+    private val consumerStatistics = CoreJsonLoadingStatistics()
+    private val consumers = ArrayList<Map<String, Any?>>()
+    private val consumerBindings = HashMap<String, Map<String, Any?>>()
+    private val consumerOwners = HashMap<String, Map<String, Any?>>()
+    private val consumerAdmissions = IdentityHashMap<Map<String, Any?>, CoreModuleAdmission>()
+    private val availableModules = directory.modules.mapTo(hashSetOf()) { "${it.unit}:${it.name}" }
     private var selectedBridge: Map<String, Any?>? = null
-    private val demand = CoreDemandBindings({ directory.owner(it) != null }, ::binding, ::constructor,
+    init {
+        val modules = HashSet<String>()
+        try {
+            CoreModules.visitUnitConsumers(input, { source, adapter ->
+                consumerSources += source
+                consumerStatistics.include(source, adapter)
+            }) { module ->
+                val unit = module["unit"] as? String ?: error("Missing loose consumer unit")
+                val name = module["module"] as? String ?: error("Missing loose consumer module")
+                val fragment = unit == "dependency-closure" && name == "THC.InterfaceClosure" &&
+                    module["boundary"] == "actual-interface-unfoldings"
+                if (!fragment) require(modules.add("$unit:$name") && "$unit:$name" !in availableModules) {
+                    "Duplicate GHC module: $unit:$name"
+                }
+                if (module["boundary"] == "optimized-Core-after-Tidy-before-CorePrep") availableModules += "$unit:$name"
+                for (binding in module["bindings"] as List<Map<String, Any?>>) {
+                    val id = binding["id"] as String
+                    require(consumerBindings.putIfAbsent(id, binding) == null) { "Duplicate binding: $id" }
+                    consumerOwners[id] = module
+                }
+                addConstructors(module)
+                consumers += module
+            }
+            for (module in consumers) module["providedModules"]?.let { provided ->
+                require(module["unit"] == "dependency-closure" && module["module"] == "THC.InterfaceClosure" &&
+                    module["boundary"] == "actual-interface-unfoldings" && provided is List<*> &&
+                    provided.all { it is String && it in availableModules }) { "Invalid or missing provided-module interface closure" }
+            }
+        } catch (failure: Throwable) { consumerSources.forEach(CoreJsonIndex::close); sources.close(); throw failure }
+    }
+    private val demand = CoreDemandBindings({ it in consumerBindings || directory.owner(it) != null }, ::binding, ::constructor,
         ::prepare, input["instrument"] != false)
+    // Cold summaries choose a calling convention, not an admission verdict.
+    // AST asynchronous execution cannot capture explicit delimited control; its
+    // actual selected binding is rejected by Program, not by this directory.
+    private val captureDelimited = (backend != "ast" || !async) &&
+        (directory.modules.any { it.containsDelimitedControl } || consumerBindings.values.any { binding ->
+            val body = binding["expr"]
+            if (body is CoreBindingBody) body.header.containsDelimitedControl else DelimitedControl.contains(body)
+        })
+    fun contains(id: String) = id in consumerBindings || directory.owner(id) != null
+
+    private fun addConstructors(data: Map<String, Any?>) {
+        for (raw in data["constructors"] as? List<Map<String, Any?>> ?: emptyList()) {
+            val id = raw["id"] as? String ?: error("Missing constructor identity")
+            val previous = constructors.putIfAbsent(id, raw)
+            require(previous == null || previous.filterKeys { it != "type" } == raw.filterKeys { it != "type" }) {
+                "Inconsistent constructor: $id"
+            }
+        }
+    }
 
     private fun metadata(module: CoreUnitDirectory.ModuleRecord): Map<String, Any?> =
         admittedModules.getOrPut(module) {
-            sources.metadata(module).also { data ->
-                for (raw in data["constructors"] as? List<Map<String, Any?>> ?: emptyList()) {
-                    val id = raw["id"] as? String ?: error("Missing constructor identity")
-                    val previous = constructors.putIfAbsent(id, raw)
-                    require(previous == null || previous.filterKeys { it != "type" } == raw.filterKeys { it != "type" }) {
-                        "Inconsistent constructor: $id"
-                    }
-                }
-            }
+            sources.metadata(module).also(::addConstructors)
         }
     private fun constructor(id: String): Map<String, Any?>? {
         constructors[id]?.let { return it }
         directory.owner(id)?.let(::metadata)
         return constructors[id]
     }
-    fun binding(id: String): Map<String, Any?> = sources.binding(id)
-        ?: throw UnsupportedCore("Unresolved external binding $id")
+    fun binding(id: String): Map<String, Any?> {
+        consumerBindings[id]?.let { binding ->
+            require(directory.owner(id) == null || sources.binding(id) == null) { "Duplicate binding: $id" }
+            return binding
+        }
+        return sources.binding(id) ?: throw UnsupportedCore("Unresolved external binding $id")
+    }
+
+    private fun consumerAdmission(module: Map<String, Any?>): CoreModuleAdmission = consumerAdmissions.getOrPut(module) {
+        if (input["verifyArtifacts"] == true) {
+            CoreForeignArtifacts.validateArchive(module)
+            CoreModules.admission(module)
+            CoreForeignExceptionBridge.read(module)
+        }
+        CoreModuleAdmission(module + ("bindings" to emptyList<Any>()), ::binding)
+    }
 
     private fun admission(module: CoreUnitDirectory.ModuleRecord): CoreModuleAdmission = admissions.getOrPut(module) {
         sources.verifyModule(module)
@@ -54,32 +118,37 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     private fun packageProvenance(unit: String): List<PackageScalarAdmission> = packageProvenance.getOrPut(unit) {
         directory.modules.filter { it.unit == unit && it.packageScalarDeclarations }.mapNotNull {
             admission(it).packageLink
-        }
+        } + consumers.filter { it["unit"] == unit && (it["staticForeignImports"] as? Map<*, *>)
+            ?.get("imports").let { imports -> imports is List<*> && imports.isNotEmpty() } }
+            .mapNotNull { consumerAdmission(it).packageLink }
     }
 
     private fun bridge(): Map<String, Any?> = selectedBridge ?: run {
         val candidates = directory.modules.filter { it.name == "THC.Internal.Exception" &&
             (directory.foreignExceptionBridgeUnit == null || it.unit == directory.foreignExceptionBridgeUnit) }
-        require(candidates.size == 1) { "Missing or ambiguous foreign exception bridge unit" }
-        val module = candidates.single()
-        checkNotNull(admission(module).bridge) {
+        val loose = consumers.filter { it["module"] == "THC.Internal.Exception" &&
+            (directory.foreignExceptionBridgeUnit == null || it["unit"] == directory.foreignExceptionBridgeUnit) }
+        require(candidates.size + loose.size == 1) { "Missing or ambiguous foreign exception bridge unit" }
+        val selected = if (loose.isEmpty()) admission(candidates.single()) else consumerAdmission(loose.single())
+        checkNotNull(selected.bridge) {
             "Foreign execution requires a genuine THC.Exception runtime bundle"
         }.also { selectedBridge = it }
     }
     private fun prepare(id: String, binding: Map<String, Any?>): ExecutableProgram {
-        val module = directory.owner(id) ?: error("Missing Core module owner: $id")
-        val admitted = admission(module)
-        val merged = CoreModules.Merger().also { merger ->
+        val admitted = consumerOwners[id]?.let(::consumerAdmission) ?:
+            admission(directory.owner(id) ?: error("Missing Core module owner: $id"))
+        val merged = CoreModules.Merger(availableModules).also { merger ->
             merger.addSelected(admitted, listOf(binding))
             admitted.packageLink?.let {
-                packageProvenance(module.unit).forEach(merger::addPackageProvenance)
+                packageProvenance(admitted.module["unit"] as String).forEach(merger::addPackageProvenance)
             }
         }.finish()
         val linked = CoreModules.demanded(merged, id, demand, ::bridge) + mapOf(
             "instrument" to (input["instrument"] != false), "diagnosticUnsupported" to (input["diagnosticUnsupported"] == true),
-            "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false), "demandBindings" to demand) +
+            "sourceNotesEnabled" to (input["sourceNotesEnabled"] != false), "demandBindings" to demand,
+            "captureDelimited" to captureDelimited) +
             (directory.targetLayout?.let { mapOf("targetLayout" to it) } ?: emptyMap())
-        if (linkedModules.add(module)) {
+        if (linkedAdmissions.add(admitted)) {
             (linked["foreignLinks"] as List<ForeignBitcode>).forEach { owner.cbits().link(it) }
             (linked["packageScalarLinks"] as List<PackageScalarLink>).forEach { owner.packageCbits.link(it) }
         }
@@ -87,11 +156,12 @@ internal class CoreUnitProgram(private val language: Language, private val direc
     }
     fun registerStartup(): List<ManagedExportAdmission> {
         val registrations = ArrayList<ManagedExportAdmission>()
-        for (module in directory.modules.filter { it.registrationObligations }) {
-            val admitted = admission(module)
+        val pending = directory.modules.filter { it.registrationObligations }.map(::admission) +
+            consumers.filter(CoreForeignArtifacts::hasRegistrationObligations).map(::consumerAdmission)
+        for (admitted in pending) {
             // This also rejects unclassified native initializers before any
             // entry executes, without pretending a selected body is complete.
-            CoreModules.Merger().also { it.addSelected(admitted, emptyList()) }.finish()
+            CoreModules.Merger(availableModules).also { it.addSelected(admitted, emptyList()) }.finish()
             admitted.exports?.let { exports ->
                 registrations += exports
                 exports.exports.forEach { entryValue(it.binder) }
@@ -146,7 +216,9 @@ internal class CoreUnitProgram(private val language: Language, private val direc
         result["coreUnitDecodedBytes"] = counters.sumOf { it.decodedBytes }
         result["coreUnitMetadataBytes"] = counters.sumOf { it.metadataBytes }
         result["coreUnitVerifiedModuleBytes"] = counters.sumOf { it.verifiedModuleBytes }
+        result["looseConsumerBindingHeaders"] = consumerBindings.size
+        result.putAll(consumerStatistics())
         return result
     }
-    override fun close() = sources.close()
+    override fun close() { try { sources.close() } finally { consumerSources.forEach(CoreJsonIndex::close) } }
 }
