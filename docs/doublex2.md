@@ -60,7 +60,5 @@ source-matched oracle can support Graal checks on another host without claiming
 that host ran native GHC SIMD. Local LLVM must satisfy GHC's supported version
 range; a renamed executable does not establish toolchain compatibility.
 
-The [DoubleX2 research archive](../research/doublex2-checkpoint.md) retains the
-original graph captures, architecture observations and counts. Type acceptance
-and result agreement alone do not prove current packed instructions, eliminated
-allocations or a throughput improvement.
+Type acceptance and result agreement alone do not prove packed instructions,
+eliminated allocations or a throughput improvement.

@@ -94,7 +94,3 @@ and byte-identical native/model TSVs. Separately named wider-shape controls use
 the prepared model. Both retain exact guest-entry, active-target and handoff
 cleanup checks. Use `python3 scripts/prepare-simd-families.py --check-only`
 to verify an existing manifest's input/artifact hashes without regenerating it.
-
-The [generated-family research archive](../research/simd-families-checkpoint.md)
-retains the initial operation counts, fixture counts and scope. They are not
-current support limits or a current test inventory.

@@ -56,7 +56,3 @@ With `--export-only`, preparation retains real pre-Tidy Core and model-only
 expectations, not a native oracle or post-Tidy export. Full preparation needs a
 working native GHC SIMD configuration. Neither mode by itself establishes packed
 machine instructions, eliminated allocations or throughput.
-
-The [FloatX4 research archive](../research/floatx4-checkpoint.md) retains the
-original x86/AArch64 graph captures and test totals. Those captures identify
-their exact runtime and oracle; they are not current raw-vector graph evidence.

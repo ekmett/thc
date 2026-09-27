@@ -69,8 +69,3 @@ Its selected-phase JSON and complete raw BGV/CFG captures are graph evidence,
 not throughput measurements. Record the exact runtime, source, oracle and host
 for a capture; a result on AVX2 does not establish an SSE2-only target, and an
 imported x86 native oracle does not establish native GHC execution on AArch64.
-
-The [archived foundation investigation](../research/simd-checkpoint.md)
-retains its original architecture comparisons, compiler graphs and test counts.
-Those captures describe their recorded implementations, not a new validation
-of the current raw-vector representation.
