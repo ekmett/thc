@@ -24,7 +24,7 @@ import qualified Data.Set as Set
 import qualified Data.Text as Text
 import Data.Time (defaultTimeLocale, formatTime, getCurrentTime)
 import FixtureSupport
-import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, findExecutable, listDirectory)
+import System.Directory (canonicalizePath, copyFile, createDirectoryIfMissing, doesDirectoryExist, doesFileExist, findExecutable, listDirectory)
 import System.Environment (lookupEnv, setEnv, unsetEnv)
 import System.Exit (die)
 import System.FilePath ((</>), takeDirectory, takeExtension)
@@ -268,12 +268,14 @@ prepareWindowsDriver root = do
     forM [(backend,dense) | backend <- ["ast","bytecode"], dense <- ["false","true"]] $ \(backend,dense) -> do
       let label = backend ++ "-" ++ dense
           output = root </> logs </> ("dist with spaces " ++ label)
+          verify = backend == "ast" && dense == "false"
       -- The first run may build the pinned vanilla support graph from source;
-      -- later modes must reuse that exact checked cache.
-      result <- runLogged (if backend == "ast" && dense == "false" then 1800 else 180) root logs label
+      -- explicitly audit it, then exercise the default no-audit policy in the
+      -- later modes while reusing that exact support cache.
+      result <- runLogged (if verify then 1800 else 180) root logs label
         [("THC_BACKEND", backend), ("JAVA_OPTS", "-Dthc.diagnostics=true -Dthc.handoffSlabs=" ++ dense)]
-        driver ["run", "--project-dir", root </> package, "completed",
-                "--thc-root", root, "--dist-dir", output]
+        driver (["run", "--project-dir", root </> package, "completed",
+                 "--thc-root", root, "--dist-dir", output] ++ ["--verify-artifacts" | verify])
       unless (commandStdout result == commandStdout observed) (die "driver output differs from native GHC")
       let diagnostics = [fields | line <- BSC.lines (commandStderr result),
             Right (Object fields) <- [eitherDecodeStrict line]]
@@ -284,6 +286,7 @@ prepareWindowsDriver root = do
   let commands = [compiled, observed] ++ runs
       supportManifests = [logs </> ("dist with spaces " ++ backend ++ "-" ++ dense) </>
         "thc-run/completed/runtime-support/packages.json" | backend <- ["ast","bytecode"], dense <- ["false","true"]]
+      auditedManifests = take 1 supportManifests
       sources = ["test/fixtures/run-pure" </> path | path <- originals] ++
         ["src/THC/Driver" </> path | path <- drivers, takeExtension path == ".hs"] ++
         ["test/haskell-fixtures/WindowsSmokeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
@@ -294,12 +297,17 @@ prepareWindowsDriver root = do
   exports <- fmap concat $ forM supportManifests $ \manifest -> do
     let output = takeDirectory (takeDirectory manifest)
         core = output </> "core"
+        audit = output </> "audit.json"
+        verified = manifest `elem` auditedManifests
+    audited <- doesFileExist (root </> audit)
+    unless (audited == verified) (die ("driver audit presence differs from requested policy: " ++ manifest))
     files <- filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
-    pure ([core </> file | file <- files] ++ [output </> "audit.json", output </> "export.args"])
+    pure ([core </> file | file <- files] ++ [audit | verified] ++ [output </> "export.args"])
   artifactHashes <- hashes root (copied ++ supportManifests ++ exports ++ [native </> "completed.exe"] ++ concatMap commandArtifacts commands)
   writeJson (root </> "build/windows-driver/provenance.json") $ object
     ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String), "system" .= Host.os,
      "runs" .= (4 :: Int), "packageToolSelection" .= ("compiler-companion" :: String),
-     "supportManifests" .= supportManifests, "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
+     "supportManifests" .= supportManifests, "auditedManifests" .= auditedManifests,
+     "inputHashes" .= sourceHashes, "artifactHashes" .= artifactHashes,
      "commands" .= map commandRecord commands]
   putStrLn "windows-driver: native GHC completion matches AST/bytecode, default/dense, paths with spaces"
