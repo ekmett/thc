@@ -18,7 +18,8 @@ freeze identity. Float accesses use a native-order four-byte `VarHandle` view
 and primitive Float expressions, frame slots and bytecode locals. Word accesses
 reuse the eight-byte raw-Long storage operations, preserving every bit.
 GHC and the strict exporter audit retain exact `WordRep` type identity;
-runtime lowering accepts integral metadata aliases sharing the Long carrier.
+runtime lowering accepts machine/64-bit metadata aliases sharing the Long
+carrier. Narrow Int-carried integers remain distinct.
 Float remains a different carrier and cannot be replaced by an integer payload.
 
 Each full-width element index is checked against the complete-element count

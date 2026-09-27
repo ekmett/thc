@@ -15,13 +15,15 @@ The audit uses the actual pinned GHC 9.14.1
 and [StgToCmm lowering](https://github.com/ghc/ghc/blob/ghc-9.14.1-release/compiler/GHC/StgToCmm/Prim.hs#L1172).
 GHC selects width-specific arithmetic and signed comparisons; widening `IntN#`
 uses signed conversion. THC therefore keeps the low N result bits and
-sign-extends them into its Long carrier. A fixed shift is selected at AST node
-construction and passed as a constant operand to each bytecode operation.
+sign-extends 8/16-bit results into its `Int` computation carrier; 32-bit results
+retain their raw bits. Width and signedness are fixed when lowering AST nodes
+and bytecode operations.
 Comparisons return full-width `Int#` zero or one. Quotients truncate toward zero;
 remainders have the dividend's sign when nonzero.
 The casts preserve the low N bits. `intNToWordN#` zero-extends the result,
 while `wordNToIntN#` sign-extends it; both keep the exact GHC `IntNRep` and
-`WordNRep` input and output contracts even though THC stores each in a Long.
+`WordNRep` input and output contracts. Computation uses `Int`; durable fields
+retain byte, short or int storage. Explicit widening alone produces `Long`.
 The signed shifts normalize the input to N bits; left shift truncates and
 sign-extends the result, while arithmetic right shift propagates the sign bit.
 Their `Int#` count must be between zero and N minus one, as required by GHC's

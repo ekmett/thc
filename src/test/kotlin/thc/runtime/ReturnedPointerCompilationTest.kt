@@ -81,7 +81,7 @@ class ReturnedPointerCompilationTest {
                         val inputs = listOf(original.plus(4) to 0x89abcdefL, alias to 0x89abcdefL, external to 0xfedcba98L)
                         owner.threads.enterCurrent()
                         try {
-                            fun read(pointer: ManagedAddress) = Calls.target(target, arrayOf(0L, pointer, 0L)) as Long
+                            fun read(pointer: ManagedAddress) = Integer.toUnsignedLong(Calls.target(target, arrayOf(0L, pointer, 0L)) as Int)
                             repeat(5) { for ((pointer, expected) in inputs) assertEquals(expected, read(pointer)) }
                             target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
                             valid(target)

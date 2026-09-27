@@ -20,8 +20,9 @@ including signed zero and quiet NaN payloads; signaling NaNs have no portable
 bit-copy guarantee. There is no additional alignment restriction.
 
 Lowering uses the existing typed array and address nodes with a constant
-byte-offset mode. Integral values share the Long carrier without redundant
-RuntimeRep identity checks. Arity, actual carrier distinctions, state tokens,
+byte-offset mode. Narrow 8/16/32-bit values use `Int`; machine-word and explicit
+64-bit values use `Long`. Names within each carrier need no redundant RuntimeRep
+identity checks. Arity, actual carrier distinctions, state tokens,
 vector exclusion, and aggregate shape and order are checked. The exporter
 auditor separately checks the exact original GHC representations.
 

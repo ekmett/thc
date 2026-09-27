@@ -16,6 +16,9 @@ species, known lifted or unlifted references, and scalar void tokens such as
 one machine-word storage class without changing bits. `Int64Rep`/`Word64Rep`
 use the same lowered Long carrier; GHC's Word/Word64 max-slot merge chooses the
 physical payload class rather than counting the two classes independently.
+Narrow 8/16/32-bit payloads compute in `Int`, but GHC's original WordSlot proof
+remains unchanged: construction explicitly widens to the canonical Long slot,
+and only the selected alternative narrows back to its declared Int carrier.
 Float and Double slots, and lifted and unlifted reference slots, remain separate.
 GHC also shares address and integral word slots. THC retains that original
 proof unchanged, but derives a separate storage projection: a collision gets

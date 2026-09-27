@@ -294,8 +294,8 @@ internal object CoreRepresentations {
         // have already failed parse(), and retained physical carriers must match.
         val unconstrained = proof.kind == CoreKind.UNKNOWN && proof.primReps == null && !proof.isAggregate && !proof.isVector
         if (proof.present && !unconstrained &&
-            (proof.kind != CoreKind.LONG || proof.isAggregate || proof.isVector))
-            throw RuntimeFault("${expr[1]} literal requires a scalar Long carrier")
+            (!proof.isInt || proof.isAggregate || proof.isVector))
+            throw RuntimeFault("${expr[1]} literal requires a scalar Int carrier")
         return CoreRepresentation(CoreKind.LONG, evaluated = true, present = true, primReps = listOf(expected))
     }
     fun lambdaResult(expr: List<Any?>): CoreRepresentation = parse(metadata(expr)?.get("resultRep"))

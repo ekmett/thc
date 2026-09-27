@@ -3800,7 +3800,7 @@ CoreStackForeign.validateHead(fn, defined)
             id, info["name"] as String, fields)
     }
     private fun primitive(name: String, args: Array<Expr>, someException: Boolean = false): Expr =
-        NarrowScalarOp.named(name)?.let { NarrowScalarExpression(it, args) } ?: floatingPrimitive(name, args) ?: when (name) {
+        NarrowScalarOp.named(name)?.let { NarrowScalarExpression(name, it, args) } ?: floatingPrimitive(name, args) ?: when (name) {
         "reallyUnsafePtrEquality#" -> {
             if (args.size != 2) throw RuntimeFault("Primitive arity mismatch: $name")
             PointerEquality(args[0], args[1])

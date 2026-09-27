@@ -18,12 +18,10 @@ internal enum class NarrowInteger(val rep: String, val bits: Int, val unsigned: 
         else -> Int::class.javaPrimitiveType!!
     }
 
-    fun narrow(value: Int): Int = when (this) {
-        INT8 -> value.toByte().toInt()
-        WORD8 -> value and 255
-        INT16 -> value.toShort().toInt()
-        WORD16 -> value and 65535
-        INT32, WORD32 -> value
+    fun narrow(value: Int): Int = when (bits) {
+        8 -> if (unsigned) value and 255 else value.toByte().toInt()
+        16 -> if (unsigned) value and 65535 else value.toShort().toInt()
+        else -> value
     }
 
     /** Public scalar inputs are range checked before adopting the exact guest carrier. */
@@ -37,12 +35,10 @@ internal enum class NarrowInteger(val rep: String, val bits: Int, val unsigned: 
     /** Only declared widening/native-word boundaries use this conversion. */
     fun widen(value: Int): Long = if (this == WORD32) Integer.toUnsignedLong(value) else narrow(value).toLong()
 
-    fun read(property: DefaultStaticProperty, storage: Any): Int = when (this) {
-        INT8 -> property.getByte(storage).toInt()
-        WORD8 -> property.getByte(storage).toInt() and 255
-        INT16 -> property.getShort(storage).toInt()
-        WORD16 -> property.getShort(storage).toInt() and 65535
-        INT32, WORD32 -> property.getInt(storage)
+    fun read(property: DefaultStaticProperty, storage: Any): Int = when (bits) {
+        8 -> property.getByte(storage).toInt().let { if (unsigned) it and 255 else it }
+        16 -> property.getShort(storage).toInt().let { if (unsigned) it and 65535 else it }
+        else -> property.getInt(storage)
     }
 
     fun write(property: DefaultStaticProperty, storage: Any, value: Int) {
@@ -76,21 +72,21 @@ internal class NarrowScalarOp private constructor(val integer: NarrowInteger, va
     fun intResult(left: Int, right: Int): Int {
         val x = integer.narrow(left)
         val y = integer.narrow(right)
-        val value = when (code) {
-            Code.CONVERT -> x
-            Code.NEGATE -> -x
-            Code.ADD -> x + y
-            Code.SUB -> x - y
-            Code.MUL -> x * y
-            Code.QUOT -> if (integer.unsigned) Integer.divideUnsigned(x, y) else x / y
-            Code.REM -> if (integer.unsigned) Integer.remainderUnsigned(x, y) else x % y
-            Code.AND -> x and y
-            Code.OR -> x or y
-            Code.XOR -> x xor y
-            Code.NOT -> x.inv()
-            Code.SHL -> x shl right
-            Code.SRA -> x shr right
-            Code.SRL -> (if (integer.bits == 32) x else x and ((1 shl integer.bits) - 1)) ushr right
+        val value = when {
+            code == Code.CONVERT -> x
+            code == Code.NEGATE -> -x
+            code == Code.ADD -> x + y
+            code == Code.SUB -> x - y
+            code == Code.MUL -> x * y
+            code == Code.QUOT -> if (integer.unsigned) Integer.divideUnsigned(x, y) else x / y
+            code == Code.REM -> if (integer.unsigned) Integer.remainderUnsigned(x, y) else x % y
+            code == Code.AND -> x and y
+            code == Code.OR -> x or y
+            code == Code.XOR -> x xor y
+            code == Code.NOT -> x.inv()
+            code == Code.SHL -> x shl right
+            code == Code.SRA -> x shr right
+            code == Code.SRL -> (if (integer.bits == 32) x else x and ((1 shl integer.bits) - 1)) ushr right
             else -> fault("Comparison requires a machine Int# result")
         }
         return integer.narrow(value)
@@ -101,10 +97,10 @@ internal class NarrowScalarOp private constructor(val integer: NarrowInteger, va
         val x = integer.narrow(left)
         val y = integer.narrow(right)
         val order = if (integer.unsigned) Integer.compareUnsigned(x, y) else x.compareTo(y)
-        val value = when (code) {
-            Code.EQ -> order == 0; Code.NE -> order != 0
-            Code.LT -> order < 0; Code.LE -> order <= 0
-            Code.GT -> order > 0; Code.GE -> order >= 0
+        val value = when {
+            code == Code.EQ -> order == 0; code == Code.NE -> order != 0
+            code == Code.LT -> order < 0; code == Code.LE -> order <= 0
+            code == Code.GT -> order > 0; code == Code.GE -> order >= 0
             else -> fault("Narrow arithmetic requires an Int carrier")
         }
         return if (value) 1L else 0L
@@ -137,10 +133,10 @@ internal class NarrowScalarOp private constructor(val integer: NarrowInteger, va
     }
 }
 
-internal class NarrowScalarExpression(private val operation: NarrowScalarOp,
+internal class NarrowScalarExpression(name: String, private val operation: NarrowScalarOp,
     @field:Children private var arguments: Array<Expr>) : Expr() {
     init {
-        if (arguments.size != if (operation.unary) 1 else 2) fault("Narrow primitive arity mismatch")
+        if (arguments.size != if (operation.unary) 1 else 2) fault("Primitive arity mismatch: $name")
         representation = operation.result
     }
     override fun execute(frame: VirtualFrame): Any =

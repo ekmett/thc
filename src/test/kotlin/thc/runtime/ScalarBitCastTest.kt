@@ -293,8 +293,8 @@ class ScalarBitCastTest {
                     }
                     val (inputRep, outputRep) = signatures.getValue(name)
                     val sameCarrier = when (mutation) {
-                        "argument", "lexical" -> proof(inputRep)["kind"] == "long"
-                        "result" -> proof(outputRep)["kind"] == "long"
+                        "argument", "lexical" -> inputRep in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
+                        "result" -> outputRep in setOf("IntRep", "WordRep", "Int64Rep", "Word64Rep")
                         else -> false
                     }
                     if (sameCarrier) {
@@ -331,7 +331,8 @@ class ScalarBitCastTest {
         val fbits = 0xff800123L; val dbits = 0xfff0000000000123UL.toLong()
         fun argument(name: String) = object : Expr() {
             override fun execute(frame: VirtualFrame): Any = error("bitcast operand was boxed")
-            override fun executeLong(frame: VirtualFrame): Long = if (name.contains("32")) fbits else dbits
+            override fun executeInt(frame: VirtualFrame): Int = fbits.toInt()
+            override fun executeLong(frame: VirtualFrame): Long = dbits
             override fun executeFloat(frame: VirtualFrame): Float = java.lang.Float.intBitsToFloat(fbits.toInt())
             override fun executeDouble(frame: VirtualFrame): Double = java.lang.Double.longBitsToDouble(dbits)
         }
@@ -340,6 +341,7 @@ class ScalarBitCastTest {
             val actual = when (name) {
                 "castWord32ToFloat#" -> java.lang.Float.floatToRawIntBits(node.executeFloat(frame)).toLong() and 0xffffffffL
                 "castWord64ToDouble#" -> java.lang.Double.doubleToRawLongBits(node.executeDouble(frame))
+                "castFloatToWord32#" -> Integer.toUnsignedLong(node.executeInt(frame))
                 else -> node.executeLong(frame)
             }
             assertEquals(if (name.contains("32")) fbits else dbits, actual, name)
@@ -350,6 +352,7 @@ class ScalarBitCastTest {
         var input = 0L
         fun source() = object : Expr() {
             override fun execute(frame: VirtualFrame): Any = error("bitcast operand was boxed")
+            override fun executeInt(frame: VirtualFrame): Int = input.toInt()
             override fun executeLong(frame: VirtualFrame): Long = input
         }
         val floatValue = rawBitCastPrimitive("castWord32ToFloat#", arrayOf(source()))!!
@@ -359,7 +362,7 @@ class ScalarBitCastTest {
         for (sign in longArrayOf(0, 0x80000000L)) for (payload in 1 until (1 shl 23)) {
             val bits = sign or 0x7f800000L or payload.toLong()
             input = bits
-            if (floatRoundTrip.executeLong(frame) != bits)
+            if (Integer.toUnsignedLong(floatRoundTrip.executeInt(frame)) != bits)
                 fail<Unit>("Float NaN changed: ${bits.toString(16)}")
         }
         for (sign in longArrayOf(0, Long.MIN_VALUE)) for (quiet in longArrayOf(0, 1L shl 51)) for (payload in 1..65535) {
@@ -382,13 +385,15 @@ class ScalarBitCastTest {
                 fun input(bits: Long): Any = when (name) {
                     "castFloatToWord32#" -> java.lang.Float.intBitsToFloat(bits.toInt())
                     "castDoubleToWord64#" -> java.lang.Double.longBitsToDouble(bits)
+                    "castWord32ToFloat#" -> bits.toInt()
                     else -> bits
                 }
                 fun invoke(bits: Long): Long {
-                    val value = Calls.target(target, arrayOf(0L, input(bits)))
+                    val value = callScalarTestTarget(target, arrayOf(0L, input(bits)))
                     return when (name) {
                         "castWord32ToFloat#" -> java.lang.Float.floatToRawIntBits(value as Float).toLong() and 0xffffffffL
                         "castWord64ToDouble#" -> java.lang.Double.doubleToRawLongBits(value as Double)
+                        "castFloatToWord32#" -> Integer.toUnsignedLong(value as Int)
                         else -> value as Long
                     }
                 }
@@ -397,7 +402,9 @@ class ScalarBitCastTest {
                     val before = count(p); assertEquals(it, invoke(it), "$backend/$name/${it.toULong().toString(16)}")
                     assertEquals(before+1, count(p)); valid(target, "$backend/$name"); released(language)
                 }
-                assertThrows(RuntimeException::class.java) { Calls.target(target, arrayOf(0L, Any())) }
+                assertThrows(RuntimeException::class.java) { callScalarTestTarget(target, arrayOf(0L, Any())) }
+                if (name == "castWord32ToFloat#")
+                    assertThrows(RuntimeException::class.java) { callScalarTestTarget(target, arrayOf(0L, bits.last())) }
                 released(language); assertEquals(bits.last(), invoke(bits.last()))
             } finally { context.leave() }
         }

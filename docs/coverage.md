@@ -149,8 +149,9 @@ The `word8`, `word16` and `word32` literal forms accept canonical unsigned
 decimal values in their exact ranges, including in case alternatives. Invalid
 values remain load errors even in diagnostic mode.
 
-Both runtimes use zero-extended primitive `Long` carriers for narrow words;
-signed narrow integers retain their existing sign-extending behavior. Arithmetic
+Both runtimes compute 8/16/32-bit signed and unsigned integers in primitive `Int`
+carriers. `Word32` retains raw bits; declared unsigned widening zero-extends them.
+Signed narrow integers preserve sign extension. Arithmetic
 is reduced modulo the declared width. In particular, `Word32` maximum times
 itself is 1, even though the full product exceeds signed 64-bit range, and
 widening `0xffffffff` yields 4294967295, not -1. Unpacked fields store the

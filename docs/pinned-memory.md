@@ -82,8 +82,8 @@ for the current interoperability boundaries.
 count four-byte or eight-byte elements on the pinned 64-bit target. Negative
 offsets from a derived address are valid when the complete element remains
 inside its allocation. Multiplication overflow and partial elements reject
-before reading; Word32 results zero-extend and Int32 results sign-extend into
-the runtime's Long carrier. Reads use native byte order and observe intervening
+before reading. Word32 and Int32 results retain raw `Int` bits; their declared
+widenings respectively zero-extend and sign-extend into machine `Long`. Reads use native byte order and observe intervening
 writes through aliases, including after unsafe freeze. The exact State/payload
 tuple keeps Word32, Word, Int32 and Int representation proofs distinct.
 
