@@ -1556,7 +1556,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).open(path, mode);
+            long result = CoreManagedFiles.current(node).open(path, mode, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1579,7 +1579,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).read(fd, address, count);
+            long result = CoreManagedFiles.current(node).read(fd, address, count, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1590,7 +1590,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, ManagedAddress address, long count, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).write(fd, address, count);
+            long result = CoreManagedFiles.current(node).write(fd, address, count, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1601,7 +1601,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).close(fd);
+            long result = CoreManagedFiles.current(node).close(fd, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1637,7 +1637,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (state == OriginalStdioOp.SEEK) result = CoreOriginalStdio.current(node).seek(fd, offset, mode);
             else {
                 TupleResultsKt.requireVoidCarrier(state);
-                result = CoreManagedFiles.current(node).seek(fd, offset, mode);
+                result = CoreManagedFiles.current(node).seek(fd, offset, mode, ForeignSafety.SAFE);
             }
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
@@ -1649,7 +1649,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).size(fd);
+            long result = CoreManagedFiles.current(node).size(fd, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1664,7 +1664,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             else if (state == OriginalStdioOp.DUP2) result = CoreOriginalStdio.current(node).duplicateTo(fd, length);
             else {
                 TupleResultsKt.requireVoidCarrier(state);
-                result = CoreManagedFiles.current(node).setSize(fd, length);
+                result = CoreManagedFiles.current(node).setSize(fd, length, ForeignSafety.SAFE);
             }
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
@@ -1676,7 +1676,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).isTerminal(fd);
+            long result = CoreManagedFiles.current(node).isTerminal(fd, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1687,7 +1687,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
                 long fd, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
-            long result = CoreManagedFiles.current(node).deviceType(fd);
+            long result = CoreManagedFiles.current(node).deviceType(fd, ForeignSafety.SAFE);
             destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }

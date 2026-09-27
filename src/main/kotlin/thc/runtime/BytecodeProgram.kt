@@ -1850,7 +1850,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                     }
                     // Commit the result before the resumable guest cut. A pending
                     // async exception never unwinds/replays the opaque foreign call.
-                    if (enableAsync && packageScalar.signature.safety == "safe") emitAsyncPoll(e)
+                    if (enableAsync && packageScalar.safety == ForeignSafety.SAFE) emitAsyncPoll(e)
                 }
             } else if (stableFree) {
                 CoreStablePointers.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2090,6 +2090,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         ManagedFileOp.IS_TERMINAL -> b.endFileIsTerminal()
                         ManagedFileOp.DEVICE_TYPE -> b.endFileDeviceType()
                     }
+                    if (enableAsync) emitAsyncPoll(e)
                 }
             } else if (processSignal != null) {
                 CoreSignalForeign.validateHead(fn, fn.getOrNull(1) in scope.locals || fn.getOrNull(1) in scope.joins || fn.getOrNull(1) in globals)
@@ -2323,6 +2324,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         CoreKind.VOID -> b.emitJavaScriptVoid(source)
                         else -> throw RuntimeFault("Unsupported JavaScript result")
                     }
+                    if (enableAsync && javascript.safety == ForeignSafety.SAFE) emitAsyncPoll(e)
                 }
             } else if (polyglot != null) {
                 val operands = args.mapIndexed { index, value -> argument(value, scope, flags[index] as Boolean) }
@@ -2338,6 +2340,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
                         PolyglotOp.READ_MEMBER -> e.builder.endPolyglotReadMember()
                         PolyglotOp.EXECUTE_INT -> e.builder.endPolyglotExecuteInt()
                     }
+                    if (enableAsync) emitAsyncPoll(e)
                 }
             } else if (fn[0] == "prim" && fn[1] == "tagToEnum#") {
                 if (args.size != 1) throw RuntimeFault("tagToEnum#: Exactly one operand required")

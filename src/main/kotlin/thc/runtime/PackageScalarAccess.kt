@@ -94,7 +94,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
 
     private fun invoke(entry: PackageScalarFunction, arguments: Array<Any?>): Any? {
         val threads = entry.owner.threads
-        val previous = threads.enterForeign()
+        val previous = threads.enterForeign(call.safety)
         try {
             try {
                 return if (pointers) invokePointers(entry, arguments)
