@@ -6,6 +6,7 @@ package thc
 import java.lang.foreign.Arena
 import java.lang.foreign.ValueLayout
 import java.util.concurrent.CancellationException
+import java.util.zip.DataFormatException
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -14,6 +15,24 @@ class CoreCbdSlabsTest {
         CoreCbdSlabs.Slab(arena, arena.allocate(size).asReadOnly())
     }
     private fun key(name: String) = CoreCbdSlabs.Key(name, "data")
+
+    @Test fun checkedInflationFailureKeepsExactIdentityAndLeavesNoReservation() {
+        CoreCbdSlabs(32, 2).use { cache ->
+            val failure = DataFormatException("original checked inflater failure")
+            val actual = assertThrows(DataFormatException::class.java) {
+                cache.acquire(key("checked")) { throw failure }
+            }
+            assertSame(failure, actual)
+            assertEquals(0L, cache.statistics().activeLeases)
+            assertEquals(0, cache.statistics().idleEntries)
+            assertEquals(1L, cache.statistics().failures)
+            cache.acquire(key("checked")) { slab(4) }.use {
+                assertTrue(it.inflated)
+                assertEquals(4L, it.bytes.byteSize())
+            }
+            assertEquals(1L, cache.statistics().inflations)
+        }
+    }
 
     @Test fun idleByteAndEntryBudgetsEvictOnlyLastReleasedEntriesNotActiveHandles() {
         CoreCbdSlabs(5, 2).use { cache ->
