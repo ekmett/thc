@@ -27,6 +27,47 @@ import java.util.zip.ZipFile
  * the original returned pointer; only the C caller performs its destruction. */
 class LibyamlNativeProductsTest {
     @TempDir lateinit var temporary: Path
+    private fun digest(bytes: ByteArray) = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
+    /** Decode only the genuine two-module unit. Original IDs select compact
+     * records in the original order, so full foreign-call inventory admission
+     * checks executable bodies too, not merely header equality. */
+    private fun selectedModules(originals: List<Pair<Map<String, Any?>, String>>): List<Map<String, Any?>> {
+        val path = System.getProperty("thc.libyamlPackages") ?: return originals.map { it.first }
+        val format = System.getProperty("thc.libyamlFormat")
+        require(format in setOf("json", "compact"))
+        val directory = CoreUnitDirectory.read(Json.parse(File(path).readText()) as Map<*, *>)!!
+        val unit = originals.map { it.first["unit"] }.distinct().single()
+        val selected = directory.modules.filter { it.unit == unit }
+        assertEquals(originals.map { it.first["module"] }.toSet(), selected.map { it.name }.toSet())
+        directory.open(verifyArtifacts = false, sourceNotes = false).use { sources ->
+            val decoded = originals.map { (original, hash) ->
+                val record = selected.single { it.name == original["module"] }
+                assertEquals(hash, record.sha256, "selected module must be the exact native fixture capture")
+                assertEquals(format == "compact", record.storage is CoreUnitDirectory.CompactStorage)
+                val ids = (original["bindings"] as List<Map<String, Any?>>).map { it["id"] as String }
+                val bindings = ids.map { id -> requireNotNull(sources.binding(id)) { "Missing original binding $id" } }
+                assertEquals(ids, bindings.map { it["id"] })
+                sources.metadata(record) + ("bindings" to bindings)
+            }
+            val count = decoded.sumOf { (it["bindings"] as List<*>).size }.toLong()
+            if (format == "compact") {
+                assertEquals(0, sources.counters().size, "compact execution must not fall back to JSON")
+                val counters = sources.compactCounters().map { it.statistics() }
+                assertEquals(2, counters.size, "unrelated package modules stay unopened")
+                assertEquals(count, counters.sumOf { it.decodedBindings })
+                assertEquals(0L, counters.sumOf { it.debugBytesRead + it.hashBytesRead })
+            } else {
+                assertEquals(0, sources.compactCounters().size)
+                val counters = sources.counters().map { it.statistics() }
+                assertEquals(1, counters.size, "unrelated package units stay unopened")
+                assertEquals(count, counters.sumOf { it.decodedBindings })
+                assertEquals(0L, counters.sumOf { it.hashBytesScanned })
+            }
+            return decoded
+        }
+    }
+
     private class Entry(language: Language, private val call: PackageScalarCall) : RootNode(language) {
         @Child private var access = PackageScalarAccess(call)
         override fun execute(frame: VirtualFrame): Any = when (call.result) {
@@ -41,7 +82,7 @@ class LibyamlNativeProductsTest {
         val directory = File(System.getProperty("thc.libyamlFixture", File(root, "build/libyaml-native").path))
         val zip = File(System.getProperty("thc.libyamlBundle"))
         val source = File(root, "compiler/test-fixtures/OriginalLibyamlNative.hs")
-        fun digest(file: File) = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(file.readBytes()))
+        fun digest(file: File) = digest(file.readBytes())
         val sourceHash = digest(source)
         assertEquals(sourceHash, File(directory, "native-source.sha256").readText().substringBefore(' '))
         val manifest = Json.parse(File(directory, "manifest.json").readText()) as Map<*, *>
@@ -49,12 +90,18 @@ class LibyamlNativeProductsTest {
         assertEquals(digest(zip), manifest["bundleSha256"])
         assertEquals(digest(File(directory, "native.tsv")), manifest["nativeSha256"])
         assertEquals(digest(File(directory, "input.yaml")), manifest["inputSha256"])
-        val modules = ZipFile(zip).use { archive -> archive.entries().asSequence()
+        val originals = ZipFile(zip).use { archive -> archive.entries().asSequence()
             .filter { it.name.startsWith("core/") && it.name.endsWith(".json") }
-            .map { archive.getInputStream(it).use { input -> Json.parse(input.readAllBytes().decodeToString()) as Map<String, Any?> } }.toList() }
+            .map { archive.getInputStream(it).use { input ->
+                val bytes = input.readAllBytes()
+                (Json.parse(bytes.decodeToString()) as Map<String, Any?>) to digest(bytes)
+            } }.toList() }
+        val modules = selectedModules(originals)
         assertEquals(setOf("Paths_libyaml", "Text.Libyaml"), modules.map { it["module"] }.toSet())
         val merged = CoreModules.merge(modules)
         val link = (merged["packageScalarLinks"] as List<PackageScalarLink>).single()
+        val originalLink = (CoreModules.merge(originals.map { it.first })["packageScalarLinks"] as List<PackageScalarLink>).single()
+        assertTrue(link.same(originalLink), "execution must use the same original native component and declared ABI")
         assertEquals("llvm-embedded-elf", link.format)
         assertEquals(50, link.abi.size)
         val expected = File(directory, "native.tsv").readLines()

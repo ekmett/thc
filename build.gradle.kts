@@ -938,7 +938,10 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         }
     }
 }
-for ((taskName, dense) in listOf("libyamlNativeDefault" to false, "libyamlNativeDense" to true)) {
+for ((taskName, dense, format) in listOf(
+    Triple("libyamlNativeDefault", false, "zip"), Triple("libyamlNativeDense", true, "zip"),
+    Triple("libyamlJsonDefault", false, "json"), Triple("libyamlJsonDense", true, "json"),
+    Triple("libyamlCompactDefault", false, "compact"), Triple("libyamlCompactDense", true, "compact"))) {
     tasks.register<Test>(taskName) {
         group = "verification"
         description = "Checks genuine libyaml C-only dependency products, retained input, cleanup and native encoder buffers."
@@ -949,6 +952,14 @@ for ((taskName, dense) in listOf("libyamlNativeDefault" to false, "libyamlNative
         systemProperty("thc.libyamlFixture", file(fixture.get()).absolutePath)
         systemProperty("thc.libyamlBundle", file("${fixture.get()}/libyaml.zip").absolutePath)
         inputs.dir(fixture)
+        if (format != "zip") {
+            val property = if (format == "compact") "thc.libyamlCompactPackages" else "thc.libyamlJsonPackages"
+            val packages = providers.gradleProperty(property).orElse("${fixture.get()}/$format-packages.json")
+            inputs.file(packages)
+            systemProperty("thc.libyamlPackages", file(packages.get()).absolutePath)
+            systemProperty("thc.libyamlFormat", format)
+            doFirst { check(file(packages.get()).isFile) { "Supply the genuine $format package manifest with -P$property" } }
+        }
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.LibyamlNativeProductsTest") }
         outputs.upToDateWhen { false }
