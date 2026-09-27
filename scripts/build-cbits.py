@@ -172,6 +172,15 @@ def main():
         subprocess.run(command, cwd=ROOT, check=True)
         commands.append(command)
         artifacts.append(artifact)
+        # These are the unchanged USE_LIBDW=0 RTS bodies, not replacement
+        # callbacks. Native loading keeps their labels usable with IOAccess.NONE.
+        artifact = output / "libdw-unavailable.dll"
+        command = [*compiler, "-O2", "-fno-strict-aliasing", "-shared",
+                   "-I", str(headers[0].parent), "-I", str(config[0].parent),
+                   str(ROOT / "src/main/c/libdw-unavailable.c"), "-o", str(artifact)]
+        subprocess.run(command, cwd=ROOT, check=True)
+        commands.append(command)
+        artifacts.append(artifact)
     # The first native limb provider is intentionally Linux x86_64 only. Keep
     # the embedded LLVM container's DT_NEEDED entry: GMP receives real native
     # arena pointers, not the managed buffers used by original MD5.

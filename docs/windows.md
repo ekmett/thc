@@ -254,6 +254,47 @@ localized messages. Pre/post-Tidy Core passes 22 strict entry audits. Both
 backends run interpreted and check every first compiled call in both handoff
 forks, with provenance, authority, bounds, state, ownership and context controls.
 
+## Original disabled-libdw finalizers
+
+The original `libdwPoolRelease` and `backtraceFree` function labels use a native
+Windows DLL built from the pinned `USE_LIBDW=0` RTS sources. JDK FFM calls the
+unchanged empty C bodies with native authority and `IOAccess.NONE`, preserving
+context ownership and managed, pinned, literal and native storage lifetimes.
+This resolves their Sulong `KERNEL32.dll` dependency lookup without granting
+guest filesystem access. It does not enable native DWARF stack inspection.
+
+~~~powershell
+./scripts/windows.ps1 -Action LibdwTest -Jobs 4
+~~~
+
+The full Test action and Windows CI include this slice. The native GHC producer
+checks eight original calls, eighteen C-finalizer observations and genuine
+function/data labels. Both JVM handoff forks exercise AST and bytecode, including
+first-compiled-call counters, storage preservation, authority, context ownership
+and expired native allocations. The existing Linux-only malloc finalizer test
+remains skipped on Windows. Evidence is under build/libdw-unavailable and the
+default/dense JUnit reports. See [the finalizer contract](c-finalizers.md).
+The Test action prepares the directory, code-page and libdw fixtures first, then
+runs their selected classes together in one default/dense invocation so later
+suites do not overwrite earlier XML reports.
+
+The separate full dictionary fixture keeps its original boxed `Int -> Int`
+helpers and adds genuine GHC-compiled `Int# -> Int#` adapters for the scalar
+launcher's host ABI. Its native oracle executes those same adapters. For example:
+
+~~~powershell
+cabal run exe:thc-fixtures --disable-shared -- windows-bridge
+$proof = Get-Content build/windows-bridge/provenance.json -Raw | ConvertFrom-Json
+$env:JAVA_OPTS = '-Xmx24g'
+$env:THC_BACKEND = 'ast'
+./build/install/thc/bin/thc.bat ($proof.modules -join ',') roundTripScalar -17
+~~~
+
+This prints `-17`. The complete support graph currently needs a large heap;
+the native Windows worker used a 24-GiB limit and ran these JVMs serially.
+All four scalar helpers match their native oracle in interpreted CLI execution
+on both AST/bytecode and default/dense handoff modes.
+
 ## Current boundaries
 
 This is a bounded native Windows gate, not full parity with Linux/macOS or the
@@ -265,19 +306,23 @@ repository's entire fixture/test suite.
   The command deliberately fails when Core is unavailable. Local CString
   recompilation does not make that compiler a full-Core installation.
   See [the compiler build requirements](ghc-core.md).
-* Acquiring the runtime library is separate from executing its complete exception
-  dictionary. The code-page/error declarations above resolve the previous strict
-  audit frontier; complete dictionary execution and automatic foreign exception
-  conversion require their separate `windows-bridge` evidence. Failed earlier
-  native-oracle/export/audit evidence is retained under build/windows-bridge.
+* The `windows-bridge` native oracle and all four strict dictionary-helper audits
+  pass with the code-page/error declarations and native libdw labels above.
+  The scalar adapters preserve the original boxed helpers and the launcher's
+  primitive ABI. Automatic foreign exception conversion and compiled execution
+  of the complete dictionary remain separate, unestablished boundaries.
+  Native/export/audit evidence, including earlier failures, is retained under
+  build/windows-bridge; the large checked graph audits have a 300-second process
+  bound. No compiled-call assertion is relaxed by that acquisition budget.
 * The Unix project-capture/shared-plugin/provider pipeline is not ported by
   this checkpoint. A single Cabal executable without internal library/build-tool
   dependencies uses the Windows exporter/launcher path after Cabal resolves the
   target. Benchmark and test-component capture on Windows remains unsupported.
 * POSIX stdio/stat/termios/signal ABIs and Linux native providers are explicitly
   skipped on Windows, with incompatible resources excluded from packaging.
-  General Windows native IO, arbitrary CAPI/Sulong libraries, libdw finalizers,
-  and GMP are not certified here. Missing capability errors remain visible.
+  General Windows native IO, arbitrary CAPI/Sulong libraries, enabled-libdw
+  stack inspection and GMP are not certified here. Missing capability errors
+  remain visible.
 * Source hashes are over repository LF bytes. The attributes file pins LF
   source checkout; the batch wrapper retains CRLF. For an older checkout with
   CRLF-converted pinned sources, restore repository bytes before building.

@@ -28,18 +28,24 @@ import System.Directory (createDirectoryIfMissing, doesFileExist, removeFile)
 import System.Environment (lookupEnv)
 import System.Exit (die)
 import System.FilePath ((</>))
+import qualified System.Info as Host
 import Text.Read (readMaybe)
 
 prepareLibdwUnavailable :: FilePath -> IO ()
 prepareLibdwUnavailable root = do
   let directory = "build/libdw-unavailable"
       native = directory </> "native"
-      binary = native </> "oracle"
+      suffix = if Host.os == "mingw32" then ".exe" else ""
+      way = ["-dynamic" | Host.os /= "mingw32"]
+      binary = native </> "oracle" ++ suffix
+      finalizerBinary = native </> "c-finalizer" ++ suffix
+      outputLines = map (takeWhile (/= '\r')) . lines . BS.unpack
       source = "compiler/test-fixtures/LibdwUnavailableNative.hs"
       cFinalizerSource = "compiler/test-fixtures/CFinalizerNative.hs"
       labelSource = "compiler/test-fixtures/ForeignLabelAudit.hs"
-      labelsFile = directory </> "foreign-labels.json"
-      oracle = directory </> "oracle.json"
+      -- Manifest keys use repository-relative paths on every host.
+      labelsFile = directory ++ "/foreign-labels.json"
+      oracle = directory ++ "/oracle.json"
       manifest = directory </> "manifest.json"
       execute = runLogged 120 root (directory </> "logs")
   createDirectoryIfMissing True (root </> native)
@@ -47,27 +53,27 @@ prepareLibdwUnavailable root = do
   when present (removeFile (root </> manifest))
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   version <- execute "ghc-version" [] ghc ["--numeric-version"]
-  unless (commandStdout version == "9.14.1\n") (die "Libdw oracle requires GHC 9.14.1")
-  _ <- execute "native-build" [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-Wall", "-Werror",
+  unless (outputLines (commandStdout version) == ["9.14.1"]) (die "Libdw oracle requires GHC 9.14.1")
+  _ <- execute "native-build" [] ghc (["--make", "-O2", "-fforce-recomp", "-Wall", "-Werror",
     "-dcore-lint", "-dstg-lint", "-package", "ghc-internal", "-odir", root </> native,
-    "-hidir", root </> native, source, "-o", root </> binary]
+    "-hidir", root </> native, source, "-o", root </> binary] ++ way)
   observed <- execute "native-oracle" [] (root </> binary) []
-  let parsed = case lines (BS.unpack (commandStdout observed)) of
+  let parsed = case outputLines (commandStdout observed) of
         ["USE_LIBDW=0", observations] -> readMaybe observations :: Maybe [Bool]
         _ -> Nothing
   unless (parsed == Just (replicate 8 True) && BS.null (commandStderr observed))
     (die "Libdw oracle does not match unavailable RTS semantics")
-  _ <- execute "c-finalizer-build" [] ghc ["--make", "-O2", "-dynamic", "-fforce-recomp", "-Wall", "-Werror",
+  _ <- execute "c-finalizer-build" [] ghc (["--make", "-O2", "-fforce-recomp", "-Wall", "-Werror",
     "-dcore-lint", "-dstg-lint", "-package", "ghc-internal", "-odir", root </> native,
-    "-hidir", root </> native, cFinalizerSource, "-o", root </> native </> "c-finalizer"]
-  cFinalizers <- execute "c-finalizer-oracle" [] (root </> native </> "c-finalizer") []
-  let cParsed = case lines (BS.unpack (commandStdout cFinalizers)) of
+    "-hidir", root </> native, cFinalizerSource, "-o", root </> finalizerBinary] ++ way)
+  cFinalizers <- execute "c-finalizer-oracle" [] (root </> finalizerBinary) []
+  let cParsed = case outputLines (commandStdout cFinalizers) of
         ["USE_LIBDW=0", observations] -> readMaybe observations :: Maybe [Bool]
         _ -> Nothing
   unless (cParsed == Just (replicate 18 True) && BS.null (commandStderr cFinalizers))
     (die "Original C finalizer oracle failed")
   library <- execute "ghc-libdir" [] ghc ["--print-libdir"]
-  libdir <- case lines (BS.unpack (commandStdout library)) of
+  libdir <- case outputLines (commandStdout library) of
     [path] -> pure path
     _ -> die "Expected one GHC library directory"
   labels <- exportLabels libdir (root </> labelSource)
