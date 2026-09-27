@@ -159,6 +159,7 @@ OPERATIONS = {
     'symlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     'readlink': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', 'Word64Rep', None), (None, 'Int32Rep')),
     'mkdir': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
+    'access': ('ccall', 'unsafe', ('AddrRep', 'Int32Rep', None), (None, 'Int32Rep')),
     'chmod': ('ccall', 'unsafe', ('AddrRep', 'Word32Rep', None), (None, 'Int32Rep')),
     '__hscore_stat': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),
     '__hscore_lstat': ('ccall', 'unsafe', ('AddrRep', 'AddrRep', None), (None, 'Int32Rep')),

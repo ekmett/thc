@@ -1734,6 +1734,17 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     @Operation
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
+    public static final class OriginalPathAccess {
+        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+                ManagedAddress path, long mode, Object state, @Bind("$node") Node node) {
+            TupleResultsKt.requireVoidCarrier(state);
+            long result = CoreOriginalStdio.current(node).access(path, mode);
+            destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     public static final class OriginalPathMode {
         @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination, OriginalStdioOp operation,

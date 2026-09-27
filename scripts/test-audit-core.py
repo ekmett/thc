@@ -3419,6 +3419,51 @@ class OriginalPathModeDeclarationTest(unittest.TestCase):
                 self.assertFalse(fixture.audit(module)['accepted'], (symbol, index, 'producer'))
 
 
+
+class OriginalPathAccessDeclarationTest(unittest.TestCase):
+    """Synthetic rejection controls; native fixtures preserve the original Id."""
+
+    def declaration(self):
+        state = dict(kind='void', primReps=[], evaluated=True)
+        address = dict(kind='address', primReps=['AddrRep'], evaluated=True)
+        integer = dict(kind='long', primReps=['Int32Rep'], evaluated=True)
+        return dict(schema=1, target=dict(kind='static', symbol='access', isFunction=True, unit='ghc-internal'),
+            convention='ccall', safety='unsafe', arity=3, suppliedArity=3,
+            argumentReps=[dict(rep, evaluated=False) for rep in (address, integer, state)],
+            resultRep=dict(tuple_rep(state, integer), evaluated=False))
+
+    def test_exact_access_requires_capability_and_ghc_owner(self):
+        fixture = LibdwUnavailableAuditTest()
+        module = fixture.fixture(self.declaration())
+        report = fixture.audit(module)
+        self.assertTrue(report['accepted'], report)
+        self.assertEqual(['access'], [call['symbol'] for call in report['foreignCalls']])
+        self.assertFalse(fixture.audit(module, dict(CAP, managedForeignCalls=[]))['accepted'])
+        for unit in ('main', 'unix-2.8.8.0-inplace', 'unix-2.8.8.0-460b', 'ghc-internal-forged'):
+            declaration = self.declaration(); declaration['target']['unit'] = unit
+            self.assertFalse(fixture.audit(fixture.fixture(declaration))['accepted'], unit)
+
+    def test_access_exact_signed_cint_and_state_contract(self):
+        fixture = LibdwUnavailableAuditTest()
+        declaration = self.declaration()
+        for key, value in (('convention', 'capi'), ('safety', 'safe'), ('arity', 2),
+                           ('suppliedArity', 2), ('resultRep', LONG)):
+            wrong = copy.deepcopy(declaration); wrong[key] = value
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], key)
+        for rep in ('IntRep', 'Word32Rep', 'Word64Rep'):
+            wrong = copy.deepcopy(declaration); wrong['argumentReps'][1]['primReps'] = [rep]
+            self.assertFalse(fixture.audit(fixture.fixture(wrong))['accepted'], rep)
+        for index in range(3):
+            module = fixture.fixture(declaration)
+            module['bindings'][0]['expr'][1][index]['rep'] = LONG
+            self.assertFalse(fixture.audit(module)['accepted'], (index, 'stored'))
+            module = fixture.fixture(declaration)
+            call = module['bindings'][0]['expr'][2][1]
+            producer = ['lit', 'string-bytes', '41'] if index == 1 else lit(9)
+            call[2][index] = [*producer, call[2][index][2]]
+            self.assertFalse(fixture.audit(module)['accepted'], (index, 'producer'))
+
+
 class OriginalPathLinkDeclarationTest(unittest.TestCase):
     """Synthetic negatives; genuine unchanged Id positives are Haskell fixtures."""
 

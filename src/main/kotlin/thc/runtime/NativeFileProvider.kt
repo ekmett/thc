@@ -249,6 +249,20 @@ internal class NativeFileProvider private constructor(private val env: TruffleLa
         }
     }
 
+    /** access uses libc's real-ID permission semantics, including its invalid-mode
+     * errors. Do not approximate it with Java readable/writable predicates. */
+    @Synchronized fun accessRaw(path: ByteArray, mode: Int): Long {
+        current()
+        if (disposed) throw ClosedChannelException()
+        val anchor = java.nio.file.Path.of(env.getPublicTruffleFile(".").absoluteFile.toUri())
+        val bytes = absoluteRawPath(anchor, path)
+        return NativeLimbScope().use { scope ->
+            val name = scope.allocate((bytes.size.toLong() + 7) and -8L)
+            name.copyFrom(bytes, 0, bytes.size)
+            result("access", name, mode)
+        }
+    }
+
     /** Preserve native mode and umask semantics; never change the process umask. */
     @Synchronized fun pathModeRaw(path: ByteArray, mode: Long, createDirectory: Boolean): Long {
         current()

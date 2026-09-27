@@ -408,16 +408,49 @@
       ]
     },
     "original-posix-stat": {
-      "junit": ["thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest"],
-      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-posix-stat"]}],
-      "outputs": ["build/original-posix-stat", "build/original-path-stat", "build/original-path-mode", "build/original-path-link"],
+      "junit": [
+        "thc.runtime.OriginalPosixStatTest",
+        "thc.runtime.PosixStatAbiTest",
+        "thc.runtime.OriginalFstatTest",
+        "thc.runtime.OriginalPathStatTest",
+        "thc.runtime.OriginalPathModeTest",
+        "thc.runtime.OriginalPathLinkTest",
+        "thc.runtime.OriginalPathAccessTest"
+      ],
+      "commands": [
+        {
+          "argv": [
+            "cabal",
+            "run",
+            "exe:thc-fixtures",
+            "--offline",
+            "--",
+            "original-posix-stat"
+          ]
+        }
+      ],
+      "outputs": [
+        "build/original-posix-stat",
+        "build/original-path-stat",
+        "build/original-path-mode",
+        "build/original-path-link",
+        "build/original-path-access"
+      ],
       "sources": [
-        "compiler/test-fixtures/OriginalPosixStatAudit.hs", "compiler/test-fixtures/OriginalPosixStatNative.hs",
-        "compiler/test-fixtures/OriginalPathStatAudit.hs", "test/haskell-fixtures/OriginalPathStatFixtures.hs",
-        "compiler/test-fixtures/OriginalPathModeAudit.hs", "test/haskell-fixtures/OriginalPathModeFixtures.hs",
-        "compiler/test-fixtures/OriginalPathLinkAudit.hs", "test/haskell-fixtures/OriginalPathLinkFixtures.hs",
-        "test/haskell-fixtures/OriginalPosixStatFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal"
+        "compiler/test-fixtures/OriginalPosixStatAudit.hs",
+        "compiler/test-fixtures/OriginalPosixStatNative.hs",
+        "compiler/test-fixtures/OriginalPathStatAudit.hs",
+        "test/haskell-fixtures/OriginalPathStatFixtures.hs",
+        "compiler/test-fixtures/OriginalPathModeAudit.hs",
+        "test/haskell-fixtures/OriginalPathModeFixtures.hs",
+        "compiler/test-fixtures/OriginalPathLinkAudit.hs",
+        "test/haskell-fixtures/OriginalPathLinkFixtures.hs",
+        "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs",
+        "test/haskell-fixtures/Main.hs",
+        "thc.cabal",
+        "compiler/test-fixtures/OriginalPathAccessAudit.hs",
+        "test/haskell-fixtures/OriginalPathAccessFixtures.hs"
       ]
     },
     "original-fd-ready": {

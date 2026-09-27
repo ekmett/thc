@@ -101,6 +101,7 @@
     "readlink",
     "mkdir",
     "chmod",
+    "access",
     "__hscore_stat",
     "__hscore_lstat",
     "ghczuwrapperZC2ZCunixzm2zi8zi8zi0zminplaceZCSystemziPosixziFilesziPosixStringZClstat",
