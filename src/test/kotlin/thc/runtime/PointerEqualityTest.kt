@@ -3,6 +3,8 @@
 
 package thc.runtime
 
+import thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame

@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.CoreFreeVariables.coreFreeVariables
+
 import kotlin.random.Random
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test

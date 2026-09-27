@@ -4,6 +4,10 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.CoreFreeVariables.coreFreeVariables
+
+import thc.runtime.CoreCallDemands.CALL_DEMANDS_PROPERTY
+
 import thc.runtime.Scalar64Primitives.scalar64PrimitiveOperation
 import thc.runtime.Scalar64Primitives.word64Literal
 

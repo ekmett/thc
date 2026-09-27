@@ -46,7 +46,7 @@ abstract class GuestRoot(language: TruffleLanguage<*>?, descriptor: FrameDescrip
 
     @field:CompilationFinal internal var coreIdentity: CoreFunctionIdentity? = null
         private set
-    internal fun configureCoreIdentity(identity: CoreFunctionIdentity?) { coreIdentity = identity }
+    @JvmName("configureCoreIdentity") internal fun configureCoreIdentity(identity: CoreFunctionIdentity?) { coreIdentity = identity }
     @field:CompilationFinal(dimensions = 1) internal var entryStrict: BooleanArray = booleanArrayOf()
         private set
     @field:CompilationFinal internal var entryArgumentOffset: Int = 1
