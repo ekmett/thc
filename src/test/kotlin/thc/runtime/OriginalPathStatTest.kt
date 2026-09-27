@@ -210,10 +210,6 @@ class OriginalPathStatTest {
                 assertThrows(RuntimeFault::class.java) { program(language, backend, raw(rejected)) }
             } }
         }
-        for (operation in OriginalStdioOp.entries.filter { it.waitStatus }) {
-            assertFalse(operation.acceptsUnit("unix-2.8.8.0-460b"))
-            assertFalse(operation.matchesSymbol(operation.symbol.replace("zminplaceZC", "zm460bZC")))
-        }
     }
 
     @Test fun stateAndCompleteDestinationValidationPrecedePathObservation() {

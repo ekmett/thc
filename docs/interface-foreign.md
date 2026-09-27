@@ -228,21 +228,24 @@ THC_TASTY_SOURCE=/path/to/tasty-1.5.4 cabal run exe:thc-fixtures -- wcwidth
 ./gradlew --continue wcwidthDefault wcwidthDense
 ```
 
-The seven original `unix-2.8.8.0-inplace` wait-status CAPI declarations
+The seven original `unix-2.8.8.0` wait-status CAPI declarations
 (`WCOREDUMP`, `WSTOPSIG`, `WIFSTOPPED`, `WTERMSIG`, `WIFSIGNALED`,
 `WEXITSTATUS`, `WIFEXITED`) execute wrappers compiled against the installed
 `HsUnix.h` on Linux x86-64. They reuse the checked scalar foreign-call path
 with the exact original unit, wrapper symbol, CInt width, and hidden
-State/result tuple. Raw macro results are preserved, including `WCOREDUMP`'s
+State/result tuple. The installed owner may end in `inplace` or lowercase
+hexadecimal digits; each wrapper's encoded owner must match that same unit,
+with its fixed index, module, and macro name. Raw macro results are preserved, including `WCOREDUMP`'s
 `128` mask; there is no JVM status formula or guest process/fork emulation.
 The context must permit native access.
 
 The `unix-wait-status` fixture recovers genuine declarations from the installed
-`System.Posix.Process.Internals` Core, specializes typed consumers with those
+`System.Posix.Process.Internals` ordinary interface unfoldings, specializes typed consumers with those
 FCallIds, and compiles the same calls with native GHC. Its 280 observations
 cover exit/signal/stop encodings, flags, signed CInt edges, and outer Int
 narrowing. Both backends compare pre/post-tidy Core interpreted and from the
-first installed compiled call, with inlining enabled and disabled. These
+first installed compiled call, with inlining enabled and disabled. Normal
+fixture preparation and focused CI include the closed 72-file receipt. These
 leaf checks do not claim full process management or a completed AD test run.
 
 ```sh

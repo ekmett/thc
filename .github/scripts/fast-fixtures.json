@@ -1359,6 +1359,14 @@
         "scripts/generate-simd-families.py"
       ]
     },
+    "unix-wait-status": {
+      "junit": ["thc.runtime.UnixWaitStatusTest"],
+      "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "unix-wait-status"]}],
+      "outputs": ["build/unix-wait-status"],
+      "sources": ["compiler/test-fixtures/UnixWaitStatusAudit.hs", "test/haskell-fixtures/UnixWaitStatusFixtures.hs",
+        "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
+        "src/main/c/wait-status-api.c", "scripts/build-cbits.py"]
+    },
     "unix-libc": {
       "junit": ["thc.runtime.UnixLibcTest"],
       "commands": [

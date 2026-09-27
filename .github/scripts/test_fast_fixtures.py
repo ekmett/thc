@@ -74,6 +74,42 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
         self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/unix-libc/ghc/UnixLibcAudit.o", {}))
 
+    def test_unix_wait_status_cache_preserves_all_original_proofs(self):
+        project = Path(__file__).resolve().parents[2]
+        manifest, owners = fast_fixtures._manifest(project)
+        group = manifest['groups']['unix-wait-status']
+        cache = fast_fixtures.fast_inputs
+        self.assertEqual('unix-wait-status', owners['thc.runtime.UnixWaitStatusTest'])
+        self.assertEqual(72, len(cache.UNIX_WAIT_OUTPUTS))
+        self.assertTrue(cache.UNIX_WAIT_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
+        self.assertIn('build/unix-wait-status', fast_fixtures.FULL_OUTPUT_ROOTS)
+        self.assertIn('"$fixture_bin" unix-wait-status', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        name = 'build/unix-wait-status/manifest.json'
+        artifacts = {}
+        for item in cache.UNIX_WAIT_OUTPUTS - {name}:
+            self.assertTrue(cache.allowed_payload(item, {}), item)
+            path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
+        for item in ('ghc/UnixWaitStatusAudit.o', 'private-core.json', 'logs/extra.stdout'):
+            self.assertFalse(cache.allowed_payload('build/unix-wait-status/' + item, {}), item)
+        receipt = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-460b', strictAccepted=True,
+                       entries=list(cache.UNIX_WAIT_ENTRIES), nativeRows=280, artifactHashes=artifacts)
+        path = self.root / name; path.write_text(json.dumps(receipt))
+        self.assertEqual(cache.UNIX_WAIT_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABCD'),
+                        dict(unixUnit='unix-2.8.7.0-460b'), dict(entries=[]), dict(nativeRows=279),
+                        dict(strictAccepted=False), dict(artifactHashes=dict(artifacts, extra='a' * 64))):
+            with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, **changes))
+        for suffix in ('logs/unit.stdout', 'post-waitWCOREDUMP.audit.json', 'oracle.tsv'):
+            item = 'build/unix-wait-status/' + suffix
+            missing = dict(artifacts); del missing[item]
+            with self.assertRaises(cache.CacheMiss): cache.unix_wait_artifact_hashes(dict(receipt, artifactHashes=missing))
+            artifact = self.root / item; artifact.write_text('changed')
+            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.symlink_to(self.root / 'build/unix-wait-status/pre.json')
+            with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
+            artifact.unlink(); artifact.write_text('fixture\n')
+
     def test_proxy_void_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
