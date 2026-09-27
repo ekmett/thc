@@ -1150,7 +1150,7 @@ tasks.register<JavaExec>("polyglotDemo") {
     group = "application"
     description = "Runs exported Haskell against GraalJS through THC.Polyglot."
     classpath = examples.runtimeClasspath + polyglotDemoRuntime
-    mainClass.set("thc.PolyglotDemoKt")
+    mainClass.set("thc.PolyglotDemo")
     jvmArgs(application.applicationDefaultJvmArgs)
     workingDir(projectDir)
 }
