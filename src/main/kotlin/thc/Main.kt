@@ -202,7 +202,8 @@ internal fun launch(arguments: Array<String>) {
         executionContext(fileIO = true, ffiMode = ffiMode).use { context ->
             initializeArguments(context, arguments)
             val action = loadEntry(context, args[1].split(','), args[2], ioMain = true, shutdownEntry = args[3], jsonSidecars = sidecars,
-                verifyArtifacts = verifyArtifacts)
+                verifyArtifacts = verifyArtifacts,
+                asyncExceptions = System.getProperty("thc.asyncExceptions")?.toBooleanStrict() ?: true)
             check(action.invokeMember("runIO").asBoolean()) { "Executable IO did not complete" }
             if (java.lang.Boolean.getBoolean("thc.diagnostics"))
                 System.err.println(action.getMember("diagnostics").asString())

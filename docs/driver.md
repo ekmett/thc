@@ -143,6 +143,12 @@ Embedded callers can still read the `diagnostics` member directly. This output
 setting does not change instrumentation, strict admission, or shutdown behavior.
 The low-level integer-kernel launcher retains its diagnostic report.
 
+Standalone `--run-executable` launches enable asynchronous exceptions on both
+backends by default. Set `JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=false"`
+to select synchronous execution explicitly; programs that install process signal
+handlers require asynchronous mode. Raw `--run-io` and embedding defaults remain
+backend-specific. See [asynchronous exceptions](async-exceptions.md).
+
 The driver and JVM launcher accept `--ffi native` or `--ffi managed`. Native is
 the default and preserves the current Sulong execution with native-library
 access; C bitcode still runs through Sulong. Managed execution is **not supported
@@ -286,19 +292,18 @@ THC_BACKEND=bytecode "$THC_ROOT/build/install/thc/bin/thc" \
 
 Keep `happy_lib_datadir` set and retain the manifest's referenced Core bundles.
 
-For the verified AST startup/shutdown path, use the same generated main and
-shutdown entries, with asynchronous exceptions explicitly enabled:
+For the AST startup/shutdown path, use the same generated main and shutdown
+entries:
 
 ```sh
-THC_BACKEND=ast JAVA_OPTS="${JAVA_OPTS:-} -Dthc.asyncExceptions=true" \
+THC_BACKEND=ast \
   "$THC_ROOT/build/install/thc/bin/thc" \
   --run-executable "@$THC_APPS/happy-guest/packages.json" \
   main::Main.main ghc-internal:GHC.Internal.TopHandler.flushStdHandles -- \
   happy -o "$THC_OUTPUT/Parser-ast.hs" "$THC_ROOT/examples/standard-apps/TinyParser.y"
 ```
 
-The same environment selection works for the HsColour command below. AST still
-defaults to synchronous mode; bytecode still defaults to asynchronous mode.
+The same environment selection works for the HsColour command below.
 Keep the Linux launcher's `-Xrs` setting: original GHC startup installs its
 [process signal handlers](process-signals.md), under the same explicit
 launcher authority on either backend.
