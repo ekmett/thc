@@ -1001,6 +1001,42 @@ private val text = "class FakeString { @Test }"
 
 
 class PrimitiveFamilyPolicyTest(unittest.TestCase):
+    integer_vector_nodes = (
+        "VectorPack",
+        "VectorUnpack",
+        "VectorOperation",
+        "Vector32Pack",
+        "Vector32Unpack",
+        "Vector32Operation",
+        "Vector16Pack",
+        "Vector16Unpack",
+        "Vector16Operation",
+        "Vector8Pack",
+        "Vector8Unpack",
+        "Vector8Operation",
+        "VectorWord32Pack",
+        "VectorWord32Unpack",
+        "VectorWord32Operation",
+        "VectorWord16Pack",
+        "VectorWord16Unpack",
+        "VectorWord16Operation",
+        "VectorWord8Pack",
+        "VectorWord8Unpack",
+        "VectorWord8Operation",
+    )
+    floating_vector_nodes = (
+        "VectorFloatPack",
+        "VectorFloatUnpack",
+        "VectorFloatOperation",
+        "VectorDoublePack",
+        "VectorDoubleUnpack",
+        "VectorDoubleOperation",
+        "VectorFloat8Fused",
+        "VectorDouble4Fused",
+        "VectorFloat16Fused",
+        "VectorDouble8Fused",
+    )
+
     @classmethod
     def setUpClass(cls):
         cls.root = Path(__file__).resolve().parents[2]
@@ -1014,7 +1050,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemmoveForeign", "CoreStringRtsForeign", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArrays", "ManagedMutVars", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "IntegerVectorPrimitives", "FloatingVectorPrimitives", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStack"},
+                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodePrimitives", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrays", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStack"} |
+                         set(self.integer_vector_nodes + self.floating_vector_nodes),
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
             with self.subTest(path=path):
@@ -1365,11 +1402,15 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             "FloatingVectorPrimitives": ["core-double-vector-memory", "core-float-vector-memory", "core-vectors",
                 "doublex2-model", "floatx4-model"],
         }
+        nodes = {"IntegerVectorPrimitives": self.integer_vector_nodes,
+                 "FloatingVectorPrimitives": self.floating_vector_nodes}
         for name, tests in expected.items():
-            with self.subTest(name=name):
-                self.assertEqual({"thc.runtime." + test for test in tests}, set(self.family(name)["junit"]))
-                self.assertEqual({"scripts/test-" + test + ".py" for test in python[name]},
-                                 set(self.family(name)["python"]))
+            for node in nodes[name]:
+                with self.subTest(name=name, node=node):
+                    group = self.families["src/main/java/thc/runtime/" + node + ".java"]
+                    self.assertEqual({"thc.runtime." + test for test in tests}, set(group["junit"]))
+                    self.assertEqual({"scripts/test-" + test + ".py" for test in python[name]},
+                                     set(group["python"]))
 
     def test_shared_dispatch_loaders_memory_proofs_layouts_and_carriers_stay_full(self):
         # Scalar64's identity fallback processes every ordinary scalar operation;
@@ -1377,7 +1418,10 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         names = ("Scalar64Primitives", "VectorMemoryPrimitives", "DataTagPrimitives", "CoreVectors",
                  "Program", "BytecodeProgram", "CoreRepresentations", "ArgumentLayout", "TupleResults", "Handoff")
         self.assertFalse({"src/main/kotlin/thc/runtime/" + name + ".kt" for name in names} & self.families.keys())
-        self.assertFalse(any(path.startswith(("compiler/", "src/main/java/")) for path in self.families))
+        self.assertFalse(any(path.startswith("compiler/") for path in self.families))
+        self.assertEqual({"src/main/java/thc/runtime/" + name + ".java"
+                          for name in self.integer_vector_nodes + self.floating_vector_nodes},
+                         {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):
         owners = self.policy["owners"]

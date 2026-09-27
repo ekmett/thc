@@ -50,7 +50,7 @@ class SimdWord8VectorTest {
         assertEquals(CoreVectors.proofWord8, proof)
         assertFalse(proof.isTuple); assertFalse(proof.isLong)
         assertEquals(List(16) { "Word8Rep" }, CoreVectors.unpackedWord8.primReps)
-        assertTrue(CoreVectors.unpackedWord8.components!!.all { it.isLong })
+        assertTrue(CoreVectors.unpackedWord8.components!!.all { it.isInt })
         assertEquals(6, CoreVectors.operationsWord8.size)
         assertFalse("negateWord8X16#" in CoreVectors.operations)
         assertFalse(ByteVector::class.java.declaredMethods.any { it.name == "negate" })
@@ -118,13 +118,14 @@ class SimdWord8VectorTest {
             for (flag in listOf(true, null, 0L, "false")) assertThrows(RuntimeFault::class.java) {
                 program(language, backend, broadcastModule(exact, flag), "root", diagnostic)
             }
-            // Duplicate integral annotations share Long; the literal tag supplies narrowing.
-            for (shared in listOf("Int8Rep", "Int32Rep")) {
+            // Lowered narrow integral annotations share Int; the literal tag supplies narrowing.
+            for (shared in listOf("Int8Rep", "Int16Rep", "Int32Rep", "Word16Rep", "Word32Rep")) {
                 val operand = listOf("lit", "word8", "1", mapOf("rep" to (lane + ("primReps" to listOf(shared)))))
                 val p = program(language, backend, broadcastModule(operand), "root", diagnostic)
                 assertEquals(1L, Calls.target(p.hostEntryTarget(1), arrayOf(p.entryValue("root"), arrayOf(0L))))
             }
             for (wrong in listOf(lane + ("kind" to "unknown"),
+                lane + ("primReps" to listOf("IntRep")), lane + ("primReps" to listOf("Word64Rep")),
                 lane + mapOf("kind" to "float", "primReps" to listOf("FloatRep")),
                 lane + mapOf("kind" to "double", "primReps" to listOf("DoubleRep")),
                 lane + mapOf("kind" to "closure", "primReps" to listOf("BoxedRep (Just Lifted)")), metadata())) {
@@ -184,7 +185,7 @@ class SimdWord8VectorTest {
             return base + ("bindings" to listOf(binding + ("expr" to lambda)))
         }
         val malformed = listOf("-1", "-128", "256", "", "+1", "01", "-0", " 1", "1.0", "18446744073709551616")
-        for (value in 0L..255L) assertEquals(value, narrowWordLiteral("word8", value.toString()))
+        for (value in 0L..255L) assertEquals(value.toInt(), narrowWordLiteral("word8", value.toString()))
         for (text in malformed) assertThrows(RuntimeFault::class.java) { narrowWordLiteral("word8", text) }
         for (backend in listOf("ast", "bytecode")) for (diagnostic in listOf(false, true)) {
             for (text in malformed) for (input in listOf(broadcastModule(listOf("lit", "word8", text, mapOf("rep" to lane))), alternative(text)))
