@@ -373,6 +373,114 @@ class PackageManifestTest(unittest.TestCase):
         return self.bundled(unit, members={'core/Shared.json': (self.root / 'first.json').read_bytes(),
                                           'core/Other.json': second})
 
+    def direct_unit(self, binding_count=1):
+        unit = dict(id='first', depends=[], modules=[])
+        payload, rows = bytearray(), []
+        # Reverse bytewise ID/module order, raw spaces and non-ASCII text.
+        for name in ('Zulu', 'Alpha'):
+            binding = dict(id=f'first:{name}.雪 space', name='value', arity=0, lifted=True,
+                           expr=['lit', 'int', '7'] if name == 'Zulu' else ['lit', 'string', 'prompt#'])
+            prefix = json.dumps(dict(schema=1, ghc='9.14.1', unit='first', module=name,
+                                    boundary=self.boundary, note='雪'), ensure_ascii=False).encode()[:-1]
+            prefix += b', "bindings": ['
+            chunks = [json.dumps(binding | dict(id=binding['id'] + (f' {index:05}' if binding_count > 1 else '')),
+                                 ensure_ascii=False).encode() for index in range(binding_count)]
+            body = b', \t\r\n'.join(chunks)
+            source = prefix + body + b'], "constructors": []}\r\n'
+            start = len(payload)
+            payload.extend(source + b'\n')
+            offset = start + len(prefix)
+            for chunk in chunks:
+                rows.append((json.loads(chunk)['id'].encode(), offset))
+                offset += len(chunk) + len(b', \t\r\n')
+            metadata_start = len(payload)
+            original = json.loads(source)
+            payload.extend(json.dumps({key: value for key, value in original.items()
+                if key in core_package_manifest.UNIT_METADATA_KEYS}).encode())
+            metadata_end = len(payload)
+            payload.extend(b'\n')
+            unit['modules'].append(dict(name=name, boundary=self.boundary, path=f'core/{name}.json',
+                sha256=hashlib.sha256(source).hexdigest(), start=start, end=start + len(source),
+                bindingsStart=start + len(prefix) - 1, bindingsEnd=start + len(prefix) + len(body) + 1,
+                metadataStart=metadata_start, metadataEnd=metadata_end,
+                containsDelimitedControl=False, registrationObligations=False, mainAlias=False,
+                packageScalarDeclarations=False))
+        for key, filename, data in [('json', 'core.jsons', payload), ('symbols', 'core.symbols',
+                b''.join(key + b' ' + str(offset).encode() + b'\n' for key, offset in sorted(rows)))]:
+            target = self.root / filename
+            target.write_bytes(data)
+            unit[key] = dict(path=str(target), sha256=hashlib.sha256(data).hexdigest())
+        return unit
+
+    def test_direct_unit_preserves_bytes_identity_and_explicit_audit(self):
+        unit = self.direct_unit()
+        path = self.manifest([unit])
+        modules = core_package_manifest.load(path)
+        self.assertEqual(['Zulu', 'Alpha'], [module['module'] for _, module in modules])
+        self.assertTrue(all('core.jsons@' in source for source, _ in modules))
+        result = subprocess.run(['python3', '-B', str(Path(__file__).with_name('audit-core.py')),
+            '--package-manifest', str(path), '--entry', 'first:Zulu.雪 space'], text=True, capture_output=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue(json.loads(result.stdout)['accepted'])
+
+    def test_direct_unit_many_bindings_and_bounded_whitespace_cursor(self):
+        unit = self.direct_unit(binding_count=2048)
+        loaded = core_package_manifest.load(self.manifest([unit]))
+        self.assertEqual(4096, sum(len(module['bindings']) for _, module in loaded))
+        class NoSuffix(str):
+            def __getitem__(self, key):
+                if isinstance(key, slice) and key.start is not None and key.stop is None:
+                    raise AssertionError('scanner copied an unvisited suffix')
+                return super().__getitem__(key)
+        text = NoSuffix(' \r\n\t { "雪" : 7, \n "bindings" : [ {"id":"x y"} ] } \n')
+        self.assertEqual(5, core_package_manifest._skip_json_space(text, 0))
+        begin, end = core_package_manifest._bindings_span(text)
+        self.assertEqual(b'[ {"id":"x y"} ]', text.encode()[begin:end])
+        self.assertEqual(len(text), core_package_manifest._skip_json_space(text, len(text)))
+
+    def test_direct_unit_rejects_bad_pair_spans_summaries_and_symbols(self):
+        import copy
+        original = self.direct_unit()
+        malformed = []
+        for missing in ('json', 'symbols'):
+            value = copy.deepcopy(original); del value[missing]; malformed.append(value)
+        malformed.append(original | dict(bundle=dict(path='/unused', sha256='a' * 64)))
+        for key, value in [('start', -1), ('end', 999999), ('bindingsStart', True),
+                           ('bindingsEnd', 1), ('containsDelimitedControl', True),
+                           ('registrationObligations', True), ('mainAlias', True), ('mainAlias', None),
+                           ('metadataStart', -1), ('metadataEnd', 999999), ('sourceMetadataStart', 0),
+                           ('packageScalarDeclarations', True)]:
+            unit = copy.deepcopy(original); unit['modules'][0][key] = value; malformed.append(unit)
+        for unit in malformed:
+            with self.subTest(unit=unit), self.assertRaises(ValueError):
+                core_package_manifest.load(self.manifest([unit]))
+        for key in ('json', 'symbols'):
+            unit = copy.deepcopy(original); unit[key]['sha256'] = '0' * 64
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'artifact hash'):
+                core_package_manifest.load(self.manifest([unit]))
+        directory = self.root / 'core.symbols'
+        rows = directory.read_bytes().splitlines(keepends=True)
+        for data in (b''.join(reversed(rows)), rows[0], b''.join(rows) + rows[0],
+                     rows[0].rsplit(b' ', 1)[0] + b' 0\n' + rows[1]):
+            unit = copy.deepcopy(original)
+            directory.write_bytes(data); unit['symbols']['sha256'] = hashlib.sha256(data).hexdigest()
+            with self.assertRaisesRegex(ValueError, 'symbol directory'):
+                core_package_manifest.load(self.manifest([unit]))
+
+    def test_direct_unit_rejects_hash_consistent_metadata_substitution(self):
+        unit = self.direct_unit()
+        source = Path(unit['json']['path'])
+        data = source.read_bytes()
+        item = unit['modules'][0]
+        start, end = item['metadataStart'], item['metadataEnd']
+        metadata = data[start:end].replace(b'"schema": 1', b'"schema": 2')
+        changed = data[:start] + metadata + data[end:]
+        source.write_bytes(changed)
+        unit['json']['sha256'] = hashlib.sha256(changed).hexdigest()
+        with self.assertRaisesRegex(ValueError, 'metadata projection'):
+            core_package_manifest.load(self.manifest([unit]))
+        self.assertFalse(core_package_manifest._same_json_value({'schema': True}, {'schema': 1}))
+
     @staticmethod
     def index_envelope(source, events=0):
         # Transport-only controls. The audit never uses these placeholder

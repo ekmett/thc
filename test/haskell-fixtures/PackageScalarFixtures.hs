@@ -70,7 +70,7 @@ preparePackageScalar root = do
        "executable oracle","  main-is: Main.hs","  hs-source-dirs: app","  ghc-options: -O2",
        "  build-depends: base, " ++ packageName,"  default-language: Haskell2010"]
     managed <- execute (name ++ "-thc-run") [("THC_BACKEND","bytecode")] driver
-      (["run", "--project-dir", root </> project,"oracle","--thc-root",root,"--runtime",runtime,
+      (["run", "--verify-artifacts", "--project-dir", root </> project,"oracle","--thc-root",root,"--runtime",runtime,
         "--dist-dir",root </> output,"--installed-core","required","--with-ghc",ghc,"--with-ghc-pkg",ghcPkg] ++
         maybe [] (\path -> ["--ghc-source",path]) sourceRoot)
     plan <- readJson (root </> output </> "native/cache/plan.json")
@@ -87,21 +87,15 @@ preparePackageScalar root = do
     libraryPlan <- unique "library component" =<< matching "component-name" "lib" units
     unit <- field libraryPlan "id"
     library <- unique "acquired library" =<< matching "id" unit records
-    bundle <- field library "bundle"
-    path <- field bundle "path"
-    expected <- field bundle "sha256"
-    actual <- hashFile path
-    unless (actual == expected) (die "package-scalar-cbits: acquired bundle hash differs")
-    let retained = output </> "library.zip"
-    copyFile path (root </> retained)
+    (retained, artifacts) <- retainUnitArtifacts root (output </> "library") library
     audit <- readJson (root </> output </> "audit.json")
     accepted <- field audit "accepted"
     unless accepted (die "package-scalar-cbits: production audit did not accept original executable")
     let record = object ["name" .= name,"packages" .= (output </> "packages.json"),"unit" .= (unit::String),
-          "libraryBundle" .= retained,"librarySha256" .= actual,"observations" .= rows]
-        artifacts = [retained,output </> "packages.json",output </> "audit.json",projectFile,packageFile] ++
+          "libraryArtifacts" .= unitArtifactReferences retained,"observations" .= rows]
+        evidence = artifacts ++ [output </> "packages.json",output </> "audit.json",projectFile,packageFile] ++
           [project </> source | source <- sources] ++ commandArtifacts managed ++ commandArtifacts native
-    pure (record,[managed,native],artifacts)
+    pure (record,[managed,native],evidence)
   plugin <- listDirectory (root </> "compiler/THC")
   driverSources <- listDirectory (root </> "src/THC/Driver")
   auditors <- listDirectory (root </> "scripts")

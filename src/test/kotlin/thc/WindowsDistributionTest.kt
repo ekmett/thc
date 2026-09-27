@@ -15,6 +15,7 @@ import thc.runtime.CoreRepresentations
 import thc.runtime.UnsupportedCore
 import thc.runtime.RuntimeFault
 import java.io.File
+import java.io.RandomAccessFile
 import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.UUID
@@ -27,6 +28,19 @@ class WindowsDistributionTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     @TempDir lateinit var temporary: Path
 
+    private fun digest(file: File): String {
+        val hash = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                hash.update(buffer, 0, count)
+            }
+        }
+        return hash.digest().joinToString("") { "%02x".format(it) }
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun verifiedReceipt(path: String): Map<String, Any?> {
         val receipt = Json.parse(File(root, path).readText()) as Map<String, Any?>
@@ -36,9 +50,8 @@ class WindowsDistributionTest {
             val hashes = receipt[field] as Map<String, String>
             assertTrue(hashes.isNotEmpty(), field)
             for ((file, hash) in hashes) {
-                val actual = MessageDigest.getInstance("SHA-256").digest(File(root, file).readBytes())
-                    .joinToString("") { "%02x".format(it) }
-                assertEquals(hash, actual, file)
+                val artifact = File(file).let { if (it.isAbsolute) it else File(root, file) }
+                assertEquals(hash, digest(artifact), file)
             }
         }
         val commands = receipt["commands"] as List<Map<String, Any?>>
@@ -109,36 +122,34 @@ class WindowsDistributionTest {
         val receipt = verifiedReceipt("build/windows-driver/provenance.json")
         val manifests = receipt["supportManifests"] as List<String>
         assertEquals(4, manifests.size)
-        val bundles = manifests.map { path ->
+        val units = manifests.map { path ->
             val manifest = Json.parse(File(root, path).readText()) as Map<String, Any?>
-            val units = manifest["units"] as List<Map<String, Any?>>
-            val unit = units.single { it["id"] == "ghc-internal" }
-            val bundle = unit["bundle"] as Map<String, String>
-            unit to bundle
+            (manifest["units"] as List<Map<String, Any?>>).single { it["id"] == "ghc-internal" }
         }
-        assertEquals(1, bundles.map { it.second }.toSet().size, "All CLI modes must reuse the same exact support bundle")
-        val (unit, bundle) = bundles.first()
+        assertEquals(1, units.toSet().size, "All CLI modes must reuse the same exact support publication")
+        val unit = units.first()
+        val direct = unit["json"] as Map<String, String>?
+        val bundle = if (direct == null) unit["bundle"] as Map<String, String> else {
+            assertFalse(unit.containsKey("bundle"))
+            val symbols = unit["symbols"] as Map<String, String>
+            for (artifact in listOf(direct, symbols))
+                assertEquals(artifact["sha256"], digest(File(artifact.getValue("path"))))
+            // The producer keeps the original validated archive for its native
+            // source-build receipts; the runtime itself selects only the pair.
+            val publication = Json.parse(File(File(direct.getValue("path")).parentFile, "publication.json").readText()) as Map<String, Any?>
+            val published = publication["unit"] as Map<String, Any?>
+            for (key in listOf("id", "modules", "json", "symbols")) assertEquals(unit[key], published[key], key)
+            publication["source"] as Map<String, String>
+        }
         fun hex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
-        fun digest(path: String): String {
-            val hash = MessageDigest.getInstance("SHA-256")
-            File(path).inputStream().use { input ->
-                val buffer = ByteArray(64 * 1024)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    hash.update(buffer, 0, count)
-                }
-            }
-            return hex(hash.digest())
-        }
-        assertEquals(bundle["sha256"], digest(bundle.getValue("path")))
+        assertEquals(bundle["sha256"], digest(File(bundle.getValue("path"))))
         ZipFile(bundle.getValue("path")).use { projected ->
             fun document(zip: ZipFile, path: String) = Json.parse(zip.getInputStream(zip.getEntry(path)).reader(Charsets.UTF_8).use { it.readText() }) as Map<String, Any?>
             val inputs = document(projected, "inplace-manifest.json")
             val complete = inputs["completeSourceBundle"] as Map<String, String>
             val excluded = inputs["archiveOnlyModules"] as List<Map<String, String>>
             assertEquals(listOf("GHC.Internal.Conc.Bound"), excluded.map { it["module"] })
-            assertEquals(complete["sha256"], digest(complete.getValue("path")))
+            assertEquals(complete["sha256"], digest(File(complete.getValue("path"))))
             ZipFile(complete.getValue("path")).use { full ->
                 val fullManifest = document(full, "manifest.json")
                 val fullInputs = document(full, "inplace-manifest.json")
@@ -153,25 +164,38 @@ class WindowsDistributionTest {
                     assertFalse(arguments.contains("-fignore-interface-pragmas"))
                 }
                 val fullModules = fullManifest["modules"] as List<Map<String, Any?>>
+                val projectedModules = (document(projected, "manifest.json")["modules"] as List<Map<String, Any?>>)
+                    .associateBy { it["name"] }
                 val selected = unit["modules"] as List<Map<String, Any?>>
                 assertEquals(211, fullModules.size)
                 assertEquals(210, selected.size)
                 for (module in selected) {
-                    assertEquals(module, fullModules.single { it["name"] == module["name"] })
+                    val original = fullModules.single { it["name"] == module["name"] }
+                    assertEquals(original, projectedModules[module["name"]], "original source projection retains its full record")
+                    for ((key, value) in original) if (direct == null || key != "index") assertEquals(value, module[key], key)
                     val member = module["path"] as String
                     // Source-rich genuine modules can each exceed the test heap.
                     // Compare every byte and the checked digest with bounded buffers.
                     val hash = MessageDigest.getInstance("SHA-256")
                     full.getInputStream(full.getEntry(member)).use { expected ->
                         projected.getInputStream(projected.getEntry(member)).use { actual ->
-                            val left = ByteArray(64 * 1024)
-                            val right = ByteArray(left.size)
-                            while (true) {
-                                val count = expected.readNBytes(left, 0, left.size)
-                                assertEquals(count, actual.readNBytes(right, 0, right.size), member)
-                                if (count == 0) break
-                                assertEquals(-1, java.util.Arrays.mismatch(left, 0, count, right, 0, count), member)
-                                hash.update(right, 0, count)
+                            direct?.let { RandomAccessFile(it.getValue("path"), "r") }.use { pair ->
+                                if (pair != null) pair.seek(module["start"] as Long)
+                                val left = ByteArray(64 * 1024)
+                                val right = ByteArray(left.size)
+                                val published = ByteArray(left.size)
+                                while (true) {
+                                    val count = expected.readNBytes(left, 0, left.size)
+                                    assertEquals(count, actual.readNBytes(right, 0, right.size), member)
+                                    if (count == 0) break
+                                    assertEquals(-1, java.util.Arrays.mismatch(left, 0, count, right, 0, count), member)
+                                    if (pair != null) {
+                                        pair.readFully(published, 0, count)
+                                        assertEquals(-1, java.util.Arrays.mismatch(left, 0, count, published, 0, count), member)
+                                    }
+                                    hash.update(right, 0, count)
+                                }
+                                if (pair != null) assertEquals(module["end"], pair.filePointer, "exact published module span")
                             }
                         }
                     }

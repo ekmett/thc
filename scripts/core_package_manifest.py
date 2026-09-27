@@ -19,6 +19,11 @@ from zipfile import BadZipFile, ZipFile
 FORMAT = 'thc-core-packages'
 BOUNDARY = 'optimized-Core-after-Tidy-before-CorePrep'
 SHA256 = re.compile(r'[0-9a-f]{64}\Z')
+UNIT_METADATA_KEYS = frozenset(('schema', 'ghc', 'unit', 'module', 'boundary', 'providedModules',
+    'constructors', 'foreign', 'foreignLink', 'staticForeignImportStubs', 'staticForeignImports',
+    'staticForeignExports', 'staticForeignExportRegistration', 'packageScalarLink', 'packageNativeLink',
+    'packageNativeArchive', 'foreignExceptionBridge', 'foreignExceptionBridgeUnit'))
+SOURCE_METADATA_KEYS = frozenset(('sourceFiles', 'sourceSpans'))
 
 
 def time_clock_symbols(unit):
@@ -1067,6 +1072,175 @@ def _iter_loose_modules(path, root, records):
         yield item, str(artifact), _module_bytes(path, item, read)
 
 
+def _unit_reference(path, unit, key):
+    ref = unit.get(key)
+    if (not isinstance(ref, dict) or set(ref) != {'path', 'sha256'} or
+            not isinstance(ref['path'], str) or not Path(ref['path']).is_absolute() or
+            not isinstance(ref['sha256'], str) or not SHA256.fullmatch(ref['sha256'])):
+        raise ValueError(f'{path}: invalid unit {key} reference')
+    return ref
+
+
+def _verified_stream(path, stream, ref):
+    digest = hashlib.sha256()
+    for block in iter(lambda: stream.read(1024 * 1024), b''):
+        digest.update(block)
+    if digest.hexdigest() != ref['sha256']:
+        raise ValueError(f'{path}: unit artifact hash mismatch: {ref["path"]}')
+    stream.seek(0)
+
+
+def _iter_unit_modules(path, unit, records):
+    """Explicit audit only: verify the pair and all selected original modules.
+
+    Unlike runtime demand loading, this reader exhaustively checks the symbol
+    inventory. It never uses the optional structural index or rewrites Core.
+    """
+    source, symbols = (_unit_reference(path, unit, key) for key in ('json', 'symbols'))
+    expected_rows = {}
+    with open(source['path'], 'rb') as stream, open(symbols['path'], 'rb') as directory:
+        _verified_stream(path, stream, source)
+        _verified_stream(path, directory, symbols)
+        size = stream.seek(0, 2)
+        previous_end = 0
+        for item in records:
+            start, end, first, last = (item.get(key) for key in
+                                     ('start', 'end', 'bindingsStart', 'bindingsEnd'))
+            if (any(type(value) is not int for value in (start, end, first, last)) or
+                    not previous_end <= start <= first < last <= end <= size):
+                raise ValueError(f'{path}: invalid unit module byte spans')
+            previous_end = end
+            stream.seek(start)
+            data = stream.read(end - start)
+            a, b = first - start, last - start
+            if data[a:a+1] != b'[' or data[b-1:b] != b']':
+                raise ValueError(f'{path}: unit bindings span does not delimit an array')
+            metadata = strict_json((data[:a] + b'[]' + data[b:]).decode('utf-8'))
+            if not isinstance(metadata, dict) or metadata.get('bindings') != []:
+                raise ValueError(f'{path}: unit bindings span is not the module bindings')
+            original = strict_json(data.decode('utf-8'))
+            if _bindings_span(data.decode('utf-8')) != (a, b):
+                raise ValueError(f'{path}: unit bindings span selects a different field')
+            for begin_key, end_key, keys, required in (
+                    ('metadataStart', 'metadataEnd', UNIT_METADATA_KEYS, True),
+                    ('sourceMetadataStart', 'sourceMetadataEnd', SOURCE_METADATA_KEYS,
+                     bool(SOURCE_METADATA_KEYS.intersection(original)))):
+                begin, finish = item.get(begin_key), item.get(end_key)
+                if not required and begin is None and finish is None:
+                    continue
+                if (type(begin) is not int or type(finish) is not int or
+                        not previous_end < begin < finish <= size):
+                    raise ValueError(f'{path}: invalid unit metadata span')
+                stream.seek(begin)
+                selected = strict_json(stream.read(finish - begin).decode('utf-8'))
+                if not _same_json_value(selected, {key: value for key, value in original.items() if key in keys}):
+                    raise ValueError(f'{path}: unit metadata projection differs from original Core')
+                previous_end = finish
+            del original, selected
+            text = data[a:b].decode('utf-8')
+            at, offset = 1, first + 1
+            decoder = json.JSONDecoder()
+            while True:
+                after_space = _skip_json_space(text, at)
+                offset += after_space - at  # JSON whitespace is one-byte ASCII.
+                at = after_space
+                if text[at] == ']':
+                    break
+                binding, end_at = decoder.raw_decode(text, at)
+                key = binding.get('id') if isinstance(binding, dict) else None
+                if not isinstance(key, str) or not key or '\n' in key or '\r' in key:
+                    raise ValueError(f'{path}: invalid unit symbol ID')
+                encoded_key = key.encode('utf-8')
+                if encoded_key in expected_rows:
+                    raise ValueError(f'{path}: duplicate unit symbol ID')
+                expected_rows[encoded_key] = offset
+                offset += len(text[at:end_at].encode('utf-8'))
+                at = end_at
+                after_space = _skip_json_space(text, at)
+                offset += after_space - at
+                at = after_space
+                if text[at] == ',':
+                    offset += 1; at += 1
+                elif text[at] != ']':
+                    raise ValueError(f'{path}: invalid unit binding separator')
+            yield item, source['path'] + '@' + str(start), data
+        previous_key = None
+        for row in directory:
+            key, delimiter, _ = row.rpartition(b' ')
+            offset = expected_rows.pop(key, None)
+            if (not delimiter or offset is None or previous_key is not None and key <= previous_key or
+                    row != key + b' ' + str(offset).encode('ascii') + b'\n'):
+                raise ValueError(f'{path}: unit symbol directory differs from original bindings')
+            previous_key = key
+        if expected_rows:
+            raise ValueError(f'{path}: unit symbol directory is missing original bindings')
+
+
+def _skip_json_space(text, at):
+    """Advance a bounded cursor without copying any unvisited suffix."""
+    size = len(text)
+    while at < size and text[at] in ' \t\r\n':
+        at += 1
+    return at
+
+
+def _same_json_value(left, right):
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(_same_json_value(left[key], value) for key, value in right.items())
+    if isinstance(left, list):
+        return len(left) == len(right) and all(_same_json_value(a, b) for a, b in zip(left, right))
+    return left == right
+
+
+def _bindings_span(text):
+    """Locate the actual top-level field for an explicitly verified module."""
+    decoder = json.JSONDecoder()
+    at = _skip_json_space(text, 0)
+    if text[at] != '{':
+        raise ValueError('Core module must be an object')
+    at += 1
+    while True:
+        at = _skip_json_space(text, at)
+        if text[at] == '}':
+            raise ValueError('Core module has no bindings')
+        key, at = decoder.raw_decode(text, at)
+        at = _skip_json_space(text, at)
+        if text[at] != ':':
+            raise ValueError('Invalid Core object delimiter')
+        at += 1
+        at = _skip_json_space(text, at)
+        _, end = decoder.raw_decode(text, at)
+        if key == 'bindings':
+            return len(text[:at].encode('utf-8')), len(text[:end].encode('utf-8'))
+        at = _skip_json_space(text, end)
+        if text[at] == ',':
+            at += 1
+
+
+def _contains_delimited_control(value):
+    if isinstance(value, list):
+        return (len(value) >= 2 and value[:2] in (['prim', 'prompt#'], ['prim', 'control0#']) or
+                any(_contains_delimited_control(item) for item in value))
+    return isinstance(value, dict) and any(_contains_delimited_control(item) for item in value.values())
+
+
+def _check_unit_summaries(path, item, module):
+    control = any(_contains_delimited_control(binding.get('expr')) for binding in module['bindings'])
+    foreign = module.get('foreign', {})
+    stubs = foreign.get('stubs') or {}
+    registration = bool(foreign.get('files') or stubs.get('initializers') or stubs.get('finalizers'))
+    alias = any(binding['id'] == 'main::' + module['module'] + '.main' for binding in module['bindings'])
+    inventory = module.get('staticForeignImports')
+    imports = inventory.get('imports') if isinstance(inventory, dict) else None
+    declarations = isinstance(imports, list) and bool(imports)
+    for key, actual in (('containsDelimitedControl', control), ('registrationObligations', registration),
+                        ('mainAlias', alias), ('packageScalarDeclarations', declarations)):
+        if type(item.get(key)) is not bool or item[key] != actual:
+            raise ValueError(f'{path}: unit {key} summary differs from original Core')
+
+
 def _iter_load(path, audit_archives, manifest_read=None):
     path = Path(path)
     root = path.resolve().parent
@@ -1097,6 +1271,9 @@ def _iter_load(path, audit_archives, manifest_read=None):
                 not isinstance(modules, list)):
             raise ValueError(f'{path}: invalid/duplicate unit or dependencies: {unit_id!r}')
         units.add(unit_id)
+        direct = 'json' in unit or 'symbols' in unit
+        if direct and ('json' not in unit or 'symbols' not in unit or 'bundle' in unit):
+            raise ValueError(f'{path}: unit requires both JSON/symbols and no bundle')
         records = []
         for item in modules:
             if not isinstance(item, dict):
@@ -1110,7 +1287,9 @@ def _iter_load(path, audit_archives, manifest_read=None):
                 raise ValueError(f'{path}: invalid/duplicate post-Tidy module: {key!r}')
             module_keys.add(key)
             reference = _index_reference(path, item)
-            if 'bundle' in unit:
+            if direct and reference is not None:
+                raise ValueError(f'{path}: direct unit modules do not select a structural index')
+            if 'bundle' in unit or direct:
                 if not zip_member(relative) or relative == 'manifest.json':
                     raise ValueError(f'{path}: unsafe ZIP member path: {relative!r}')
             else:
@@ -1125,11 +1304,14 @@ def _iter_load(path, audit_archives, manifest_read=None):
                         raise ValueError(f'{path}: duplicate JSON/index path: {member!r}')
                     loose_paths.add(artifact)
             records.append(item)
-        artifacts = (_iter_bundle_modules(path, unit, records) if 'bundle' in unit else
+        artifacts = (_iter_unit_modules(path, unit, records) if direct else
+                     _iter_bundle_modules(path, unit, records) if 'bundle' in unit else
                      _iter_loose_modules(path, root, records))
         with closing(artifacts):
             for item, artifact, data in artifacts:
                 module = _validated_module(path, unit_id, item, data, audit_archives)
+                if direct:
+                    _check_unit_summaries(path, item, module)
                 del data
                 found = True
                 yield artifact, module

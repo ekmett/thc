@@ -54,6 +54,54 @@ bytecode execution, and checks that removing the library fails before execution.
 This focused proof uses binder/file provenance from `-g0`; it does not claim
 preservation of nested expression SourceNote ticks.
 
+## Direct unit artifacts
+
+The project driver publishes a nonempty unit as two absolute artifact references:
+`json: {path, sha256}` and `symbols: {path, sha256}`. Both must be present, and
+the unit must not also select `bundle`. `core.jsons` contains original module
+JSON bytes plus LF separators and small metadata projections. `core.symbols`
+contains one row per original top-level binding:
+
+```text
+exact-unit:Module.binding decimal-byte-offset
+```
+
+IDs are decoded raw UTF-8, sorted by unsigned UTF-8 bytes; a row ends with LF.
+The last space separates the ID from the decimal offset, so IDs can contain
+spaces. Empty, duplicate, or line-breaking IDs are rejected. The offset points
+to the original binding object's opening `{`, not an escaped ID or a display
+name. It is recorded from actual final bytes, after package-native amendments.
+Directory sort order does not change Core binding order, so a following row's
+offset is never a binding length.
+
+Module records retain their original name, logical path, boundary and module
+hash. They add absolute byte positions, all end-exclusive: `start`/`end` select
+the unchanged original module, `bindingsStart`/`bindingsEnd` include the binding
+array's brackets, and `metadataStart`/`metadataEnd` select a separate object of
+existing identity, constructor, ABI and foreign-admission fields. This object
+excludes `bindings`, `groups` and `sourceCore`. When source tables exist,
+`sourceMetadataStart`/`sourceMetadataEnd` select an object containing the original
+`sourceFiles`/`sourceSpans`, independently of admission metadata. These projections
+are additional bytes in the same unit payload, not replacements for original
+Core or extra sidecar files.
+
+Four Boolean module facts are derived from the original data:
+
+- `containsDelimitedControl`: an expression contains the actual `prompt#` or
+  `control0#` primitive, not merely that spelling in a string.
+- `registrationObligations`: foreign files or stub initializers/finalizers exist.
+- `mainAlias`: the exact `main::<Module>.main` binding exists.
+- `packageScalarDeclarations`: `staticForeignImports.imports` is nonempty.
+
+When available, the unit's `targetLayout` is the existing `thc-target-layout`
+schema-1 document with the original compiler and layout records, checked against
+the acquisition receipt. Missing layout is not replaced by a host assumption.
+Artifact hashes remain verification metadata, not a default whole-unit scan.
+The explicit auditor verifies both artifacts, exact symbol offsets, module
+hashes, metadata projections and derived facts before publishing a completed
+result. ZIP acquisition receipts remain in the producer cache; existing ZIP and
+loose-module manifests remain valid.
+
 ## Optional JSON indexes and lazy loading
 
 A module record may include an `index` object with exactly `path` and `sha256`:

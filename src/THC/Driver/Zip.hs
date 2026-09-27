@@ -10,7 +10,7 @@
 -- Portability : Haskell 2010; bytestring and zip-archive
 --
 -- Encode and validate deterministic, path-safe ZIP bundles.
-module THC.Driver.Zip (encodeZip, decodeZip) where
+module THC.Driver.Zip (encodeZip, decodeZip, ZipMember, decodeZipMembers, readZipMember) where
 
 import Codec.Archive.Zip (Archive(..), Entry(..), emptyArchive, fromArchive,
                           fromEntry, toArchiveOrFail, toEntry)
@@ -44,6 +44,33 @@ decodeZip bytes = do
         then Left "invalid Core ZIP member names"
         else let decoded = [(eRelativePath entry, BL.toStrict (fromEntry entry)) | entry <- entries]
              in foldr (\(_, body) result -> BS.length body `seq` result) (Right decoded) decoded
+
+-- | An entry retaining its original compressed bytes, not an inflated body.
+newtype ZipMember = ZipMember Entry
+
+-- | Validate the complete ZIP directory without decompressing every member.
+-- 'readZipMember' decompresses one member when requested, so a sequential consumer
+-- need not retain all uncompressed bodies. The input remains the original ZIP;
+-- callers still check its digest and each selected member's identity/digest.
+decodeZipMembers :: BS.ByteString -> IO (Either String [(FilePath, ZipMember)])
+decodeZipMembers bytes = do
+  parsed <- try (evaluate directory) :: IO (Either SomeException (Either String [(FilePath, ZipMember)]))
+  pure (either (const (Left "invalid Core ZIP")) id parsed)
+  where
+    directory = do
+      archive <- toArchiveOrFail (BL.fromStrict bytes)
+      let entries = zEntries archive
+          names = map eRelativePath entries
+      if any (not . safeName) names || length names /= length (nub names)
+        then Left "invalid Core ZIP member names"
+        else Right [(eRelativePath entry, ZipMember entry) | entry <- entries]
+
+-- | Decompress a selected member without storing the result in its directory
+-- entry. Retaining the directory therefore retains compressed bytes only.
+readZipMember :: ZipMember -> IO BS.ByteString
+readZipMember (ZipMember entry) = do
+  result <- try (evaluate (BL.toStrict (fromEntry entry))) :: IO (Either SomeException BS.ByteString)
+  either (const (fail "invalid Core ZIP member")) pure result
 
 safeName :: String -> Bool
 safeName name = case name of

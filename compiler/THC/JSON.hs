@@ -10,13 +10,43 @@
 -- Portability : Haskell 2010; bytestring
 --
 -- The producer's ordered JSON representation and byte-exact renderers.
-module THC.JSON (J(..), json, jsonBytes) where
+module THC.JSON (J(..), json, jsonBytes, jsonBytesWithBindings) where
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as Builder
 import qualified Data.ByteString.Lazy as BL
 import Data.Char (ord)
 import Numeric (showHex)
+
+-- | Emit the same UTF-8 module JSON while recording actual byte positions of
+-- top-level binding objects and the complete bindings-array span. All offsets
+-- are zero-based and the array end is exclusive. Field and binding order are
+-- unchanged; counts come from the exact byte chunks used in the final output.
+jsonBytesWithBindings :: J -> (BS.ByteString, [(String, Int)], (Int, Int))
+jsonBytesWithBindings (O fields) = case break ((== "bindings") . fst) fields of
+  (before, ("bindings", A bindings) : after)
+    | all ((/= "bindings") . fst) after ->
+      let prefix = BS.init (jsonBytes (O before)) <>
+            (if null before then BS.empty else BS.singleton 44) <>
+            jsonBytes (S "bindings") <> BS.pack [58, 91]
+          start = BS.length prefix - 1
+          (chunks, offsets, end) = emit (BS.length prefix) bindings
+          suffix = (if null after then BS.empty else BS.singleton 44) <>
+            BS.tail (jsonBytes (O after))
+      in (BS.concat (prefix : chunks ++ [BS.singleton 93, suffix]), offsets, (start, end + 1))
+  _ -> error "Core module requires one bindings array"
+  where
+    emit position [] = ([], [], position)
+    emit position (value@(O members) : rest) = case [key | ("id", S key) <- members] of
+      [key] ->
+        let bytes = jsonBytes value
+            delimiter = [BS.singleton 44 | not (null rest)]
+            next = position + BS.length bytes + length delimiter
+            (chunks, offsets, end) = emit next rest
+        in (bytes : delimiter ++ chunks, (key, position) : offsets, end)
+      _ -> error "Core binding requires one string ID"
+    emit _ _ = error "Core bindings must be objects"
+jsonBytesWithBindings _ = error "Core module must be an object"
 
 -- | Ordered JSON: objects, arrays, strings, arbitrary-size integers, booleans
 -- and null. Ordering is part of the producer's serialized output contract.

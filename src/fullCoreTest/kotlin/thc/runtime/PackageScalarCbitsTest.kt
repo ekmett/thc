@@ -23,7 +23,7 @@ import java.nio.file.Path
 import java.util.Collections
 import java.util.IdentityHashMap
 
-/** Real Cabal C sources, native observations and unchanged retained library bundles. */
+/** Real Cabal C sources, native observations and unchanged retained library artifacts. */
 @EnabledOnOs(OS.LINUX)
 @EnabledIfSystemProperty(named = "os.arch", matches = "amd64|x86_64")
 class PackageScalarCbitsTest {
@@ -44,23 +44,40 @@ class PackageScalarCbitsTest {
             "test/fixtures/run-scalar-cbits/src/Scalar.hs", "test/fixtures/run-scalar-cbits/src/ScalarAgain.hs",
             "test/fixtures/run-scalar-cbits/cbits/scalar.c", "test/fixtures/run-scalar-cbits/cbits/scalar.h",
             "src/THC/Driver/ScalarBitcode.hs", "compiler/THC/Plugin.hs", "test/haskell-fixtures/PackageScalarFixtures.hs"))
-        OriginalStdioChecks.hashes(root, manifest["artifactHashes"],
-            listOf("first", "second").flatMap { listOf("$prefix/$it/packages.json", "$prefix/$it/library.zip", "$prefix/$it/audit.json") }.toSet(), "$prefix/")
         val records = manifest["records"] as List<Map<String, Any?>>
         assertEquals(listOf("first", "second"), records.map { it["name"] })
         assertEquals(2, records.map { it["unit"] }.distinct().size)
+        val retainedPaths = records.flatMap { record ->
+            (record["libraryArtifacts"] as List<Map<String, String>>).map { reference ->
+                File(reference.getValue("path")).relativeTo(root).invariantSeparatorsPath
+            }
+        }
+        OriginalStdioChecks.hashes(root, manifest["artifactHashes"],
+            (listOf("first", "second").flatMap { listOf("$prefix/$it/packages.json", "$prefix/$it/audit.json") } +
+                retainedPaths).toSet(), "$prefix/")
         val modules = mutableListOf<Map<String, Any?>>()
         for (record in records) {
             val packages = json(record["packages"] as String)
             val unit = (packages["units"] as List<Map<String, Any?>>).single { it["id"] == record["unit"] }
-            val bundle = unit["bundle"] as Map<*, *>
-            assertEquals(record["librarySha256"], bundle["sha256"])
-            assertEquals("$prefix/${record["name"]}/library.zip", record["libraryBundle"])
+            val keys = if (unit.containsKey("json")) {
+                assertFalse(unit.containsKey("bundle"), "pair and legacy ZIP cannot both be selected")
+                listOf("json", "symbols")
+            } else listOf("bundle")
+            val references = record["libraryArtifacts"] as List<Map<String, String>>
+            assertEquals(keys.size, references.size, "retain every selected unit artifact")
+            val relocated = unit.toMutableMap()
+            for ((key, retained) in keys.zip(references)) {
+                val original = unit[key] as Map<String, String>
+                assertEquals(original["sha256"], retained["sha256"], "unchanged $key artifact hash")
+                val suffix = when (key) { "json" -> ".jsons"; "symbols" -> ".symbols"; else -> ".zip" }
+                assertEquals(File(root, "$prefix/${record["name"]}/library/${record["unit"]}$suffix").canonicalPath,
+                    File(retained.getValue("path")).canonicalPath, "retained $key path")
+                relocated[key] = original + ("path" to File(retained.getValue("path")).canonicalPath)
+            }
             // Select an unchanged, hashed unit from the ordinary acquisition result.
-            // No test Core, synthetic provider or edited ZIP is substituted.
+            // No test Core, synthetic provider or rewritten payload is substituted.
             val selected = temporary.resolve("${record["name"]}-packages.json").toFile()
-            val retained = bundle + ("path" to File(root, record["libraryBundle"] as String).canonicalPath)
-            selected.writeText(Json.stringify(packages + ("units" to listOf(unit + ("bundle" to retained)))))
+            selected.writeText(Json.stringify(packages + ("units" to listOf(relocated))))
             CorePackageManifest.visitModules(selected.path) { module, _ -> modules.add(module) }
             val rows = record["observations"] as List<Map<String, Any?>>
             assertEquals(30, rows.size)

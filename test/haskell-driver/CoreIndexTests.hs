@@ -16,14 +16,17 @@ module CoreIndexTests (tests) where
 
 import Control.Exception (IOException, try)
 import Control.Monad (forM_)
+import Codec.Archive.Zip (Archive(..), Entry(..), emptyArchive, fromArchive, toEntry)
 import qualified Crypto.Hash.SHA256 as SHA
 import Data.Aeson (Value(..), object, (.=))
 import qualified Data.Aeson.KeyMap as KeyMap
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as BL
 import Data.Either (isLeft)
 import Numeric (showHex)
 import Test.HUnit (Test(..), assertBool, assertEqual)
 import THC.Driver.CoreIndex
+import THC.Driver.Zip (decodeZip, decodeZipMembers, readZipMember)
 import THC.JsonIndex (validateSidecar)
 
 tests :: Test
@@ -76,6 +79,21 @@ tests = TestLabel "source-bound Core index package pairs" $ TestList
                       [("A", "../x.json", "{}")]] $ \modules -> do
       result <- try (indexedModules modules) :: IO (Either IOException ([Value], [(FilePath, BS.ByteString)]))
       assertBool "producer rejects collisions and unsafe paths" (isLeft result)
+  , TestCase $ do
+      let corrupt = "bad deflate"
+          cold = (toEntry "cold.json" 0 (BL.replicate 100000 65))
+            {eCompressedData = corrupt, eCompressedSize = fromIntegral (BL.length corrupt)}
+          bytes = BL.toStrict (fromArchive emptyArchive {zEntries = [toEntry "selected.json" 0 "{}", cold]})
+      entries <- either fail pure =<< decodeZipMembers bytes
+      selected <- maybe (fail "missing selected member") readZipMember (lookup "selected.json" entries)
+      assertEqual "directory admission does not inflate a cold member" "{}" selected
+      rejected <- try (maybe (fail "missing cold member") readZipMember (lookup "cold.json" entries))
+        :: IO (Either IOException BS.ByteString)
+      assertBool "selected malformed compression fails at access" (isLeft rejected)
+      assertBool "legacy exhaustive decoder still rejects the whole archive" . isLeft =<< decodeZip bytes
+  , TestCase $ forM_ [["../escape"], ["same", "same"]] $ \names -> do
+      let bytes = BL.toStrict (fromArchive emptyArchive {zEntries = [toEntry name 0 "{}" | name <- names]})
+      assertBool "member-at-a-time reader preserves directory safety" . isLeft =<< decodeZipMembers bytes
   ]
   where
     first (value:_) = value

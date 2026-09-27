@@ -92,14 +92,21 @@ Acquisition accepts the build/provider options shared with `run`, including
 suffix. Acquisition is not equivalent to a successful application or benchmark
 run.
 
-`run` and `acquire` automatically produce JSON navigation indexes for their
-package modules. Each module retains its JSON bytes and hash; its optional
-`index` record names and hashes the adjacent `.json.idx` payload. The driver
-indexes the final JSON after native-artifact linking, so the sidecar describes
-the bytes actually stored in the package ZIP. Export cache identities include
-the index format and producer inputs; existing immutable bundles are not
-rewritten. JSON-only packages remain supported. A malformed or stale declared
-index is rejected rather than treated as an absent index.
+`run` and `acquire` publish one uncompressed `core.jsons` and one sorted text
+`core.symbols` per nonempty GHC unit. Publication uses the final linked module
+bytes from the acquisition cache, preserving each module and its hash. The
+directory maps exact binding IDs to absolute UTF-8 byte offsets recorded while
+writing. Small metadata and optional source-table projections have separate
+spans; they do not duplicate binding bodies or diagnostic pretty Core. See the
+[unit artifact contract](core-package-manifest.md#direct-unit-artifacts).
+
+The acquisition cache retains its original ZIPs and optional JSON navigation
+indexes as provenance, without rewriting immutable bundles. The runtime
+manifest explicitly selects the plain pair, not those ZIPs or indexes. A warm
+publication checks cache identity and file sizes; `--verify-artifacts` also
+checks cached pair hashes and regenerates corrupt publications from the checked
+original ZIP. Legacy ZIP, loose JSON and explicit structural-index inputs remain
+separate supported formats.
 
 Simple-package runs also produce sidecars for their loose consumer modules.
 The driver passes those pairs explicitly alongside the support package
@@ -423,7 +430,8 @@ guest; it must neither hide transitive library dependencies nor pull host-only
 Setup packages into the Core manifest.
 It writes one compressed Core ZIP per local component under
 `<dist-dir>/native/cache/thc/core-bundles/v1`, inside Cabal's build directory,
-and a checked `packages.json` manifest. `cabal clean --builddir <dist-dir>/native`
+and publishes the unit's plain artifacts through `packages.json`.
+`cabal clean --builddir <dist-dir>/native`
 removes these in-place bundles along with the native build. The OS application
 cache (`THC_CACHE_HOME` overrides its location) holds content-keyed dependency
 bundles. Each local ZIP includes `manifest.json`, its Core modules, and
@@ -524,8 +532,9 @@ frame sizes, InfoProv offsets and closure ordinals. The receipt identifies the
 nonprofiling dynamic way separately from the GHC version, ABI and platform.
 It is provenance for a future low-level snapshot adapter; source export alone
 does not make the original RTS stack primitives executable.
-The JVM package loader compares that layout in the ZIP index and hashed build
-receipt, checks the host architecture, word size, endianness, nonprofiling way
+Unit publication checks that layout against the hashed build receipt and copies
+the original layout/compiler document into the unit record. Legacy ZIP loading
+reads the same two receipts. The runtime checks host architecture, word size, endianness, nonprofiling way
 and field bounds, and carries the installed GHC tables-next-to-code choice into
 one immutable target-layout record for either
 backend. Bundles without the receipt have no target layout; stack/IPE operations
