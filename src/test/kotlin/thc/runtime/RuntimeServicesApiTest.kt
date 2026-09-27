@@ -36,7 +36,7 @@ class RuntimeServicesApiTest {
     private fun variable(name: String, rep: Map<String, Any?>): List<Any?> =
         listOf("var", name, mapOf("rep" to rep))
     private fun literal(value: Long, rep: Map<String, Any?>): List<Any?> =
-        listOf("lit", "int", value.toString(), mapOf("rep" to rep))
+        listOf("lit", if (rep == cInt) "int32" else "int64", value.toString(), mapOf("rep" to rep))
     private fun binder(name: String, rep: Map<String, Any?>) =
         mapOf("id" to name, "lifted" to (rep == closure), "rep" to rep)
     private fun descriptor(name: String): Map<String, Any?> =
@@ -74,8 +74,12 @@ class RuntimeServicesApiTest {
         .option("engine.SingleTierCompilationThreshold", "10000000").build()
     private fun program(language: Language, backend: String, source: Map<String, Any?> = module()): ExecutableProgram =
         if (backend == "ast") Program(language, source) else BytecodeProgram(language, source, true)
-    private fun call(guest: ExecutableProgram, name: String, vararg values: Any?): Long =
-        Calls.target(guest.entryTarget(name), arrayOf(0L, *values, Unit)) as Long
+    private fun call(guest: ExecutableProgram, name: String, vararg values: Any?): Long {
+        // The CInt selector/operation uses an Int carrier in the typed entry.
+        val arguments = arrayOf<Any?>(0L, *values, Unit)
+        arguments[1] = (values[0] as Long).toInt()
+        return callScalarTestTarget(guest.entryTarget(name), arguments) as Long
+    }
     private fun query(guest: ExecutableProgram, selector: Long, index: Long = 0, detail: Long = 0) =
         call(guest, "query", selector, index, detail)
     private fun released(language: Language) {
@@ -143,6 +147,9 @@ class RuntimeServicesApiTest {
                     assertThrows(RuntimeFault::class.java) {
                         Calls.target(target, arrayOf(0L, 0L, 0L, 0L, 7L))
                     }
+                    assertThrows(RuntimeFault::class.java) {
+                        callScalarTestTarget(target, arrayOf(0L, 0, 0L, 0L, 7L))
+                    }
                     released(language)
                 } finally { context.leave() }
             }
@@ -198,6 +205,9 @@ class RuntimeServicesApiTest {
                     assertThrows(RuntimeFault::class.java) {
                         Calls.target(guest.entryTarget("enableThenTrace"), arrayOf(0L, 0L, 0L, pointer, bytes.size.toLong(), 7L))
                     }
+                    assertThrows(RuntimeFault::class.java) {
+                        callScalarTestTarget(guest.entryTarget("enableThenTrace"), arrayOf(0L, 0, 0L, pointer, bytes.size.toLong(), 7L))
+                    }
                     assertEquals(0L, query(guest, 500))
                     assertEquals(0, output.size())
                     assertEquals(0L, call(guest, "control", 500L, 1L))
@@ -209,6 +219,9 @@ class RuntimeServicesApiTest {
                     }
                     assertThrows(RuntimeFault::class.java) {
                         Calls.target(guest.entryTarget("trace"), arrayOf(0L, 0L, 0L, pointer, bytes.size.toLong(), 7L))
+                    }
+                    assertThrows(RuntimeFault::class.java) {
+                        callScalarTestTarget(guest.entryTarget("trace"), arrayOf(0L, 0, 0L, pointer, bytes.size.toLong(), 7L))
                     }
                     assertEquals(0, output.size(), "Malformed payloads and State cannot publish partial records")
                     released(language)
