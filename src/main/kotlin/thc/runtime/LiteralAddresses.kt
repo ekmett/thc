@@ -101,7 +101,7 @@ internal class ManagedAddress private constructor(
         if (capabilities != null) fault("RTS data label has no numeric guest address")
         if (finalizer != null) fault("Opaque C function label has no numeric guest address")
         if (stable != null) return StablePointers.current(null).nativeToken(this)
-        native?.let { return it.access { segment -> segment.address() + offset } }
+        native?.let { return it.accessLong { segment -> segment.address() + offset } }
         return if (this === NULL) 0L else numeric ?: NativeAddresses.current(null).project(this)
     }
     // Mutable views preserve aliases. Immutable sources return snapshots so a
