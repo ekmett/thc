@@ -55,8 +55,8 @@ internal class ManagedAddress private constructor(
     internal fun isNativeBase(): Boolean = native != null && offset == 0L
     /** Keep native storage alive across a complete operation, including calls
      * whose native pointer outlives an individual checked byte access. */
-    internal fun <T> withNativeBorrow(body: () -> T): T =
-        if (native == null) body() else native.borrow().use { body() }
+    internal inline fun <T> withNativeBorrow(body: () -> T): T =
+        native?.borrow().use { body() }
     internal fun <T> withNativeSegment(body: (MemorySegment) -> T): T =
         if (native != null) native.access { body(it.asSlice(offset)) }
         else synchronized(owner ?: fault("Address has no owned native allocation")) {
@@ -67,16 +67,15 @@ internal class ManagedAddress private constructor(
         else synchronized(owner ?: fault("Address has no owned native allocation")) {
             body.applyAsLong((owner.nativeSegment() ?: fault("Address has no owned native allocation")).asSlice(offset))
         }
-    internal fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
+    internal inline fun <T> withNativeBorrows(other: ManagedAddress, body: () -> T): T {
         if (native == null) return other.withNativeBorrow(body)
         if (other.native == null || native === other.native) return withNativeBorrow(body)
         // Ordered acquisition also prevents two copies from deadlocking behind
         // queued frees while each already holds the other's source allocation.
-        fun forward() = withNativeBorrow { other.withNativeBorrow(body) }
         return when (Integer.compareUnsigned(System.identityHashCode(native), System.identityHashCode(other.native))) {
-            -1 -> forward()
+            -1 -> withNativeBorrow { other.withNativeBorrow(body) }
             1 -> other.withNativeBorrow { withNativeBorrow(body) }
-            else -> synchronized(NATIVE_BORROW_TIE) { forward() }
+            else -> synchronized(NATIVE_BORROW_TIE) { withNativeBorrow { other.withNativeBorrow(body) } }
         }
     }
     internal fun stableHandle(): StablePointers.Handle? = stable
