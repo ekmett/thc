@@ -422,7 +422,8 @@
         "thc.runtime.OriginalUnlinkAtTest",
         "thc.runtime.OriginalFstatAtTest",
         "thc.runtime.OriginalCurrentDirectoryTest",
-        "thc.runtime.OriginalDirectoryStreamsTest"
+        "thc.runtime.OriginalDirectoryStreamsTest",
+        "thc.runtime.OriginalDirectoryPathsTest"
       ],
       "commands": [
         {
@@ -445,7 +446,8 @@
         "build/original-unlinkat",
         "build/original-fstatat",
         "build/original-current-directory",
-        "build/original-directory-streams"
+        "build/original-directory-streams",
+        "build/original-directory-paths"
       ],
       "sources": [
         "compiler/test-fixtures/OriginalPosixStatAudit.hs",
@@ -469,7 +471,9 @@
         "compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs",
         "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
         "compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs",
-        "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs"
+        "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs",
+        "compiler/test-fixtures/OriginalDirectoryPathsAudit.hs",
+        "test/haskell-fixtures/OriginalDirectoryPathsFixtures.hs"
       ]
     },
     "original-fd-ready": {

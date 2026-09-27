@@ -170,6 +170,7 @@ class OriginalPathLinkTest {
             }
             for (unit in listOf("main", "unix-2.8.7.0-inplace", "unix-2.8.8.0-ABCD", "unix-2.8.8.0-nothex",
                 "ghc-internal")) {
+                if (operation == OriginalStdioOp.READLINK && unit == "ghc-internal") continue
                 val bad = copy(call) as MutableList<Any?>
                 (((bad[6] as MutableMap<String, Any?>)["foreignCall"] as MutableMap<String, Any?>)["target"] as MutableMap<String, Any?>)["unit"] = unit
                 assertThrows(RuntimeFault::class.java) { validate(bad) }

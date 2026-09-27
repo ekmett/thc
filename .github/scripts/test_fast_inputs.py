@@ -96,6 +96,31 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathLinkAudit.o', 'unknown.json'):
             self.assertFalse(cache.allowed_payload('build/original-path-link/' + suffix, {}))
 
+    def test_original_directory_paths_closed_receipt(self):
+        name = 'build/original-directory-paths/manifest.json'
+        outputs = cache.ORIGINAL_DIRECTORY_PATHS_OUTPUTS
+        self.assertEqual(35, len(outputs))
+        self.assertEqual(cache.platform.system() == 'Linux', name in DECLARED_REQUIRED)
+        artifacts = {path: 'a' * 64 for path in outputs - {name}}
+        good = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
+                    entries=['pathRemoveDirectory', 'executableReadlink'], installedArtifactsHashed=False,
+                    readlinkUnit="ghc-internal", artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.original_directory_paths_artifact_hashes(good))
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
+                        dict(entries=['pathRemoveDirectory']), dict(installedArtifactsHashed=True), dict(readlinkUnit="main"),
+                        dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
+                        dict(artifactHashes={**artifacts, 'build/original-directory-paths/pre.json': 'bad'})):
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_directory_paths_artifact_hashes(dict(good, **changes))
+        for path in artifacts:
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_directory_paths_artifact_hashes(dict(good,
+                    artifactHashes={key: value for key, value in artifacts.items() if key != path}))
+        for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalDirectoryPathsAudit.o', 'unknown.json'):
+            self.assertFalse(cache.allowed_payload('build/original-directory-paths/' + suffix, {}))
+
     def test_original_path_access_closed_receipt(self):
         name = 'build/original-path-access/manifest.json'
         outputs = cache.ORIGINAL_PATH_ACCESS_OUTPUTS

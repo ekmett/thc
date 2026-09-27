@@ -157,6 +157,7 @@ extra-source-files:
   compiler/test-fixtures/RtsDiagnosticsNative.hs
   compiler/test-fixtures/OriginalFcntlAudit.hs
   compiler/test-fixtures/OriginalPathLinkAudit.hs
+  compiler/test-fixtures/OriginalDirectoryPathsAudit.hs
   compiler/test-fixtures/OriginalPathAccessAudit.hs
   compiler/test-fixtures/OriginalUnlinkAtAudit.hs
   compiler/test-fixtures/OriginalFstatAtAudit.hs
@@ -847,6 +848,7 @@ executable thc-fixtures
     OriginalHandleReadinessFixtures
     OriginalPathModeFixtures
     OriginalPathLinkFixtures
+    OriginalDirectoryPathsFixtures
     OriginalPathAccessFixtures
     OriginalUnlinkAtFixtures
     OriginalFstatAtFixtures

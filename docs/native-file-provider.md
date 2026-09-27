@@ -291,3 +291,23 @@ with native GHC across pathname, descriptor alias/failure, raw-name, EOF, rename
 and deleted-directory observations. Both backends preserve exact first-installed
 entry counts and compiled target validity. `NativeDirectoryStreamsTest` covers
 handle lifetime, disposal, and pre-effect output validation.
+
+## Original directory pathname calls
+
+The genuine unsafe Unix 2.8.8.0 `rmdir` declaration uses the same authenticated
+context directory anchor and Linux `unlinkat(AT_REMOVEDIR)` service as existing
+removal calls. It preserves raw names, symlink and trailing-slash behavior,
+namespace changes, and native errno. Failed State or address validation occurs
+before removal, and a renamed context directory keeps its identity.
+
+The `ghc-internal` declaration in `GHC.Internal.System.Environment.ExecutablePath`
+is also accepted for `readlink`. Its original result is `CInt`/`Int32Rep`, matching
+the already admitted Unix declaration; an `Int64Rep` replacement is rejected.
+Both owners share checked output staging, exact native truncation without an
+added NUL, failure preservation, raw path bytes, and native filesystem authority.
+This adds no special interpretation of process-specific symlink contents.
+
+`OriginalDirectoryPathsTest` compares the actual installed declarations with
+native GHC across removal and guarded read-buffer cases, checks first-installed
+entries in both backends, and retains negative owner/ABI/State tests and renamed
+context isolation.
