@@ -402,6 +402,7 @@ jobs:
             build/rts-shutdown/*.json
             build/rts-shutdown/logs/
             build/original-open/
+            build/process-lifecycle/
             build/libdw-unavailable/manifest.json
             build/libdw-unavailable/oracle.json
             build/libdw-unavailable/foreign-labels.json

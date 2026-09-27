@@ -7,9 +7,10 @@ import com.oracle.truffle.api.nodes.Node
 import java.nio.channels.ClosedChannelException
 import thc.Language
 
-/** ABI marshalling only. Interpreter hooks own the declared activation, wait
- * cut and completed-result continuation; no process effect is retried here. */
+/** ABI marshalling and declared activation. Interpreter hooks own the completed
+ * result/errno continuation and delivery cut; no process effect is retried here. */
 internal class ManagedProcessForeign {
+    private class InterruptedWait : RuntimeException(null, null, false, false)
     private val context = Language.currentState()
     private val failures = ProcessFailureStage.entries.associateWith { stage ->
         if (stage == ProcessFailureStage.NONE) ManagedAddress.nullAddress() else {
@@ -21,6 +22,24 @@ internal class ManagedProcessForeign {
 
     companion object {
         @JvmStatic fun current(node: Node?): ManagedProcessForeign = Language.currentState(node).files.processForeign
+    }
+
+    /** Exact declaration activation. Native cancellation only observes pending
+     * work; the interpreter claims it after saving the returned scalar/errno. */
+    @TruffleBoundary fun invoke(operation: ProcessOp, arguments: Array<Any?>, node: Node): Long {
+        val threads = context.threads
+        val previous = threads.enterForeign(if (operation == ProcessOp.WAIT) ForeignSafety.INTERRUPTIBLE else ForeignSafety.UNSAFE)
+        return try {
+            try {
+                execute(operation, arguments, node, if (operation == ProcessOp.WAIT) ({
+                    if (threads.interruptibleForeignPending()) throw InterruptedWait()
+                }) else null)
+            } catch (_: InterruptedWait) {
+                // No waitpid/reap occurred and the caller's output is untouched.
+                context.stdio.captureForeignErrno(4) // Linux EINTR, matching this transport.
+                -1L
+            }
+        } finally { threads.leaveForeign(previous) }
     }
 
     private fun cint(value: Any?): Int {

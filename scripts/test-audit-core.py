@@ -2150,6 +2150,7 @@ class OriginalForeignOperandAuditTest(unittest.TestCase):
         targets += [('ghc-internal', symbol) for symbol in (
             'close', 'isatty', 'epoll_ctl', 'hs_free_stable_ptr', '__hscore_set_errno', 'getpid')]
         targets += [('unix-2.8.8.0-inplace', 'geteuid')]
+        targets += [('process-1.6.26.1-inplace', symbol) for symbol in core_original_foreign.PROCESS_OPERATIONS]
         for unit, symbol in targets:
             target = dict(kind='static', symbol=symbol, unit=unit, isFunction=True)
             convention, safety, arguments, output = core_original_foreign.operation(target)

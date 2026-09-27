@@ -222,7 +222,7 @@ internal class ManagedProcesses(private val directory: NativeDirectoryOwner) : C
         try {
             while (true) {
                 beforeBlock?.invoke()
-                val readiness = wait.await(node, -1)[0].toInt()
+                val readiness = wait.await(node, -1, beforeBlock)[0].toInt()
                 synchronized(child) {
                     if (child.closed || readiness and 32 != 0) throw ClosedChannelException()
                     val result = query(child)

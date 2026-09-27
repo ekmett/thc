@@ -33,6 +33,11 @@ class CoreProcessForeignTest {
         val manifest = Json.parse(Files.readString(root.resolve("build/process-lifecycle/core/manifest.json"))) as Map<*, *>
         for (stage in listOf("pre", "post")) {
             val module = source(stage)
+            val audit = Json.parse(Files.readString(root.resolve("build/process-lifecycle/core/$stage.audit.json"))) as Map<*, *>
+            assertEquals(true, audit["accepted"])
+            for (field in listOf("issues", "missingGlobals", "runtimeExternals")) assertEquals(emptyList<Any>(), audit[field])
+            assertEquals(ProcessOp.entries.map { it.symbol }.toSet(),
+                (audit["foreignCalls"] as List<Map<*, *>>).map { it["symbol"] }.toSet())
             CoreProcessForeign.validateHeads(module)
             val declarations = calls(module)
             assertEquals(4, declarations.size)

@@ -6,12 +6,12 @@ file resources, polls and reaps exit status, sends termination, and owns shutdow
 cleanup. It requires both native access and explicit process-creation permission.
 File access alone does not grant subprocess authority.
 
-This service is not yet connected to original process-package declaration
-admission. The dedicated `CoreProcessForeign` validator and `ManagedProcessForeign`
-ABI adapter are present, but interpreter admission/activation hooks remain separate.
-`NativeIO` has not acquired a new default process grant. The remaining
-adapter must preserve the original declarations and use the existing foreign-call
-activation and completion machinery; no capability counts change with this service.
+Both interpreters admit the four original process-package declarations below.
+`CoreProcessForeign` checks their exact owner, safety and ABI; the shared
+`ManagedProcessForeign` adapter marshals context-owned arguments and resources.
+`NativeIO.createContext` keeps its default process grant denied. An embedding
+can explicitly pass `allowProcesses = true`; the Linux command-line context
+opts in. The existing one-argument JVM factory remains available.
 
 ## Original declarations
 
@@ -86,7 +86,13 @@ preserves non-pipe output cells, and validates all output cells before launch.
 Waiting blocks on a private duplicated pidfd through `NativeEventWait`.
 Safepoint retries only repeat readiness observation. Reaping takes place after
 readiness outside the blocked callback and is never replayed by this service.
-The caller supplies its existing interruptible-operation cut. Registry shutdown
+The original interruptible wait observes pending asynchronous work while inside
+its foreign activation, without claiming delivery there. Before a genuinely
+blocking native poll it can return EINTR, leaving the output and child untouched.
+MaskedUninterruptible defers this cancellation. An already completed reap wins;
+the interpreter saves both its result and errno before the completion poll.
+Resumption restores that errno even on another carrier and never repeats the
+wait or reap. Registry shutdown
 wakes waiters, kills only still-owned children, reaps them, and releases leases;
 it remains valid after LLVM disposal. Shutdown waits for kernel reaping after
 SIGKILL and does not promise a deadline for an uninterruptible kernel task.
@@ -98,8 +104,8 @@ glibc's `posix_spawn` directory/closefrom actions. It probes pidfd waiting befor
 creating a child. SIGCHLD set to `SIG_IGN`, or with `SA_NOCLDWAIT`, is rejected
 with `ENOTSUP` before pipes or a child are created. Credential changes and Windows console flags are rejected
 before creation. Process groups and new sessions can be requested at creation;
-group signalling, control-C delegation and original Handle/FFI integration are
-separate work.
+group signalling, control-C delegation and complete original Handle integration
+are separate work. These four declarations do not imply complete System.Process.
 
 The embedding host must keep SIGCHLD policy stable during creation and must not
 independently reap these children, including in signal handlers or other threads.
@@ -129,9 +135,21 @@ and reaps a real child. These controls never alter the JVM's signal policy.
 With the pinned GHC and GraalVM selected, run both handoff modes from one build:
 
 ```sh
-./gradlew --continue testDefault --tests thc.runtime.ManagedProcessesTest \
-  testDense --tests thc.runtime.ManagedProcessesTest
+cabal run exe:thc-fixtures --offline -- process-lifecycle
+./gradlew --continue \
+  testDefault --tests thc.runtime.ManagedProcessesTest --tests thc.runtime.ManagedProcessForeignTest \
+              --tests thc.runtime.CoreProcessForeignTest --tests thc.runtime.ProcessLifecycleCoreTest \
+  testDense --tests thc.runtime.ManagedProcessesTest --tests thc.runtime.ManagedProcessForeignTest \
+            --tests thc.runtime.CoreProcessForeignTest --tests thc.runtime.ProcessLifecycleCoreTest
 ```
 
-These are service tests; they do not establish original Core execution or full
-`System.Process` support in either interpreter.
+The Haskell producer rebuilds only the SHA256-pinned, unmodified process 1.6.26.1
+source package in a private database, retaining complete Core. Its narrow
+`--allow-newer=process:base` relaxes the archive's Cabal bound for the pinned
+GHC 9.14.1 base 4.22 without editing any package source. Real FCallIds are read
+from those interfaces and specialized into typed consumers; no target metadata
+is forged. Pre/post-tidy audits and AST/bytecode tests cover interpreted and first
+installed execution, native lifecycle/creation observations, pipe/environment/CWD
+transport, actual PID observability, all masking states, interrupted and completed
+waits with queued delivery, saved errno and no replay. The service and declaration
+tests retain negative provenance, permission, cancellation and resource controls.
