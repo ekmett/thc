@@ -926,6 +926,8 @@ def open_modules(path, *, audit_archives=False):
     not execution. Completion establishes the same manifest/module checks as
     load_for_audit, not whole-program admission or cross-module audit proofs.
     Consumers own any modules they retain; this reader retains no past ASTs.
+    manifest_identity records the exact bytes/inventory actually parsed, once
+    read; its presence does not imply successful completion.
     """
     return _ModuleStream(path, audit_archives)
 
@@ -933,9 +935,13 @@ def open_modules(path, *, audit_archives=False):
 class _ModuleStream:
     def __init__(self, path, audit_archives):
         self._path = path
-        self._iterator = _iter_load(path, audit_archives)
+        self.manifest_identity = None
+        self._iterator = _iter_load(path, audit_archives, self._manifest_read)
         self._complete = False
         self._closed = False
+
+    def _manifest_read(self, identity):
+        self.manifest_identity = identity
 
     @property
     def complete(self):
@@ -979,10 +985,14 @@ def _iter_loose_modules(root, records):
         yield item, str(artifact), artifact.read_bytes()
 
 
-def _iter_load(path, audit_archives):
+def _iter_load(path, audit_archives, manifest_read=None):
     path = Path(path)
     root = path.resolve().parent
-    manifest = strict_json(path.read_text())
+    data = path.read_bytes()
+    manifest = strict_json(data.decode('utf-8'))
+    if manifest_read is not None:
+        manifest_read(dict(path=str(path.resolve()), sha256=hashlib.sha256(data).hexdigest(), manifest=manifest))
+    del data
     if (not isinstance(manifest, dict) or manifest.get('format') != FORMAT or
             type(manifest.get('schema')) is not int or manifest['schema'] != 1 or
             manifest.get('ghc') != '9.14.1' or

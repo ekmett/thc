@@ -10,8 +10,14 @@ binders scope over alternatives only. An accepted report is a static capability
 check, not a proof that arbitrary inputs terminate or avoid a Haskell error.
 """
 import argparse
-from collections import deque
+from collections import deque, OrderedDict
+from collections.abc import Mapping, MutableMapping, MutableSet
+from contextlib import closing
+import hashlib
 import json
+import os
+import sqlite3
+import tempfile
 import core_data_tags
 import core_md5_foreign
 import core_managed_files
@@ -47,112 +53,696 @@ ARITHMETIC_EXCEPTIONS = {name: 'ghc-internal:GHC.Internal.Exception.Type.' + pay
     ('raiseUnderflow#', 'underflowException'))}
 
 
+_ANY = object()
+
+
+class AuditStoreError(RuntimeError):
+    """Infrastructure failure; never translate this into a capability issue."""
+
+
+def _key(value):
+    if not isinstance(value, str):
+        raise TypeError('Audit store keys must be strings')
+    # JSON identifiers can contain escaped surrogates/NULs. SQLite TEXT cannot
+    # carry all such Python strings, but an exact BLOB key can.
+    return value.encode('utf-8', errors='surrogatepass')
+
+
+def _text(value):
+    return value.decode('utf-8', errors='surrogatepass')
+
+
+def _lookup_key(value):
+    if not isinstance(value, str):
+        # Original dictionaries permit a hashable non-string *lookup* and
+        # return no match; unhashable lookups retain their original TypeError.
+        hash(value)
+        raise KeyError(value)
+    return _key(value)
+
+
+def _pack(value):
+    # This serializes already parsed values; it is not an input admission path.
+    data = json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode('ascii')
+    return data, hashlib.sha256(data).digest()
+
+
+def _unpack(data, digest):
+    if hashlib.sha256(data).digest() != digest:
+        raise AuditStoreError('Audit store record checksum mismatch')
+    try:
+        return json.loads(data)
+    except (ValueError, TypeError) as error:
+        raise AuditStoreError('Audit store record JSON is invalid') from error
+
+
+class _Binding(Mapping):
+    def __init__(self, store, key, header, has_expression):
+        self._store = store
+        self._key = key
+        self._header = header
+        self._has_expression = has_expression
+
+    def __getitem__(self, key):
+        if key == 'expr' and self._has_expression:
+            return self._store._expression(self._key)
+        return self._header[key]
+
+    def __iter__(self):
+        return iter(self._header)
+
+    def __len__(self):
+        return len(self._header)
+
+
+class _Bindings(Mapping):
+    def __init__(self, store):
+        self._store = store
+
+    def __getitem__(self, key):
+        encoded = _lookup_key(key)
+        row = self._store._one('SELECT header,header_hash,has_expression FROM bindings WHERE key=?', (encoded,))
+        if row is None:
+            raise KeyError(key)
+        return _Binding(self._store, encoded, _unpack(row[0], row[1]), bool(row[2]))
+
+    def __contains__(self, key):
+        try:
+            encoded = _lookup_key(key)
+        except KeyError:
+            return False
+        return self._store._one('SELECT 1 FROM bindings WHERE key=?', (encoded,)) is not None
+
+    def __iter__(self):
+        for row in self._store._rows('SELECT key FROM bindings ORDER BY ordinal'):
+            yield _text(row[0])
+
+    def __len__(self):
+        return self._store._one('SELECT count(*) FROM bindings')[0]
+
+
+class _Sources(Mapping):
+    def __init__(self, store):
+        self._store = store
+
+    def __getitem__(self, key):
+        row = self._store._one('SELECT source FROM bindings WHERE key=?', (_lookup_key(key),))
+        if row is None:
+            raise KeyError(key)
+        return _text(row[0])
+
+    def __iter__(self):
+        return iter(self._store.bindings)
+
+    def __len__(self):
+        return len(self._store.bindings)
+
+
+class _Records(Mapping):
+    def __init__(self, store, namespace):
+        self._store = store
+        self._namespace = _key(namespace)
+
+    def __getitem__(self, key):
+        row = self._store._one('SELECT payload,digest FROM records WHERE namespace=? AND key=?',
+                               (self._namespace, _lookup_key(key)))
+        if row is None:
+            raise KeyError(key)
+        return _unpack(*row)
+
+    def __iter__(self):
+        for row in self._store._rows('SELECT key FROM records WHERE namespace=? ORDER BY ordinal', (self._namespace,)):
+            yield _text(row[0])
+
+    def __len__(self):
+        return self._store._one('SELECT count(*) FROM records WHERE namespace=?', (self._namespace,))[0]
+
+
+class AuditStore:
+    """Fresh disk catalogue with lazy bodies and ordered diagnostic storage.
+
+    Returned records/expressions are read-only by contract. The expression cache
+    is bounded by both entry count and *encoded* bytes, not an asserted Python
+    heap size; oversized expressions are returned uncached. Active caller-held
+    objects remain the caller's responsibility. No rows are fetched en masse.
+    complete means input ingestion is sealed, never that an audit was accepted.
+    """
+
+    def __init__(self, path, provenance, *, cache_bytes=8 * 1024 * 1024,
+                 cache_entries=32, page_cache_kib=4096, batch_rows=256):
+        if any(type(value) is not int or value < 0 for value in (cache_bytes, cache_entries)):
+            raise ValueError('Invalid audit expression cache bound')
+        if any(type(value) is not int or value <= 0 for value in (page_cache_kib, batch_rows)):
+            raise ValueError('Invalid audit SQLite bound')
+        provenance_data, provenance_hash = _pack(provenance)
+        self.path = Path(path)
+        self._complete = False
+        self._closed = False
+        self._pending = 0
+        self._batch_rows = batch_rows
+        self._cache_limit = cache_bytes
+        self._cache_entries = cache_entries
+        self._cache = OrderedDict()
+        self._cache_bytes = 0
+        self.expression_loads = 0
+        # Never overwrite/reopen another run's DB or follow an existing symlink.
+        descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.close(descriptor)
+        self._connection = sqlite3.connect(self.path, cached_statements=32)
+        try:
+            self._connection.execute('PRAGMA temp_store=FILE')
+            self._connection.execute('PRAGMA mmap_size=0')
+            self._connection.execute(f'PRAGMA cache_size=-{page_cache_kib}')
+            self._connection.execute('PRAGMA foreign_keys=ON')
+            self._connection.executescript('''
+                BEGIN;
+                CREATE TABLE metadata(key TEXT PRIMARY KEY, payload BLOB NOT NULL, digest BLOB NOT NULL);
+                CREATE TABLE bindings(
+                    ordinal INTEGER PRIMARY KEY, key BLOB UNIQUE NOT NULL, source BLOB NOT NULL, name BLOB,
+                    header BLOB NOT NULL, header_hash BLOB NOT NULL, has_expression INTEGER NOT NULL,
+                    expression BLOB, expression_hash BLOB);
+                CREATE INDEX binding_names ON bindings(name,ordinal);
+                CREATE TABLE records(ordinal INTEGER PRIMARY KEY, namespace BLOB NOT NULL, key BLOB NOT NULL,
+                    payload BLOB NOT NULL, digest BLOB NOT NULL, UNIQUE(namespace,key));
+                CREATE TABLE events(ordinal INTEGER PRIMARY KEY, kind BLOB NOT NULL, group_key BLOB, owner BLOB,
+                    payload BLOB NOT NULL, digest BLOB NOT NULL);
+                CREATE INDEX event_groups ON events(kind,group_key,ordinal);
+                CREATE INDEX event_owners ON events(kind,owner,ordinal);
+                CREATE TABLE discovery(ordinal INTEGER PRIMARY KEY, key BLOB UNIQUE NOT NULL, predecessor BLOB,
+                    popped INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(predecessor) REFERENCES discovery(key));
+                CREATE INDEX pending_discovery ON discovery(popped,ordinal);
+                CREATE TABLE members(namespace BLOB NOT NULL, owner BLOB NOT NULL, value BLOB NOT NULL,
+                    PRIMARY KEY(namespace,owner,value)) WITHOUT ROWID;
+            ''')
+            self._connection.execute('INSERT INTO metadata VALUES(?,?,?)',
+                                     ('provenance', provenance_data, provenance_hash))
+            self._set_metadata('format', 'thc-audit-store-v1')
+            self._set_metadata('phase', 'ingesting')
+            self._connection.commit()
+        except BaseException:
+            self._connection.close()
+            self._closed = True
+            raise
+        self.bindings = _Bindings(self)
+        self.sources = _Sources(self)
+
+    @property
+    def complete(self):
+        return self._complete
+
+    @property
+    def cached_expression_bytes(self):
+        return self._cache_bytes
+
+    @property
+    def cached_expression_count(self):
+        return len(self._cache)
+
+    def _open(self):
+        if self._closed:
+            raise RuntimeError('Audit store is closed')
+
+    def _ingesting(self):
+        self._open()
+        if self._complete:
+            raise RuntimeError('Audit input catalogue is already sealed')
+
+    def _ready(self):
+        self._open()
+        if not self._complete:
+            raise RuntimeError('Audit input catalogue is not sealed')
+
+    def _one(self, query, parameters=()):
+        self._open()
+        with closing(self._connection.execute(query, parameters)) as cursor:
+            return cursor.fetchone()
+
+    def _rows(self, query, parameters=()):
+        self._open()
+        with closing(self._connection.execute(query, parameters)) as cursor:
+            yield from cursor
+
+    def _tick(self):
+        self._pending += 1
+        if self._pending >= self._batch_rows:
+            self._connection.commit()
+            self._pending = 0
+
+    def _set_metadata(self, key, value):
+        payload, digest = _pack(value)
+        self._connection.execute('INSERT OR REPLACE INTO metadata VALUES(?,?,?)', (key, payload, digest))
+
+    def provenance(self):
+        return _unpack(*self._one('SELECT payload,digest FROM metadata WHERE key=?', ('provenance',)))
+
+    def put_binding(self, source, binding):
+        """Stage one checked binding, keeping the first duplicate.
+
+        Return its previous source on duplicates, so the existing auditor can
+        emit its existing duplicate-binding diagnostic without changing policy.
+        """
+        self._ingesting()
+        key, source = _key(binding['id']), _key(source)
+        previous = self._one('SELECT source FROM bindings WHERE key=?', (key,))
+        if previous is not None:
+            return _text(previous[0])
+        header = dict(binding)
+        has_expression = 'expr' in header
+        expression, expression_hash = _pack(header['expr']) if has_expression else (None, None)
+        if has_expression:
+            header['expr'] = None  # Keep original key ordering, not the AST.
+        header, header_hash = _pack(header)
+        name = _key(binding['name']) if isinstance(binding.get('name'), str) else None
+        self._connection.execute('''INSERT INTO bindings
+            (key,source,name,header,header_hash,has_expression,expression,expression_hash)
+            VALUES(?,?,?,?,?,?,?,?)''', (key, source, name, header, header_hash,
+                                       int(has_expression), expression, expression_hash))
+        self._tick()
+        return None
+
+    def _expression(self, key):
+        self._open()
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key][0]
+        row = self._one('SELECT expression,expression_hash FROM bindings WHERE key=? AND has_expression=1', (key,))
+        if row is None:
+            raise KeyError('expr')
+        value = _unpack(*row)
+        self.expression_loads += 1
+        size = len(row[0])
+        if self._cache_entries and size <= self._cache_limit:
+            while self._cache and (self._cache_bytes + size > self._cache_limit or len(self._cache) >= self._cache_entries):
+                _, (_, previous_size) = self._cache.popitem(last=False)
+                self._cache_bytes -= previous_size
+            self._cache[key] = (value, size)
+            self._cache_bytes += size
+        return value
+
+    def named(self, name):
+        for row in self._rows('SELECT key FROM bindings WHERE name=? ORDER BY ordinal', (_key(name),)):
+            yield _text(row[0])
+
+    def records(self, namespace):
+        return _Records(self, namespace)
+
+    def put_record(self, namespace, key, value):
+        """Store a checked constructor/module/native record; preserve key order.
+
+        Conflict comparison/admission remains with the existing auditor. Call
+        this only after its check decides to retain or replace a record.
+        """
+        self._ingesting()
+        payload, digest = _pack(value)
+        self._connection.execute('''INSERT INTO records(namespace,key,payload,digest) VALUES(?,?,?,?)
+            ON CONFLICT(namespace,key) DO UPDATE SET payload=excluded.payload,digest=excluded.digest''',
+            (_key(namespace), _key(key), payload, digest))
+        self._tick()
+
+    def seal(self, *, validation_complete):
+        self._ingesting()
+        if validation_complete is not True:
+            raise ValueError('Cannot seal an incomplete validated module stream')
+        try:
+            self._set_metadata('phase', 'ready')
+            self._connection.commit()
+        except BaseException:
+            # A later close must not commit a ready marker after failed sealing.
+            self._connection.rollback()
+            raise
+        self._pending = 0
+        self._complete = True
+
+    def append_event(self, kind, value, *, group=None, owner=None):
+        self._open()
+        payload, digest = _pack(value)
+        cursor = self._connection.execute('INSERT INTO events(kind,group_key,owner,payload,digest) VALUES(?,?,?,?,?)',
+            (_key(kind), None if group is None else _key(group), None if owner is None else _key(owner), payload, digest))
+        ordinal = cursor.lastrowid
+        cursor.close()
+        self._tick()
+        return ordinal
+
+    def _event_filter(self, kind, group, owner):
+        clauses, parameters = ['kind=?'], [_key(kind)]
+        for column, value in (('group_key', group), ('owner', owner)):
+            if value is not _ANY:
+                clauses.append(column + ' IS ?')
+                parameters.append(None if value is None else _key(value))
+        return ' AND '.join(clauses), parameters
+
+    def events(self, kind, *, group=_ANY, owner=_ANY):
+        self._ready()
+        where, parameters = self._event_filter(kind, group, owner)
+        for row in self._rows('SELECT payload,digest FROM events WHERE ' + where + ' ORDER BY ordinal', parameters):
+            yield _unpack(*row)
+
+    def event_count(self, kind, *, group=_ANY, owner=_ANY):
+        where, parameters = self._event_filter(kind, group, owner)
+        return self._one('SELECT count(*) FROM events WHERE ' + where, parameters)[0]
+
+    def event_groups(self, kind):
+        """Stream distinct group keys in string order, with ungrouped None first."""
+        self._ready()
+        for row in self._rows('SELECT DISTINCT group_key FROM events WHERE kind=? ORDER BY group_key', (_key(kind),)):
+            yield None if row[0] is None else _text(row[0])
+
+    def event_group_count(self, kind):
+        return self._one('SELECT count(*) FROM (SELECT DISTINCT group_key FROM events WHERE kind=?)', (_key(kind),))[0]
+
+    def members(self, namespace, owner):
+        return _DiskSet(self, namespace, owner)
+
+    def discover(self, key, predecessor=None):
+        """Queue first discovery only, preserving the caller's exact BFS order."""
+        self._ready()
+        key = _key(key)
+        if self._one('SELECT 1 FROM discovery WHERE key=?', (key,)) is not None:
+            return False
+        predecessor = None if predecessor is None else _key(predecessor)
+        if predecessor is not None and self._one('SELECT 1 FROM discovery WHERE key=?', (predecessor,)) is None:
+            raise ValueError('Audit predecessor must have been discovered already')
+        self._connection.execute('INSERT INTO discovery(key,predecessor) VALUES(?,?)', (key, predecessor))
+        self._tick()
+        return True
+
+    def pop_pending(self):
+        self._ready()
+        row = self._one('SELECT ordinal,key FROM discovery WHERE popped=0 ORDER BY ordinal LIMIT 1')
+        if row is None:
+            return None
+        self._connection.execute('UPDATE discovery SET popped=1 WHERE ordinal=?', (row[0],))
+        self._tick()
+        return _text(row[1])
+
+    def is_discovered(self, key):
+        self._ready()
+        return self._one('SELECT 1 FROM discovery WHERE key=?', (_key(key),)) is not None
+
+    def predecessor(self, key):
+        self._ready()
+        row = self._one('SELECT predecessor FROM discovery WHERE key=?', (_key(key),))
+        if row is None:
+            raise KeyError(key)
+        return None if row[0] is None else _text(row[0])
+
+    def reachable_count(self):
+        self._ready()
+        return self._one('SELECT count(*) FROM discovery WHERE popped=1')[0]
+
+    def pending_count(self):
+        self._ready()
+        return self._one('SELECT count(*) FROM discovery WHERE popped=0')[0]
+
+    def reachable(self):
+        self._ready()
+        for key, predecessor in self._rows('SELECT key,predecessor FROM discovery WHERE popped=1 ORDER BY ordinal'):
+            yield _text(key), None if predecessor is None else _text(predecessor)
+
+    def reachable_via(self, key):
+        self._ready()
+        result = []
+        while key is not None:
+            result.append(key)
+            key = self.predecessor(key)
+        result.reverse()
+        return result
+
+    def close(self):
+        if not self._closed:
+            try:
+                self._connection.commit()
+            finally:
+                self._connection.close()
+                self._closed = True
+                self._cache.clear()
+                self._cache_bytes = 0
+
+    def checkpoint(self, phase):
+        self._ready()
+        self._set_metadata('auditPhase', phase)
+        self._connection.commit()
+        self._pending = 0
+
+    def __enter__(self):
+        self._open()
+        return self
+
+    def __exit__(self, exception_type, exception, traceback):
+        try:
+            if exception_type is not None and not self._closed:
+                self._connection.rollback()
+        finally:
+            self.close()
+        if exception_type is None and not self._complete:
+            raise RuntimeError('Audit input catalogue was not sealed')
+
+
+class _InputRecords(MutableMapping):
+    """Existing registration assignments, with admission still in Audit."""
+    def __init__(self, store, namespace, compound=False):
+        self.store, self.namespace, self.compound = store, namespace, compound
+        self.view = store.records(namespace)
+
+    def encoded(self, key):
+        if not self.compound:
+            if not isinstance(key, str):
+                hash(key)
+                raise KeyError(key)
+            return key
+        hash(key)
+        if (not isinstance(key, tuple) or len(key) != 2 or
+                not all(value is None or isinstance(value, str) for value in key)):
+            raise KeyError(key)
+        return json.dumps(key, ensure_ascii=True, separators=(',', ':'))
+
+    def __getitem__(self, key):
+        return self.view[self.encoded(key)]
+
+    def __setitem__(self, key, value):
+        self.store.put_record(self.namespace, self.encoded(key), value)
+
+    def __delitem__(self, key):
+        raise TypeError('Registered audit input cannot be deleted')
+
+    def __iter__(self):
+        for key in self.view:
+            yield tuple(json.loads(key)) if self.compound else key
+
+    def __len__(self):
+        return len(self.view)
+
+
+class _DiskSet(MutableSet):
+    def __init__(self, store, namespace, owner):
+        self.store, self.scope = store, (_key(namespace), _key(owner))
+
+    def __contains__(self, value):
+        return isinstance(value, str) and self.store._one(
+            'SELECT 1 FROM members WHERE namespace=? AND owner=? AND value=?', (*self.scope, _key(value))) is not None
+
+    def __iter__(self):
+        for row in self.store._rows('SELECT value FROM members WHERE namespace=? AND owner=? ORDER BY value', self.scope):
+            yield _text(row[0])
+
+    def __len__(self):
+        return self.store._one('SELECT count(*) FROM members WHERE namespace=? AND owner=?', self.scope)[0]
+
+    def add(self, value):
+        self.store._open()
+        self.store._connection.execute('INSERT OR IGNORE INTO members VALUES(?,?,?)', (*self.scope, _key(value)))
+        self.store._tick()
+
+    def discard(self, value):
+        raise TypeError('Audit proof/discovery sets are append-only')
+
+    def update(self, values):
+        for value in values: self.add(value)
+
+
+class _ProofSets:
+    def __init__(self, store): self.store = store
+    def __getitem__(self, key): return self.store.members('package-scalar-proofs', key)
+    def setdefault(self, key, default): return self[key]
+
+
+class _EventList:
+    def __init__(self, store, kind, group=_ANY, group_field=None, owner_field=None):
+        self.store, self.kind, self.group = store, kind, group
+        self.group_field, self.owner_field = group_field, owner_field
+
+    def append(self, value):
+        group = value.get(self.group_field) if self.group_field else (None if self.group is _ANY else self.group)
+        owner = value.get(self.owner_field) if self.owner_field else None
+        self.store.append_event(self.kind, value, group=group, owner=owner)
+
+    def extend(self, values):
+        for value in values: self.append(value)
+
+    def __iter__(self): return self.store.events(self.kind, group=self.group)
+    def __len__(self): return self.store.event_count(self.kind, group=self.group)
+
+
+class _UseGroups:
+    def __init__(self, store, kind): self.store, self.kind = store, kind
+    def __getitem__(self, key): return _EventList(self.store, self.kind, key, owner_field='owner')
+    def setdefault(self, key, default): return self[key]
+    def __iter__(self): return self.store.event_groups(self.kind)
+    def __len__(self): return self.store.event_group_count(self.kind)
+
+
+class _Literals(_UseGroups):
+    def __init__(self, store): super().__init__(store, 'literal-uses')
+    def __getitem__(self, key):
+        return dict(kind=key, examples=_EventList(self.store, 'literal-examples', key),
+                    uses=super().__getitem__(key))
+
+
+class _Predecessors(Mapping):
+    def __init__(self, store): self.store = store
+    def __getitem__(self, key): return self.store.predecessor(key)
+    def __contains__(self, key): return isinstance(key, str) and self.store.is_discovered(key)
+    def __iter__(self):
+        for row in self.store._rows('SELECT key FROM discovery ORDER BY ordinal'): yield _text(row[0])
+    def __len__(self): return self.store._one('SELECT count(*) FROM discovery')[0]
+
+
+class _Reachable:
+    def __init__(self, store): self.store = store
+    def __iter__(self):
+        for key, predecessor in self.store.reachable(): yield key
+    def __len__(self): return self.store.reachable_count()
+
+
+class _StreamArray:
+    """Repeatable report section: never materialize a whole nested use group."""
+    def __init__(self, values): self.values = values
+    def __iter__(self): return iter(self.values())
+
+
+class _StreamReport(dict):
+    pass
+
+
 class Audit:
-    def __init__(self, modules, capabilities):
+    def __init__(self, modules, capabilities, store=None):
         self.cap = capabilities
-        self.bindings = {}
-        self.constructors = {}
-        self.sources = {}
-        self.issues = []
-        self.edges = []
-        self.missing = {}
-        self.primitives = {}
-        self.foreign_calls = []
-        self.literals = {}
-        self.used_constructors = {}
-        self.reachable = []
-        self.predecessors = {}
-        self.queue = deque()
-        self.linked_foreign = {}
-        self.package_scalar_links = {}
-        self.package_scalar_proofs = {}
-        self.archive_bindings = {}
-        self.retained_exports = []
+        self.store = store
+        self.bindings = store.bindings if store is not None else {}
+        self.constructors = _InputRecords(store, 'constructors') if store is not None else {}
+        self.sources = store.sources if store is not None else {}
+        self.issues = _EventList(store, 'issues', owner_field='owner') if store is not None else []
+        self.edges = _EventList(store, 'edges', group_field='dependency', owner_field='caller') if store is not None else []
+        self.missing = _UseGroups(store, 'missing') if store is not None else {}
+        self.primitives = _UseGroups(store, 'primitives') if store is not None else {}
+        self.foreign_calls = _EventList(store, 'foreign', owner_field='owner') if store is not None else []
+        self.literals = _Literals(store) if store is not None else {}
+        self.used_constructors = _UseGroups(store, 'constructors') if store is not None else {}
+        self.reachable = _Reachable(store) if store is not None else []
+        self.predecessors = _Predecessors(store) if store is not None else {}
+        self.queue = deque() if store is None else None
+        self.linked_foreign = _InputRecords(store, 'linked-foreign', compound=True) if store is not None else {}
+        self.package_scalar_links = _InputRecords(store, 'package-links') if store is not None else {}
+        self.package_scalar_proofs = _ProofSets(store) if store is not None else {}
+        self.archive_bindings = _InputRecords(store, 'archive-bindings') if store is not None else {}
+        self.retained_exports = _EventList(store, 'retained-exports') if store is not None else []
         for source, module in modules:
-            scalar_link = None
-            native_archive = None
-            try:
-                native_archive = core_package_manifest.package_native_archive(module)
-                scalar_link = core_package_manifest.package_scalar_link(module)
-                if scalar_link:
-                    link, proved = scalar_link
-                    if any(other['unit'] != link['unit'] and other['componentSha256'] == link['componentSha256']
-                           for other in self.package_scalar_links.values()):
-                        raise ValueError('Package C entry namespace belongs to another unit: ' + link['componentSha256'])
-                    previous = self.package_scalar_links.setdefault(link['unit'], link)
-                    if previous != link:
-                        raise ValueError('Conflicting package C component identity: ' + link['unit'])
-                    self.package_scalar_proofs.setdefault(link['unit'], set()).update(proved)
-            except (ValueError, KeyError, TypeError) as error:
-                self.issue('module-format', None, source, str(error))
-            foreign = module.get('foreign')
-            stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
-            registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
-                            (isinstance(stubs, dict) and
-                             bool(stubs.get('initializers') or stubs.get('finalizers'))))
-            retained = None
-            if module.get('schema') == 2 and registration and 'staticForeignExportRegistration' in module:
-                try:
-                    retained = core_package_manifest.managed_registration(module)
-                except (ValueError, KeyError, TypeError) as error:
-                    self.issue('module-format', None, source, str(error))
-            if retained:
-                self.retained_exports.extend(retained)
-            managed_imports = False
-            try:
-                managed_imports = not scalar_link and core_package_manifest.managed_import_stubs(module)
-            except (ValueError, KeyError, TypeError) as error:
-                self.issue('module-format', None, source, str(error))
-            linked = (type(module.get('schema')) is int and module['schema'] == 2 and
-                      'foreignLink' in module and core_package_manifest.linked_foreign(module))
-            archive = core_package_manifest.foreign_execution_issue(module) if native_archive or (not linked and not scalar_link and not retained and not managed_imports) else None
-            if archive:
-                try:
-                    core_package_manifest.validate_archive_only_foreign(module)
-                except ValueError as error:
-                    self.issue('module-format', None, source, str(error))
-            if linked:
-                for symbol in module['foreignLink']['symbols']:
-                    key = (module['foreignLink']['unit'], symbol)
-                    if key in self.linked_foreign:
-                        self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
-                    self.linked_foreign[key] = module['foreignLink']
-            if (type(module.get('schema')) is not int or
-                    (module['schema'] != 1 and not linked and not scalar_link and not archive and not retained and not managed_imports) or
-                    module.get('ghc') != '9.14.1' or
-                    ('foreign' in module and not linked and not scalar_link and not archive and not retained and not managed_imports) or (registration and not retained)):
-                self.issue('module-format', None, source,
-                           archive or
-                           'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
-            for binding in module.get('bindings', []):
-                key = binding.get('id')
-                if not isinstance(key, str):
-                    self.issue('binding-id', None, source, 'Binding lacks a string id')
-                    continue
-                if key in self.bindings:
-                    self.issue('duplicate-binding', key, source, 'Also supplied by ' + self.sources[key])
-                else:
-                    self.bindings[key] = binding
-                    self.sources[key] = source
-                    if archive and not registration and (native_archive is None or
-                            core_package_manifest.native_archive_blocks(module, binding, native_archive)):
-                        self.archive_bindings[key] = (source, archive)
-            for constructor in module.get('constructors', []):
-                key = constructor.get('id')
-                if not isinstance(key, str):
-                    self.issue('constructor-id', None, source, 'Constructor lacks a string id')
-                # GHC can alpha-rename quantified variables in the diagnostic
-                # pretty-printed type between modules. Keep every runtime and
-                # exporter metadata field exact, including unknown future keys.
-                elif key in self.constructors and {
-                        name: value for name, value in self.constructors[key].items() if name != 'type'
-                    } != {name: value for name, value in constructor.items() if name != 'type'}:
-                    self.issue('inconsistent-constructor', None, source, key)
-                else:
-                    self.constructors[key] = constructor
+            self._register_module(source, module)
+            del module  # Drop the full AST before parsing the next module.
         for unit, link in self.package_scalar_links.items():
             if self.package_scalar_proofs[unit] != {entry['entry'] for entry in link['abi']}:
                 self.issue('module-format', None, unit, 'Package C ABI lacks complete typed import provenance')
+        if store is not None:
+            store.seal(validation_complete=getattr(modules, 'complete', True))
+
+    def _register_module(self, source, module):
+        if self.store is not None:
+            self.store.put_record('modules', source,
+                {key: value for key, value in module.items() if key not in ('bindings', 'constructors')})
+        scalar_link = None
+        native_archive = None
+        try:
+            native_archive = core_package_manifest.package_native_archive(module)
+            scalar_link = core_package_manifest.package_scalar_link(module)
+            if scalar_link:
+                link, proved = scalar_link
+                if any(other['unit'] != link['unit'] and other['componentSha256'] == link['componentSha256']
+                       for other in self.package_scalar_links.values()):
+                    raise ValueError('Package C entry namespace belongs to another unit: ' + link['componentSha256'])
+                previous = self.package_scalar_links.setdefault(link['unit'], link)
+                if previous != link:
+                    raise ValueError('Conflicting package C component identity: ' + link['unit'])
+                self.package_scalar_proofs.setdefault(link['unit'], set()).update(proved)
+        except (ValueError, KeyError, TypeError) as error:
+            self.issue('module-format', None, source, str(error))
+        foreign = module.get('foreign')
+        stubs = foreign.get('stubs') if isinstance(foreign, dict) else None
+        registration = ((isinstance(foreign, dict) and bool(foreign.get('files'))) or
+                        (isinstance(stubs, dict) and
+                         bool(stubs.get('initializers') or stubs.get('finalizers'))))
+        retained = None
+        if module.get('schema') == 2 and registration and 'staticForeignExportRegistration' in module:
+            try:
+                retained = core_package_manifest.managed_registration(module)
+            except (ValueError, KeyError, TypeError) as error:
+                self.issue('module-format', None, source, str(error))
+        if retained:
+            self.retained_exports.extend(retained)
+        managed_imports = False
+        try:
+            managed_imports = not scalar_link and core_package_manifest.managed_import_stubs(module)
+        except (ValueError, KeyError, TypeError) as error:
+            self.issue('module-format', None, source, str(error))
+        linked = (type(module.get('schema')) is int and module['schema'] == 2 and
+                  'foreignLink' in module and core_package_manifest.linked_foreign(module))
+        archive = core_package_manifest.foreign_execution_issue(module) if native_archive or (not linked and not scalar_link and not retained and not managed_imports) else None
+        if archive:
+            try:
+                core_package_manifest.validate_archive_only_foreign(module)
+            except ValueError as error:
+                self.issue('module-format', None, source, str(error))
+        if linked:
+            for symbol in module['foreignLink']['symbols']:
+                key = (module['foreignLink']['unit'], symbol)
+                if key in self.linked_foreign:
+                    self.issue('module-format', None, source, 'Duplicate linked CAPI symbol ' + symbol)
+                self.linked_foreign[key] = module['foreignLink']
+        if (type(module.get('schema')) is not int or
+                (module['schema'] != 1 and not linked and not scalar_link and not archive and not retained and not managed_imports) or
+                module.get('ghc') != '9.14.1' or
+                ('foreign' in module and not linked and not scalar_link and not archive and not retained and not managed_imports) or (registration and not retained)):
+            self.issue('module-format', None, source,
+                       archive or
+                       'Requires executable Core schema 1 / GHC 9.14.1 without foreign artifacts')
+        for binding in module.get('bindings', []):
+            key = binding.get('id')
+            if not isinstance(key, str):
+                self.issue('binding-id', None, source, 'Binding lacks a string id')
+                continue
+            if key in self.bindings:
+                self.issue('duplicate-binding', key, source, 'Also supplied by ' + self.sources[key])
+            else:
+                if self.store is None:
+                    self.bindings[key] = binding
+                    self.sources[key] = source
+                else:
+                    self.store.put_binding(source, binding)
+                if archive and not registration and (native_archive is None or
+                        core_package_manifest.native_archive_blocks(module, binding, native_archive)):
+                    self.archive_bindings[key] = (source, archive)
+        for constructor in module.get('constructors', []):
+            key = constructor.get('id')
+            if not isinstance(key, str):
+                self.issue('constructor-id', None, source, 'Constructor lacks a string id')
+            # GHC can alpha-rename quantified variables in the diagnostic
+            # pretty-printed type between modules. Keep every runtime and
+            # exporter metadata field exact, including unknown future keys.
+            elif key in self.constructors and {
+                    name: value for name, value in self.constructors[key].items() if name != 'type'
+                } != {name: value for name, value in constructor.items() if name != 'type'}:
+                self.issue('inconsistent-constructor', None, source, key)
+            else:
+                self.constructors[key] = constructor
 
     def issue(self, code, owner, path, detail):
         self.issues.append(dict(code=code, owner=owner, path=path, detail=detail))
@@ -298,11 +888,16 @@ class Audit:
         location = self.location(owner, path)
         self.edges.append(dict(caller=owner, dependency=key, path=path))
         if key in self.bindings:
-            if key not in self.predecessors:
-                self.predecessors[key] = owner
-                self.queue.append(key)
+            self._discover(key, owner)
         elif key not in self.cap.get('externalBindings', []):
             self.missing.setdefault(key, []).append(location)
+
+    def _discover(self, key, predecessor=None):
+        if self.store is not None:
+            self.store.discover(key, predecessor)
+        elif key not in self.predecessors:
+            self.predecessors[key] = predecessor
+            self.queue.append(key)
 
     def literal(self, kind, value, owner, path):
         item = self.literals.setdefault(kind, dict(kind=kind, examples=[], uses=[]))
@@ -2115,7 +2710,8 @@ class Audit:
         # closure. Each root receives the same boundary check below.
         roots = []
         for entry in entries:
-            candidates = [entry] if entry in self.bindings else [k for k, b in self.bindings.items() if b.get('name') == entry]
+            candidates = ([entry] if entry in self.bindings else list(self.store.named(entry)) if self.store is not None
+                          else [k for k, b in self.bindings.items() if b.get('name') == entry])
             if len(candidates) != 1:
                 self.issue('entry-resolution', None, entry, dict(candidates=candidates))
             else:
@@ -2142,19 +2738,17 @@ class Audit:
                         self.issue('aggregate-boundary', key, '/entry', 'unboxed-tuple host result')
                 if is_sum(self.known_result(expression)) or is_sum(self.bindings[key].get('rep')):
                     self.issue('aggregate-boundary', key, '/entry', 'unboxed-sum host result')
-                if key not in self.predecessors:
-                    self.predecessors[key] = None
-                    self.queue.append(key)
+                self._discover(key)
+                del expression, formals, result
         # Retention does not call an export. The current backends must still
         # lower its closure body, so unsupported retained bodies remain gaps.
         for key in self.retained_exports:
-            if key not in self.predecessors:
-                self.predecessors[key] = None
-                self.queue.append(key)
-        reported_archives = set()
-        while self.queue:
-            key = self.queue.popleft()
-            self.reachable.append(key)
+            self._discover(key)
+        reported_archives = self.store.members('reported-archives', '') if self.store is not None else set()
+        while self.store.pending_count() if self.store is not None else self.queue:
+            key = self.store.pop_pending() if self.store is not None else self.queue.popleft()
+            if self.store is None:
+                self.reachable.append(key)
             if key in self.archive_bindings:
                 source, detail = self.archive_bindings[key]
                 if source not in reported_archives:
@@ -2167,6 +2761,9 @@ class Audit:
             if type(binding.get('lifted')) is not bool:
                 self.issue('unknown-binder-levity', key, '/binding', key)
             self.walk(binding.get('expr'), {}, key, '/expr', join_prefix=binding.get('joinValueArity', 0))
+            del binding
+        if self.store is not None:
+            return self._stream_report(roots)
         for issue in self.issues:
             if issue['owner'] in self.predecessors:
                 issue['reachableVia'] = self.reachable_via(issue['owner'])
@@ -2187,6 +2784,102 @@ class Audit:
                     limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',
                             'Acceptance checks the declared capability profile, not termination, branch feasibility, or runtime correctness.'])
 
+    def _stream_report(self, roots):
+        store = self.store
+
+        def events(kind, group=_ANY):
+            return _StreamArray(lambda: store.events(kind, group=group))
+
+        def issues():
+            for issue in store.events('issues'):
+                if issue['owner'] in self.predecessors:
+                    issue['reachableVia'] = self.reachable_via(issue['owner'])
+                yield issue
+
+        def missing():
+            for key in store.event_groups('missing'):
+                with closing(store.events('missing', group=key)) as uses:
+                    first = next(uses)
+                yield dict(id=key, reachableVia=self.reachable_via(first['owner']) + [key], references=events('missing', key))
+
+        def runtime_externals():
+            for key in sorted(set(self.cap.get('externalBindings', []))):
+                if key not in self.bindings and store.event_count('edges', group=key):
+                    yield dict(id=key, uses=events('edges', key))
+
+        def literals():
+            for key in store.event_groups('literal-uses'):
+                yield dict(kind=key, examples=events('literal-examples', key), uses=events('literal-uses', key))
+
+        return _StreamReport(schema=2, audit='syntactic-reachable-core', roots=roots,
+            retainedExports=_StreamArray(lambda: iter(self.retained_exports)), capabilityProfile=self.cap.get('name'),
+            accepted=not self.issues and not self.missing,
+            summary=dict(suppliedBindings=len(self.bindings), reachableBindings=len(self.reachable),
+                         missingGlobals=len(self.missing), issues=len(self.issues)),
+            reachableBindings=_StreamArray(lambda: (dict(id=key, source=self.sources[key], predecessor=predecessor)
+                for key, predecessor in store.reachable())),
+            dependencies=events('edges'), missingGlobals=_StreamArray(missing),
+            runtimeExternals=_StreamArray(runtime_externals),
+            primitives=_StreamArray(lambda: (dict(name=key, expectedArity=self.cap['primitives'].get(key), uses=events('primitives', key))
+                for key in store.event_groups('primitives'))),
+            foreignCalls=events('foreign'),
+            constructors=_StreamArray(lambda: (dict(id=key, metadata=self.constructors.get(key), uses=events('constructors', key))
+                for key in store.event_groups('constructors'))),
+            literals=_StreamArray(literals), issues=_StreamArray(issues),
+            limits=['All syntactically reachable branches and local RHSs are audited, including lazy error paths.',
+                    'Acceptance checks the declared capability profile, not termination, branch feasibility, or runtime correctness.'])
+
+
+def _input_modules(package_manifest, files, store=None):
+    if package_manifest:
+        with core_package_manifest.open_modules(package_manifest, audit_archives=True) as modules:
+            recorded = False
+            for source, module in modules:
+                if store is not None and not recorded:
+                    store.put_record('input-provenance', 'package-manifest', modules.manifest_identity)
+                    recorded = True
+                yield source, module
+                del module
+            if store is not None:
+                store.put_record('input-completion', 'package-manifest', dict(complete=modules.complete))
+    for index, path in enumerate(files):
+        data = path.read_bytes()
+        module = json.loads(data.decode('utf-8'))
+        if store is not None:
+            store.put_record('input-provenance', 'loose:' + str(index),
+                dict(path=str(path.resolve()), sha256=hashlib.sha256(data).hexdigest()))
+        del data
+        yield str(path), module
+        del module
+
+
+def _tool_provenance(capabilities, capability_bytes):
+    root = Path(__file__).resolve().parent
+    paths = [Path(__file__), *sorted(root.glob('core_*.py')),
+             root.parent / 'src/main/resources/thc/scalar-primop-signatures.json',
+             root.parent / 'src/test/resources/thc/polyglot-abi.json']
+    return dict(format='thc-audit-invocation-v1', python=sys.version, sqlite=sqlite3.sqlite_version,
+        capabilities=dict(path=str(capabilities.resolve()), sha256=hashlib.sha256(capability_bytes).hexdigest()),
+        tools=[dict(path=str(path.resolve()), sha256=hashlib.sha256(path.read_bytes()).hexdigest()) for path in paths],
+        storage=dict(pageCacheKiB=4096, expressionCacheBytes=8 * 1024 * 1024, expressionCacheEntries=32, batchRows=256))
+
+
+def _emit_report(report, output, store=None):
+    if output is None:
+        write_report(report, sys.stdout)
+        sys.stdout.flush()
+        return
+    output.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix='.' + output.name + '.', suffix='.partial', dir=output.parent)
+    try:
+        with os.fdopen(descriptor, 'w', encoding='utf-8', newline='\n') as stream:
+            write_report(report, stream)
+        if store is not None: store.checkpoint('report-written')
+        os.replace(temporary, output)
+    except BaseException:
+        print('Incomplete report preserved at ' + temporary, file=sys.stderr)
+        raise
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -2196,31 +2889,55 @@ def main():
     parser.add_argument('--entry', action='append', required=True, help='Exact global id or unambiguous occurrence name; repeatable')
     parser.add_argument('--io-main', action='store_true', help='Validate the exact IO () host entry contract instead of the scalar host result')
     parser.add_argument('--capabilities', type=Path, default=Path(__file__).with_name('core-capabilities.json'))
-    parser.add_argument('--output', type=Path, help='Write full JSON report here (otherwise stdout)')
+    parser.add_argument('--output', type=Path, help='Atomically publish the complete JSON report here (otherwise stdout)')
+    storage = parser.add_mutually_exclusive_group()
+    storage.add_argument('--store', type=Path, help='Fresh SQLite working catalogue; existing paths are never reused')
+    storage.add_argument('--eager', action='store_true', help='Use the original in-memory path for small-input equivalence checks')
     args = parser.parse_args()
-    files = []
-    for supplied in args.modules:
-        path = Path(supplied)
-        files.extend(sorted(path.glob('*.json')) if path.is_dir() else [path])
     try:
+        files, lists = [], []
+        for supplied in args.modules:
+            path = Path(supplied)
+            files.extend(sorted(path.glob('*.json')) if path.is_dir() else [path])
         for manifest in args.module_list:
-            for line in manifest.read_text().splitlines():
+            data = manifest.read_bytes()
+            text = data.decode('utf-8')
+            lists.append(dict(path=str(manifest.resolve()), sha256=hashlib.sha256(data).hexdigest(), text=text))
+            for line in text.splitlines():
                 if line.strip():
                     path = Path(line.strip())
                     files.append(path if path.is_absolute() else manifest.parent / path)
+        files = list(dict.fromkeys(files))
         if not files and not args.package_manifest:
             parser.error('Supply modules or --module-list')
-        modules = (core_package_manifest.load_for_audit(args.package_manifest) if args.package_manifest else [])
-        modules += [(str(path), json.loads(path.read_text())) for path in dict.fromkeys(files)]
-        report = Audit(modules, json.loads(args.capabilities.read_text())).run(args.entry, io_main=args.io_main)
-    except (OSError, ValueError, TypeError) as error:
+        capability_bytes = args.capabilities.read_bytes()
+        capabilities = json.loads(capability_bytes.decode('utf-8'))
+        if args.eager:
+            with closing(_input_modules(args.package_manifest, files)) as modules:
+                report = Audit(modules, capabilities).run(args.entry, io_main=args.io_main)
+            _emit_report(report, args.output)
+        else:
+            if args.store is not None:
+                store_path = args.store
+                store_path.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                if args.output: args.output.parent.mkdir(parents=True, exist_ok=True)
+                directory = tempfile.mkdtemp(prefix='thc-core-audit-', dir=args.output.parent if args.output else None)
+                store_path = Path(directory) / 'catalogue.sqlite'
+            provenance = _tool_provenance(args.capabilities, capability_bytes)
+            provenance.update(entries=args.entry, ioMain=args.io_main, moduleLists=lists,
+                packageManifest=str(args.package_manifest) if args.package_manifest else None,
+                looseModules=[str(path) for path in files])
+            with AuditStore(store_path, provenance) as store:
+                print('Audit working catalogue: ' + str(store_path), file=sys.stderr)
+                with closing(_input_modules(args.package_manifest, files, store)) as modules:
+                    auditor = Audit(modules, capabilities, store=store)
+                store.checkpoint('walking')
+                report = auditor.run(args.entry, io_main=args.io_main)
+                store.checkpoint('walked')
+                _emit_report(report, args.output, store)
+    except (OSError, ValueError, TypeError, sqlite3.Error, AuditStoreError) as error:
         parser.error(str(error))
-    if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        with args.output.open('w') as stream:
-            write_report(report, stream)
-    else:
-        write_report(report, sys.stdout)
     print(json.dumps(dict(accepted=report['accepted'], **report['summary'])), file=sys.stderr)
     return 0 if report['accepted'] else 1
 
@@ -2228,8 +2945,37 @@ def main():
 def write_report(report, stream):
     # Large application reports must not materialize both the encoder's full
     # chunk list and a second, joined JSON string beside the loaded Core.
-    json.dump(report, stream, indent=2)
+    if isinstance(report, _StreamReport):
+        _write_stream_json(report, stream)
+    else:
+        json.dump(report, stream, indent=2)
     stream.write('\n')
+
+
+def _write_stream_json(value, stream, level=0):
+    # Match JSONEncoder(indent=2), including empty containers, while allowing
+    # repeatable cursor sections at any array nesting level. Never list() them.
+    if isinstance(value, dict):
+        stream.write('{')
+        first = True
+        for key, item in value.items():
+            stream.write(('\n' if first else ',\n') + '  ' * (level + 1))
+            stream.write(json.dumps(key) + ': ')
+            _write_stream_json(item, stream, level + 1)
+            first = False
+        if not first: stream.write('\n' + '  ' * level)
+        stream.write('}')
+    elif isinstance(value, (list, tuple, _StreamArray)):
+        stream.write('[')
+        first = True
+        for item in value:
+            stream.write(('\n' if first else ',\n') + '  ' * (level + 1))
+            _write_stream_json(item, stream, level + 1)
+            first = False
+        if not first: stream.write('\n' + '  ' * level)
+        stream.write(']')
+    else:
+        json.dump(value, stream)
 
 
 if __name__ == '__main__':

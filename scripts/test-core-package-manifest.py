@@ -56,6 +56,34 @@ class PackageNativeVariantsTest(unittest.TestCase):
         _, partial = core_package_manifest.package_scalar_link(module)
         self.assertEqual(1, len(partial), 'one symbol does not prove both semantic variants')
 
+    def test_indexed_audit_keeps_cross_module_native_completeness_and_conflicts(self):
+        import copy
+        import importlib.util
+        import io
+        root = Path(__file__).resolve().parent
+        spec = importlib.util.spec_from_file_location('native_store_audit', root / 'audit-core.py')
+        audit = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(audit)
+        capabilities = json.loads((root / 'core-capabilities.json').read_text())
+        original = self.module(['AddrRep', 'ByteArray#'])
+        first, second = copy.deepcopy(original), copy.deepcopy(original)
+        first['staticForeignImports']['imports'] = first['staticForeignImports']['imports'][:1]
+        second['staticForeignImports']['imports'] = second['staticForeignImports']['imports'][1:]
+        conflicting = copy.deepcopy(second)
+        conflicting['packageNativeLink'].update(bitcodeHex='4342', bitcodeSha256=hashlib.sha256(b'CB').hexdigest())
+        with TemporaryDirectory() as directory:
+            for name, modules, accepted in [('complete', [first, second], True), ('incomplete', [first], False),
+                                             ('conflicting', [first, conflicting], False)]:
+                with self.subTest(name=name):
+                    inputs = [(str(index), module) for index, module in enumerate(modules)]
+                    expected = audit.Audit(inputs, capabilities).run([])
+                    self.assertEqual(accepted, expected['accepted'])
+                    with audit.AuditStore(Path(directory) / (name + '.sqlite'), {}) as store:
+                        report = audit.Audit(iter(inputs), capabilities, store=store).run([])
+                        output = io.StringIO()
+                        audit.write_report(report, output)
+                        self.assertEqual(json.dumps(expected, indent=2) + '\n', output.getvalue())
+
     def test_partial_native_link_keeps_indices_and_requires_complete_closure_receipt(self):
         import copy
         module = self.module(['AddrRep', 'ByteArray#'])
@@ -372,10 +400,23 @@ class PackageManifestTest(unittest.TestCase):
         with patch.object(Path, 'read_bytes', tracked_read):
             with core_package_manifest.open_modules(path) as modules:
                 next(modules)
-                self.assertEqual(['first.json'], reads)
+                self.assertEqual(['packages.json', 'first.json'], reads)
                 next(modules)
-                self.assertEqual(['first.json', 'second.json'], reads)
+                self.assertEqual(['packages.json', 'first.json', 'second.json'], reads)
                 self.assertEqual([], list(modules))
+
+    def test_stream_identity_hashes_exact_manifest_bytes_and_does_not_claim_completion(self):
+        path = self.manifest([self.unit('first'), self.unit('second')])
+        data = path.read_bytes().replace(b'\n', b'\r\n')
+        path.write_bytes(data)
+        stream = core_package_manifest.open_modules(path)
+        self.assertIsNone(stream.manifest_identity)
+        next(stream)
+        self.assertEqual(dict(path=str(path.resolve()), sha256=hashlib.sha256(data).hexdigest(),
+                              manifest=json.loads(data)), stream.manifest_identity)
+        self.assertFalse(stream.complete)
+        stream.close()
+        self.assertFalse(stream.complete)
 
     def test_stream_closes_verified_archive_on_completion_early_exit_and_consumer_error(self):
         path = self.two_module_bundle()
@@ -925,6 +966,9 @@ class RetainedModuleProbeTest(unittest.TestCase):
             manifest=dict(path=str(manifest_path), sha256=hashlib.sha256(manifest_bytes).hexdigest()),
             inventory=inventory, selected=dict(unit=unit['id'], module=selected, bytes=size),
             selectedModuleValidated=False)
+        store_path = os.environ.get('THC_LOADER_PROBE_STORE')
+        if store_path:
+            receipt.update(selectedModuleIndexed=False, storeComplete=False, storePath=store_path)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(json.dumps(receipt, indent=2) + '\n')
         # This component verifies the selected bundle's *whole* hash, inventory
@@ -942,7 +986,44 @@ class RetainedModuleProbeTest(unittest.TestCase):
                 module = core_package_manifest._validated_module(manifest_path, unit['id'], record, data, True)
                 receipt.update(selectedModuleValidated=True, source=source,
                     bindingCount=len(module['bindings']), constructorCount=len(module.get('constructors', [])))
-                del data, module
+                del data
+                if store_path:
+                    # Component-only indexing, not a sealed catalogue. The full
+                    # manifest has NOT been consumed or cross-module audited.
+                    import importlib.util
+                    import resource
+                    import sqlite3
+                    audit_path = Path(__file__).with_name('audit-core.py')
+                    spec = importlib.util.spec_from_file_location('index_probe_audit', audit_path)
+                    audit_core = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(audit_core)
+                    receipt.update(phase='largest-module-indexing',
+                        python=platform.python_version(), sqlite=sqlite3.sqlite_version,
+                        validationMaxRssKiB=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
+                        storeToolSha256=hashlib.sha256(audit_path.read_bytes()).hexdigest())
+                    output.write_text(json.dumps(receipt, indent=2) + '\n')
+                    store = audit_core.AuditStore(store_path,
+                        dict(manifest=receipt['manifest'], source=source, unit=unit['id'], module=record,
+                             phase='incomplete-selected-module-probe'))
+                    try:
+                        store.put_record('module', source,
+                            {key: value for key, value in module.items() if key not in ('bindings', 'constructors')})
+                        for binding in module['bindings']:
+                            self.assertIsNone(store.put_binding(source, binding))
+                        for constructor in module.get('constructors', []):
+                            store.put_record('constructors', constructor['id'], constructor)
+                        receipt.update(indexedBindings=len(store.bindings),
+                            indexedConstructors=len(store.records('constructors')),
+                            largestExpressionBytes=store._one('SELECT max(length(expression)) FROM bindings')[0],
+                            expressionLoads=store.expression_loads, cachedExpressionBytes=store.cached_expression_bytes)
+                        self.assertEqual(receipt['bindingCount'], receipt['indexedBindings'])
+                        self.assertFalse(store.complete)
+                    finally:
+                        store.close()
+                    receipt.update(selectedModuleIndexed=True, phase='largest-module-indexed-incomplete',
+                        storeBytes=Path(store_path).stat().st_size,
+                        indexMaxRssKiB=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+                del module
                 break
         self.assertTrue(receipt['selectedModuleValidated'])
         output.write_text(json.dumps(receipt, indent=2) + '\n')
