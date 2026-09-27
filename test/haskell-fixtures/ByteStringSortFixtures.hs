@@ -183,23 +183,23 @@ prepareByteStringSort root = do
     liftIO $ case natives of
       [nativeValue] -> do
         let native = unsafeCoerce nativeValue :: Ptr Word8 -> Int -> IO ()
-        forM sortCases $ \(name, payload, start, count) -> do
-          let initial = replicate 7 165 ++ payload ++ replicate 9 90
+        forM sortCases $ \(name, payload, start, byteCount) -> do
+          let inputBytes = replicate 7 165 ++ payload ++ replicate 9 90
               offset = 7 + start
-              total = length initial
-              expected = take offset initial ++ sort (take count (drop offset initial)) ++
-                drop (offset + count) initial
-          unless (start >= 0 && count >= 0 && start + count <= length payload)
+              total = length inputBytes
+              expected = take offset inputBytes ++ sort (take byteCount (drop offset inputBytes)) ++
+                drop (offset + byteCount) inputBytes
+          unless (start >= 0 && byteCount >= 0 && start + byteCount <= length payload)
             (die "Invalid native ByteString sort slice")
           allocaBytes total $ \base -> do
-            pokeArray base initial
-            native (plusPtr base offset) count
+            pokeArray base inputBytes
+            native (plusPtr base offset) byteCount
             bytes <- Bytes.packCStringLen (castPtr base, total)
             unless (Bytes.unpack bytes == expected)
               (die ("Original fps_sort disagrees with unsigned order or modified sentinels: " ++ name))
             pure (object ["entry" .= ("sortBytes" :: String), "case" .= name,
-              "input" .= hexBytes (Bytes.pack initial), "offset" .= offset, "count" .= count,
-              "result" .= count, "bytes" .= hexBytes bytes])
+              "input" .= hexBytes (Bytes.pack inputBytes), "offset" .= offset, "count" .= byteCount,
+              "result" .= byteCount, "bytes" .= hexBytes bytes])
       _ -> die "Missing compiled original sort consumer"
   writeJson (root </> directory </> "oracle.json") (toJSON oracle)
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
