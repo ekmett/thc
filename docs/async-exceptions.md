@@ -187,8 +187,10 @@ cabal run thc-fixtures --offline -- uncaught-self
 [STM](stm.md) aborts its current attempt and preserves an `atomically#` restart
 at the enclosing update boundary; it does not save a live log or resume an
 abandoned transactional child. Compact traversal, GHC BCO interpreter frames,
-opaque foreign execution and non-delivery asynchronous/delimited scheduling cuts retain their
-separate continuation barriers.
+opaque foreign execution and new `control0#` capture across a parked one-shot
+caller chain retain their separate continuation barriers. Scheduling cuts and
+AST stack spills within an existing delimited invocation use its own one-shot
+driver; those owners are not copied into the reusable image.
 Arbitrary JVM/native frames and blocking file operations do not gain resumable
 interruption from the public option. See the
 [primop-by-primop behavior reference](primop-behavior.md#exceptions-blocking-and-transactions)

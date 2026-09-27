@@ -28,8 +28,9 @@ class FixturePreparationTest(unittest.TestCase):
         native = (project / "compiler/test-fixtures/ThreadAsyncNative.hs").read_text()
         self.assertIn("build/thread-async/saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/thread-async/external-saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
+        self.assertIn("build/thread-async/scheduled-saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
         for entry in ("promptSelfThrow", "promptMaskedUnmaskSelf", "savedSelfThrow",
-                      "savedMaskedSelf", "savedSuffixSelf", "savedMaskCatchSelf", "externalSaved"):
+                      "savedMaskedSelf", "savedSuffixSelf", "savedMaskCatchSelf", "externalSaved", "scheduledSaved"):
             self.assertIn('"' + entry + '"', producer)
             self.assertIn("Audit." + entry + " 0#", native)
             for stage in ("pre", "post"):

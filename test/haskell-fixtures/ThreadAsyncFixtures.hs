@@ -38,7 +38,7 @@ prepareThreadAsync root = do
       lazyDriver = "compiler/test-fixtures/LazyForkNative.hs"
       entries = ["forkAndThrow", "killUncaught", "selfThrow", "maskedUnmaskSelf",
         "promptSelfThrow", "promptMaskedUnmaskSelf", "savedSelfThrow", "savedMaskedSelf",
-        "savedSuffixSelf", "savedMaskCatchSelf", "externalSaved", "yieldProbe", "yieldMasked"]
+        "savedSuffixSelf", "savedMaskCatchSelf", "externalSaved", "scheduledSaved", "yieldProbe", "yieldMasked"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -99,6 +99,11 @@ prepareThreadAsync root = do
   let externalNative = [22122122, 22122123] :: [Int]
   unless (external == unlines (map show externalNative)) (die "Saved external-delivery native oracle disagreed")
   writeFile (output </> "external-saved-oracle.txt") external
+  scheduled <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
+    ["scheduled-saved", "+RTS", "-N2", "-RTS"] ""
+  let scheduledNative = [96202106490, 97204107494] :: [Integer]
+  unless (scheduled == unlines (map show scheduledNative)) (die "Saved scheduling native oracle disagreed")
+  writeFile (output </> "scheduled-saved-oracle.txt") scheduled
   yielded <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["yield", "+RTS", "-N2", "-RTS"] ""
   unless (yielded == "37\n39\n") (die "Public thread yield# State/mask oracle disagreed")
@@ -120,7 +125,7 @@ prepareThreadAsync root = do
         ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt",
         directory </> "yield-oracle.txt", directory </> "lazy-oracle.txt", directory </> "saved-oracle.txt",
-        directory </> "external-saved-oracle.txt"] ++
+        directory </> "external-saved-oracle.txt", directory </> "scheduled-saved-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
           suffix <- ["core/ThreadAsyncAudit.json", "core/LazyForkAudit.json", "lazyFork-audit.json"] ++
                     [entry ++ "-audit.json" | entry <- entries]]
@@ -132,6 +137,7 @@ prepareThreadAsync root = do
     "yieldNative" .= ([37, 39] :: [Int]),
     "savedNative" .= savedNative,
     "externalSavedNative" .= externalNative,
+    "scheduledSavedNative" .= scheduledNative,
     "lazyNative" .= ([52, 53] :: [Int]),
     "inputHashes" .= sourceHashes,
     "artifactHashes" .= artifactHashes, "installedArtifactsHashed" .= False]
@@ -162,6 +168,8 @@ supportedThreadContract entry (Object report) = hasPublicThreadPrimitives && cas
               "lazyFork" -> ["fork#", "killThread#"]
               "externalSaved" -> ["fork#", "myThreadId#", "killThread#", "catch#", "prompt#", "control0#",
                 "takeMVar#", "putMVar#", "readMutVar#", "writeMutVar#", "getMaskingState#"]
+              "scheduledSaved" -> ["prompt#", "control0#", "maskUninterruptible#",
+                "readMutVar#", "writeMutVar#", "getMaskingState#"]
               "yieldProbe" -> ["yield#", "getMaskingState#"]
               "yieldMasked" -> ["yield#", "maskUninterruptible#", "getMaskingState#"]
               _ -> []

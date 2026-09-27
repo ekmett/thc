@@ -4,6 +4,8 @@ package thc.runtime
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.Truffle
+import com.oracle.truffle.api.bytecode.BytecodeConfig
+import com.oracle.truffle.api.bytecode.ContinuationResult
 import com.oracle.truffle.api.frame.FrameDescriptor
 import com.oracle.truffle.api.frame.FrameSlotKind
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -495,9 +497,187 @@ class DelimitedContinuationsTest {
                     assertEquals(4, resumedChildren, "An independent owner may resume each child once only")
                     assertEquals(3, handled)
                     assertNull(threads.poll(root))
-                    val scheduling = AstCapture(AstStackSpill, MaskingState.UNMASKED)
-                    assertThrows(UnsupportedCore::class.java) { DelimitedControl.asyncFailure(scheduling, root) }
                 } finally { threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun eachImageInvocationDrainsItsOwnCutsAndNeverStoresTheirOwners() {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.Compilation", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val threads = Language.currentState().threads
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val payload = Any()
+                val children = ArrayList<AstContinuation>()
+                val requests = ArrayList<AsyncRequest>()
+                var effects = 0
+                var handled = 0
+                var mode = 0
+                val handler = Closure(null, arity = 2, target = object : GuestRoot(language, FrameLayout().build()) {
+                    init { configureEntry(booleanArrayOf(false, false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any {
+                        handled++
+                        assertSame(payload, frame.arguments[1])
+                        assertEquals(AsyncRequestState.ACKNOWLEDGED, requests.last().state)
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this))
+                        return shape.layout.create().also { shape.layout.setObject(it, 0, payload) }
+                    }
+                }.callTarget)
+                val root = object : GuestRoot(language, FrameLayout().build()) {
+                    @field:Child private var site = DelimitedActionSite(language, Metrics(false))
+                    init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    fun cut(frame: VirtualFrame, marker: Any?, next: () -> Any?): AstContinuation =
+                        AstCapture(marker, SynchronousMasking.current(this)).append(object : AstResumeStep {
+                            override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                assertSame(Unit, input)
+                                effects++
+                                return next()
+                            }
+                        }).freeze(this, frame.materialize()).also { children += it }
+                    override fun execute(frame: VirtualFrame): Any = cut(frame, AstStackSpill) {
+                        when (mode) {
+                            0 -> cut(frame, Unit) {
+                                shape.layout.create().also { shape.layout.setObject(it, 0, payload) }
+                            }
+                            1 -> {
+                                val submitted = AtomicReference<AsyncRequest>()
+                                val target = threads.currentId()
+                                val sender = Thread { submitted.set(threads.send(target, payload)) }
+                                sender.start(); sender.join(5000); assertFalse(sender.isAlive)
+                                val request = threads.poll(this, true)!!
+                                assertSame(submitted.get(), request)
+                                requests += request
+                                cut(frame, request) { error("A reached catch must not resume its abandoned child") }
+                            }
+                            2 -> throw DelimitedCut(PromptTag(Language.currentState(this)), null, shape,
+                                SynchronousMasking.current(this), this)
+                            else -> cut(frame, DelimitedCut(PromptTag(Language.currentState(this)), null, shape,
+                                SynchronousMasking.current(this), this)) { error("A recapture marker is not a Unit cut") }
+                        }
+                    }
+                    fun image(): DelimitedStack {
+                        val node = this
+                        val frame = Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor)
+                        val cut = DelimitedCut(PromptTag(Language.currentState(this)), null, shape,
+                            MaskingState.UNMASKED, this)
+                        cut.frames += DelimitedFrame(frame, object : DelimitedStep {
+                            override fun resume(frame: com.oracle.truffle.api.frame.MaterializedFrame,
+                                                input: DelimitedResume, ambient: MaskingState,
+                                                outerMask: DelimitedStep?): Any? {
+                                val result = input.get()
+                                throw AstCapture(AstStackSpill, SynchronousMasking.current(node))
+                                    .append(object : AstResumeStep {
+                                        override fun resume(frame: VirtualFrame, input: Any?): Any? {
+                                            assertSame(Unit, input)
+                                            effects++
+                                            return result
+                                        }
+                                    })
+                            }
+                        })
+                        cut.frames += DelimitedFrame(frame, DelimitedCatchStep(site, handler, shape))
+                        return DelimitedStack(cut, shape)
+                    }
+                    fun resume(image: DelimitedStack): Any? = image.resume(site,
+                        Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor),
+                        Closure(null, arity = 1, target = callTarget))
+                }
+                threads.enterCurrent()
+                try {
+                    val image = root.image()
+                    repeat(2) {
+                        val answer = root.resume(image) as HandoffStorage
+                        assertSame(payload, shape.layout.getObject(answer, 0))
+                    }
+                    assertEquals(6, effects, "Two action cuts and the saved suffix run once per invocation")
+                    assertEquals(4, children.size)
+                    for (child in children) assertThrows(RuntimeFault::class.java) { child.continueWith(Unit) }
+                    mode = 1
+                    repeat(2) { assertSame(payload, shape.layout.getObject(root.resume(image) as HandoffStorage, 0)) }
+                    assertEquals(8, effects, "Delivery must not replay or resume the interrupted action")
+                    assertEquals(2, handled)
+                    assertNotSame(requests[0], requests[1])
+                    assertTrue(requests.all { it.state == AsyncRequestState.ACKNOWLEDGED })
+                    for (recapture in 2..3) {
+                        mode = recapture
+                        assertEquals("control0# cannot recapture a parked one-shot invocation chain",
+                            assertThrows(UnsupportedCore::class.java) { root.resume(image) }.message)
+                    }
+                    mode = 0
+                    assertSame(payload, shape.layout.getObject(root.resume(image) as HandoffStorage, 0))
+                    assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(root))
+                    assertEquals(0, astStackScope(root).depth)
+                    assertNull(threads.poll(root))
+                } finally { threads.leaveCurrent() }
+            } finally { context.leave() }
+        }
+    }
+
+    @Test fun savedBytecodeSuffixDrainsRepeatedUnitCutsInFreshOwners() {
+        Context.newBuilder("thc").allowExperimentalOptions(true)
+            .option("engine.Compilation", "false").build().use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
+                    components = listOf(state, value)), language)
+                val marker = Any()
+                val answer = shape.layout.create().also { shape.layout.setObject(it, 0, marker) }
+                val owner = object : GuestRoot(language, FrameLayout().build()) {
+                    @field:Child private var site = DelimitedActionSite(language, Metrics(false))
+                    init { configureEntry(booleanArrayOf(false), false); configureTupleResult(shape) }
+                    override fun bloom(frame: VirtualFrame): Long = 0L
+                    override fun execute(frame: VirtualFrame): Any = answer
+                    fun resume(image: DelimitedStack, action: Any? = Closure(null, arity = 1, target = callTarget)): Any? = image.resume(site,
+                        Truffle.getRuntime().createMaterializedFrame(arrayOf(0L), frameDescriptor),
+                        action)
+                    fun finish(result: Any?, target: com.oracle.truffle.api.RootCallTarget): Any? =
+                        site.finish(result, shape, target)
+                }
+                val cut = DelimitedCut(PromptTag(Language.currentState()), null, shape,
+                    MaskingState.UNMASKED, owner)
+                val bytecode = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    b.beginYield(); b.emitLoadConstant(cut); b.endYield()
+                    repeat(2) { b.beginYield(); b.emitLoadConstant(Unit); b.endYield() }
+                    b.beginReturn(); b.emitLoadConstant(answer); b.endReturn()
+                    b.endRoot()
+                }.getNode(0)
+                bytecode.configureTupleResult(shape)
+                val saved = Calls.target(bytecode.callTarget, arrayOf(0L)) as ContinuationResult
+                assertSame(cut, saved.result)
+                cut.append(saved.frame, DelimitedBytecodeStep(saved, shape))
+                val image = DelimitedStack(cut, shape)
+                repeat(2) { assertSame(marker, shape.layout.getObject(owner.resume(image) as HandoffStorage, 0)) }
+                val closure = Closure(null, arity = 1, target = owner.callTarget)
+                val head = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
+                    b.beginRoot()
+                    repeat(2) { b.beginYield(); b.emitLoadConstant(Unit); b.endYield() }
+                    b.beginReturn(); b.emitLoadConstant(closure); b.endReturn()
+                    b.endRoot()
+                }.getNode(0)
+                val lazyAction = Thunk(head.callTarget, null)
+                repeat(2) {
+                    assertSame(marker, shape.layout.getObject(owner.resume(image, lazyAction) as HandoffStorage, 0))
+                    assertEquals(2, lazyAction.state)
+                    assertSame(closure, lazyAction.value)
+                    assertNull(lazyAction.owner)
+                }
+                val unrelated = saved.continueWith(DelimitedResume(answer))
+                assertEquals("Delimited invocation returned an unrelated continuation",
+                    assertThrows(RuntimeFault::class.java) { owner.finish(unrelated, owner.callTarget) }.message)
+                assertEquals(MaskingState.UNMASKED, SynchronousMasking.current(owner))
+                assertEquals(0, language.handoffState.get().results.depth)
             } finally { context.leave() }
         }
     }
