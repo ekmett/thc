@@ -22,6 +22,11 @@ internal class NativeFileSystem private constructor(private val host: FileSystem
     constructor(standardEndpoints: Set<StandardEndpoint> = emptySet()) :
         this(FileSystem.newDefaultFileSystem(), standardEndpoints.toSet())
 
+    // Kotlin delegation omits Java default methods. Keep this context-local
+    // setting on the same fixed host used for path resolution and acquisition.
+    override fun setCurrentWorkingDirectory(currentWorkingDirectory: Path) =
+        host.setCurrentWorkingDirectory(currentWorkingDirectory)
+
     override fun newByteChannel(path: Path, options: Set<OpenOption>, vararg attrs: FileAttribute<*>): SeekableByteChannel {
         val requests = options.filterIsInstance<NativeOpenRequest>()
         if (requests.isEmpty()) return host.newByteChannel(path, options, *attrs)

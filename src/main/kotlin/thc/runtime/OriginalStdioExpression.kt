@@ -14,18 +14,26 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
 
     private object ResumeCompleted : AstResumeStep {
         override fun resume(frame: VirtualFrame, input: Any?): Any? {
-            if (input !== Unit) fault("Original unlinkat continuation expected a completed async poll")
+            if (input !== Unit) fault("Original pathname call continuation expected a completed async poll")
             return null
         }
     }
 
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        if (operation == OriginalStdioOp.UNLINKAT) {
+        if (operation == OriginalStdioOp.UNLINKAT || operation == OriginalStdioOp.FSTATAT) {
             val fd = operands[0].executeRequiredLong(frame)
             val path = operands[1].executeRequiredAddress(frame)
-            val flags = operands[2].executeRequiredLong(frame)
-            requireVoidCarrier(operands[3].execute(frame))
-            FrameAccess.writeLong(frame, slots[offset], CoreOriginalStdio.current(this).unlinkAt(fd, path, flags))
+            val result = if (operation == OriginalStdioOp.FSTATAT) {
+                val destination = operands[2].executeRequiredAddress(frame)
+                val flags = operands[3].executeRequiredLong(frame)
+                requireVoidCarrier(operands[4].execute(frame))
+                CoreOriginalStdio.current(this).statAt(fd, path, destination, flags)
+            } else {
+                val flags = operands[2].executeRequiredLong(frame)
+                requireVoidCarrier(operands[3].execute(frame))
+                CoreOriginalStdio.current(this).unlinkAt(fd, path, flags)
+            }
+            FrameAccess.writeLong(frame, slots[offset], result)
             // A safe-call poll resumes after the saved result, never at the effect.
             if (AstControl.enabled(this)) {
                 val compiled = CompilerDirectives.inCompiledCode()

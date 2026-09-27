@@ -103,6 +103,11 @@ class StdioHostAbiTest {
         val abi = parse(original)
         assertEquals(at["AT_FDCWD"], abi.atFdcwd)
         assertEquals(at["AT_REMOVEDIR"], abi.atRemoveDir)
+        assertEquals(at["AT_SYMLINK_NOFOLLOW"], abi.atSymlinkNoFollow)
+        assertEquals(at["AT_EMPTY_PATH"], abi.atEmptyPath)
+        assertThrows(RuntimeFault::class.java) { parse(original + ("at" to (at + ("AT_SYMLINK_NOFOLLOW" to 0)))) }
+        if (system == "Linux")
+            assertThrows(RuntimeFault::class.java) { parse(original + ("at" to (at + ("AT_EMPTY_PATH" to 0)))) }
         assertEquals(-71L, parse(original + ("at" to (at + ("AT_FDCWD" to -71L)))).atFdcwd)
         for (field in at.keys) {
             for (wrong in listOf(null, true, 1.0, "0", Int.MIN_VALUE.toLong() - 1, Int.MAX_VALUE.toLong() + 1))

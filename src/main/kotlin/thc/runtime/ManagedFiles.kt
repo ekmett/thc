@@ -743,6 +743,39 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     /** Validate the complete output before observing a path. Snapshot the pathname
      * before locking the destination, then retain its storage through native
      * observation and successful copy-back; failures leave the image untouched. */
+    @TruffleBoundary internal fun statAtOriginal(fd: Long, path: ManagedAddress, destination: ManagedAddress,
+                                               flags: Int, cwd: Long, emptyPath: Long): Long {
+        val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
+        destination.requireByteRegion(size, writable = true)
+        val bytes = originalPathBytes(path)
+        return result {
+            val provider = synchronized(this) {
+                if (disposed) fail(4, "THC file context is closed")
+                nativeProvider ?: fail(7, "Original fstatat requires the explicit native filesystem")
+            }
+            destination.withNativeBorrow {
+                fun publish(): Long {
+                    destination.requireByteRegion(size, writable = true)
+                    val image = if (fd == cwd || bytes[0] == '/'.code.toByte()) provider.statAtRaw(bytes, flags, emptyPath)
+                    else try {
+                        withDescriptor(fd) { entry ->
+                            val native = entry.native ?: fail(7, "Original fstatat requires an authenticated native descriptor")
+                            native.statAt(bytes, flags)
+                        }
+                    } catch (missing: FileFailure) {
+                        if (missing.kind != 4L) throw missing
+                        provider.statAtInvalidRaw(bytes, flags)
+                    }
+                    if (image.size.toLong() != size) fault("Native fstatat image has the wrong size")
+                    ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size)
+                    return 0L
+                }
+                val allocation = destination.cbitsOwner()
+                if (allocation == null) publish() else synchronized(allocation) { publish() }
+            }
+        }
+    }
+
     @TruffleBoundary internal fun pathStatOriginal(path: ManagedAddress, destination: ManagedAddress, followLinks: Boolean): Long {
         val size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0)
         destination.requireByteRegion(size, writable = true)

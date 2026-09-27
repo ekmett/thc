@@ -725,40 +725,40 @@
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
     },
     "src/main/c/native-file-api.c": {
-      "junit": ["thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/java/thc/runtime/NativeFileLease.java": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/kotlin/thc/NativeIO.kt": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/kotlin/thc/NativeFileSystem.kt": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeFileException.kt": {
-      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeFileProvider.kt": {
-      "junit": ["thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt": {
-      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedFiles.kt": {
-      "junit": ["thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest"],
+      "junit": ["thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.FileWaitPrimitiveTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedStdio.kt": {
-      "junit": ["thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest"],
+      "junit": ["thc.runtime.NativeEventWaitTest", "thc.runtime.NativeEpollTest", "thc.runtime.NativeEventDescriptorsTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.NativeFileBuffersTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.ManagedStdioTest", "thc.runtime.ManagedFilesTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.GuestThreadsTest", "thc.GuestExceptionsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/StdioHostAbi.kt": {
-      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest"],
+      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.NativeFileProviderTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"],
       "python": []
     },
     "src/main/c/stdio-abi-probe.c": {
-      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest"],
+      "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.StdioHostAbiTest", "thc.runtime.ManagedStdioTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreManagedFiles.kt": {
@@ -770,11 +770,11 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt": {
-      "junit": ["thc.runtime.UnixWaitStatusTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.OriginalUnlinkAtTest"],
+      "junit": ["thc.runtime.UnixWaitStatusTest", "thc.runtime.UnixLibcTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"],
       "python": []
     },
     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt": {
-      "junit": ["thc.runtime.UnixWaitStatusTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest"],
+      "junit": ["thc.runtime.UnixWaitStatusTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"],
       "python": []
     },
     "compiler/test-fixtures/OriginalStdioReadAudit.hs": {
@@ -1145,7 +1145,8 @@
         "thc.runtime.FloatWordArrayNativeTest",
         "thc.runtime.PinnedPointerCellsTest",
         "thc.runtime.OriginalMemsetTest",
-        "thc.runtime.OriginalUnlinkAtTest"
+        "thc.runtime.OriginalUnlinkAtTest",
+        "thc.runtime.OriginalFstatAtTest"
       ],
       "python": []
     },
@@ -1629,7 +1630,9 @@
         "thc.runtime.SimdInt32ByteArrayTest",
         "thc.runtime.SimdWord32ByteArrayTest",
         "thc.runtime.SimdFloatByteArrayTest",
-        "thc.runtime.SimdDoubleByteArrayTest", "thc.runtime.AstStackNativeTest", "thc.runtime.OriginalUnlinkAtTest"],
+        "thc.runtime.SimdDoubleByteArrayTest", "thc.runtime.AstStackNativeTest", "thc.runtime.OriginalUnlinkAtTest",
+        "thc.runtime.OriginalFstatAtTest"
+      ],
       "python": []
     },
     "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
@@ -1681,10 +1684,10 @@
       "python": []
     },
     "src/main/kotlin/thc/runtime/PosixStat.kt": {
-      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/main/c/posix-stat-abi-probe.c": {
-      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
+      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "src/test/kotlin/thc/runtime/OriginalPathStatTest.kt": {
       "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["scripts/test-audit-core.py"]
@@ -1698,11 +1701,20 @@
     "src/test/kotlin/thc/runtime/OriginalUnlinkAtTest.kt": {
       "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "src/test/kotlin/thc/runtime/OriginalFstatAtTest.kt": {
+      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "compiler/test-fixtures/OriginalUnlinkAtAudit.hs": {
       "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["scripts/test-audit-core.py"]
     },
+    "compiler/test-fixtures/OriginalFstatAtAudit.hs": {
+      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["scripts/test-audit-core.py"]
+    },
     "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs": {
       "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["scripts/test-audit-core.py"]
+    },
+    "test/haskell-fixtures/OriginalFstatAtFixtures.hs": {
+      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/test/kotlin/thc/runtime/OriginalPathAccessTest.kt": {
       "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["scripts/test-audit-core.py"]
@@ -1732,7 +1744,7 @@
       "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["scripts/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalPosixStatFixtures.hs": {
-      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalUnlinkAtTest"], "python": []
+      "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest"], "python": []
     },
     "compiler/test-fixtures/OriginalPosixStatAudit.hs": {
       "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []

@@ -154,6 +154,39 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalUnlinkAtAudit.o', 'ghc/abi-probe', 'native/oracle', 'unknown.json'):
             self.assertFalse(cache.allowed_payload('build/original-unlinkat/' + suffix, {}))
 
+    def test_original_fstatat_closed_receipt(self):
+        name = 'build/original-fstatat/manifest.json'
+        outputs = cache.ORIGINAL_FSTATAT_OUTPUTS
+        self.assertEqual(33, len(outputs))
+        self.assertEqual(cache.platform.system() == 'Linux', name in DECLARED_REQUIRED)
+        artifacts = {path: 'a' * 64 for path in outputs - {name}}
+        good = dict(schema=1, ghc='9.14.1', directoryUnit='directory-1.3.10.0-inplace',
+                    entries=['pathFstatAt'], installedArtifactsHashed=False,
+                    artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.original_fstatat_artifact_hashes(good))
+        for unit in ('directory-1.3.10.0-inplace', 'directory-1.3.10.0-02fc', 'directory-1.3.10.0-deadbeef'):
+            self.assertEqual(artifacts, cache.original_fstatat_artifact_hashes(dict(good, directoryUnit=unit)))
+        for unit in (None, 42, 'directory-1.3.10.0', 'directory-1.3.10.0-',
+                     'directory-1.3.10.0-ABCD', 'directory-1.3.10.0-xyz',
+                     'directory-1.3.9.0-02fc', 'unix-1.3.10.0-02fc',
+                     'directory-1.3.10.0-inplace\n', 'directory-1.3.10.0-02fc:forged'):
+            with self.assertRaises(cache.CacheMiss, msg=unit):
+                cache.original_fstatat_artifact_hashes(dict(good, directoryUnit=unit))
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(directoryUnit='directory-1.3.10.0-ABC'),
+                        dict(entries=[]), dict(installedArtifactsHashed=True),
+                        dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
+                        dict(artifactHashes={**artifacts, 'build/original-fstatat/pre.json': 'bad'})):
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_fstatat_artifact_hashes(dict(good, **changes))
+        for path in artifacts:
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_fstatat_artifact_hashes(dict(good,
+                    artifactHashes={key: value for key, value in artifacts.items() if key != path}))
+        for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalFstatAtAudit.o', 'ghc/abi-probe', 'native/oracle', 'unknown.json'):
+            self.assertFalse(cache.allowed_payload('build/original-fstatat/' + suffix, {}))
+
     def test_bytestring_utf8_closed_receipt(self):
         manifest_path = 'build/bytestring-utf8/manifest.json'
         outputs = cache.BYTESTRING_UTF8_OUTPUTS

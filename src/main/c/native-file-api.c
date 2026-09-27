@@ -168,6 +168,28 @@ int64_t thc_file_standard(int *lease, int endpoint, int64_t *error) {
   return fd < 0 ? -1 : 0;
 }
 
+static int64_t fstatat_image(int fd, const char *path, void *destination, int flags, int64_t *error) {
+  struct stat value;
+  memset(&value, 0, sizeof(value));
+  int result = fstatat(fd, path, &value, flags);
+  *error = result < 0 ? errno : 0;
+  if (result == 0) memcpy(destination, &value, sizeof(value));
+  return result;
+}
+
+int64_t thc_file_fstatat(const int *lease, const char *path, void *destination, int flags, int64_t *error) {
+  return fstatat_image(*lease, path, destination, flags, error);
+}
+
+int64_t thc_file_fstatat_cwd(const char *path, void *destination, int flags, int64_t *error) {
+  return fstatat_image(AT_FDCWD, path, destination, flags, error);
+}
+
+// Only a relative name can reach this fixed-invalid-descriptor failure path.
+int64_t thc_file_fstatat_invalid(const char *path, void *destination, int flags, int64_t *error) {
+  return fstatat_image(-1, path, destination, flags, error);
+}
+
 int64_t thc_file_path_stat(const char *path, int follow, void *destination, int64_t *error) {
   struct stat value;
   memset(&value, 0, sizeof(value));

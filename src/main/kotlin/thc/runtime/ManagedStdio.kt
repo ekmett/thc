@@ -189,6 +189,15 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return result
     }
 
+    @TruffleBoundary fun statAt(fd: Long, path: ManagedAddress, destination: ManagedAddress, flags: Long): Long {
+        val abi = hostAbi
+        if (fd != fd.toInt().toLong() || flags != flags.toInt().toLong())
+            fault("Original fstatat requires canonical signed CInt descriptor and flags")
+        val result = files.statAtOriginal(fd, path, destination, flags.toInt(), abi.atFdcwd, abi.atEmptyPath)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
     @TruffleBoundary fun unlinkAt(fd: Long, path: ManagedAddress, flags: Long): Long {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || flags != flags.toInt().toLong())

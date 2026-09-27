@@ -5,7 +5,7 @@ package thc.runtime
 
 /** Actual C errno constants from the build host, not the private service categories. */
 internal class StdioHostAbi private constructor(private val errors: Map<String, Long>, private val seek: Map<String, Long>,
-    private val open: Map<String, Long>, val atFdcwd: Long, val atRemoveDir: Long, val siginfoBytes: Long) {
+    private val open: Map<String, Long>, val atFdcwd: Long, val atRemoveDir: Long, val atSymlinkNoFollow: Long, val atEmptyPath: Long, val siginfoBytes: Long) {
     fun requireOpenAbi() { if (open.getValue("modeBytes") != 4L) fault("Original open requires the Linux Word32 mode_t ABI") }
     fun openReadable(flags: Long): Boolean = (flags and open.getValue("O_ACCMODE")).let {
         it == open.getValue("O_RDONLY") || it == open.getValue("O_RDWR") }
@@ -104,14 +104,19 @@ internal class StdioHostAbi private constructor(private val errors: Map<String, 
             requireAbi(mask != 0L && access.toSet().size == 3 && access.all { it and mask == it } &&
                 open.getValue("O_APPEND") != 0L && open.getValue("O_APPEND") and mask == 0L, "open access/status bits")
             val at = manifest["at"] as? Map<*, *>
-            requireAbi(at != null && at.keys == setOf("AT_FDCWD", "AT_REMOVEDIR"), "at fields")
+            requireAbi(at != null && at.keys == setOf("AT_FDCWD", "AT_REMOVEDIR", "AT_SYMLINK_NOFOLLOW", "AT_EMPTY_PATH"), "at fields")
             val atFdcwd = exactInteger(at!!["AT_FDCWD"])
             val atRemoveDir = exactInteger(at["AT_REMOVEDIR"])
             requireAbi(atFdcwd != null && atFdcwd in Int.MIN_VALUE.toLong()..-1L, "negative CInt AT_FDCWD")
             requireAbi(atRemoveDir != null && atRemoveDir in 1L..Int.MAX_VALUE.toLong(), "positive CInt AT_REMOVEDIR")
+            val atNoFollow = exactInteger(at["AT_SYMLINK_NOFOLLOW"])
+            val atEmptyPath = exactInteger(at["AT_EMPTY_PATH"])
+            requireAbi(atNoFollow != null && atNoFollow in 1L..Int.MAX_VALUE.toLong(), "positive CInt AT_SYMLINK_NOFOLLOW")
+            requireAbi(atEmptyPath != null && atEmptyPath in (if (system == "Linux") 1L else 0L)..Int.MAX_VALUE.toLong(),
+                "CInt AT_EMPTY_PATH availability")
             val siginfoBytes = exactInteger(manifest["siginfoBytes"])
             requireAbi(siginfoBytes != null && siginfoBytes in 1L..Int.MAX_VALUE.toLong(), "siginfo_t size")
-            return StdioHostAbi(errors, seek, open, atFdcwd!!, atRemoveDir!!, siginfoBytes!!)
+            return StdioHostAbi(errors, seek, open, atFdcwd!!, atRemoveDir!!, atNoFollow!!, atEmptyPath!!, siginfoBytes!!)
         }
         fun load(): StdioHostAbi {
             val document = StdioHostAbi::class.java.getResourceAsStream("/thc/native/stdio-host-abi.json")?.use {
