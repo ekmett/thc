@@ -67,8 +67,7 @@ With a complete-Core GHC 9.14.1 provider and its configured original source tree
 
 ```sh
 export THC_FOREIGN_EXCEPTION_GHC_SOURCE=/path/to/configured/ghc-9.14.1
-cabal run exe:thc-fixtures -- foreign-exceptions
-./gradlew foreignExceptionTest foreignExceptionDenseTest
+make foreign-exception-test-modes
 ```
 
 The producer retains native/API controls, Safe-Haskell acceptance and rejection,
@@ -78,4 +77,8 @@ bytecode backends, including explicit compilation, cleanup, stored rethrows,
 metadata reverse entry, and raw-bottom controls. Public package-call controls
 reuse the same genuine support. Isolated ABI/access-node tests remain in the
 ordinary test suites; the complete original-program fixture is an explicit
-prerequisite of these dedicated tasks.
+prerequisite of these dedicated tasks. The required Build workflow runs this target
+on its provisioned Linux complete-Core runner, selected by the
+`THC_FULL_CORE_ENVIRONMENT` repository variable. Missing provider or configured
+source fails that job. Fast checks and the stock hosted suites retain the
+portable ABI tests; they do not claim to execute these complete-Core cases.

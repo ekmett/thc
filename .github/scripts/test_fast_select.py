@@ -257,6 +257,23 @@ class FastSelectionTest(unittest.TestCase):
         self.commit()
         self.assertFalse(self.plan()["polyglot"]["required"])
 
+    def test_full_core_source_set_is_not_an_optional_language_test_inventory(self):
+        # Protocol helpers cannot safely enter the portable optional inventory.
+        # The dedicated source set must neither block Fast checks nor claim they ran.
+        optional = "src/polyglotTest/kotlin/example/ForeignExceptionTest.kt"
+        source = kotlin("ForeignExceptionTest") + "\nclass ForeignProtocolHelper {}\n"
+        self.write(optional, source)
+        self.commit()
+        self.assertFalse(self.plan()["runnable"])
+        self.git("rm", optional)
+        self.write("src/fullCoreTest/kotlin/example/ForeignExceptionTest.kt", source)
+        self.write("src/polyglotTest/kotlin/example/PolyglotTest.kt", kotlin("PolyglotTest", "@Test fun stillRuns() {}"))
+        self.commit()
+        result = self.plan()
+        self.assertTrue(result["runnable"])
+        self.assertNotIn("example.ForeignExceptionTest", result["junit"]["classes"])
+        self.assertEqual(["example.PolyglotTest"], result["polyglot"]["classes"])
+
     def test_missing_optional_class_cannot_pass_a_required_lane(self):
         path = "src/polyglotTest/kotlin/example/PolyglotTest.kt"
         self.git("rm", path)
