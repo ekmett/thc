@@ -104,7 +104,7 @@ class NarrowIntegerTransportTest {
         evidence()
         val rows = File(directory, "oracle.tsv").readLines().map { it.split('\t') }.groupBy { it[0] }
         return listOf("pre", "post").flatMap { stage -> listOf("ast", "bytecode").flatMap { backend ->
-            NarrowInteger.entries.map { integer -> DynamicTest.dynamicTest("$stage/$backend/public/${integer.rep}") {
+            NarrowInteger.values().map { integer -> DynamicTest.dynamicTest("$stage/$backend/public/${integer.rep}") {
                 entered { context, language ->
                     val entry = "public" + integer.rep.removeSuffix("Rep")
                     val program = program(language, stage, backend, entry)
