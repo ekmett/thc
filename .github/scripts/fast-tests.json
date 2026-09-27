@@ -1638,6 +1638,7 @@
         "thc.runtime.AsyncStrictEntryNativeTest",
         "thc.runtime.MaskFunctionNativeTest",
         "thc.runtime.ScalarExceptionResultsNativeTest",
+        "thc.runtime.ExceptionResultLayoutsNativeTest",
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.runtime.SmallArrayTest",
         "thc.runtime.ScalarMemoryUtilitiesTest",
