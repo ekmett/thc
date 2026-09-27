@@ -8,6 +8,7 @@ import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.MaterializedFrame
+import com.oracle.truffle.api.frame.FrameSlotTypeException
 import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 import com.oracle.truffle.api.nodes.DirectCallNode
@@ -34,6 +35,66 @@ class HandoffTest {
         assertEquals("Check failed.", failure.message)
         assertArrayEquals(arrayOf(17L, 23L), packet)
         assertReleased(language.handoffState.get())
+    }
+
+    @Test fun invalidTailDestinationPreservesBloomOrderAndReleasesOnlyItsInputLoan() = withLanguage { language ->
+        val state = language.handoffState.get()
+        val nonGuest = object : RootNode(null) {
+            override fun execute(frame: VirtualFrame): Any = error("Non-guest destination reached dispatch")
+        }
+        for (destination in listOf(null, nonGuest)) {
+            val layout = FrameLayout()
+            val reference = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
+            val entry = HandoffEntry.create(language, layout, listOf(reference), proof, false)!!
+            val packet = arrayOf<Any?>(17L, Any())
+            var reads = 0
+            val target = object : RootCallTarget {
+                override fun getRootNode(): RootNode? {
+                    reads++
+                    assertEquals(0L, packet[0])
+                    assertEquals(1, state.arguments.depth)
+                    assertEquals(1, state.arguments.retainedReferences())
+                    assertNull(state.pending)
+                    return destination
+                }
+                override fun call(vararg arguments: Any?): Any = error("Invalid destination reached dispatch")
+            }
+            val action = object : RootNode(null) {
+                override fun execute(frame: VirtualFrame): Any = error("Invalid destination reached call action")
+            }.callTarget
+            val body = object : Expr() {
+                @Child private var caller = HandoffCaller(target, entry, Metrics(true))
+                @Child private var dispatch = DirectCallNode.create(action)
+                override fun execute(frame: VirtualFrame): Any? = caller.call(frame, frame.arguments, dispatch, true)
+            }
+            val descriptor = layout.build()
+            val root = FunctionRoot(language, descriptor, "invalid tail destination", null, intArrayOf(),
+                intArrayOf(), intArrayOf(), body, Metrics(false), resultProof = proof, handoff = entry)
+            root.adoptChildren()
+            val frame = Truffle.getRuntime().createVirtualFrame(packet, descriptor)
+            frame.setLong(entry.destinationSlot, 0L)
+            val output = state.results.acquire(entry.arguments)
+            val marker = Any()
+            entry.arguments.setObject(output, 1, marker)
+            val calls = state.calls
+            val transfers = state.tailTransfers
+            // Source bloom is read before the destination, inside the same cleanup region.
+            frame.setObject(FrameLayout.BLOOM_FILTER, Any())
+            assertThrows(FrameSlotTypeException::class.java) { body.execute(frame) }
+            assertEquals(0, reads); assertReleased(state)
+            frame.setLong(FrameLayout.BLOOM_FILTER, 17L)
+            packet[0] = 17L
+            val type = if (destination == null) NullPointerException::class.java else ClassCastException::class.java
+            val failure = assertThrows(type) { body.execute(frame) }
+            if (destination == null)
+                assertEquals("null cannot be cast to non-null type thc.runtime.GuestRoot", failure.message)
+            assertEquals(1, reads); assertEquals(0L, packet[0]); assertReleased(state)
+            assertEquals(calls, state.calls); assertEquals(transfers, state.tailTransfers)
+            assertEquals(1, state.results.depth); assertTrue(output.live)
+            assertSame(marker, entry.arguments.getObject(output, 1))
+            state.results.release(output, entry.arguments)
+            assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
+        }
     }
 
     private val longRep = mapOf("kind" to "long", "primReps" to listOf("IntRep"), "evaluated" to true)
