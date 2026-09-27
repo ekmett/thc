@@ -84,6 +84,8 @@ class ManagedProcessForeignTest {
         val failure = cell(8)
         assertEquals(-1L, create(vector("/definitely-missing-thc-command"), streams = longArrayOf(-1, -1, -1), outputs = outputs, failure = failure))
         assertEquals("posix_spawnp", text(failure.readAddressElementIndex(0)))
+        assertThrows(RuntimeFault::class.java) { failure.readAddressElementIndex(0).writeWord8(0, 0) }
+        assertThrows(RuntimeFault::class.java) { state.nativeAllocations.free(failure.readAddressElementIndex(0)) }
         assertTrue(outputs.all { int(it) == 991L })
         val marker = directory.resolve("unexpected")
         val command = vector("/bin/sh", "-c", "touch '${marker}'")

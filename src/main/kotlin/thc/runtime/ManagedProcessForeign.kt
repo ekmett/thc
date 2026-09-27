@@ -13,12 +13,9 @@ internal class ManagedProcessForeign {
     private val context = Language.currentState()
     private val failures = ProcessFailureStage.entries.associateWith { stage ->
         if (stage == ProcessFailureStage.NONE) ManagedAddress.nullAddress() else {
-            val bytes = stage.operation.toByteArray(Charsets.US_ASCII)
-            context.nativeAllocations.malloc(bytes.size.toLong() + 1).also { address ->
-                if (address === ManagedAddress.nullAddress()) throw OutOfMemoryError("Process failure string")
-                bytes.forEachIndexed { index, byte -> address.writeWord8(index.toLong(), byte.toLong()) }
-                address.writeWord8(bytes.size.toLong(), 0)
-            }
+            val bytes = stage.operation.toByteArray(Charsets.US_ASCII) + byteArrayOf(0)
+            ManagedAddress.fromHex(bytes.joinToString("") { (it.toInt() and 255).toString(16).padStart(2, '0') })
+                .also { it.toNativeBits() } // Stage immutable native images before any launch effect.
         }
     }
 
