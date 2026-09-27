@@ -915,7 +915,9 @@ internal class Force @JvmOverloads constructor(private val metrics: Metrics, pri
                 // Otherwise parsing its implementation can specialize the shared
                 // interface before another continuation kind links in this graph.
                 suspensionProfile.enter()
-                val saved = savedGuestContinuation(result)!!
+                val continuationResult = savedGuestContinuation(result)
+                if (continuationResult == null) CompilerDirectives.transferToInterpreter()
+                val saved = continuationResult!!
                 if (saved.yielded is DelimitedCut)
                     fault("control0# cannot capture across a thunk update")
                 val expectedRoot = continuation?.sourceRoot
