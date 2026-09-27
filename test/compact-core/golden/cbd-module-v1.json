@@ -1,0 +1,28 @@
+{
+  "schema": 2,
+  "ghc": "9.14.1",
+  "unit": "main",
+  "module": "CBDGolden",
+  "boundary": "optimized-Core-before-Tidy",
+  "constructors": [],
+  "bindings": [
+    {
+      "id": "main:CBDGolden.answer", "name": "answer", "arity": 0,
+      "lifted": false, "rep": {"kind": "long", "primReps": ["IntRep"], "evaluated": true},
+      "source": "answer-note",
+      "expr": ["lit", "int", "42", {"rep": {"kind": "long", "primReps": ["IntRep"], "evaluated": true}}]
+    },
+    {
+      "id": "main:CBDGolden.identity", "name": "identity", "arity": 1,
+      "entryStrict": [true], "source": "identity-note",
+      "expr": ["lam", [{"id": "n", "name": "n", "lifted": false, "coercion": false,
+        "rep": {"kind": "long", "primReps": ["IntRep"], "evaluated": true}}],
+        ["var", "n", {"rep": {"kind": "long", "primReps": ["IntRep"], "evaluated": true}}], {}]
+    }
+  ],
+  "sourceFiles": [{"id": "f0", "path": "CBDGolden.hs", "content": "answer = 42\nidentity n = n\n"}],
+  "sourceSpans": [
+    {"id": "answer-note", "file": "f0", "startLine": 1, "startColumn": 1, "endLine": 1, "endColumn": 12},
+    {"id": "identity-note", "file": "f0", "startLine": 2, "startColumn": 1, "endLine": 2, "endColumn": 15}
+  ]
+}

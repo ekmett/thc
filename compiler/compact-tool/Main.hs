@@ -21,21 +21,22 @@ import System.Exit (die)
 import Text.Read (readMaybe)
 import THC.Compact.JSON (parseModuleWithoutDebug, parseModuleWithDebug)
 import THC.Compact.Inspect (inspectContainer, inspectName, inspectSource)
-import THC.Compact.Module (writeModule, writeModuleWithDebug)
+import THC.Compact.Module (writeModuleCompressed, writeModuleWithDebugCompressed)
+import THC.Compact.Compression (parseEncodingOptions)
 
 main :: IO ()
 main = do
   arguments <- getArgs
   case arguments of
-    ["encode",source,destination] -> do
+    "encode":options -> do
+      (policy,omitDebug,source,destination) <- either die pure (parseEncodingOptions options)
       value <- BS.readFile source >>= either die pure . eitherDecodeStrict'
-      (facts,bindings,annotations) <- either die pure (parseModuleWithDebug value)
-      _ <- writeModuleWithDebug destination facts bindings annotations
-      pure ()
-    ["encode","--without-debug",source,destination] -> do
-      value <- BS.readFile source >>= either die pure . eitherDecodeStrict'
-      (facts,bindings) <- either die pure (parseModuleWithoutDebug value)
-      _ <- writeModule destination facts bindings
+      _ <- if omitDebug then do
+        (facts,bindings) <- either die pure (parseModuleWithoutDebug value)
+        writeModuleCompressed policy destination facts bindings
+      else do
+        (facts,bindings,annotations) <- either die pure (parseModuleWithDebug value)
+        writeModuleWithDebugCompressed policy destination facts bindings annotations
       pure ()
     ["decode",source,destination] -> do
       value <- BS.readFile source >>= either die pure . inspectContainer
@@ -54,7 +55,7 @@ main = do
     ["--help"] -> putStrLn usage
     _ -> die usage
   where
-    usage = "Usage: thc-compact encode [--without-debug] MODULE.json MODULE.thcc\n       thc-compact decode MODULE.thcc MODULE.json\n       thc-compact source MODULE.thcc DATA_OFFSET\n       thc-compact name MODULE.thcc BINDING_OFFSET ORDINAL_SLOT"
+    usage = "Usage: thc-compact encode [--without-debug] [--cbd-compression LEVEL|TYPE=LEVEL]... MODULE.json MODULE.cbd\n       thc-compact decode MODULE.cbd MODULE.json\n       thc-compact source MODULE.cbd DATA_OFFSET\n       thc-compact name MODULE.cbd BINDING_OFFSET ORDINAL_SLOT\nCompression: default 0 (STORED); 1..9 Deflate; explicit member overrides win.\nTypes: header, data, strings, symbols, names, filenames, line-columns."
     unsigned text = case readMaybe text of
       Just value | value >= (0::Integer) && value <= 18446744073709551615 -> pure (fromInteger value)
       _ -> die "Expected unsigned 64-bit decimal position"

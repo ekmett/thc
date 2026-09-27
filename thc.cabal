@@ -16,6 +16,7 @@ extra-source-files:
   docs/compact-core-format.md
   test/compact-core/golden/*.json
   test/compact-core/golden/*.hex
+  test/compact-core/golden/*.cbd
   compiler/json-index/README.md
   compiler/json-index/LICENSE.succinctly
   compiler/json-index/LICENSE.everett
@@ -515,6 +516,8 @@ library compact-core
     THC.Compact.Decode
     THC.Compact.Debug
     THC.Compact.Annotations
+    THC.Compact.Compression
+    THC.Compact.Zip
   build-depends:
     thc:core-json-index,
     aeson >= 2.3 && < 2.4,
@@ -523,10 +526,12 @@ library compact-core
     bytestring >= 0.12.2 && < 0.13,
     containers >= 0.8 && < 0.9,
     directory >= 1.3 && < 1.4,
+    digest >= 0.0.2 && < 0.1,
     filepath >= 1.5 && < 1.6,
     text >= 2.1 && < 2.2,
     transformers >= 0.6 && < 0.7,
-    vector >= 0.13 && < 0.14
+    vector >= 0.13 && < 0.14,
+    zlib >= 0.7.1 && < 0.8
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)
@@ -549,7 +554,7 @@ test-suite compact-core-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   hs-source-dirs: test/compact-core
-  other-modules: SemanticTests DebugTests
+  other-modules: SemanticTests DebugTests CompressionTests CbdTests
   build-depends:
     thc:compact-core,
     thc:core-json-index,
@@ -561,7 +566,8 @@ test-suite compact-core-tests
     filepath >= 1.5 && < 1.6,
     temporary >= 1.3 && < 1.4,
     text >= 2.1 && < 2.2,
-    HUnit >= 1.6 && < 1.7
+    HUnit >= 1.6 && < 1.7,
+    zip-archive >= 0.4.3.2 && < 0.5
   default-language: Haskell2010
   ghc-options: -Wall
   if flag(development)

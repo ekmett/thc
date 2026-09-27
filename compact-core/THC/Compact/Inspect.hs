@@ -14,7 +14,7 @@
 -- are original source spelling. IEEE bit literals retain every payload bit.
 -- Reading a complete module here is an explicit inspection operation, never a
 -- runtime startup or linking prerequisite.
-module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, moduleJSON) where
+module THC.Compact.Inspect (inspectContainer, inspectName, inspectSource, unpackContainer, moduleJSON) where
 
 import Data.Aeson
 import qualified Data.Aeson.Key as Key
@@ -30,21 +30,15 @@ import THC.Compact.Decode
 import THC.Compact.Debug
 import THC.Compact.Facts
 import THC.Compact.Wire
+import THC.Compact.Zip (readZip)
 
 -- | Decode original data order, not digest order. The caller explicitly reads
 -- the one container to inspect; normal runtime demand loading is independent.
 inspectContainer :: BS.ByteString -> Either String Value
 inspectContainer bytes = do
-  header <- decodeExact getHeader (BS.take 24 bytes)
-  footer <- decodeExact getFooter (BS.drop (BS.length bytes-128) bytes)
-  validateContainer (fromIntegral (BS.length bytes)) header footer
-  case footerSegments footer of
-    [dataSpan,stringSpan,_,_,_,indexSpan] -> do
-      let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
-          payload = slice dataSpan
-          strings = slice stringSpan
-          directory = slice indexSpan
-          factsBytes = BS.take (fromIntegral (headerFactsLength header)) (BS.drop 24 bytes)
+  (_,factsBytes,segments) <- unpackContainer bytes
+  case segments of
+    [payload,strings,_,_,_,directory] -> do
       facts <- decodeFacts factsBytes strings
       rows <- mapM (\start -> decodeExact ((,) <$> getByteString 16 <*> getWord64le)
         (BS.take 24 (BS.drop start directory))) [0,24..BS.length directory-1]
@@ -56,7 +50,7 @@ inspectContainer bytes = do
 -- reserved max-uint64 scope and its one-based header slot.
 inspectName :: BS.ByteString -> Word64 -> Word64 -> Either String Value
 inspectName bytes scope slot = do
-  (_,segments) <- debugSegments bytes
+  (_,_,segments) <- unpackContainer bytes
   case segments of
     [_,_,names,_,_,_] -> maybe Null str <$> nameAt names scope slot
     _ -> Left "Compact container requires six segments"
@@ -65,9 +59,10 @@ inspectName bytes scope slot = do
 -- any executable record or unselected debug-name entry.
 inspectSource :: BS.ByteString -> Word64 -> Either String Value
 inspectSource bytes position = do
-  (footer,segments) <- debugSegments bytes
-  case (footerSegments footer,segments) of
-    (Span _ dataSize:_,[_,strings,_,filenames,positions,_]) -> do
+  (_,_,segments) <- unpackContainer bytes
+  case segments of
+    [payload,strings,_,filenames,positions,_] -> do
+      let dataSize = fromIntegral (BS.length payload)
       location <- locationAt filenames positions strings dataSize position
       pure $ case location of
         Nothing -> Null
@@ -80,13 +75,17 @@ inspectSource bytes position = do
        ("startLine",toJSON sl),("startColumn",toJSON sc),("endLine",toJSON el),("endColumn",toJSON ec)]
       ++ p "content" str content ++ p "label" str label ++ p "charIndex" toJSON index ++ p "charLength" toJSON size
 
-debugSegments :: BS.ByteString -> Either String (Footer,[BS.ByteString])
-debugSegments bytes = do
-  header <- decodeExact getHeader (BS.take 24 bytes)
-  footer <- decodeExact getFooter (BS.drop (BS.length bytes-128) bytes)
-  validateContainer (fromIntegral (BS.length bytes)) header footer
-  let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
-  pure (footer,map slice (footerSegments footer))
+-- | Explicit offline archive inspection, including CRC/inflation checks. The
+-- returned payloads retain their original member-relative coordinate systems.
+unpackContainer :: BS.ByteString -> Either String (Header,BS.ByteString,[BS.ByteString])
+unpackContainer bytes = do
+  members <- readZip bytes
+  let member key = maybe (Left ("Missing CBD member: " ++ key)) Right (lookup key members)
+  headerBytes <- member "header"
+  header <- decodeExact getHeader (BS.take 32 headerBytes)
+  segments <- mapM member ["data","strings","names","filenames","line-columns","symbols"]
+  validateContainer header (map (fromIntegral . BS.length) segments)
+  pure (header,BS.drop 32 headerBytes,segments)
 
 str :: BS.ByteString -> Value
 str = String . Text.decodeUtf8

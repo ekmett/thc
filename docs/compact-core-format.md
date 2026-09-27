@@ -1,4 +1,4 @@
-# Compact Core container
+# Core Binary Distribution
 
 Version 1 containers support opt-in loading through both runtime backends.
 The native converter writes typed executable and header records, shared strings,
@@ -10,18 +10,24 @@ The project driver still publishes JSON unit artifacts by default.
 
 ## Assembly and addressing
 
-One module produces one mmap-able file. The producer constructs six streams:
-executable data (preceded by the header), common strings, optional real names,
-optional filename intervals, optional line/column intervals, and fingerprints.
-The five auxiliary streams use scoped binary temporary handles. The producer
-streams executable data, appends the five auxiliaries in that order, then writes
-the fixed-size footer. It never patches the header or rebases payload references.
-Owned temporary handles/files are cleaned on both success and failure; only the
-completed container is published. These are construction streams, not a public
-six-sidecar artifact API.
+One module produces one ordinary ZIP archive named `.cbd`. Its seven members,
+in producer order, are `header`, `data`, `strings`, `names`, `filenames`,
+`line-columns`, and `symbols`. All are present; absent debug maps have zero
+length. Readers accept any physical or directory order, with exactly one of
+each member. The ZIP central directory owns physical placement and compression;
+there is no separate THC offset footer or embedded whole-container member.
 
-All record references are relative to their logical segment. Only the footer
-contains absolute file positions. A string reference is its byte start and byte
+The producer constructs the six payload fragments through scoped binary
+temporary handles, accumulating each fragment's size and CRC as it is emitted.
+ZIP assembly copies or compresses bounded chunks. STORED members need no CRC
+rescan; Deflate uses an additional scoped compressed temporary so actual sizes
+are available in its local header. Standard ZIP64 fields carry sizes/offsets
+that do not fit ordinary ZIP fields. Deterministic member order and timestamps
+make identical inputs/options reproducible. Only the completed archive is
+atomically published; owned temporaries are cleaned on success and failure.
+
+All record references are relative to their uncompressed logical member.
+A string reference is its byte start and byte
 length in the raw UTF-8 common-string segment, not a string ID. Strings may be
 interned while writing. Debug names contain their own display text; filename
 records may cold-reference common strings. No debug segment participates in
@@ -29,35 +35,22 @@ linking, loading executable records, or execution.
 
 ## Fixed framing
 
-Fixed-width integers are little-endian. The 24-byte prefix is:
+Fixed-width integers are little-endian. The `header` member starts with 32 bytes:
 
 | Byte | Width | Value |
 | ---: | ---: | --- |
-| 0 | 8 | ASCII `THCCMP` followed by two zero bytes |
+| 0 | 8 | ASCII `THCCBD1` followed by one zero byte |
 | 8 | 2 | major version, `1` |
 | 10 | 2 | minor version, `0` |
-| 12 | 4 | reserved, `0` |
-| 16 | 8 | typed header-facts byte length |
+| 12 | 4 | actual module-summary flags |
+| 16 | 8 | top-level binding count |
+| 24 | 4 | debug-presence flags |
+| 28 | 4 | reserved, `0` |
 
-Typed facts immediately follow the prefix. They carry module identity, compiler,
-target layout and operative provenance; they are not a separate metadata file.
-The executable-data segment starts at `24 + factsLength`.
-
-The footer is exactly 128 bytes, located at `fileSize - 128`:
-
-| Byte | Width | Value |
-| ---: | ---: | --- |
-| 0 | 8 | ASCII `THCCEND1` |
-| 8 | 16 | executable data: absolute offset, byte length (two u64) |
-| 24 | 16 | common strings: offset, length |
-| 40 | 16 | real names: offset, length |
-| 56 | 16 | filename intervals: offset, length |
-| 72 | 16 | line/column intervals: offset, length |
-| 88 | 16 | fingerprints: offset, length |
-| 104 | 8 | top-level binding count |
-| 112 | 4 | actual module-summary flags |
-| 116 | 4 | debug-presence flags |
-| 120 | 8 | reserved, `0` |
+Unchanged typed facts follow to the end of the member. They carry module
+identity, compiler, target layout and operative provenance. Their string
+references remain relative to `strings`; executable origins are relative to
+`data`, independently of ZIP compression and placement.
 
 Summary bits 0 through 3 are, respectively, `containsDelimitedControl`,
 `registrationObligations`, `mainAlias`, and `packageScalarDeclarations`, with
@@ -65,13 +58,12 @@ the same actual producer-derived meanings as the JSON unit manifest. Remaining
 bits are zero. Debug bits 0 through 2 indicate nonempty names, filename intervals,
 and line/column intervals respectively; remaining bits are zero.
 
-The six segments are contiguous in the listed order. An empty segment starts at
-the current cursor and has length zero. The fingerprint segment ends exactly at
-the footer. Its length is `24 * bindingCount`, checked without overflowing.
-Local extent checks use subtraction, not unchecked `offset + length` arithmetic.
-Unknown versions, reserved bits, inconsistent flags/counts, overlaps, gaps and
-out-of-file extents are rejected. These framing checks do not traverse executable
-records, strings or debug data and do not imply a default whole-file hash pass.
+The uncompressed `symbols` length is `24 * bindingCount`, checked without
+overflowing. Debug flags agree with the uncompressed member lengths. Local ZIP
+extents use subtraction-based bounds checks. Unknown versions, reserved bits,
+inconsistent flags/counts and invalid ZIP member extents are rejected without
+a default whole-file hash or executable-record scan. Encryption and multi-disk
+archives are unsupported.
 
 ## Integers and lookup
 
@@ -462,10 +454,11 @@ Build the native tool with `cabal build exe:thc-compact --offline -fdevelopment`
 It currently accepts one flat Core JSON module at a time:
 
 ```sh
-cabal run exe:thc-compact -- encode Module.json Module.thcc
-cabal run exe:thc-compact -- decode Module.thcc inspected.json
-cabal run exe:thc-compact -- source Module.thcc 0
-cabal run exe:thc-compact -- name Module.thcc 0 0
+cabal run exe:thc-compact -- encode Module.json Module.cbd
+cabal run exe:thc-compact -- encode --cbd-compression 9 --cbd-compression data=0 Module.json Module.cbd
+cabal run exe:thc-compact -- decode Module.cbd inspected.json
+cabal run exe:thc-compact -- source Module.cbd 0
+cabal run exe:thc-compact -- name Module.cbd 0 0
 ```
 
 Normal encoding preserves supplied original names and source notes, recording
@@ -476,11 +469,22 @@ and exception-bridge facts are typed. Linked bitcode is stored as raw bytes and
 reconstructed as canonical hexadecimal by the JSON inspector.
 The converter is not yet a default project-publication path.
 
+Compression defaults to ZIP STORED for every member. Repeat
+`--cbd-compression LEVEL` or `--cbd-compression TYPE=LEVEL` to select levels
+0 through 9; `--cbd-compression=VALUE` also works. Level 0 means STORED, not
+level-zero Deflate; levels 1 through 9 use Deflate. Types are the seven exact
+member names above. A per-type override wins regardless of the global setting's
+position; the last assignment within the same scope wins. Invalid syntax,
+unknown types and out-of-range levels fail before output creation. The archive
+records the methods, so readers need no matching compression option.
+
 `decode` is an explicit full-module semantic inspection, separate from runtime
 demand loading. It emits flat records with deterministic `@local/N` identities
 and synthetic display names, not recovered original spellings. `source` and
 `name` inspect original debug values separately at the requested exact DATA
-origin/name key; they do not decode executable records. The semantic dump preserves only the
+origin/name key; they do not decode executable records. Native inspection
+validates/inflates the archive explicitly; it is separate from runtime member
+laziness. The semantic dump preserves only the
 two operative entry-type facts, not arbitrary pretty types or printed IdInfo.
 For lossless IEEE inspection it emits `float-bits` and `double-bits` literals with
 unsigned decimal bit payloads; this converter accepts those tags in addition to
@@ -490,7 +494,7 @@ preserves signed zero and NaN payload bits.
 
 The opt-in manifest representation retains the original module `sha256`, name,
 boundary and four actual summary booleans. Its `compact` field contains `path`,
-the container `sha256`, and `format: "thc-compact-core-v1"`. Original unit identity,
+the container `sha256`, and `format: "thc-cbd-v1"`. Original unit identity,
 dependencies and any real canonical `targetLayout` remain in the unit descriptor.
 Compact paths are absolute. Each nonempty unit selects either compact containers
 for all its modules or the JSON/symbol pair; units with different storage formats
@@ -504,16 +508,39 @@ whole-file hash or body scan. Explicit artifact verification hashes a fresh
 mapping, retains that same mapping, and enumerates the selected module's bindings
 for admission checks. It does not open unrelated modules.
 
+STORED members are slices of the exact mapped snapshot. Deflated members inflate
+once on demand into shared immutable memory, with exact length and CRC checked
+during inflation. Inflation is per member; record decoding remains per binding.
+Thus the first DATA access inflates all of `data`, and header string references
+can inflate `strings`, including source text stored there, even while debug-map
+read counts remain zero. Diagnostics distinguish directory reads, member
+inflations, inflated bytes, compressed bytes read, slab-cache hits and explicitly
+verified STORED bytes from selected-record decode bytes. Idle inflated storage
+has separate bounded caching; active member handles retain their snapshot or
+slab independently of the archive owner.
+
 ## Shared controls
 
 Manual byte vectors live in
 [`test/compact-core/golden`](../test/compact-core/golden/integers-v1.json).
-`header-v1.hex` and `footer-v1.hex` describe a framing-only 181-byte fixture with
-zero header-facts bytes, two data bytes, three string bytes and one fingerprint.
-They are not a valid typed Core module. The integer vectors cover canonical
+`cbd-header-v1.hex` specifies the 32-byte prefix with version 1.0, summary flags
+10, one binding and no debug flags. It is not a valid typed module by itself.
+The integer vectors cover canonical
 thresholds and signed/unsigned endpoints. The native Haskell tests also reject
 truncation, overlong integers, overflow, invalid versions/reserved fields and
 inconsistent segment extents. Kotlin consumes the same byte contract independently.
+
+`cbd-module-v1.json` is a small, explicitly specified semantic/debug model with
+an integer answer of 42 and a scalar identity function. It is test data, not a
+captured native-GHC provenance claim. Native tests encode it with STORED,
+Deflate and mixed methods, inspect its typed values, and independently decode
+ZIP members. The same JSON regenerates reader interoperability fixtures with
+the CLI above. `cbd-module-v1-{stored,deflated,mixed}.cbd` are generated
+interoperability fixtures: default policy, global 9, and global 9 with `data=0`
+and `symbols=0`, respectively. They are checked against the independent JSON
+model and unchanged uncompressed member bytes; Deflate bit choices are not a
+cross-zlib-version canonical encoding. Packaging never changes executable
+member offsets.
 
 `nested-shared-rep-v1.hex` is a manually specified 62-byte executable-segment
 fragment, not encoder-generated expected output. Its first Rep starts at 0:

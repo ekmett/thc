@@ -13,13 +13,14 @@
 --
 -- One-pass typed module publication. Binding positions are captured as bytes
 -- are written; the existing canonical MD5 encoder sorts only lookup records.
-module THC.Compact.Module (writeModule, writeModuleWithDebug) where
+module THC.Compact.Module (writeModule, writeModuleWithDebug, writeModuleCompressed, writeModuleWithDebugCompressed) where
 
 import Control.Monad (foldM, forM_, unless, void)
 import Data.Bits ((.|.))
 import Data.IORef
 import THC.CoreSymbols (symbolDigest, encodeMd5Symbols)
 import THC.Compact.Core
+import THC.Compact.Compression
 import THC.Compact.Annotations
 import THC.Compact.Debug
 import THC.Compact.Encode
@@ -30,17 +31,25 @@ import THC.Compact.Writer
 -- | Publish typed records with no debug streams. Callers must explicitly choose
 -- this debug-free path; original debug information is not parsed or discarded
 -- by this function. Module-level known unsupported provenance fails preparation.
-writeModule :: FilePath -> Facts -> [Binding] -> IO Footer
-writeModule destination facts bindings = writeModuleRecords destination facts
+writeModule :: FilePath -> Facts -> [Binding] -> IO Container
+writeModule = writeModuleCompressed defaultCompression
+
+-- | Publish using an explicitly selected CBD compression policy.
+writeModuleCompressed :: Compression -> FilePath -> Facts -> [Binding] -> IO Container
+writeModuleCompressed policy destination facts bindings = writeModuleRecords policy destination facts
   (map (\value -> (value,[])) bindings) Nothing
 
 -- | Preserve supplied original display annotations in optional debug segments,
 -- using actual emitted DATA origins. No debug values alter semantic records.
-writeModuleWithDebug :: FilePath -> Facts -> [(Binding,[Annotation])] -> ModuleAnnotations -> IO Footer
-writeModuleWithDebug destination facts bindings catalog = writeModuleRecords destination facts bindings (Just catalog)
+writeModuleWithDebug :: FilePath -> Facts -> [(Binding,[Annotation])] -> ModuleAnnotations -> IO Container
+writeModuleWithDebug = writeModuleWithDebugCompressed defaultCompression
 
-writeModuleRecords :: FilePath -> Facts -> [(Binding,[Annotation])] -> Maybe ModuleAnnotations -> IO Footer
-writeModuleRecords destination facts bindings catalog = do
+-- | Preserve debug annotations while independently selecting ZIP methods.
+writeModuleWithDebugCompressed :: Compression -> FilePath -> Facts -> [(Binding,[Annotation])] -> ModuleAnnotations -> IO Container
+writeModuleWithDebugCompressed policy destination facts bindings catalog = writeModuleRecords policy destination facts bindings (Just catalog)
+
+writeModuleRecords :: Compression -> FilePath -> Facts -> [(Binding,[Annotation])] -> Maybe ModuleAnnotations -> IO Container
+writeModuleRecords policy destination facts bindings catalog = do
   encoderSlot <- newIORef Nothing
   let prepare streams = do
         encoder <- newEncoder streams
@@ -88,4 +97,4 @@ writeModuleRecords destination facts bindings catalog = do
       declarations = case drop 2 (factsPendingProvenance facts) of
         Known (ImportsRecord (ImportProof _ _ _ _ _ _ (ImportsVerified _ _ imports _))) : _ -> not (null imports)
         _ -> False
-  writeContainerStreamed destination prepare produce
+  writeContainerStreamedWith policy destination prepare produce

@@ -30,7 +30,7 @@ import THC.Compact.Debug
 import THC.Compact.Encode (newEncoder, internString)
 import THC.Compact.JSON (parseModuleWithDebug, parseModuleWithoutDebug)
 import THC.Compact.Module (writeModuleWithDebug)
-import THC.Compact.Inspect (inspectContainer)
+import THC.Compact.Inspect (inspectContainer, unpackContainer)
 import THC.Compact.Wire
 import THC.Compact.Writer
 
@@ -66,7 +66,7 @@ debugTests = TestList
           (locationAt filenames positions BS.empty 24 0)
   , TestLabel "optional absent debug and invalid publication preserve original" $ TestCase $
       withSystemTempDirectory "compact-debug-empty" $ \directory -> do
-        let destination = directory </> "empty.thcc"
+        let destination = directory </> "empty.cbd"
         footer <- writeContainer destination BS.empty 0 $ \streams -> do
           encoder <- newEncoder streams
           debug <- newDebugEncoder streams (internString encoder)
@@ -74,27 +74,27 @@ debugTests = TestList
           recordLocation debug 0 Nothing
           finishDebug debug 4
           pure 0
-        assertEqual "truly absent optional tables" 0 (footerDebugFlags footer)
+        assertEqual "truly absent optional tables" 0 (headerDebugFlags (containerHeader footer))
         original <- BS.readFile destination
         failure <- try (writeContainer destination BS.empty 0 $ \streams -> do
           encoder <- newEncoder streams
           debug <- newDebugEncoder streams (internString encoder)
           recordName debug 0 0 "first"
           recordName debug 0 0 "duplicate"
-          pure 0) :: IO (Either IOException Footer)
+          pure 0) :: IO (Either IOException Container)
         assertBool "duplicate debug declaration rejected" (isLeft failure)
         assertEqual "original output preserved" original =<< BS.readFile destination
   , TestLabel "original annotations follow emitted records without changing semantics" $ TestCase $
       withSystemTempDirectory "compact-annotations" $ \directory -> do
         (facts,bindings,annotations) <- either fail pure (parseModuleWithDebug originalModule)
-        let destination = directory </> "annotated.thcc"
-        footer <- writeModuleWithDebug destination facts bindings annotations
+        let destination = directory </> "annotated.cbd"
+        _ <- writeModuleWithDebug destination facts bindings annotations
         bytes <- BS.readFile destination
         inspected <- either fail pure (inspectContainer bytes)
         assertEqual "semantic records independent of optional debug" (parseModuleWithoutDebug originalModule)
           (parseModuleWithoutDebug inspected)
-        let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
-        case map slice (footerSegments footer) of
+        (_,_,segments) <- either fail pure (unpackContainer bytes)
+        case segments of
           [payload,strings,names,filenames,positions,_] -> do
             assertEqual "original top-level display name" (Right (Just "originalFunction")) (nameAt names 0 0)
             assertEqual "original parameter display name" (Right (Just "originalParameter")) (nameAt names 0 1)
@@ -111,7 +111,7 @@ debugTests = TestList
         case bindings of
           (value,notes):rest -> do
             failure <- try (writeModuleWithDebug destination facts ((value,drop 1 notes):rest) annotations)
-              :: IO (Either IOException Footer)
+              :: IO (Either IOException Container)
             assertBool "annotation mismatch cannot publish misleading origins" (isLeft failure)
             assertEqual "original container preserved after mismatch" bytes =<< BS.readFile destination
           _ -> assertFailure "Missing modeled bindings"
@@ -122,7 +122,7 @@ rowCount bytes = fromIntegral <$> decodeExact getWord64le (BS.drop (BS.length by
 
 withTables :: (BS.ByteString -> BS.ByteString -> BS.ByteString -> BS.ByteString -> Assertion) -> Assertion
 withTables inspect = withSystemTempDirectory "compact-debug" $ \directory -> do
-  let destination = directory </> "debug.thcc"
+  let destination = directory </> "debug.cbd"
   footer <- writeContainer destination BS.empty 0 $ \streams -> do
     encoder <- newEncoder streams
     debug <- newDebugEncoder streams (internString encoder)
@@ -136,10 +136,10 @@ withTables inspect = withSystemTempDirectory "compact-debug" $ \directory -> do
     recordLocation debug 20 Nothing
     finishDebug debug 24
     pure 0
-  assertEqual "all optional segments present" 7 (footerDebugFlags footer)
+  assertEqual "all optional segments present" 7 (headerDebugFlags (containerHeader footer))
   bytes <- BS.readFile destination
-  let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
-  case map slice (footerSegments footer) of
+  (_,_,segments) <- either fail pure (unpackContainer bytes)
+  case segments of
     [_,strings,names,filenames,positions,_] -> inspect strings names filenames positions
     _ -> assertFailure "Missing compact debug segments"
 

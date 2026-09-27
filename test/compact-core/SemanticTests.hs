@@ -37,7 +37,7 @@ import THC.Compact.Encode
 import THC.Compact.Facts
 import THC.Compact.Module (writeModule)
 import THC.Compact.JSON (parseModuleWithoutDebug)
-import THC.Compact.Inspect (moduleJSON, inspectContainer)
+import THC.Compact.Inspect (moduleJSON, inspectContainer, unpackContainer)
 import THC.CoreSymbols (symbolDigest)
 import THC.Compact.Wire
 import THC.Compact.Writer
@@ -124,7 +124,7 @@ semanticTests = TestList
   , TestLabel "known-start facts need no executable bytes and share raw strings" $ TestCase $
       withSystemTempDirectory "compact-header" $ \directory -> do
         encoderSlot <- newIORef Nothing
-        let destination = directory </> "header.thcc"
+        let destination = directory </> "header.cbd"
             prepare streams = do
               encoder <- newEncoder streams
               writeIORef encoderSlot (Just encoder)
@@ -133,39 +133,34 @@ semanticTests = TestList
               encoder <- readIORef encoderSlot >>= maybe (fail "Missing encoder") pure
               _ <- encodeBinding encoder completeBinding
               pure 0
-        footer <- writeContainerPrepared destination prepare 0 produce
+        _ <- writeContainerPrepared destination prepare 0 produce
         file <- BS.readFile destination
-        header <- either fail pure (decodeExact getHeader (BS.take 24 file))
-        let factBytes = BS.take (fromIntegral (headerFactsLength header)) (BS.drop 24 file)
-        case footerSegments footer of
-          _ : Span stringStart stringLength : _ -> do
-            let strings = BS.take (fromIntegral stringLength) (BS.drop (fromIntegral stringStart) file)
+        (_,factBytes,segments) <- either fail pure (unpackContainer file)
+        case segments of
+          _ : strings : _ -> do
             assertEqual "header-only decode" (Right completeFacts) (decodeFacts factBytes strings)
             assertBool "header includes inline constructor shape" (not (BS.null factBytes))
           _ -> assertFailure "Missing strings"
   , TestLabel "unmapped present provenance cannot disappear during preparation" $ TestCase $
       withSystemTempDirectory "compact-header-rejection" $ \directory -> do
-        failure <- try (writeContainerPrepared (directory </> "bad.thcc")
+        failure <- try (writeContainerPrepared (directory </> "bad.cbd")
           (\streams -> newEncoder streams >>= \encoder -> encodeFacts encoder
             completeFacts {factsPendingProvenance=Known (ImportsRecord completeImports) : replicate 7 Missing}) 0 (const (pure 0)))
-          :: IO (Either IOException Footer)
+          :: IO (Either IOException Container)
         assertBool "unmapped known record rejected" (isLeft failure)
   , TestLabel "module directory captures actual data-relative binding positions" $ TestCase $
       withSystemTempDirectory "compact-module" $ \directory -> do
         let values = [completeBinding, completeBinding {bindingIdentity=Global "main::Typed.main"},
               completeBinding {bindingIdentity=Global "main:Typed.control", bindingExpr=Prim emptyMeta "prompt#"}]
-            destination = directory </> "module.thcc"
+            destination = directory </> "module.cbd"
         footer <- writeModule destination completeFacts values
-        assertEqual "all bindings indexed" 3 (footerBindingCount footer)
-        assertEqual "actual control/registration/alias, no scalar declarations" 7 (footerSummaries footer)
-        assertEqual "debug-free producer" 0 (footerDebugFlags footer)
+        assertEqual "all bindings indexed" 3 (headerBindingCount (containerHeader footer))
+        assertEqual "actual control/registration/alias, no scalar declarations" 7 (headerSummaries (containerHeader footer))
+        assertEqual "debug-free producer" 0 (headerDebugFlags (containerHeader footer))
         file <- BS.readFile destination
-        case footerSegments footer of
-          [dataSpan,stringSpan,_,_,_,indexSpan] -> do
-            let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) file)
-                bytes = slice dataSpan
-                strings = slice stringSpan
-                rows = slice indexSpan
+        (_,_,segments) <- either fail pure (unpackContainer file)
+        case segments of
+          [bytes,strings,_,_,_,rows] -> do
             assertEqual "fixed24 per binding" 72 (BS.length rows)
             decoded <- forM [0,24,48] $ \start ->
               either fail pure (decodeExact ((,) <$> getByteString 16 <*> getWord64le) (BS.take 24 (BS.drop start rows)))
@@ -177,7 +172,7 @@ semanticTests = TestList
                 Global key -> assertEqual "canonical logical UTF8 MD5" digest =<< symbolDigest key
                 Local _ -> assertFailure "Published local identity"
           _ -> assertFailure "Missing six segments"
-        failure <- try (writeModule destination completeFacts [completeBinding,completeBinding]) :: IO (Either IOException Footer)
+        failure <- try (writeModule destination completeFacts [completeBinding,completeBinding]) :: IO (Either IOException Container)
         assertBool "duplicate digest rejects publication" (isLeft failure)
         assertEqual "valid original container preserved" file =<< BS.readFile destination
         inspected <- either fail pure (inspectContainer file)
@@ -197,17 +192,16 @@ semanticTests = TestList
                Known (ExportsRecord completeExports),Known (RegistrationRecord completeRegistration),Missing,Unknown,Missing]}
         assertEqual "exact nominal types and inventory multiplicity survive flat conversion" (Right (facts,[]))
           (parseModuleWithoutDebug (moduleJSON facts []))
-        let destination = directory </> "provenance.thcc"
+        let destination = directory </> "provenance.cbd"
         footer <- writeModule destination facts []
-        assertEqual "actual registration and declaration provider, no bindings" 10 (footerSummaries footer)
+        assertEqual "actual registration and declaration provider, no bindings" 10 (headerSummaries (containerHeader footer))
         bytes <- BS.readFile destination
-        header <- either fail pure (decodeExact getHeader (BS.take 24 bytes))
-        let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
-        case map slice (footerSegments footer) of
+        (_,factBytes,segments) <- either fail pure (unpackContainer bytes)
+        case segments of
           payload:strings:_ -> do
             assertEqual "header provenance has no executable shape references" BS.empty payload
             assertEqual "all scoped types, safety and original expected calls preserved"
-              (Right facts) (decodeFacts (BS.take (fromIntegral (headerFactsLength header)) (BS.drop 24 bytes)) strings)
+              (Right facts) (decodeFacts factBytes strings)
           _ -> assertFailure "Missing provenance container segments"
   , TestLabel "unclassified and rejected provenance remain non-verified records" $ TestCase $
       forM_ [(ImportsUnclassified "unknown original declaration",RegistrationUnclassified "unknown original product"),
@@ -265,18 +259,18 @@ semanticTests = TestList
 withEncoded :: (Streams -> Encoder -> IO a) -> (BS.ByteString -> BS.ByteString -> a -> Assertion) -> Assertion
 withEncoded produce inspect = withSystemTempDirectory "compact-typed" $ \directory -> do
   result <- newIORef Nothing
-  let destination = directory </> "control.thcc"
-  footer <- writeContainer destination BS.empty 0 $ \streams -> do
+  let destination = directory </> "control.cbd"
+  _ <- writeContainer destination BS.empty 0 $ \streams -> do
     encoder <- newEncoder streams
     value <- produce streams encoder
     writeIORef result (Just value)
     pure 0
   bytes <- BS.readFile destination
-  let slice (Span start size) = BS.take (fromIntegral size) (BS.drop (fromIntegral start) bytes)
-  case footerSegments footer of
-    dataSpan : stringSpan : _ -> do
+  (_,_,segments) <- either fail pure (unpackContainer bytes)
+  case segments of
+    payload : strings : _ -> do
       value <- readIORef result >>= maybe (fail "Missing typed control result") pure
-      inspect (slice dataSpan) (slice stringSpan) value
+      inspect payload strings value
     _ -> assertFailure "Missing compact segments"
 
 literals :: [Literal]

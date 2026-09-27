@@ -10,49 +10,55 @@
 -- Stability   : experimental
 -- Portability : Haskell 2010; scoped binary temporary files and atomic rename
 --
--- Forward-only container construction. Five private auxiliary streams are
--- appended to the executable stream, followed by an EOF directory. The data
--- handle is never sought or patched. No construction sidecars are published.
+-- Counted fragment construction followed by bounded ordinary ZIP assembly.
+-- Only the completed CBD archive is published; temporary fragments are scoped.
 module THC.Compact.Writer
-  ( Streams, streamOffset, appendBytes, appendRecord, writeContainer, writeContainerPrepared, writeContainerStreamed ) where
+  ( Streams, streamOffset, appendBytes, appendRecord, writeContainer, writeContainerPrepared
+  , writeContainerStreamed, writeContainerStreamedWith ) where
 
 import Control.Exception (IOException, bracket, bracketOnError, catch)
-import Control.Monad (foldM, unless)
+import Control.Monad (unless)
 import Data.Binary.Put (Put, runPut)
 import Data.Bits ((.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as BL
+import Data.Digest.CRC32 (crc32, crc32Update)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Word (Word32, Word64)
 import System.Directory (removeFile, renameFile)
 import System.FilePath (takeDirectory)
-import System.IO (Handle, SeekMode(AbsoluteSeek), hClose, hFlush, hSeek, openBinaryTempFile)
+import System.IO (Handle, hClose, openBinaryTempFile)
+import THC.Compact.Compression
 import THC.Compact.Wire
+import THC.Compact.Zip
 
 -- | Private append-only handles and strict relative byte counters. They are
 -- valid only inside the callback passed to 'writeContainer'.
-newtype Streams = Streams [(Handle, IORef Word64)]
+data Fragment = Fragment !Handle !(IORef Word64) !(IORef Word32)
+newtype Streams = Streams [Fragment]
 
 -- | The next relative byte position, without seeking any output handle.
 streamOffset :: Streams -> Segment -> IO Word64
-streamOffset (Streams streams) segment = readIORef (snd (streams !! fromEnum segment))
+streamOffset (Streams streams) segment = case streams !! fromEnum segment of
+  Fragment _ size _ -> readIORef size
 
 -- | Append bytes and return their segment-relative starting position. Text
 -- encoding, shape interning and fingerprint sorting belong to the typed encoder.
 appendBytes :: Streams -> Segment -> BS.ByteString -> IO Word64
 appendBytes (Streams streams) segment bytes = do
-  let (handle, counter) = streams !! fromEnum segment
+  let Fragment handle counter checksum = streams !! fromEnum segment
   start <- readIORef counter
   end <- checkedAdd start (fromIntegral (BS.length bytes))
   BS.hPut handle bytes
   writeIORef counter $! end
+  old <- readIORef checksum
+  writeIORef checksum $! crc32Update old bytes
   pure start
 
 -- | Encode one bounded record without accumulating preceding executable data.
 appendRecord :: Streams -> Segment -> Put -> IO Word64
 appendRecord streams segment record = do
-  let Streams handles = streams
-  start <- readIORef (snd (handles !! fromEnum segment))
+  start <- streamOffset streams segment
   mapM_ (appendBytes streams segment) (BL.toChunks (runPut record))
   pure start
 
@@ -61,53 +67,58 @@ appendRecord streams segment record = do
 -- Summary bits must be actual producer facts. Every owned temporary file is
 -- closed and removed on failure; auxiliary files are also removed on success.
 -- Existing output remains intact if construction or framing validation fails.
-writeContainer :: FilePath -> BS.ByteString -> Word32 -> (Streams -> IO Word64) -> IO Footer
+writeContainer :: FilePath -> BS.ByteString -> Word32 -> (Streams -> IO Word64) -> IO Container
 writeContainer destination facts = writeContainerPrepared destination (const (pure facts))
 
 -- | Prepare small known-start facts while interning their strings in the
 -- auxiliary stream. Preparation cannot emit executable bytes. Header facts are
 -- complete before the prefix is written; no output seek or fixup is needed.
-writeContainerPrepared :: FilePath -> (Streams -> IO BS.ByteString) -> Word32 -> (Streams -> IO Word64) -> IO Footer
+writeContainerPrepared :: FilePath -> (Streams -> IO BS.ByteString) -> Word32 -> (Streams -> IO Word64) -> IO Container
 writeContainerPrepared destination prepare summaries produce =
   writeContainerStreamed destination prepare $ \streams -> do
     count <- produce streams
     pure (count,summaries)
 
--- | Derive summaries while emitting executable records, then put those actual
--- end-derived facts in the footer without a body prepass.
-writeContainerStreamed :: FilePath -> (Streams -> IO BS.ByteString) -> (Streams -> IO (Word64,Word32)) -> IO Footer
-writeContainerStreamed destination prepare produce = bracketOnError
-  (openBinaryTempFile directory "compact-data.tmp") cleanup $ \(path, output) -> do
-    footer <- withAuxiliaries 5 [] $ \auxiliaries -> do
-      streams <- Streams <$> mapM (\handle -> (,) handle <$> newIORef 0) (output : auxiliaries)
+-- | Default all-STORED CBD publication. Actual summaries are accumulated during
+-- executable emission, never discovered by scanning a completed body.
+writeContainerStreamed :: FilePath -> (Streams -> IO BS.ByteString) -> (Streams -> IO (Word64,Word32)) -> IO Container
+writeContainerStreamed = writeContainerStreamedWith defaultCompression
+
+-- | Per-member compression changes packaging only. Every fragment's CRC and
+-- size are accumulated while producing it, so STORED assembly needs one copy.
+writeContainerStreamedWith :: Compression -> FilePath -> (Streams -> IO BS.ByteString) -> (Streams -> IO (Word64,Word32)) -> IO Container
+writeContainerStreamedWith policy destination prepare produce = bracketOnError
+  (openBinaryTempFile directory "compact-archive.tmp") cleanup $ \(path, output) -> do
+    container <- withAuxiliaries 6 [] $ \auxiliaries -> do
+      streams <- Streams <$> mapM (\handle -> Fragment handle <$> newIORef 0 <*> newIORef 0) auxiliaries
       facts <- prepare streams
       preparedData <- streamOffset streams ExecutableData
       unless (preparedData == 0) (fail "Compact fact preparation emitted executable data")
-      let header = Header 1 0 (fromIntegral (BS.length facts))
-      BL.hPut output (runPut (putHeader header))
-      BS.hPut output facts
       (count,summaries) <- produce streams
       let Streams handles = streams
-      lengths <- mapM (readIORef . snd) handles
-      (_, spans) <- foldM nextSpan (headerSize+headerFactsLength header, []) lengths
-      end <- case reverse spans of
-        Span start size : _ -> checkedAdd start size
-        [] -> fail "Missing compact streams"
-      total <- checkedAdd end footerSize
+      lengths <- mapM (\(Fragment _ size _) -> readIORef size) handles
       let debug = case lengths of
             [_,_,names,files,positions,_] ->
               (if names == 0 then 0 else 1) .|.
               (if files == 0 then 0 else 2) .|.
               (if positions == 0 then 0 else 4)
             _ -> 0
-          result = Footer spans count summaries debug
-      either fail pure (validateContainer total header result)
-      mapM_ (copyAuxiliary output) auxiliaries
-      BL.hPut output (runPut (putFooter result))
+          header = Header 1 0 summaries count debug
+          result = Container header lengths
+          headerBytes = BL.toStrict (runPut (putHeader header)) <> facts
+          members = [DataMember,StringsMember,NamesMember,FilenamesMember,LineColumnsMember,SymbolsMember]
+      either fail pure (validateContainer header lengths)
+      sources <- mapM (\(member,Fragment handle size checksum) ->
+        ZipSource (memberName member) (compressionLevel member policy) <$> readIORef size <*> readIORef checksum <*> pure handle)
+        (zip members handles)
+      bracket (openBinaryTempFile directory "compact-header.tmp") cleanup $ \(_,headerHandle) -> do
+        BS.hPut headerHandle headerBytes
+        writeZip directory output
+          (ZipSource "header" (compressionLevel HeaderMember policy) (fromIntegral (BS.length headerBytes)) (crc32 headerBytes) headerHandle : sources)
       pure result
     hClose output
     renameFile path destination
-    pure footer
+    pure container
   where
     directory = takeDirectory destination
     withAuxiliaries :: Int -> [Handle] -> ([Handle] -> IO a) -> IO a
@@ -115,19 +126,6 @@ writeContainerStreamed destination prepare produce = bracketOnError
     withAuxiliaries remaining handles action = bracket
       (openBinaryTempFile directory "compact-aux.tmp") cleanup $ \(_, handle) ->
         withAuxiliaries (remaining-1) (handle:handles) action
-    nextSpan (!position, spans) size = do
-      end <- checkedAdd position size
-      pure (end, spans ++ [Span position size])
-
-copyAuxiliary :: Handle -> Handle -> IO ()
-copyAuxiliary output input = do
-  hFlush input
-  hSeek input AbsoluteSeek 0
-  copy
-  where
-    copy = do
-      bytes <- BS.hGetSome input 65536
-      unless (BS.null bytes) (BS.hPut output bytes >> copy)
 
 checkedAdd :: Word64 -> Word64 -> IO Word64
 checkedAdd start size
