@@ -38,8 +38,10 @@ internal object ManagedByteArray {
     }
     // Word8ArrayAs* counts bytes and permits unaligned starts.
     private fun byteOffset(bytes: ByteArray, offset: Long, width: Int, representation: String): Int {
-        if (offset < 0 || offset > bytes.size.toLong() - width)
+        if (offset < 0 || offset > bytes.size.toLong() - width) {
+            transferToInterpreter()
             fault("ByteArray# $representation byte offset outside its backing storage")
+        }
         return offset.toInt()
     }
 
