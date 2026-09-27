@@ -1097,7 +1097,7 @@ def _iter_unit_modules(path, unit, records):
     inventory. It never uses the optional structural index or rewrites Core.
     """
     source, symbols = (_unit_reference(path, unit, key) for key in ('json', 'symbols'))
-    expected_rows = []
+    expected_rows = {}
     with open(source['path'], 'rb') as stream, open(symbols['path'], 'rb') as directory:
         _verified_stream(path, stream, source)
         _verified_stream(path, directory, symbols)
@@ -1141,8 +1141,8 @@ def _iter_unit_modules(path, unit, records):
             at, offset = 1, first + 1
             decoder = json.JSONDecoder()
             while True:
-                after_space = at + len(text[at:]) - len(text[at:].lstrip())
-                offset += len(text[at:after_space].encode('utf-8'))
+                after_space = _skip_json_space(text, at)
+                offset += after_space - at  # JSON whitespace is one-byte ASCII.
                 at = after_space
                 if text[at] == ']':
                     break
@@ -1150,24 +1150,38 @@ def _iter_unit_modules(path, unit, records):
                 key = binding.get('id') if isinstance(binding, dict) else None
                 if not isinstance(key, str) or not key or '\n' in key or '\r' in key:
                     raise ValueError(f'{path}: invalid unit symbol ID')
-                expected_rows.append((key.encode('utf-8'), offset))
+                encoded_key = key.encode('utf-8')
+                if encoded_key in expected_rows:
+                    raise ValueError(f'{path}: duplicate unit symbol ID')
+                expected_rows[encoded_key] = offset
                 offset += len(text[at:end_at].encode('utf-8'))
                 at = end_at
-                while text[at].isspace():
-                    offset += len(text[at].encode('utf-8')); at += 1
+                after_space = _skip_json_space(text, at)
+                offset += after_space - at
+                at = after_space
                 if text[at] == ',':
                     offset += 1; at += 1
                 elif text[at] != ']':
                     raise ValueError(f'{path}: invalid unit binding separator')
             yield item, source['path'] + '@' + str(start), data
-        expected_rows.sort()
-        if any(a[0] == b[0] for a, b in zip(expected_rows, expected_rows[1:])):
-            raise ValueError(f'{path}: duplicate unit symbol ID')
-        for key, offset in expected_rows:
-            if directory.readline() != key + b' ' + str(offset).encode('ascii') + b'\n':
+        previous_key = None
+        for row in directory:
+            key, delimiter, _ = row.rpartition(b' ')
+            offset = expected_rows.pop(key, None)
+            if (not delimiter or offset is None or previous_key is not None and key <= previous_key or
+                    row != key + b' ' + str(offset).encode('ascii') + b'\n'):
                 raise ValueError(f'{path}: unit symbol directory differs from original bindings')
-        if directory.read(1):
-            raise ValueError(f'{path}: extra unit symbol directory row')
+            previous_key = key
+        if expected_rows:
+            raise ValueError(f'{path}: unit symbol directory is missing original bindings')
+
+
+def _skip_json_space(text, at):
+    """Advance a bounded cursor without copying any unvisited suffix."""
+    size = len(text)
+    while at < size and text[at] in ' \t\r\n':
+        at += 1
+    return at
 
 
 def _same_json_value(left, right):
@@ -1183,24 +1197,24 @@ def _same_json_value(left, right):
 def _bindings_span(text):
     """Locate the actual top-level field for an explicitly verified module."""
     decoder = json.JSONDecoder()
-    at = len(text) - len(text.lstrip())
+    at = _skip_json_space(text, 0)
     if text[at] != '{':
         raise ValueError('Core module must be an object')
     at += 1
     while True:
-        at += len(text[at:]) - len(text[at:].lstrip())
+        at = _skip_json_space(text, at)
         if text[at] == '}':
             raise ValueError('Core module has no bindings')
         key, at = decoder.raw_decode(text, at)
-        at += len(text[at:]) - len(text[at:].lstrip())
+        at = _skip_json_space(text, at)
         if text[at] != ':':
             raise ValueError('Invalid Core object delimiter')
         at += 1
-        at += len(text[at:]) - len(text[at:].lstrip())
+        at = _skip_json_space(text, at)
         _, end = decoder.raw_decode(text, at)
         if key == 'bindings':
             return len(text[:at].encode('utf-8')), len(text[:end].encode('utf-8'))
-        at = end + len(text[end:]) - len(text[end:].lstrip())
+        at = _skip_json_space(text, end)
         if text[at] == ',':
             at += 1
 

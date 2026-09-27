@@ -373,7 +373,7 @@ class PackageManifestTest(unittest.TestCase):
         return self.bundled(unit, members={'core/Shared.json': (self.root / 'first.json').read_bytes(),
                                           'core/Other.json': second})
 
-    def direct_unit(self):
+    def direct_unit(self, binding_count=1):
         unit = dict(id='first', depends=[], modules=[])
         payload, rows = bytearray(), []
         # Reverse bytewise ID/module order, raw spaces and non-ASCII text.
@@ -383,11 +383,16 @@ class PackageManifestTest(unittest.TestCase):
             prefix = json.dumps(dict(schema=1, ghc='9.14.1', unit='first', module=name,
                                     boundary=self.boundary, note='雪'), ensure_ascii=False).encode()[:-1]
             prefix += b', "bindings": ['
-            body = json.dumps(binding, ensure_ascii=False).encode()
+            chunks = [json.dumps(binding | dict(id=binding['id'] + (f' {index:05}' if binding_count > 1 else '')),
+                                 ensure_ascii=False).encode() for index in range(binding_count)]
+            body = b', \t\r\n'.join(chunks)
             source = prefix + body + b'], "constructors": []}\r\n'
             start = len(payload)
             payload.extend(source + b'\n')
-            rows.append((binding['id'].encode(), start + len(prefix)))
+            offset = start + len(prefix)
+            for chunk in chunks:
+                rows.append((json.loads(chunk)['id'].encode(), offset))
+                offset += len(chunk) + len(b', \t\r\n')
             metadata_start = len(payload)
             original = json.loads(source)
             payload.extend(json.dumps({key: value for key, value in original.items()
@@ -417,6 +422,21 @@ class PackageManifestTest(unittest.TestCase):
             '--package-manifest', str(path), '--entry', 'first:Zulu.雪 space'], text=True, capture_output=True)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(json.loads(result.stdout)['accepted'])
+
+    def test_direct_unit_many_bindings_and_bounded_whitespace_cursor(self):
+        unit = self.direct_unit(binding_count=2048)
+        loaded = core_package_manifest.load(self.manifest([unit]))
+        self.assertEqual(4096, sum(len(module['bindings']) for _, module in loaded))
+        class NoSuffix(str):
+            def __getitem__(self, key):
+                if isinstance(key, slice) and key.start is not None and key.stop is None:
+                    raise AssertionError('scanner copied an unvisited suffix')
+                return super().__getitem__(key)
+        text = NoSuffix(' \r\n\t { "雪" : 7, \n "bindings" : [ {"id":"x y"} ] } \n')
+        self.assertEqual(5, core_package_manifest._skip_json_space(text, 0))
+        begin, end = core_package_manifest._bindings_span(text)
+        self.assertEqual(b'[ {"id":"x y"} ]', text.encode()[begin:end])
+        self.assertEqual(len(text), core_package_manifest._skip_json_space(text, len(text)))
 
     def test_direct_unit_rejects_bad_pair_spans_summaries_and_symbols(self):
         import copy
