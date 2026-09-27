@@ -142,11 +142,19 @@ result; use matched measurements and actual compiler output for that question.
 * [Current architecture and planned work](architecture.md) and
   [development checks](contributing.md).
 
-Runtime experiments are opt-in except compact headers and class-owned layouts.
+Ordinary launches enable compact object headers and prefer compressed object
+references. `JAVA_OPTS` or `THC_OPTS` can supply `-XX:-UseCompressedOops` to the
+installed launcher; inherited `JAVA_TOOL_OPTIONS`, `JDK_JAVA_OPTIONS` and
+`_JAVA_OPTIONS` also retain their explicit choice. Gradle test and JavaExec
+forks respect their JVM arguments and inherited options. Explicit RAM-sizing
+options such as `-XX:MaxRAMPercentage=...` retain JVM heap ergonomics; a large
+`-Xmx` or a collector requiring full pointers can disable compressed references.
+No fixed maximum heap size is imposed.
+
 `-Dthc.classOwnedLayouts=false` selects field-bearing layouts;
 `-Pthc.compactObjectHeaders=false` disables compact headers for Gradle launches.
-The controlled benchmark also accepts `-XX:-UseCompactObjectHeaders` for a
-matched header-off run. Keep graph capture separate from timed measurements.
+Other runtime experiments are opt-in. Keep graph capture separate from timed
+measurements.
 
 [Open design questions](../research/open-questions.md) identify concrete next
 decisions about program closures, optimization, resumable effects and packaging.

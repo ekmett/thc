@@ -5,6 +5,8 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
 import java.net.URI
+import org.gradle.process.JavaForkOptions
+import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
     application
@@ -118,6 +120,22 @@ application {
         // Embedders do not inherit these launcher JVM arguments.
         if (System.getProperty("os.name") == "Linux") listOf("-Xrs") else emptyList()
 }
+// An explicit oop or RAM-sizing choice belongs to the caller. In particular,
+// forcing compressed oops can cap an otherwise explicit MaxRAMPercentage heap.
+// Defer to opaque @argument files too, without opening or parsing them here.
+val inheritedJvmOptions = listOf("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS")
+val memoryOptionNames = listOf("UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", "@")
+fun defaultCompressedOops(options: JavaForkOptions): List<String> {
+    val explicit = options.jvmArgs.orEmpty() + inheritedJvmOptions.map { options.environment[it]?.toString().orEmpty() }
+    return if (explicit.any { option -> memoryOptionNames.any(option::contains) }) emptyList()
+        else listOf("-XX:+UseCompressedOops")
+}
+tasks.withType<JavaExec>().configureEach {
+    jvmArgumentProviders.add(CommandLineArgumentProvider { defaultCompressedOops(this) })
+}
+tasks.withType<Test>().configureEach {
+    jvmArgumentProviders.add(CommandLineArgumentProvider { defaultCompressedOops(this) })
+}
 tasks.startScripts {
     // This must happen before Java starts. HotSpot's suspend handler cannot be
     // chained behind the guest's USR2 handler; reserve Linux signal 64 for it.
@@ -133,12 +151,32 @@ tasks.startScripts {
         esac
 
     """.trimIndent()
+    // Decide on the user's machine, not when the distribution is built. Java
+    // reads JAVA_TOOL_OPTIONS and JDK_JAVA_OPTIONS before command-line defaults.
+    val unixMemoryPolicy = """
+        case "${'$'}{JAVA_TOOL_OPTIONS-} ${'$'}{JDK_JAVA_OPTIONS-} ${'$'}{_JAVA_OPTIONS-} ${'$'}{JAVA_OPTS-} ${'$'}{THC_OPTS-}" in
+          *UseCompressedOops*|*MaxRAM*|*MinRAM*|*InitialRAM*|*@*) ;;
+          *) DEFAULT_JVM_OPTS="${'$'}DEFAULT_JVM_OPTS \"-XX:+UseCompressedOops\"" ;;
+        esac
+    """.trimIndent()
+    // Query these variables rather than expanding their contents into cmd syntax:
+    // an otherwise valid quoted -D property can contain shell metacharacters.
+    val windowsMemoryPolicy = """
+        (set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\System32\findstr.exe" /L /C:"UseCompressedOops" /C:"MaxRAM" /C:"MinRAM" /C:"InitialRAM" /C:"@" >nul
+        if errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-XX:+UseCompressedOops"
+    """.trimIndent()
     inputs.property("linuxSignalPolicy", policy)
+    inputs.property("unixMemoryPolicy", unixMemoryPolicy)
+    inputs.property("windowsMemoryPolicy", windowsMemoryPolicy)
     doLast {
-        val marker = "# Collect all arguments for the java command:"
-        val script = unixScript.readText()
-        check(script.contains(marker)) { "Missing Gradle launcher insertion point" }
-        unixScript.writeText(script.replace(marker, policy + "\n" + marker))
+        val unixMarker = "# Collect all arguments for the java command:"
+        val unix = unixScript.readText()
+        check(unix.contains(unixMarker)) { "Missing Gradle Unix launcher insertion point" }
+        unixScript.writeText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n\n" + unixMarker))
+        val windowsMarker = "@rem Execute thc"
+        val windows = windowsScript.readText()
+        check(windows.contains(windowsMarker)) { "Missing Gradle Windows launcher insertion point" }
+        windowsScript.writeText(windows.replace(windowsMarker, windowsMemoryPolicy.replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker))
     }
 }
 tasks.named<JavaExec>("run") {
