@@ -4709,7 +4709,10 @@ CoreStackForeign.validateHead(fn, defined)
                 val arm = explicit[index]
                 if (destination == null) b.beginConditional() else b.beginIfThenElse()
                 b.beginMatchLiteral(arm.tag!!.toLong()); read(fields[0]).emit(e); b.endMatchLiteral()
-                emitResult(arm.body, e, destination); choice(index + 1)
+                // Aggregate arms emit one store per physical result slot. Each
+                // branch must still be one builder child (including zero slots).
+                b.beginBlock(); emitResult(arm.body, e, destination); b.endBlock()
+                b.beginBlock(); choice(index + 1); b.endBlock()
                 if (destination == null) b.endConditional() else b.endIfThenElse()
             }
             choice(0)
