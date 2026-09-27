@@ -154,6 +154,7 @@ extra-source-files:
   compiler/test-fixtures/OriginalPathAccessAudit.hs
   compiler/test-fixtures/OriginalUnlinkAtAudit.hs
   compiler/test-fixtures/OriginalFstatAtAudit.hs
+  compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs
   compiler/test-fixtures/OriginalFcntlNative.hs
   compiler/test-fixtures/OriginalErrnoAudit.hs
   compiler/test-fixtures/OriginalErrnoNative.hs
@@ -840,6 +841,7 @@ executable thc-fixtures
     OriginalPathAccessFixtures
     OriginalUnlinkAtFixtures
     OriginalFstatAtFixtures
+    OriginalCurrentDirectoryFixtures
     OriginalPathStatFixtures
     OriginalPosixStatFixtures
     OriginalGmpFixtures

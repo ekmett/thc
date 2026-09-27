@@ -44,6 +44,13 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
             }
             return null
         }
+        if (operation == OriginalStdioOp.GETCWD) {
+            val output = operands[0].executeRequiredAddress(frame)
+            val capacity = operands[1].executeRequiredLong(frame)
+            requireVoidCarrier(operands[2].execute(frame))
+            FrameAccess.writeObject(frame, slots[offset], CoreOriginalStdio.current(this).currentDirectory(output, capacity))
+            return null
+        }
         if (operation == OriginalStdioOp.SET_ERRNO) {
             val value = operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[1].execute(frame))
@@ -144,6 +151,10 @@ internal class OriginalStdioExpression(private val operation: OriginalStdioOp,
                 else operands[0].executeRequiredLong(frame)
             requireVoidCarrier(operands[operands.lastIndex].execute(frame))
             PosixStat.execute(operation, address, mode)
+        } else if (operation == OriginalStdioOp.CHDIR) {
+            val path = operands[0].executeRequiredAddress(frame)
+            requireVoidCarrier(operands[1].execute(frame))
+            CoreOriginalStdio.current(this).changeDirectory(path)
         } else if (operation == OriginalStdioOp.SYMLINK) {
             val target = operands[0].executeRequiredAddress(frame)
             val path = operands[1].executeRequiredAddress(frame)

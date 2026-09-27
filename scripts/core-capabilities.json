@@ -97,6 +97,8 @@
     "ghczuwrapperZC11ZCghczminternalZCGHCziInternalziSystemziPosixziInternalsZCsigprocmask",
     "__hscore_sizeof_stat",
     "__hscore_fstat",
+    "chdir",
+    "getcwd",
     "symlink",
     "readlink",
     "mkdir",

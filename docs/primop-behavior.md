@@ -20,6 +20,12 @@ The tables distinguish unsupported behavior from intentional target choices
 and performance-only hints. Linked implementation guides supply detail and
 test commands.
 
+## Original working-directory foreign calls
+
+| Original declaration | Current behavior and consequence |
+| --- | --- |
+| Unix 2.8.8.0 `chdir` / `getcwd` | Both backends use the explicit Linux x86_64 NativeIO context's directory descriptor; process CWD stays unchanged. `getcwd` supports non-null caller-owned buffers and rejects GNU NULL allocation. Verified physical naming can return EACCES for inaccessible ancestors where native process `getcwd` succeeds; relative IO remains descriptor-based. See [native files](native-file-provider.md#context-working-directory) for lifetime and platform requirements. |
+
 ## Sparks and thread scheduling
 
 | Primop | Current behavior and consequence |

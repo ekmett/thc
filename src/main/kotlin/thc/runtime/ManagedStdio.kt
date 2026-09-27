@@ -177,6 +177,23 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         return closed
     }
 
+    @TruffleBoundary fun changeDirectory(path: ManagedAddress): Long {
+        val abi = hostAbi
+        val result = files.changeDirectoryOriginal(path)
+        if (result < 0) lastError.set(fileError(abi))
+        return result
+    }
+
+    @TruffleBoundary fun currentDirectory(output: ManagedAddress, capacity: Long): ManagedAddress {
+        val abi = hostAbi
+        val result = files.currentDirectoryOriginal(output, capacity)
+        if (result < 0) {
+            lastError.set(fileError(abi))
+            return ManagedAddress.nullAddress()
+        }
+        return output
+    }
+
     @TruffleBoundary fun symlink(target: ManagedAddress, path: ManagedAddress): Long {
         val result = files.symlinkOriginal(target, path)
         if (result < 0) lastError.set(fileError(hostAbi))
@@ -193,7 +210,7 @@ internal class ManagedStdio(private val files: ManagedFiles) {
         val abi = hostAbi
         if (fd != fd.toInt().toLong() || flags != flags.toInt().toLong())
             fault("Original fstatat requires canonical signed CInt descriptor and flags")
-        val result = files.statAtOriginal(fd, path, destination, flags.toInt(), abi.atFdcwd, abi.atEmptyPath)
+        val result = files.statAtOriginal(fd, path, destination, flags.toInt(), abi.atFdcwd)
         if (result < 0) lastError.set(fileError(abi))
         return result
     }

@@ -1066,6 +1066,33 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.StdioHostAbiTest",
                       self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
 
+    def test_current_directory_sources_select_the_genuine_context_directory_comparison(self):
+        for path in ("compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs",
+                     "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
+                     "src/test/kotlin/thc/runtime/OriginalCurrentDirectoryTest.kt",
+                     "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
+                     "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
+                     "src/main/kotlin/thc/runtime/NativeDirectoryOwner.kt",
+                     "src/main/kotlin/thc/NativeFileSystem.kt",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
+                     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/ManagedStdio.kt",
+                     "src/main/kotlin/thc/runtime/ManagedFiles.kt",
+                     "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
+                     "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
+                     "test/haskell-fixtures/Main.hs"):
+            self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", self.policy["owners"][path]["junit"], path)
+        self.assertIn("thc.runtime.StdioHostAbiTest",
+                      self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
+
+    def test_directory_filesystem_owner_selects_lifetime_and_original_controls(self):
+        for path in ("src/main/kotlin/thc/runtime/NativeDirectoryOwner.kt",
+                     "src/main/kotlin/thc/NativeFileSystem.kt", "src/main/kotlin/thc/NativeIO.kt",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/c/native-file-api.c",
+                     "src/main/c/native-directory-api.c"):
+            self.assertIn("thc.runtime.NativeDirectoryFileSystemTest", self.policy["owners"][path]["junit"], path)
+            self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", self.policy["owners"][path]["junit"], path)
+
     def test_array_core_helper_selects_all_consuming_suites(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt"]
         consumers = set()
@@ -1073,7 +1100,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             source = path.read_text()
             if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
                 consumers.update(select.junit_info(source)[0])
-        self.assertEqual(36, len(consumers))
+        self.assertEqual(37, len(consumers))
         self.assertIn("thc.runtime.Explicit64ArrayTest", consumers)
         self.assertIn("thc.runtime.OriginalPathStatTest", consumers)
         self.assertIn("thc.runtime.OriginalPathModeTest", consumers)
@@ -1081,6 +1108,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertIn("thc.runtime.OriginalPathAccessTest", consumers)
         self.assertIn("thc.runtime.OriginalUnlinkAtTest", consumers)
         self.assertIn("thc.runtime.OriginalFstatAtTest", consumers)
+        self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", consumers)
         self.assertIn("thc.runtime.UnalignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.AlignedScalarMemoryTest", consumers)
         self.assertIn("thc.runtime.IntegerCompletionTest", consumers)

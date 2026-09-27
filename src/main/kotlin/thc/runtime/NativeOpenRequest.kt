@@ -14,17 +14,17 @@ import java.nio.file.Path
  * Abort retains the same lease if a provider throws after completing acquisition. */
 internal class NativeOpenRequest(val endpoint: StandardEndpoint?,
     private val expectedOptions: Set<OpenOption>,
-    private val create: (Path?) -> NativeFileResource) : OpenOption, Closeable {
+    private val create: (Path?, NativeDirectoryOwner.Borrow?) -> NativeFileResource) : OpenOption, Closeable {
     private val thread = Thread.currentThread()
     private var resource: NativeFileResource? = null
     private var completed = false
     private var closed = false
 
-    @Synchronized fun acquire(path: Path?, options: Set<OpenOption>): SeekableByteChannel {
+    @Synchronized fun acquire(path: Path?, options: Set<OpenOption>, directory: NativeDirectoryOwner.Borrow? = null): SeekableByteChannel {
         check(Thread.currentThread() === thread && !closed && !completed) { "Closed, late, or duplicate native acquisition" }
         require(options == expectedOptions && ((path == null) == (endpoint != null))) { "Changed native acquisition options" }
         completed = true
-        return create(path).also { resource = it }
+        return create(path, directory).also { resource = it }
     }
 
     @Synchronized fun commit(channel: SeekableByteChannel): OpenedNativeFile {

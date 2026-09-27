@@ -128,10 +128,10 @@ Original open forwards all canonical flags and mode bits unchanged to libc,
 including requested truncation/append/creation behavior and the host umask.
 No flags are added, no retry occurs, and success does not require a later fstat
 or regular-file check. A complete pointer-free NUL-terminated region is copied
-before effects; pathname bytes are not decoded as UTF-8. For relative paths,
-the fixed host filesystem's public `.` URI supplies the absolute byte anchor;
-guest symlink/dot segments are appended without normalization. Empty names stay
-empty. The fixed factory does not promise a mutable working-directory API.
+before effects; pathname bytes are not decoded as UTF-8. Relative paths use the
+context's borrowed directory descriptor with `openat`; guest symlink/dot segments
+are not normalized. Empty names stay empty. Safe and interruptible workers retain
+that same borrow until completion or cancellation has joined the worker.
 
 A pending acquisition reserves the lowest free context descriptor before
 creation or truncation. Both dup and private open skip reservations; dup2 into a
@@ -217,3 +217,48 @@ value. Context ownership and freed-storage checks apply to native path aliases.
 The native GHC oracle supplies expected results for files, directories, symlinks,
 raw-byte names, denied traversal, invalid modes and missing paths without
 assuming whether the process has root privileges.
+
+### Context working directory
+
+The fixed Linux x86_64 NativeIO factory shares one opened directory between its
+filesystem and native provider. Original Unix 2.8.8.0 unsafe `chdir` acquires an
+`O_PATH` directory, checks effective-ID search permission with `faccessat2`, and
+publishes the replacement once. Failure leaves the current directory unchanged.
+The Env setter uses the same transaction; public and internal Truffle files see
+the same owner. Initialization is idempotent. The JVM/process working directory
+never changes, and separate contexts retain independent owners.
+
+Each relative operation borrows an owned duplicate for its complete lookup.
+Native open/stat/access/mode/link/unlink families use their descriptor-relative
+POSIX calls, preserving raw bytes and symlink/`..` semantics. Ordinary filesystem
+operations resolve through the private borrowed `/proc/self/fd` handle; directory
+streams retain it through close and expose paths under the requested directory.
+Renaming or replacing an ancestor cannot redirect an operation to the old name.
+Disposal rejects new borrows and closes the current owner; in-flight borrows close
+when their operation finishes. Linux consumes a directory descriptor on close
+even on EINTR, so private anchor cleanup never retries or changes a completed
+operation's reported result. Ordinary opened-file close errors remain reported.
+
+Original unsafe `getcwd` supports a non-null, caller-owned byte buffer. It checks
+the entire writable range before observing the directory, stages the name,
+writes one trailing NUL on success, and returns the identical address and offset.
+Failure leaves the buffer unchanged. Zero capacity reports EINVAL; insufficient
+capacity reports ERANGE. Success preserves errno. GNU NULL-buffer allocation is
+explicitly unsupported; no unowned address is returned.
+
+Physical naming verifies procfs text against the directory's mount/device/inode
+identity and falls back to a descriptor walk for long names. It does not strip a
+literal ` (deleted)` suffix. Rename produces the new physical name, while a
+removed directory reports ENOENT and keeps its live handle for remaining relative
+operations. This requires Linux `statx` mount identity, `faccessat2`, and procfs
+for ordinary filesystem resolution. The verification/walk can conservatively
+report EACCES for inaccessible ancestors where the kernel's process `getcwd`
+would succeed. Env pathname queries have the same limitation; relative IO does
+not first recover a physical name.
+
+`OriginalCurrentDirectoryTest` compares genuine source-built Unix FCallIds with
+native GHC in an isolated child process, using guarded output buffers, raw names,
+rename/deletion, long names and exact first-installed AST/bytecode calls.
+`NativeDirectoryFileSystemTest` checks context isolation, transactional setters,
+ordinary IO, stream path/lifetime behavior and descriptor reuse. The native
+oracle restores only its own child CWD; the coordinator and JVM stay unchanged.

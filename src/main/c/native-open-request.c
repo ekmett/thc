@@ -32,7 +32,7 @@ _Static_assert(sizeof(_Atomic int) == 4, "guard cmpl requires a four-byte cancel
 // label is IMMEDIATELY after syscall: Linux resumes there when an operation has
 // completed (including successful fd acquisition). Never discard that result.
 // This is machine code, never Sulong code, and never runs on a JVM thread.
-extern long thc_open_guard(const _Atomic int *, const char *, int, uint32_t);
+extern long thc_open_guard(const _Atomic int *, const char *, int, uint32_t, int);
 extern char thc_open_guard_start[], thc_open_guard_end[], thc_open_guard_cancel[];
 __asm__(".text\n"
         ".hidden thc_open_guard\n.type thc_open_guard,@function\n"
@@ -42,7 +42,7 @@ __asm__(".text\n"
         "cmpl $0,(%rdi)\n"
         "jne thc_open_guard_cancel\n"
         "mov %ecx,%r10d\n"
-        "mov $-100,%edi\n"
+        "mov %r8d,%edi\n"
         "mov $257,%eax\n"
         "syscall\n"
         ".global thc_open_guard_end\n.hidden thc_open_guard_end\n"
@@ -110,6 +110,7 @@ struct open_request {
   int error;
   char *path;
   int flags;
+  int directory;
   uint32_t mode;
 };
 
@@ -155,7 +156,7 @@ static void *open_worker(void *argument) {
 #ifdef THC_OPEN_REQUEST_TEST
   test_boundary(1);
 #endif
-  long result = error ? -error : thc_open_guard(&request->cancelled, request->path, request->flags, request->mode);
+  long result = error ? -error : thc_open_guard(&request->cancelled, request->path, request->flags, request->mode, request->directory);
 #ifdef THC_OPEN_REQUEST_TEST
   test_boundary(2);
 #endif
@@ -166,7 +167,7 @@ static void *open_worker(void *argument) {
   return NULL;
 }
 
-void *thc_open_start(const char *path, int flags, uint32_t mode, int *error) {
+void *thc_open_start_at(const char *path, int flags, uint32_t mode, int directory, int *error) {
   *error = own_signal();
   if (*error) return NULL;
   struct open_request *request = calloc(1, sizeof(*request));
@@ -180,6 +181,7 @@ void *thc_open_start(const char *path, int flags, uint32_t mode, int *error) {
   request->event = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
   if (request->event < 0) { *error = errno; goto failed; }
   request->flags = flags;
+  request->directory = directory;
   request->mode = mode;
   *error = pthread_create(&request->worker, NULL, open_worker, request);
   if (*error) goto failed;
@@ -237,4 +239,9 @@ int thc_open_finish(struct open_request *request, int *lease) {
   free(request->path);
   free(request);
   return error;
+}
+
+// Existing isolated native oracle entry; runtime supplies an owned directory.
+void *thc_open_start(const char *path, int flags, uint32_t mode, int *error) {
+  return thc_open_start_at(path, flags, mode, AT_FDCWD, error);
 }

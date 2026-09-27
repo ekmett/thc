@@ -151,12 +151,14 @@ class NativeFileProviderTest {
             assertThrows(SecurityException::class.java) { provider().open(directory.resolve("never").toString(), 3) }
             assertFalse(Files.exists(directory.resolve("never")))
         } }
-        Context.newBuilder("thc").allowNativeAccess(true)
-            .allowIO(IOAccess.newBuilder().fileSystem(FileSystem.newReadOnlyFileSystem(NativeFileSystem())).build())
+        val readOnlyNative = NativeFileSystem()
+        try { Context.newBuilder("thc").allowNativeAccess(true)
+            .allowIO(IOAccess.newBuilder().fileSystem(FileSystem.newReadOnlyFileSystem(readOnlyNative)).build())
             .build().use { context -> entered(context) {
             assertThrows(SecurityException::class.java) { provider().open(directory.resolve("never").toString(), 3) }
             assertFalse(Files.exists(directory.resolve("never")))
         } }
+        } finally { readOnlyNative.directoryOwner.close() }
         nativeContext().use { context -> entered(context) {
             val error = assertThrows(NativeFileException::class.java) { provider().open(directory.resolve("absent").toString(), 0) }
             assertEquals(StdioHostAbi.load().error(1), error.errno.toLong())
@@ -216,7 +218,7 @@ class NativeFileProviderTest {
         var acquired: SeekableByteChannel? = null
         val failure = IOException("after completion")
         nativeContext().use { context -> entered(context) {
-            val request = NativeOpenRequest(null, emptySet()) { provider().open(it!!.toString(), 3) }
+            val request = NativeOpenRequest(null, emptySet()) { path, _ -> provider().open(path!!.toString(), 3) }
             assertSame(failure, assertThrows(IOException::class.java) {
                 request.use {
                     acquired = it.acquire(directory.resolve("created"), emptySet())
@@ -231,7 +233,7 @@ class NativeFileProviderTest {
     @Test fun reentrantProviderDisposalAfterAcquisitionCannotPublishAClosedResource() {
         nativeContext().use { context -> entered(context) {
             val selected = provider()
-            val request = NativeOpenRequest(null, emptySet()) { selected.open(it!!.toString(), 3) }
+            val request = NativeOpenRequest(null, emptySet()) { path, _ -> selected.open(path!!.toString(), 3) }
             request.use {
                 val acquired = it.acquire(directory.resolve("reentrant"), emptySet())
                 selected.close()
@@ -245,14 +247,14 @@ class NativeFileProviderTest {
     @Test fun duplicateAndLateCompletionAreRejectedWithoutLeakingChannels() {
         nativeContext().use { context -> entered(context) {
             val selected = provider()
-            val request = NativeOpenRequest(null, emptySet()) { selected.open(it!!.toString(), 3) }
+            val request = NativeOpenRequest(null, emptySet()) { path, _ -> selected.open(path!!.toString(), 3) }
             val acquired = request.acquire(directory.resolve("twice"), emptySet())
             assertThrows(IllegalStateException::class.java) { request.acquire(directory.resolve("ignored"), emptySet()) }
             request.close()
             assertFalse(acquired.isOpen)
             assertEquals(0L, nativeDescriptors(directory.resolve("twice")))
             assertThrows(IllegalStateException::class.java) { request.acquire(directory.resolve("ignored"), emptySet()) }
-            val once = NativeOpenRequest(null, emptySet()) { selected.open(it!!.toString(), 3) }
+            val once = NativeOpenRequest(null, emptySet()) { path, _ -> selected.open(path!!.toString(), 3) }
             once.commit(once.acquire(directory.resolve("once"), emptySet())).use { opened ->
                 assertThrows(IllegalStateException::class.java) { once.acquire(directory.resolve("ignored"), emptySet()) }
                 assertEquals(0L, opened.size())
@@ -270,13 +272,13 @@ class NativeFileProviderTest {
                 return Files.newByteChannel(directory.resolve("substitute"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
             }
         }
-        Context.newBuilder("thc").allowNativeAccess(true)
+        try { Context.newBuilder("thc").allowNativeAccess(true)
             .allowIO(IOAccess.newBuilder().fileSystem(fs).build()).build().use { context -> entered(context) {
                 assertThrows(SecurityException::class.java) { provider().open(directory.resolve("victim").toString(), 3) }
                 assertEquals(0, calls, "Reject unauthenticated embedding before native acquisition")
                 assertFalse(Files.exists(directory.resolve("victim")))
                 assertFalse(Files.exists(directory.resolve("substitute")))
-            } }
+            } } } finally { native.directoryOwner.close() }
     }
 
     @Test fun metadataCannotCrossContextsAndClosedResourcesStayClosed() {

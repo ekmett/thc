@@ -62,6 +62,7 @@ import OriginalStrerrorFixtures (prepareOriginalStrerror)
 import OriginalStdioTruncateFixtures (prepareOriginalStdioTruncate)
 import OriginalHandleReadinessFixtures (prepareOriginalHandleReadiness)
 import OriginalPosixStatFixtures (prepareOriginalPosixStat)
+import OriginalCurrentDirectoryFixtures (prepareOriginalCurrentDirectory)
 import LibdwUnavailableFixtures (prepareLibdwUnavailable)
 import NativeAddressFixtures (prepareNativeAddress)
 import ProcessSignalFixtures (prepareProcessSignals)
@@ -980,6 +981,7 @@ main = do
     "original-stdio-read":[] -> prepareOriginalStdioRead root
     ["original-handle-readiness"] -> prepareOriginalHandleReadiness root
     ["original-posix-stat"] -> prepareOriginalPosixStat root
+    ["original-current-directory"] -> prepareOriginalCurrentDirectory root
     ["original-open"] -> prepareOriginalOpen root
     ["package-scalar-cbits"] -> preparePackageScalar root
     ["stableptr-ffi"] -> prepareStablePtrFFI root

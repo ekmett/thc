@@ -187,6 +187,86 @@ class FastInputTests(unittest.TestCase):
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalFstatAtAudit.o', 'ghc/abi-probe', 'native/oracle', 'unknown.json'):
             self.assertFalse(cache.allowed_payload('build/original-fstatat/' + suffix, {}))
 
+    def test_original_current_directory_closed_receipt(self):
+        name = 'build/original-current-directory/manifest.json'
+        outputs = cache.ORIGINAL_CURRENT_DIRECTORY_OUTPUTS
+        self.assertEqual(46, len(outputs))
+        self.assertEqual(cache.platform.system() == 'Linux', name in DECLARED_REQUIRED)
+        artifacts = {path: 'a' * 64 for path in outputs - {name}}
+        good = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
+                    entries=['pathChdir', 'pathGetCwd'], installedArtifactsHashed=False,
+                    nativeIsolatedChild=True, coordinatorCwdUnchanged=True, privateRebuiltUnix=True, unixSourceReceipt='build/original-current-directory/unix-source.json',
+                    unixArchiveSha256='a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e', artifactHashes=artifacts)
+        self.assertEqual(artifacts, cache.original_current_directory_artifact_hashes(good))
+        for unit in ('unix-2.8.8.0-inplace', 'unix-2.8.8.0-02fc', 'unix-2.8.8.0-deadbeef'):
+            self.assertEqual(artifacts, cache.original_current_directory_artifact_hashes(dict(good, unixUnit=unit)))
+        for unit in (None, 42, 'unix-2.8.8.0', 'unix-2.8.8.0-',
+                     'unix-2.8.8.0-ABCD', 'unix-2.8.8.0-xyz',
+                     'unix-2.8.7.0-02fc', 'directory-2.8.8.0-02fc',
+                     'unix-2.8.8.0-inplace\n', 'unix-2.8.8.0-02fc:forged'):
+            with self.assertRaises(cache.CacheMiss, msg=unit):
+                cache.original_current_directory_artifact_hashes(dict(good, unixUnit=unit))
+        for label in ('pre-audit-pathChdir', 'post-audit-pathGetCwd', 'native-child', 'unix-extract', 'unix-build'):
+            self.assertIn('build/original-current-directory/logs/' + label + '.command.json', outputs)
+        for path in outputs:
+            self.assertTrue(cache.allowed_payload(path, {}), path)
+        for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
+                        dict(entries=[]), dict(installedArtifactsHashed=True),
+                        dict(nativeIsolatedChild=False), dict(coordinatorCwdUnchanged=False),
+                        dict(privateRebuiltUnix=False), dict(unixSourceReceipt="wrong"), dict(unixArchiveSha256="a" * 64),
+                        dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
+                        dict(artifactHashes={**artifacts, 'build/original-current-directory/pre.json': 'bad'})):
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_current_directory_artifact_hashes(dict(good, **changes))
+        for path in artifacts:
+            with self.assertRaises(cache.CacheMiss):
+                cache.original_current_directory_artifact_hashes(dict(good,
+                    artifactHashes={key: value for key, value in artifacts.items() if key != path}))
+        for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalCurrentDirectoryAudit.o', 'ghc/abi-probe', 'native/oracle', 'unix-source/unix.cabal', 'unix-build/build/libHSunix.so', 'unknown.json'):
+            self.assertFalse(cache.allowed_payload('build/original-current-directory/' + suffix, {}))
+
+    def test_original_current_directory_archive_roundtrip_preserves_source_receipt(self):
+        name = 'build/original-current-directory/manifest.json'
+        receipt_name = 'build/original-current-directory/unix-source.json'
+        artifacts = cache.ORIGINAL_CURRENT_DIRECTORY_OUTPUTS - {name}
+        for path in artifacts:
+            self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\x00\xff\n')
+        # The complete Core and unchanged upstream sources are provenance, not
+        # prerequisites for restoring the closed exported fixture set.
+        private_source = 'build/original-current-directory/unix-source-run/unix-2.8.8.0/unix.cabal'
+        private_interface = '/private/fixture/unix-dist/PosixPath.hi'
+        receipt = json.dumps(dict(archive='vendor/archives/unix-2.8.8.0.tar.gz',
+            archiveSha256='a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e',
+            sourceHashes={private_source: 'a' * 64}, interfaceHashes={private_interface: 'b' * 64},
+            sourcesUnchangedAfterBuild=True, unixUnit='unix-2.8.8.0-inplace'))
+        self.put(receipt_name, receipt)
+        original = json.dumps(dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-inplace',
+            entries=list(cache.ORIGINAL_CURRENT_DIRECTORY_ENTRIES), installedArtifactsHashed=False,
+            nativeIsolatedChild=True, coordinatorCwdUnchanged=True, privateRebuiltUnix=True,
+            unixSourceReceipt=receipt_name,
+            unixArchiveSha256='a128dea3bfeb731a562f22d376fa606e902154d95321363f7ec1ea6b787a5a3e',
+            inputHashes=self.manifest['inputHashes'],
+            artifactHashes={path: cache.digest(self.root / path) for path in artifacts}))
+        self.put(name, original)
+        with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, name)):
+            packed = self.pack()
+            self.assertTrue(cache.ORIGINAL_CURRENT_DIRECTORY_OUTPUTS <= packed['payload'].keys())
+            self.assertNotIn(private_source, packed['payload'])
+            self.assertNotIn(private_interface, packed['payload'])
+            self.remove_payload(packed)
+            cache.restore(self.root, self.current, self.bundle)
+            self.assertEqual(original, (self.root / name).read_text())
+            self.assertEqual(receipt, (self.root / receipt_name).read_text())
+            for path in cache.ORIGINAL_CURRENT_DIRECTORY_OUTPUTS:
+                self.assertEqual(packed['payload'][path], cache.digest(self.root / path), path)
+            self.remove_payload(packed)
+            missing = self.rewrite(lambda entries: [(member, data) for member, data in entries
+                if member.name != 'files/' + receipt_name])
+            self.rejected_without_writes(missing)
+            corrupt = self.rewrite(lambda entries: [(member, data + b' ' if member.name == 'files/' + receipt_name else data)
+                for member, data in entries])
+            self.rejected_without_writes(corrupt)
+
     def test_bytestring_utf8_closed_receipt(self):
         manifest_path = 'build/bytestring-utf8/manifest.json'
         outputs = cache.BYTESTRING_UTF8_OUTPUTS
