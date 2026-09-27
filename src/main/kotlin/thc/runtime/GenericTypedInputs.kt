@@ -66,10 +66,10 @@ private fun InputSource.copyGeneric(frame: VirtualFrame, node: Node, values: Arr
         val field = to + i - from
         val proof = physicalProofs?.get(i)
         when {
-            proof?.isInt == true -> putInt(storage, field, int(frame, node, values, i))
-            proof?.isLong == true -> putLong(storage, field, long(frame, node, values, i))
-            proof?.isFloat == true -> putFloat(storage, field, float(frame, node, values, i))
-            proof?.isDouble == true -> putDouble(storage, field, double(frame, node, values, i))
+            proof?.isInt == true -> putInt(storage, field, readInt(frame, node, values, i))
+            proof?.isLong == true -> putLong(storage, field, readLong(frame, node, values, i))
+            proof?.isFloat == true -> putFloat(storage, field, readFloat(frame, node, values, i))
+            proof?.isDouble == true -> putDouble(storage, field, readDouble(frame, node, values, i))
             else -> putScalar(storage, field, reference(frame, node, values, i))
         }
     }
@@ -180,9 +180,9 @@ internal fun genericScalarValues(frame: VirtualFrame, node: Node, source: InputS
         if (proof?.isTuple == true || proof?.isVector == true) fault("Typed input cannot enter a scalar packet")
         val physical = ArgumentLayout.offset(source.layout, i)
         result[physical - from] = when {
-            proof?.isLong == true -> source.long(frame, node, values, physical)
-            proof?.isFloat == true -> source.float(frame, node, values, physical)
-            proof?.isDouble == true -> source.double(frame, node, values, physical)
+            proof?.isLong == true -> source.readLong(frame, node, values, physical)
+            proof?.isFloat == true -> source.readFloat(frame, node, values, physical)
+            proof?.isDouble == true -> source.readDouble(frame, node, values, physical)
             else -> source.reference(frame, node, values, physical)
         }
     }
