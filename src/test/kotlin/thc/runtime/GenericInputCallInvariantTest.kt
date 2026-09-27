@@ -89,4 +89,55 @@ class GenericInputCallInvariantTest {
         }
         preparationFailure(root, ClassCastException::class.java)
     }
+
+    @Test fun invalidTypedTargetLeavesExistingLoansUntouchedBeforeTheAction() =
+        executionContext(false).use { context ->
+            context.initialize("thc"); context.enter()
+            try {
+                val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
+                val field = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
+                val tuple = CoreRepresentation(CoreKind.UNKNOWN, true, true, field.primReps, listOf(field))
+                val layout = TypedInputLayout(language, ArgumentLayout.fromProofs(listOf(tuple))!!, false)
+                val nonGuest = object : RootNode(null) {
+                    override fun execute(frame: VirtualFrame): Any? = error("Non-guest target reached dispatch")
+                }
+                val untyped = object : GuestRoot(language, FrameLayout().build()) {
+                    override fun bloom(frame: VirtualFrame) = 0L
+                    override fun execute(frame: VirtualFrame): Any? = error("Untyped target reached dispatch")
+                }
+                val roots = listOf(null, nonGuest, untyped)
+                val failures = listOf(NullPointerException::class.java, ClassCastException::class.java, RuntimeFault::class.java)
+                val state = language.handoffState.get()
+                for ((root, type) in roots.zip(failures)) {
+                    var reads = 0
+                    val target = object : RootCallTarget {
+                        override fun getRootNode(): RootNode? { reads++; return root }
+                        override fun call(vararg arguments: Any?): Any? = error("Invalid target reached dispatch")
+                    }
+                    val input = state.arguments.acquire(layout.packet).also { it.inputMode = 1 }
+                    val output = state.results.acquire(layout.packet)
+                    val generation = input.generation
+                    val marker = Any()
+                    val outputMarker = Any()
+                    layout.packet.setObject(input, layout.header, marker)
+                    layout.packet.setObject(output, layout.header, outputMarker)
+                    val failure = assertThrows(type) {
+                        invokeTypedInput(target, input) { error("Invalid target reached the action") }
+                    }
+                    if (root == null)
+                        assertEquals("null cannot be cast to non-null type thc.runtime.GuestRoot", failure.message)
+                    if (root === untyped) assertEquals("Target has no typed input entry", failure.message)
+                    assertEquals(1, reads)
+                    assertTrue(input.live); assertEquals(1, input.inputMode); assertEquals(generation, input.generation)
+                    assertSame(marker, layout.packet.getObject(input, layout.header))
+                    assertTrue(output.live); assertSame(outputMarker, layout.packet.getObject(output, layout.header))
+                    assertEquals(1, state.arguments.depth); assertEquals(1, state.results.depth)
+                    assertNull(state.pending)
+                    layout.release(input)
+                    state.results.release(output, layout.packet)
+                    assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
+                    assertEquals(0, state.results.depth); assertEquals(0, state.results.retainedReferences())
+                }
+            } finally { context.leave() }
+        }
 }

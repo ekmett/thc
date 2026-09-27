@@ -240,7 +240,9 @@ internal fun typedPap(function: Closure, input: TypedInputLayout, source: InputS
  * deoptimization still have one generation-checked owner in the caller. */
 internal inline fun invokeTypedInput(target: com.oracle.truffle.api.RootCallTarget, input: HandoffStorage,
     action: (Array<Any?>) -> Any?): Any? {
-    val layout = (target.rootNode as GuestRoot).typedInput ?: fault("Target has no typed input entry")
+    val root = target.rootNode
+    if (root == null) CompilerDirectives.transferToInterpreter()
+    val layout = (root as GuestRoot).typedInput ?: fault("Target has no typed input entry")
     val generation = input.generation
     try { return action(arrayOf(input)) }
     // Trampoline targets vary at runtime. Cleanup receives only storage and
