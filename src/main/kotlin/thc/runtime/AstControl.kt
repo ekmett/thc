@@ -99,8 +99,7 @@ internal object AstControl {
             (saved.rootEntrySpill || saved.tailSpill) && saved.stackSpill() && saved.asyncRequest() == null &&
             caller?.isTailSpillIdentityRoot() == true &&
             root is FunctionRoot && root.isTailSpillIdentityRoot() && root.role == FunctionRootRole.PASS_THROUGH &&
-            caller.scalarResultProof.kind == root.scalarResultProof.kind &&
-            caller.scalarResultProof.isInt == root.scalarResultProof.isInt) {
+            AstTailResult.sameCarrier(caller.scalarResultProof, root.scalarResultProof)) {
             if (saved.rootEntrySpill) saved.certifyTailEntry()
             val pending = AstPendingTail(saved, tailTarget ?: expectedTarget ?: root.callTarget, node, callerMask)
             throw AstCapture(pending, callerMask).append(pending)

@@ -47,8 +47,13 @@ alone does not authorize eliding tuple completion, masks, catches or updates.
 
 ## Internal tail-spill compaction
 
-The first compaction path covers synchronous, non-delimited, evaluated primitive
-scalar arms without a typed return loan. It uses the existing conservative
+Compaction covers synchronous, non-delimited, evaluated primitive scalar arms
+and exact `DATA`, `CLOSURE` and `ADDRESS` reference results without a typed
+return loan. Reference edges require matching result kinds and the existing exact
+reference carrier. They forward the identical guest object: constructor fields
+and closure bodies remain unentered, and addresses retain their backing owner
+and offset. Unknown/object-only and lazy proofs do not qualify.
+It uses the existing conservative
 64-root scheduling budget, independently of user async delivery. That logical
 budget is not a guarantee about arbitrary carrier stack sizes; no native
 stack-pointer probe or runtime-specific stack-limit API is used.
@@ -74,7 +79,7 @@ Bloom ancestry is rebuilt from the selected surviving owner, not removed by
 bit subtraction or inferred from parked roots. The anchor remains installed
 across legitimate loop iterations without a generic trampoline on each lap.
 
-Async-enabled, delimited, aggregate, reference/lazy-result and result-loan paths
+Async-enabled, delimited, aggregate/vector, unknown/lazy-result and result-loan paths
 continue using their existing capture/completion protocols; they are not compacted
 by this tranche. Public loading still does not enable outlining by default.
 
@@ -93,3 +98,7 @@ cabal run exe:thc-fixtures -fdevelopment -- delimited-continuations
 non-tail suffixes, masks live before and after the first spill, and nested anchors
 whose tail transfers must not cross a non-tail return boundary. `AstStackTest`
 continues to cover shared updates, failures, async delivery and driver isolation.
+The exact-reference controls also exercise real outlined-arm calls, first-installed
+spills without settling calls, unforced constructor/exception payloads, unentered
+closure bodies, address backing identity, shared updates and ordinary fallback
+completion for lazy or unknown results.
