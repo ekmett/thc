@@ -1,5 +1,10 @@
 # Experimental Native Image graph preparation
 
+The opt-in [selected-Core native code cache](../../docs/native-code-cache.md)
+adds a usable `bin/native-cache build/store/run` workflow on the existing AST
+preparation path. Its `cache` recipe mode is distinct from the `thc.Main` runtime
+JIT image below; it has explicit platform/toolchain and admitted-Core limits.
+
 This directory preserves the reproducible preparation tools for investigating
 guest runtime compilation in Native Image. It is separate from the working
 [pure interpreter recipe](../../docs/native-image-feasibility.md) and is not a

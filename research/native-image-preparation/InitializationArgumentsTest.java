@@ -70,8 +70,11 @@ public final class InitializationArgumentsTest {
     }
 
     private static int prepare(Path root, String processIdentity) throws Exception {
+        return prepare(root, processIdentity, "prepare-only");
+    }
+    private static int prepare(Path root, String processIdentity, String mode) throws Exception {
         var command = new ProcessBuilder("bash", root.resolve("recipe/prepared-image.sh").toString(),
-            root.toString(), "prepare-only");
+            root.toString(), mode);
         command.environment().put("JAVA_HOME", javaHome.toString());
         command.environment().remove("THC_NATIVE_IMAGE_PROCESS_IDENTITY");
         if (processIdentity != null) command.environment().put("THC_NATIVE_IMAGE_PROCESS_IDENTITY", processIdentity);
@@ -129,6 +132,15 @@ public final class InitializationArgumentsTest {
         check(prepare(foreign) == 0, "default prepare after opt-in failed");
         check(Files.readString(foreignArgs).isEmpty(), "default preparation must clear a prior opt-in, not retain stale registration");
         check(prepare(foreign, "true") == 2, "reject misspelled opt-in values");
+        Files.writeString(manual.resolve("recipe/cache-initialization.txt"), "# explicit cache holder\nthc.fixture.Marker\n");
+        boolean linuxAmd64 = System.getProperty("os.name").equals("Linux") &&
+            java.util.Set.of("amd64", "x86_64").contains(System.getProperty("os.arch"));
+        check(prepare(manual, null, "cache-prepare-only") == (linuxAmd64 ? 0 : 2), "cache recipe host restriction");
+        if (linuxAmd64) check(inventory(manual, "prepared-initialization.args").equals(
+            "--initialize-at-build-time=thc.fixture.Tag,thc.fixture.Marker\n"), "cache mode adds only its explicit finite inventory");
+        check(prepare(manual) == 0, "ordinary preparation after cache mode");
+        check(inventory(manual, "prepared-initialization.args").equals(
+            "--initialize-at-build-time=thc.fixture.Tag\n"), "ordinary image must not inherit cached-mode holders");
         System.out.println("PASS " + checks + " initialization-argument checks; prepare-only, no image execution");
     }
 }
