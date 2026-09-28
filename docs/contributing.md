@@ -163,6 +163,18 @@ materialization/completion declarations and runtime integration. The Truffle DSL
 processor is the published upstream artifact; branches use ordinary profiling.
 API/runtime overlays are built separately and never replace shared Maven cache files.
 
+Compilation preparation also indexes immutable bytecode metadata. Sparse local
+lifetime change points avoid expanding the full local table at each exception
+edge; an ordered interval tree finds the first matching handler at or after the
+original start offset. These indices remain partial-evaluation constants and
+retain the existing handler profiles and frame cleanup. They are built lazily
+for the exact bytecode snapshot entering root, saved-continuation or OSR
+compilation, and published together. Retained storage is linear in metadata
+entries, not bytecode length; unused roots allocate no index arrays. Interpreter
+and noncanonical helper inputs retain the original scans. Handler lookup can
+still visit multiple subtrees for overlapping interval envelopes; this is not a
+claim of logarithmic worst-case search or elimination of all graph-size failures.
+
 For an upstream-runtime build, use `./gradlew -Pthc.stockTruffle=true installDist`.
 This selects the published Truffle API, runtime and Sulong artifacts; the
 `verifyStockTruffle` task checks the runtime classpath. Generated-source
