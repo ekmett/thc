@@ -40,6 +40,8 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final ManagedExportRegistry managedExports;
         private final ManagedForeignRoots foreignRoots;
         private final HandoffLayouts handoffLayouts;
+        private record ConstructorLayoutKey(String id, CoreFields fields) {}
+        private final Map<ConstructorLayoutKey, DataLayout> constructorLayouts = new HashMap<>();
         private final JavaScriptImports javaScriptImports;
         private final PackageScalarLibraries packageCbits;
         private final CarrierLocal<MaskingState> maskingState;
@@ -138,6 +140,16 @@ public final class Language extends TruffleLanguage<Language.State> {
         public ManagedExportRegistry getManagedExports() { return managedExports; }
         public ManagedForeignRoots getForeignRoots() { return foreignRoots; }
         public HandoffLayouts getHandoffLayouts() { return handoffLayouts; }
+        /** Only parsed shape metadata enters this cache; demand loading happens before taking its lock. */
+        public synchronized DataLayout constructorLayout(TruffleLanguage<?> language, String id, String name, CoreFields fields) {
+            int unitEnd = id.indexOf(':');
+            // Symbolic constructor occurrences can contain or end in a dot.
+            int moduleEnd = id.indexOf('.', unitEnd + 1);
+            if (unitEnd <= 0 || moduleEnd <= unitEnd + 1 || moduleEnd == id.length() - 1)
+                return DataLayout.fromFields(language, id, name, fields);
+            return constructorLayouts.computeIfAbsent(new ConstructorLayoutKey(id, fields),
+                key -> DataLayout.fromFields(language, id, name, fields));
+        }
         public JavaScriptImports getJavaScriptImports() { return javaScriptImports; }
         public PackageScalarLibraries getPackageCbits() { return packageCbits; }
         public CarrierLocal<MaskingState> getMaskingState() { return maskingState; }
@@ -339,13 +351,13 @@ public final class Language extends TruffleLanguage<Language.State> {
                     hostInputs = List.of();
                 }
                 if (hostInputs != null) {
-                    for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
-                    CoreRepresentations.requireScalar(hostResult, "host result");
+                    for (var proof : hostInputs) HostAbi.require(proof);
+                    HostAbi.require(hostResult);
                 }
                 if (!expression.isEmpty() && "lam".equals(expression.getFirst())) {
                     for (var parameter : (List<Map<String, Object>>) expression.get(1))
-                        CoreRepresentations.requireScalar(CoreRepresentations.binder(parameter), "host argument");
-                    CoreRepresentations.requireScalar(CoreRepresentations.lambdaResult(expression), "host result");
+                        HostAbi.require(CoreRepresentations.binder(parameter));
+                    HostAbi.require(CoreRepresentations.lambdaResult(expression));
                 }
             } catch (UnsupportedCore gap) {
                 if (!Boolean.TRUE.equals(input.get("diagnosticUnsupported"))) throw gap;
@@ -421,8 +433,8 @@ public final class Language extends TruffleLanguage<Language.State> {
                         }
                     }
                     if (hostInputs != null) {
-                        for (var proof : hostInputs) CoreRepresentations.requireScalar(proof, "host argument");
-                        CoreRepresentations.requireScalar(hostResult, "host result");
+                        for (var proof : hostInputs) HostAbi.require(proof);
+                        HostAbi.require(hostResult);
                     }
                     var registrations = program.registerStartup();
                     var value = new EntryValue(program, entry, ((Number) selected.get("arity")).intValue(), null,

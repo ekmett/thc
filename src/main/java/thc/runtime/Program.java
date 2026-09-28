@@ -237,13 +237,14 @@ public final class Program implements ExecutableProgram {
             if (proof.isTypedTransport()) {
                 TupleShape shape = new TupleShape(proof, (thc.Language) language);
                 int[] slots = new int[shape.getWidth()];
-                for (int i = 0; i < slots.length; i++) { slots[i] = layout.bind("<async operand field " + i + ">"); temporaries.add(slots[i]); }
+                for (int i = 0; i < slots.length; i++) {
+                    slots[i] = layout.bind("<async operand field " + i + ">", FrameLayout.carrierKind(shape.getLeaves()[i]));
+                    temporaries.add(slots[i]);
+                }
                 bindings.add(new LocalBinding(-1, value, false, slots));
                 return proof.isVector() ? new VectorLocalRead(shape, slots) : new TupleLocalRead(shape, slots);
             }
-            FrameSlotKind kind = proof.isInt() ? FrameSlotKind.Int : proof.isLong() ? FrameSlotKind.Long :
-                proof.isFloat() ? FrameSlotKind.Float : proof.isDouble() ? FrameSlotKind.Double :
-                proof.isEvaluatedReference() ? FrameSlotKind.Object : FrameSlotKind.Illegal;
+            FrameSlotKind kind = FrameLayout.carrierKind(proof);
             int slot = layout.bind("<async operand " + bindings.size() + ">", kind);
             temporaries.add(slot);
             bindings.add(new LocalBinding(slot, value, proof.isLong()));
@@ -369,6 +370,7 @@ public final class Program implements ExecutableProgram {
             unsupportedPolicy = "reject-at-binding-admission"; break;
         }
         result.put("unsupportedPolicy", unsupportedPolicy);
+        result.put("foreignUnsupportedPolicy", "trap-when-reached");
         result.put("deferredUnsupported", new ArrayList<>(deferredUnsupported));
         result.put("unsupportedTraps", metrics.getUnsupportedTraps());
         result.put("frames", "indexed primitive slots; selective StaticShape captures");
@@ -529,6 +531,7 @@ public final class Program implements ExecutableProgram {
             rootSource(body), entryStrict, handoff, tuple, tupleSlots, inputLayout, enableAsync, environmentVectorSlots,
             delimited, role, outlineCaseArms || deferDefaultArm,
             scope.deferredArms != null && !scope.deferredArms.isEmpty(), false);
+        root.configureInputProofs(inputProofs);
         if (scope.deferredArms != null) for (DeferredArm candidate : scope.deferredArms) {
             AstDeferredArm.PreparedBody prepared = new AstDeferredArm.PreparedBody(
                 candidate.node.getRepresentation(), candidate.node.getCoreSourceLocation());
@@ -844,7 +847,8 @@ public final class Program implements ExecutableProgram {
     private Expr compileTupleCase(List<Object> expr, Expr scrutinee, CoreRepresentation proof, Scope local, boolean tail) {
         TupleShape shape = new TupleShape(proof, (thc.Language) language);
         int[] slots = new int[shape.getWidth()];
-        for (int i = 0; i < slots.length; i++) slots[i] = local.layout.bind("<tuple case " + i + ">");
+        for (int i = 0; i < slots.length; i++) slots[i] = local.layout.bind("<tuple case " + i + ">",
+            FrameLayout.carrierKind(shape.getLeaves()[i]));
         local.bindTuple((String) expr.get(2), proof, slots);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
         if (alternatives.isEmpty()) return new TupleCase(scrutinee, slots, new EmptyCaseResult(CoreRepresentations.expression(expr)));
@@ -994,7 +998,7 @@ public final class Program implements ExecutableProgram {
         if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
         CoreFields fields = new CoreFields(info);
         if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
-        layout = DataLayout.fromFields(language, id, (String) info.get("name"), fields);
+        layout = thc.Language.currentState().constructorLayout(language, id, (String) info.get("name"), fields);
         dataLayouts.put(id, layout);
         return layout;
     }
@@ -1194,7 +1198,7 @@ public final class Program implements ExecutableProgram {
         if (binderProof.isTuple()) return compileTupleCase(expr, scrutinee, binderProof, local, tail);
         if (binderProof.isVector()) return compileVectorCase(expr, scrutinee, binderProof, local, tail);
         int binder = local.bind((String) expr.get(2), !binderProof.getPresent() || binderProof.isLong(), binderProof,
-            false, null, null, outlinedSlotKind(binderProof, false)).slot;
+            false, null, null, FrameLayout.carrierKind(binderProof)).slot;
         List<List<Object>> rawAlternatives = (List<List<Object>>) expr.get(3);
         Alternative[] alternatives = new Alternative[rawAlternatives.size()];
         List<CoreRepresentation> results = new ArrayList<>();
@@ -1425,13 +1429,20 @@ public final class Program implements ExecutableProgram {
         var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var libdw = CoreLibdwForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
-        var polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
+        PolyglotOp polyglot;
+        try {
+            polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort &&
             byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null &&
             runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone &&
             stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign &&
             !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null &&
             managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null &&
             !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
+        } catch (UnsupportedCore unavailable) {
+            // Only the final unknown-symbol fallback is deferred. Known ABI validation above stays eager.
+            deferredUnsupported.add(unavailable.getMessage());
+            return new UnsupportedForeignCall(unavailable.getMessage(), metrics);
+        }
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {
@@ -1844,7 +1855,7 @@ public final class Program implements ExecutableProgram {
                 DataLayout falseLayout = dataLayouts.get(CoreThreadScheduling.FALSE);
                 if (falseLayout == null) {
                     if (language == null) throw fault("Spark constructor requires a guest language");
-                    falseLayout = new DataLayout(language, CoreThreadScheduling.FALSE, "False", new String[0], new Class<?>[0]);
+                    falseLayout = thc.Language.currentState().constructorLayout(language, CoreThreadScheduling.FALSE, "False", CoreFields.EMPTY);
                     dataLayouts.put(CoreThreadScheduling.FALSE, falseLayout);
                 }
                 falseValue = falseLayout.allocate();

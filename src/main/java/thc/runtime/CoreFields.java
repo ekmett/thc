@@ -4,12 +4,14 @@ package thc.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /** Constructor metadata describes representation after the worker's CBV obligations. */
 public final class CoreFields {
+    public static final CoreFields EMPTY = new CoreFields(Map.of("arity", 0, "fieldReps", List.of()));
     private final String[] storage;
     private final Class<?>[] referenceTypes;
     private final CoreRepresentation[] vectorProofs;
@@ -23,6 +25,18 @@ public final class CoreFields {
     public boolean getHasAggregates() {
         for (CoreRepresentation proof : logicalProofs) if (proof.isAggregate()) return true;
         return false;
+    }
+    @Override public boolean equals(Object value) {
+        return value instanceof CoreFields other && Arrays.equals(storage, other.storage) &&
+            Arrays.equals(referenceTypes, other.referenceTypes) && Arrays.equals(vectorProofs, other.vectorProofs) &&
+            Arrays.equals(logicalProofs, other.logicalProofs) && Arrays.equals(offsets, other.offsets);
+    }
+    @Override public int hashCode() {
+        int result = Arrays.hashCode(storage);
+        result = 31 * result + Arrays.hashCode(referenceTypes);
+        result = 31 * result + Arrays.hashCode(vectorProofs);
+        result = 31 * result + Arrays.hashCode(logicalProofs);
+        return 31 * result + Arrays.hashCode(offsets);
     }
     public CoreFields(Map<String, ?> info) {
         Object id = info.get("id"), kind = info.get("kind");

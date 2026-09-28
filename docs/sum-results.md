@@ -67,11 +67,15 @@ zero-width State/empty-tuple distinctions and lazy lifted neighbours. Inactive
 boxed reference fields use null; inactive address fields use the managed null
 address, and inactive vector fields use a zero of the exact species. These are
 THC padding values, never observations of native inactive registers.
-Unsupported vector species, integer-width conversion, `BoxedRep Nothing` and unknown logical or physical layouts
-remain unsupported. Partial sum constructors, ordinary sum let bindings and
-public host sum inputs/results also remain unsupported. Function values returning sums
-may still pass through existing scalar/reference closure paths, but a sum value
-cannot cross those excluded boundaries. Top-level sum storage is rejected in
+Unsupported vector species, integer-width conversion and unknown logical or
+physical layouts remain unsupported. Known-pointer `BoxedRep Nothing` values
+flow through [scalar and tuple transport](tuple-inputs.md) without forcing;
+sum payload slot classification still requires concrete boxed levity.
+Partial sum constructors and recursive or lifted sum lets
+also remain unsupported; nonrecursive unlifted sum lets use typed locals.
+The [Core host ABI](site/embedding.md#load-a-core-entry) transports supported
+sum arguments/results as `[tag, payload]` arrays and can return callable
+context-owned functions with sum signatures. Top-level sum storage is rejected in
 both strict and diagnostic mode; diagnostic mode does not invent a heap carrier.
 Unsupported cold function paths retain the existing diagnostic trap policy.
 Exact sum fields in saturated boxed constructors are supported separately through

@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
@@ -26,11 +24,9 @@ public final class ScalarArrayInputSource extends InputSource {
         throw fault("Expected primitive Double input");
     }
     @Override public Object reference(VirtualFrame frame, Node node, Object[] values, int index) {
-        if (values == null) CompilerDirectives.transferToInterpreter();
-        return java.util.Objects.requireNonNull(values)[index];
+        return ColdCallChecks.values(values)[index];
     }
     @Override public void setReference(VirtualFrame frame, Node node, Object[] values, int index, Object value) {
-        if (values == null) CompilerDirectives.transferToInterpreter();
-        java.util.Objects.requireNonNull(values)[index] = value;
+        ColdCallChecks.values(values)[index] = value;
     }
 }

@@ -70,7 +70,7 @@ public final class GuestThreads {
     public static final class GuestThread {
         final Thread thread;
         final GuestThreadId identity;
-        final boolean externalAsync;
+        boolean externalAsync;
         final ArrayDeque<GuestEntry> entriesPrevious = new ArrayDeque<>();
         final ArrayDeque<AsyncRequest> queue = new ArrayDeque<>();
         AsyncRequest claimed;
@@ -98,8 +98,10 @@ public final class GuestThreads {
         final GuestThread prior;
         final MaskingState mask;
         final LoomScheduler.Admission callbackAdmission;
-        public GuestEntry(GuestThreadId active, GuestThreadStatus status, AstStackScope astStack, GuestThread prior, MaskingState mask, LoomScheduler.Admission callbackAdmission) {
-            this.active = active; this.status = status; this.astStack = astStack; this.prior = prior; this.mask = mask; this.callbackAdmission = callbackAdmission;
+        final boolean externalAsync;
+        public GuestEntry(GuestThreadId active, GuestThreadStatus status, AstStackScope astStack, GuestThread prior, MaskingState mask, boolean externalAsync, LoomScheduler.Admission callbackAdmission) {
+            this.active = active; this.status = status; this.astStack = astStack; this.prior = prior; this.mask = mask;
+            this.externalAsync = externalAsync; this.callbackAdmission = callbackAdmission;
         }
         public GuestThreadId getActive() { return active; }
         public GuestThreadStatus getStatus() { return status; }
@@ -287,11 +289,21 @@ public final class GuestThreads {
             if (identity.allocationBaseline < 0) identity.allocationUnavailable = true;
         }
         var poll = pollState(current);
-        slot.entriesPrevious.addLast(new GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask, admission));
+        slot.entriesPrevious.addLast(new GuestEntry(activeIdentity.get(), slot.identity.status, poll.astStack, prior, previousMask, slot.externalAsync, admission));
+        if (!callback && prior != null) slot.externalAsync &= externalAsync;
         poll.astStack = new AstStackScope(); slot.identity.status = GuestThreadStatus.RUNNING; activeIdentity.set(slot.identity);
         slot.entries++; currentSlot.set(slot); pollState(current).current = slot; enterGuestPermission(); return identity.logicalId;
     }
     public long registerCurrent() { return enterCurrent(); }
+    /** Scope host-call admission without changing queued requests or the guest lifetime. */
+    @TruffleBoundary public synchronized boolean setCurrentExternalAsync(boolean enabled) {
+        var slot = currentSlot.get();
+        if (slot == null || slot.entries <= 0) throw fault("Current Java thread has not entered this guest context");
+        boolean previous = slot.externalAsync;
+        // A nested entry cannot unwind through an outer nonresumable activation.
+        slot.externalAsync = enabled && (slot.entries == 1 || slot.entriesPrevious.getLast().externalAsync);
+        return previous;
+    }
     /** myThreadId# observes an existing guest entry; it never creates a new lifetime. */
     public long currentId() { return currentIdentity().logicalId; }
     public GuestThreadId currentIdentity() {
@@ -409,7 +421,7 @@ public final class GuestThreads {
     @TruffleBoundary public synchronized boolean interruptibleForeignPending() {
         var slot = currentSlot.get();
         if (slot == null || closed || threads.get(slot.identity.logicalId) != slot || slot.claimed != null || slot.queue.isEmpty()) return false;
-        return slot.queue.getFirst().forceSelf || maskingState.get() != MaskingState.MASKED_UNINTERRUPTIBLE;
+        return slot.queue.getFirst().forceSelf || slot.externalAsync && maskingState.get() != MaskingState.MASKED_UNINTERRUPTIBLE;
     }
     @TruffleBoundary private synchronized AsyncRequest claim(GuestThread target, Node node, boolean interruptible) {
         if (closed) return null;
@@ -418,7 +430,7 @@ public final class GuestThreads {
         var state = delivery.get();
         if (state == null || state.permission != DeliveryPermission.GUEST || activeIdentity.get() != target.identity || target.claimed != null || target.queue.isEmpty()) return null;
         var request = target.queue.getFirst();
-        boolean allowed = request.forceSelf || switch (maskingState.get()) {
+        boolean allowed = request.forceSelf || target.externalAsync && switch (maskingState.get()) {
             case UNMASKED -> true; case MASKED_INTERRUPTIBLE -> interruptible; case MASKED_UNINTERRUPTIBLE -> false;
         };
         if (!allowed) return null;
@@ -441,7 +453,10 @@ public final class GuestThreads {
                 var previous = target.entriesPrevious.removeLast(); pollState(current).astStack = previous.astStack;
                 admission = previous.callbackAdmission;
                 if (previous.active == null) activeIdentity.remove(); else activeIdentity.set(previous.active);
-                if (--target.entries != 0) { if (!closed) target.identity.status = previous.status; }
+                if (--target.entries != 0) {
+                    target.externalAsync = previous.externalAsync;
+                    if (!closed) target.identity.status = previous.status;
+                }
                 else {
                     settleAllocation(target.identity); target.identity.lastOutcome = outcome;
                     if (!closed) target.identity.status = target.identity.forked || target.identity.callback ? outcome : GuestThreadStatus.FOREIGN;

@@ -127,7 +127,7 @@ Result and argument loans must be released, warmed result pools reused, and
 supported workloads must report zero unsupported traps and blackholes.
 
 General dynamic checked bounds, library error paths, copying/freezing via FFI,
-floating host arguments, arbitrary floating arithmetic, signaling-NaN identity,
+arbitrary floating arithmetic, signaling-NaN identity,
 and non-native byte order on the current native host are not claimed. Existing
 `unsafeFreezeByteArray#` alias semantics are used, not broadened by this slice.
 

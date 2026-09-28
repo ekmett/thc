@@ -22,8 +22,12 @@ public final class GenericInputCall extends Node {
     @Child private TailCallLoop loop;
     @Child private TupleBounce tupleBounce;
     public GenericInputCall(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start) {
+        this(source, count, tail, metrics, destination, start, false);
+    }
+    public GenericInputCall(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start,
+            boolean coldGeneric) {
         this.source = source; this.count = count; this.tail = tail; this.metrics = metrics; this.destination = destination; this.start = start;
-        legacy = new IndirectCallerNode(metrics); force = new Force(metrics); loop = new TailCallLoop(metrics);
+        legacy = new IndirectCallerNode(metrics, coldGeneric); force = new Force(metrics); loop = new TailCallLoop(metrics);
         if (destination != null) tupleBounce = new TupleBounce(destination, metrics);
     }
     public Object execute(VirtualFrame frame, Closure initial, Object[] values) { return execute(frame, initial, values, start); }
@@ -33,12 +37,7 @@ public final class GenericInputCall extends Node {
         while (true) {
             int remaining = count + start - offset;
             var target = function.target;
-            var rootValue = target.getRootNode();
-            if (rootValue == null) {
-                CompilerDirectives.transferToInterpreter();
-                throw new NullPointerException("null cannot be cast to non-null type thc.runtime.GuestRoot");
-            }
-            GuestRoot root = (GuestRoot) rootValue;
+            GuestRoot root = ColdCallChecks.guestRoot(target.getRootNode());
             TypedInputLayout input = root.getTypedInput();
             int used = Math.min(function.arity, remaining);
             validateGenericInput(root, function.suppliedCount, source.getLayout(), offset, used, destination, function.arity == remaining, function.arity > remaining);

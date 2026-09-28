@@ -67,8 +67,9 @@ enabled during warmup; post-install host-driven calls are not a separate claim
 that the host bridge's entry counter was measured.
 
 Four separately listed context roots (`makeBox`, `waitTake`, `waitRead`,
-`waitPut`) are internal host-driven tests, not an extension of the public
-integer-only entry ABI. Native ready-state adapters provide 507 oracle rows.
+`waitPut`) are internal host-driven tests. Public context-owned reference
+transport is covered separately by the [Core host ABI](site/embedding.md#load-a-core-entry).
+Native ready-state adapters provide 507 oracle rows.
 Native-only thread/status handshakes also verify reader broadcast and queued
 take/put order under one and two GHC capabilities, 45 rows each. Their fork and
 exception dependencies are outside guest exports and do not establish guest

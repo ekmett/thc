@@ -157,13 +157,8 @@ class SimdFloatByteArrayTest {
             assertEquals("Vector memory read requires an immediate exact case", error.getMessage());
         });
     }
-    private void checkFault(PolyglotException error, boolean diagnostic, String label) {
-        var message = error.getMessage() == null ? "" : error.getMessage();
-        assertTrue(message.contains("unboxed-tuple (host result)"), label + ": " + message);
-        assertEquals(diagnostic, message.contains("Diagnostic unsupported path reached:"), label);
-    }
     private record Operation(String name, int arity) {}
-    @Test void publicHostTupleResultsRejectAtLoadOrTrapBeforeArgumentNormalization() throws Exception {
+    @Test void publicHostTupleResultsRetainStateAndRejectInvalidCarriers() throws Exception {
         var provenance = provenance();
         for (var stage : (List<String>) provenance.get("stages")) for (var backend : List.of("ast", "bytecode")) try (var context = context(true)) {
             var module = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdFloatX4ByteArray.json").toPath()));
@@ -172,17 +167,26 @@ class SimdFloatByteArrayTest {
                 for (boolean diagnostic : List.of(false, true)) {
                     var label = stage + "/" + backend + "/" + name + "/diagnostic=" + diagnostic;
                     var request = Json.stringify(Map.of("entry", name, "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(module)));
-                    if (!diagnostic) checkFault(assertThrows(PolyglotException.class, () -> context.eval("thc", request), label), diagnostic, label);
-                    else {
-                        var entry = context.eval("thc", request);
-                        assertTrue(entry.canExecute(), label);
-                        // The deferred host-result fault must precede guest carrier checks,
-                        // host argument normalization, and even the host arity check.
-                        var valid = new Object[operation.arity]; Arrays.fill(valid, 0L);
-                        var invalid = new Object[operation.arity]; Arrays.fill(invalid, 0L); invalid[0] = "invalid host argument";
-                        for (var input : List.of(valid, invalid, new Object[0]))
-                            checkFault(assertThrows(PolyglotException.class, () -> entry.execute(input), label), diagnostic, label);
-                    }
+                    var entry = context.eval("thc", request);
+                    assertTrue(entry.canExecute(), label);
+                    var bytes = HostByteArrayTestValues.allocate(context, backend);
+                    // Initialize through the genuine guest writer, never assume fresh native memory is zero.
+                    var writer = context.eval("thc", Json.stringify(Map.of("entry", family + "WriteWorker",
+                        "backend", backend, "diagnosticUnsupported", diagnostic, "modules", List.of(module))));
+                    var initial = new Object[7]; Arrays.fill(initial, 0L);
+                    initial[0] = bytes; initial[initial.length - 1] = null;
+                    var written = writer.execute(initial);
+                    assertEquals(2, written.getArraySize(), label); assertTrue(written.getArrayElement(0).isNull(), label);
+                    assertEquals(0L, written.getArrayElement(1).asLong(), label);
+                    var valid = new Object[operation.arity]; Arrays.fill(valid, 0L);
+                    valid[0] = bytes; valid[valid.length - 1] = null;
+                    var invalid = valid.clone(); invalid[0] = "invalid host argument";
+                    var badState = valid.clone(); badState[badState.length - 1] = 0L;
+                    for (var input : List.of(invalid, badState, new Object[0]))
+                        assertThrows(PolyglotException.class, () -> entry.execute(input), label);
+                    var result = entry.execute(valid);
+                    assertEquals(2, result.getArraySize(), label); assertTrue(result.getArrayElement(0).isNull(), label);
+                    assertEquals(0L, result.getArrayElement(1).asLong(), label);
                 }
             }
         }

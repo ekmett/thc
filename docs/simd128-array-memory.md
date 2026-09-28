@@ -49,9 +49,11 @@ Returning the primitive's whole read tuple directly remains unsupported.
 
 This intrinsic restriction is distinct from [guest vector transport](simd.md),
 which supports arguments/results, tuple leaves, joins, PAP prefixes and owned
-captures/heap fields. Public host vector arguments/results and unboxed-tuple
-results remain unsupported. [Address operations](simd128-address-memory.md)
-and [wider byte-array vectors](simd-wide-array-memory.md) have separate contracts.
+captures/heap fields. The [Core host ABI](site/embedding.md#load-a-core-entry)
+transports exact vector and unboxed-tuple arguments/results; it does not relax
+the mutable-read intrinsic's immediate-case requirement.
+[Address operations](simd128-address-memory.md) and
+[wider byte-array vectors](simd-wide-array-memory.md) have separate contracts.
 
 ## Reproducible checks
 

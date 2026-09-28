@@ -94,6 +94,12 @@ public final class FunctionRoot extends GuestRoot {
         configureTupleResult(tuple);
         configureScalarResult(body.getRepresentation().refine(resultProof));
         // Establish mandatory carriers before publishing the root, never on its first compiled call.
+        if (inputLayout != null) for (int i = 0; i < argumentSlots.length; i++) {
+            if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) continue;
+            initialize(descriptor, argumentSlots[i], FrameLayout.carrierKind(inputLayout.getPhysicalProofs()[argumentIndices[i]]));
+        }
+        if (tuple != null) for (int i = 0; i < tupleSlots.length; i++)
+            initialize(descriptor, tupleSlots[i], tuple.getLayout(), i);
         for (int i = 0; i < argumentSlots.length; i++) {
             if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) continue;
             if (i >= argumentProofs.length) continue;
@@ -133,8 +139,14 @@ public final class FunctionRoot extends GuestRoot {
     private static void initialize(FrameDescriptor descriptor, int slot, FrameSlotKind kind) {
         if (descriptor.getSlotKind(slot) == FrameSlotKind.Illegal) descriptor.setSlotKind(slot, kind);
     }
+    private static void initialize(FrameDescriptor descriptor, int slot, HandoffLayout layout, int field) {
+        initialize(descriptor, slot, layout.isInt(field) ? FrameSlotKind.Int :
+            layout.isLong(field) ? FrameSlotKind.Long : layout.isFloat(field) ? FrameSlotKind.Float :
+            layout.isDouble(field) ? FrameSlotKind.Double : FrameSlotKind.Object);
+    }
     public HandoffEntry getHandoff() { return handoff; }
     public boolean getEnableAsync() { return enableAsync; }
+    @Override public boolean getAsynchronousExceptions() { return enableAsync; }
     public boolean getEnableDelimited() { return enableDelimited; }
     public boolean getCapturesContinuations() { return capturesContinuations; }
     public boolean getStackCapture() { return stackCapture; }

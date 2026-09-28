@@ -1858,7 +1858,7 @@
     "STM/TVar primops admit synchronous and asynchronous transactions in both backends with context-owned lazy boxed cells, validated buffered writes, atomic commit, real retry wakeup and nested catch/orElse rollback. Async delivery aborts the attempt and preserves an atomically restart at the enclosing update boundary, never a live transaction log or abandoned child chain. Explicit checkpoint/delimited capture and GC-driven BlockedIndefinitelyOnSTM detection remain unavailable. Empty-read-set retries wait until interruption or cancellation/disposal. Nested atomically raises the original implicit GHC exception closure.",
     "All 16 address atomics return old values (including failed CAS), narrow exact widths, require alignment and complete checked ranges, and supply full barriers. Managed byte storage synchronizes owner then backing bytes; pointer CAS/exchange retain managed pointer cells and compare address identity. Numeric atomics reject pointer-cell overlaps. Pinned numeric storage uses real atomics on Linux x86_64 and macOS x86_64/arm64, including exact byte/short C CAS. Native-enabled Linux x86_64 contexts also admit owned malloc storage; native pointer values must have real address bits. Freed or foreign owners, unowned numeric dereferences, opaque locations and immutable writes reject.",
     "copyAddrToByteArray#, copyByteArrayToAddr# and copyMutableByteArrayToAddr# copy contained byte ranges between distinct array/address backing allocations, as required by GHC; same-backing addresses reject even for disjoint or empty ranges. Managed pointer cells retain references only through whole-cell managed copies and cannot be exported as raw native bits. Native addresses require live context-owned malloc storage on the existing native-enabled Linux x86_64 backend; unowned numeric pointers and immutable destinations reject. Empty valid copies preserve pointer cells and return scalar State# without a result tuple.",
-    "Original stg_sig_install supports HUP/INT/QUIT/USR1/USR2/TERM/XCPU/XFSZ with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc with platform hosting. Loom rejects process-signal installation. Only the standalone NativeIO launcher can own process handlers, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire them. The launcher uses -Xrs and reserves signal 64 for HotSpot with _JAVA_SR_SIGNUM=64 before JVM startup, rejecting incompatible supplied settings. Guest USR2 requires verified native dispositions, and guest signal 64 remains unavailable. A native signal-safe pipe transports each actual signal number and siginfo bytes to original GHC runHandlersPtr on a Truffle thread. Delivery requires asyncExceptions=true on either backend (AST opt-in, bytecode default); other signals and non-null masks remain unavailable. See docs/process-signals.md for shutdown and embedding limits.",
+    "Original stg_sig_install supports HUP/INT/QUIT/USR1/USR2/TERM/XCPU/XFSZ with DFL/IGN/HAN/RST and a null mask on Linux x86_64 glibc with either platform or Loom hosting. A Loom reader releases its HEC during native waits and reacquires admission before guest dispatch. Only the standalone NativeIO launcher can own process handlers, once per JVM lifetime; ordinary native-enabled embeddings cannot acquire them. The launcher uses -Xrs and reserves signal 64 for HotSpot with _JAVA_SR_SIGNUM=64 before JVM startup, rejecting incompatible supplied settings. Guest USR2 requires verified native dispositions, and guest signal 64 remains unavailable. A native signal-safe pipe transports each actual signal number and siginfo bytes to original GHC runHandlersPtr on a Truffle thread. Delivery requires asyncExceptions=true on either backend (AST opt-in, bytecode default); other signals and non-null masks remain unavailable. See docs/process-signals.md for shutdown and embedding limits.",
     "Original RTS diagnostic leaves write context stderr and return: reportStackOverflow identifies the actual guest Java thread and reports that its JVM stack limit is unavailable; reportHeapOverflow identifies the actual shared JVM maximum heap size. No native GHC TSO sizes or -K/-M advice are invented. errorBelch2 supports the original callers' %s CString format and appends one newline. debugBelch2 supports Debug.Trace's %s\\n CString format, adding no prefix or extra newline. Both preserve raw bytes and offset/NUL boundaries; other printf varargs formats reject before output. traceIO's NUL filtering and warning remain in the original Haskell caller. No program-name prefix is invented for an embedding that has not registered one.",
     "Original safe shutdownHaskellAndExit/shutdownHaskellAndSignal close the owning polyglot context with the first CInt status/fast request retained. Host resources are disposed in both modes; guest shutdown finalizers are not implemented. Exit codes use their low eight bits; signals 1..64 use negative polyglot exit codes, with other signed CInt signal values mapping to 255. Only the standalone launcher terminates its JVM or re-raises the requested signal after context cleanup; embedded callers receive PolyglotException.isExit.",
     "waitRead#/waitWrite# admit exact Int# and State# contracts for live context-owned native descriptors. A logical wait token retains its original descriptor identity across async suspension and rejects close or number reuse. Bad descriptors raise the original lazy ghc-internal blockedOnBadFD payload; arbitrary host streams and nonnative readiness providers have no general readiness guarantee.",
@@ -1891,9 +1891,10 @@
     "Atomic Int-array reads/writes, fetchAdd/Sub/And/Nand/Or/XorIntArray#, and casInt{,8,16,32,64}Array# use owned mutable allocations with full memory barriers. Fetch and CAS return the previous signed value; failed CAS leaves bytes unchanged. Offsets count elements of the selected width, arithmetic wraps, and narrow CAS compares low bits. Raw host arrays, immutable allocations, out-of-range elements, and pointer-cell overlaps are rejected. See docs/atomic-int-arrays.md for native/model/concurrency evidence and managed-storage limits.",
     "StablePtr# uses context-owned opaque AddrRep handles, with lazy referents and exact hs_free_stable_ptr. Ordinary unsafe package ccall/capi imports can compare, retain and return persistent opaque native identities; deRefStablePtr recovers the original rooted referent. Owned native pointer cells and exact numeric roundtrips recover live current-context identities. Free or context disposal releases the root and identity; copied tokens do not extend that lifetime. Handles have no guest byte storage, pointer arithmetic or ordering, and are not native GHC closure addresses or callback support. Managed pointer cells retain handles in allocation-owned storage; raw ByteArray storage remains rejected. The nine RTS shared-CAF getOrSet calls atomically retain their first live handle per context until disposal; null queries leave empty slots unchanged.",
     "Weak# registrations are explicitly finalized, not GC-driven: context-owned registrations retain lazy keys, values and Haskell actions until explicit finalizeWeak# or context close. Exact source-certified USE_LIBDW=0 C labels can register one-argument callbacks; explicit finalization makes the weak dead before invoking them through Sulong outside the registry lock, then returns the real Haskell action without invoking it. Close discards outstanding callbacks. Original rts_setMainThread stores the Weak# key capability, not its boxed value or a permanent Java thread ID. The separate launcher-only process signal bridge admits only INT/QUIT/HUP/TERM. Automatic GC/ephemeron reclamation and arbitrary C function/data labels remain unsupported.",
+    "The logical polyglot Core ABI uses retained signatures for signed, unsigned and narrow integers, Float/Double, exact raw JDK vectors, recursive tuple/sum arrays, State/Void nulls and context-owned guest references/functions. It preserves lazy references and copies completed aggregate results out of temporary storage. Raw numeric pointers, arbitrary Java reference injection and native C callback addresses are not admitted. Declared C exports keep their separate scalar signatures, and guest exception/masking rules are unchanged. The separate Python Core auditor still rejects vector/tuple/sum entry signatures; ordinary loadEntry does not invoke it. See docs/site/embedding.md.",
     "Unboxed tuple inputs, results and owned closure/thunk captures use exact recursive layouts and concrete Long, Float, Double, traced reference (including BoxedRep Nothing), evaluated managed-address or fixed-species vector fields. Supported sums inside tuples expand their physical tag/payload slots while retaining the logical tree, zero-width components and lazy lifted neighbours. Capture restoration rebinds the logical tuple without boxing it or retaining a caller frame; empty/State components have no stored payload. Local joins accept tuple arguments and read enclosing typed frame slots; parallel transfers reuse those slots without a call carrier. Nonrecursive unlifted tuple/sum lets evaluate once into typed frame locals; recursive/lifted aggregate lets, global aggregate storage and unresolved leaves remain unsupported. Saturated boxed constructors flatten exact tuple/sum fields into owned typed properties; see docs/aggregate-heap-fields.md. Empty tuple cases evaluate their scrutinee and propagate bottom, trapping if malformed Core returns. See docs/tuple-joins.md and docs/tuple-captures.md.",
-    "SIMD guest transport admits the 30 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple and sum fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings and public host vector arguments/results remain unsupported. Transport does not expand the existing SIMD operation families.",
-    "Unboxed sums with two or more alternatives support ordinary guest inputs, typed PAP prefixes, tail transfers, owned closure/thunk captures, results, local join inputs/results and same-frame captures, saturated boxed-constructor fields and immediate cases for exact integral (including Int64/Word64), Float, Double, known reference, evaluated managed-address, supported vector, void and recursively nested tuple/sum payloads. Original GHC slots/projections remain immutable: derived THC storage splits a shared address/integer word slot into traced reference and primitive Long fields. Floating widths, pointer levities and exact vector species remain separate. Inactive boxed references are null, addresses are managed null and vectors are exact-species zero padding; no native inactive register is observed. Tags are validated against exact family arity before DEFAULT. Local joins move every tag/payload field in parallel and reuse typed result destinations within one activation. Nonrecursive unlifted sum lets evaluate once into typed frame locals. Width-changing payload casts, unknown leaves, recursive/lifted sum lets, global aggregate storage and host sum inputs/results remain unsupported. See docs/sum-inputs.md."
+    "SIMD guest transport admits the 30 exact vectorRepresentations through arguments, results, PAP prefixes, tail transfers, local calls, join arguments/results, same-frame join captures, unboxed tuple and sum fields, nonrecursive unlifted let bindings, owned closure/thunk captures and boxed constructor fields. Exact VecRep identity remains distinct from equal-width tuples and other vector shapes. Recursive or lifted vector let bindings remain unsupported. The logical polyglot Core ABI accepts and returns exact raw JDK vectors with the declared species; this is not a native C vector calling convention. Transport does not expand the existing SIMD operation families.",
+    "Unboxed sums with two or more alternatives support ordinary guest inputs, typed PAP prefixes, tail transfers, owned closure/thunk captures, results, local join inputs/results and same-frame captures, saturated boxed-constructor fields and immediate cases for exact integral (including Int64/Word64), Float, Double, known reference, evaluated managed-address, supported vector, void and recursively nested tuple/sum payloads. Original GHC slots/projections remain immutable: derived THC storage splits a shared address/integer word slot into traced reference and primitive Long fields. Floating widths, pointer levities and exact vector species remain separate. Inactive boxed references are null, addresses are managed null and vectors are exact-species zero padding; no native inactive register is observed. Tags are validated against exact family arity before DEFAULT. Local joins move every tag/payload field in parallel and reuse typed result destinations within one activation. Nonrecursive unlifted sum lets evaluate once into typed frame locals. Width-changing payload casts, unknown leaves, recursive/lifted sum lets and global aggregate storage remain unsupported. The logical polyglot Core ABI transports supported sum arguments/results as tag/payload arrays. See docs/sum-inputs.md and docs/site/embedding.md."
   ],
   "aggregateHeapFields": [
     "unboxed-tuple",
@@ -1928,96 +1929,96 @@
     "heap-fields"
   ],
   "vectorRepresentations": [
-    {"lanes": 32, "element": "Int8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 32, "element": "Word8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 64, "element": "Int8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 64, "element": "Word8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 32, "element": "Int16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 32, "element": "Word16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 16, "element": "Int16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 16, "element": "Word16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
+    {"lanes": 32, "element": "Int8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 32, "element": "Word8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 64, "element": "Int8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 64, "element": "Word8ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 32, "element": "Int16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 32, "element": "Word16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 16, "element": "Int16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 16, "element": "Word16ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
     {
       "lanes": 2,
       "element": "Word64ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 8,
       "element": "Word32ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 8,
       "element": "Int32ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 16,
       "element": "Int32ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 8,
       "element": "FloatElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 4,
       "element": "DoubleElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 4,
       "element": "Word32ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 8,
       "element": "Word16ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 16,
       "element": "Word8ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 16,
       "element": "Int8ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 8,
       "element": "Int16ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 2,
       "element": "Int64ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 4,
       "element": "Int32ElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 4,
       "element": "FloatElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
     {
       "lanes": 2,
       "element": "DoubleElemRep",
-      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"
+      "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"
     },
-    {"lanes": 4, "element": "Int64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 8, "element": "Int64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 4, "element": "Word64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 8, "element": "Word64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 16, "element": "Word32ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 16, "element": "FloatElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"},
-    {"lanes": 8, "element": "DoubleElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; public host vector arguments/results unsupported"}
+    {"lanes": 4, "element": "Int64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 8, "element": "Int64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 4, "element": "Word64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 8, "element": "Word64ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 16, "element": "Word32ElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 16, "element": "FloatElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"},
+    {"lanes": 8, "element": "DoubleElemRep", "scope": "local operations and exact guest transport with owned heap captures and constructor fields; logical polyglot arguments/results use exact raw JDK vector species"}
   ],
   "tuplePrimitives": {
     "decodeDouble_2Int#": {
