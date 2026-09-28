@@ -32,6 +32,83 @@ public final class BytecodeStackPreparation {
                 // Reuse the already materialized saved frame, as interpreter continuation entry does.
                 FrameWithoutBoxing targetFrame = parentFrame;
     """;
+    private static final String RESERVED_SLOT = "    private static final int CONTINUATION_FRAME_INDEX = 0;\n";
+    private static final String USER_SLOTS = "    private static final int USER_LOCALS_START_INDEX = 1;\n";
+    // SAVED_OPERANDS removes the sole producer of the split-frame pointer. Remove its
+    // consumers in the same pinned transform, not the actual stores/clears or slot 0.
+    // Reversible markers allow the whole generated-source pipeline to run again.
+    private static final String[][] FORWARDING = {
+        {"""
+            if (CompilerDirectives.inCompiledCode() && (this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+                localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
+            }
+""", "            // THC unified frame v1: compiled locals\n"},
+        {"""
+            if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+                localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
+            }
+""", "            // THC unified frame v1: interpreter locals\n"},
+        {"""
+                FrameWithoutBoxing localFrame = frame.isObject(CONTINUATION_FRAME_INDEX)
+                    ? (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX) : frame;
+""", "                // THC unified frame v1: transaction locals\n                FrameWithoutBoxing localFrame = frame;\n"},
+        {"""
+            MaterializedFrame localFrame = frame;
+            if (CompilerDirectives.inCompiledCode() && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+                localFrame = (MaterializedFrame) frame.getObject(CONTINUATION_FRAME_INDEX);
+                // The yield result will be stored at sp - 1. The operands below it need to be preserved for resumption.
+                // These operands belong to the interval [stackBase, sp - 1).
+                long stackBase = getRoot().stackBase;
+                if (stackBase < sp - 1) {
+                    FRAMES.copyTo(frame, stackBase, localFrame, stackBase, sp - 1 - stackBase);
+                }
+            } else {
+                localFrame = frame.materialize();
+            }
+""", "            // THC unified frame v1: yield\n            MaterializedFrame localFrame = frame.materialize();\n"},
+        {"""
+            if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+                FrameWithoutBoxing localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
+                result = root.interceptControlFlowException(cfe, localFrame, this, (int) bci);
+            } else {
+                result = root.interceptControlFlowException(cfe, frame, this, (int) bci);
+            }
+""", "            // THC unified frame v1: control flow\n            result = root.interceptControlFlowException(cfe, frame, this, (int) bci);\n"},
+        {"""
+            if ((this.configEncoding & 0x8L) != 0 && frame.isObject(CONTINUATION_FRAME_INDEX)) {
+                FrameWithoutBoxing localFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
+                for (int localOffset = targetLocalCount; localOffset < originalLocalCount; localOffset++) {
+                    FRAMES.clear(localFrame, USER_LOCALS_START_INDEX + localOffset);
+                }
+            } else {
+                for (int localOffset = targetLocalCount; localOffset < originalLocalCount; localOffset++) {
+                    FRAMES.clear(frame, USER_LOCALS_START_INDEX + localOffset);
+                }
+            }
+""", """
+            // THC unified frame v1: exception locals
+            for (int localOffset = targetLocalCount; localOffset < originalLocalCount; localOffset++) {
+                FRAMES.clear(frame, USER_LOCALS_START_INDEX + localOffset);
+            }
+"""},
+        {"""
+        FrameWithoutBoxing syncToMaterializedFrame(FrameWithoutBoxing frame, int currentSp) {
+            if (!frame.isObject(CONTINUATION_FRAME_INDEX)) {
+                return frame;
+            }
+            FrameWithoutBoxing materializedFrame = (FrameWithoutBoxing) frame.getObject(CONTINUATION_FRAME_INDEX);
+            if (root.stackBase < currentSp) {
+                FRAMES.copyTo(frame, root.stackBase, materializedFrame, root.stackBase, currentSp - root.stackBase);
+            }
+            return materializedFrame;
+        }
+""", """
+        // THC unified frame v1: resume synchronization
+        FrameWithoutBoxing syncToMaterializedFrame(FrameWithoutBoxing frame, int currentSp) {
+            return frame;
+        }
+"""}
+    };
     private static final String WRAPPER = """
             // THC balanced bytecode stack entry v1
             private Object continueAt(AbstractBytecodeNode bc, long bci, long sp, FrameWithoutBoxing frame, ContinuationRootNodeImpl continuationRootNode) {
@@ -65,6 +142,8 @@ public final class BytecodeStackPreparation {
     public static String transform(String source, String version) {
         require(VERSION.equals(version), "Review bytecode stack entry for Truffle " + version);
         String result = unix(source, "Mixed generated source newlines");
+        for (String[] pair : FORWARDING) result = result.replace(pair[1], pair[0]);
+        require(!result.contains("THC unified frame"), "Changed unified frame preparation");
         if (result.contains("THC saved continuation operands")) {
             result = replaceOnce(result, SAVED_OPERANDS, VIRTUAL_OPERANDS, "Changed saved continuation operands");
         }
@@ -78,6 +157,13 @@ public final class BytecodeStackPreparation {
             "Changed bytecode continuation parent frame");
         result = replaceOnce(result, SIGNATURE, WRAPPER + BODY, "Changed bytecode continueAt entry");
         result = replaceOnce(result, VIRTUAL_OPERANDS, SAVED_OPERANDS, "Changed continuation operand frame");
+        for (String[] pair : FORWARDING) {
+            require(result.contains(pair[0]), "Changed split-frame consumer: " + pair[1].strip());
+            result = result.replace(pair[0], pair[1]);
+        }
+        String consumers = replaceOnce(result, RESERVED_SLOT, "", "Changed reserved continuation slot");
+        consumers = replaceOnce(consumers, USER_SLOTS, "", "Changed user local offset");
+        require(!consumers.contains("CONTINUATION_FRAME_INDEX"), "Unknown split-frame producer or consumer");
         return newline(source, result);
     }
 
@@ -89,10 +175,13 @@ public final class BytecodeStackPreparation {
 
     public static void check() {
         String before = "class Entry {\n"
+            + RESERVED_SLOT + USER_SLOTS
             + "    Object initial() { return continueAt(bytecode, 0, stackBase, (FrameWithoutBoxing) frame, null); }\n"
             + "    Object resume() { return root.continueAt(bytecodeNode, index, sp, frame, this); }\n"
             + "    void savedLocals() {\n" + VIRTUAL_OPERANDS + "    }\n"
-            + SIGNATURE + "        return existingBody();\n    }\n}\n";
+            + SIGNATURE + "        return existingBody();\n    }\n"
+            + java.util.Arrays.stream(FORWARDING).filter(p -> !p[0].contains("? (FrameWithoutBoxing)"))
+                .map(p -> p[0]).collect(java.util.stream.Collectors.joining()) + "}\n";
         String after = transform(before, VERSION);
         require(transform(after, VERSION).equals(after), "Stack entry preparation is not idempotent");
         require(transform(before.replace("\n", "\r\n"), VERSION).equals(after.replace("\n", "\r\n")),
@@ -108,5 +197,14 @@ public final class BytecodeStackPreparation {
         reject(before.replace("sp - 1 - root.stackBase", "sp - root.stackBase"), VERSION);
         reject(after.replace("targetFrame = parentFrame", "targetFrame = otherFrame"), VERSION);
         reject(after + VIRTUAL_OPERANDS, VERSION);
+        reject(before + "FRAMES.setObject(frame, CONTINUATION_FRAME_INDEX, parentFrame);", VERSION);
+        reject(before + "frame.getObject(CONTINUATION_FRAME_INDEX);", VERSION);
+        reject(before.replace(RESERVED_SLOT, RESERVED_SLOT.replace("= 0", "= 1")), VERSION);
+        reject(before.replace(USER_SLOTS, USER_SLOTS.replace("= 1", "= 0")), VERSION);
+        for (String[] pair : FORWARDING) {
+            reject(after.replace(pair[1], pair[1].replace("THC unified frame v1", "THC unified frame changed")), VERSION);
+        }
+        require(after.contains("FRAMES.clear(frame, USER_LOCALS_START_INDEX + localOffset)"), "Lost local cleanup");
+        require(after.contains("frame.materialize()"), "Lost yield materialization");
     }
 }
