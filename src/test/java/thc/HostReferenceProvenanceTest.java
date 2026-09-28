@@ -8,6 +8,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import org.graalvm.polyglot.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -56,6 +57,109 @@ class HostReferenceProvenanceTest {
         var tuple = list("app", list("con", "host:Provenance.Single", 1), list(variable("delayed", LAZY_CLOSURE)),
             list(true), true, true, map("rep", LAZY_TUPLE));
         return list("let", false, list(binding), tuple, map("rep", LAZY_TUPLE));
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void rawEntryRejectsAnotherContextBeforeExecutionOrCompilation(String backend) throws Exception {
+        for (boolean hosted : new boolean[]{false, true}) {
+            var ownerOutput = new ByteArrayOutputStream();
+            var otherOutput = new ByteArrayOutputStream();
+            try (var engine = Engine.create()) {
+                var builder = Context.newBuilder("thc").engine(engine).err(ownerOutput);
+                if (hosted) builder.allowExperimentalOptions(true).allowCreateThread(true).option("thc.ThreadHosting", "loom");
+                try (var owner = builder.build(); var other = Context.newBuilder("thc").engine(engine).err(otherOutput).build()) {
+                    owner.initialize("thc"); other.initialize("thc");
+                    final EntryValue raw;
+                    final Value value;
+                    owner.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        var source = module(INTEGER, INTEGER, trace("owner-entry", variable("input", INTEGER), INTEGER));
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, source, false) : new BytecodeProgram(language, source, false);
+                        raw = new EntryValue(program, "host:Provenance.entry", 1);
+                        value = owner.asValue(raw);
+                    } finally { owner.leave(); }
+                    var interop = InteropLibrary.getUncached();
+                    other.enter();
+                    try {
+                        assertTrue(interop.isExecutable(raw));
+                        assertTrue(interop.isMemberReadable(raw, "diagnostics"));
+                        assertAll(
+                            () -> assertTrue(assertThrows(IllegalArgumentException.class,
+                                () -> interop.execute(raw, 17L)).getMessage().contains("another context")),
+                            () -> assertTrue(assertThrows(IllegalArgumentException.class,
+                                () -> interop.invokeMember(raw, "compile")).getMessage().contains("another context")));
+                        assertEquals(0, ownerOutput.size());
+                        assertEquals(0, otherOutput.size());
+                        assertNull(Language.currentState().getThreads().pollState(Thread.currentThread()).getCurrent());
+                        // A normal polyglot Value enters its own context even while another is current.
+                        assertEquals(23L, value.execute(23L).asLong());
+                        assertEquals(0, otherOutput.size());
+                    } finally { other.leave(); }
+                    assertTrue(ownerOutput.toString(StandardCharsets.UTF_8).contains("owner-entry"));
+                    owner.enter();
+                    try { assertEquals(29L, interop.execute(raw, 29L)); }
+                    finally { owner.leave(); }
+                    owner.close();
+                    assertThrows(IllegalStateException.class, () -> value.execute(31L));
+                    other.enter();
+                    try { assertThrows(IllegalArgumentException.class, () -> interop.execute(raw, 31L)); }
+                    finally { other.leave(); }
+                    assertEquals(0, otherOutput.size());
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void rawRunIoRejectsAnotherContextWithoutConsumingTheLifecycle(String backend) throws Exception {
+        var ownerOutput = new ByteArrayOutputStream();
+        var otherOutput = new ByteArrayOutputStream();
+        try (var engine = Engine.create(); var owner = Context.newBuilder("thc").engine(engine).err(ownerOutput).build();
+                var other = Context.newBuilder("thc").engine(engine).err(otherOutput).build()) {
+            owner.initialize("thc"); other.initialize("thc");
+            final EntryValue raw;
+            final Value value;
+            owner.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var unit = map("kind", "data", "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+                var result = map("kind", "unknown", "aggregate", "unboxed-tuple", "components", list(STATE, unit),
+                    "primReps", list("BoxedRep (Just Lifted)"), "evaluated", true);
+                String unitId = "ghc-internal:GHC.Internal.Tuple.()";
+                var body = list("app", list("con", "StateUnit", 2),
+                    list(list("void", map("rep", STATE)), list("con", unitId, 0, map("rep", unit))),
+                    list(false, true), true, true, map("rep", result));
+                var main = module(STATE, result, trace("owner-main", body, result));
+                var shutdown = module(STATE, result, trace("owner-shutdown", body, result));
+                var shutdownBinding = with((Map<String, Object>) ((List<?>) shutdown.get("bindings")).getFirst(),
+                    "id", "host:Provenance.shutdown", "name", "shutdown");
+                var source = with(main, "bindings", list(((List<?>) main.get("bindings")).getFirst(), shutdownBinding),
+                    "constructors", list(map("id", "StateUnit", "name", "StateUnit", "kind", "unboxed-tuple", "arity", 2),
+                        map("id", unitId, "name", "()", "kind", "boxed", "arity", 0,
+                            "strictFields", list(), "fieldLifted", list(), "fieldReps", list())));
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, source, false) : new BytecodeProgram(language, source, false);
+                var proof = CoreRepresentations.parse(result);
+                raw = new EntryValue(program, "host:Provenance.entry", 1, null, proof, language,
+                    "host:Provenance.shutdown", proof, false, null, null);
+                value = owner.asValue(raw);
+            } finally { owner.leave(); }
+            var interop = InteropLibrary.getUncached();
+            other.enter();
+            try {
+                assertTrue(interop.isMemberInvocable(raw, "runIO"));
+                assertTrue(assertThrows(IllegalArgumentException.class,
+                    () -> interop.invokeMember(raw, "runIO")).getMessage().contains("another context"));
+                assertEquals(0, ownerOutput.size()); assertEquals(0, otherOutput.size());
+                assertNull(Language.currentState().getThreads().pollState(Thread.currentThread()).getCurrent());
+            } finally { other.leave(); }
+            assertTrue(value.invokeMember("runIO").asBoolean());
+            var output = ownerOutput.toString(StandardCharsets.UTF_8);
+            assertTrue(output.contains("owner-main")); assertTrue(output.contains("owner-shutdown"));
+            assertThrows(PolyglotException.class, () -> value.invokeMember("runIO"));
+            assertEquals(output, ownerOutput.toString(StandardCharsets.UTF_8));
+            assertEquals(0, otherOutput.size());
+        }
     }
 
     @Test void nestedPolicyCannotUpgradeItsCallerAndRestoresItsAdmission() throws Exception {
