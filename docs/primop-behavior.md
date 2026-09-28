@@ -107,7 +107,8 @@ distinguish THC's typed-result semantics from GHC's narrower native continuation
 ABI and list remaining generic sum/vector transport limits.
 
 Details: [asynchronous exceptions](async-exceptions.md), [MVars](managed-mvars.md),
-[STM](stm.md), [arithmetic exception implementation](../src/main/kotlin/thc/runtime/GuestExceptions.kt).
+[STM](stm.md), [arithmetic exception validation](../src/main/java/thc/runtime/CoreArithmeticExceptions.java)
+and [raising](../src/main/java/thc/runtime/RaiseArithmeticException.java).
 
 ## Weak pointers and finalization
 
