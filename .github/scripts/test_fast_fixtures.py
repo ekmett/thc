@@ -2185,13 +2185,14 @@ class FixturePreparationTest(unittest.TestCase):
                          {"mode": "selected", "rebuilt": [], "reused": []})
         self.assertEqual(self.calls, [])
 
-    def test_mixed_backend_continuations_need_no_exported_fixture(self):
+    def test_mixed_backend_and_stock_recovery_need_no_exported_fixture(self):
         project = Path(__file__).resolve().parents[2]
         _, owners = fast_fixtures._manifest(project)
-        name = "thc.runtime.MixedBackendContinuationTest"
-        self.assertIn(name, owners)
-        self.assertIsNone(owners[name])
-        self.assertTrue((project / "src/test/java/thc/runtime/MixedBackendContinuationTest.java").is_file())
+        for simple_name in ("MixedBackendContinuationTest", "StockGraphRecoveryTest"):
+            name = "thc.runtime." + simple_name
+            self.assertIn(name, owners)
+            self.assertIsNone(owners[name])
+            self.assertTrue((project / "src/test/java/thc/runtime" / (simple_name + ".java")).is_file())
 
     def test_unrelated_source_does_not_invalidate_group(self):
         self.prepare("thc.AlphaTest")

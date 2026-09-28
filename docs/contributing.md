@@ -158,10 +158,25 @@ This selects the published Truffle API, runtime and Sulong artifacts; the
 `verifyStockTruffle` task checks the runtime classpath. Generated-source
 normalization still applies. Ordinary calls and saved continuations can use this
 configuration, with deoptimization allowed on a first uncommon event.
-Automatic graph-budget extraction and retry still require the default runtime
-overlay. Stock OSR wrappers expose no public source-owner accessor, so their
-events are omitted from per-context JIT counters. Full application, native-image
-and Windows native-library parity are not yet established for this mode.
+Stock graph-size recovery records an exact pinned permanent `GraphTooBig`
+diagnostic, then replaces only the next fresh entry after that compiler task is
+terminal. Eligible AST case/default boundaries and bytecode case plans produce a
+fresh reduced target; existing closures, active bodies and saved continuation
+PCs retain their logical identities. The launcher reports compilation failures
+with `Print`, while explicit synchronous test compilation keeps `Throw`. Guest
+calls are never caught and replayed to recover from compilation failure.
+
+AST and bytecode OSR failures can be attributed through their public child
+ownership and recover on a later fresh entry, with fresh loop/OSR state. This does
+not migrate an active loop. Shared roots without a unique context owner,
+unattributed wrappers, other compiler errors and exhausted structural candidates
+are not recovered. The stock-only `StockGraphRecoveryTest` covers real failures,
+typed loans, old/fresh saved bodies, OSR and competing entry claimants; it skips
+under the overlay, whose compiler-time retry remains a separate path. The tested
+concurrency scope is entry publication, not every in-flight compiler interleaving.
+Stock OSR events remain omitted from the separate per-context JIT counters.
+Full application, native-image and Windows native-library parity are not yet
+established for this mode.
 
 Run `./gradlew testBytecodeMetadataSplit` for compiled before/after opcode checks
 and malformed-input controls. Add

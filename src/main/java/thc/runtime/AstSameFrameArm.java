@@ -10,6 +10,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.source.SourceSection;
@@ -25,6 +26,7 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
     @Child private IndirectCallNode call = IndirectCallNode.create();
     @CompilationFinal(dimensions = 1) private volatile RootCallTarget[] targets;
     private volatile long sideGeneration;
+    private boolean copiedExtraction;
 
     AstSameFrameArm(Expr body) {
         this.body = body;
@@ -40,6 +42,10 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
         select(region, largest, size);
         AstSameFrameArm selected = largest[0];
         if (selected == null) return false;
+        return prepare(selected);
+    }
+
+    private static boolean prepare(AstSameFrameArm selected) {
         return selected.atomic(() -> {
             if (selected.targets != null) return false;
             ContextRoot source = (ContextRoot) selected.getRootNode();
@@ -69,9 +75,21 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
 
     @Override public Node copy() {
         AstSameFrameArm clone = (AstSameFrameArm) super.copy();
+        clone.copiedExtraction = copiedExtraction || targets != null;
         clone.targets = null;
         clone.sideGeneration = 0;
         return clone;
+    }
+
+    /** Recovery clones keep prior boundaries, with fresh sides owned by the new
+     * body. Ordinary Truffle cloning retains its existing unextracted behavior. */
+    static void restoreCopiedExtractions(Node root) {
+        for (AstSameFrameArm arm : NodeUtil.findAllNodeInstances(root, AstSameFrameArm.class)) {
+            if (arm.copiedExtraction) {
+                prepare(arm);
+                arm.copiedExtraction = false;
+            }
+        }
     }
 
     @Override public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
@@ -121,6 +139,14 @@ final class AstSameFrameArm extends Expr implements ReplaceObserver {
             super(source, FrameDescriptor.newBuilder().build());
             this.arm = arm;
             this.mode = mode;
+        }
+        ContextRoot sourceRoot() { return (ContextRoot) arm.getRootNode(); }
+
+        boolean extractInCopy(FunctionRoot replacement) {
+            var originalArms = NodeUtil.findAllNodeInstances(sourceRoot(), AstSameFrameArm.class);
+            var copiedArms = NodeUtil.findAllNodeInstances(replacement, AstSameFrameArm.class);
+            int index = originalArms.indexOf(arm);
+            return index >= 0 && originalArms.size() == copiedArms.size() && extract(copiedArms.get(index).body);
         }
         @Override public Object execute(VirtualFrame callFrame) {
             Object[] args = callFrame.getArguments();

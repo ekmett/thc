@@ -54,6 +54,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final RuntimeTraceServices runtimeTrace;
         private final Object compilationOwner = new Object();
         private final RuntimeJitServices runtimeJit;
+        private final GraphRecovery graphRecovery;
         public final ManagedSTM stm;
         private final ManagedFiles files;
         private final RtsFileLocks rtsFileLocks;
@@ -104,6 +105,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             threadAnnotations = language.threadAnnotations;
             runtimeTrace = new RuntimeTraceServices(env.err());
             runtimeJit = new RuntimeJitServices(this);
+            graphRecovery = new GraphRecovery(this);
             stm = new ManagedSTM();
             files = new ManagedFiles(env, threads);
             rtsFileLocks = new RtsFileLocks();
@@ -162,6 +164,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         public ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> getThreadAnnotations() { return threadAnnotations; }
         public RuntimeTraceServices getRuntimeTrace() { return runtimeTrace; }
         public RuntimeJitServices getRuntimeJit() { return runtimeJit; }
+        public GraphRecovery getGraphRecovery() { return graphRecovery; }
         public Object getCompilationOwner() { return compilationOwner; }
         public ManagedFiles getFiles() { return files; }
         public RtsFileLocks getRtsFileLocks() { return rtsFileLocks; }
@@ -259,6 +262,7 @@ public final class Language extends TruffleLanguage<Language.State> {
     }
     @Override protected void disposeContext(State context) {
         context.compilerRts.close();
+        context.graphRecovery.close();
         try { context.runtimeJit.close(); } finally { context.runtimeTrace.close(); }
         context.compactImages.close();
         context.heapAddresses.close();

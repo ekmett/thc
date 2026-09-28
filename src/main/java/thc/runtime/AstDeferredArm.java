@@ -52,6 +52,24 @@ public final class AstDeferredArm extends Expr {
         return true;
     }
 
+    /** Entry recovery owns its prepared side as well as its copied inline arm.
+     * The original prepared target may still belong to an active or saved body. */
+    static boolean extractFresh(FunctionRoot root) {
+        List<AstDeferredArm> candidates = NodeUtil.findAllNodeInstances(root, AstDeferredArm.class);
+        if (candidates.size() != 1) return false;
+        AstDeferredArm arm = candidates.getFirst();
+        if (arm.target == null || !(arm.target.getRootNode() instanceof FunctionRoot source))
+            throw new IllegalStateException("Unprepared deferred arm");
+        FunctionRoot side = source.copyForRecovery();
+        List<PreparedBody> bodies = NodeUtil.findAllNodeInstances(side, PreparedBody.class);
+        if (bodies.size() != 1) throw new IllegalStateException("Invalid deferred side body");
+        PreparedBody prepared = new PreparedBody(arm.getRepresentation(), arm.getCoreSourceLocation());
+        bodies.getFirst().replace(prepared);
+        arm.target = null;
+        arm.prepare(side.getCallTarget(), prepared);
+        return extract(root);
+    }
+
     @Override public Object execute(VirtualFrame frame) { return body.execute(frame); }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException { return body.executeInt(frame); }
     @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException { return body.executeLong(frame); }
