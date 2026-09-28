@@ -30,6 +30,7 @@ public final class Main {
             .option("engine.CompilationFailureAction", "Throw");
         if (profile == ContextProfile.SYNCHRONOUS_TEST) return builder;
         return builder.allowEnvironmentAccess(EnvironmentAccess.INHERIT)
+            .option("engine.CompilationFailureAction", "Print")
             .option("engine.CompilerThreads", System.getProperty("polyglot.engine.CompilerThreads", LAUNCHER_COMPILER_THREADS))
             .option("engine.TraceCompilation", System.getProperty("thc.traceCompilation", "false"))
             .option("engine.SingleTierCompilationThreshold", "10000")

@@ -24,6 +24,7 @@ import com.oracle.truffle.api.bytecode.ConstantOperand;
 import com.oracle.truffle.api.bytecode.ContinuationResult;
 import com.oracle.truffle.api.bytecode.GenerateBytecode;
 import com.oracle.truffle.api.bytecode.Operation;
+import com.oracle.truffle.api.bytecode.Prolog;
 import com.oracle.truffle.api.bytecode.Variadic;
 import com.oracle.truffle.api.dsl.Bind;
 import com.oracle.truffle.api.dsl.Cached;
@@ -33,6 +34,9 @@ import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.ControlFlowException;
 import thc.Language;
 
 /**
@@ -61,6 +65,55 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @CompilerDirectives.CompilationFinal private boolean passThrough;
     @CompilerDirectives.CompilationFinal private BytecodeCaseRegion.Plan casePlan;
     @Children private BytecodeCaseRegion[] caseRegions = new BytecodeCaseRegion[0];
+    @Child private volatile DirectCallNode recoveredEntry;
+
+    private static final class EnterRecovered extends ControlFlowException {
+        private static final EnterRecovered INSTANCE = new EnterRecovered();
+    }
+
+    /** Stock DSL prologs run only on fresh entry, before any argument ingress.
+     * Saved continuations enter their original bytecode directly at the saved PC. */
+    @Prolog public static final class RecoveryEntry {
+        @Specialization public static void enter(@Bind BytecodeRoot root) {
+            DirectCallNode redirect = root.recoveredEntry;
+            if (redirect == null && CompilerDirectives.inInterpreter() && root.graphFailure.get() != null)
+                redirect = root.recoverEntry();
+            if (redirect != null) throw EnterRecovered.INSTANCE;
+        }
+    }
+
+    @Override public Object interceptControlFlowException(ControlFlowException failure, VirtualFrame frame,
+            BytecodeNode bytecode, int bci) {
+        if (failure != EnterRecovered.INSTANCE) throw failure;
+        return Calls.direct(recoveredEntry, frame.getArguments());
+    }
+
+    @TruffleBoundary private DirectCallNode recoverEntry() {
+        var service = Language.currentState(this).getGraphRecovery();
+        var claim = service.claim(this);
+        if (claim == null) return recoveredEntry;
+        try {
+            if (casePlan == null || casePlan.generation() != 0) return null;
+            // The generated stock clone recreates continuation constants/owners,
+            // but deliberately shallow-copies inherited custom children.
+            BytecodeRoot replacement = (BytecodeRoot) cloneUninitialized();
+            replacement.stackDriver = stackDriver == null ? null : replacement.insert(NodeUtil.cloneNode(stackDriver));
+            BytecodeCaseRegion[] regions = new BytecodeCaseRegion[caseRegions.length];
+            for (int i = 0; i < regions.length; i++) regions[i] = NodeUtil.cloneNode(caseRegions[i]);
+            replacement.caseRegions = replacement.insert(regions);
+            replacement.casePlan = new BytecodeCaseRegion.Plan();
+            replacement.casePlan.recover(0);
+            DirectCallNode prepared = DirectCallNode.create(replacement.getCallTarget());
+            return atomic(() -> {
+                if (recoveredEntry == null && service.publishable(this, claim)) {
+                    recoveredEntry = insert(prepared);
+                    reportReplace(this, this, "fresh bytecode entry after terminal graph-size failure");
+                }
+                return recoveredEntry;
+            });
+        } finally { graphFailure.compareAndSet(claim, null); }
+    }
+
     final void configureCaseRegions(boolean passThrough, boolean inline, BytecodeCaseRegion[] regions) {
         this.passThrough = passThrough;
         caseRegions = insert(regions);
