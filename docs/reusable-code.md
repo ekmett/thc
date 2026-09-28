@@ -24,8 +24,17 @@ while every load still allocates its own program and runtime resources. Prepared
 code can be instantiated only with its original language in that language's
 currently entered context. A fresh instance may reuse code after its preparation
 context closes, but another context's instance cannot enter that code. Bytecode
-code reuse is not yet enabled; ordinary cached sources still construct fresh AST
+code reuse is not yet enabled. Ordinary cached sources still construct fresh AST
 or bytecode programs on every load, including repeated loads within one context.
+An explicit `prepareCode: true` scalar load request instead lowers admitted AST
+code during parsing and caches only its prepared code and signature metadata.
+Executing that cached load factory creates fresh program cells and resources,
+without running the lowerer. Asynchronous, diagnostic, managed-export and
+unit-directory requests are not admitted to this path. The opt-in process guard
+`-Dthc.requireCachedCode=true` rejects parser cache misses and ordinary AST
+lowering; it does not itself load an auxiliary artifact or disable compilation.
+The deployment tool must additionally require a matching persisted source and
+valid targets, and set the engine's compilation option to false.
 Shared executable roots retain no context compilation-owner token. Their compiler
 events are deliberately outside per-context JIT telemetry; ordinary roots and
 clones retain explicit ownership. This never changes per-instance guest metrics.

@@ -79,6 +79,8 @@ public final class Program implements ExecutableProgram {
     }
     private Program(TruffleLanguage<?> language, Map<String, Object> moduleData, boolean enableAsync,
                     boolean outlineCaseArms, boolean deferDefaultArm, boolean reusableCode, PreparedCode prepared) {
+        if (prepared == null && Boolean.getBoolean("thc.requireCachedCode"))
+            throw new UnsupportedCore("Runtime THC lowering is disabled; prepared code is required");
         this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
         this.reusableCode = reusableCode;
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
@@ -193,8 +195,8 @@ public final class Program implements ExecutableProgram {
      * Unselected definitions stay unprepared. Context sharing and AOT preparation remain separate. */
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
-        if (module.containsKey("demandBindings") || module.containsKey("foreignLinks") || module.containsKey("packageScalarLinks") ||
-                module.containsKey("selectedForeignExceptionBridge") || module.get("constructors") instanceof List<?> cs && !cs.isEmpty())
+        if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("foreignLinks")) || !absentOrEmpty(module.get("packageScalarLinks")) ||
+                module.get("selectedForeignExceptionBridge") != null || module.get("constructors") instanceof List<?> cs && !cs.isEmpty())
             throw new UnsupportedCore("Reusable AST admission currently requires a constructor- and foreign-free module");
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
@@ -216,6 +218,7 @@ public final class Program implements ExecutableProgram {
         return new PreparedCode(Map.of("bindings", List.copyOf(headers), "constructors", List.of(),
             "instrument", builder.metrics.getEnabled()), Map.copyOf(values), builder.codeIdentity, language);
     }
+    private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty(); }
     public static final class PreparedCode {
         private final Map<String, Object> module;
         private final Map<String, CodeValue> values;

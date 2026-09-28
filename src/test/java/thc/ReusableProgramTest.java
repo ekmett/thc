@@ -76,6 +76,96 @@ class ReusableProgramTest {
         return ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get(key)).longValue();
     }
 
+    @Test void preparedPublicSourceInstantiatesWithoutLoweringAndRejectsCacheMisses() throws Exception {
+        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var caf = binding("shared", plus(literal(17), literal(25)), true); caf.put("arity", 0);
+        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("shared"), variable("x")),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        reader.put("arity", 1); reader.put("rep", closureRep);
+        var request = map("modules", list(module(list(caf, reader))), "entry", "read", "backend", "ast",
+            "asyncExceptions", false, "prepareCode", true);
+        var source = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(request), "prepared-owned-load").cached(true).buildLiteral();
+        var previous = System.getProperty("thc.requireCachedCode");
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
+                preparation.parse(source); // Store path parses and lowers, but never executes a guest or load factory.
+            }
+            System.setProperty("thc.requireCachedCode", "true");
+            for (int contextIndex = 0; contextIndex < 2; contextIndex++) {
+                try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                    var first = context.eval(source);
+                    var sibling = context.eval(source);
+                    assertEquals(0L, publicCount(first, "loweredRootCount"), "cached load must not invoke the AST lowerer");
+                    assertEquals(0L, publicCount(sibling, "loweredRootCount"));
+                    assertEquals(0L, publicCount(first, "thunkEvaluations"));
+                    assertEquals(0L, publicCount(sibling, "thunkEvaluations"));
+                    assertEquals(47L, first.execute(5L).asLong());
+                    assertEquals(1L, publicCount(first, "thunkEvaluations"));
+                    assertEquals(0L, publicCount(sibling, "thunkEvaluations"));
+                    assertEquals(49L, sibling.execute(7L).asLong());
+                    assertEquals(1L, publicCount(sibling, "thunkEvaluations"));
+                    assertEquals(0L, publicCount(first, "loweredRootCount"));
+                    var absent = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(request), "absent-prepared-load").cached(true).buildLiteral();
+                    assertTrue(assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.eval(absent))
+                        .getMessage().contains("Cached THC source required"));
+                    context.enter();
+                    try {
+                        var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                        assertTrue(assertThrows(UnsupportedCore.class, () -> new Program(language, module(list(caf, reader))))
+                            .getMessage().contains("Runtime THC lowering is disabled"));
+                    } finally { context.leave(); }
+                }
+            }
+        } finally {
+            if (previous == null) System.clearProperty("thc.requireCachedCode"); else System.setProperty("thc.requireCachedCode", previous);
+        }
+    }
+
+    @Test void preparedPublicFactoryHasContextFreeAotPreparationAndStrictAdmission() throws Exception {
+        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("x"), literal(1)),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        reader.put("arity", 1); reader.put("rep", closureRep);
+        var request = map("modules", list(module(list(reader))), "entry", "read", "backend", "ast",
+            "asyncExceptions", false, "prepareCode", true);
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            com.oracle.truffle.api.RootCallTarget factory;
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    factory = (com.oracle.truffle.api.RootCallTarget) Language.currentState().getEnv().parsePublic(
+                        com.oracle.truffle.api.source.Source.newBuilder("thc", Json.stringify(request), "prepared-factory").cached(true).build());
+                } finally { context.leave(); }
+                for (var invalid : List.of(map("backend", "bytecode"), map("asyncExceptions", true),
+                        map("prepareCode", "true"), map("diagnosticUnsupported", true))) {
+                    var rejected = new LinkedHashMap<>(request); rejected.putAll(invalid);
+                    assertThrows(org.graalvm.polyglot.PolyglotException.class,
+                        () -> context.eval("thc", Json.stringify(rejected)), invalid.toString());
+                }
+            }
+            var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+            assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
+            assertEquals(true, type.getMethod("prepareForAOT").invoke(factory));
+            type.getMethod("compile", boolean.class).invoke(factory, true);
+            assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
+            assertEquals(false, type.getMethod("wasExecuted").invoke(factory));
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var result = (EntryValue) factory.call();
+                    var interop = com.oracle.truffle.api.interop.InteropLibrary.getUncached();
+                    assertEquals(8L, interop.execute(result, 7L));
+                    var diagnostics = (Map<?, ?>) Json.parse((String) interop.readMember(result, "diagnostics"));
+                    assertEquals(0L, ((Number) diagnostics.get("loweredRootCount")).longValue());
+                    assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
+                } finally { context.leave(); }
+            }
+        }
+    }
+
     @Test void untouchedRealRootsPrepareOutsideContextAndRetainTheirFirstCompiledEntry() throws Exception {
         var untouched = new AtomicInteger();
         var lazy = new CoreBindingBody(new CoreBindingBody.Header(2, Map.of(0, "var", 1, "unused"), false), null,

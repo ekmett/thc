@@ -7,6 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.ExecutionSignature;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -298,8 +299,12 @@ public final class Language extends TruffleLanguage<Language.State> {
     @Override protected void initializeMultiThreading(State context) { context.markMultithreaded(); }
 
     @SuppressWarnings("unchecked") @Override protected CallTarget parse(ParsingRequest request) {
+        if (Boolean.getBoolean("thc.requireCachedCode")) throw new UnsupportedCore("Cached THC source required; parsing is disabled");
         var input = (Map<String, Object>) Json.parse(request.getSource().getCharacters().toString());
+        require(!input.containsKey("prepareCode") || input.get("prepareCode") instanceof Boolean, "prepareCode must be a Boolean");
+        boolean prepareCode = Boolean.TRUE.equals(input.get("prepareCode"));
         if ("managed-exports".equals(input.get("mode"))) {
+            require(!prepareCode, "Reusable code does not yet admit managed exports");
             String backend = ManagedExportPlan.backend(input);
             var directory = CoreModules.unitDirectory(input);
             if (directory != null) return new RootNode(this) {
@@ -313,6 +318,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             }.getCallTarget();
         }
         var directory = CoreModules.unitDirectory(input);
+        require(!prepareCode || directory == null, "Reusable code does not yet admit unit-directory loading");
         if (directory != null) return unitRoot(input, directory);
         var merger = new CoreModules.Merger();
         if (!(input.get("entry") instanceof String entry)) throw new IllegalStateException("Expected entry name");
@@ -377,6 +383,13 @@ public final class Language extends TruffleLanguage<Language.State> {
         var acceptedResult = hostResult;
         var resultFault = hostResultFault;
         var shutdownProof = shutdownResult;
+        if (prepareCode) {
+            require(backend.equals("ast") && !async && ioResult == null && shutdownEntry == null &&
+                !Boolean.TRUE.equals(input.get("diagnosticUnsupported")) && registrations.isEmpty(),
+                "Reusable code currently requires synchronous, strict, foreign-free AST scalar entries");
+            return new PreparedRoot(this, Program.prepareCode(this, linked, List.of(entry)), entry,
+                ((Number) selected.get("arity")).intValue(), acceptedInputs, acceptedResult).getCallTarget();
+        }
         return new RootNode(this) {
             @Override public Object execute(VirtualFrame frame) {
                 // Parsed roots may be Engine-shared; programs, CAFs and registrations are context-owned.
@@ -396,6 +409,30 @@ public final class Language extends TruffleLanguage<Language.State> {
             }
             @Override public String getName() { return "THC load " + entry; }
         }.getCallTarget();
+    }
+
+    /** Cached load factory: code is shared, while every execution creates fresh ordinary runtime state. */
+    static final class PreparedRoot extends RootNode {
+        final Program.PreparedCode code;
+        private final String entry;
+        private final int arity;
+        private final List<CoreRepresentation> inputs;
+        private final CoreRepresentation result;
+        PreparedRoot(Language language, Program.PreparedCode code, String entry, int arity,
+                List<CoreRepresentation> inputs, CoreRepresentation result) {
+            super(language);
+            this.code = code; this.entry = entry; this.arity = arity; this.inputs = inputs; this.result = result;
+        }
+        @Override public Object execute(VirtualFrame frame) { return instantiate(); }
+        @TruffleBoundary private EntryValue instantiate() {
+            var language = getLanguage(Language.class);
+            return new EntryValue(code.newInstance(language), entry, arity, null, null, language,
+                null, null, false, inputs, result);
+        }
+        @Override protected ExecutionSignature prepareForAOT() {
+            return ExecutionSignature.create(EntryValue.class, new Class<?>[0]);
+        }
+        @Override public String getName() { return "THC prepared load " + entry; }
     }
 
     @SuppressWarnings("unchecked") private CallTarget unitRoot(Map<String, Object> input, CoreUnitDirectory directory) {
