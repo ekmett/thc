@@ -32,6 +32,7 @@ public final class GenericInputCall extends Node {
     }
     public Object execute(VirtualFrame frame, Closure initial, Object[] values) { return execute(frame, initial, values, start); }
     public Object execute(VirtualFrame frame, Closure initial, Object[] values, int initialOffset) {
+        Metrics metrics = this.metrics != null ? this.metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
         Closure function = initial;
         int offset = initialOffset;
         while (true) {
@@ -72,7 +73,7 @@ public final class GenericInputCall extends Node {
                         if (exact && tupleBounce != null && !AstControl.captures(this)) {
                             tupleBounce.execute(frame, transfer); return null;
                         }
-                        answer = loop.execute(transfer);
+                        answer = loop.execute(transfer, metrics);
                     }
                 }
                 result = AstControl.captures(this) ? AstControl.complete(this, answer, target,

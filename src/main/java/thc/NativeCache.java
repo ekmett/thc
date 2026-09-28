@@ -28,20 +28,26 @@ public final class NativeCache {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 1 && args[0].equals("--help")) {
-            System.out.println("store CACHE MODULE.json[,MODULE.json...]|@PACKAGES.json ENTRY [--verify-artifacts]\nrun CACHE [INTEGER...]");
+            System.out.println("store CACHE MODULE.json[,MODULE.json...]|@PACKAGES.json ENTRY [--verify-artifacts]\nrun CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
             return;
         }
         if (args.length < 2 || !(args[0].equals("store") && (args.length == 4 ||
                 args.length == 5 && args[4].equals("--verify-artifacts")) || args[0].equals("run")))
-            throw new IllegalArgumentException("Expected store CACHE MODULES ENTRY or run CACHE [INTEGER...]");
+            throw new IllegalArgumentException("Expected store CACHE MODULES ENTRY or run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]");
         if (!ImageInfo.inImageRuntimeCode()) throw new IllegalStateException("Use the experimental native-cache image, not the JVM launcher");
         Path cache = Path.of(args[1]).toAbsolutePath();
         if (args[0].equals("store")) store(cache, request(Arrays.asList(args[2].split(",", -1)), args[3], args.length == 5));
         else {
             Object[] arguments = new Object[args.length - 2];
-            for (int i = 2; i < args.length; i++) arguments[i - 2] = Long.parseLong(args[i]);
+            for (int i = 2; i < args.length; i++) arguments[i - 2] = argument(args[i]);
             run(cache, arguments);
         }
+    }
+
+    static Object argument(String value) {
+        if (value.startsWith("f:")) return Float.valueOf(value.substring(2));
+        if (value.startsWith("d:")) return Double.valueOf(value.substring(2));
+        return Long.valueOf(value);
     }
 
     static String request(List<String> modules, String entry) {
@@ -105,7 +111,8 @@ public final class NativeCache {
             Source source = selectedSource(engine);
             try (Context context = Context.newBuilder("thc").engine(engine).build()) {
                 Value entry = context.parse(source).execute(); // Actual cached factory validates its own targets.
-                long result = entry.execute(arguments).asLong();
+                Value result = entry.execute(arguments);
+                if (!result.isNumber()) throw new IllegalStateException("Cached entry must return a numeric scalar");
                 Map<?, ?> diagnostics = (Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString());
                 if (((Number) diagnostics.get("loweredRootCount")).longValue() != 0 ||
                         ((Number) diagnostics.get("compiledEntries")).longValue() == 0 || submissions.get() != 0)

@@ -76,5 +76,9 @@ class CoreFloatingLiteralTest {
         assertThrows(UnsupportedCore.class, () -> new CoreFloatingLiteral.Single(0).decode("double"));
         assertThrows(UnsupportedCore.class, () -> new CoreFloatingLiteral.Double(0).decode("float"));
         assertThrows(UnsupportedCore.class, () -> new CoreFloatingLiteral.Single(0).decode("int"));
+        assertThrows(UnsupportedCore.class, () -> CoreFloatingLiteral.fromDocument(Map.of("floatBits", "0")).decode("double"));
+        assertThrows(UnsupportedCore.class, () -> CoreFloatingLiteral.fromDocument(Map.of("floatBits", "0", "doubleBits", "0")));
+        assertThrows(NumberFormatException.class, () -> CoreFloatingLiteral.fromDocument(Map.of("floatBits", "100000000")));
+        assertThrows(NumberFormatException.class, () -> CoreFloatingLiteral.fromDocument(Map.of("doubleBits", "not-bits")));
     }
 }

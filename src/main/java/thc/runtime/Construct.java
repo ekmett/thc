@@ -66,7 +66,10 @@ final class Construct extends Expr {
             return reusable.createLong(owner, fields[0].executeRequiredLong(frame));
         DataValue value = reusable.allocate(owner);
         for (int i = 0; i < fields.length; i++) {
-            if (reusable.isLong(i)) reusable.initializeLong(owner, value, i, fields[i].executeRequiredLong(frame));
+            if (reusable.isInt(i)) reusable.initializeInt(owner, value, i, fields[i].executeRequiredInt(frame));
+            else if (reusable.isLong(i)) reusable.initializeLong(owner, value, i, fields[i].executeRequiredLong(frame));
+            else if (reusable.isFloat(i)) reusable.initializeFloat(owner, value, i, fields[i].executeRequiredFloat(frame));
+            else if (reusable.isDouble(i)) reusable.initializeDouble(owner, value, i, fields[i].executeRequiredDouble(frame));
             else reusable.initialize(owner, value, i, fields[i].execute(frame));
         }
         return value;

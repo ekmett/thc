@@ -6,13 +6,17 @@ cache provider. It produces two artifacts: a native launcher and a matching code
 cache. It is not the ordinary `thc run` path or a general Haskell AOT distribution.
 
 The current admission is synchronous, foreign-free AST code:
-explicit machine-word input proofs, integer literals, globals, ordinary function
-applications, nested closures, `let` bindings, `Int#` literal/default cases, local
-joins, saturated boxed constructors and constructor cases, and `+#`, `-#`, `*#`
-arithmetic. Internal function formals and case binders/results require exact
-machine-word or data proofs; join formals/results remain machine-word-only.
-Constructor fields currently support machine words and boxed data with exact
-field descriptors, including lazy tails. Recursive local joins use the existing local-loop lowering;
+exact numeric scalar input proofs, numeric literals, globals, ordinary function
+applications, nested closures, `let` bindings, integral literal/default cases, local
+joins, saturated boxed constructors and constructor cases. Numeric carriers include
+machine words, signed/unsigned 8/16/32-bit integers, `Float#` and `Double#`.
+The admitted arithmetic includes `+#`, `-#`, `*#`, existing narrow scalar operations,
+floating arithmetic/comparisons and integer/floating conversions. Floating cases
+may use defaults, not floating literal alternatives (which GHC Core disallows).
+Internal function formals and case binders/results require exact numeric or data
+proofs; join formals/results are numeric. Constructor fields support these numeric
+carriers and boxed data with exact field descriptors, including lazy tails.
+Recursive local joins use the existing local-loop lowering;
 ordinary self recursion uses the existing function loop, prepared before publication.
 Higher-order formals and unsaturated constructor functions remain outside this
 incremental admission.
@@ -52,9 +56,11 @@ bin/native-cache run build/affine.cache -3 9 2
 
 Use the actual JSON path emitted by the exporter. Multiple self-contained Core
 JSON files may be supplied as one comma-separated argument. Entry selection uses
-the existing Core linker. Inputs to `run` are signed 64-bit integers, with the
-entry's existing host ABI validating arity/carriers; arithmetic uses ordinary
-machine-word overflow. The selected entry is fixed in the cache; arguments are
+the existing Core linker. Plain inputs to `run` are signed 64-bit integers; prefix
+floating inputs with `f:` for Float or `d:` for Double. The entry's existing host
+ABI validates arity, carriers and narrow integer ranges; signed and unsigned results
+keep that ABI's widening rules. Arithmetic uses the primitive's ordinary wrapping
+or floating-point behavior. The selected entry is fixed in the cache; arguments are
 not compiled in. `src/examples/THC/CachedCalls.hs` exercises ordinary out-of-line
 guest functions through the same export/store/run commands and argument contract.
 
@@ -98,6 +104,23 @@ The nonnegative count selects a fresh descending list. Its fold adds to the
 dynamic seed and a shared list's sum. Constructor storage metadata is shared
 code, while each load owns its list values, CAF cells and lazy tails. No list
 elements or CAF bodies are evaluated during preparation.
+
+`src/examples/THC/CachedNumeric.hs` combines an `Int16#`, `Float#` and `Double#`
+through a boxed constructor and a shared floating CAF:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-numeric-core" \
+  bin/export-core.sh src/examples/THC/CachedNumeric.hs
+bin/native-cache store build/numeric.cache \
+  build/cached-numeric-core/THC.CachedNumeric.json calculate
+bin/native-cache run build/numeric.cache 2 f:1.5 d:21.0
+# 47.0
+bin/native-cache run build/numeric.cache 32767 f:-0.5 d:16371.5
+# -25.0
+```
+
+The narrow addition wraps before widening, and the Float addition rounds before
+conversion to Double. These are dynamic arguments, not store-time training inputs.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and

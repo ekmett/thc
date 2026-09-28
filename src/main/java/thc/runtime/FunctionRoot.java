@@ -228,6 +228,12 @@ public final class FunctionRoot extends GuestRoot {
         // Frame carriers were established structurally before target publication;
         // no context lookup, guest execution or observed-profile seeding is needed.
         if (programSlot < 0) return null;
+        if (getTypedInput() != null) {
+            // Narrow scalars already use the typed packet calling convention.
+            // Its generated storage class varies; retain exact layout/owner checks.
+            preparedForAOT = true;
+            return ExecutionSignature.create(numericClass(getScalarResultProof()), new Class<?>[]{null});
+        }
         List<CoreRepresentation> inputs = getInputProofs();
         Class<?>[] signature = new Class<?>[getEntryArgumentOffset() + inputs.size()];
         signature[0] = Long.class;
@@ -237,13 +243,21 @@ public final class FunctionRoot extends GuestRoot {
         signature[1] = null;
         for (int i = 0; i < inputs.size(); i++) {
             CoreRepresentation proof = inputs.get(i);
-            if (!(proof.isLong() || proof.getKind() == CoreKind.DATA)) throw new IllegalStateException("Unsupported reusable AOT argument");
+            Class<?> carrier = numericClass(proof);
+            if (carrier == null && proof.getKind() != CoreKind.DATA) throw new IllegalStateException("Unsupported reusable AOT argument");
             // Lifted data may arrive as a lazy thunk or an authenticated owned
             // constructor carrier; neither has one exact signature class.
-            signature[getEntryArgumentOffset() + i] = proof.isLong() ? Long.class : null;
+            signature[getEntryArgumentOffset() + i] = carrier;
         }
         preparedForAOT = true;
-        return ExecutionSignature.create(getScalarResultProof().isLong() ? Long.class : null, signature);
+        return ExecutionSignature.create(numericClass(getScalarResultProof()), signature);
+    }
+    private static Class<?> numericClass(CoreRepresentation proof) {
+        if (proof.isInt()) return Integer.class;
+        if (proof.isLong()) return Long.class;
+        if (proof.isFloat()) return Float.class;
+        if (proof.isDouble()) return Double.class;
+        return null;
     }
     public boolean getEnableAsync() { return enableAsync; }
     @Override public boolean getAsynchronousExceptions() { return enableAsync; }

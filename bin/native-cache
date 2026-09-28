@@ -13,7 +13,7 @@ case "${1:---help}" in
         [[ $# == 4 || $# == 5 && $5 == --verify-artifacts ]] || { echo 'Usage: bin/native-cache store CACHE MODULES ENTRY [--verify-artifacts]' >&2; exit 2; }
         exec "$image" "$@" ;;
     run)
-        [[ $# -ge 2 ]] || { echo 'Usage: bin/native-cache run CACHE [INTEGER...]' >&2; exit 2; }
+        [[ $# -ge 2 ]] || { echo 'Usage: bin/native-cache run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]' >&2; exit 2; }
         # Reserve address space, but let Engine.CacheLoad perform the ONLY load.
         # AuxiliaryImagePath would eagerly map it and make CacheLoad reject it.
         cache_bytes=$(wc -c < "$2")
@@ -22,6 +22,6 @@ case "${1:---help}" in
         exec "$image" "-XX:AuxiliaryImageBytes=$reserved_bytes" "$@" ;;
     -h|--help)
         echo 'Experimental Linux AMD64 / GraalVM 25.3.4.1 cached AST code'
-        echo 'bin/native-cache build | store CACHE MODULES ENTRY [--verify-artifacts] | run CACHE [INTEGER...]' ;;
+        echo 'bin/native-cache build | store CACHE MODULES ENTRY [--verify-artifacts] | run CACHE [INTEGER|f:FLOAT|d:DOUBLE...]' ;;
     *) echo 'Unknown native-cache command; use --help' >&2; exit 2 ;;
 esac

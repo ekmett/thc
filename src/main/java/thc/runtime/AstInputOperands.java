@@ -18,7 +18,8 @@ public final class AstInputOperands extends Node {
         for (Expr argument : arguments) proofs.add(argument.getRepresentation());
         layout = java.util.Objects.requireNonNull(ArgumentLayout.fromProofs(proofs));
         int[] slots = new int[layout.getPhysicalArity()];
-        for (int i = 0; i < slots.length; i++) slots[i] = frameLayout.bind("<typed input " + i + ">");
+        for (int i = 0; i < slots.length; i++) slots[i] = frameLayout.bind("<typed input " + i + ">",
+            FrameLayout.carrierKind(layout.getPhysicalProofs()[i]));
         source = new AstInputSource(layout, slots);
     }
     public ArgumentLayout getLayout() { return layout; }

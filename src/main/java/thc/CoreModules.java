@@ -359,7 +359,7 @@ public final class CoreModules {
         var directory = unitDirectory(input);
         if (directory == null) {
             require(input.containsKey("modules"), "Cached preparation requires inline modules or a package directory");
-            return Json.stringify(input);
+            return Json.stringify(detachedValue(input));
         }
         require(input.get("consumerModules") == null && input.get("indexedModuleFiles") == null,
             "Cached package selection requires a qualified entry in its package directory");
@@ -396,6 +396,7 @@ public final class CoreModules {
         }
     }
     private static Object detachedValue(Object value) {
+        if (value instanceof thc.runtime.CoreFloatingLiteral floating) return floating.document();
         if (value instanceof Map<?,?> fields) {
             var result = new LinkedHashMap<String,Object>();
             fields.forEach((key, field) -> {

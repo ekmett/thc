@@ -259,23 +259,24 @@ public final class Program implements ExecutableProgram {
             }
         }
     }
-    private record CodeValue(RootCallTarget target, CaptureLayout captures, int arity, Object literal) {
+    private record CodeValue(RootCallTarget target, CaptureLayout captures, int arity, Object literal, int constructorIndex) {
         static CodeValue from(Object value, Program builder) {
             if (value instanceof Closure closure && closure.suppliedCount == 0 && closure.environment != null &&
                     closure.environment.getLayout().getStorageSize() == 0)
-                return new CodeValue(closure.target, closure.environment.getLayout(), closure.arity, null);
+                return new CodeValue(closure.target, closure.environment.getLayout(), closure.arity, null, -1);
             if (value instanceof Thunk thunk && thunk.getState() == 0 && thunk.getEnvironment() != null &&
                     thunk.getEnvironment().getLayout().getStorageSize() == 0)
-                return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null);
-            if (value instanceof Long || value == Unit.INSTANCE) return new CodeValue(null, null, 0, value);
+                return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null, -1);
+            if (value instanceof Integer || value instanceof Long || value instanceof Float || value instanceof Double || value == Unit.INSTANCE)
+                return new CodeValue(null, null, 0, value, -1);
             // Store an immutable constructor index, never the preparation load's
             // nullary value or its allocation key/cache.
             if (value instanceof DataValue data && data.getLayout().getArity() == 0 && data.getLayout().reusableStorage() != null)
-                return new CodeValue(null, null, 0, required(builder.constructorIndices, data.getLayout().getId()));
-            throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or a machine-word literal");
+                return new CodeValue(null, null, 0, null, required(builder.constructorIndices, data.getLayout().getId()));
+            throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or a numeric scalar literal");
         }
         Object instantiate(Program instance) {
-            if (target == null) return literal instanceof Integer index ? instance.constructorLayout(index).allocate() : literal;
+            if (target == null) return constructorIndex >= 0 ? instance.constructorLayout(constructorIndex).allocate() : literal;
             CapturedFrame environment = captures.captureValues(new Object[0], instance);
             return arity < 0 ? new Thunk(target, environment) : new Closure(environment, arity, target);
         }
@@ -288,20 +289,26 @@ public final class Program implements ExecutableProgram {
                     throw new UnsupportedCore("Reusable constructor functions must be saturated");
             }
             case "lit" -> {
-                if (!"int".equals(expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not a machine word");
+                if (!reusableLiteral((String) expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not a numeric scalar");
             }
             case "lam" -> {
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
                     CoreRepresentation proof = CoreRepresentations.binder(argument);
-                    if (!reusableScalar(proof) || proof.isLong() && representationLifted(argument))
-                        throw new UnsupportedCore("Reusable AST input requires a machine-word or data proof");
+                    if (!reusableScalar(proof) || proof.getKind() != CoreKind.DATA && representationLifted(argument))
+                        throw new UnsupportedCore("Reusable AST input requires a numeric scalar or data proof");
                 }
                 requireReusableBody((List<Object>) expression.get(2));
             }
             case "app" -> {
                 List<Object> function = (List<Object>) expression.get(1);
                 if ("prim".equals(function.getFirst())) {
-                    if (!Set.of("+#", "-#", "*#").contains(function.get(1)))
+                    String name = (String) function.get(1);
+                    if (NarrowScalarOp.named(name) == null && !Set.of("+#", "-#", "*#",
+                            "plusFloat#", "minusFloat#", "timesFloat#", "divideFloat#", "negateFloat#",
+                            "+##", "-##", "*##", "/##", "negateDouble#",
+                            "eqFloat#", "neFloat#", "ltFloat#", "leFloat#", "gtFloat#", "geFloat#",
+                            "==##", "/=##", "<##", "<=##", ">##", ">=##",
+                            "int2Float#", "int2Double#", "float2Int#", "double2Int#", "float2Double#", "double2Float#").contains(name))
                         throw new UnsupportedCore("Reusable AST primitive is outside the admitted arithmetic family");
                 } else if ("con".equals(function.getFirst())) {
                     if (((Number) function.get(2)).intValue() != ((List<?>) expression.get(2)).size())
@@ -313,8 +320,8 @@ public final class Program implements ExecutableProgram {
                 var bindings = (List<Map<String,Object>>) expression.get(2);
                 var joins = CoreJoins.definitions(bindings);
                 if (joins != null) for (var join : joins) {
-                    if (!join.getResult().getPresent() || !join.getResult().isLong())
-                        throw new UnsupportedCore("Reusable AST join result requires a machine-word proof");
+                    if (!reusableScalar(join.getResult()) || join.getResult().getKind() == CoreKind.DATA)
+                        throw new UnsupportedCore("Reusable AST join result requires a numeric scalar proof");
                 }
                 for (var binding : bindings) {
                     CoreRepresentation proof = CoreRepresentations.binder(binding);
@@ -327,15 +334,15 @@ public final class Program implements ExecutableProgram {
                 CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
                 CoreRepresentation result = CoreRepresentations.expression(expression);
                 if (!reusableScalar(binder) || !reusableScalar(result))
-                    throw new UnsupportedCore("Reusable AST case binder and result require word or data proofs");
+                    throw new UnsupportedCore("Reusable AST case binder and result require numeric scalar or data proofs");
                 requireReusableBody((List<Object>) expression.get(1));
                 for (var alternative : (List<List<Object>>) expression.get(3)) {
                     String kind = (String) alternative.getFirst();
                     if (kind.equals("data")) {
                         if (binder.getKind() != CoreKind.DATA) throw new UnsupportedCore("Reusable data case requires a data binder");
-                    } else if (!(kind.equals("default") || binder.isLong() && kind.equals("lit") &&
-                            ((List<?>) alternative.get(1)).getFirst().equals("int")) || !((List<?>) alternative.get(2)).isEmpty())
-                        throw new UnsupportedCore("Reusable AST case requires data, word literals or default alternatives");
+                    } else if (!(kind.equals("default") || (binder.isLong() || binder.isInt()) && kind.equals("lit") &&
+                            reusableLiteral((String) ((List<?>) alternative.get(1)).getFirst())) || !((List<?>) alternative.get(2)).isEmpty())
+                        throw new UnsupportedCore("Reusable AST case requires data, integral literals or default alternatives");
                     requireReusableBody((List<Object>) alternative.get(3));
                 }
             }
@@ -343,7 +350,15 @@ public final class Program implements ExecutableProgram {
         }
     }
     private static boolean reusableScalar(CoreRepresentation proof) {
-        return proof.getPresent() && (proof.isLong() || proof.getKind() == CoreKind.DATA) && !proof.isTypedTransport();
+        return proof.getPresent() && (proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble() ||
+            proof.getKind() == CoreKind.DATA) && !proof.isTypedTransport();
+    }
+    private static boolean reusableLiteral(String kind) {
+        return switch (kind) {
+            case "int", "word", "char", "int8", "word8", "int16", "word16", "int32", "word32",
+                 "int64", "word64", "float", "double" -> true;
+            default -> false;
+        };
     }
     private static boolean representationLifted(Map<String, Object> binding) {
         return binding.get("lifted") instanceof Boolean lifted ? lifted :
@@ -896,6 +911,7 @@ public final class Program implements ExecutableProgram {
         return result;
     }
     private Object literal(String kind, Object encoded, CoreRepresentation proof) {
+        if (encoded instanceof Map<?,?> document) encoded = CoreFloatingLiteral.fromDocument(document);
         if (encoded instanceof CoreFloatingLiteral floating) return floating.decode(kind);
         if (!(encoded instanceof String value)) throw new UnsupportedCore("Malformed Core literal payload");
         return switch (kind) {
@@ -2331,9 +2347,9 @@ public final class Program implements ExecutableProgram {
         }
         Expr function = compile(fn, scope, false);
         ArgumentLayout input = ArgumentLayout.fromProofs(loweredProofs(nodes));
-        if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, metrics,
+        if (input != null && input.getRequiresTyped()) return new AstTypedApplication(function, nodes, scope.layout, tail, codeMetrics(),
             tupleProof.isTypedTransport() ? new TupleShape(tupleProof, (thc.Language) language) : null,
-            tail && !capturesContinuations && scope.self != null &&
+            !reusableCode && tail && !capturesContinuations && scope.self != null &&
                 TypedInputs.supportsTypedSelf(scope.self.getInputLayout(), scope.self.getEntryStrict(), input));
         if (tupleProof.isTypedTransport()) {
             TupleShape shape = new TupleShape(tupleProof, (thc.Language) language);

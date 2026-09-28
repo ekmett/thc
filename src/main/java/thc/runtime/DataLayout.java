@@ -61,8 +61,9 @@ public final class DataLayout {
         Reusable(TruffleLanguage<?> language, String id, String name, CoreFields logicalFields) {
             this.id = id; this.name = name; this.logicalFields = logicalFields;
             for (CoreRepresentation proof : logicalFields.getLogicalProofs())
-                if (!proof.getPresent() || !(proof.isLong() || proof.getKind() == CoreKind.DATA) || proof.isTypedTransport())
-                    throw new UnsupportedCore("Reusable constructor fields require word or lifted-data proofs");
+                if (!proof.getPresent() || !(proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble() ||
+                        proof.getKind() == CoreKind.DATA) || proof.isTypedTransport())
+                    throw new UnsupportedCore("Reusable constructor fields require numeric scalar or data proofs");
             fields = newFields(logicalFields.getStorage(), logicalFields.getReferenceTypes(), logicalFields.getVectorProofs());
             // A shared carrier must carry its exact per-load owner, not use the
             // ordinary one-layout-per-class shortcut.
@@ -80,6 +81,9 @@ public final class DataLayout {
             return owner.nullaryValue != null ? owner.nullaryValue : shape.getFactory().create(owner, owner.allocationKey);
         }
         boolean isLong(int index) { return fields[index].isLong(); }
+        boolean isInt(int index) { return fields[index].isInt(); }
+        boolean isFloat(int index) { return fields[index].isFloat(); }
+        boolean isDouble(int index) { return fields[index].isDouble(); }
         DataValue createLong(DataLayout owner, long value) {
             checkOwner(owner);
             DataValue[] cached = owner.boxedValues;
@@ -92,6 +96,15 @@ public final class DataLayout {
         }
         void initializeLong(DataLayout owner, DataValue value, int index, long field) {
             checkOwner(owner); owner.checkField(value, index); fields[index].initializeLong(value, field);
+        }
+        void initializeInt(DataLayout owner, DataValue value, int index, int field) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].initializeInt(value, field);
+        }
+        void initializeFloat(DataLayout owner, DataValue value, int index, float field) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].initializeFloat(value, field);
+        }
+        void initializeDouble(DataLayout owner, DataValue value, int index, double field) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].initializeDouble(value, field);
         }
         void restore(DataLayout owner, DataValue value, int index, Frame frame, int slot) {
             checkOwner(owner); owner.checkField(value, index); fields[index].restore(value, frame, slot);

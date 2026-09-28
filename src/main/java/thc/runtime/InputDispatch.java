@@ -22,10 +22,11 @@ public final class InputDispatch extends Node {
     public InputDispatch(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination) { this(source, count, tail, metrics, destination, 0); }
     public InputDispatch(InputSource source, int count, boolean tail, Metrics metrics, TupleDestination destination, int start) {
         this.source = source; this.count = count; this.tail = tail; this.metrics = metrics; this.destination = destination; this.start = start;
-        generic = new GenericInputCall(source, count, tail, metrics, destination, start);
+        generic = new GenericInputCall(source, count, tail, metrics, destination, start, metrics == null);
     }
     public Object execute(VirtualFrame frame, Closure function) { return execute(frame, function, null); }
     @ExplodeLoop public Object execute(VirtualFrame frame, Closure function, Object[] values) {
+        if (metrics == null) return generic.execute(frame, function, values);
         for (InputCallArm arm : direct) if (arm.matches(function)) return arm.execute(frame, function, values);
         if (!megamorphic) {
             CompilerDirectives.transferToInterpreterAndInvalidate();

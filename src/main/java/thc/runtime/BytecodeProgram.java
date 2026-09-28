@@ -1425,6 +1425,7 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private Object literal(String kind, Object encoded) { return literal(kind, encoded, null); }
     private Object literal(String kind, Object encoded, CoreRepresentation proof) {
+        if (encoded instanceof Map<?,?> document) encoded = CoreFloatingLiteral.fromDocument(document);
         if (encoded instanceof CoreFloatingLiteral floating) return floating.decode(kind);
         if (!(encoded instanceof String value)) throw new UnsupportedCore("Malformed Core literal payload");
         return switch (kind) {
