@@ -123,7 +123,7 @@ public final class ManagedSignalMask {
                     nativeOutput.copyTo(output, 0, output.length);
                     for (int i = 0; i < output.length; i++) oldset.writeWord8(i, output[i]);
                 }
-                if (result == -1) owner.getStdio().nativeError$org_intelligence_thc(errno);
+                if (result == -1) owner.getStdio().nativeError(errno);
                 return result;
             } finally { owner.getThreads().leaveForeign(previous); }
         } catch (InteropException failure) { throw propagate(failure); }

@@ -191,9 +191,9 @@ public final class GuestThreads {
     /** An uncaught callback cannot carry its opaque foreign caller as a guest continuation. */
     public boolean inForeignCallback() {
         var state = delivery.get();
-        if (state == null) return false;
+        if (state == null || state.permission != DeliveryPermission.GUEST) return false;
         var stack = foreignActivations.get();
-        return state.permission == DeliveryPermission.GUEST && stack != null && stack.top() != null;
+        return stack != null && stack.top() != null;
     }
     public long enterCurrent() { return enterCurrent(null, false, true, null); }
     public long enterCurrent(MaskingState inheritedMask) { return enterCurrent(inheritedMask, false, true, null); }
@@ -202,7 +202,7 @@ public final class GuestThreads {
     @TruffleBoundary public long enterCurrent(MaskingState inheritedMask, boolean forked, boolean externalAsync, Long capability) {
         var stack = foreignActivations.get();
         var activation = stack == null ? null : stack.top();
-        var deliveryState = delivery.get();
+        var deliveryState = activation == null ? null : delivery.get();
         boolean callback = activation != null && (deliveryState == null || deliveryState.permission != DeliveryPermission.GUEST || activation.caller == activeIdentity.get());
         if (callback) {
             if (activation.owner.closed) throw fault("Foreign caller context has closed");
@@ -372,9 +372,10 @@ public final class GuestThreads {
     }
     @TruffleBoundary private synchronized AsyncRequest claim(GuestThread target, Node node, boolean interruptible) {
         if (closed) return null;
-        var current = Thread.currentThread(); var state = delivery.get();
-        if (target.thread != current || currentSlot.get() != target || threads.get(target.identity.logicalId) != target ||
-            state == null || state.permission != DeliveryPermission.GUEST || activeIdentity.get() != target.identity || target.claimed != null || target.queue.isEmpty()) return null;
+        var current = Thread.currentThread();
+        if (target.thread != current || currentSlot.get() != target || threads.get(target.identity.logicalId) != target) return null;
+        var state = delivery.get();
+        if (state == null || state.permission != DeliveryPermission.GUEST || activeIdentity.get() != target.identity || target.claimed != null || target.queue.isEmpty()) return null;
         var request = target.queue.getFirst();
         boolean allowed = request.forceSelf || switch (maskingState.get()) {
             case UNMASKED -> true; case MASKED_INTERRUPTIBLE -> interruptible; case MASKED_UNINTERRUPTIBLE -> false;

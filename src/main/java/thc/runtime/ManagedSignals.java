@@ -77,7 +77,7 @@ public final class ManagedSignals {
             nativeTransport = acquired;
         }
         var result = nativeTransport.install((int) signal, (int) action);
-        if (result.action() == -3) owner.getStdio().nativeError$org_intelligence_thc(result.errno());
+        if (result.action() == -3) owner.getStdio().nativeError(result.errno());
         return result.action();
     }
     private void consume(ProcessSignalTransport nativeTransport, SignalDispatchRoot root) {

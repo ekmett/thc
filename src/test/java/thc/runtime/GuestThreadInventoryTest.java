@@ -18,12 +18,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class GuestThreadInventoryTest {
     private static GuestThreads registry() {
         return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED),
-            CpuAffinity.Companion.discover(false), ignored -> Unit.INSTANCE);
+            CpuAffinity.Companion.discover(false), ignored -> {});
     }
 
     @Test void logicalCountIsContextLocalAndShrinkDoesNotRewriteAffinityClaims() {
         var affinity = new CpuAffinity(null, 8);
-        var first = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), affinity, ignored -> Unit.INSTANCE);
+        var first = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), affinity, ignored -> {});
         var second = registry();
         long originalSecond = second.capabilityCount();
         first.enterCurrent(null, false, true, 7L);

@@ -41,7 +41,7 @@ public final class ManagedIconv {
     }
     private void initialize(Object nativeLibrary) {
         if (disposed) throw fault("Iconv context is closed");
-        stdio.nativeError$org_intelligence_thc(0); // Validate the target C ABI before allocating native state.
+        stdio.nativeError(0); // Validate the target C ABI before allocating native state.
         if (library == null) library = nativeLibrary;
         if (locale == null) {
             var created = call("thc_iconv_locale_new");
@@ -98,7 +98,7 @@ public final class ManagedIconv {
             var error = new Result(1);
             var handle = call("thc_iconv_open", locale, new CbitsBuffer(toBytes, false), (long) toBytes.length,
                 new CbitsBuffer(fromBytes, false), (long) fromBytes.length, error.buffer);
-            stdio.nativeError$org_intelligence_thc(error.get(0));
+            stdio.nativeError(error.get(0));
             if (interop.isNull(handle)) return -1;
             handles.put(id, handle); return id;
         }
@@ -110,7 +110,7 @@ public final class ManagedIconv {
             var error = new Result(1);
             try {
                 long result = interop.asLong(call("thc_iconv_close", handle, error.buffer));
-                stdio.nativeError$org_intelligence_thc(error.get(0)); return result;
+                stdio.nativeError(error.get(0)); return result;
             } catch (InteropException failure) { throw propagate(failure); }
         }
     }
@@ -175,7 +175,7 @@ public final class ManagedIconv {
                 inputCell.writeAddressElementIndex(0, input.plus(inSize - inLeft));
                 inputCount.writeNativeScalar(0, 8, inLeft);
             }
-            stdio.nativeError$org_intelligence_thc(result.get(1)); return result.get(0);
+            stdio.nativeError(result.get(1)); return result.get(0);
         }
     }
     /** Called during language finalization while LLVM guest calls remain legal. */

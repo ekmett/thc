@@ -67,7 +67,7 @@ class CoreUnitAsyncPolicyTest {
     private long count(ExecutableProgram program, String name) { return ((Number) program.diagnostics().get(name)).longValue(); }
     private AsyncRequest externalSend(GuestThreads threads, long id) throws Exception {
         var pending = CompletableFuture.supplyAsync(() -> threads.send(id, "pending demand")).get(5, TimeUnit.SECONDS);
-        assertFalse(pending.getForceSelf$org_intelligence_thc()); return pending;
+        assertFalse(pending.getForceSelf()); return pending;
     }
     private Context context(ByteArrayOutputStream output) { return Context.newBuilder("thc").err(output).build(); }
     private CoreUnitProgram program(Language.State owner) { var programs = owner.getCoreUnitPrograms(); assertEquals(1, programs.size()); return programs.getFirst(); }
@@ -84,7 +84,7 @@ class CoreUnitAsyncPolicyTest {
                         // A different Java thread prevents self-throwTo from bypassing policy.
                         try { CompletableFuture.runAsync(() -> {
                             if (async) {
-                                var pending = threads.send(slot.getIdentity(), "policy probe"); assertFalse(pending.getForceSelf$org_intelligence_thc());
+                                var pending = threads.send(slot.getIdentity(), "policy probe"); assertFalse(pending.getForceSelf());
                                 assertEquals(AsyncRequestState.PENDING, pending.getState()); assertTrue(pending.cancel()); assertEquals(AsyncRequestState.CANCELLED, pending.getState());
                             } else assertThrows(UnsupportedCore.class, () -> threads.send(slot.getIdentity(), "rejected"));
                         }).get(5, TimeUnit.SECONDS); } catch (Exception failure) { throw new AssertionError(failure); }

@@ -39,7 +39,10 @@ public final class SignalDispatchRoot extends RootNode {
             throw RuntimeFault.fault("Signal dispatcher requires an async IO unit tuple");
         var boxedPointer = pointer.create(new Object[]{frame.getArguments()[0]});
         var number = frame.getArguments()[1];
-        if (number == null) CompilerDirectives.transferToInterpreter();
+        if (number == null) {
+            CompilerDirectives.transferToInterpreter();
+            throw new NullPointerException("null cannot be cast to non-null type kotlin.Long");
+        }
         var boxedSignal = signal.createInt(((Long) number).intValue());
         dispatch.execute(frame, closure, new Object[]{boxedPointer, boxedSignal, kotlin.Unit.INSTANCE});
         if (!(unitForce.execute(frame, frame.getObject(FrameLayout.TAIL_RESULT)) instanceof DataValue unit))

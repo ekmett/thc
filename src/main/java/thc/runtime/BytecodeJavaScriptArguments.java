@@ -28,8 +28,7 @@ public final class BytecodeJavaScriptArguments {
         return values;
     }
     public Object state(BytecodeNode bytecode, VirtualFrame frame) {
-        try { return state.getObject(bytecode, frame); }
-        catch (UnexpectedResultException error) { throw propagate(error); }
+        return state.getObject(bytecode, frame);
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }
 }
