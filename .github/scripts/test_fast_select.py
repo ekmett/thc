@@ -1465,7 +1465,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         expected = {"thc.runtime." + name for name in ("IntegerSimdModelTest", "SimdInt8VectorTest",
                     "SimdInt16VectorTest", "SimdWord16VectorTest", "SimdWord32VectorTest")}
         for path in ("test/haskell-fixtures/IntegerSimdFixtures.hs",
-                     "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"):
+                     "src/test/java/thc/runtime/IntegerSimdModelTest.java",
+                     "src/test/java/thc/runtime/IntegerSimdModel.java"):
             self.assertEqual(expected, set(self.policy["owners"][path]["junit"]))
             self.assertEqual(["scripts/test-core-vectors.py"], self.policy["owners"][path]["python"])
         self.assertLessEqual(expected, set(self.policy["owners"]["test/haskell-fixtures/Main.hs"]["junit"]))

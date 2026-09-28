@@ -54,7 +54,8 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/CoreVectorMemory.java",
                   "src/main/java/thc/runtime/VectorByteArrayExpression.java",
                   "src/main/java/thc/runtime/VectorMemory.java",
-                  "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt")
+                  "src/test/java/thc/runtime/IntegerSimdModelTest.java",
+                  "src/test/java/thc/runtime/IntegerSimdModel.java")
 MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays
 explicit64-primops float-word-arrays fused-floating int-arrays int16-arrays int32-arrays

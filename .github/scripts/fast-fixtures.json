@@ -88,7 +88,8 @@
         "compiler/test-fixtures/SimdWord16X8.hs", "compiler/test-fixtures/SimdWord16X8Native.hs",
         "compiler/test-fixtures/SimdWord32X4.hs", "compiler/test-fixtures/SimdWord32X4Native.hs",
         "test/haskell-fixtures/IntegerSimdFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt"]
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/test/java/thc/runtime/IntegerSimdModelTest.java",
+        "src/test/java/thc/runtime/IntegerSimdModel.java"]
     },
     "text-cbits": {
       "junit": ["thc.runtime.TextCbitsTest"],

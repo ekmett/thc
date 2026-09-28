@@ -2800,7 +2800,11 @@
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
       "python": ["scripts/test-core-vectors.py"]
     },
-    "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt": {
+    "src/test/java/thc/runtime/IntegerSimdModelTest.java": {
+      "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
+      "python": ["scripts/test-core-vectors.py"]
+    },
+    "src/test/java/thc/runtime/IntegerSimdModel.java": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
       "python": ["scripts/test-core-vectors.py"]
     },
