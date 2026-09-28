@@ -323,7 +323,7 @@ public final class CoreModules {
         require(input.get("packageManifestSha256") == null && input.get("packageCapability") == null && input.get("consumerModules") == null, "Orphan package manifest identity");
         if (!(input.get("modules") instanceof List<?> modules)) throw new IllegalStateException("Expected modules array");
         for (Object module : modules) accept.accept(with((Map<String,Object>) module, "foreignExceptionBridgeUnit", input.get("foreignExceptionBridgeUnit")));
-        return input.get("targetLayout") == null ? null : TargetLayout.Companion.fromDocument(input.get("targetLayout"));
+        return input.get("targetLayout") == null ? null : TargetLayout.fromDocument(input.get("targetLayout"));
     }
     private static boolean sameCapability(String supplied, String expected) { return MessageDigest.isEqual(supplied.getBytes(StandardCharsets.US_ASCII), expected.getBytes(StandardCharsets.US_ASCII)); }
     private static MessageDigest digest() { try { return MessageDigest.getInstance("SHA-256"); } catch (NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); } }

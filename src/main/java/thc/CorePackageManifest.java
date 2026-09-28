@@ -72,7 +72,7 @@ public final class CorePackageManifest {
                 "ZIP entries differ from declared modules in " + id);
         require(centralNames.equals(entryNames), "ZIP central directory differs from entries in " + id);
         require(index.get("targetLayout") == null || inputRecord != null, "Wired target layout lacks hashed build inputs in " + id);
-        return inputRecord == null ? null : TargetLayout.Companion.fromReceipts(index, inputRecord);
+        return inputRecord == null ? null : TargetLayout.fromReceipts(index, inputRecord);
     }
     private static String digest(byte[] bytes) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }

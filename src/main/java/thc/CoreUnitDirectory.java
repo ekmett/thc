@@ -269,7 +269,7 @@ public final class CoreUnitDirectory {
                         flag(module, "packageScalarDeclarations", "Missing package declaration summary")));
             }
             if (unit.get("targetLayout") != null) {
-                var candidate = TargetLayout.Companion.fromDocument(unit.get("targetLayout"));
+                var candidate = TargetLayout.fromDocument(unit.get("targetLayout"));
                 require(layout == null || layout.equals(candidate), "Conflicting GHC target layouts");
                 layout = candidate;
             }

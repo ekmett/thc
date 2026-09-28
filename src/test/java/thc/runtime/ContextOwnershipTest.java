@@ -12,7 +12,7 @@ import thc.Language;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
-import kotlin.jvm.functions.Function0;
+import java.util.function.Supplier;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ContextOwnershipTest {
@@ -30,7 +30,7 @@ class ContextOwnershipTest {
                         var address = ManagedAddress.fromHex("616263");
                         var stable = state.getStablePointers().make(address);
                         state.getStablePointers().getOrSetSharedCAF(SharedCAFStore.EVENT_MANAGER, stable);
-                        var weak = state.getWeaks().make(address, stable, (Function0<Integer>) () -> ++finalizerCalls);
+                        var weak = state.getWeaks().make(address, stable, (Supplier<Integer>) () -> ++finalizerCalls);
                         long bits = state.getNativeAddresses().project(address);
                         return new Roots(state, weak, stable, address, bits, Objects.requireNonNull(state.getNativeAddresses().transport(address)));
                     } finally { context.leave(); }

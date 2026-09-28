@@ -135,9 +135,9 @@ public final class DelimitedActionSite extends Node {
     }
     public Object annotated(VirtualFrame frame, Object annotation, Object action, Object state, TupleShape shape) {
         requireVoidCarrier(state);
-        StackAnnotationState prior = StackAnnotations.INSTANCE.enter(this, annotation);
+        StackAnnotationState prior = StackAnnotations.enter(this, annotation);
         try { return invoke(frame, action, new Object[] {kotlin.Unit.INSTANCE}, shape); }
         catch (DelimitedCut cut) { throw cut.append(frame, new DelimitedAnnotationStep(this, prior)); }
-        finally { StackAnnotations.INSTANCE.set(this, prior); }
+        finally { StackAnnotations.set(this, prior); }
     }
 }

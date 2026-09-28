@@ -36,7 +36,7 @@ public final class CoreCompactModule implements AutoCloseable {
             require(Objects.equals(facts.get("ghc"), "9.14.1") && Objects.equals(facts.get("unit"), module.unit()) &&
                     Objects.equals(facts.get("module"), module.name()) && Objects.equals(facts.get("boundary"), "optimized-Core-after-Tidy-before-CorePrep"),
                     "Compact Core identity differs from package directory: " + module.getPrefix());
-            if (facts.get("targetLayout") != null) require(Objects.equals(TargetLayout.Companion.fromDocument(facts.get("targetLayout")), targetLayout),
+            if (facts.get("targetLayout") != null) require(Objects.equals(TargetLayout.fromDocument(facts.get("targetLayout")), targetLayout),
                     "Compact Core target layout differs from package directory");
             var result = new LinkedHashMap<>(facts);
             result.remove("targetLayout"); result.put("bindings", List.of());

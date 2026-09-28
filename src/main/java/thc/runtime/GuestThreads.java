@@ -27,14 +27,14 @@ public final class GuestThreads {
         final ArrayDeque<DeliveryPermission> guestPrevious = new ArrayDeque<>();
     }
     public GuestThreads(ThreadLocal<MaskingState> maskingState, Wake wake) {
-        this(maskingState, CpuAffinity.Companion.discover(false), wake);
+        this(maskingState, CpuAffinity.discover(false), wake);
     }
     public GuestThreads(ThreadLocal<MaskingState> maskingState, CpuAffinity cpuAffinity, Wake wake) {
         this.maskingState = maskingState; this.cpuAffinity = cpuAffinity; this.wake = wake;
         logicalCapabilities = cpuAffinity.getCount();
     }
     public GuestThreads(TruffleLanguage.Env env, ThreadLocal<MaskingState> maskingState) {
-        this(maskingState, CpuAffinity.Companion.discover(env.isNativeAccessAllowed()), target ->
+        this(maskingState, CpuAffinity.discover(env.isNativeAccessAllowed()), target ->
             env.submitThreadLocal(new Thread[]{target}, new ThreadLocalAction(true, false) {
                 // Only wake the target's safepoint. An async exception needs a saved guest cut.
                 @Override protected void perform(Access access) {}
@@ -242,7 +242,7 @@ public final class GuestThreads {
         if (!callback && prior != null) slot = prior;
         else { slot = new GuestThread(current, identity, externalAsync); threads.put(identity.logicalId, slot); }
         if (slot.entries == 0) {
-            identity.allocationBaseline = GuestAllocationAccounting.INSTANCE.sample(identity.javaId);
+            identity.allocationBaseline = GuestAllocationAccounting.sample(identity.javaId);
             if (identity.allocationBaseline < 0) identity.allocationUnavailable = true;
         }
         var poll = pollState(current);
@@ -259,7 +259,7 @@ public final class GuestThreads {
         return slot.identity;
     }
     private void settleAllocation(GuestThreadId identity) {
-        long end = GuestAllocationAccounting.INSTANCE.sample(identity.javaId);
+        long end = GuestAllocationAccounting.sample(identity.javaId);
         if (end >= 0 && identity.allocationBaseline >= 0) identity.allocationRemaining -= end - identity.allocationBaseline;
         else identity.allocationUnavailable = true;
         identity.allocationBaseline = -1;
@@ -271,7 +271,7 @@ public final class GuestThreads {
     private synchronized void resumeAllocation(GuestThreadId identity) {
         identity.allocationSuspended = false;
         if (closed || identity.status.getTerminal()) return;
-        identity.allocationBaseline = GuestAllocationAccounting.INSTANCE.sample(identity.javaId);
+        identity.allocationBaseline = GuestAllocationAccounting.sample(identity.javaId);
         if (identity.allocationBaseline < 0) identity.allocationUnavailable = true;
     }
     @TruffleBoundary public synchronized long allocationCounter() {
@@ -279,7 +279,7 @@ public final class GuestThreads {
         var identity = currentIdentity();
         if (identity.allocationUnavailable || identity.allocationBaseline < 0)
             throw fault("Thread allocation accounting was unavailable during this guest lifetime; reset it before reading");
-        long allocated = GuestAllocationAccounting.INSTANCE.sample(identity.javaId);
+        long allocated = GuestAllocationAccounting.sample(identity.javaId);
         if (allocated < 0) { identity.allocationUnavailable = true; throw fault("Thread allocation accounting is unavailable for this carrier"); }
         return identity.allocationRemaining - (allocated - identity.allocationBaseline);
     }
@@ -289,7 +289,7 @@ public final class GuestThreads {
         if (identity.owner != this || !knownThreads.containsKey(identity)) throw fault("ThreadId# belongs to another guest context");
         var slot = threads.get(identity.logicalId);
         if (!identity.allocationSuspended && slot != null && slot.identity == identity)
-            identity.allocationBaseline = GuestAllocationAccounting.INSTANCE.bytes(identity.javaId);
+            identity.allocationBaseline = GuestAllocationAccounting.bytes(identity.javaId);
         identity.allocationRemaining = value; identity.allocationUnavailable = false;
     }
     /** Independent snapshot including retained completed identities under the registry lock. */

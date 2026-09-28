@@ -28,8 +28,8 @@ class GuestThreadsTest {
     private static <T, E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
 
     @Test void pollCellRetainsNestedEntriesButSeparatesContextsAndClearsCompletedTargets() {
-        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
-        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
+        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
         var carrier = Thread.currentThread();
         var outerCell = outer.pollState(carrier); var innerCell = inner.pollState(carrier);
         assertFalse(outerCell == innerCell); assertNull(outerCell.getCurrent());
@@ -54,7 +54,7 @@ class GuestThreadsTest {
 
     @Test void nonresumableForkRejectsExternalSendBeforeWakeButAllowsSelfAndDeadTargets() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var wakes = new AtomicInteger();
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> { wakes.incrementAndGet(); });
         var ready = new CountDownLatch(1); var finish = new CountDownLatch(1);
         var identity = new AtomicReference<GuestThreadId>(); var failure = new AtomicReference<Throwable>();
         var worker = new Thread(() -> {
@@ -87,7 +87,7 @@ class GuestThreadsTest {
 
     @Test void javaThreadIdAndMaskingGateQueuedDelivery() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var wakes = new AtomicInteger();
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> { wakes.incrementAndGet(); });
         var ready = new CountDownLatch(1); var proceed = new CountDownLatch(1); var id = new AtomicLong();
         var firstSeen = new AtomicReference<AsyncRequest>(); var secondSeen = new AtomicReference<AsyncRequest>();
         var worker = new Thread(() -> {
@@ -115,7 +115,7 @@ class GuestThreadsTest {
 
     @Test void cancellationAndTargetCompletionWakePendingSenders() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {});
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> {});
         var ready = new CountDownLatch(1); var finish = new CountDownLatch(1); var id = new AtomicLong();
         var worker = new Thread(() -> {
             id.set(threads.registerCurrent()); ready.countDown();
@@ -130,7 +130,7 @@ class GuestThreadsTest {
 
     @Test void nestedEntryRetainsTargetAndInheritedMaskUntilOuterExit() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {});
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> {});
         long id = threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
         assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, masks.get());
         assertEquals(id, threads.enterCurrent(MaskingState.UNMASKED, false, true, null));
@@ -146,8 +146,8 @@ class GuestThreadsTest {
         for (boolean crossContext : new boolean[]{false, true}) for (boolean alreadyEntered : new boolean[]{false, true}) {
             var outerMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
             var innerMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-            var outer = new GuestThreads(outerMasks, CpuAffinity.Companion.discover(false), target -> {});
-            var inner = crossContext ? new GuestThreads(innerMasks, CpuAffinity.Companion.discover(false), target -> {}) : outer;
+            var outer = new GuestThreads(outerMasks, CpuAffinity.discover(false), target -> {});
+            var inner = crossContext ? new GuestThreads(innerMasks, CpuAffinity.discover(false), target -> {}) : outer;
             outer.enterCurrent(MaskingState.MASKED_INTERRUPTIBLE, false, true, null); var caller = outer.currentIdentity();
             if (crossContext && alreadyEntered) inner.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
             var innerIdentity = !crossContext || alreadyEntered ? inner.currentIdentity() : null;
@@ -180,8 +180,8 @@ class GuestThreadsTest {
     }
 
     @Test void innermostDeclarationAndClosedOriginControlNestedCallbacks() {
-        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
-        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
+        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
         outer.enterCurrent(null, false, true, null); var caller = outer.currentIdentity(); var safe = outer.enterForeign(ForeignSafety.SAFE);
         try {
             inner.enterCurrent(null, false, true, null); var callback = inner.currentIdentity();
@@ -204,7 +204,7 @@ class GuestThreadsTest {
             assertThrows(RuntimeFault.class, () -> inner.enterCurrent(null, false, true, null));
         } finally { outer.leaveForeign(safe); outer.leaveCurrent(GuestThreadStatus.FINISHED); inner.close(); }
         // Popped activations must not poison subsequent contexts on this carrier.
-        var fresh = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var fresh = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
         fresh.enterCurrent(null, false, true, null);
         try { assertFalse(fresh.isCurrentBound()); } finally { fresh.leaveCurrent(GuestThreadStatus.FINISHED); fresh.close(); }
     }
@@ -213,8 +213,8 @@ class GuestThreadsTest {
         for (boolean callback : new boolean[]{false, true}) for (var mask : MaskingState.values()) {
             var callerMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var callbackMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
             var wakes = new AtomicInteger();
-            var caller = new GuestThreads(callerMasks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
-            var other = new GuestThreads(callbackMasks, CpuAffinity.Companion.discover(false), target -> {});
+            var caller = new GuestThreads(callerMasks, CpuAffinity.discover(false), target -> { wakes.incrementAndGet(); });
+            var other = new GuestThreads(callbackMasks, CpuAffinity.discover(false), target -> {});
             caller.enterCurrent(mask, false, true, null); var callerId = caller.currentIdentity();
             AsyncRequest first; AsyncRequest second;
             try {
@@ -250,8 +250,8 @@ class GuestThreadsTest {
     }
 
     @Test void inactiveContextCannotClaimItsMailboxOnAnotherGuestsCarrier() {
-        var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
-        var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
+        var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
         caller.enterCurrent(null, false, true, null); var callerId = caller.currentIdentity(); var submitted = new AtomicReference<AsyncRequest>();
         try {
             var sender = new Thread(() -> submitted.set(caller.send(callerId, "external"))); sender.start(); join(sender); assertFalse(sender.isAlive());
@@ -269,8 +269,8 @@ class GuestThreadsTest {
     @Test void crossContextSendCannotBypassNonresumableTargetAdmission() {
         for (boolean callback : new boolean[]{false, true}) {
             var wakes = new AtomicInteger();
-            var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
-            var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+            var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> { wakes.incrementAndGet(); });
+            var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
             caller.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, true, false, null); var callerId = caller.currentIdentity();
             try {
                 var foreign = callback ? caller.enterForeign(ForeignSafety.SAFE) : null;
@@ -288,7 +288,7 @@ class GuestThreadsTest {
     @Test void callbackIdentityMailboxAndMaskAreIsolatedOnTheSameCarrier() {
         for (var mask : MaskingState.values()) {
             var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-            var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {});
+            var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> {});
             threads.enterCurrent(mask, false, true, null);
             var caller = threads.currentIdentity();
             var original = Thread.currentThread();
@@ -361,8 +361,8 @@ class GuestThreadsTest {
 
     @Test void callbackAllocationsAreChargedOnlyToTheirLogicalIdentity() {
         for (boolean crossContext : List.of(false, true)) {
-            var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
-            var callbacks = crossContext ? new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {}) : outer;
+            var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
+            var callbacks = crossContext ? new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {}) : outer;
             var retained = new ArrayList<byte[]>();
             outer.enterCurrent(null, false, true, null);
             var caller = outer.currentIdentity();
@@ -417,7 +417,7 @@ class GuestThreadsTest {
     }
 
     @Test void foreignScopeBeforeRegistrationAndExceptionalCallbackExitRestorePermission() {
-        var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.discover(false), target -> {});
         var prior = threads.enterForeign(ForeignSafety.SAFE);
         try {
             assertNull(threads.poll(node, false));
@@ -449,8 +449,8 @@ class GuestThreadsTest {
     @Test void foreignOriginCrossesContextsWithoutSharingTheirMailboxesOrMasks() {
         var outerMask = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
         var innerMask = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var outer = new GuestThreads(outerMask, CpuAffinity.Companion.discover(false), target -> {});
-        var inner = new GuestThreads(innerMask, CpuAffinity.Companion.discover(false), target -> {});
+        var outer = new GuestThreads(outerMask, CpuAffinity.discover(false), target -> {});
+        var inner = new GuestThreads(innerMask, CpuAffinity.discover(false), target -> {});
         outer.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
         try {
             var previous = outer.enterForeign(ForeignSafety.SAFE);
@@ -486,21 +486,21 @@ class GuestThreadsTest {
         var lifted = new CoreRepresentation(CoreKind.DATA, false, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
         var action = new CoreRepresentation(CoreKind.CLOSURE, true, true, List.of("BoxedRep (Just Lifted)"), null, null, null, null, null);
         var result = new CoreRepresentation(CoreKind.UNKNOWN, false, true, thread.getPrimReps(), List.of(state, thread), null, null, null, null);
-        CoreGuestThreads.INSTANCE.validate("fork#", List.of(action, state), List.of(true, false), result);
-        CoreGuestThreads.INSTANCE.validate("myThreadId#", List.of(state), List.of(false), result);
-        CoreGuestThreads.INSTANCE.validate("killThread#", List.of(thread, lifted, state), List.of(false, true, false), state);
+        CoreGuestThreads.validate("fork#", List.of(action, state), List.of(true, false), result);
+        CoreGuestThreads.validate("myThreadId#", List.of(state), List.of(false), result);
+        CoreGuestThreads.validate("killThread#", List.of(thread, lifted, state), List.of(false, true, false), state);
         var wrongThread = thread.copy(thread.getKind(), thread.getEvaluated(), thread.getPresent(), lifted.getPrimReps(),
             thread.getComponents(), thread.getVector(), thread.getAlternatives(), thread.getTagSlot(), thread.getAlternativeSlots());
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("killThread#", List.of(wrongThread, lifted, state), List.of(false, true, false), state));
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("killThread#", List.of(thread, lifted, state), List.of(false, false, false), state));
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("fork#", List.of(action, state), List.of(true, false),
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("killThread#", List.of(wrongThread, lifted, state), List.of(false, true, false), state));
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("killThread#", List.of(thread, lifted, state), List.of(false, false, false), state));
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("fork#", List.of(action, state), List.of(true, false),
             result.copy(result.getKind(), result.getEvaluated(), result.getPresent(), result.getPrimReps(), List.of(state, lifted),
                 result.getVector(), result.getAlternatives(), result.getTagSlot(), result.getAlternativeSlots())));
     }
 
     @Test void selfThrowClaimsImmediatelyEvenUnderUninterruptibleMask() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { throw new IllegalStateException("Self throw needs no cross-thread wake"); });
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> { throw new IllegalStateException("Self throw needs no cross-thread wake"); });
         long id = threads.enterCurrent(null, false, true, null);
         try {
             for (var mask : MaskingState.values()) {
@@ -514,7 +514,7 @@ class GuestThreadsTest {
 
     @Test void uncaughtPublicBoundaryRetainsExactPayloadAndAcknowledgesOnlyThisTarget() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { throw new IllegalStateException("Self throw needs no cross-thread wake"); });
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> { throw new IllegalStateException("Self throw needs no cross-thread wake"); });
         long id = threads.enterCurrent(null, false, true, null);
         try {
             var payload = new Object();
@@ -529,7 +529,7 @@ class GuestThreadsTest {
 
     @Test void interruptedSenderPausesOnlyUnclaimedOutboundAndResumesSameToken() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var wakes = new AtomicInteger();
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> { wakes.incrementAndGet(); });
         long id = threads.enterCurrent(null, false, true, null);
         try {
             var submitted = new AtomicReference<AsyncRequest>();
@@ -552,7 +552,7 @@ class GuestThreadsTest {
     @Test void targetCompletionBetweenEnqueueAndWakeIsSuccessfulNoop() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
         var exit = new CountDownLatch(1); var ready = new CountDownLatch(1);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {
+        var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> {
             exit.countDown(); join(target); assertFalse(target.isAlive());
             throw new IllegalStateException("Wake rejected a completed Java thread");
         });
@@ -572,7 +572,7 @@ class GuestThreadsTest {
             var pollAllowed = new CountDownLatch(1); var claimed = new CountDownLatch(1);
             var acknowledge = new CountDownLatch(1); var ready = new CountDownLatch(1);
             var seen = new AtomicReference<AsyncRequest>(); var wakeCount = new AtomicInteger();
-            var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {
+            var threads = new GuestThreads(masks, CpuAffinity.discover(false), target -> {
                 if (!resumed || wakeCount.incrementAndGet() == 2) {
                     pollAllowed.countDown(); assertTrue(await(claimed));
                     throw new IllegalStateException("Wake failed after target claim");

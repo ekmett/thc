@@ -17,7 +17,7 @@ public final class DelimitedCut extends AbstractTruffleException implements Inte
     public DelimitedCut(PromptTag tag, Object handler, TupleShape inputShape, MaskingState capturedMask, Node node) {
         super("Internal delimited continuation capture", null, 0, node);
         this.tag = tag; this.handler = handler; this.inputShape = inputShape; this.capturedMask = capturedMask;
-        capturedAnnotations = StackAnnotations.INSTANCE.current(node);
+        capturedAnnotations = StackAnnotations.current(node);
     }
     public PromptTag getTag() { return tag; }
     public Object getHandler() { return handler; }

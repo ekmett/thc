@@ -112,13 +112,18 @@ class RtsShutdownTest {
     }
     @Test fun malformedProofsAndCarriersRejectWithoutClosingTheContext() {
         for (backend in listOf("ast", "bytecode")) context().use { context -> entered(context) { language ->
-            for (op in RtsShutdownOp.entries) {
+            for (op in RtsShutdownOp.values()) {
                 for ((key, bad) in listOf("safety" to "unsafe", "convention" to "capi", "arity" to 2L, "resultRep" to state))
                     assertThrows(RuntimeFault::class.java) { program(language, backend, module(op, descriptor(op) + (key to bad))) }
                 val value = context.asValue(EntryValue(program(language, backend, module(op)), "entry", 2))
                 for (args in listOf(arrayOf(Long.MAX_VALUE, 0L), arrayOf(0L, Long.MIN_VALUE))) {
+                    val direct = assertThrows(RuntimeFault::class.java) {
+                        CoreRtsShutdown.shutdown(null, op, args[0], args[1], Unit)
+                    }
+                    assertTrue(direct.message.orEmpty().contains("signed CInt"))
                     val failure = assertThrows(PolyglotException::class.java) { value.execute(*args) }
-                    assertFalse(failure.isExit); assertTrue(failure.message.orEmpty().contains("signed CInt"))
+                    assertFalse(failure.isExit)
+                    assertTrue(failure.message.orEmpty().contains("Public narrow integer argument is out of range"))
                     assertNull(Language.currentState().shutdown.get())
                 }
             }

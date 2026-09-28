@@ -482,7 +482,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         CoreOriginalStdio.validateHeads(requested);
         CoreProcessForeign.validateHeads(requested);
         CoreStablePointers.validateHeads(requested);
-        CoreRtsShutdown.INSTANCE.validateHeads(requested);
+        CoreRtsShutdown.validateHeads(requested);
         CoreMainThreadForeign.validateHeads(requested);
         CoreBoundThreadForeign.validateHeads(requested);
         CoreStringRtsForeign.validateHeads(requested);
@@ -5514,7 +5514,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var capi = CoreCapiForeign.validate(foreignMetadata, representations, flags, resultRepresentation, foreignLinks);
         boolean stableFree = CoreStablePointers.validate(foreignMetadata, representations, flags, resultRepresentation);
         var sharedCAF = CoreSharedCAFStores.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var shutdown = CoreRtsShutdown.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var shutdown = CoreRtsShutdown.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation, false);
         var gcForeign = CoreGcForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
@@ -5913,12 +5913,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (shutdown != null) {
-            CoreRtsShutdown.INSTANCE.validateHead(fn, defined);
+            CoreRtsShutdown.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreRtsShutdown.INSTANCE.validateOperand(shutdown, index, operand.proof(), lexicalProof(argument, scope));
+                CoreRtsShutdown.validateOperand(shutdown, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6581,7 +6581,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 || delimited && Set.of("annotateStack#", "catch#", "unmaskAsyncExceptions#", "maskAsyncExceptions#", "maskUninterruptible#").contains(name)) {
             var proofs = argumentProofs(args);
             if (Set.of("newPromptTag#", "prompt#", "control0#").contains(name)) DelimitedControl.validate(name, proofs, flags, tupleProof);
-            else if (name.equals("annotateStack#")) StackAnnotations.INSTANCE.validate(proofs, flags, tupleProof);
+            else if (name.equals("annotateStack#")) StackAnnotations.validate(proofs, flags, tupleProof);
             else CoreSynchronousExceptions.validate(name, proofs, flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -6721,11 +6721,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }, evaluatedProof(tupleProof, true));
         }
-        if (CoreThreadScheduling.INSTANCE.named(name)) {
-            CoreThreadScheduling.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+        if (CoreThreadScheduling.named(name)) {
+            CoreThreadScheduling.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
-            CoreThreadScheduling.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreThreadScheduling.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("par#")) return new ProvenExpression(e -> e.builder.emitLoadConstant(1L), evaluatedProof(tupleProof, true));
             if (name.equals("delay#")) return new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6761,10 +6761,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.endBlock();
             });
         }
-        if (CoreThreadObservation.INSTANCE.named(name)) {
-            CoreThreadObservation.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+        if (CoreThreadObservation.named(name)) {
+            CoreThreadObservation.validate(name, argumentProofs(args), flags, tupleProof);
             var state = argument(args.get(0), scope, false);
-            CoreThreadObservation.INSTANCE.validate(name, List.of(state.proof()), flags, tupleProof);
+            CoreThreadObservation.validate(name, List.of(state.proof()), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginObserveThreads(destination.get(0), name.equals("listThreads#")); state.emit(e); e.builder.endObserveThreads();
             });
@@ -6800,7 +6800,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("annotateStack#")) {
-            StackAnnotations.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            StackAnnotations.validate(argumentProofs(args), flags, tupleProof);
             var annotation = argument(args.get(0), scope, true);
             var action = argument(args.get(1), scope, true);
             var state = argument(args.get(2), scope, false);
@@ -6816,7 +6816,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("clearCCS#")) {
-            CoreProfileAction.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            CoreProfileAction.validate(argumentProofs(args), flags, tupleProof);
             var state = compile(args.get(1), scope, false);
             var checked = new ProvenExpression(e -> {
                 var b = e.builder;
@@ -6824,8 +6824,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(state.proof(), true));
             return tupleApplication(new TupleShape(tupleProof, language), argument(args.get(0), scope, true), List.of(checked), scope, tail);
         }
-        if (ClosureInspectOp.Companion.named(name) != null) {
-            var operation = ClosureInspectOp.Companion.named(name);
+        if (ClosureInspectOp.named(name) != null) {
+            var operation = ClosureInspectOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, index == 0));
@@ -6852,9 +6852,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("labelThread#") || name.equals("threadLabel#")) {
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = argumentOperands(args, scope);
-            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreGuestThreads.validate(name, loweredProofs(operands), flags, tupleProof);
             if (name.equals("threadLabel#")) return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginThreadLabel(destination.get(0), destination.get(1)); for (var operand : operands) operand.emit(e); e.builder.endThreadLabel();
             });
@@ -6865,16 +6865,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("threadStatus#")) {
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = argumentOperands(args, scope);
-            CoreGuestThreads.INSTANCE.validate(name, loweredProofs(operands), flags, tupleProof);
+            CoreGuestThreads.validate(name, loweredProofs(operands), flags, tupleProof);
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginThreadStatus(destination.get(0), destination.get(1), destination.get(2));
                 for (var operand : operands) operand.emit(e); e.builder.endThreadStatus();
             });
         }
         if (Set.of("fork#", "forkOn#", "myThreadId#", "killThread#").contains(name)) {
-            CoreGuestThreads.INSTANCE.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreGuestThreads.validate(name, argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
             if (name.equals("killThread#")) {

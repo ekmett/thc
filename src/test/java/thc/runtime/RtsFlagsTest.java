@@ -40,7 +40,7 @@ class RtsFlagsTest {
         var compiler = new LinkedHashMap<>((Map<String, Object>) document.get("compiler"));
         compiler.put("abi", abi);
         document.put("compiler", compiler);
-        return TargetLayout.Companion.fromDocument(document);
+        return TargetLayout.fromDocument(document);
     }
 
     private static Context context() { return context(new ByteArrayOutputStream()); }
