@@ -306,7 +306,7 @@ private class DirectTupleCaller(private val destination: TupleDestination, metri
                 } catch (cut: DelimitedCut) {
                     val remaining = arguments.copyOfRange(physicalCount, arguments.size)
                     throw cut.append(frame, object : DelimitedPendingApplication {
-                        override val destination = this@DirectTupleCaller.destination
+                        override fun getDestination() = this@DirectTupleCaller.destination
                         override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                             ambient: MaskingState, outerMask: DelimitedStep?): Any? {
                             val remainingCall = rest ?: fault("Missing tuple overapplication remainder")
@@ -458,7 +458,7 @@ private class GenericTupleCaller(private val destination: TupleDestination, priv
                         val remaining = arguments.copyOf()
                         val next = offset + count
                         throw cut.append(frame, object : DelimitedPendingApplication {
-                            override val destination = this@GenericTupleCaller.destination
+                            override fun getDestination() = this@GenericTupleCaller.destination
                             override fun resume(frame: MaterializedFrame, input: DelimitedResume,
                                                 ambient: MaskingState, outerMask: DelimitedStep?): Any? {
                                 try { execute(frame, ApplicationKt.requireClosure(force.execute(frame, input.get())), remaining.copyOf(), next) }

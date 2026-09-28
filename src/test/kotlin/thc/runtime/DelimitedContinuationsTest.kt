@@ -861,11 +861,11 @@ class DelimitedContinuationsTest {
         original.setObject(reference, heap)
         original.setDouble(floating, Double.fromBits(0x7ff8000000000042L))
         original.setAuxiliarySlot(auxiliary, heap)
-        val image = copyContinuationFrame(original)
+        val image = DelimitedContinuationsKt.copyContinuationFrame(original)
         original.setLong(scalar, 11)
         original.arguments[1] = 12L
-        val first = copyContinuationFrame(image)
-        val second = copyContinuationFrame(image)
+        val first = DelimitedContinuationsKt.copyContinuationFrame(image)
+        val second = DelimitedContinuationsKt.copyContinuationFrame(image)
         first.setLong(scalar, 13)
         first.arguments[1] = 14L
         assertEquals(Long.MIN_VALUE, second.getLong(scalar))

@@ -122,7 +122,7 @@ class EmptyJoinInputTest {
         val scalar=CoreRepresentation(CoreKind.LONG,true,true,listOf("IntRep"))
         val zero=CoreRepresentation(CoreKind.UNKNOWN,true,true,emptyList(),emptyList())
         val typed=arrayOf<IntArray?>(null,intArrayOf(),null)
-        val target=LocalJoinTarget(Any(),1,intArrayOf(a,-1,b),arrayOf(scalar,zero,scalar),typedSlots=typed);val events=mutableListOf<String>();val metrics=Metrics(true)
+        val target=LocalJoinTarget(Any(),1,intArrayOf(a,-1,b),arrayOf(scalar,zero,scalar),BooleanArray(3),CoreRepresentation.UNKNOWN,typed);val events=mutableListOf<String>();val metrics=Metrics(true)
         fun scalarRead(label: String,slot: Int)=object: Expr() {
             override fun execute(frame: VirtualFrame): Any=executeLong(frame)
             override fun executeLong(frame: VirtualFrame): Long { events.add(label);return frame.getLong(slot) }
