@@ -90,7 +90,7 @@ class BytecodeColdHandlerTest {
                 fun arguments(prefix: ManagedMVar, blocked: ManagedMVar) = arrayOf<Any?>(0L, prefix, blocked, *values)
                 fun valid() = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                 fun checkResult(result: Any?) {
-                    val tuple = ownedTupleResult(result, shape)
+                    val tuple = TupleResultsKt.ownedTupleResult(result, shape)
                     assertEquals(6, shape.width)
                     for (i in values.indices) {
                         assertTrue(shape.layout.isLong(i))

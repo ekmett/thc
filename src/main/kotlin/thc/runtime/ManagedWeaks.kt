@@ -176,7 +176,7 @@ internal class WeakExpression(private val operation: WeakOp, @field:Children pri
             val value = operands[1].execute(frame)
             val action = if (operation == WeakOp.MAKE) operands[2].execute(frame)
                 ?: fault("mkWeak# requires a finalizer carrier") else null
-            requireVoidCarrier(operands.last().execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands.last().execute(frame))
             FrameAccess.writeObject(frame, slots[offset], registry.make(first, value, action))
         } else if (operation == WeakOp.ADD_C_FINALIZER) {
             val function = first as? ManagedAddress ?: fault("Expected a C function Addr#")
@@ -184,12 +184,12 @@ internal class WeakExpression(private val operation: WeakOp, @field:Children pri
             val flag = operands[2].executeLong(frame)
             operands[3].executeRequiredAddress(frame)
             val weak = operands[4].execute(frame)
-            requireVoidCarrier(operands[5].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[5].execute(frame))
             val provider = Language.currentState(this).cbits()
             FrameAccess.writeLong(frame, slots[offset], registry.addCFinalizer(function, address,
                 flag, weak, provider))
         } else {
-            requireVoidCarrier(operands[1].execute(frame))
+            TupleResultsKt.requireVoidCarrier(operands[1].execute(frame))
             val result = if (operation == WeakOp.FINALIZE) registry.finalize(first) else registry.dereference(first)
             FrameAccess.writeLong(frame, slots[offset], result.flag)
             FrameAccess.writeObject(frame, slots[offset + 1], result.value)

@@ -71,7 +71,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
     }
 
     @ExplodeLoop private fun prepare(arguments: Array<Any?>, state: Any?): PackageScalarFunction {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         if (arguments.size != argumentReps.size) fault("Package C argument count mismatch")
         // The signature bounds explosion even when the caller's array length is dynamic.
         for (index in 0 until argumentReps.size) {

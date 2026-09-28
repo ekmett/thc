@@ -282,7 +282,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = emission.builder;
             b.beginBlock();
             var lanes = new ArrayList<BytecodeLocal>();
-            for (int i = 0; i < TupleShape.Companion.flatten(proof).size(); ++i)
+            for (int i = 0; i < TupleShape.flatten(proof).size(); ++i)
                 lanes.add(b.createLocal("vector result lane " + i, null));
             expression.emitTuple(emission, lanes);
             b.emitReadVectorSlots(new BytecodeVectorSlots(proof, accessors(lanes)));
@@ -652,7 +652,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         return dataLayouts.computeIfAbsent(id, key -> {
             var info = constructors.get(key);
             if (info == null) throw new RuntimeFault("Missing constructor metadata " + key);
-            return DataLayout.Companion.fromFields$org_intelligence_thc(language, key, (String) info.get("name"),
+            return DataLayout.fromFields(language, key, (String) info.get("name"),
                 new CoreFields(info));
         });
     }
@@ -3654,10 +3654,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (tuple.fields.size() != leaves.size()) throw new RuntimeFault("Tuple join capture disagrees with its physical slots");
                 for (int i = 0; i < tuple.fields.size(); ++i) {
                     var field = tuple.fields.get(i);
-                    if (!field.proof.getPresent() || !TupleShape.Companion.compatible(leaves.get(i), field.proof))
+                    if (!field.proof.getPresent() || !TupleShape.compatible(leaves.get(i), field.proof))
                         throw new RuntimeFault("Tuple join capture has a mismatched leaf proof");
                     var previous = capturedTupleFields.get(field.id);
-                    if (previous != null && !TupleShape.Companion.compatible(previous.proof, field.proof))
+                    if (previous != null && !TupleShape.compatible(previous.proof, field.proof))
                         throw new RuntimeFault("Tuple join captures disagree on a shared physical slot");
                     capturedTupleFields.put(field.id, field);
                 }
@@ -3710,7 +3710,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         var entry = compile(expression, local, tail);
         var proof = entry.proof().refine(evaluatedProof(CoreRepresentations.INSTANCE.expression(expression), false));
-        for (var body : bodies) TupleShape.Companion.requireCompatible(proof, body.proof(), false);
+        for (var body : bodies) TupleShape.requireCompatible(proof, body.proof(), false);
         return new ProvenExpression(new ResultExpression((e, destination) -> {
             if (proof.isTypedTransport() != (destination != null)) throw new RuntimeFault("Join result destination disagrees with its representation");
             for (var field : capturedTupleFields.values())
@@ -4706,7 +4706,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 tag = null;
             } else {
                 if (!"data".equals(alt.getFirst()) || ids.size() != 1) throw new RuntimeFault("Invalid sum alternative");
-                int selected = SumShape.INSTANCE.constructor(proof, constructors.get(alt.get(1)), ids.size());
+                int selected = SumShape.constructor(proof, constructors.get(alt.get(1)), ids.size());
                 var component = proof.getAlternatives().get(selected - 1);
                 var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
                 if (metadata.size() != 1 || !Objects.equals(metadata.getFirst().get("id"), ids.getFirst()))
@@ -4714,11 +4714,11 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var actual = CoreRepresentations.INSTANCE.binder(metadata.getFirst());
                 if (!(metadata.getFirst().get("lifted") instanceof Boolean lifted))
                     throw new RuntimeFault("Unknown sum payload binder levity");
-                SumShape.INSTANCE.payload(component, actual, lifted);
+                SumShape.payload(component, actual, lifted);
                 var logical = evaluatedProof(component.refine(actual), component.getEvaluated());
-                var leaves = TupleShape.Companion.flatten(logical);
+                var leaves = TupleShape.flatten(logical);
                 var projected = new ArrayList<Local>();
-                for (int physical : SumShape.INSTANCE.projection(proof, selected - 1)) {
+                for (int physical : SumShape.projection(proof, selected - 1)) {
                     int index = projected.size();
                     var leaf = leaves.get(index);
                     if (!leaf.isInt()) projected.add(fields.get(physical));
@@ -4808,7 +4808,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         local.bindVoid(read.getStateBinder(), CoreVectorMemory.INSTANCE.getStateProof());
         var vectorProof = read.getOperation().getVectorProof();
         var lanes = new ArrayList<Local>();
-        for (var proof : TupleShape.Companion.flatten(vectorProof))
+        for (var proof : TupleShape.flatten(vectorProof))
             lanes.add(new Local(nextLocal++, read.getVectorBinder() + " read lane " + lanes.size(), proof.isLong(), proof));
         local.bindTuple(read.getVectorBinder(), vectorProof, lanes);
         var body = compile(read.getBody(), local, tail);
@@ -4854,10 +4854,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             for (int index = 0; index < ids.size(); ++index) {
                 var id = ids.get(index);
                 var component = shape.getComponents()[index];
-                if (index < metadata.size()) TupleShape.Companion.requireCompatible(component,
+                if (index < metadata.size()) TupleShape.requireCompatible(component,
                     CoreRepresentations.INSTANCE.binder(metadata.get(index)), true);
                 int offset = shape.getOffsets()[index];
-                int width = TupleShape.Companion.flatten(component).size();
+                int width = TupleShape.flatten(component).size();
                 if (component.isTypedTransport()) scope.bindTuple(id, component, fields.subList(offset, offset + width));
                 else if (component.getKind() == CoreKind.VOID) scope.bindVoid(id, component);
                 else {
@@ -4883,18 +4883,18 @@ public final class BytecodeProgram implements ExecutableProgram {
             var b = e.builder;
             boolean vectors = false;
             for (int i = 0; i < layout.getArity(); ++i) vectors |= layout.isVector(i);
-            if (!layout.getHasAggregateFields$org_intelligence_thc() && !vectors) {
+            if (!layout.getHasAggregateFields() && !vectors) {
                 b.beginConstruct(layout); for (var arg : args) arg.emit(e); b.endConstruct();
             } else {
                 b.beginBlock();
                 var fields = new ArrayList<List<BytecodeLocal>>();
                 for (int index = 0; index < args.size(); ++index) {
                     var argument = args.get(index);
-                    int physical = layout.fieldOffset$org_intelligence_thc(index);
-                    var proof = layout.logicalProof$org_intelligence_thc(index);
+                    int physical = layout.fieldOffset(index);
+                    var proof = layout.logicalProof(index);
                     if (proof != null && proof.isAggregate()) {
                         var slots = new ArrayList<BytecodeLocal>();
-                        for (int i = 0; i < layout.logicalWidth$org_intelligence_thc(index); ++i)
+                        for (int i = 0; i < layout.logicalWidth(index); ++i)
                             slots.add(b.createLocal("field " + index + " aggregate " + i, null));
                         argument.emitTuple(e, slots);
                         for (var slot : slots) fields.add(List.of(slot));
@@ -4937,7 +4937,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     : demand == null ? null : demand.occurrence(id, occurrence);
                 CoreVectors.INSTANCE.requireVariableProof(proof, occurrence);
                 if (aggregate != null) {
-                    TupleShape.Companion.requireCompatible(aggregate.proof, occurrence, false);
+                    TupleShape.requireCompatible(aggregate.proof, occurrence, false);
                     yield tupleExpression(aggregate.proof, (e, destination) -> {
                         for (int index = 0; index < aggregate.fields.size(); ++index) {
                             e.builder.beginStoreLocal(destination.get(index));
@@ -5001,7 +5001,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var id = (String) binding.get("id");
             if (proof.isVector()) {
                 var lanes = new ArrayList<Local>();
-                for (var field : TupleShape.Companion.flatten(proof))
+                for (var field : TupleShape.flatten(proof))
                     lanes.add(new Local(nextLocal++, id + " vector let lane " + lanes.size(), field.isLong(), field));
                 local.bindTuple(id, evaluatedProof(proof, true), lanes); slots.add(lanes);
             } else slots.add(List.of(bind(local, id, !representation(binding), evaluatedProof(proof, false),
@@ -5023,7 +5023,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             var fields = slots.get(index);
             if (CoreRepresentations.INSTANCE.binder(group.get(index)).isVector()) {
                 if (!rhs.get(index).proof().isVector()) throw new RuntimeFault("Vector let binding requires an exact vector result proof");
-                TupleShape.Companion.requireCompatible(CoreRepresentations.INSTANCE.binder(group.get(index)), rhs.get(index).proof(), false);
+                TupleShape.requireCompatible(CoreRepresentations.INSTANCE.binder(group.get(index)), rhs.get(index).proof(), false);
             } else {
                 var slot = fields.getFirst();
                 var proof = evaluatedProof(slot.proof.refine(rhs.get(index).proof()), rhs.get(index).proof().getEvaluated());
@@ -5077,7 +5077,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         var strict = strictConstructorFields(id, arity);
         var layout = dataLayout(id);
-        if (arity != 0 && layout.getHasAggregateFields$org_intelligence_thc())
+        if (arity != 0 && layout.getHasAggregateFields())
             throw new UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs");
         if (arity == 0) return construct(layout, List.of());
         var context = new FunctionContext(arity, strict);
@@ -5097,11 +5097,11 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (int index = 0; index < proofs.size(); ++index) {
             var proof = proofs.get(index);
             int offset = ArgumentLayout.offset(context.inputLayout, index);
-            var vector = layout.vectorProof$org_intelligence_thc(index);
+            var vector = layout.vectorProof(index);
             if (vector != null) {
                 var exact = proof.refine(vector);
                 var lanes = new ArrayList<Local>();
-                for (var leaf : TupleShape.Companion.flatten(exact)) {
+                for (var leaf : TupleShape.flatten(exact)) {
                     int lane = lanes.size();
                     var local = new Local(nextLocal++, "field" + index + " vector lane " + lane, leaf.isLong(), leaf);
                     lanes.add(local); physical.add(new TypedArgument(offset + lane, local));
@@ -5167,23 +5167,23 @@ public final class BytecodeProgram implements ExecutableProgram {
             };
             var ids = (List<String>) alt.get(2);
             var layout = value instanceof DataLayout data ? data : null;
-            if (layout != null && layout.getLogicalArity$org_intelligence_thc() != ids.size()) throw new RuntimeFault("Constructor field/binder mismatch");
+            if (layout != null && layout.getLogicalArity() != ids.size()) throw new RuntimeFault("Constructor field/binder mismatch");
             var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
             var fields = new ArrayList<List<Local>>();
             for (int index = 0; index < ids.size(); ++index) {
                 var id = ids.get(index);
-                int physical = layout == null ? index : layout.fieldOffset$org_intelligence_thc(index);
-                var logicalProof = layout == null ? null : layout.logicalProof$org_intelligence_thc(index);
+                int physical = layout == null ? index : layout.fieldOffset(index);
+                var logicalProof = layout == null ? null : layout.logicalProof(index);
                 var aggregate = logicalProof != null && logicalProof.isAggregate() ? logicalProof : null;
-                var vector = aggregate == null && layout != null ? layout.vectorProof$org_intelligence_thc(physical) : null;
+                var vector = aggregate == null && layout != null ? layout.vectorProof(physical) : null;
                 if (aggregate != null) {
                     if (index >= metadata.size()) throw new RuntimeFault("Missing aggregate constructor binder proof");
                     var record = metadata.get(index);
                     if (!Boolean.FALSE.equals(record.get("lifted"))) throw new RuntimeFault("Aggregate constructor binder must be unlifted");
                     var actual = CoreRepresentations.INSTANCE.binder(record);
-                    TupleShape.Companion.requireCompatible(aggregate, actual, true);
+                    TupleShape.requireCompatible(aggregate, actual, true);
                     var proof = aggregate.refine(actual);
-                    var leaves = proof.isSum() ? SumShape.INSTANCE.storage(proof) : TupleShape.Companion.flatten(proof);
+                    var leaves = proof.isSum() ? SumShape.storage(proof) : TupleShape.flatten(proof);
                     var lanes = new ArrayList<Local>();
                     for (var leaf : leaves) lanes.add(new Local(nextLocal++, id + " aggregate " + lanes.size(), leaf.isLong(), leaf));
                     child.bindTuple(id, proof, lanes);
@@ -5194,7 +5194,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (!Boolean.FALSE.equals(record.get("lifted"))) throw new UnsupportedCore("Vector constructor binder must be unlifted");
                     var proof = CoreRepresentations.INSTANCE.binder(record).refine(vector);
                     var lanes = new ArrayList<Local>();
-                    for (var leaf : TupleShape.Companion.flatten(proof))
+                    for (var leaf : TupleShape.flatten(proof))
                         lanes.add(new Local(nextLocal++, id + " vector lane " + lanes.size(), leaf.isLong(), leaf));
                     child.bindTuple(id, proof, lanes); fields.add(lanes);
                 } else {
@@ -5344,14 +5344,14 @@ public final class BytecodeProgram implements ExecutableProgram {
             List<Object> fn, List<List<Object>> args, List<?> flags, boolean[] callStrict, CoreRepresentation tupleProof) {
         var metadata = constructors.get(fn.size() > 1 ? fn.get(1) : null);
         if (tupleProof.isSum() && "con".equals(fn.getFirst()) && metadata != null && "unboxed-sum".equals(metadata.get("kind"))) {
-            int tag = SumShape.INSTANCE.constructor(tupleProof, metadata, fn.get(2));
+            int tag = SumShape.constructor(tupleProof, metadata, fn.get(2));
             if (args.size() != 1) throw new RuntimeFault("Sum constructor must be saturated");
             var selected = tupleProof.getAlternatives().get(tag - 1);
             if (!(flags.getFirst() instanceof Boolean lifted)) throw new UnsupportedCore("Unknown sum payload levity");
             var payload = selected.isTypedTransport() ? compile(args.getFirst(), scope, false) : argument(args.getFirst(), scope, lifted);
-            SumShape.INSTANCE.payload(selected, payload.proof(), lifted);
+            SumShape.payload(selected, payload.proof(), lifted);
             var shape = new TupleShape(tupleProof, language);
-            var leaves = TupleShape.Companion.flatten(selected);
+            var leaves = TupleShape.flatten(selected);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock();
@@ -5367,7 +5367,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.endStoreLocal();
                 }
                 var mapped = new ArrayList<BytecodeLocal>();
-                for (int index : SumShape.INSTANCE.projection(tupleProof, tag - 1)) mapped.add(destination.get(index));
+                for (int index : SumShape.projection(tupleProof, tag - 1)) mapped.add(destination.get(index));
                 if (selected.isTypedTransport()) {
                     var logical = new ArrayList<BytecodeLocal>();
                     for (int index = 0; index < mapped.size(); ++index)
@@ -5402,7 +5402,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             for (int index = 0; index < args.size(); ++index) {
                 var arg = args.get(index);
                 var component = shape.getComponents()[index];
-                TupleShape.Companion.requireCompatible(component, CoreRepresentations.INSTANCE.expression(arg), true);
+                TupleShape.requireCompatible(component, CoreRepresentations.INSTANCE.expression(arg), true);
                 if (component.isTypedTransport() && !Boolean.FALSE.equals(flags.get(index)))
                     throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (component.isTypedTransport()) operands.add(compile(arg, scope, false));
@@ -5418,7 +5418,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var component = shape.getComponents()[index];
                     int offset = shape.getOffsets()[index];
                     var operand = operands.get(index);
-                    if (component.isTypedTransport()) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.Companion.flatten(component).size()));
+                    if (component.isTypedTransport()) operand.emitTuple(e, destination.subList(offset, offset + TupleShape.flatten(component).size()));
                     else if (component.getKind() == CoreKind.VOID) { b.beginDiscardVoid(); operand.emit(e); b.endDiscardVoid(); }
                     else {
                         b.beginStoreLocal(destination.get(offset));
@@ -5432,7 +5432,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         var constructor = "con".equals(fn.getFirst()) ? dataLayout((String) fn.get(1)) : null;
-        if (constructor != null && args.size() > constructor.getLogicalArity$org_intelligence_thc())
+        if (constructor != null && args.size() > constructor.getLogicalArity())
             throw new RuntimeFault("Constructor arity mismatch: " + fn.get(1));
         var strict = constructor != null && ((Number) fn.get(2)).intValue() == args.size()
             ? strictConstructorFields((String) fn.get(1), args.size()) : null;
@@ -5450,22 +5450,22 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (int index = 0; index < args.size(); ++index) {
             var arg = args.get(index);
             if (!(flags.get(index) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown argument levity");
-            var logical = constructor == null ? null : constructor.logicalProof$org_intelligence_thc(index);
+            var logical = constructor == null ? null : constructor.logicalProof(index);
             var aggregate = logical != null && logical.isAggregate() ? logical : null;
             var vectorField = aggregate == null && constructor != null
-                ? constructor.vectorProof$org_intelligence_thc(constructor.fieldOffset$org_intelligence_thc(index)) : null;
+                ? constructor.vectorProof(constructor.fieldOffset(index)) : null;
             Expression operand;
             if (aggregate != null && strict != null) {
                 if (lifted) throw new RuntimeFault("Aggregate constructor operand must be unlifted");
                 operand = compile(arg, scope, false);
-                TupleShape.Companion.requireCompatible(aggregate, operand.proof(), true);
+                TupleShape.requireCompatible(aggregate, operand.proof(), true);
             } else {
                 operand = argument(arg, scope, lifted && !callStrict[index] && !(strict != null && strict[index])
                     && !(entryStrict != null && index < entryStrict.length && entryStrict[index]), "argument thunk",
                     vectorField != null || !"prim".equals(fn.getFirst()) && !"con".equals(fn.getFirst()), lifted);
                 if (vectorField != null) {
                     if (!operand.proof().isVector()) throw new RuntimeFault("Constructor vector field requires an exact vector operand");
-                    TupleShape.Companion.requireCompatible(vectorField, operand.proof(), false);
+                    TupleShape.requireCompatible(vectorField, operand.proof(), false);
                 }
             }
             operands.add(operand);

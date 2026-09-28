@@ -1873,7 +1873,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Md5Init {
         @Specialization public static void apply(ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedMd5.INSTANCE.init(context);
+            ManagedMd5.init(context);
         }
     }
 
@@ -2184,7 +2184,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Md5Update {
         @Specialization public static void apply(ManagedAddress context, ManagedAddress input, int length, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedMd5.INSTANCE.update(context, input, length);
+            ManagedMd5.update(context, input, length);
         }
     }
 
@@ -2192,7 +2192,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class Md5Final {
         @Specialization public static void apply(ManagedAddress output, ManagedAddress context, Object state) {
             ManagedByteArray.requireState(state);
-            ManagedMd5.INSTANCE.finish(output, context);
+            ManagedMd5.finish(output, context);
         }
     }
 

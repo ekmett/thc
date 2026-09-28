@@ -79,7 +79,7 @@ internal class ForkThread(@field:Child private var action: Expr, @field:Child pr
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val requested = capability?.executeRequiredLong(frame)
         val child = action.execute(frame) // Do not force the lifted action on its parent.
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], GuestThreadOps.fork(this, child, AstControl.enabled(this), requested))
         return null
     }
@@ -89,7 +89,7 @@ internal class MyThreadId(@field:Child private var state: Expr, proof: CoreRepre
     init { representation = proof.copy(evaluated = true) }
     override fun execute(frame: VirtualFrame): Nothing = fault("myThreadId# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         FrameAccess.write(frame, slots[offset], GuestThreadOps.myThreadId(this))
         return null
     }
@@ -101,7 +101,7 @@ internal class ThreadStatus(@field:Child private var identity: Expr, @field:Chil
     override fun execute(frame: VirtualFrame): Nothing = fault("threadStatus# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val target = identity.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val snapshot = GuestThreadOps.threadStatus(this, target)
         FrameAccess.writeLong(frame, slots[offset], snapshot.status)
         FrameAccess.writeLong(frame, slots[offset + 1], snapshot.capability)
@@ -160,7 +160,7 @@ internal class KillThread(@field:Child private var identity: Expr, @field:Child 
     override fun execute(frame: VirtualFrame): Any {
         val target = identity.execute(frame)
         val exception = payload.execute(frame) // The lifted payload remains lazy.
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         if (!captureWait && target !== GuestThreadOps.myThreadId(this))
             throw UnsupportedCore("AST external killThread# requires a captured sender continuation")
         return finish(GuestThreadOps.beginKill(this, target, exception))
@@ -173,7 +173,7 @@ internal class LabelThread(@field:Child private var identity: Expr, @field:Child
     override fun execute(frame: VirtualFrame): Any {
         val target = identity.execute(frame)
         val label = bytes.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         GuestThreadOps.labelThread(this, target, label)
         return Unit
     }
@@ -185,7 +185,7 @@ internal class ThreadLabel(@field:Child private var identity: Expr, @field:Child
     override fun execute(frame: VirtualFrame): Nothing = fault("threadLabel# requires a tuple destination")
     override fun executeTuple(frame: VirtualFrame, slots: IntArray, offset: Int): Any? {
         val target = identity.execute(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         val label = GuestThreadOps.threadLabel(this, target)
         FrameAccess.writeLong(frame, slots[offset], if (label == null) 0L else 1L)
         FrameAccess.write(frame, slots[offset + 1], label)
@@ -215,7 +215,7 @@ private class ForkDestination(shape: TupleShape, private val language: Language)
                 ?: fault("Fork action suspended without an async request")
             throw UncaughtForkAsync(request)
         }
-        if (result === TupleComplete) {
+        if (result === TupleComplete.INSTANCE) {
             val pool = language.handoffState.get().results
             val storage = pool.completed()
             try {

@@ -311,7 +311,7 @@ class SimdFloatFmaTest {
                             for (argument in arguments.indices)
                                 inputLayout.packet.setObject(loan, inputLayout.header + inputLayout.logical.offset(argument),
                                     arguments[argument])
-                            val result = ownedTupleResult(TypedInputsKt.invokeTypedInput(worker, loan) { Calls.target(worker, it) }, resultShape)
+                            val result = TupleResultsKt.ownedTupleResult(TypedInputsKt.invokeTypedInput(worker, loan) { Calls.target(worker, it) }, resultShape)
                             val raw = resultShape.layout.getObject(result, 0)
                             if (double) {
                                 val vector = assertInstanceOf(DoubleVector::class.java, raw)

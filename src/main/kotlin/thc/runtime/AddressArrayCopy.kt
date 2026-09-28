@@ -36,7 +36,7 @@ internal class AddressToByteArrayExpression(proof: CoreRepresentation,
         val to = destination.execute(frame)
         val start = offset.executeRequiredLong(frame)
         val length = count.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         from.copyToByteArray(to, start, length)
         return Unit
     }
@@ -52,7 +52,7 @@ internal class ByteArrayToAddressExpression(proof: CoreRepresentation,
         val start = offset.executeRequiredLong(frame)
         val to = destination.executeRequiredAddress(frame)
         val length = count.executeRequiredLong(frame)
-        requireVoidCarrier(state.execute(frame))
+        TupleResultsKt.requireVoidCarrier(state.execute(frame))
         to.copyFromByteArray(from, start, length)
         return Unit
     }
