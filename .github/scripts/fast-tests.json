@@ -2513,6 +2513,27 @@
       ],
       "python": []
     },
+    "src/test/java/thc/CoreBackendTestSupport.java": {
+      "junit": [
+        "thc.BytecodeBackendTest",
+        "thc.BytecodeCoreProofTest",
+        "thc.BytecodeSourceNotesTest",
+        "thc.BytecodeStaticEntryTest",
+        "thc.CStringTest",
+        "thc.CoverageCorpusTest",
+        "thc.GuestExceptionsTest",
+        "thc.LoopSafepointTest",
+        "thc.ManagedExportAsyncPolicyTest",
+        "thc.ManagedExportsNativeTest",
+        "thc.ManagedForeignRootsNativeTest",
+        "thc.ManagedImportStubsNativeTest",
+        "thc.NarrowPublicEntryTest",
+        "thc.NarrowWordPrimitiveTest",
+        "thc.RealCoreCallDemandTest",
+        "thc.RealCoreEntryContractTest"
+      ],
+      "python": []
+    },
     "src/test/java/thc/ScalarPrimopModel.java": {
       "junit": [
         "thc.ScalarPrimopModelTest",
