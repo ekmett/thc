@@ -190,7 +190,9 @@ public final class CoreCompactRecords {
         return result;
     }
     private Map<String,Object> foreign(CoreCompactCursor cursor, boolean inline) throws Throwable {
-        var result = map("schema", cursor.unsigned());
+        long schema = cursor.unsigned();
+        require(schema == 1 || schema == 2, "Unsupported compact Core foreign-call schema");
+        var result = map("schema", schema);
         int tag = cursor.readByte();
         switch (tag) {
             case 0 -> {
@@ -206,6 +208,7 @@ public final class CoreCompactRecords {
         result.put("arity", cursor.unsigned()); result.put("suppliedArity", cursor.unsigned());
         result.put("argumentReps", list(cursor, () -> rep(cursor, inline))); result.put("resultRep", rep(cursor, inline));
         field(cursor, result, "intrinsic", () -> text(cursor)); field(cursor, result, "javascriptSource", () -> text(cursor));
+        if (schema == 2) field(cursor, result, "argumentTypes", () -> list(cursor, () -> element(cursor, () -> text(cursor))));
         return result;
     }
     private Map<String,Object> meta(CoreCompactCursor cursor, Origin origin) throws Throwable {
