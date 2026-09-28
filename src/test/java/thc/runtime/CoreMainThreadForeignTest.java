@@ -49,27 +49,27 @@ class CoreMainThreadForeignTest {
         changed.put(key, value); return changed;
     }
     @Test void exactOriginalWeakAndStateAbiRejectsNearMisses() {
-        var good = proof(); var validator = CoreMainThreadForeign.INSTANCE;
-        assertTrue(validator.validate(good, List.of(weak, state), List.of(false, false), tuple(false)));
-        validator.validateHeads(application());
+        var good = proof();
+        assertTrue(CoreMainThreadForeign.validate(good, List.of(weak, state), List.of(false, false), tuple(false)));
+        CoreMainThreadForeign.validateHeads(application());
         var otherTarget = changed((Map<?, ?>) descriptor().get("target"), "symbol", "stg_sig_install");
         var otherCall = changed(descriptor(), "target", otherTarget);
-        assertFalse(validator.validate(changed(good, "foreignCall", otherCall), List.of(weak, state), List.of(false, false), tuple(false)));
+        assertFalse(CoreMainThreadForeign.validate(changed(good, "foreignCall", otherCall), List.of(weak, state), List.of(false, false), tuple(false)));
         for (var change : new Object[][]{{"schema",1.0},{"convention","capi"},{"safety","safe"},
             {"arity",1L},{"suppliedArity",3L},{"extra",true}})
-            assertThrows(RuntimeFault.class, () -> validator.validate(changed(good, "foreignCall", changed(descriptor(), (String) change[0], change[1])),
+            assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validate(changed(good, "foreignCall", changed(descriptor(), (String) change[0], change[1])),
                 List.of(weak, state), List.of(false, false), tuple(false)));
         for (var change : new Object[][]{{"unit","base"},{"kind","dynamic"},{"isFunction",false}})
             assertThrows(RuntimeFault.class, () -> {
                 var call = changed(descriptor(), "target", changed((Map<?, ?>) descriptor().get("target"), (String) change[0], change[1]));
-                validator.validate(changed(good, "foreignCall", call), List.of(weak, state), List.of(false, false), tuple(false));
+                CoreMainThreadForeign.validate(changed(good, "foreignCall", call), List.of(weak, state), List.of(false, false), tuple(false));
             });
-        assertThrows(RuntimeFault.class, () -> validator.validate(good, List.of(state, weak), List.of(false, false), tuple(false)));
-        assertThrows(RuntimeFault.class, () -> validator.validate(good, List.of(weak, state), List.of(true, false), tuple(false)));
-        assertThrows(RuntimeFault.class, () -> validator.validate(good, List.of(weak, state), List.of(false, false), scalar("void", null, true)));
-        assertThrows(RuntimeFault.class, () -> validator.validateHead(variable("original-fcall", closure), true));
+        assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validate(good, List.of(state, weak), List.of(false, false), tuple(false)));
+        assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validate(good, List.of(weak, state), List.of(true, false), tuple(false)));
+        assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validate(good, List.of(weak, state), List.of(false, false), scalar("void", null, true)));
+        assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validateHead(variable("original-fcall", closure), true));
         var forged = new ArrayList<>(application()); forged.set(1, List.of("prim", "rts_setMainThread"));
-        assertThrows(RuntimeFault.class, () -> validator.validateHeads(forged));
+        assertThrows(RuntimeFault.class, () -> CoreMainThreadForeign.validateHeads(forged));
     }
     @Test void bothLoadersRegisterTheWeakKeyWithoutRetainingItsValueOrAThreadIdSnapshot() throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = MainKt.executionContext(false)) {

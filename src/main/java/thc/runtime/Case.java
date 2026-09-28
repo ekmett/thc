@@ -1,0 +1,222 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc.runtime;
+
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Objects;
+import static thc.runtime.Alternative.*;
+import static thc.runtime.RuntimeFault.fault;
+
+class Case extends Expr {
+    protected final int binderSlot;
+    @Children protected Alternative[] alternatives;
+    @Child private LocalBinding scrutinee;
+    private final boolean delimited;
+    Case(Expr scrutinee, int binderSlot, Alternative[] alternatives, Metrics metrics) {
+        this(scrutinee, binderSlot, alternatives, metrics, null, false);
+    }
+    Case(Expr scrutinee, int binderSlot, Alternative[] alternatives, Metrics metrics,
+         CoreRepresentation binderProof, boolean delimited) {
+        this.binderSlot = binderSlot; this.alternatives = alternatives; this.delimited = delimited;
+        var proofs = new ArrayList<CoreRepresentation>(alternatives.length);
+        var kinds = new HashSet<CoreKind>();
+        boolean evaluated = true, present = alternatives.length != 0, references = alternatives.length != 0;
+        for (Alternative alternative : alternatives) {
+            CoreRepresentation proof = alternative.getBody().getRepresentation();
+            proofs.add(proof); kinds.add(proof.getKind());
+            evaluated &= proof.getEvaluated(); present &= proof.getPresent();
+            references &= proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE || proof.getKind() == CoreKind.OBJECT;
+        }
+        CoreKind kind = kinds.size() == 1 ? kinds.iterator().next() : references ? CoreKind.OBJECT : CoreKind.UNKNOWN;
+        CoreRepresentation first = proofs.isEmpty() ? null : proofs.getFirst();
+        boolean aggregate = first != null && first.isAggregate(), narrow = first != null && first.isInt();
+        for (CoreRepresentation proof : proofs) {
+            aggregate = aggregate && proof.isAggregate() && TupleShape.Companion.compatible(first, proof);
+            narrow = narrow && Objects.equals(proof.getPrimReps(), first.getPrimReps());
+        }
+        CoreRepresentation selected = null;
+        if (aggregate) selected = first;
+        else {
+            CoreRepresentation vector = CoreVectors.INSTANCE.caseResult(proofs);
+            if (vector != null) setRepresentation(vector);
+            else if (narrow) selected = first;
+            else setRepresentation(new CoreRepresentation(kind, evaluated, present, null, null, null, null, null, null));
+        }
+        if (selected != null) setRepresentation(selected.copy(selected.getKind(), evaluated, selected.getPresent(),
+            selected.getPrimReps(), selected.getComponents(), selected.getVector(), selected.getAlternatives(),
+            selected.getTagSlot(), selected.getAlternativeSlots()));
+        Evaluate evaluatedScrutinee = new Evaluate(scrutinee, metrics);
+        if (binderProof != null) evaluatedScrutinee.setRepresentation(evaluatedScrutinee.getRepresentation().refine(
+            binderProof.copy(binderProof.getKind(), false, binderProof.getPresent(), binderProof.getPrimReps(),
+                binderProof.getComponents(), binderProof.getVector(), binderProof.getAlternatives(),
+                binderProof.getTagSlot(), binderProof.getAlternativeSlots())));
+        this.scrutinee = new LocalBinding(binderSlot, evaluatedScrutinee, true);
+    }
+    protected final void prepare(VirtualFrame frame) { prepare(frame, null, 0); }
+    protected final void prepare(VirtualFrame frame, int[] destination, int offset) {
+        try { scrutinee.write(frame); }
+        catch (AstCapture cut) {
+            throw cut.append(new AstResumeStep() {
+                @Override public Object resume(VirtualFrame frame, Object input) {
+                    Expr branch = select(frame).getBody();
+                    return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
+                }
+            });
+        } catch (DelimitedCut cut) {
+            if (!delimited) throw cut;
+            throw cut.append(frame, new DelimitedStep() {
+                @Override public Object resume(MaterializedFrame frame, DelimitedResume input,
+                                               MaskingState ambient, DelimitedStep outerMask) {
+                    // Bind the completed scrutinee without evaluating it again.
+                    FrameAccess.INSTANCE.write(frame, binderSlot, input.get());
+                    Expr branch = select(frame).getBody();
+                    return destination == null ? branch.execute(frame) : branch.executeTuple(frame, destination, offset);
+                }
+            });
+        }
+    }
+    private Alternative select(VirtualFrame frame) {
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) { restoreFields(frame, alt); return alt; }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback;
+    }
+    protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matches(frame, binderSlot); }
+    @ExplodeLoop @Override public Object execute(VirtualFrame frame) {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().execute(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().execute(frame);
+    }
+    @ExplodeLoop @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeInt(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeInt(frame);
+    }
+    @ExplodeLoop @Override public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeLong(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeLong(frame);
+    }
+    @ExplodeLoop @Override public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeFloat(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeFloat(frame);
+    }
+    @ExplodeLoop @Override public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeDouble(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeDouble(frame);
+    }
+    @ExplodeLoop @Override public Closure executeClosure(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeClosure(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeClosure(frame);
+    }
+    @ExplodeLoop @Override public DataValue executeDataValue(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeDataValue(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeDataValue(frame);
+    }
+    @ExplodeLoop @Override public ManagedAddress executeAddress(VirtualFrame frame) throws UnexpectedResultException {
+        prepare(frame);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeAddress(frame);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeAddress(frame);
+    }
+    @ExplodeLoop @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
+        prepare(frame, slots, offset);
+        Alternative fallback = null;
+        for (Alternative alt : alternatives) {
+            if (alt.getKind() == DEFAULT_ALTERNATIVE) { fallback = alt; continue; }
+            if (matches(frame, alt)) {
+                restoreFields(frame, alt);
+                return alt.getBody().executeTuple(frame, slots, offset);
+            }
+        }
+        if (fallback == null) throw fault("Non-exhaustive Core case");
+        return fallback.getBody().executeTuple(frame, slots, offset);
+    }
+    @ExplodeLoop private void restoreFields(VirtualFrame frame, Alternative alt) {
+        if (alt.getKind() == DATA_ALTERNATIVE) {
+            Object scrutinee = frame.getObject(binderSlot);
+            if (!(scrutinee instanceof DataValue data)) throw fault("Invalid constructor case");
+            if (!(alt.getValue() instanceof DataLayout layout)) throw fault("Invalid constructor alternative");
+            for (int i = 0; i < alt.getFields().length; i++) {
+                int[] lanes = i < alt.getVectorFields().length ? alt.getVectorFields()[i] : null;
+                if (lanes == null) layout.restore(data, i, frame, alt.getFields()[i]);
+                else layout.restoreVector(data, i, frame, lanes, 0);
+            }
+        }
+    }
+}

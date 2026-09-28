@@ -50,37 +50,36 @@ class CoreBoundThreadForeignTest {
         changed.put(key, value); return changed;
     }
     @Test void exactStateAndHsBoolCertificateRejectsNearMisses() {
-        var validator = CoreBoundThreadForeign.INSTANCE;
-        assertTrue(validator.validate(proof(), List.of(state), List.of(false), tuple(), false));
-        validator.validateHeads(application());
+        assertTrue(CoreBoundThreadForeign.validate(proof(), List.of(state), List.of(false), tuple(), false));
+        CoreBoundThreadForeign.validateHeads(application());
         for (var symbol : List.of("isCurrentThreadBound", "forkOS", "prefix_rtsSupportsBoundThreads")) {
             var call = changed(descriptor(), "target", changed((Map<?, ?>) descriptor().get("target"), "symbol", symbol));
-            assertFalse(validator.validate(changed(proof(), "foreignCall", call), List.of(state), List.of(false), tuple(), false));
+            assertFalse(CoreBoundThreadForeign.validate(changed(proof(), "foreignCall", call), List.of(state), List.of(false), tuple(), false));
         }
         for (var change : new Object[][]{{"schema",true},{"schema",1.0},{"convention","capi"},{"safety","safe"},
             {"arity",0L},{"suppliedArity",2L},{"extra",true}})
-            assertThrows(RuntimeFault.class, () -> validator.validate(changed(proof(), "foreignCall", changed(descriptor(), (String) change[0], change[1])),
+            assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(changed(proof(), "foreignCall", changed(descriptor(), (String) change[0], change[1])),
                 List.of(state), List.of(false), tuple(), false));
         for (var change : new Object[][]{{"unit","base"},{"kind","dynamic"},{"isFunction",false},{"extra",1}})
             assertThrows(RuntimeFault.class, () -> {
                 var call = changed(descriptor(), "target", changed((Map<?, ?>) descriptor().get("target"), (String) change[0], change[1]));
-                validator.validate(changed(proof(), "foreignCall", call), List.of(state), List.of(false), tuple(), false);
+                CoreBoundThreadForeign.validate(changed(proof(), "foreignCall", call), List.of(state), List.of(false), tuple(), false);
             });
         for (var wrong : List.of(changed(tuple(), "components", List.of(integer)),
             changed(tuple(), "components", List.of(state, scalar("long", "Int32Rep", true))),
             changed(tuple(), "primReps", List.of("WordRep")), scalar("data", "BoxedRep (Just Lifted)", true))) {
-            assertThrows(RuntimeFault.class, () -> validator.validate(proof(), List.of(state), List.of(false), wrong, false));
-            assertThrows(RuntimeFault.class, () -> validator.validate(changed(proof(), "foreignCall", changed(descriptor(), "resultRep", wrong)),
+            assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(proof(), List.of(state), List.of(false), wrong, false));
+            assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(changed(proof(), "foreignCall", changed(descriptor(), "resultRep", wrong)),
                 List.of(state), List.of(false), tuple(), false));
         }
-        assertThrows(RuntimeFault.class, () -> validator.validate(proof(), List.of(integer), List.of(false), tuple(), false));
-        assertThrows(RuntimeFault.class, () -> validator.validate(proof(), List.of(state), List.of(true), tuple(), false));
-        assertThrows(RuntimeFault.class, () -> validator.validate(changed(proof(), "foreignCall", changed(descriptor(), "argumentReps", List.of(state))),
+        assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(proof(), List.of(integer), List.of(false), tuple(), false));
+        assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(proof(), List.of(state), List.of(true), tuple(), false));
+        assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(changed(proof(), "foreignCall", changed(descriptor(), "argumentReps", List.of(state))),
             List.of(state), List.of(false), tuple(), false));
-        assertThrows(RuntimeFault.class, () -> validator.validateHead(variable("structural-fcall", closure), true));
+        assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validateHead(variable("structural-fcall", closure), true));
         assertThrows(RuntimeFault.class, () -> {
             var application = new ArrayList<>(application()); application.set(1, List.of("prim", "rtsSupportsBoundThreads"));
-            validator.validateHeads(application);
+            CoreBoundThreadForeign.validateHeads(application);
         });
     }
     @Test void originalAllocationGetterKeepsItsDistinctPrimAndInt64Abi() {
@@ -89,10 +88,10 @@ class CoreBoundThreadForeignTest {
         call.put("target", Map.of("kind", "static", "symbol", "stg_getThreadAllocationCounterzh", "unit", "ghc-internal", "isFunction", true));
         call.put("convention", "prim"); call.put("safety", "safe"); call.put("resultRep", result);
         var proof = Map.of("rep", result, "foreignCall", call);
-        assertTrue(CoreBoundThreadForeign.INSTANCE.validate(proof, List.of(state), List.of(false), result, true));
-        assertFalse(CoreBoundThreadForeign.INSTANCE.validate(proof, List.of(state), List.of(false), result, false));
+        assertTrue(CoreBoundThreadForeign.validate(proof, List.of(state), List.of(false), result, true));
+        assertFalse(CoreBoundThreadForeign.validate(proof, List.of(state), List.of(false), result, false));
         for (var change : new Object[][]{{"convention","ccall"},{"safety","unsafe"},{"resultRep",tuple()}})
-            assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.INSTANCE.validate(changed(proof, "foreignCall", changed(call, (String) change[0], change[1])),
+            assertThrows(RuntimeFault.class, () -> CoreBoundThreadForeign.validate(changed(proof, "foreignCall", changed(call, (String) change[0], change[1])),
                 List.of(state), List.of(false), result, true));
     }
     @Test void bothLoadersCheckStoredStateAndRuntimeCarrierBeforeWritingTypedZero() throws Exception {

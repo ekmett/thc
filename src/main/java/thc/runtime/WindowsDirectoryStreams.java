@@ -126,7 +126,7 @@ public final class WindowsDirectoryStreams implements Closeable {
                 var data = arena.allocate(Abi.getSize(), Abi.getAlignment());
                 var error = arena.allocate(Api.capture);
                 // Allocate identity before acquiring the OS resource.
-                var token = ManagedAddress.Companion.fromAllocation(ManagedAllocation.Companion.immutable(new byte[0], 8, true));
+                var token = ManagedAddress.Companion.fromAllocation(ManagedAllocation.immutable(new byte[0], 8, true));
                 var nativeHandle = foreign(() -> (MemorySegment) Api.first.invokeExact(error, text, data));
                 lastError().set(Api.error(error));
                 if (nativeHandle.address() == -1L) return invalidHandle();

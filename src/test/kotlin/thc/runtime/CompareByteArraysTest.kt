@@ -4,6 +4,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.runtime.ByteArrayOp.expression as byteArrayExpression
+
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
@@ -224,7 +226,7 @@ class CompareByteArraysTest {
     @Test fun mixedHeapPinnedAndImmutableInputsUseFirstInstalledComparisons() {
         fun variants(bytes: ByteArray): List<Any> = listOf(bytes,
             ManagedAllocation.mutable(bytes.size.toLong(), 8).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
-            ManagedAllocation.mutable(bytes.size.toLong(), 8, pinned = true).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
+            ManagedAllocation.mutable(bytes.size.toLong(), 8, true).also { it.copyBytesIn(bytes, 0, 0, bytes.size.toLong()) },
             ManagedAllocation.immutable(bytes, 8))
         val a = ByteArray(65) { (it * 61 + 128).toByte() }
         val b = a.copyOf().also { it[64] = (it[64].toInt() xor 128).toByte() }

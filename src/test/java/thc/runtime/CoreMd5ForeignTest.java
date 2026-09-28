@@ -27,7 +27,7 @@ class CoreMd5ForeignTest {
         Map<String, Object> descriptor() { return (Map<String, Object>) metadata.get("foreignCall"); }
         Map<String, Object> target() { return (Map<String, Object>) descriptor().get("target"); }
         List<Map<String, Object>> declared() { return (List<Map<String, Object>>) descriptor().get("argumentReps"); }
-        Md5ForeignOp validate() { return CoreMd5Foreign.INSTANCE.validate(metadata, arguments, flags, result); }
+        Md5ForeignOp validate() { return CoreMd5Foreign.validate(metadata, arguments, flags, result); }
         Map<String, Object> proof(int site) {
             return site == 0 ? (Map<String, Object>) descriptor().get("resultRep") : site == 1 ? (Map<String, Object>) metadata.get("rep") : result;
         }
@@ -71,7 +71,7 @@ class CoreMd5ForeignTest {
             Map.of("foreignCall", Map.of("target", Map.of("kind", "dynamic"))),
             Map.of("foreignCall", Map.of("target", Map.of("symbol", "MD5Init"))),
             Map.of("foreignCall", Map.of("target", Map.of("symbol", "__hsbase_MD5Other")))))
-            assertNull(CoreMd5Foreign.INSTANCE.validate(value, List.of(), List.of(), null));
+            assertNull(CoreMd5Foreign.validate(value, List.of(), List.of(), null));
     }
     @Test void ExactIntegerAndDescriptorKeysRejectNormalizedForgeries() {
         for (var field : List.of("schema", "arity", "suppliedArity")) {

@@ -49,7 +49,7 @@ class WindowsDirectoryStreamsTest {
         return ManagedAddress.Companion.fromByteArray((value + '\0').getBytes(StandardCharsets.UTF_16LE));
     }
     private ManagedAddress buffer() {
-        return ManagedAddress.Companion.fromAllocation(ManagedAllocation.Companion.mutable(WindowsDirectoryStreams.Abi.getSize(), 8, false, 8));
+        return ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(WindowsDirectoryStreams.Abi.getSize(), 8, false, 8));
     }
     private Context context() { return WindowsDirectoryStreams.createContext(ContextProfile.SYNCHRONOUS_TEST); }
     private Language enter(Context context) {
@@ -176,7 +176,7 @@ class WindowsDirectoryStreamsTest {
                                     default -> relative || suffix.isEmpty() ? suffix : base + "\\" + suffix;
                                 };
                                 long size = WindowsDirectoryStreams.Abi.getSize();
-                                var storage = ManagedAddress.Companion.fromAllocation(ManagedAllocation.Companion.mutable(size + 16, 8, false, 8));
+                                var storage = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(size + 16, 8, false, 8));
                                 storage.fill(size + 16, 165);
                                 var output = storage.plus(8);
                                 var handle = (ManagedAddress) invoke("directoryFirst", path(query), output);
@@ -239,7 +239,7 @@ class WindowsDirectoryStreamsTest {
                 var query = path(directory + "\\*");
                 var output = buffer();
                 for (var invalid : List.of(ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.fromByteArray(new byte[2]),
-                    ManagedAddress.Companion.fromAllocation(ManagedAllocation.Companion.immutable(new byte[1024], 8, false)))) {
+                    ManagedAddress.Companion.fromAllocation(ManagedAllocation.immutable(new byte[1024], 8, false)))) {
                     assertThrows(RuntimeFault.class, () -> streams.first(query, invalid));
                     assertEquals(0, streams.liveCount());
                 }
@@ -251,7 +251,7 @@ class WindowsDirectoryStreamsTest {
                 assertEquals(name(next), name(output));
                 // Win32's mallocForeignPtrBytes uses pinned byte-array storage.
                 // The separate Linux libc malloc provider is not a Windows allocator.
-                var owner = ManagedAllocation.Companion.mutable(WindowsDirectoryStreams.Abi.getSize() + 16, 8, true, 8);
+                var owner = ManagedAllocation.mutable(WindowsDirectoryStreams.Abi.getSize() + 16, 8, true, 8);
                 var memory = ManagedAddress.Companion.fromAllocation(owner);
                 memory.fill(WindowsDirectoryStreams.Abi.getSize() + 16, 165);
                 var nativeBuffer = memory.plus(8);

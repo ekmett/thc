@@ -1,0 +1,239 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0
+import static thc.buildlogic.BuildChecks.*
+import java.security.MessageDigest
+import java.util.jar.JarFile
+
+def protocolRuntimeVersion = "25.3.4.1"
+def protocolRuntimeSource = configurations.create("protocolRuntimeSource") { canBeConsumed = false; transitive = false }
+def protocolRuntimeBinary = configurations.create("protocolRuntimeBinary") { canBeConsumed = false; transitive = false }
+def protocolRuntimeCompile = configurations.create("protocolRuntimeCompile") { canBeConsumed = false }
+dependencies {
+    add(protocolRuntimeSource.name, "org.graalvm.truffle:truffle-runtime:$protocolRuntimeVersion:sources")
+    add(protocolRuntimeBinary.name, "org.graalvm.truffle:truffle-runtime:$protocolRuntimeVersion")
+    add(protocolRuntimeCompile.name, "org.graalvm.truffle:truffle-runtime:$protocolRuntimeVersion")
+    // The API is replaced by a file artifact, so declare its options/Polyglot compile input explicitly.
+    add(protocolRuntimeCompile.name, "org.graalvm.polyglot:polyglot:$protocolRuntimeVersion")
+}
+def protocolRuntimeDigest = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes).encodeHex().toString() }
+def requireRuntimeArchive = { File file, String hash ->
+    checkBuild(protocolRuntimeDigest(file.bytes) == hash) { "Pinned Truffle runtime archive hash mismatch: ${file.name}" }
+}
+def prepareProtocolRuntime = tasks.register("prepareProtocolRuntime", Sync) {
+    from(provider { zipTree(protocolRuntimeSource.singleFile) })
+    include("com/oracle/truffle/runtime/OptimizedCallTarget.java")
+    into(layout.buildDirectory.dir("protocol-runtime/source"))
+    inputs.files("tools/truffle-protocol/declared-return-runtime.patch", "tools/truffle-protocol/graph-budget-runtime.patch")
+    doFirst {
+        requireRuntimeArchive(protocolRuntimeSource.singleFile,
+            "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519")
+    }
+    doLast {
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/declared-return-runtime.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/graph-budget-runtime.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/runtime/OptimizedCallTarget.java").toFile().getText("UTF-8")
+            .contains("declaredReturnPolicyVersion")) { "Declared return runtime patch was not applied" }
+    }
+}
+def compileProtocolRuntime = tasks.register("compileProtocolRuntime", JavaCompile) {
+    source(prepareProtocolRuntime)
+    include("**/*.java")
+    classpath = files(tasks.named("materializableApiJar", Jar).flatMap { it.archiveFile }) + protocolRuntimeCompile
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/classes"))
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+    // --release hides JVMCI; these are the pinned runtime's existing JVMCI inputs.
+    options.compilerArgs.addAll(["-proc:none", "--add-modules=jdk.internal.vm.ci",
+        "--add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=ALL-UNNAMED"])
+}
+def protocolRuntimeJar = tasks.register("protocolRuntimeJar", Jar) {
+    group = "build"
+    description = "Build the pinned runtime with an explicit per-root polymorphic completion declaration."
+    archiveBaseName.set("thc-truffle-runtime")
+    archiveVersion.set("$protocolRuntimeVersion-return1-budget1")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime"))
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(compileProtocolRuntime.flatMap { it.destinationDirectory })
+    from(provider { zipTree(protocolRuntimeBinary.singleFile) }) {
+        exclude("com/oracle/truffle/runtime/OptimizedCallTarget.class", "com/oracle/truffle/runtime/OptimizedCallTarget\$*.class",
+            "META-INF/MANIFEST.MF")
+    }
+    from("tools/truffle-protocol/LICENSE-UPL.txt") { into("META-INF") }
+    inputs.files(protocolRuntimeBinary)
+    doFirst {
+        requireRuntimeArchive(protocolRuntimeBinary.singleFile,
+            "d74ff0b8eb9a5fec4a571f78bc21750ee41dfd454877b8cce8b33641efd90ae3")
+        new JarFile(protocolRuntimeBinary.singleFile).withCloseable { jar ->
+            manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
+        }
+        manifest.attributes(["Implementation-Title": "THC declared root completion Truffle runtime",
+            "Implementation-Version": "$protocolRuntimeVersion-return1-budget1",
+            "Upstream-Source-SHA256": "bc365db6f4765d57bc4779508dbe0fcdd2c379b4027eb954fd5b0c9e55c8a519"])
+    }
+}
+configurations.configureEach {
+    if (name !in [protocolRuntimeSource.name, protocolRuntimeBinary.name, protocolRuntimeCompile.name].toSet()) {
+        exclude(group: "org.graalvm.truffle", module: "truffle-runtime")
+    }
+}
+dependencies {
+    add("implementation", files(protocolRuntimeJar.flatMap { it.archiveFile }))
+    // Preserve the upstream runtime POM dependency after replacing its binary with a file artifact.
+    add("implementation", "org.graalvm.truffle:truffle-compiler:$protocolRuntimeVersion")
+}
+tasks.register("verifyProtocolRuntimeSelection") {
+    group = "verification"
+    dependsOn(protocolRuntimeJar, "verifyMaterializableApiSelection")
+    doLast {
+        def runtime = configurations.getByName("runtimeClasspath").files
+        checkBuild(runtime.every { !(it.name == "truffle-runtime-${protocolRuntimeVersion}.jar") }) { "Stock runtime remains on runtime classpath" }
+        def overlay = protocolRuntimeJar.get().archiveFile.get().asFile
+        checkBuild(runtime.count { it.name == overlay.name } == 1) { "Expected exactly one declared runtime artifact" }
+        def replaced = { String name -> name == "META-INF/MANIFEST.MF" ||
+            name == "com/oracle/truffle/runtime/OptimizedCallTarget.class" ||
+            name.startsWith("com/oracle/truffle/runtime/OptimizedCallTarget\$") }
+        new JarFile(protocolRuntimeBinary.singleFile).withCloseable { stock ->
+            new JarFile(overlay).withCloseable { declared ->
+                def original = stock.entries().toList().findAll { !it.isDirectory() }.toList()
+                def current = declared.entries().toList().findAll { !it.isDirectory() }.toList()
+                checkBuild(current.collect { it.name }.toSet().minus(original.collect { it.name }.toSet())
+                    .every { replaced(it) || it == "META-INF/LICENSE-UPL.txt" }) { "Unexpected added runtime payload" }
+                for (entry in original.findAll { !(replaced(it.name)) }) {
+                    def target = checkNotNull(declared.getJarEntry(entry.name)) { "Missing runtime entry: ${entry.name}" }
+                    checkBuild(protocolRuntimeDigest(stock.getInputStream(entry).bytes) ==
+                        protocolRuntimeDigest(declared.getInputStream(target).bytes)) { "Unrelated runtime entry changed: ${entry.name}" }
+                }
+                checkBuild(declared.manifest.mainAttributes.getValue("Multi-Release") == stock.manifest.mainAttributes.getValue("Multi-Release"))
+                layout.buildDirectory.file("protocol-runtime/verified-artifact.sha256").get().asFile.setText(
+                    protocolRuntimeDigest(overlay.bytes) + "  " + overlay.name + "\n" +
+                    protocolRuntimeDigest(file("tools/truffle-protocol/declared-return-runtime.patch").bytes) + "  declared-return-runtime.patch\n" +
+                    protocolRuntimeDigest(file("tools/truffle-protocol/graph-budget-runtime.patch").bytes) + "  graph-budget-runtime.patch\n" +
+                    "Preserved upstream nonreplacement entries: " + original.count { !replaced(it.name) } + "\n", "UTF-8")
+            }
+        }
+    }
+}
+tasks.named("check") { dependsOn("verifyProtocolRuntimeSelection") }
+
+// One compiled control runs against matching stock and declared API/runtime binaries.
+def returnPolicyMain = extensions.getByType(org.gradle.api.tasks.SourceSetContainer).named("main")
+def returnPolicyRuntime = files(returnPolicyMain.map { it.output }, returnPolicyMain.map { it.runtimeClasspath })
+def compileReturnPolicyControl = tasks.register("compileReturnPolicyControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/ReturnPolicyProbe.java")
+    classpath = returnPolicyRuntime
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/classes"))
+}
+def returnPolicyModes = ["stock", "overlay"].collect { mode ->
+    tasks.register("testReturnPolicy" + mode.capitalize(), JavaExec) {
+        group = "verification"
+        description = "Check explicit completion policy, unchanged arguments, AOT and public split against $mode binaries."
+        dependsOn("verifyProtocolRuntimeSelection")
+        def selectedApi = mode == "stock" ? files(configurations.getByName("materializableApiBinary")) : files(tasks.named("materializableApiJar", Jar).flatMap { it.archiveFile })
+        def selectedRuntime = mode == "stock" ? files(protocolRuntimeBinary) : files(protocolRuntimeJar.flatMap { it.archiveFile })
+        classpath = files(compileReturnPolicyControl.flatMap { it.destinationDirectory }) + selectedApi + selectedRuntime +
+            returnPolicyRuntime.filter { !it.name.startsWith("thc-truffle-api-") && !it.name.startsWith("thc-truffle-runtime-") }
+        mainClass.set("protocolprobe.ReturnPolicyProbe")
+        args(mode)
+        enableAssertions = true
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+        maxHeapSize = "1g"
+    }
+}
+tasks.register("testReturnPolicy") { group = "verification"; dependsOn(returnPolicyModes) }
+tasks.named("check") { dependsOn("testReturnPolicy") }
+
+def compileReturnContinuationControl = tasks.register("compileReturnContinuationControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/ReturnContinuationRoot.java", "tools/truffle-protocol/tests/ReturnContinuationProbe.java")
+    classpath = files(compileReturnPolicyControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    options.annotationProcessorPath = files(tasks.named("protocolProcessorJar", Jar).flatMap { it.archiveFile }) + returnPolicyRuntime
+    options.release.set(21)
+    options.compilerArgs.add("-proc:full")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/continuations"))
+    options.generatedSourceOutputDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/generated"))
+}
+tasks.register("testReturnContinuations", JavaExec) {
+    group = "verification"
+    description = "Check actual generated first and nested yields, source splits and serialized return declarations."
+    dependsOn("verifyProtocolRuntimeSelection")
+    classpath = files(compileReturnContinuationControl.flatMap { it.destinationDirectory },
+        compileReturnPolicyControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    mainClass.set("protocolprobe.ReturnContinuationProbe")
+    enableAssertions = true
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+    maxHeapSize = "1g"
+}
+tasks.named("check") { dependsOn("testReturnContinuations") }
+
+def compileGraphBudgetControl = tasks.register("compileGraphBudgetControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/GraphBudgetProbe.java")
+    classpath = returnPolicyRuntime
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/graph-budget"))
+}
+tasks.register("testGraphBudgetRecovery", JavaExec) {
+    group = "verification"
+    description = "Check actual graph-budget failure, structural extraction, task completion and first compiled call."
+    dependsOn("verifyProtocolRuntimeSelection")
+    classpath = files(compileGraphBudgetControl.flatMap { it.destinationDirectory }) + returnPolicyRuntime
+    mainClass.set("protocolprobe.GraphBudgetProbe")
+    enableAssertions = true
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+    maxHeapSize = "1g"
+}
+tasks.named("check") { dependsOn("testGraphBudgetRecovery") }
+
+def compileRuntimeLinkageControl = tasks.register("compileRuntimeLinkageControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/RuntimeLinkageProbe.java")
+    classpath = files()
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(layout.buildDirectory.dir("protocol-runtime/checks/linkage"))
+}
+def testRuntimeLinkageConfiguration = tasks.register("testRuntimeLinkageConfiguration") {
+    group = "verification"
+    description = "Check deferred linkage tasks retain distinct arguments and exact stock/overlay artifacts."
+    doLast {
+        ["stock", "overlay"].each { expected ->
+            def linkage = tasks.named("testRuntimeLinkage" + expected.capitalize(), JavaExec).get()
+            checkBuild(linkage.args == [expected]) { "${linkage.name} selected arguments ${linkage.args}, expected $expected" }
+            def expectedApi = expected == "stock" ? configurations.getByName("materializableApiBinary").singleFile :
+                tasks.named("materializableApiJar", Jar).get().archiveFile.get().asFile
+            def expectedRuntime = expected == "stock" ? protocolRuntimeBinary.singleFile : protocolRuntimeJar.get().archiveFile.get().asFile
+            def paths = linkage.classpath.files
+            checkBuild(paths.findAll { it.name.startsWith("truffle-api-") || it.name.startsWith("thc-truffle-api-") } == [expectedApi].toSet()) {
+                "${linkage.name} selected the wrong API artifacts"
+            }
+            checkBuild(paths.findAll { it.name.startsWith("truffle-runtime-") || it.name.startsWith("thc-truffle-runtime-") } == [expectedRuntime].toSet()) {
+                "${linkage.name} selected the wrong runtime artifacts"
+            }
+        }
+    }
+}
+tasks.named("check") { dependsOn(testRuntimeLinkageConfiguration) }
+tasks.named("testReturnPolicy") { dependsOn(testRuntimeLinkageConfiguration) }
+["stock", "overlay"].each { mode ->
+    def task = tasks.register("testRuntimeLinkage" + mode.capitalize(), JavaExec) {
+        dependsOn("verifyProtocolRuntimeSelection")
+        def api = mode == "stock" ? files(configurations.getByName("materializableApiBinary")) : files(tasks.named("materializableApiJar", Jar).flatMap { it.archiveFile })
+        def runtime = mode == "stock" ? files(protocolRuntimeBinary) : files(protocolRuntimeJar.flatMap { it.archiveFile })
+        classpath = files(compileRuntimeLinkageControl.flatMap { it.destinationDirectory }) + api + runtime +
+            returnPolicyRuntime.filter { !it.name.startsWith("thc-truffle-api-") && !it.name.startsWith("thc-truffle-runtime-") }
+        mainClass.set("protocolprobe.RuntimeLinkageProbe")
+        args(mode)
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+        maxHeapSize = "512m"
+    }
+    tasks.named("testReturnPolicy") { dependsOn(task) }
+}

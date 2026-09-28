@@ -111,7 +111,7 @@ class ByteStringDecimalTest {
                         val base = when (kind) {
                             0 -> ManagedAddress.fromByteArray(ByteArray(48))
                             3 -> Language.currentState().nativeAllocations.malloc(48)
-                            else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(48, 8, pinned = kind == 2))
+                            else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(48, 8, kind == 2))
                         }
                         try {
                             repeat(48) { base.writeWord8(it.toLong(), 165) }

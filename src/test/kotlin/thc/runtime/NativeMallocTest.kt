@@ -231,8 +231,8 @@ class NativeMallocTest {
     private fun pinnedStorageCopy(backend: String) = inside { language ->
         val program = load(language, backend, module(emptyList()))
         val target = program.entryTarget("copy")
-        val source = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, pinned = true))
-        val destination = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, pinned = true))
+        val source = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, true))
+        val destination = ManagedAddress.fromAllocation(ManagedAllocation.mutable(24, 8, true))
         fun exercise(seed: Long, compiled: Boolean) {
             for (offset in 0L until 24L) source.writeWord8(offset, seed + offset)
             val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()

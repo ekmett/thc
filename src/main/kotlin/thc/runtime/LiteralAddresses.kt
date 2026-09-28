@@ -541,7 +541,8 @@ internal class ManagedAddress private constructor(
         } }
         requireRange(displacement, vectorBytes.toLong())
         val start = offset + displacement
-        owner?.let { allocation -> return allocation.accessVector(start, true, 1, false, vectorBytes) { segment ->
+        owner?.let { allocation -> return synchronized(allocation) {
+            val segment = allocation.vectorSegment(start, true, 1, false, vectorBytes)
             ByteVector.fromMemorySegment(species, segment, start, ByteOrder.nativeOrder())
         } }
         return ByteVector.fromArray(species,
@@ -559,7 +560,8 @@ internal class ManagedAddress private constructor(
         }; return }
         requireRange(displacement, vectorBytes.toLong(), writable = true)
         val start = offset + displacement
-        owner?.let { allocation -> allocation.accessVector(start, true, 1, true, vectorBytes) { segment ->
+        owner?.let { allocation -> synchronized(allocation) {
+            val segment = allocation.vectorSegment(start, true, 1, true, vectorBytes)
             vector.intoMemorySegment(segment, start, ByteOrder.nativeOrder())
         }; return }
         vector.intoArray(mutableBytes ?: fault("Cannot write through an immutable literal Addr#"), start.toInt())
@@ -581,7 +583,10 @@ internal class ManagedAddress private constructor(
         action: (MemorySegment, Int) -> T): T {
         requireRange(0, width.toLong(), writable)
         if (offset % width != 0L) fault("Misaligned atomic Addr#")
-        owner?.let { return it.accessAtomicByteRange(offset, width, writable, action) }
+        owner?.let { allocation -> return synchronized(allocation) {
+            val segment = allocation.atomicSegment(offset, width, writable)
+            synchronized(allocation.storageKey()) { action(segment, offset.toInt()) }
+        } }
         val bytes = literalBytes ?: mutableBytes ?: fault("Atomic Addr# has no byte storage")
         return synchronized(bytes) { action(MemorySegment.ofArray(bytes), offset.toInt()) }
     }
@@ -708,7 +713,7 @@ internal class ManagedAddress private constructor(
                 destination.copyBytesIn(source, offset, destinationOffset, count)
             else MemorySegment.copy(source, offset, MemorySegment.ofArray(destination as ByteArray), destinationOffset, count)
         } else ManagedByteArray.copyGuest(owner ?: literalBytes ?: mutableBytes,
-            offset, destination, destinationOffset, count, mutable = false)
+            offset, destination, destinationOffset, count, false)
     }
 
     fun copyFromByteArray(source: Any?, sourceOffset: Long, count: Long) = withNativeBorrow {
@@ -724,7 +729,7 @@ internal class ManagedAddress private constructor(
                 source.copyBytesTo(sourceOffset, it, 0, count)
             } else {
                 val bytes = ByteArray(count.toInt())
-                ManagedByteArray.copyGuest(source, sourceOffset, bytes, 0, count, mutable = false)
+                ManagedByteArray.copyGuest(source, sourceOffset, bytes, 0, count, false)
                 pointer.copyIn(bytes)
             }
             return@withNativeBorrow
@@ -734,7 +739,7 @@ internal class ManagedAddress private constructor(
             if (source is ManagedAllocation) source.copyBytesTo(sourceOffset, target, offset, count)
             else MemorySegment.copy(MemorySegment.ofArray(source as ByteArray), sourceOffset, target, offset, count)
         } else ManagedByteArray.copyGuest(source, sourceOffset, owner ?: mutableBytes,
-            offset, count, mutable = false)
+            offset, count, false)
     }
 
     fun fill(count: Long, value: Long) = withNativeBorrow {
@@ -924,7 +929,7 @@ internal class ManagedAddress private constructor(
          * Copy once into private read-only bytes; unlike LitString, add no NUL.
          * Numeric projection then uses the existing context-owned static image. */
         internal fun fromStaticBytes(bytes: ByteArray, pointerBytes: Int = 8): ManagedAddress =
-            fromAllocation(ManagedAllocation.immutable(bytes, pointerBytes, staticImage = true))
+            fromAllocation(ManagedAllocation.immutable(bytes, pointerBytes, true))
         fun fromGuestByteArray(value: Any?): ManagedAddress = when (value) {
             is ManagedAllocation -> fromAllocation(value)
             is ByteArray -> fromByteArray(value)

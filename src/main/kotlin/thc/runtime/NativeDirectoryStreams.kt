@@ -161,6 +161,6 @@ internal class NativeDirectoryStreams(private val directory: NativeDirectoryOwne
     @Synchronized internal fun liveCount(): Int = streams.size
     companion object {
         private fun token(): ManagedAddress = ManagedAddress.fromAllocation(
-            ManagedAllocation.immutable(ByteArray(0), 8, staticImage = true))
+            ManagedAllocation.immutable(ByteArray(0), 8, true))
     }
 }

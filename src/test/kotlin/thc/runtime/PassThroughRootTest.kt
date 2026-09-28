@@ -55,9 +55,12 @@ class PassThroughRootTest {
                 override fun executeFloat(frame: VirtualFrame) = frame.getFloat(slot)
                 override fun executeDouble(frame: VirtualFrame) = frame.getDouble(slot)
             }
-            val root = FunctionRoot(language, layout.build(), "pass scalar", null, intArrayOf(),
-                intArrayOf(slot), intArrayOf(0), body, metrics, arrayOf(proof), proof,
-                role = FunctionRootRole.PASS_THROUGH)
+            val root = FunctionRoot(language, layout.build(), "pass scalar", null,
+                intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+                metrics, arrayOf(proof), proof, body.coreSourceLocation,
+                booleanArrayOf(), null, null, intArrayOf(),
+                null, false, emptyArray(), false,
+                FunctionRootRole.PASS_THROUGH, false)
             val target = root.callTarget
             compile(target)
             assertEquals(0L, metrics.compiledEntries)
@@ -91,8 +94,12 @@ class PassThroughRootTest {
                 throw transfer
             }
         }
-        val root = FunctionRoot(language, FrameLayout().build(), "pass self", null, intArrayOf(),
-            intArrayOf(), intArrayOf(), body, metrics, role = FunctionRootRole.PASS_THROUGH)
+        val root = FunctionRoot(language, FrameLayout().build(), "pass self", null,
+            intArrayOf(), intArrayOf(), intArrayOf(), body,
+            metrics, emptyArray(), body.representation, body.coreSourceLocation,
+            booleanArrayOf(), null, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.PASS_THROUGH, false)
         val target = root.callTarget
         val packet = arrayOf<Any?>(17L, Any())
         val tail = TailCall(target, packet)
@@ -137,9 +144,12 @@ class PassThroughRootTest {
                 error("Inherited outer Bloom must bounce")
             }
         }
-        val side = FunctionRoot(language, sideLayout.build(), "D", null, intArrayOf(),
-            intArrayOf(sideN), intArrayOf(0), sideBody, sideMetrics, arrayOf(long), long,
-            role = FunctionRootRole.PASS_THROUGH)
+        val side = FunctionRoot(language, sideLayout.build(), "D", null,
+            intArrayOf(), intArrayOf(sideN), intArrayOf(0), sideBody,
+            sideMetrics, arrayOf(long), long, sideBody.coreSourceLocation,
+            booleanArrayOf(), null, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.PASS_THROUGH, false)
         val outerBody = object : Expr() {
             @Child var call = DirectCallNode.create(side.callTarget)
             var entries = 0
@@ -151,8 +161,12 @@ class PassThroughRootTest {
                 return Calls.direct(call, arrayOf((rootNode as GuestRoot).bloom(frame), frame.getLong(n))) as Long
             }
         }
-        outer = FunctionRoot(language, outerLayout.build(), "A", null, intArrayOf(), intArrayOf(n),
-            intArrayOf(0), outerBody, outerMetrics, arrayOf(long), long)
+        outer = FunctionRoot(language, outerLayout.build(), "A", null,
+            intArrayOf(), intArrayOf(n), intArrayOf(0), outerBody,
+            outerMetrics, arrayOf(long), long, outerBody.coreSourceLocation,
+            booleanArrayOf(), null, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.FUNCTION, false)
         assertEquals(73L, Calls.target(outer.callTarget, arrayOf(0L, 4L)))
         assertEquals(5, outerBody.entries); assertEquals(5, sideBody.entries)
         assertTrue(sideBody.ancestryPreserved)
@@ -171,9 +185,12 @@ class PassThroughRootTest {
             override fun execute(frame: VirtualFrame): Any? = try { child.execute(frame) }
                 finally { originalArgument = FrameAccess.read(frame, slot) }
         }
-        val root = FunctionRoot(language, layout.build(), "scalar self side", null, intArrayOf(),
-            intArrayOf(slot), intArrayOf(0), body, Metrics(false), arrayOf(long), long,
-            role = FunctionRootRole.PASS_THROUGH)
+        val root = FunctionRoot(language, layout.build(), "scalar self side", null,
+            intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+            Metrics(false), arrayOf(long), long, body.coreSourceLocation,
+            booleanArrayOf(), null, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.PASS_THROUGH, false)
         function.value = Closure(null, 1, root.callTarget)
         val transfer = assertThrows(TailCall::class.java) { Calls.target(root.callTarget, arrayOf(0L, 11L)) }
         assertSame(root.callTarget, transfer.target); assertEquals(22L, transfer.args[1])
@@ -184,16 +201,19 @@ class PassThroughRootTest {
         val layout = FrameLayout(); val slot = layout.bind("argument")
         val function = Function()
         val input = ArgumentLayout.fromProofs(listOf(int))!!
-        val app = AstTypedApplication(function, arrayOf(Value(22, int)), layout, true, Metrics(false), selfTransfer = true)
+        val app = AstTypedApplication(function, arrayOf(Value(22, int)), layout, true, Metrics(false), null, true)
         var originalArgument: Any? = null
         val body = object : Expr() {
             @Child var child = app
             override fun execute(frame: VirtualFrame): Any? = try { child.execute(frame) }
                 finally { originalArgument = FrameAccess.read(frame, slot) }
         }
-        val root = FunctionRoot(language, layout.build(), "typed self side", null, intArrayOf(),
-            intArrayOf(slot), intArrayOf(0), body, Metrics(false), arrayOf(int), int, inputLayout = input,
-            role = FunctionRootRole.PASS_THROUGH)
+        val root = FunctionRoot(language, layout.build(), "typed self side", null,
+            intArrayOf(), intArrayOf(slot), intArrayOf(0), body,
+            Metrics(false), arrayOf(int), int, body.coreSourceLocation,
+            booleanArrayOf(), null, null, intArrayOf(),
+            input, false, emptyArray(), false,
+            FunctionRootRole.PASS_THROUGH, false)
         val typed = TypedInputLayout.create(language, input, false)!!
         root.configureTypedInput(typed)
         function.value = Closure(null, 1, root.callTarget)
@@ -205,7 +225,7 @@ class PassThroughRootTest {
         assertEquals(0, incoming.inputMode)
         val outgoing = transfer.input!!
         try { assertEquals(22, typed.packet.getInt(outgoing, 1)); assertTrue(outgoing.inputMode in 1..3) }
-        finally { discardTypedInput(language, outgoing) }
+        finally { TypedInputsKt.discardTypedInput(language, outgoing) }
         val state = language.handoffState.get()
         assertEquals(0, state.arguments.depth); assertEquals(0, state.arguments.retainedReferences())
     }
@@ -234,7 +254,11 @@ class PassThroughRootTest {
             }
         }
         val side = FunctionRoot(language, FrameLayout().build(), "returning side", null,
-            intArrayOf(), intArrayOf(), intArrayOf(), body, metrics, role = FunctionRootRole.PASS_THROUGH)
+            intArrayOf(), intArrayOf(), intArrayOf(), body,
+            metrics, emptyArray(), body.representation, body.coreSourceLocation,
+            booleanArrayOf(), null, null, intArrayOf(),
+            null, false, emptyArray(), false,
+            FunctionRootRole.PASS_THROUGH, false)
         assertEquals(42L, Calls.target(side.callTarget, arrayOf(0x12345678L)))
         assertEquals(1L, metrics.trampolineIterations)
     }

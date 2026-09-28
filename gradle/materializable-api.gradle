@@ -1,0 +1,206 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0
+import static thc.buildlogic.BuildChecks.*
+import java.security.MessageDigest
+import java.lang.module.Configuration
+import java.lang.module.FindException
+import java.lang.module.ModuleFinder
+import java.util.jar.JarFile
+
+def materializableApiVersion = "25.3.4.1"
+def materializableApiSource = configurations.create("materializableApiSource") {
+    canBeConsumed = false; transitive = false
+}
+def materializableApiBinary = configurations.create("materializableApiBinary") {
+    canBeConsumed = false; transitive = false
+}
+def materializableApiCompile = configurations.create("materializableApiCompile") {
+    canBeConsumed = false
+}
+dependencies {
+    add(materializableApiSource.name, "org.graalvm.truffle:truffle-api:$materializableApiVersion:sources")
+    add(materializableApiBinary.name, "org.graalvm.truffle:truffle-api:$materializableApiVersion")
+    add(materializableApiCompile.name, "org.graalvm.truffle:truffle-api:$materializableApiVersion")
+}
+def requireApiArchive = { File file, String hash ->
+    checkBuild(MessageDigest.getInstance("SHA-256").digest(file.bytes).encodeHex().toString() == hash) {
+        "Pinned Truffle API archive hash mismatch: ${file.name}"
+    }
+}
+def prepareMaterializableApi = tasks.register("prepareMaterializableApi", Sync) {
+    from(provider { zipTree(materializableApiSource.singleFile) })
+    include("com/oracle/truffle/api/nodes/RootNode.java", "com/oracle/truffle/api/nodes/NodeAccessor.java",
+        "com/oracle/truffle/api/bytecode/ContinuationRootNode.java")
+    into(layout.buildDirectory.dir("materializable-api/source"))
+    inputs.files("tools/truffle-protocol/materializable-root.patch", "tools/truffle-protocol/declared-return-api.patch",
+        "tools/truffle-protocol/graph-budget-api.patch")
+    doFirst {
+        requireApiArchive(materializableApiSource.singleFile,
+            "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064")
+    }
+    doLast {
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/materializable-root.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/declared-return-api.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        providers.exec {
+            workingDir(destinationDir)
+            environment("GIT_CEILING_DIRECTORIES", destinationDir.parentFile.absolutePath)
+            commandLine("git", "apply", "--no-index", file("tools/truffle-protocol/graph-budget-api.patch").absolutePath)
+        }.result.get().assertNormalExitValue()
+        checkBuild(destinationDir.toPath().resolve("com/oracle/truffle/api/nodes/RootNode.java").toFile().getText("UTF-8")
+            .contains("materializableFramePolicyVersion")) { "Materializable-root API patch was not applied" }
+    }
+}
+def compileMaterializableApi = tasks.register("compileMaterializableApi", JavaCompile) {
+    source(prepareMaterializableApi)
+    include("**/*.java")
+    classpath = materializableApiCompile
+    destinationDirectory.set(layout.buildDirectory.dir("materializable-api/classes"))
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+}
+def materializableApiJar = tasks.register("materializableApiJar", Jar) {
+    group = "build"
+    description = "Build pinned API source classes with declared materialization and completion contracts."
+    archiveBaseName.set("thc-truffle-api")
+    archiveVersion.set("$materializableApiVersion-protocol3")
+    destinationDirectory.set(layout.buildDirectory.dir("materializable-api"))
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+    from(compileMaterializableApi.flatMap { it.destinationDirectory })
+    from(provider { zipTree(materializableApiBinary.singleFile) }) {
+        exclude("com/oracle/truffle/api/nodes/RootNode.class", "com/oracle/truffle/api/nodes/RootNode\$*.class",
+            "com/oracle/truffle/api/nodes/NodeAccessor.class", "com/oracle/truffle/api/nodes/NodeAccessor\$*.class",
+            "com/oracle/truffle/api/bytecode/ContinuationRootNode.class", "META-INF/MANIFEST.MF")
+    }
+    from("tools/truffle-protocol/LICENSE-UPL.txt") { into("META-INF") }
+    inputs.files(materializableApiBinary)
+    doFirst {
+        requireApiArchive(materializableApiBinary.singleFile,
+            "f9efa18b1cb6c4e39862f5ac83a88ee4c9e31252c52c2ee5192c2a707cd9b27f")
+        new JarFile(materializableApiBinary.singleFile).withCloseable { jar ->
+            manifest.attributes(jar.manifest.mainAttributes.collectEntries { key, value -> [(key.toString()): value.toString()] })
+        }
+        manifest.attributes(["Implementation-Title": "THC declared root protocol Truffle API",
+            "Implementation-Version": "$materializableApiVersion-protocol3",
+            "Upstream-Source-SHA256": "19b6c77ad407ca062d4334040177847e322d52ed2f04804953d54dd366579064"])
+    }
+}
+// Only the build-input configurations retain stock API. Every executable/compiler
+// configuration receives the distinct artifact; never mutate a shared cache jar.
+configurations.configureEach {
+    if (name !in [materializableApiSource.name, materializableApiBinary.name, materializableApiCompile.name].toSet()) {
+        exclude(group: "org.graalvm.truffle", module: "truffle-api")
+    }
+}
+dependencies {
+    add("implementation", files(materializableApiJar.flatMap { it.archiveFile }))
+    // File artifacts do not retain the replaced API POM's required JNI module.
+    add("implementation", "org.graalvm.sdk:jniutils:$materializableApiVersion")
+}
+tasks.register("verifyMaterializableApiSelection") {
+    group = "verification"
+    dependsOn(materializableApiJar, configurations.named("runtimeClasspath"))
+    doLast {
+        def runtime = configurations.getByName("runtimeClasspath").files
+        checkBuild(runtime.every { !(it.name == "truffle-api-${materializableApiVersion}.jar") }) { "Stock Truffle API remains on runtime classpath" }
+        checkBuild(runtime.count { it.name == materializableApiJar.get().archiveFileName.get() } == 1) { "Expected exactly one declared API artifact" }
+        // Classpath execution alone does not check the preserved JPMS descriptors.
+        def runtimeJars = runtime.findAll { it.name.endsWith(".jar") }.toList()
+        def resolveTruffleModules = { List<File> jars -> Configuration.empty().resolve(
+            ModuleFinder.of(jars.collect { it.toPath() } as java.nio.file.Path[]), ModuleFinder.ofSystem(),
+            ["org.graalvm.truffle", "org.graalvm.truffle.runtime"].toSet()) }
+        checkBuild(resolveTruffleModules(runtimeJars).findModule("org.graalvm.jniutils").isPresent()) {
+            "Declared Truffle modules must resolve the required JNI utility module"
+        }
+        def withoutJni = runtimeJars.findAll { !(it.name == "jniutils-${materializableApiVersion}.jar") }
+        checkBuild(withoutJni.size() == runtimeJars.size() - 1) { "Expected exactly one pinned JNI utility artifact" }
+        Throwable missingJni = null
+        try { resolveTruffleModules(withoutJni) } catch (Throwable failure) { missingJni = failure }
+        checkBuild(missingJni instanceof FindException && (missingJni.message ?: "").contains("org.graalvm.jniutils")) {
+            "Removing JNI utilities must reject the preserved Truffle module graph"
+        }
+        def overlay = materializableApiJar.get().archiveFile.get().asFile
+        def replaced = { String name -> name == "META-INF/MANIFEST.MF" ||
+            name == "com/oracle/truffle/api/nodes/RootNode.class" ||
+            name.startsWith("com/oracle/truffle/api/nodes/RootNode\$") ||
+            name == "com/oracle/truffle/api/nodes/NodeAccessor.class" ||
+            name.startsWith("com/oracle/truffle/api/nodes/NodeAccessor\$") ||
+            name == "com/oracle/truffle/api/bytecode/ContinuationRootNode.class" }
+        def digest = { byte[] bytes -> MessageDigest.getInstance("SHA-256").digest(bytes)
+            .encodeHex().toString() }
+        new JarFile(materializableApiBinary.singleFile).withCloseable { stock ->
+            new JarFile(overlay).withCloseable { declared ->
+                def stockEntries = stock.entries().toList().findAll { !it.isDirectory() }.toList()
+                def declaredEntries = declared.entries().toList().findAll { !it.isDirectory() }.toList()
+                def allowedAdded = ["META-INF/LICENSE-UPL.txt"].toSet()
+                checkBuild(declaredEntries.collect { it.name }.toSet().minus(stockEntries.collect { it.name }.toSet())
+                    .every { replaced(it) || it in allowedAdded }) { "Unexpected added API payload" }
+                for (entry in stockEntries.findAll { !(replaced(it.name)) }) {
+                    def counterpart = checkNotNull(declared.getJarEntry(entry.name)) { "Missing upstream API entry: ${entry.name}" }
+                    checkBuild(digest(stock.getInputStream(entry).bytes) == digest(declared.getInputStream(counterpart).bytes)) {
+                        "Unrelated upstream API entry changed: ${entry.name}"
+                    }
+                }
+                checkBuild(declared.manifest.mainAttributes.getValue("Multi-Release") == stock.manifest.mainAttributes.getValue("Multi-Release")) {
+                    "Upstream multi-release behavior changed"
+                }
+                def report = layout.buildDirectory.file("materializable-api/verified-artifact.sha256").get().asFile
+                report.setText(digest(overlay.bytes) + "  " + overlay.name + "\n" +
+                    digest(file("tools/truffle-protocol/materializable-root.patch").bytes) + "  materializable-root.patch\n" +
+                    digest(file("tools/truffle-protocol/declared-return-api.patch").bytes) + "  declared-return-api.patch\n" +
+                    digest(file("tools/truffle-protocol/graph-budget-api.patch").bytes) + "  graph-budget-api.patch\n" +
+                    "Preserved upstream nonreplacement entries: " + stockEntries.count { !replaced(it.name) } + "\n", "UTF-8")
+            }
+        }
+    }
+}
+
+
+
+// Same compiled control classes execute with the real stock and declared API.
+// The stock lane deliberately avoids linking the additive capability method.
+def materializableMain = extensions.getByType(org.gradle.api.tasks.SourceSetContainer).named("main")
+def materializableChecks = layout.buildDirectory.dir("materializable-api/checks")
+def materializableRuntime = files(materializableMain.map { it.output }, materializableMain.map { it.runtimeClasspath })
+def compileMaterializationControl = tasks.register("compileMaterializationControl", JavaCompile) {
+    source("tools/truffle-protocol/tests/MaterializationProbe.java")
+    classpath = materializableRuntime
+    options.release.set(17)
+    options.compilerArgs.add("-proc:none")
+    destinationDirectory.set(materializableChecks.map { it.dir("classes") })
+}
+def materializationModes = ["stock", "overlay"].collect { mode ->
+    tasks.register("testMaterialization" + mode.capitalize(), JavaExec) {
+        group = "verification"
+        description = "Check materializable-root publication, split/copy policy and actual OSR against $mode API."
+        dependsOn("verifyMaterializableApiSelection")
+        def selectedApi = mode == "stock" ? files(materializableApiBinary) : files(materializableApiJar.flatMap { it.archiveFile })
+        def selectedRuntime = providers.provider {
+            if (mode == "stock") return configurations.getByName("protocolRuntimeBinary").singleFile
+            else return tasks.named("protocolRuntimeJar", Jar).get().archiveFile.get().asFile
+        }
+        dependsOn("protocolRuntimeJar")
+        classpath = files(compileMaterializationControl.flatMap { it.destinationDirectory }) + selectedApi +
+            files(selectedRuntime) + materializableRuntime.filter {
+                it.name != materializableApiJar.get().archiveFileName.get() &&
+                    !it.name.startsWith("thc-truffle-runtime-")
+            }
+        mainClass.set("protocolprobe.MaterializationProbe")
+        args(mode)
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
+        maxHeapSize = "1g"
+    }
+}
+tasks.register("testMaterializableApi") {
+    group = "verification"
+    dependsOn(materializationModes)
+}
+tasks.named("check") { dependsOn("testMaterializableApi") }

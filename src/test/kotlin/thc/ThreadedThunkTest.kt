@@ -173,7 +173,7 @@ class ThreadedThunkTest {
                             assertEquals(1, thunk.state)
                             assertSame(originalOwner, thunk.owner)
                             assertNull(thunk.value)
-                            thunk.monitor.notifyAll()
+                            (thunk.monitor as java.lang.Object).notifyAll()
                         }
                         assertThrows(TimeoutException::class.java) { waiter.get(20, TimeUnit.MILLISECONDS) }
                     }

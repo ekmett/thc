@@ -176,7 +176,7 @@ class InterfaceCoreNativeTest {
                         val bytes = ByteArray(32) { 0x5a }
                         val address = ManagedAddress.fromByteArray(bytes).plus(5)
                         val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
-                        assertEquals(0L, Calls.target(target, arrayOf<Any?>(0L, clock, address, Unit)))
+                        assertEquals(0, Calls.target(target, arrayOf<Any?>(0L, clock, address, Unit)))
                         if (compiled) {
                             assertEquals(before + 1, (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                             valid(target)

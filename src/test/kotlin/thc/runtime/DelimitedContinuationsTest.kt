@@ -207,10 +207,15 @@ class DelimitedContinuationsTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 for (enabled in listOf(false, true)) {
+                    val body = object : Expr() {
+                        override fun execute(frame: VirtualFrame): Any? = error("Metadata preparation executed guest code")
+                    }
                     val source = FunctionRoot(language, FrameLayout().build(), "unexecuted policy", null,
-                        intArrayOf(), intArrayOf(), intArrayOf(), object : Expr() {
-                            override fun execute(frame: VirtualFrame): Any? = error("Metadata preparation executed guest code")
-                        }, Metrics(false), enableDelimited = enabled)
+                        intArrayOf(), intArrayOf(), intArrayOf(), body,
+                        Metrics(false), emptyArray(), body.representation, body.coreSourceLocation,
+                        booleanArrayOf(), null, null, intArrayOf(),
+                        null, false, emptyArray(), enabled,
+                        FunctionRootRole.FUNCTION, false)
                     val clone = NodeUtil.cloneNode(source)
                     for (root in listOf(source, clone)) {
                         assertSame(root, root.callTarget.rootNode)
@@ -808,8 +813,11 @@ class DelimitedContinuationsTest {
                     }
                 }
                 val function = FunctionRoot(language, layout.build(), "saved tuple root", null,
-                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false), resultProof = proof,
-                    tuple = shape, tupleSlots = intArrayOf(slot), enableAsync = true, enableDelimited = true)
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(false), emptyArray(), proof, body.coreSourceLocation,
+                    booleanArrayOf(), null, shape, intArrayOf(slot),
+                    null, true, emptyArray(), true,
+                    FunctionRootRole.FUNCTION, false)
                 function.callTarget // Adopt the real FunctionBody and its completion step.
                 val owner = object : GuestRoot(language, FrameLayout().build()) {
                     @field:Child private var site = DelimitedActionSite(language, Metrics(false))
@@ -861,11 +869,11 @@ class DelimitedContinuationsTest {
         original.setObject(reference, heap)
         original.setDouble(floating, Double.fromBits(0x7ff8000000000042L))
         original.setAuxiliarySlot(auxiliary, heap)
-        val image = copyContinuationFrame(original)
+        val image = DelimitedContinuationsKt.copyContinuationFrame(original)
         original.setLong(scalar, 11)
         original.arguments[1] = 12L
-        val first = copyContinuationFrame(image)
-        val second = copyContinuationFrame(image)
+        val first = DelimitedContinuationsKt.copyContinuationFrame(image)
+        val second = DelimitedContinuationsKt.copyContinuationFrame(image)
         first.setLong(scalar, 13)
         first.arguments[1] = 14L
         assertEquals(Long.MIN_VALUE, second.getLong(scalar))

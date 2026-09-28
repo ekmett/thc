@@ -44,7 +44,7 @@ class OriginalGmpTest {
                 "$prefix/$stage/core/OriginalGmpAudit.json", "$prefix/$stage/core/THC.InterfaceClosure.json") }, "$prefix/")
         val rows = json("$prefix/oracle.json") as List<Map<String, Any?>>
         assertEquals(464, rows.size)
-        assertEquals(GmpForeignOp.entries.map { it.symbol }.toSet(), rows.map { it["symbol"] }.toSet())
+        assertEquals(GmpForeignOp.values().map { it.symbol }.toSet(), rows.map { it["symbol"] }.toSet())
         assertEquals(mapOf("originalAdd" to 15, "originalSub" to 15, "originalAddWord" to 8,
             "originalMulWord" to 8, "originalCmp" to 5, "originalMul" to 4, "originalDivWord" to 12,
             "originalModWord" to 5, "originalQuotRem" to 8, "originalQuot" to 4, "originalRem" to 8,
@@ -127,7 +127,7 @@ class OriginalGmpTest {
             val source = module(stage)
             val calls = OriginalStdioChecks.foreignCalls(source)
             assertEquals(24, calls.size)
-            assertEquals(GmpForeignOp.entries.toSet(), calls.map { call ->
+            assertEquals(GmpForeignOp.values().toSet(), calls.map { call ->
                 val metadata = call[6] as Map<*, *>
                 CoreGmpForeign.validate(metadata, (call[2] as List<List<Any?>>).map {
                     CoreRepresentations.metadata(it)?.get("rep") }, call[3] as List<*>, metadata["rep"])

@@ -29,7 +29,7 @@ class CoreManagedFilesTest {
         }
         Map<String, Object> target() { return (Map<String, Object>) descriptor.get("target"); }
         List<Map<String, Object>> declared() { return (List<Map<String, Object>>) descriptor.get("argumentReps"); }
-        ManagedFileOp validate() { return CoreManagedFiles.INSTANCE.validate(metadata, arguments, flags, result); }
+        ManagedFileOp validate() { return CoreManagedFiles.validate(metadata, arguments, flags, result); }
         Map<String, Object> proof(int site) {
             return site == 0 ? (Map<String, Object>) descriptor.get("resultRep") : site == 1 ? (Map<String, Object>) metadata.get("rep") : result;
         }
@@ -57,7 +57,7 @@ class CoreManagedFilesTest {
             var input = new Input("open"); input.target().put("symbol", symbol); assertNull(input.validate());
         }
         for (var metadata : Arrays.asList(null, Map.of(), Collections.singletonMap("foreignCall", null)))
-            assertNull(CoreManagedFiles.INSTANCE.validate(metadata, List.of(), List.of(), null));
+            assertNull(CoreManagedFiles.validate(metadata, List.of(), List.of(), null));
     }
     @Test void exactTargetDescriptorAndIntegerFields() {
         for (var name : fixtures.getSignatures().keySet()) {

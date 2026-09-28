@@ -116,7 +116,7 @@ class ManagedAllocationTest {
                     }
                 }
                 val target = root.callTarget
-                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, pinned = true))
+                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, true))
                 val pointer = ManagedAddress.fromByteArray(byteArrayOf(42))
                 for (owner in storage) {
                     owner.writeAddressByteOffset(0, pointer)
@@ -165,7 +165,7 @@ class ManagedAllocationTest {
                     }
                 }
                 val target = root.callTarget
-                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, pinned = true))
+                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, true))
                 for (owner in storage) {
                     ManagedByteArray.writeIntGuest(owner, 2, 40)
                     assertEquals(41L, target.call(owner))
@@ -210,7 +210,7 @@ class ManagedAllocationTest {
                     }
                 }
                 val target = root.callTarget
-                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, pinned = true))
+                val storage = listOf(ManagedAllocation.mutable(24, 8), ManagedAllocation.mutable(24, 8, true))
                 val addresses = storage.map { ManagedAddress.fromAllocation(it).plus(16) }
                 for ((owner, address) in storage.zip(addresses))
                     assertSame(address, target.call(owner, 0L, address))
@@ -252,7 +252,7 @@ class ManagedAllocationTest {
                     }
                 }
                 val heap = ManagedAllocation.mutable(16, 8)
-                val native = ManagedAllocation.mutable(16, 8, pinned = true)
+                val native = ManagedAllocation.mutable(16, 8, true)
                 val heapAlias = heap.rawBytesIfPointerFree()
                 val nativeAlias = native.nativeSegment()!!
                 val target = root.callTarget
@@ -284,7 +284,8 @@ class ManagedAllocationTest {
         val storage = ManagedAllocation.mutable(16, 8)
         val failure = IllegalStateException("failed scalar operation")
         val element = assertThrows(IllegalStateException::class.java) {
-            storage.accessElement(0, 8, false) {
+            synchronized(storage) {
+                storage.elementSegment(0, 8, false)
                 assertTrue(Thread.holdsLock(storage))
                 throw failure
             }
@@ -292,7 +293,8 @@ class ManagedAllocationTest {
         assertSame(failure, element)
         assertFalse(Thread.holdsLock(storage))
         val byteRange = assertThrows(IllegalStateException::class.java) {
-            storage.accessByteRange(1, 4, true) {
+            synchronized(storage) {
+                storage.byteRangeSegment(1, 4, true)
                 assertTrue(Thread.holdsLock(storage))
                 throw failure
             }
@@ -330,7 +332,8 @@ class ManagedAllocationTest {
         for (scalarOffset in listOf(false, true)) for (width in listOf(4, 8))
             for (writable in listOf(false, true)) {
                 val thrown = assertThrows(IllegalStateException::class.java) {
-                    storage.accessVector(1, scalarOffset, width, writable) {
+                    synchronized(storage) {
+                        storage.vectorSegment(1, scalarOffset, width, writable, 16)
                         assertTrue(Thread.holdsLock(storage))
                         throw failure
                     }
@@ -338,14 +341,16 @@ class ManagedAllocationTest {
                 assertSame(failure, thrown)
                 assertFalse(Thread.holdsLock(storage))
                 assertThrows(RuntimeFault::class.java) {
-                    storage.accessVector(Long.MAX_VALUE, scalarOffset, width, writable) {
+                    synchronized(storage) {
+                        storage.vectorSegment(Long.MAX_VALUE, scalarOffset, width, writable, 16)
                         fail<Unit>("Invalid vector range reached the operation")
                     }
                 }
                 assertFalse(Thread.holdsLock(storage))
-                assertEquals(32L, storage.accessVector(0, scalarOffset, width, writable) {
+                assertEquals(32L, synchronized(storage) {
+                    val segment = storage.vectorSegment(0, scalarOffset, width, writable, 16)
                     assertTrue(Thread.holdsLock(storage))
-                    it.byteSize()
+                    segment.byteSize()
                 })
                 assertFalse(Thread.holdsLock(storage))
             }

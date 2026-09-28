@@ -45,7 +45,7 @@ public final class CoreRuntimeServices {
         require(!expr.isEmpty() && "app".equals(expr.get(0)) && function != null && function.size() == 3 &&
             "var".equals(function.get(0)) && function.get(1) instanceof String name && !name.isEmpty() && !defined,
             "unresolved foreign identifier");
-        CoreBoundThreadForeign.INSTANCE.validateHead(function, defined);
+        CoreBoundThreadForeign.validateHead(function, defined);
         require(target.keySet().equals(Set.of("kind", "symbol", "unit", "isFunction")) && "static".equals(target.get("kind")) &&
             Boolean.TRUE.equals(target.get("isFunction")) && (target.get("unit") == null || target.get("unit") instanceof String),
             "static function target");

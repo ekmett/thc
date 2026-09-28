@@ -1,0 +1,32 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+package thc.runtime;
+
+import com.oracle.truffle.api.RootCallTarget;
+
+/** A shared lazy update cell; state publishes the answer and ownership release. */
+public final class Thunk {
+    private RootCallTarget target;
+    private CapturedFrame environment;
+    // 0=unevaluated, 1=owned, 2=WHNF, 3=failure, 4=unsupported unwind, 5=parked.
+    private volatile int state;
+    private Object value;
+    private Thread owner;
+
+    public Thunk(RootCallTarget target, CapturedFrame environment) {
+        this.target = target;
+        this.environment = environment;
+    }
+    public RootCallTarget getTarget() { return target; }
+    public void setTarget(RootCallTarget target) { this.target = target; }
+    public CapturedFrame getEnvironment() { return environment; }
+    public void setEnvironment(CapturedFrame environment) { this.environment = environment; }
+    public int getState() { return state; }
+    public void setState(int state) { this.state = state; }
+    public Object getValue() { return value; }
+    public void setValue(Object value) { this.value = value; }
+    public Thread getOwner() { return owner; }
+    public void setOwner(Thread owner) { this.owner = owner; }
+    // One stable monitor per thunk, with no additional lock allocation.
+    public Object getMonitor() { return this; }
+}

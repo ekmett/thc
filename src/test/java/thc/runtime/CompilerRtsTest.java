@@ -24,9 +24,9 @@ class CompilerRtsTest {
         ManagedAddress counter, alias;
         first.enter();
         try {
-            counter = CoreDataLabels.INSTANCE.fromCore("ghc_unique_counter64", proof, null);
+            counter = CoreDataLabels.fromCore("ghc_unique_counter64", proof, null);
             alias = counter.plus(8).plus(-8);
-            var step = CoreDataLabels.INSTANCE.fromCore("ghc_unique_inc", proof, null);
+            var step = CoreDataLabels.fromCore("ghc_unique_inc", proof, null);
             assertEquals(0L, AtomicAddressOp.READ.numeric(counter, 0, 0));
             assertEquals(1L, AtomicAddressOp.READ.numeric(step, 0, 0));
             assertTrue(counter.sameLocation(alias)); assertFalse(counter.sameLocation(step));
@@ -37,11 +37,11 @@ class CompilerRtsTest {
             assertEquals(73L, AtomicAddressOp.READ.numeric(counter, 0, 0));
             assertThrows(RuntimeFault.class, () -> AtomicAddressOp.READ.numeric(counter.plus(1), 0, 0));
             var unevaluated = new CoreRepresentation(CoreKind.ADDRESS, false, true, List.of("AddrRep"), null, null, null, null, null);
-            assertThrows(RuntimeFault.class, () -> CoreDataLabels.INSTANCE.fromCore("ghc_unique_counter64", unevaluated, null));
+            assertThrows(RuntimeFault.class, () -> CoreDataLabels.fromCore("ghc_unique_counter64", unevaluated, null));
         } finally { first.leave(); }
         second.enter();
         try {
-            assertEquals(0L, AtomicAddressOp.READ.numeric(CoreDataLabels.INSTANCE.fromCore("ghc_unique_counter64", proof, null), 0, 0));
+            assertEquals(0L, AtomicAddressOp.READ.numeric(CoreDataLabels.fromCore("ghc_unique_counter64", proof, null), 0, 0));
             assertThrows(RuntimeFault.class, () -> AtomicAddressOp.READ.numeric(counter, 0, 0));
             assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
             assertThrows(RuntimeFault.class, () -> counter.sameLocation(counter));
@@ -52,7 +52,7 @@ class CompilerRtsTest {
         try (var context = context()) {
             context.enter();
             ManagedAddress address;
-            try { address = CoreDataLabels.INSTANCE.fromCore("ghc_unique_counter64", proof, null); }
+            try { address = CoreDataLabels.fromCore("ghc_unique_counter64", proof, null); }
             finally { context.leave(); }
             var pool = Executors.newFixedThreadPool(4);
             try {

@@ -22,8 +22,8 @@ def digest(path):
 
 
 def sources():
-    paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle.kts',
-        'settings.gradle.kts', 'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
+    paths = subprocess.check_output(['git', 'ls-files', 'src/main', 'build.gradle', 'build.gradle.kts', 'buildSrc',
+        'settings.gradle', 'settings.gradle.kts', 'gradle.properties', 'gradle', 'gradlew', 'gradlew.bat'], cwd=ROOT, text=True).splitlines()
     return {p: digest(ROOT / p) for p in paths}
 
 

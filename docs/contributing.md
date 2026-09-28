@@ -142,8 +142,9 @@ The pinned Truffle 25.3.4.1 processor emits one large
 exceed the JVM's 64 KiB method limit there. This is instruction introspection,
 not one giant primop executor. The processor offers no option to split it.
 
-[`gradle/bytecode-metadata.gradle.kts`](../gradle/bytecode-metadata.gradle.kts)
-splits complete case/return groups into bounded private helpers at the end of
+[`gradle/bytecode-metadata.gradle`](../gradle/bytecode-metadata.gradle) runs the
+[Java normalizers](../buildSrc/src/main/java/thc/buildlogic/BytecodeNormalizers.java).
+The metadata pass splits complete case/return groups into bounded private helpers at the end of
 `kaptKotlin`, before Gradle snapshots that task's output. Every argument
 description is retained verbatim; the interpreter and primop implementations are
 untouched. This normalization removes no metadata and requires no GHC. It is
@@ -158,6 +159,12 @@ and malformed-input controls. Add
 `-Pthc.metadataFixture=/absolute/path/to/BytecodeRootGen.java` to compare every
 argument description in an existing generated source without modifying it.
 The check is also part of Gradle's `check` task.
+
+Build configuration uses Groovy, with Java build logic in `buildSrc`. While
+runtime and test consumers are still migrating, Kotlin and KAPT remain enabled;
+the build-language port does not change annotation-processing order or remove
+their runtime dependencies. All five pinned normalizers run before generated
+bytecode sources compile.
 
 The same pinned normalization adds a read-only `Builder.isParsingSources()`
 accessor. Callers can test the builder's existing mode before resolving lazy

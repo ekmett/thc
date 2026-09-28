@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static thc.runtime.CoreGmpForeignKt.GMP_ARRAY_REP;
+import static thc.runtime.CoreGmpForeign.GMP_ARRAY_REP;
 
 /** Descriptor controls only; genuine imported declarations have a separate oracle. */
 class CoreGmpForeignTest {
@@ -45,16 +45,16 @@ class CoreGmpForeignTest {
         assertEquals(24, GmpForeignOp.values().length);
         for (var operation : GmpForeignOp.values()) {
             var proof = result(operation, true);
-            assertEquals(operation, CoreGmpForeign.INSTANCE.validate(Map.of("rep", proof, "foreignCall", descriptor(operation)),
+            assertEquals(operation, CoreGmpForeign.validate(Map.of("rep", proof, "foreignCall", descriptor(operation)),
                 operation.getArguments().stream().map(rep -> scalar(rep, true)).toList(),
                 operation.getArguments().stream().map(rep -> false).toList(), proof));
             assertNull(operation.getArguments().getLast());
             assertTrue(operation.getObjectIndices().size() <= 4); assertTrue(operation.getLongIndices().size() <= 3);
         }
-        assertNull(CoreGmpForeign.INSTANCE.validate(Map.of(), List.of(), List.of(), null));
+        assertNull(CoreGmpForeign.validate(Map.of(), List.of(), List.of(), null));
     }
     private void reject(Map<String, Object> call, List<?> args, List<?> flags, Object result) {
-        assertThrows(RuntimeFault.class, () -> CoreGmpForeign.INSTANCE.validate(Map.of("rep", result, "foreignCall", call), args, flags, result));
+        assertThrows(RuntimeFault.class, () -> CoreGmpForeign.validate(Map.of("rep", result, "foreignCall", call), args, flags, result));
     }
     @Test void malformedDescriptorsAndOccurrenceProofsCannotChangeTheAbi() {
         for (var operation : GmpForeignOp.values()) {
@@ -83,18 +83,18 @@ class CoreGmpForeignTest {
     @Test void headsAndStoredOperandsCannotForgeKnownRepresentations() {
         List<Object> head = List.of("var", "genuine-fcall-unique", Map.of("rep", Map.of("kind", "closure",
             "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true)));
-        CoreGmpForeign.INSTANCE.validateHead(head, false);
-        assertThrows(RuntimeFault.class, () -> CoreGmpForeign.INSTANCE.validateHead(head, true));
-        assertThrows(RuntimeFault.class, () -> CoreGmpForeign.INSTANCE.validateHead(List.of("var", ""), false));
+        CoreGmpForeign.validateHead(head, false);
+        assertThrows(RuntimeFault.class, () -> CoreGmpForeign.validateHead(head, true));
+        assertThrows(RuntimeFault.class, () -> CoreGmpForeign.validateHead(List.of("var", ""), false));
         for (var operation : GmpForeignOp.values()) for (int i = 0; i < operation.getArguments().size(); i++) {
             int index = i;
             var primitive = operation.getArguments().get(index);
             var kind = primitive == null ? CoreKind.VOID : primitive.equals(GMP_ARRAY_REP) ? CoreKind.OBJECT : CoreKind.LONG;
             var proof = new CoreRepresentation(kind, true, true, primitive == null ? List.of() : List.of(primitive), null, null, null, null, null);
-            CoreGmpForeign.INSTANCE.validateOperand(operation, index, proof, proof);
+            CoreGmpForeign.validateOperand(operation, index, proof, proof);
             var incorrect = new CoreRepresentation(CoreKind.ADDRESS, true, true, List.of("AddrRep"), null, null, null, null, null);
-            assertThrows(RuntimeFault.class, () -> CoreGmpForeign.INSTANCE.validateOperand(operation, index, incorrect, proof));
-            assertThrows(RuntimeFault.class, () -> CoreGmpForeign.INSTANCE.validateOperand(operation, index, proof, incorrect));
+            assertThrows(RuntimeFault.class, () -> CoreGmpForeign.validateOperand(operation, index, incorrect, proof));
+            assertThrows(RuntimeFault.class, () -> CoreGmpForeign.validateOperand(operation, index, proof, incorrect));
         }
     }
 }
