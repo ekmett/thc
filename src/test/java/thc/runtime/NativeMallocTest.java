@@ -745,6 +745,55 @@ public class NativeMallocTest {
             });
     }
     @Test
+    public void nativeScalarReadsKeepExactCarriersOnFirstInstalledEntries() throws Exception {
+        record ReadCase(String entry, int width, Object expected) {}
+        for (String backend : List.of("ast", "bytecode"))
+            for (var read : List.of(new ReadCase("load32", 4, 0x89abcdef),
+                     new ReadCase("load", 8, 0x89abcdef01234567L)))
+                inside(language -> {
+                    var registry = Language.currentState().getNativeAllocations();
+                    var base = registry.malloc(24);
+                    var alias = base.plus(8);
+                    try {
+                        // Explicitly synthetic Core exercises the actual native read wrappers.
+                        var source = module(List.of());
+                        ((List<Map<String, Object>>) source.get("bindings"))
+                            .add(binding("load32", "indexWord32OffAddr#", List.of("AddrRep", "IntRep"), "Word32Rep"));
+                        var program = load(language, backend, source);
+                        var target = program.entryTarget(read.entry());
+                        base.writeNativeScalar(8, read.width(), 17L, true);
+                        Object initial = read.width() == 4 ? (Object) Integer.valueOf(17) : Long.valueOf(17);
+                        assertEquals(initial, Calls.target(target, new Object[] {0L, alias, 0L}));
+                        target.getClass().getMethod("compile", boolean.class).invoke(target, true);
+                        valid(target);
+                        var runtime = Truffle.getRuntime();
+                        runtime.getClass()
+                            .getMethod("bypassedInstalledCode",
+                                Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget"))
+                            .invoke(runtime, target);
+                        valid(target);
+                        base.writeNativeScalar(8, read.width(), ((Number) read.expected()).longValue(), true);
+                        long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
+                        assertEquals(read.expected(), Calls.target(target, new Object[] {0L, alias, 0L}));
+                        assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                        assertSame(target, program.entryTarget(read.entry()));
+                        valid(target);
+                        released(language);
+                        assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD32.readInt(base, 22, true));
+                        assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD64.read(base, 17, true));
+                    } finally {
+                        // This rejects a retained borrow, including one leaked by the failed reads.
+                        registry.free(base);
+                    }
+                    assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD32.readInt(alias, 0));
+                    assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD64.read(alias, 0));
+                    assertEquals("Expected a narrow address read",
+                        assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD64.readInt(alias, 0)).getMessage());
+                    assertEquals("Expected a machine or 64-bit address read",
+                        assertThrows(RuntimeFault.class, () -> ManagedAddressRead.WORD32.read(alias, 0)).getMessage());
+                });
+    }
+    @Test
     public void termiosTransferCopiesBackWholeImagesOnSuccessAndNativeError() throws Exception {
         inside(language -> {
             assumeTrue(System.getProperty("os.name").equals("Linux"), "termios requires the native POSIX provider");
