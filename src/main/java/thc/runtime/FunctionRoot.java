@@ -97,13 +97,20 @@ public final class FunctionRoot extends GuestRoot {
         configureScalarResult(body.getRepresentation().refine(resultProof));
         // Establish mandatory carriers before publishing the root, never on its first compiled call.
         if (inputLayout != null) for (int i = 0; i < argumentSlots.length; i++) {
-            if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) continue;
+            if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) {
+                initialize(descriptor, argumentSlots[i], FrameSlotKind.Object);
+                continue;
+            }
             initialize(descriptor, argumentSlots[i], FrameLayout.carrierKind(inputLayout.getPhysicalProofs()[argumentIndices[i]]));
         }
         if (tuple != null) for (int i = 0; i < tupleSlots.length; i++)
             initialize(descriptor, tupleSlots[i], tuple.getLayout(), i);
         for (int i = 0; i < argumentSlots.length; i++) {
-            if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) continue;
+            if (capturesContinuations && contains(getStrictArgumentPositions(), argumentIndices[i] + getEntryArgumentOffset())) {
+                // Deferred strict ingress may still be a Thunk, even though its body proof is evaluated.
+                initialize(descriptor, argumentSlots[i], FrameSlotKind.Object);
+                continue;
+            }
             if (i >= argumentProofs.length) continue;
             CoreRepresentation proof = argumentProofs[i];
             FrameSlotKind kind;

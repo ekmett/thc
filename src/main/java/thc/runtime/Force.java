@@ -40,17 +40,25 @@ public final class Force extends Node {
         trampoline = new TailCallLoop(metrics);
     }
     public Object execute(VirtualFrame frame, Object value) {
-        if (!seenThunk) {
-            if (!(value instanceof Thunk)) return value;
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            seenThunk = true;
-        }
         if (!(value instanceof Thunk original)) return value;
         Metrics invocationMetrics = metrics;
         if (invocationMetrics == null) {
             if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Missing reusable force owner");
             invocationMetrics = root.invocationMetrics(frame);
         }
+        if (!seenThunk) {
+            // An untouched compiled demand has no target/profile history. Keep its
+            // real thunk execution cold without training or retiring the caller.
+            if (CompilerDirectives.inCompiledCode()) return executeCold(original, invocationMetrics);
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            seenThunk = true;
+        }
+        return executeThunk(original, invocationMetrics);
+    }
+    @TruffleBoundary(transferToInterpreterOnException = false)
+    private Object executeCold(Thunk original, Metrics invocationMetrics) { return executeThunk(original, invocationMetrics); }
+
+    private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
         while (true) {
             switch (original.getState()) {
