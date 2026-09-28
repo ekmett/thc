@@ -244,6 +244,13 @@ semanticTests = TestList
           ordered = nativeFactsWithFlags [("a-config",True),("z-config",False)]
       assertEqual "Cabal flag object order does not leak into typed records" (Right (ordered,[]))
         (parseModuleWithoutDebug (moduleJSON reversed []))
+  , TestLabel "installed native component is discoverable without source declarations" $ TestCase $
+      withSystemTempDirectory "compact-installed-native" $ \directory -> do
+        let facts = completeFacts {factsForeign = Missing, factsPendingProvenance =
+              [Missing,Missing,Missing,Missing,Missing,Missing,Known (NativeLinkRecord completeNativeLink),Missing]}
+        footer <- writeModule (directory </> "module.cbd") facts []
+        assertEqual "foreign-owner lookup sees the compiled component in the cold directory"
+          8 (headerSummaries (containerHeader footer))
   , TestLabel "typed package address and finalizer facts preserve schema-one prefixes" $ TestCase $ do
       ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _ _) <- pure completeImports
       let address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi
