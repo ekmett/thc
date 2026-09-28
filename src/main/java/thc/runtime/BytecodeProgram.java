@@ -5276,7 +5276,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 && (scalarSuffix || literalCount >= 2 && literalCount <= 8)
                 && alternatives.stream().allMatch(a -> "lit".equals(a.getFirst()) || "default".equals(a.getFirst()))
                 && caseRegionWork(scalarSuffix ? alternatives.getFirst().get(3) : expr, 64) >= 64;
-        if (!context.preparingCaseRegion && context.caseRegions.isEmpty() && (constructorPartition || scalarPartition)
+        if (!context.preparingCaseRegion && context.caseRegions.size() < BytecodeCaseRegion.MAX_REGIONS
+                && (constructorPartition || scalarPartition)
                 && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)) {
             context.preparingCaseRegion = true;
             try { return partitionedCase(expr, scope, tail, scalarPartition); }
@@ -5318,7 +5319,11 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         int width = scalar ? 1 : BytecodeCaseRegion.WIDTH;
         int end = explicit.size() + (scalar && !fallback.isEmpty() ? 1 : 0);
-        var emission = new CaseRegionEmission();
+        // Every disjoint region shares the root's single monotone preparation
+        // choice. A later region must never restore an inline copy after an
+        // earlier side has already required capacity extraction.
+        if (scope.function.caseEmission == null) scope.function.caseEmission = new CaseRegionEmission();
+        var emission = scope.function.caseEmission;
         while (true) {
             int rootMark = roots.size();
             int joinMark = localJoinCount;
@@ -5353,7 +5358,6 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         int index = scope.function.caseRegions.size();
         scope.function.caseRegions.add(new BytecodeCaseRegion(guards, width, targets, layouts, tail));
-        scope.function.caseEmission = emission;
         var scrutinee = force(compile((List<Object>) expr.get(1), scope, false));
         return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
