@@ -86,7 +86,7 @@ class WindowsCodePagesTest {
         operations.put("localFree", OriginalStdioOp.LOCAL_FREE);
     }
     private List<Object> original(String name) throws Exception {
-        var calls = OriginalStdioChecks.INSTANCE.foreignCalls(CoreModules.INSTANCE.reachable(source(), name, false));
+        var calls = OriginalStdioChecks.foreignCalls(CoreModules.INSTANCE.reachable(source(), name, false));
         assertEquals(1, calls.size());
         return calls.getFirst();
     }
@@ -105,16 +105,16 @@ class WindowsCodePagesTest {
         assertEquals(true, proof.get("originalFCallIds"));
         assertEquals(new ArrayList<>(operations.keySet()), proof.get("entries"));
         assertEquals("2a83779c9af86554a3289f2787a38d6aa83d00d136aa9f920361dd693c101e77", proof.get("archiveSha256"));
-        OriginalStdioChecks.INSTANCE.hashes(root, proof.get("inputHashes"), Set.of("compiler/test-fixtures/WindowsCodePageAudit.hs",
+        OriginalStdioChecks.hashes(root, proof.get("inputHashes"), Set.of("compiler/test-fixtures/WindowsCodePageAudit.hs",
             "test/haskell-fixtures/WindowsCodePageFixtures.hs", "scripts/core_original_foreign.py"), null);
-        OriginalStdioChecks.INSTANCE.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.json", logs + "/post.json", logs + "/oracle.json"), logs + "/");
+        OriginalStdioChecks.hashes(root, proof.get("artifactHashes"), Set.of(logs + "/pre.json", logs + "/post.json", logs + "/oracle.json"), logs + "/");
         var upstream = logs + "/source/ghc-9.14.1/libraries/ghc-internal/";
         var sourceHashes = new LinkedHashMap<String, String>();
         for (var entry : ((Map<String, String>) proof.get("sourceHashes")).entrySet()) {
             var relative = root.getCanonicalFile().toPath().relativize(new File(entry.getKey()).getCanonicalFile().toPath()).toString().replace('\\', '/');
             sourceHashes.put(relative, entry.getValue());
         }
-        OriginalStdioChecks.INSTANCE.hashes(root, sourceHashes, Set.of(upstream + "src/GHC/Internal/Windows.hs",
+        OriginalStdioChecks.hashes(root, sourceHashes, Set.of(upstream + "src/GHC/Internal/Windows.hs",
             upstream + "src/GHC/Internal/IO/Encoding/CodePage.hs", upstream + "src/GHC/Internal/IO/Encoding/CodePage/API.hs",
             upstream + "cbits/Win32Utils.c"), upstream);
         for (var command : (List<Map<String, Object>>) proof.get("commands")) assertEquals(command.get("expectedExit"), command.get("exit"));
@@ -342,7 +342,7 @@ class WindowsCodePagesTest {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             var language = enter(context);
             try {
-                var target = program(language, backend, OriginalStdioChecks.INSTANCE.rawModule(call, source(), null)).entryTarget("entry");
+                var target = program(language, backend, OriginalStdioChecks.rawModule(call, source(), null)).entryTarget("entry");
                 var output = buffer(18);
                 assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[] {0L, 932L, output, 7L}));
                 assertEquals(Collections.nCopies(18, 165L), bytes(output, 18));

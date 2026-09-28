@@ -13,7 +13,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SuppressWarnings("unchecked")
 class CoreManagedFilesTest {
-    private static final ManagedFileFixtures fixtures = ManagedFileFixtures.INSTANCE;
     private static class Input {
         final Map<String, Object> descriptor;
         final Map<String, Object> metadata;
@@ -21,11 +20,11 @@ class CoreManagedFilesTest {
         final List<Object> flags;
         final Map<String, Object> result;
         Input(String name) {
-            descriptor = fixtures.descriptor(name);
-            metadata = new LinkedHashMap<>(Map.of("foreignCall", descriptor, "rep", fixtures.tuple(name, true)));
-            for (var rep : fixtures.getSignatures().get(name)) arguments.add(fixtures.scalar(rep, true));
+            descriptor = ManagedFileFixtures.descriptor(name);
+            metadata = new LinkedHashMap<>(Map.of("foreignCall", descriptor, "rep", ManagedFileFixtures.tuple(name, true)));
+            for (var rep : ManagedFileFixtures.signatures.get(name)) arguments.add(ManagedFileFixtures.scalar(rep, true));
             flags = new ArrayList<>(Collections.nCopies(arguments.size(), false));
-            result = fixtures.tuple(name, true);
+            result = ManagedFileFixtures.tuple(name, true);
         }
         Map<String, Object> target() { return (Map<String, Object>) descriptor.get("target"); }
         List<Map<String, Object>> declared() { return (List<Map<String, Object>>) descriptor.get("argumentReps"); }
@@ -39,8 +38,8 @@ class CoreManagedFilesTest {
         assertTrue(error.getMessage().startsWith("Invalid managed file call: "), error.getMessage());
     }
     @Test void allElevenExactContractsAndImportingUnits() {
-        assertEquals(11, fixtures.getSignatures().size());
-        for (var name : fixtures.getSignatures().keySet()) for (var unit : Arrays.asList(null, "main", "library-1.0", "ghc-internal")) {
+        assertEquals(11, ManagedFileFixtures.signatures.size());
+        for (var name : ManagedFileFixtures.signatures.keySet()) for (var unit : Arrays.asList(null, "main", "library-1.0", "ghc-internal")) {
             var input = new Input(name);
             input.target().put("unit", unit);
             assertEquals("thc_io_v1_" + name, input.validate().getSymbol());
@@ -60,7 +59,7 @@ class CoreManagedFilesTest {
             assertNull(CoreManagedFiles.validate(metadata, List.of(), List.of(), null));
     }
     @Test void exactTargetDescriptorAndIntegerFields() {
-        for (var name : fixtures.getSignatures().keySet()) {
+        for (var name : ManagedFileFixtures.signatures.keySet()) {
             for (var field : List.of("schema", "arity", "suppliedArity")) {
                 for (var value : Arrays.asList(null, true, false, 1.0, 2.0, "1", -1L, 1L << 32)) {
                     var input = new Input(name); input.descriptor.put(field, value); reject(input);
@@ -81,8 +80,8 @@ class CoreManagedFilesTest {
         }
     }
     @Test void everyArgumentFlagAndProofIsExact() {
-        for (var name : fixtures.getSignatures().keySet()) {
-            for (int i = 0; i < fixtures.getSignatures().get(name).size(); i++) {
+        for (var name : ManagedFileFixtures.signatures.keySet()) {
+            for (int i = 0; i < ManagedFileFixtures.signatures.get(name).size(); i++) {
                 for (var value : Arrays.asList(true, 0, null, "false")) {
                     var input = new Input(name); input.flags.set(i, value); reject(input);
                 }
