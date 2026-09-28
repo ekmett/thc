@@ -29,6 +29,7 @@ public final class EntryValue implements TruffleObject {
     private final CoreRepresentation hostResult;
     private final RootCallTarget guestTarget, ioTarget, shutdownTarget;
     private final Object guestEntry, shutdownValue;
+    private final Program.PreparedCode requiredCode;
     private final AtomicBoolean lifecycleStarted;
     private record Compilation(RootCallTarget original, List<CallTarget> targets) {}
     private volatile Compilation installedCompilation;
@@ -40,8 +41,17 @@ public final class EntryValue implements TruffleObject {
             CoreRepresentation ioResult, Language language, String shutdownEntry,
             CoreRepresentation shutdownResult, boolean processSignals,
             List<CoreRepresentation> hostInputs, CoreRepresentation hostResult) {
+        this(program, entry, argumentCount, hostResultFault, ioResult, language, shutdownEntry,
+            shutdownResult, processSignals, hostInputs, hostResult, null);
+    }
+    EntryValue(ExecutableProgram program, String entry, int argumentCount, String hostResultFault,
+            CoreRepresentation ioResult, Language language, String shutdownEntry,
+            CoreRepresentation shutdownResult, boolean processSignals,
+            List<CoreRepresentation> hostInputs, CoreRepresentation hostResult, Program.PreparedCode preparedCode) {
         // Load factories create entries per context, including when their prepared code is shared.
         owner = Language.currentState();
+        requiredCode = Boolean.getBoolean("thc.requireCachedCode") && Boolean.getBoolean("thc.requireCompiledCode")
+            ? Objects.requireNonNull(preparedCode, "Cached compiled entry requires its prepared code") : null;
         this.program = program; this.entry = entry; this.argumentCount = argumentCount;
         this.hostResultFault = hostResultFault; this.processSignals = processSignals;
         var untypedTarget = program.hostEntryTarget(argumentCount);
@@ -108,12 +118,12 @@ public final class EntryValue implements TruffleObject {
         try {
             try {
                 Object result = AsyncContinuations.publicResult(dispatch.executePublic(guestTarget, new Object[]{guestEntry, normalized}), dispatch);
-                if (hostResult != null) return HostAbi.result(owner, hostResult, result, program);
+                if (hostResult != null) return checkedResult(HostAbi.result(owner, hostResult, result, program));
                 var proof = hostResult != null ? hostResult : signature == null ? null : signature.getScalarResultProof();
                 NarrowInteger narrow = proof == null ? null : proof.getNarrowInteger();
-                if (narrow == null) return result;
+                if (narrow == null) return checkedResult(result);
                 if (!(result instanceof Integer value)) throw new RuntimeFault("Expected narrow integer result at public boundary");
-                return narrow.widen(value);
+                return checkedResult(narrow.widen(value));
             } catch (ThunkSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
             catch (CallSegmentSuspended suspended) { throw AsyncContinuations.publicSuspension(suspended, dispatch); }
             catch (AsyncDelivery delivered) { throw AsyncContinuations.uncaught(delivered.getRequest(), dispatch); }
@@ -122,6 +132,20 @@ public final class EntryValue implements TruffleObject {
             if (failure instanceof GuestException guest) dispatch.escaping(guest);
             throw failure;
         } finally { threads.leaveCurrent(outcome); }
+    }
+
+    private Object checkedResult(Object result) {
+        if (requiredCode != null) requireCachedReturn();
+        return result;
+    }
+    @TruffleBoundary private void requireCachedReturn() {
+        // This runs after HostAbi consumes any result loan, on the actual hosted
+        // guest-return thread and before leaveCurrent, not the host caller thread.
+        requiredCode.requireInstalledCode();
+        var state = guestTarget.getRootNode().getLanguage(Language.class).getHandoffState().get();
+        if (state.getPending() != null || state.getArguments().getDepth() != 0 || state.getResults().getDepth() != 0 ||
+                state.getArguments().retainedReferences() != 0 || state.getResults().retainedReferences() != 0)
+            throw new IllegalStateException("Cached guest returned with outstanding handoff state");
     }
 
     @ExportMessage public boolean hasMembers() { return true; }

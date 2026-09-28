@@ -11,11 +11,107 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Source;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreExecutionTestSupport.*;
 
 class NativeCacheTest {
     @TempDir Path directory;
+
+    @Test void cachedReturnRejectsLateInvalidationOfAnotherSavedTarget() throws Exception {
+        cachedReturn("invalidate");
+    }
+
+    @Test void cachedReturnChecksLoansOnTheHostedGuestThread() throws Exception {
+        for (String state : List.of("clean", "arguments", "results", "pending")) cachedReturn(state);
+    }
+
+    private Map<String, Object> identity(String name) {
+        var word = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closure = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        return map("id", name, "name", name, "arity", 1, "lifted", true, "rep", closure,
+            "expr", list("lam", list(map("id", "x", "name", "x", "type", "Int#", "lifted", false, "rep", word)),
+                list("var", "x"), map("rep", closure, "resultRep", word)));
+    }
+
+    private void cachedReturn(String fault) throws Exception {
+        String oldCached = System.getProperty("thc.requireCachedCode"), oldCompiled = System.getProperty("thc.requireCompiledCode");
+        var caller = Thread.currentThread();
+        var guestThread = new java.util.concurrent.atomic.AtomicReference<Thread>();
+        var guestState = new java.util.concurrent.atomic.AtomicReference<HandoffState>();
+        var cleanup = new java.util.concurrent.atomic.AtomicReference<Runnable>(() -> {});
+        try (Context context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true)
+                .option("thc.ThreadHosting", "loom").option("engine.BackgroundCompilation", "false")
+                .option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
+            context.initialize("thc"); context.enter();
+            Language language;
+            EntryValue entry;
+            try {
+                language = com.oracle.truffle.api.TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var code = Program.prepareCode(language, map("schema", 1, "ghc", "9.14.1", "module", "CacheReturn",
+                    "constructors", list(), "bindings", list(identity("read"), identity("other"))), List.of("read", "other"));
+                var program = code.newInstance(language);
+                var other = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget("other");
+                for (String name : List.of("read", "other")) {
+                    var target = (com.oracle.truffle.runtime.OptimizedCallTarget) program.entryTarget(name);
+                    assertFalse(target.wasExecuted());
+                    assertTrue(target.prepareForAOT()); target.compile(true);
+                    assertFalse(target.wasExecuted());
+                }
+                code.requireInstalledCode();
+                var host = program.hostEntryTarget(1);
+                var observed = new com.oracle.truffle.api.nodes.RootNode(language) {
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                        Object result = Calls.target(host, frame.getArguments());
+                        guestThread.set(Thread.currentThread());
+                        var state = language.getHandoffState().get(); guestState.set(state);
+                        if (fault.equals("invalidate")) other.invalidate("late saved-target test");
+                        else if (!fault.equals("clean")) {
+                            var layout = language.getHandoffLayouts().intern(List.of("BoxedRep (Just Lifted)"));
+                            if (fault.equals("pending")) {
+                                state.setPending(layout.create()); cleanup.set(() -> state.setPending(null));
+                            } else {
+                                var loan = fault.equals("arguments") ? state.getArguments().acquire(layout) : state.getResults().acquire(layout);
+                                layout.setObject(loan, 0, new Object());
+                                cleanup.set(() -> { if (fault.equals("arguments")) state.getArguments().release(loan);
+                                    else state.getResults().release(loan, layout); });
+                            }
+                        }
+                        return result;
+                    }
+                }.getCallTarget();
+                ExecutableProgram observedProgram = new ExecutableProgram() {
+                    @Override public boolean getAsynchronousExceptions() { return false; }
+                    @Override public com.oracle.truffle.api.RootCallTarget hostEntryTarget(int arity) { return observed; }
+                    @Override public Object entryValue(String name) { return program.entryValue(name); }
+                    @Override public com.oracle.truffle.api.RootCallTarget entryTarget(String name) { return program.entryTarget(name); }
+                    @Override public DataLayout constructorLayout(String id) { return program.constructorLayout(id); }
+                    @Override public Map<String, Object> diagnostics() { return program.diagnostics(); }
+                };
+                System.setProperty("thc.requireCachedCode", "true"); System.setProperty("thc.requireCompiledCode", "true");
+                entry = new EntryValue(observedProgram, "read", 1, null, null, language, null, null, false, null, null, code);
+            } finally { context.leave(); }
+            try {
+                if (fault.equals("clean")) assertEquals(42L, context.asValue(entry).execute(42L).asLong());
+                else {
+                    var failure = assertThrows(org.graalvm.polyglot.PolyglotException.class, () -> context.asValue(entry).execute(42L));
+                    assertTrue(failure.getMessage().contains(fault.equals("invalidate")
+                        ? "Cached compiled target required" : "Cached guest returned with outstanding handoff state"), failure.getMessage());
+                }
+                assertNotSame(caller, guestThread.get(), "exercise the hosted guest-return thread");
+                context.enter();
+                try {
+                    var callerState = language.getHandoffState().get();
+                    assertNotSame(callerState, guestState.get());
+                    assertNull(callerState.getPending()); assertEquals(0, callerState.getArguments().getDepth());
+                    assertEquals(0, callerState.getResults().getDepth());
+                } finally { context.leave(); }
+            } finally { cleanup.get().run(); }
+        } finally {
+            if (oldCached == null) System.clearProperty("thc.requireCachedCode"); else System.setProperty("thc.requireCachedCode", oldCached);
+            if (oldCompiled == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", oldCompiled);
+        }
+    }
 
     @Test void publicCachedSourceIdentityAndDynamicArgumentsUseFreshPrograms() throws Exception {
         String module = """
