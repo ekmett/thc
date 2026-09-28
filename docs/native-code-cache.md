@@ -5,20 +5,24 @@ process starts**, using THC's existing AST lowerer and the pinned Truffle auxili
 cache provider. It produces two artifacts: a native launcher and a matching code
 cache. It is not the ordinary `thc run` path or a general Haskell AOT distribution.
 
-The current admission is synchronous, constructor- and foreign-free AST code:
+The current admission is synchronous, foreign-free AST code:
 explicit machine-word input proofs, integer literals, globals, ordinary function
 applications, nested closures, `let` bindings, `Int#` literal/default cases, local
-joins, and `+#`, `-#`, `*#` arithmetic. Function and join formals still require
-machine-word arguments; case binders/results and join results need exact
-machine-word proofs. Recursive local joins use the existing local-loop lowering;
+joins, saturated boxed constructors and constructor cases, and `+#`, `-#`, `*#`
+arithmetic. Internal function formals and case binders/results require exact
+machine-word or data proofs; join formals/results remain machine-word-only.
+Constructor fields currently support machine words and boxed data with exact
+field descriptors, including lazy tails. Recursive local joins use the existing local-loop lowering;
 ordinary self recursion uses the existing function loop, prepared before publication.
-Higher-order formals, constructors and constructor cases remain outside this
+Higher-order formals and unsaturated constructor functions remain outside this
 incremental admission.
 Reachable CAF code is prepared without evaluating the CAF;
 each load creates a fresh Program, CAF cells and metrics. Unselected definitions
 stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
-selection; reachable constructor code remains rejected and no constructor layout
-is retained in the prepared code. Unsupported code fails admission rather than falling back to
+selection. Prepared code retains only immutable constructor storage descriptors;
+each load receives fresh allocation keys, nullary values and optional boxed-value
+caches. Constructor matches authenticate that exact load's layout, not just its
+name, tag or shared carrier class. Unsupported code fails admission rather than falling back to
 runtime lowering. Bytecode, typed aggregates,
 async delivery, IO and FFI are not admitted by this workflow.
 
@@ -75,6 +79,25 @@ The same module's `countDown` entry exercises ordinary global self recursion:
 store it as a separate cache and run it with a nonnegative count. It returns zero
 without requiring a base-case training call; loop counters belong to the invoking
 program instance, not the preparation context.
+
+`src/examples/THC/CachedList.hs` adds ordinary recursive data and a shared lazy
+CAF through the same workflow:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-list-core" \
+  bin/export-core.sh src/examples/THC/CachedList.hs
+bin/native-cache store build/list.cache \
+  build/cached-list-core/THC.CachedList.json sumFrom
+bin/native-cache run build/list.cache 5 26
+# 47
+bin/native-cache run build/list.cache 0 -31
+# -25
+```
+
+The nonnegative count selects a fresh descending list. Its fold adds to the
+dynamic seed and a shared list's sum. Constructor storage metadata is shared
+code, while each load owns its list values, CAF cells and lazy tails. No list
+elements or CAF bodies are evaluated during preparation.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and

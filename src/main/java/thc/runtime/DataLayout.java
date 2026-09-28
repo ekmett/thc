@@ -48,6 +48,56 @@ public final class DataLayout {
     private final DataValue nullaryValue;
     @CompilationFinal(dimensions = 1) private final DataValue[] boxedValues;
     private final long boxedValueMinimum;
+    private final Reusable reusable;
+
+    /** Code-owned storage only. Allocation keys, constructor identity and guest
+     * caches belong to each instantiated DataLayout, never to cached code. */
+    static final class Reusable {
+        final String id;
+        final String name;
+        final CoreFields logicalFields;
+        @CompilationFinal(dimensions = 1) final Field[] fields;
+        final StaticShape<DataValueFactory> shape;
+        Reusable(TruffleLanguage<?> language, String id, String name, CoreFields logicalFields) {
+            this.id = id; this.name = name; this.logicalFields = logicalFields;
+            for (CoreRepresentation proof : logicalFields.getLogicalProofs())
+                if (!proof.getPresent() || !(proof.isLong() || proof.getKind() == CoreKind.DATA) || proof.isTypedTransport())
+                    throw new UnsupportedCore("Reusable constructor fields require word or lifted-data proofs");
+            fields = newFields(logicalFields.getStorage(), logicalFields.getReferenceTypes(), logicalFields.getVectorProofs());
+            // A shared carrier must carry its exact per-load owner, not use the
+            // ordinary one-layout-per-class shortcut.
+            shape = buildShape(language, fields, false);
+        }
+        DataLayout instantiate() {
+            return new DataLayout(null, id, name, logicalFields.getStorage(), logicalFields.getReferenceTypes(),
+                logicalFields.getVectorProofs(), logicalFields, this);
+        }
+        private void checkOwner(DataLayout owner) {
+            if (owner.reusable != this) throw fault("Reusable constructor storage does not match owner");
+        }
+        DataValue allocate(DataLayout owner) {
+            checkOwner(owner);
+            return owner.nullaryValue != null ? owner.nullaryValue : shape.getFactory().create(owner, owner.allocationKey);
+        }
+        boolean isLong(int index) { return fields[index].isLong(); }
+        DataValue createLong(DataLayout owner, long value) {
+            checkOwner(owner);
+            DataValue[] cached = owner.boxedValues;
+            if (cached != null && value >= owner.boxedValueMinimum && value < owner.boxedValueMinimum + cached.length)
+                return cached[(int) (value - owner.boxedValueMinimum)];
+            DataValue result = allocate(owner); fields[0].initializeLong(result, value); return result;
+        }
+        void initialize(DataLayout owner, DataValue value, int index, Object field) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].initialize(value, field);
+        }
+        void initializeLong(DataLayout owner, DataValue value, int index, long field) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].initializeLong(value, field);
+        }
+        void restore(DataLayout owner, DataValue value, int index, Frame frame, int slot) {
+            checkOwner(owner); owner.checkField(value, index); fields[index].restore(value, frame, slot);
+        }
+    }
+    Reusable reusableStorage() { return reusable; }
 
     public DataLayout(TruffleLanguage<?> language, String id, String name, String[] fieldReps) {
         this(language, id, name, fieldReps, new Class<?>[fieldReps.length]);
@@ -60,8 +110,13 @@ public final class DataLayout {
     }
     private DataLayout(TruffleLanguage<?> language, String id, String name, String[] fieldReps,
                        Class<?>[] referenceTypes, CoreRepresentation[] vectorProofs, CoreFields logicalFields) {
+        this(language, id, name, fieldReps, referenceTypes, vectorProofs, logicalFields, null);
+    }
+    private DataLayout(TruffleLanguage<?> language, String id, String name, String[] fieldReps,
+                       Class<?>[] referenceTypes, CoreRepresentation[] vectorProofs, CoreFields logicalFields, Reusable reusable) {
         if (referenceTypes.length != fieldReps.length || vectorProofs.length != fieldReps.length) throw new IllegalArgumentException("Failed requirement.");
         this.id = id; this.name = name; this.logicalFields = logicalFields;
+        this.reusable = reusable;
         arity = fieldReps.length;
         logicalArity = logicalFields == null ? arity : logicalFields.getLogicalProofs().length;
         hasAggregateFields = logicalFields != null && logicalFields.getHasAggregates();
@@ -70,9 +125,9 @@ public final class DataLayout {
             collectSums(logicalFields.getLogicalProofs()[i], logicalFields.getOffsets()[i], sums);
         sumFields = sums.toArray(SumField[]::new);
         exactFieldReps = fieldReps.clone();
-        boolean requested = Boolean.parseBoolean(System.getProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY, "true"));
-        Field[] chosenFields = newFields(fieldReps, referenceTypes, vectorProofs);
-        StaticShape<DataValueFactory> chosenShape = buildShape(language, chosenFields, requested);
+        boolean requested = reusable == null && Boolean.parseBoolean(System.getProperty(ClassOwnedLayouts.CLASS_OWNED_LAYOUTS_PROPERTY, "true"));
+        Field[] chosenFields = reusable == null ? newFields(fieldReps, referenceTypes, vectorProofs) : reusable.fields;
+        StaticShape<DataValueFactory> chosenShape = reusable == null ? buildShape(language, chosenFields, requested) : reusable.shape;
         DataValue sample = chosenShape.getFactory().create(this, allocationKey);
         boolean reserved = requested && ClassOwnedLayouts.reserve(sample.getClass(), classOwnerToken);
         if (requested && !reserved) {
@@ -83,7 +138,7 @@ public final class DataLayout {
         }
         fields = chosenFields; shape = chosenShape;
         ownedCarrier = reserved ? sample.getClass() : null;
-        constructorClass = new ConstructorClassIdentity(sample.getClass());
+        constructorClass = reusable == null ? new ConstructorClassIdentity(sample.getClass()) : null;
         nullaryValue = arity == 0 ? sample : null;
         boolean cache = Boolean.getBoolean(BOXED_VALUE_CACHE_PROPERTY) && fieldReps.length == 1 && !hasAggregateFields;
         boolean intlike = cache && id.equals(BOXED_INT_CONSTRUCTOR_ID) && name.equals("I#") && fieldReps[0].equals("IntRep");
@@ -134,11 +189,11 @@ public final class DataLayout {
     }
     private void checkAllocated(DataValue value) {
         if (ownedCarrier != null && value.getClass() != ownedCarrier) throw fault("Unexpected carrier for class-owned constructor layout");
-        constructorClass.observe(value.getClass());
+        if (constructorClass != null) constructorClass.observe(value.getClass());
     }
     public boolean matches(Object value) {
         if (ownedCarrier != null) return owns(value);
-        if (classIdentityEnabled && constructorClass.isExclusive()) return value != null && value.getClass() == constructorClass.getCarrier();
+        if (classIdentityEnabled && constructorClass != null && constructorClass.isExclusive()) return value != null && value.getClass() == constructorClass.getCarrier();
         return owns(value);
     }
     public Object checkAllocationKey(Object key) {

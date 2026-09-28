@@ -59,6 +59,8 @@ public final class Program implements ExecutableProgram {
     private final List<Map<String, Object>> bindings;
     private final Map<String, Map<String, Object>> constructors;
     private final Map<String, DataLayout> dataLayouts;
+    private final Map<String, Integer> constructorIndices = new LinkedHashMap<>();
+    private final DataLayout[] indexedLayouts;
     private final Map<String, GlobalBinding> globals;
     private final GlobalBinding[] indexedGlobals;
     private final Map<String, CoreRepresentation> globalProofs = new LinkedHashMap<>();
@@ -121,6 +123,13 @@ public final class Program implements ExecutableProgram {
             }
         constructors = demand == null ? localConstructors : demand.constructors(localConstructors);
         dataLayouts = demand == null ? new LinkedHashMap<>() : demand.getLayouts();
+        indexedLayouts = !reusableCode ? null : new DataLayout[prepared == null ? constructors.size() : prepared.layouts.size()];
+        if (prepared != null) for (DataLayout.Reusable storage : prepared.layouts) {
+            int index = constructorIndices.size();
+            constructorIndices.put(storage.id, index);
+            DataLayout layout = storage.instantiate();
+            indexedLayouts[index] = layout; dataLayouts.put(storage.id, layout);
+        }
         Map<String, GlobalBinding> localGlobals = new LinkedHashMap<>();
         for (Map<String, Object> binding : bindings)
             localGlobals.put((String) binding.get("id"), new GlobalBinding((String) binding.get("name")));
@@ -200,9 +209,8 @@ public final class Program implements ExecutableProgram {
         if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("foreignLinks")) || !absentOrEmpty(module.get("packageScalarLinks")) ||
                 module.get("selectedForeignExceptionBridge") != null)
             throw new UnsupportedCore("Reusable AST admission currently requires a foreign-free, non-demand-loaded module");
-        // Real GHC modules carry unused $trModule constructor descriptors. Retain
-        // them during ordinary validation, but requireReusableBody still rejects
-        // every reachable constructor. None enters PreparedCode below.
+        // Validate with the real module descriptors, retaining only storage
+        // metadata for constructors actually reached during selected lowering.
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         ArrayDeque<String> pending = new ArrayDeque<>(entries);
@@ -210,7 +218,7 @@ public final class Program implements ExecutableProgram {
             String id = (String) builder.bindings.get(builder.bindingIndex(pending.removeFirst())).get("id");
             if (values.containsKey(id)) continue;
             Object value = builder.entryValue(id);
-            values.put(id, CodeValue.from(value));
+            values.put(id, CodeValue.from(value, builder));
             pending.addAll(builder.codeDependencies);
             builder.codeDependencies.clear();
         }
@@ -221,18 +229,20 @@ public final class Program implements ExecutableProgram {
                 "lifted", builder.representation(binding), "expr", List.of("void")));
         }
         return new PreparedCode(Map.of("bindings", List.copyOf(headers), "constructors", List.of(),
-            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), List.copyOf(builder.codeTargets), builder.codeIdentity, language);
+            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), List.copyOf(builder.codeTargets),
+            builder.dataLayouts.values().stream().map(DataLayout::reusableStorage).toList(), builder.codeIdentity, language);
     }
     private static boolean absentOrEmpty(Object value) { return value == null || value instanceof List<?> list && list.isEmpty(); }
     public static final class PreparedCode {
         private final Map<String, Object> module;
         private final Map<String, CodeValue> values;
         private final List<RootCallTarget> targets;
+        private final List<DataLayout.Reusable> layouts;
         private final Object identity;
         private final TruffleLanguage<?> language;
-        private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, List<RootCallTarget> targets,
+        private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, List<RootCallTarget> targets, List<DataLayout.Reusable> layouts,
                              Object identity, TruffleLanguage<?> language) {
-            this.module = module; this.values = values; this.targets = targets; this.identity = identity; this.language = language;
+            this.module = module; this.values = values; this.targets = targets; this.layouts = layouts; this.identity = identity; this.language = language;
         }
         public Program newInstance(TruffleLanguage<?> language) {
             if (language != this.language || language != LANGUAGES.get(null))
@@ -248,7 +258,7 @@ public final class Program implements ExecutableProgram {
         }
     }
     private record CodeValue(RootCallTarget target, CaptureLayout captures, int arity, Object literal) {
-        static CodeValue from(Object value) {
+        static CodeValue from(Object value, Program builder) {
             if (value instanceof Closure closure && closure.suppliedCount == 0 && closure.environment != null &&
                     closure.environment.getLayout().getStorageSize() == 0)
                 return new CodeValue(closure.target, closure.environment.getLayout(), closure.arity, null);
@@ -256,10 +266,14 @@ public final class Program implements ExecutableProgram {
                     thunk.getEnvironment().getLayout().getStorageSize() == 0)
                 return new CodeValue(thunk.getTarget(), thunk.getEnvironment().getLayout(), -1, null);
             if (value instanceof Long || value == Unit.INSTANCE) return new CodeValue(null, null, 0, value);
-            throw new UnsupportedCore("Reusable AST binding requires closed code or a machine-word literal");
+            // Store an immutable constructor index, never the preparation load's
+            // nullary value or its allocation key/cache.
+            if (value instanceof DataValue data && data.getLayout().getArity() == 0 && data.getLayout().reusableStorage() != null)
+                return new CodeValue(null, null, 0, required(builder.constructorIndices, data.getLayout().getId()));
+            throw new UnsupportedCore("Reusable AST binding requires closed code, nullary data or a machine-word literal");
         }
         Object instantiate(Program instance) {
-            if (target == null) return literal;
+            if (target == null) return literal instanceof Integer index ? instance.constructorLayout(index).allocate() : literal;
             CapturedFrame environment = captures.captureValues(new Object[0], instance);
             return arity < 0 ? new Thunk(target, environment) : new Closure(environment, arity, target);
         }
@@ -267,14 +281,18 @@ public final class Program implements ExecutableProgram {
     private static void requireReusableBody(List<Object> expression) {
         switch ((String) expression.getFirst()) {
             case "var", "void" -> { }
+            case "con" -> {
+                if (((Number) expression.get(2)).intValue() != 0)
+                    throw new UnsupportedCore("Reusable constructor functions must be saturated");
+            }
             case "lit" -> {
                 if (!"int".equals(expression.get(1))) throw new UnsupportedCore("Reusable AST literal is not a machine word");
             }
             case "lam" -> {
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
                     CoreRepresentation proof = CoreRepresentations.binder(argument);
-                    if (representationLifted(argument) || !proof.getPresent() || !proof.isLong())
-                        throw new UnsupportedCore("Reusable AST input requires a machine-word proof");
+                    if (!reusableScalar(proof) || proof.isLong() && representationLifted(argument))
+                        throw new UnsupportedCore("Reusable AST input requires a machine-word or data proof");
                 }
                 requireReusableBody((List<Object>) expression.get(2));
             }
@@ -283,6 +301,9 @@ public final class Program implements ExecutableProgram {
                 if ("prim".equals(function.getFirst())) {
                     if (!Set.of("+#", "-#", "*#").contains(function.get(1)))
                         throw new UnsupportedCore("Reusable AST primitive is outside the admitted arithmetic family");
+                } else if ("con".equals(function.getFirst())) {
+                    if (((Number) function.get(2)).intValue() != ((List<?>) expression.get(2)).size())
+                        throw new UnsupportedCore("Reusable constructor functions must be saturated");
                 } else requireReusableBody(function);
                 for (List<Object> argument : (List<List<Object>>) expression.get(2)) requireReusableBody(argument);
             }
@@ -303,20 +324,24 @@ public final class Program implements ExecutableProgram {
             case "case" -> {
                 CoreRepresentation binder = CoreRepresentations.caseBinder(expression);
                 CoreRepresentation result = CoreRepresentations.expression(expression);
-                if (!binder.getPresent() || !binder.isLong() || !result.getPresent() || !result.isLong())
-                    throw new UnsupportedCore("Reusable AST case binder and result require machine-word proofs");
+                if (!reusableScalar(binder) || !reusableScalar(result))
+                    throw new UnsupportedCore("Reusable AST case binder and result require word or data proofs");
                 requireReusableBody((List<Object>) expression.get(1));
                 for (var alternative : (List<List<Object>>) expression.get(3)) {
                     String kind = (String) alternative.getFirst();
-                    if (!(kind.equals("default") || kind.equals("lit") &&
-                            ((List<?>) alternative.get(1)).getFirst().equals("int")) ||
-                            !((List<?>) alternative.get(2)).isEmpty())
-                        throw new UnsupportedCore("Reusable AST case requires word literals or default alternatives");
+                    if (kind.equals("data")) {
+                        if (binder.getKind() != CoreKind.DATA) throw new UnsupportedCore("Reusable data case requires a data binder");
+                    } else if (!(kind.equals("default") || binder.isLong() && kind.equals("lit") &&
+                            ((List<?>) alternative.get(1)).getFirst().equals("int")) || !((List<?>) alternative.get(2)).isEmpty())
+                        throw new UnsupportedCore("Reusable AST case requires data, word literals or default alternatives");
                     requireReusableBody((List<Object>) alternative.get(3));
                 }
             }
             default -> throw new UnsupportedCore("Reusable AST node is not yet admitted: " + expression.getFirst());
         }
+    }
+    private static boolean reusableScalar(CoreRepresentation proof) {
+        return proof.getPresent() && (proof.isLong() || proof.getKind() == CoreKind.DATA) && !proof.isTypedTransport();
     }
     private static boolean representationLifted(Map<String, Object> binding) {
         return binding.get("lifted") instanceof Boolean lifted ? lifted :
@@ -325,6 +350,7 @@ public final class Program implements ExecutableProgram {
     private Metrics codeMetrics() { return reusableCode ? null : metrics; }
     Metrics instanceMetrics() { return metrics; }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
+    DataLayout constructorLayout(int index) { return indexedLayouts[index]; }
     boolean usesCode(Object identity) { return codeIdentity == identity; }
     boolean belongsToCurrentContext(com.oracle.truffle.api.nodes.Node node) {
         return contextOwner == thc.Language.currentState(node);
@@ -717,7 +743,9 @@ public final class Program implements ExecutableProgram {
         constructedRootCount++;
         root.configureForeignExceptionBridge(reusableCode ? null : foreignExceptionBridge);
         if (language instanceof thc.Language thc) root.configureTypedInput(TypedInputLayout.create(thc, inputLayout, captures != null));
-        if (role == FunctionRootRole.FUNCTION && !capturesContinuations && body instanceof Case && inputLayout == null) {
+        // Leading-case plans retain concrete layouts. Reusable cases resolve
+        // their invocation's constructor owner through the indexed program slot.
+        if (!reusableCode && role == FunctionRootRole.FUNCTION && !capturesContinuations && body instanceof Case && inputLayout == null) {
             Set<String> used = new LinkedHashSet<>(free);
             used.retainAll(argumentIds);
             root.configureLeadingCaseReturn(LeadingCaseReturn.discover(args, expression, resultProof, root.getEntryArgumentOffset(),
@@ -1192,7 +1220,10 @@ public final class Program implements ExecutableProgram {
         if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
         CoreFields fields = new CoreFields(info);
         if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
-        layout = thc.Language.currentState().constructorLayout(language, id, (String) info.get("name"), fields);
+        if (reusableCode) {
+            layout = new DataLayout.Reusable(language, id, (String) info.get("name"), fields).instantiate();
+            int index = constructorIndices.size(); constructorIndices.put(id, index); indexedLayouts[index] = layout;
+        } else layout = thc.Language.currentState().constructorLayout(language, id, (String) info.get("name"), fields);
         dataLayouts.put(id, layout);
         return layout;
     }
@@ -1268,12 +1299,13 @@ public final class Program implements ExecutableProgram {
         }
         return result;
     }
-    private Expr construct(String id, Expr[] args, FrameLayout frame) {
+    private Expr construct(String id, Expr[] args, FrameLayout frame, int programSlot) {
         boolean[] strict = strictConstructorFields(id, args.length);
         Expr[] fields = new Expr[args.length];
-        for (int i = 0; i < fields.length; i++) fields[i] = strict[i] ? new Evaluate(args[i], metrics) : args[i];
+        for (int i = 0; i < fields.length; i++) fields[i] = strict[i] ? new Evaluate(args[i], codeMetrics()) : args[i];
         DataLayout layout = dataLayout(id);
-        return new Construct(layout, fields, constructorVectorSlots(layout, frame));
+        return reusableCode ? new Construct(layout.reusableStorage(), programSlot, required(constructorIndices, id), fields) :
+            new Construct(layout, fields, constructorVectorSlots(layout, frame));
     }
 
     private Expr compileSupported(List<Object> expr, Scope scope, boolean tail) {
@@ -1467,7 +1499,10 @@ public final class Program implements ExecutableProgram {
                 default -> throw new RuntimeFault("Invalid Core alternative kind " + kind);
             };
             Expr body = caseArm((List<Object>) alt.get(3), child, tail);
-            alternatives[a] = new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1);
+            alternatives[a] = reusableCode && layout != null ?
+                new Alternative(tag, layout.reusableStorage(), ints(slots), body, vectorFields, false,
+                    scope.programSlot, required(constructorIndices, layout.getId())) :
+                new Alternative(tag, value, ints(slots), body, vectorFields, !reusableCode && alternatives.length > 1);
             results.add(body.getRepresentation()); kinds.add(tag);
             allLong &= tag != LITERAL_ALTERNATIVE || value instanceof Long;
             anyAggregate |= body.getRepresentation().isAggregate();
@@ -1495,7 +1530,8 @@ public final class Program implements ExecutableProgram {
             if (proof.getComponents() == null || !proof.getComponents().isEmpty()) throw new RuntimeFault("Empty tuple constructor has nonempty logical components");
             return new TupleConstruct(new TupleShape(proof, (thc.Language) language), new Expr[0]);
         }
-        if (arity == 0) return construct(id, new Expr[0], scope.layout);
+        if (arity == 0) return construct(id, new Expr[0], scope.layout, scope.programSlot);
+        if (reusableCode) throw new UnsupportedCore("Reusable constructor functions must be saturated");
         FrameLayout layout = new FrameLayout();
         DataLayout constructor = dataLayout(id);
         if (constructor.getHasAggregateFields()) throw new UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs");
@@ -1523,7 +1559,7 @@ public final class Program implements ExecutableProgram {
                 fields[index] = new VectorLocalRead(new TupleShape(vector, (thc.Language) language), lanes);
             }
         }
-        Expr body = construct(id, fields, layout);
+        Expr body = construct(id, fields, layout, -1);
         FunctionRoot root = new FunctionRoot(language, layout.build(), "constructor " + id, null, new int[0],
             ints(slots), ints(indices), body, metrics, argumentProofs.toArray(CoreRepresentation[]::new), body.getRepresentation(), rootSource(body),
             strictConstructorFields(id, arity), null, null, new int[0], inputLayout, false, new int[0][], false,
@@ -2286,7 +2322,8 @@ public final class Program implements ExecutableProgram {
         }
         if (constructorStrict != null) {
             DataLayout target = dataLayout((String) fn.get(1));
-            return new Construct(target, nodes, constructorVectorSlots(target, scope.layout));
+            return reusableCode ? new Construct(target.reusableStorage(), scope.programSlot, required(constructorIndices, target.getId()), nodes) :
+                new Construct(target, nodes, constructorVectorSlots(target, scope.layout));
         }
         Expr function = compile(fn, scope, false);
         ArgumentLayout input = ArgumentLayout.fromProofs(loweredProofs(nodes));

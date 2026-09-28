@@ -17,12 +17,19 @@ final class Alternative extends Node {
     @Child private Expr body;
     @CompilationFinal(dimensions = 2) private final int[][] vectorFields;
     private final CountingConditionProfile matchProfile;
+    private final int programSlot;
+    private final int constructorIndex;
     Alternative(int kind, Object value, int[] fields, Expr body) { this(kind, value, fields, body, new int[0][]); }
     Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields) {
         this(kind, value, fields, body, vectorFields, true);
     }
     Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields, boolean profileChoice) {
+        this(kind, value, fields, body, vectorFields, profileChoice, -1, -1);
+    }
+    Alternative(int kind, Object value, int[] fields, Expr body, int[][] vectorFields, boolean profileChoice,
+                int programSlot, int constructorIndex) {
         this.kind = kind; this.value = value; this.fields = fields; this.body = body; this.vectorFields = vectorFields;
+        this.programSlot = programSlot; this.constructorIndex = constructorIndex;
         // A singleton still checks its match. Do not store the uncached sentinel:
         // NodeUtil clones it, losing the identity guard around its disabled counters.
         matchProfile = profileChoice ? CountingConditionProfile.create() : null;
@@ -33,8 +40,15 @@ final class Alternative extends Node {
     public Expr getBody() { return body; }
     public void setBody(Expr body) { this.body = body; }
     public int[][] getVectorFields() { return vectorFields; }
-    boolean matchesData(DataValue value) {
-        boolean matches = ((DataLayout) this.value).matches(value);
+    DataLayout layout(VirtualFrame frame) {
+        return constructorIndex < 0 ? (DataLayout) value : Program.instance(frame, programSlot).constructorLayout(constructorIndex);
+    }
+    void restore(DataValue data, int index, VirtualFrame frame, int slot) {
+        if (value instanceof DataLayout.Reusable storage) storage.restore(layout(frame), data, index, frame, slot);
+        else layout(frame).restore(data, index, frame, slot);
+    }
+    boolean matchesData(VirtualFrame frame, DataValue value) {
+        boolean matches = layout(frame).matches(value);
         return matchProfile == null ? matches : matchProfile.profile(matches);
     }
     boolean matchesLong(long value) {
@@ -43,7 +57,7 @@ final class Alternative extends Node {
     }
     boolean matches(VirtualFrame frame, int slot) {
         boolean matches = switch (kind) {
-            case DATA_ALTERNATIVE -> frame.isObject(slot) && ((DataLayout) value).matches(frame.getObject(slot));
+            case DATA_ALTERNATIVE -> frame.isObject(slot) && layout(frame).matches(frame.getObject(slot));
             case LITERAL_ALTERNATIVE -> matchesLiteral(frame, slot);
             default -> false;
         };

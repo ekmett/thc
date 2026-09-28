@@ -236,8 +236,11 @@ public final class FunctionRoot extends GuestRoot {
         // existing authenticated layout/owner checks, without inventing a class.
         signature[1] = null;
         for (int i = 0; i < inputs.size(); i++) {
-            if (!inputs.get(i).isLong()) throw new IllegalStateException("Unsupported reusable AOT argument");
-            signature[getEntryArgumentOffset() + i] = Long.class;
+            CoreRepresentation proof = inputs.get(i);
+            if (!(proof.isLong() || proof.getKind() == CoreKind.DATA)) throw new IllegalStateException("Unsupported reusable AOT argument");
+            // Lifted data may arrive as a lazy thunk or an authenticated owned
+            // constructor carrier; neither has one exact signature class.
+            signature[getEntryArgumentOffset() + i] = proof.isLong() ? Long.class : null;
         }
         preparedForAOT = true;
         return ExecutionSignature.create(getScalarResultProof().isLong() ? Long.class : null, signature);

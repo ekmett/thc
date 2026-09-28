@@ -8,5 +8,5 @@ final class DataCase extends Case {
     DataCase(Expr scrutinee, int binder, Alternative[] alternatives, Metrics metrics, CoreRepresentation proof, boolean delimited) {
         super(scrutinee, binder, alternatives, metrics, proof, delimited);
     }
-    @Override protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matchesData((DataValue) frame.getObject(binderSlot)); }
+    @Override protected boolean matches(VirtualFrame frame, Alternative alternative) { return alternative.matchesData(frame, (DataValue) frame.getObject(binderSlot)); }
 }

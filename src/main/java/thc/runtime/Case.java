@@ -211,11 +211,10 @@ class Case extends Expr {
         if (alt.getKind() == DATA_ALTERNATIVE) {
             Object scrutinee = frame.getObject(binderSlot);
             if (!(scrutinee instanceof DataValue data)) throw fault("Invalid constructor case");
-            if (!(alt.getValue() instanceof DataLayout layout)) throw fault("Invalid constructor alternative");
             for (int i = 0; i < alt.getFields().length; i++) {
                 int[] lanes = i < alt.getVectorFields().length ? alt.getVectorFields()[i] : null;
-                if (lanes == null) layout.restore(data, i, frame, alt.getFields()[i]);
-                else layout.restoreVector(data, i, frame, lanes, 0);
+                if (lanes == null) alt.restore(data, i, frame, alt.getFields()[i]);
+                else alt.layout(frame).restoreVector(data, i, frame, lanes, 0);
             }
         }
     }

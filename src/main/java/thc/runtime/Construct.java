@@ -9,14 +9,24 @@ import static thc.runtime.RuntimeFault.fault;
 
 final class Construct extends Expr {
     private final DataLayout layout;
+    private final DataLayout.Reusable reusable;
+    private final int programSlot;
+    private final int constructorIndex;
     @Children private Expr[] fields;
     @CompilationFinal(dimensions = 2) private final int[][] vectorSlots;
     Construct(DataLayout layout, Expr[] fields) { this(layout, fields, new int[0][]); }
     Construct(DataLayout layout, Expr[] fields, int[][] vectorSlots) {
         this.layout = layout; this.fields = fields; this.vectorSlots = vectorSlots;
+        reusable = null; programSlot = constructorIndex = -1;
+        setRepresentation(new CoreRepresentation(CoreKind.DATA, true, false, null, null, null, null, null, null));
+    }
+    Construct(DataLayout.Reusable reusable, int programSlot, int constructorIndex, Expr[] fields) {
+        this.reusable = reusable; this.programSlot = programSlot; this.constructorIndex = constructorIndex;
+        layout = null; this.fields = fields; vectorSlots = new int[0][];
         setRepresentation(new CoreRepresentation(CoreKind.DATA, true, false, null, null, null, null, null, null));
     }
     @ExplodeLoop @Override public DataValue execute(VirtualFrame frame) {
+        if (reusable != null) return executeReusable(frame);
         if (layout.getHasBoxedValueCache()) return layout.createLong(fields[0].executeRequiredLong(frame));
         DataValue value = layout.allocate();
         for (int i = 0; i < fields.length; i++) {
@@ -47,6 +57,17 @@ final class Construct extends Expr {
             else if (layout.isFloat(physical)) layout.initializeFloat(value, physical, fields[i].executeRequiredFloat(frame));
             else if (layout.isDouble(physical)) layout.initializeDouble(value, physical, fields[i].executeRequiredDouble(frame));
             else layout.initialize(value, physical, fields[i].execute(frame));
+        }
+        return value;
+    }
+    @ExplodeLoop private DataValue executeReusable(VirtualFrame frame) {
+        DataLayout owner = Program.instance(frame, programSlot).constructorLayout(constructorIndex);
+        if (fields.length == 1 && reusable.isLong(0) && owner.getHasBoxedValueCache())
+            return reusable.createLong(owner, fields[0].executeRequiredLong(frame));
+        DataValue value = reusable.allocate(owner);
+        for (int i = 0; i < fields.length; i++) {
+            if (reusable.isLong(i)) reusable.initializeLong(owner, value, i, fields[i].executeRequiredLong(frame));
+            else reusable.initialize(owner, value, i, fields[i].execute(frame));
         }
         return value;
     }

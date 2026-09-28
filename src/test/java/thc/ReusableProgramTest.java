@@ -140,9 +140,9 @@ class ReusableProgramTest {
         }
     }
 
-    @Test void unusedConstructorMetadataDoesNotAdmitConstructorCode() {
+    @Test void unusedConstructorMetadataRemainsUnpreparedUntilSelected() {
         var data = module(list(binding("read", lambda(plus(variable("x"), literal(1))), true),
-            binding("constructed", list("con", "Unused", list()), true)));
+            binding("constructed", list("con", "Unused", 0), true)));
         data.put("constructors", list(map("id", "Unused", "name", "Unused", "arity", 0, "tag", 1,
             "kind", "boxed", "strictFields", list(), "fieldLifted", list(), "fieldReps", list())));
         try (var context = Main.executionContext(false)) {
@@ -152,9 +152,9 @@ class ReusableProgramTest {
                 var code = Program.prepareCode(language, data, List.of("read"));
                 var instance = code.newInstance(language);
                 assertEquals(8L, call(instance, instance.entryValue("read"), 7L));
-                assertTrue(assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, data, List.of("constructed")))
-                    .getMessage().contains("Reusable AST node is not yet admitted: con"));
                 assertThrows(UnsupportedCore.class, () -> instance.entryValue("constructed"));
+                var selected = Program.prepareCode(language, data, List.of("constructed"));
+                assertNotSame(selected.newInstance(language).entryValue("constructed"), selected.newInstance(language).entryValue("constructed"));
             } finally { context.leave(); }
         }
     }
