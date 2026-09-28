@@ -19,6 +19,9 @@ import SimdCallAudit
 
 entry :: String -> Int# -> Int#
 entry "directCase" = directCase
+entry "keepAliveCase" = keepAliveCase
+entry "keepAliveThrowCase" = keepAliveThrowCase
+entry "keepAliveThrowSumCase" = keepAliveThrowSumCase
 entry "papCase" = papCase
 entry "nestedTupleCase" = nestedTupleCase
 entry "joinCase" = joinCase

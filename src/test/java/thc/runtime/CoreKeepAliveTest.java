@@ -64,9 +64,11 @@ class CoreKeepAliveTest {
         assertEquals(0, pools.getArguments().getDepth()); assertEquals(0, pools.getResults().getDepth());
         assertEquals(0, pools.getArguments().retainedReferences()); assertEquals(0, pools.getResults().retainedReferences());
     }
-    @Test void exactScalarTupleAndExistingSumResultsKeepTheirLogicalIdentity() {
+    @Test void exactScalarVectorTupleAndSumResultsKeepTheirLogicalIdentity() {
         var inputs = list(owner, state, closure).stream().map(CoreRepresentations::parse).toList();
-        for (var result : list(integer, word8, data, tuple(state, data), tuple(state, word8), sum(), tuple(sum(), integer))) {
+        var vector = map("kind", "vector", "evaluated", true, "primReps", list("VecRep 8 Int16ElemRep"),
+            "vector", map("lanes", 8, "element", "Int16ElemRep"));
+        for (var result : list(integer, word8, data, vector, tuple(state, data), tuple(state, word8), sum(), tuple(sum(), integer))) {
             var actual = CoreRepresentations.parse(result);
             assertDoesNotThrow(() -> CoreKeepAlive.validate(inputs, list(true, false, true), actual, list(CoreRepresentations.parse(state)), actual));
         }

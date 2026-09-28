@@ -14,7 +14,7 @@ public final class CoreArithmeticExceptions {
         };
         return value == null ? null : "ghc-internal:GHC.Internal.Exception.Type." + value;
     }
-    public static void validate(String name, List<CoreRepresentation> arguments, List<?> flags, CoreRepresentation result) {
+    public static void validateArguments(String name, List<CoreRepresentation> arguments, List<?> flags) {
         if (payload(name) == null || arguments.size() != 1 || !arguments.getFirst().isEmptyTuple() || !flags.equals(List.of(false)))
             throw new RuntimeFault(name + ": expected one exact unlifted empty tuple argument");
         // These primops never return, so they impose no result-carrier restriction.

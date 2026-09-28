@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class SimdCallNativeTest {
     private final File root = new File(System.getProperty("thc.projectRoot")), directory = new File(root, "build/simd-calls");
     private long model(String name, long x) {
+        if (name.startsWith("keepAliveThrow")) return x;
         if (name.equals("overCase")) return (short) x == 0 ? 30L : 44L;
         if (!name.equals("chainCase") && !name.equals("loopCase")) return (long) (short) x + 13L;
         long answer = 0;
@@ -183,6 +184,15 @@ class SimdCallNativeTest {
     private record Input(String name, long x) {}
     private record Row(String name, long x, long want) {}
     @Test void nativeVectorCallsPapAndJoinsKeepCompiledAstAndBytecodeResults() throws Exception {
+        checkEntries(null);
+    }
+    @Test void nativeKeepAliveVectorContinuationsReturnAndThrowInCompiledAstAndBytecode() throws Exception {
+        checkEntries(Set.of("keepAliveCase", "keepAliveThrowCase"));
+    }
+    @Test void nativeEmptySumCasesPropagateKeepAliveThrowsInCompiledAstAndBytecode() throws Exception {
+        checkEntries(Set.of("keepAliveThrowSumCase"));
+    }
+    private void checkEntries(Set<String> wantedEntries) throws Exception {
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(directory, "manifest.json").toPath())); assertEquals(1L, manifest.get("schema"));
         var hashes = new LinkedHashMap<>((Map<String, String>) manifest.get("inputHashes")); hashes.putAll((Map<String, String>) manifest.get("artifactHashes"));
         for (var item : hashes.entrySet()) {
@@ -190,9 +200,9 @@ class SimdCallNativeTest {
             assertEquals(item.getValue(), hash, "Stale SIMD call artifact " + item.getKey());
         }
         var entries = (List<String>) manifest.get("entries");
-        assertEquals(Set.of("directCase", "papCase", "nestedTupleCase", "joinCase", "overCase", "heapCase", "heapPapCase", "capturedCase", "thunkCase", "chainCase", "loopCase"), new LinkedHashSet<>(entries));
+        assertEquals(Set.of("directCase", "papCase", "nestedTupleCase", "joinCase", "overCase", "heapCase", "heapPapCase", "capturedCase", "thunkCase", "chainCase", "loopCase", "keepAliveCase", "keepAliveThrowCase", "keepAliveThrowSumCase"), new LinkedHashSet<>(entries));
         var cases = new ArrayList<Input>(); for (var name : entries) for (var input : (List<Number>) manifest.get("inputs")) cases.add(new Input(name, input.longValue()));
-        assertEquals(99, cases.size()); var nativeRows = (Number) manifest.get("nativeRows"); var rows = new ArrayList<Row>();
+        assertEquals(126, cases.size()); var nativeRows = (Number) manifest.get("nativeRows"); var rows = new ArrayList<Row>();
         if (nativeRows != null) for (var line : Files.readAllLines(new File(directory, "oracle.tsv").toPath())) {
             var parts = line.split("\t", -1); assertEquals(3, parts.length); rows.add(new Row(parts[0], Long.parseLong(parts[1]), Long.parseLong(parts[2])));
         } else for (var input : cases) rows.add(new Row(input.name, input.x, model(input.name, input.x)));
@@ -207,7 +217,17 @@ class SimdCallNativeTest {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var source = (Map<String, Object>) Json.parse(Files.readString(new File(directory, stage + "-core/SimdCallAudit.json").toPath())); retainedHeapCore(source);
                     for (var name : entries) {
-                        var linked = CoreModules.reachable(source, name); ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
+                        if (wantedEntries == null ? name.startsWith("keepAlive") : !wantedEntries.contains(name)) continue;
+                        var linked = CoreModules.reachable(source, name);
+                        if (name.equals("keepAliveThrowSumCase")) assertTrue(nodes(linked).stream().anyMatch(node ->
+                            Objects.equals(at(node, 0), "case") && Objects.equals(at(node, 3), List.of()) &&
+                            Objects.equals(field(field(field(at(node, 4), "binder"), "rep"), "aggregate"), "unboxed-sum")),
+                            "Genuine empty sum case must remain in exported Core");
+                        else if (wantedEntries != null) assertTrue(nodes(linked).stream().anyMatch(node ->
+                            Objects.equals(at(node, 0), "app") && Objects.equals(at(at(node, 1), 0), "prim") &&
+                            Objects.equals(at(at(node, 1), 1), "keepAlive#") &&
+                            Objects.equals(field(field(at(node, 6), "rep"), "kind"), "vector")), "Genuine direct-vector keepAlive# must remain in exported Core");
+                        ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                         var function = context.asValue(new EntryValue(program, name, 1)); var selected = new ArrayList<Row>(); for (var row : rows) if (row.name.equals(name)) selected.add(row);
                         for (var row : selected) assertEquals(row.want, function.execute(row.x).asLong(), stage + "/" + backend + "/" + name + "/" + row.x + " interpreted");
                         assertTrue(function.invokeMember("compile").asBoolean(), stage + "/" + backend + "/" + name + " compile"); var target = program.entryTarget(name);
@@ -216,6 +236,9 @@ class SimdCallNativeTest {
                             assertEquals(row.want, function.execute(row.x).asLong(), stage + "/" + backend + "/" + name + "/" + row.x + " compiled");
                             assertTrue(((Number) program.diagnostics().get("compiledEntries")).longValue() > before); valid(target);
                             assertEquals(0, language.getHandoffState().get().getArguments().getDepth()); assertEquals(0, language.getHandoffState().get().getResults().getDepth());
+                            assertEquals(0, language.getHandoffState().get().getArguments().retainedReferences());
+                            assertEquals(0, language.getHandoffState().get().getResults().retainedReferences());
+                            assertNull(language.getHandoffState().get().getPending());
                         }
                     }
                 } finally { context.leave(); }
