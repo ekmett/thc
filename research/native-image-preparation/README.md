@@ -115,6 +115,16 @@ entries do not construct a host receiver, guest value, context or dispatch node.
 They follow the existing explicit export-family preparation contract, without
 adding a general generated-class recognizer.
 
+`SavedGuestContinuations` and `TupleDestination` each initialize only a private
+array of literal production carrier classes. They construct no carrier, frame,
+context or thread. Resolving these class literals does not run their initializers.
+The explicit tuple-family entries also retain its eight previously stateless
+subclasses, which have no own initializer, static state or interfaces. The
+generated stateless-hierarchy rule deliberately rejects them once their parent
+has an initializer; it is not weakened to admit arbitrary class-array holders.
+Preparing nested destination classes does not initialize their enclosing roots
+or STM implementation. Ordinary per-instance execution and ownership stay unchanged.
+
 The manual Windows additions are:
 
 ```diff

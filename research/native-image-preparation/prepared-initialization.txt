@@ -89,6 +89,19 @@ thc.runtime.RtsEventForeignExpression$ResumeCompleted
 # guest context, frame or handoff state is constructed by these initializers.
 thc.runtime.Force
 thc.runtime.HandoffCaller
+# Private arrays of production carrier Class literals only; no carrier is created.
+thc.runtime.SavedGuestContinuations
+thc.runtime.TupleDestination
+# Previously stateless subclasses whose parent now has the audited Class array.
+# These have no own initializer or static state; enclosing classes stay separate.
+thc.runtime.AstTupleDestination
+thc.runtime.BytecodeTupleSlots
+thc.runtime.ContinuationTupleDestination
+thc.runtime.EntryRoot$HostDestination
+thc.runtime.ForkDestination
+thc.runtime.IoUnitDestination
+thc.runtime.ManagedExportIoRoot$ManagedExportDestination
+thc.runtime.STMCall$AsyncDestination
 
 # Finite Java metadata compatibility inventory; see the closure audit in README.
 # Literal enum descriptors and argument lists only, not their runtime operations.
