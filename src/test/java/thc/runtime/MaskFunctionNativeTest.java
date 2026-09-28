@@ -52,7 +52,7 @@ class MaskFunctionNativeTest {
     }
     private static List<List<Object>> calls(Object value, String tag, String name) {
         var result = new ArrayList<List<Object>>();
-        for (var node : nodes(value)) if (!node.isEmpty() && node.get(0).equals("app") && node.get(1) instanceof List<?> head &&
+        for (var node : nodes(value)) if (!node.isEmpty() && "app".equals(node.get(0)) && node.get(1) instanceof List<?> head &&
             !head.isEmpty() && tag.equals(head.get(0)) && head.size() > 1 && name.equals(head.get(1))) result.add(node);
         return result;
     }
@@ -185,7 +185,7 @@ class MaskFunctionNativeTest {
             for (var entry : map.entrySet()) result.put(entry.getKey(), rewrite(entry.getValue(), primitive, change)); return result;
         }
         if (value instanceof List<?> list) {
-            if (!list.isEmpty() && list.get(0).equals("app") && list.get(1) instanceof List<?> head &&
+            if (!list.isEmpty() && "app".equals(list.get(0)) && list.get(1) instanceof List<?> head &&
                 head.subList(0, Math.min(2, head.size())).equals(List.of("prim", primitive))) return change.apply((List<Object>) list);
             var result = new ArrayList<Object>(); for (var child : list) result.add(rewrite(child, primitive, change)); return result;
         }
