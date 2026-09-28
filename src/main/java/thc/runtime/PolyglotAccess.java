@@ -15,7 +15,6 @@ import thc.HostReference;
 import java.nio.ByteOrder;
 /** Cached interop messages can specialize on the foreign language's actual objects. */
 public final class PolyglotAccess extends Node {
-    @Child private Force force = new Force(new Metrics(false));
     @Child private IndirectCallNode evalCall = IndirectCallNode.create();
     @Child private InteropLibrary members = InteropLibrary.getFactory().createDispatched(3);
     @Child private InteropLibrary functions = InteropLibrary.getFactory().createDispatched(3);
@@ -39,7 +38,8 @@ public final class PolyglotAccess extends Node {
         } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
     }
     private Object receiver(VirtualFrame frame, Object value) {
-        if (!(force.execute(frame, value) instanceof ForeignValue handle)) throw RuntimeFault.fault("Expected THC.Polyglot.Value");
+        // Lowering owns resumable handle demand; this opaque boundary never forces.
+        if (!(value instanceof ForeignValue handle)) throw RuntimeFault.fault("Expected THC.Polyglot.Value");
         if (handle.getOwner() != Language.currentState(this)) throw RuntimeFault.fault("Polyglot value belongs to a different context");
         return handle.getReceiver();
     }
@@ -92,7 +92,7 @@ public final class PolyglotAccess extends Node {
             }
             default -> value = receiver(frame, arguments[0]);
         }
-        // Force foreign handles before the opaque call, while guest continuations are available.
+        // Both handles have already completed their resumable guest demand.
         Object argument = operation == PolyglotOp.EXECUTE_VALUE ? receiver(frame, arguments[1])
             : operation == PolyglotOp.ARRAY_WRITE ? receiver(frame, arguments[2]) : null;
         var threads = owner.getThreads();
@@ -106,7 +106,7 @@ public final class PolyglotAccess extends Node {
         } catch (AbstractTruffleException error) { throw foreignExceptions.raise(error); }
     }
     /** Receiver-dependent library specialization must not retire a cold guest target.
-     * Forcing, SAFE transitions and the completed-result poll remain outside this frame-free boundary. */
+     * Guest demand, SAFE transitions and the completed-result poll remain outside this frame-free boundary. */
     @TruffleBoundary private Object accessStorage(Language.State owner, PolyglotOp operation,
             Object value, Object argument, Object[] arguments) throws InteropException {
         return switch (operation) {

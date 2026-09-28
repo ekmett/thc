@@ -1870,7 +1870,18 @@ public final class Program implements ExecutableProgram {
             return new MemcpyExpression(operands, tupleProof, byteArrays);
         }
         if (javascript != null) return new JavaScriptExpression(javascript, argumentOperands(args, scope, false)).proven(evaluated(tupleProof, true));
-        if (polyglot != null) return new PolyglotExpression(polyglot, argumentOperands(args, scope, flags)).proven(evaluated(tupleProof, true));
+        if (polyglot != null) {
+            // Every lifted operand in this ABI is an opaque Value consumed by the
+            // foreign operation. Demand it at an ordinary resumable guest cut,
+            // retaining earlier operands and the not-yet-executed foreign suffix.
+            OperandBuilder outer = operandBuilder;
+            OperandBuilder operands = capturesContinuations ? new OperandBuilder(scope.layout) : null;
+            operandBuilder = operands;
+            try {
+                Expr body = new PolyglotExpression(polyglot, argumentOperands(args, scope, false)).proven(evaluated(tupleProof, true));
+                return operands == null ? body : operands.finish(body);
+            } finally { operandBuilder = outer; }
+        }
 
         if (primitive && Set.of("newBCO#", "mkApUpd0#").contains(fn.get(1))) {
             String name = (String) fn.get(1);

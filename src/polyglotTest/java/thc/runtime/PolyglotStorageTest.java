@@ -34,6 +34,128 @@ class PolyglotStorageTest {
             if (afterRead != null) afterRead.run();
         }
     }
+    /** A real shared thunk with a saved child cut before its foreign handle exists. */
+    private static final class LazyHandle extends GuestRoot {
+        private final ForeignValue value;
+        int prefix, suffix;
+        AsyncRequest request;
+        LazyHandle(Language language, ForeignValue value) {
+            super(language, new FrameLayout().build()); this.value = value;
+        }
+        @Override public long bloom(VirtualFrame frame) { return 0L; }
+        @Override public boolean getAsynchronousExceptions() { return true; }
+        @Override public Object execute(VirtualFrame frame) {
+            prefix++;
+            var threads = Language.currentState(this).getThreads();
+            request = threads.send(threads.currentIdentity(), "lazy handle");
+            assertSame(request, threads.poll(this));
+            return new AstCapture(request, SynchronousMasking.current(this)).append((saved, input) -> {
+                assertSame(Unit.INSTANCE, input); suffix++; return value;
+            }).freeze(this, frame.materialize());
+        }
+    }
+    private static Object finishChild(Language language, SavedGuestContinuation saved, TupleShape shape) {
+        return new RootNode(language) {
+            @Child private Force force = new Force(new Metrics(false), true);
+            @Override public Object execute(VirtualFrame frame) { return force.drainStack(saved, shape); }
+        }.getCallTarget().call();
+    }
+    @ExportLibrary(InteropLibrary.class)
+    static final class ForeignEffect implements TruffleObject {
+        int effects;
+        Object value;
+        @ExportMessage boolean isExecutable() { return true; }
+        @ExportMessage Object execute(Object[] arguments) {
+            assertEquals(1, arguments.length); effects++; value = arguments[0]; return value;
+        }
+        @ExportMessage boolean hasArrayElements() { return true; }
+        @ExportMessage long getArraySize() { return 1; }
+        @ExportMessage boolean isArrayElementReadable(long index) { return index == 0; }
+        @ExportMessage boolean isArrayElementModifiable(long index) { return index == 0; }
+        @ExportMessage boolean isArrayElementInsertable(long index) { return false; }
+        @ExportMessage Object readArrayElement(long index) throws InvalidArrayIndexException {
+            if (index != 0) throw InvalidArrayIndexException.create(index); return value;
+        }
+        @ExportMessage void writeArrayElement(long index, Object next) throws InvalidArrayIndexException {
+            if (index != 0) throw InvalidArrayIndexException.create(index); effects++; value = next;
+        }
+    }
+    @Tag("foreign-exceptions-full-core")
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void bothHandleDemandsResumeWithoutReplayingEarlierOperands(String backend) throws Exception {
+        for (var operation : List.of(PolyglotOp.EXECUTE_VALUE, PolyglotOp.ARRAY_WRITE)) try (var context = coldContext()) {
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState(); owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var models = new PolyglotFFITest();
+                var module = ForeignExceptionFixtureSupport.link(models.foreignModule(models.call(operation)), "call");
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
+                var target = program.entryTarget("call");
+                var shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
+                var foreign = new ForeignEffect();
+                var receiver = new LazyHandle(language, new ForeignValue(owner, foreign));
+                var argument = new LazyHandle(language, new ForeignValue(owner, 42L));
+                var receiverThunk = new Thunk(receiver.getCallTarget(), null);
+                var argumentThunk = new Thunk(argument.getCallTarget(), null);
+                assertTrue(context.asValue(new EntryValue(program, "call", operation.getArguments().size())).invokeMember("compile").asBoolean());
+                Object answer = Calls.target(target, operation == PolyglotOp.EXECUTE_VALUE
+                    ? new Object[]{0L, receiverThunk, argumentThunk, Unit.INSTANCE}
+                    : new Object[]{0L, receiverThunk, 0L, argumentThunk, Unit.INSTANCE});
+                var first = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(answer));
+                assertSame(receiver.request, first.asyncRequest()); assertEquals(0, argument.prefix); assertEquals(0, foreign.effects);
+                receiver.request.acknowledge();
+                var second = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(finishChild(language, first, shape)));
+                assertSame(argument.request, second.asyncRequest());
+                assertEquals(1, receiver.prefix); assertEquals(1, receiver.suffix); assertEquals(2, receiverThunk.getState());
+                assertEquals(1, argument.prefix); assertEquals(0, argument.suffix); assertEquals(0, foreign.effects);
+                argument.request.acknowledge();
+                answer = finishChild(language, second, shape);
+                var result = TupleResults.ownedTupleResult(answer, shape);
+                if (operation == PolyglotOp.EXECUTE_VALUE)
+                    assertEquals(42L, ((ForeignValue) shape.getLayout().getObject(result, 0)).getReceiver());
+                else assertEquals(0L, shape.getLayout().getLong(result, 0));
+                assertEquals(42L, foreign.value); assertEquals(1, foreign.effects);
+                assertEquals(1, receiver.prefix); assertEquals(1, receiver.suffix);
+                assertEquals(1, argument.prefix); assertEquals(1, argument.suffix); assertEquals(2, argumentThunk.getState());
+            } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
+    @Tag("foreign-exceptions-full-core")
+    @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
+    void originalGhcCopyResumesLazyHandleBeforePerformingForeignRead(String backend) throws Exception {
+        try (var context = coldContext()) {
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState();
+            owner.getThreads().enterCurrent(null, false, true, null);
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                String entry = "main:PolyglotStorage.copySlice#";
+                var module = new LinkedHashMap<>(CoreModules.reachable(ForeignExceptionFixtureSupport.source("post"), entry, true));
+                module.put("instrument", true);
+                ExecutableProgram program = backend.equals("ast") ? new Program(language, module, true) : new BytecodeProgram(language, module, true);
+                var target = program.entryTarget(entry);
+                var shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
+                var bytes = new ForeignBytes(new byte[]{1,2,3,4,5,6}, false);
+                var child = new LazyHandle(language, new ForeignValue(owner, bytes));
+                var thunk = new Thunk(child.getCallTarget(), null);
+                assertTrue(context.asValue(new EntryValue(program, entry, 4)).invokeMember("compile").asBoolean());
+                assertEquals(0, child.prefix); assertEquals(0, bytes.bulkReads);
+                Object answer = Calls.target(target, new Object[]{0L, thunk, 1L, 3L, Unit.INSTANCE});
+                var saved = Objects.requireNonNull(SavedGuestContinuations.savedGuestContinuation(answer));
+                assertSame(target.getRootNode(), saved.getSourceRoot(), "The saved cut must retain the pending foreign copy");
+                assertSame(child.request, saved.asyncRequest());
+                assertEquals(1L, ((Number) program.diagnostics().get("compiledEntries")).longValue());
+                assertEquals(1, child.prefix); assertEquals(0, child.suffix);
+                assertEquals(0, bytes.bulkReads, "No foreign effect may run before handle demand completes");
+                child.request.acknowledge();
+                answer = finishChild(language, saved, shape);
+                assertArrayEquals(new byte[]{2,3,4}, (byte[]) shape.getLayout().getObject(TupleResults.ownedTupleResult(answer, shape), 0));
+                assertEquals(1, child.prefix); assertEquals(1, child.suffix);
+                assertEquals(2, thunk.getState()); assertEquals(1, bytes.bulkReads);
+            } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
+        }
+    }
     @Tag("foreign-exceptions-full-core")
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     void originalGhcViewsKeepTheirTypedArrayDeclarationsOnFirstCompiledCall(String backend) throws Exception {

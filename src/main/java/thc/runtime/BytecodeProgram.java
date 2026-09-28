@@ -6418,7 +6418,9 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (polyglot != null) {
             var operands = new ArrayList<Expression>();
-            for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, CoreRepresentations.argumentMayBeLazy(flags.get(index), args.get(index))));
+            // Opaque Value handles are demanded before foreign execution, using
+            // the same saved force checkpoint as other strict guest operands.
+            for (var arg : args) operands.add(argument(arg, scope, false));
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 switch (polyglot) {
