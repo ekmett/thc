@@ -229,8 +229,8 @@ semanticTests = TestList
       assertEqual "Cabal flag object order does not leak into typed records" (Right (ordered,[]))
         (parseModuleWithoutDebug (moduleJSON reversed []))
   , TestLabel "typed package address and finalizer facts preserve schema-one prefixes" $ TestCase $ do
-      let ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _) = completeImports
-          address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi
+      ImportProof _ scope execution profile owner name (ImportsVerified wordBits productRecord imports calls _) <- pure completeImports
+      let address = AddressAssociation qualified (Known "original.h") "original_finalizer" True CApi
             nominal nominal "representational" (Just (["AddrRep"],"void"))
           imports2 = ImportProof 2 scope execution profile owner name
             (ImportsVerified wordBits productRecord imports calls [address])
