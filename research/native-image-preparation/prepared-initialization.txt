@@ -162,6 +162,7 @@ thc.runtime.CoreMd5Foreign$1
 thc.runtime.CoreRepresentation$1
 thc.runtime.EnvironmentExpression$1
 thc.runtime.GuestThreadOps$1
+thc.runtime.GuestThreadOps$2
 thc.runtime.GuestThreads$2
 thc.runtime.JavaScriptAccess$1
 thc.runtime.JavaScriptExpression$1
@@ -170,6 +171,8 @@ thc.runtime.ManagedFiles$1
 thc.runtime.ManagedGmp$1
 thc.runtime.ManagedMVars$1
 thc.runtime.Md5ForeignExpression$1
+thc.runtime.NativeUnix$1
+thc.runtime.PolyglotAccess$1
 thc.runtime.PolyglotExpression$1
 thc.runtime.PosixStat$1
 thc.runtime.Program$1
