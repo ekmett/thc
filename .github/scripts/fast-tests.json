@@ -22,7 +22,7 @@
     "src/main/kotlin/thc/runtime/NativeEventWait.kt": {
       "junit": ["thc.runtime.NativeEventWaitTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/RubbishLiterals.kt": {
+    "src/main/java/thc/runtime/RubbishLiterals.java": {
       "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]
     },
     "src/main/kotlin/thc/runtime/CoreCpuAffinity.kt": {
@@ -69,7 +69,13 @@
     "src/main/kotlin/thc/runtime/CoreCompactImages.kt": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/HintTracePrimops.kt": {
+    "src/main/java/thc/runtime/PrefetchExpression.java": {
+      "junit": ["thc.runtime.HintTraceTest"], "python": []
+    },
+    "src/main/java/thc/runtime/TraceExpression.java": {
+      "junit": ["thc.runtime.HintTraceTest"], "python": []
+    },
+    "src/main/java/thc/runtime/TraceOp.java": {
       "junit": ["thc.runtime.HintTraceTest"], "python": []
     },
     "src/main/kotlin/thc/runtime/ManagedSTM.kt": {
@@ -114,7 +120,7 @@
       "junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest", "thc.runtime.AtomicAddressTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/CoreDataLabels.kt": {
+    "src/main/java/thc/runtime/CoreDataLabels.java": {
       "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -1398,7 +1404,10 @@
     "src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest", "thc.runtime.DelimitedContinuationsTest", "thc.runtime.StableNamesTest", "thc.runtime.GhcBCOTest", "thc.runtime.ProcessSignalsTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/StableNames.kt": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "src/main/java/thc/runtime/StableNames.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "src/main/java/thc/runtime/StableNameOp.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "src/main/java/thc/runtime/MakeStableName.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "src/main/java/thc/runtime/HashStableName.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "compiler/test-fixtures/StableNamesNative.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/haskell-fixtures/StableNameFixtures.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},

@@ -3433,8 +3433,8 @@ CoreStackForeign.validateHead(fn, defined)
                 val operation = VectorMemoryOp.named(fn[1] as String)!!
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 vectorMemory(operation, args.map { compile(it, scope, false) })
-            } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
-                if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
+            } else if (fn[0] == "prim" && fn[1] in PrefetchExpression.ARITIES) {
+                if (args.size != PrefetchExpression.ARITIES[fn[1]]) fault("Wrong prefetch arity")
                 val value = argument(args[0], scope, flags[0] as Boolean)
                 val offset = if (args.size == 3) compile(args[1], scope, false) else null
                 val state = compile(args.last(), scope, false)
@@ -3473,8 +3473,10 @@ CoreStackForeign.validateHead(fn, defined)
                     e.builder.endTouch()
                 }, tupleProof.copy(evaluated = true))
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
-                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
-                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val argumentProofs = args.map(CoreRepresentations::expression)
+                val continuation = args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) }
+                CoreKeepAlive.validate(argumentProofs, flags, tupleProof,
+                    continuation?.first, continuation?.second)
                 val kept = argument(args[0], scope, flags[0] as Boolean)
                 val state = compile(args[1], scope, false)
                 val function = argument(args[2], scope, true)

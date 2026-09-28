@@ -3368,8 +3368,8 @@ CoreStackForeign.validateHead(fn, defined)
                 operation.validate(args.map(CoreRepresentations::expression), flags, tupleProof)
                 if (operation.isAddress) VectorAddressExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
                 else VectorByteArrayExpression(operation, args.map { compile(it, scope, false) }.toTypedArray())
-            } else if (fn[0] == "prim" && fn[1] in prefetchArities) {
-                if (args.size != prefetchArities[fn[1]]) fault("Wrong prefetch arity")
+            } else if (fn[0] == "prim" && fn[1] in PrefetchExpression.ARITIES) {
+                if (args.size != PrefetchExpression.ARITIES[fn[1]]) fault("Wrong prefetch arity")
                 PrefetchExpression(argument(args[0], scope, flags[0] as Boolean),
                     if (args.size == 3) compile(args[1], scope, false) else null,
                     compile(args.last(), scope, false), tupleProof)
@@ -3387,8 +3387,10 @@ CoreStackForeign.validateHead(fn, defined)
                 CoreTouch.validate(listOf(kept.representation, state.representation), flags, tupleProof)
                 TouchExpression(kept, state, tupleProof)
             } else if (fn[0] == "prim" && fn[1] == "keepAlive#") {
-                CoreKeepAlive.validate(args.map(CoreRepresentations::expression), flags, tupleProof,
-                    args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) })
+                val argumentProofs = args.map(CoreRepresentations::expression)
+                val continuation = args.getOrNull(2)?.let { CoreRepresentations.knownFunctionSignature(it, bindings) }
+                CoreKeepAlive.validate(argumentProofs, flags, tupleProof,
+                    continuation?.first, continuation?.second)
                 val kept = argument(args[0], scope, flags[0] as Boolean)
                 val state = compile(args[1], scope, false)
                 val function = compile(args[2], scope, false)
