@@ -50,6 +50,15 @@ public final class BytecodeNormalizerChecks {
         reject(patch, before.replace("createCachedTags(numLocals);", "createCachedTags(other);"));
         reject(patch, after.replace("info == FrameSlotKind.Long", "info instanceof FrameSlotKind"));
         reject(patch, after.replace("super.prepareForCompilation", "otherPreparation"));
+        String delegated = before + "\n    private static final class ContinuationRootNodeImpl extends ContinuationRootNode {\n" +
+                "        @Override\n" +
+                "        protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {\n" +
+                "            return root.prepareForCompilation(rootCompilation, tier, lastTier);\n" +
+                "        }\n}\n";
+        stable(patch, delegated);
+        reject(patch, delegated.replace("return root.prepareForCompilation", "return other.prepareForCompilation"));
+        reject(patch, delegated + CONTINUATION_PREPARATION);
+        reject(patch, delegated.replace("ContinuationRootNodeImpl extends ContinuationRootNode", "OtherRoot extends RootNode"));
         for (String kind : List.of("Int", "Float", "Double", "Boolean"))
             reject(patch, after.replace("info == FrameSlotKind." + kind, "info == null"));
     }

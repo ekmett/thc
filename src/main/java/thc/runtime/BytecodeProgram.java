@@ -184,6 +184,9 @@ public final class BytecodeProgram implements ExecutableProgram {
         List<VectorCapture> vectorCaptures = List.of();
         CaptureLayout captureLayout;
         boolean mayLoop;
+        boolean passThrough;
+        boolean preparingCaseRegion;
+        final List<BytecodeCaseRegion> caseRegions = new ArrayList<>();
         LeadingCaseReturn leadingCaseReturn;
         TupleShape tuple;
 
@@ -714,8 +717,15 @@ public final class BytecodeProgram implements ExecutableProgram {
 
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
             CoreRepresentation resultProof, boolean[] entryStrict) {
+        return function(label, args, expression, outer, resultProof, entryStrict, true, false);
+    }
+
+    private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer,
+            CoreRepresentation resultProof, boolean[] entryStrict, boolean tail, boolean passThrough) {
         if (entryStrict.length != args.size()) throw new RuntimeFault("Function entry contract arity mismatch");
         var context = new FunctionContext(args.size(), entryStrict.clone());
+        context.passThrough = passThrough;
+        context.preparingCaseRegion = passThrough;
         var scope = new Scope(context, outer.source);
         var free = CoreFreeVariables.coreFreeVariables(expression);
         var argumentIds = new LinkedHashSet<String>();
@@ -807,7 +817,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             var arg = args.get(index);
             String id = (String) arg.get("id");
             boolean lifted = representation(arg);
-            var proof = evaluatedProof(CoreRepresentations.binder(arg), !lifted || context.entryStrict[index]);
+            var proof = passThrough ? CoreRepresentations.binder(arg)
+                    : evaluatedProof(CoreRepresentations.binder(arg), !lifted || context.entryStrict[index]);
             int offset = ArgumentLayout.offset(context.inputLayout, index);
             if (proof.isTypedTransport()) {
                 if (lifted) throw new RuntimeFault(proof.isVector() ? "Vector formal cannot be lifted" : "Tuple formal cannot be lifted");
@@ -830,10 +841,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             } else context.arguments.add(null);
         }
         context.typedArguments = physicalArguments;
-        var compiled = compile(expression, scope, true);
+        var compiled = compile(expression, scope, tail);
         boolean anyStrict = false;
         for (boolean strict : context.entryStrict) anyStrict |= strict;
-        if ((!enableAsync || !anyStrict) && compiled.loweredCase() && context.inputLayout == null) {
+        if (!passThrough && (!enableAsync || !anyStrict) && compiled.loweredCase() && context.inputLayout == null) {
             var usedArguments = new LinkedHashSet<>(free);
             usedArguments.retainAll(argumentIds);
             context.leadingCaseReturn = LeadingCaseReturn.discover(args, expression, resultProof,
@@ -844,7 +855,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             throw new RuntimeFault("Sum function requires exact body and declared result proofs");
         var body = new ProvenExpression(compiled, evaluatedProof(compiled.proof().refine(resultProof), compiled.proof().getEvaluated()));
         context.tuple = body.proof.isTypedTransport() ? new TupleShape(body.proof, language) : null;
-        var target = build(label, context, body, !body.proof.getEvaluated());
+        var target = build(label, context, body, !passThrough && !body.proof.getEvaluated());
         ((GuestRoot) target.getRootNode()).configureInputProofs(argumentProofs);
         captureSources.addAll(vectorSources);
         return new FunctionSpec(target, context.captureLayout, captureSources, vectorCount != 0);
@@ -901,7 +912,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var kind = FrameLayout.carrierKind(local.proof);
                     e.staticScalars.put(local.id, kind);
                     info = kind;
-                } else if (singleWrite && (staticLiftedReference(local.proof)
+                } else if (singleWrite && (staticBoxedReference(local.proof)
                         || typedFormal && FrameLayout.carrierKind(local.proof) == FrameSlotKind.Object)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
@@ -1010,6 +1021,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         root.configureLeadingCaseReturn(context.leadingCaseReturn);
         root.configureTupleResult(context.tuple);
         root.configureScalarResult(body.proof());
+        root.configureCaseRegions(context.passThrough, context.caseRegions.toArray(BytecodeCaseRegion[]::new));
         roots.add(root);
         return root.getCallTarget();
     }
@@ -1079,48 +1091,17 @@ public final class BytecodeProgram implements ExecutableProgram {
         b.beginBlock();
         var values = new ArrayList<BytecodeLocal>();
         for (int i = 0; i < operands.size(); ++i) {
-            var local = b.createLocal("Blocking operand " + i, null);
-            b.beginStoreLocal(local); operands.get(i).emit(e); b.endStoreLocal();
+            // The request ABI saves boxed scalar values, without observing or forcing them.
+            var local = b.createLocal("Blocking operand " + i, FrameSlotKind.Object);
+            b.beginStaticStoreObject(local); operands.get(i).emit(e); b.endStaticStoreObject();
             values.add(local);
         }
-        var retry = b.createLocal("Blocking request pending", "primitive");
-        var request = b.createLocal("Blocking async request", FrameSlotKind.Object);
-        var active = b.createLocal("Blocking logical mask", FrameSlotKind.Object);
-        var discard = b.createLocal("Blocking resume value", FrameSlotKind.Object);
-        b.beginStoreLocal(retry); b.emitLoadConstant(true); b.endStoreLocal();
-        b.beginWhile();
-        b.emitLoadLocal(retry);
-        b.beginBlock();
-        b.beginTryCatch();
-        b.beginBlock();
-        operation.accept(values);
-        b.beginStoreLocal(retry); b.emitLoadConstant(false); b.endStoreLocal();
-        b.endBlock();
-        b.beginBlock();
-        b.beginStaticStoreObject(request);
-        b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
-        b.endStaticStoreObject();
-        b.beginStaticStoreObject(active); b.emitCurrentMask(); b.endStaticStoreObject();
-        b.beginStaticStoreObject(discard);
-        b.beginReenterCallMask();
-        beginAnnotationYield(e);
-        b.beginParkAsyncMask();
-        b.emitStaticLoadObject(request);
-        b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
-        b.endParkAsyncMask();
-        endAnnotationYield(e);
-        b.emitStaticLoadObject(active);
-        b.endReenterCallMask();
-        b.endStaticStoreObject();
-        b.endBlock();
-        b.endTryCatch();
-        b.endBlock();
-        b.endWhile();
+        emitOwnerWaitRetry(e, () -> operation.accept(values));
         if (result) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
         b.endBlock();
     }
 
-    /** Only a foreign owner wait may restart; the producer/local operand stays saved. */
+    /** Retry only an uncommitted request; the producer/local operand stays saved. */
     private void emitOwnerWaitRetry(Emission e, Runnable attempt) {
         if (!enableAsync) { attempt.run(); return; }
         var b = e.builder;
@@ -3502,15 +3483,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             evaluatedArguments[i] = proof.getEvaluated(); proofs.add(proof);
         }
         var inputLayout = ArgumentLayout.fromProofs(proofs);
-        boolean loop = tail && context.inputLayout == null && inputLayout == null
+        boolean catchesTail = tail && !context.passThrough;
+        boolean loop = catchesTail && context.inputLayout == null && inputLayout == null
             && arguments.size() <= context.formalArity && context.formalArity > 0;
         // Roots without direct self-calls can still receive A -> B -> ... -> A.
-        if (tail) context.mayLoop = true;
+        if (catchesTail) context.mayLoop = true;
         return evaluated(e -> {
             var b = e.builder;
             if (enableAsync) { b.beginBlock(); emitAsyncPoll(e); }
             BytecodeLocal reentryResult = null;
-            if (tail) {
+            if (catchesTail) {
                 b.beginBlock();
                 reentryResult = b.createLocal("tail result", null);
                 b.beginStoreLocal(reentryResult);
@@ -3518,7 +3500,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (resumable && !loop) checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail);
             else if (inputLayout != null && inputLayout.getRequiresTyped())
                 typedArguments(e, function, arguments, inputLayout, tail, null, tail && !resumable
-                    && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
+                    && !context.passThrough && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
             else if (inputLayout != null) compactArguments(e, function, arguments, inputLayout, (fn, values) -> {
                 b.beginApplyCompact(inputLayout, tail, metrics, evaluatedArguments);
                 b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
@@ -4390,7 +4372,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         for (var argument : arguments) proofs.add(argument.proof());
         var inputLayout = ArgumentLayout.fromProofs(proofs);
         var context = scope.function;
-        if (tail) context.mayLoop = true;
+        if (tail && !context.passThrough) context.mayLoop = true;
         return tupleExpression(shape.getProof(), (e, destination) -> {
             var b = e.builder;
             if (!tail) {
@@ -4415,7 +4397,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (resumable) checkpointedTupleApplication(e, shape, function, arguments, inputLayout, destination, true);
                 else if (inputLayout != null && inputLayout.getRequiresTyped())
                     typedArguments(e, function, arguments, inputLayout, true, tupleSlots(shape, destination),
-                        TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
+                        !context.passThrough && TypedInputs.supportsTypedSelf(context.inputLayout, context.entryStrict, inputLayout));
                 else if (inputLayout == null) {
                     b.beginTailApplyTuple(tupleSlots(shape, destination), arguments.size(), metrics);
                     requireClosure(function).emit(e); for (var argument : arguments) argument.emit(e);
@@ -4432,13 +4414,15 @@ public final class BytecodeProgram implements ExecutableProgram {
                     b.beginBlock(); b.beginReturn(); b.emitLoadLocal(result); b.endReturn(); b.endBlock();
                     b.endIfThen();
                 }
-                b.beginIfThenElse();
-                b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(false); b.endIsTailReentry();
-                b.beginBlock();
-                restoreTailArguments(e, context, result);
-                b.emitBranch(Objects.requireNonNull(e.continueLabel));
-                b.endBlock(); b.beginBlock(); b.endBlock();
-                b.endIfThenElse();
+                if (!context.passThrough) {
+                    b.beginIfThenElse();
+                    b.beginIsTailReentry(); b.emitLoadLocal(result); b.emitLoadConstant(false); b.endIsTailReentry();
+                    b.beginBlock();
+                    restoreTailArguments(e, context, result);
+                    b.emitBranch(Objects.requireNonNull(e.continueLabel));
+                    b.endBlock(); b.beginBlock(); b.endBlock();
+                    b.endIfThenElse();
+                }
                 b.endBlock();
             }
         });
@@ -4565,10 +4549,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             && Set.of("IntRep", "WordRep", "Int64Rep", "Word64Rep").contains(proof.getPrimReps().getFirst());
     }
 
-    private static boolean staticLiftedReference(CoreRepresentation proof) {
+    private static boolean staticBoxedReference(CoreRepresentation proof) {
         return !proof.isTypedTransport() && Set.of(CoreKind.OBJECT, CoreKind.DATA, CoreKind.CLOSURE).contains(proof.getKind())
             && proof.getPrimReps() != null && proof.getPrimReps().size() == 1
-            && "BoxedRep (Just Lifted)".equals(proof.getPrimReps().getFirst());
+            // Boxed storage is Object regardless of levity; this does not prove WHNF.
+            && Set.of("BoxedRep (Just Lifted)", "BoxedRep (Just Unlifted)", "BoxedRep Nothing")
+                .contains(proof.getPrimReps().getFirst());
     }
 
     private Expression primitive(String name, List<Expression> args) { return primitive(name, args, false); }
@@ -5209,6 +5195,121 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression compileCase(List<Object> expr, Scope scope, boolean tail) {
+        var alternatives = (List<List<Object>>) expr.get(3);
+        var context = scope.function;
+        long dataCount = alternatives.stream().filter(a -> "data".equals(a.getFirst())).count();
+        if (!context.preparingCaseRegion && context.caseRegions.isEmpty() && scope.joins.isEmpty()
+                && dataCount >= 64 && dataCount <= BytecodeCaseRegion.MAX_ALTERNATIVES
+                && alternatives.stream().allMatch(a -> "data".equals(a.getFirst()) || "default".equals(a.getFirst()))
+                && CoreRepresentations.caseBinder(expr).getKind() == CoreKind.DATA) {
+            context.preparingCaseRegion = true;
+            try { return partitionedCase(expr, scope, tail); }
+            finally { context.preparingCaseRegion = false; }
+        }
+        return inlineCase(expr, scope, tail);
+    }
+
+    private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail) {
+        var inline = inlineCase(expr, scope, tail, true);
+        var alternatives = (List<List<Object>>) expr.get(3);
+        var explicit = alternatives.stream().filter(a -> "data".equals(a.getFirst())).toList();
+        var fallback = alternatives.stream().filter(a -> "default".equals(a.getFirst())).toList();
+        var binder = (String) expr.get(2);
+        var binderMetadata = Map.<String, Object>of("id", binder, "name", binder, "lifted", true,
+                "rep", ((Map<String, Object>) expr.getLast()).get("binder") instanceof Map<?, ?> record
+                        ? record.get("rep") : Map.of());
+        var specs = new ArrayList<FunctionSpec>();
+        var guards = new DataLayout[explicit.size()];
+        for (int i = 0; i < guards.length; i++) guards[i] = dataLayout((String) explicit.get(i).get(1));
+        for (int start = 0; start < explicit.size(); start += BytecodeCaseRegion.WIDTH) {
+            var chunk = new ArrayList<>(explicit.subList(start, Math.min(start + BytecodeCaseRegion.WIDTH, explicit.size())));
+            if (start + BytecodeCaseRegion.WIDTH >= explicit.size()) chunk.addAll(fallback);
+            var body = new ArrayList<>(expr);
+            body.set(1, List.of("var", binder));
+            body.set(3, chunk);
+            specs.add(function("case region " + binder + " " + start, List.of(binderMetadata), body, scope,
+                    inline.proof(), new boolean[1], tail, true));
+        }
+        var targets = new RootCallTarget[specs.size()];
+        var layouts = new CaptureLayout[specs.size()];
+        for (int i = 0; i < specs.size(); i++) {
+            targets[i] = specs.get(i).target; layouts[i] = specs.get(i).captureLayout;
+        }
+        int index = scope.function.caseRegions.size();
+        scope.function.caseRegions.add(new BytecodeCaseRegion(guards, targets, layouts, tail));
+        var scrutinee = force(compile((List<Object>) expr.get(1), scope, false));
+        return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
+            var b = e.builder;
+            b.beginBlock();
+            var answer = destination == null ? b.createLocal("case choice result", FrameSlotKind.Object) : null;
+            var complete = b.createLabel();
+            b.beginUnprofiledIfThen();
+            b.emitInlineCaseRegions();
+            b.beginBlock();
+            if (answer != null) b.beginStaticStoreObject(answer);
+            emitResult(inline, e, destination);
+            if (answer != null) b.endStaticStoreObject();
+            b.emitBranch(complete);
+            b.endBlock(); b.endUnprofiledIfThen();
+            var captures = new LocalAccessor[specs.size()][];
+            for (int i = 0; i < captures.length; i++) {
+                var locals = specs.get(i).captures;
+                captures[i] = new LocalAccessor[locals.size()];
+                for (int j = 0; j < locals.size(); j++)
+                    captures[i][j] = LocalAccessor.constantOf(Objects.requireNonNull(e.locals.get(locals.get(j).id)));
+            }
+            var result = destination == null ? null : tupleSlots(new TupleShape(inline.proof(), language), destination);
+            if (answer != null) b.beginStaticStoreObject(answer);
+            emitCaseRegionCall(e, scope.function, index, new BytecodeCaseRegion.Source(captures, result), scrutinee, tail);
+            if (answer != null) b.endStaticStoreObject();
+            b.emitLabel(complete);
+            if (answer != null) b.emitStaticLoadObject(answer);
+            b.endBlock();
+        }), inline.proof()));
+    }
+
+    private void emitCaseRegionCall(Emission e, FunctionContext context, int index, BytecodeCaseRegion.Source source,
+            Expression scrutinee, boolean tail) {
+        var b = e.builder;
+        b.beginBlock();
+        var mask = b.createLocal("case region caller mask", FrameSlotKind.Object);
+        b.beginStaticStoreObject(mask); b.emitCurrentMask(); b.endStaticStoreObject();
+        var result = b.createLocal("case region result", FrameSlotKind.Object);
+        if (resumable) b.beginTryCatch();
+        b.beginStaticStoreObject(result);
+        b.beginCallCaseRegion(index, source); scrutinee.emit(e); b.emitStaticLoadObject(mask); b.endCallCaseRegion();
+        b.endStaticStoreObject();
+        if (resumable) {
+            b.beginBlock();
+            var suspended = b.createLocal("case region suspension", FrameSlotKind.Object);
+            b.beginStaticStoreObject(suspended); b.beginCallSuspensionOnly(); b.emitLoadException();
+            b.endCallSuspensionOnly(); b.endStaticStoreObject();
+            if (source.destination() == null) { b.beginStaticStoreObject(result); b.beginResumeApplication(); }
+            else b.beginResumeTupleApplication(source.destination());
+            b.emitStaticLoadObject(suspended);
+            b.beginReenterCallMask(); beginAnnotationYield(e);
+            b.beginParkCallMask(); b.emitStaticLoadObject(suspended);
+            b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry)); b.emitStaticLoadObject(mask);
+            b.endParkCallMask(); endAnnotationYield(e); b.emitStaticLoadObject(mask); b.endReenterCallMask();
+            if (source.destination() == null) { b.endResumeApplication(); b.endStaticStoreObject(); }
+            else b.endResumeTupleApplication();
+            b.endBlock(); b.endTryCatch();
+        }
+        if (tail && context.mayLoop) {
+            b.beginUnprofiledIfThen();
+            b.beginIsTailReentry(); b.emitStaticLoadObject(result); b.emitLoadConstant(false); b.endIsTailReentry();
+            b.beginBlock(); restoreTailArguments(e, context, result);
+            b.emitBranch(Objects.requireNonNull(e.continueLabel)); b.endBlock(); b.endUnprofiledIfThen();
+        }
+        if (source.destination() == null) b.emitStaticLoadObject(result);
+        b.endBlock();
+    }
+
+    private Expression inlineCase(List<Object> expr, Scope scope, boolean tail) {
+        return inlineCase(expr, scope, tail, false);
+    }
+
+    private Expression inlineCase(List<Object> expr, Scope scope, boolean tail, boolean preparedDecision) {
         var vectorRead = CoreVectorMemory.readCase(expr, constructors);
         if (vectorRead != null) return vectorReadCase(vectorRead, scope, tail);
         var local = scope.child();
@@ -5333,7 +5434,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             // A case binder is written once, before its alternatives. A saved
             // activation retains that same slot; resumption does not rebind it.
             if (staticWideLong(binderProof)) e.staticLocals.add(binder.id);
-            else if (binderProof.getKind() == CoreKind.VOID || staticLiftedReference(binderProof))
+            else if (binderProof.getKind() == CoreKind.VOID || staticBoxedReference(binderProof))
                 e.staticObjectLocals.add(binder.id);
             if (category == CaseCategory.GENERIC) {
                 if (e.staticObjectLocals.contains(binder.id)) {
@@ -5404,7 +5505,34 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
             var choice = new Choice();
-            if (ordered == null) choice.emit(0);
+            if (preparedDecision) {
+                // The finite recovery decision must be compilable before any
+                // arm has run. Preserve its ordered constructor guards without
+                // Conditional's adaptive branch/merge instructions. Scalar
+                // results use the same boxed merge contract; aggregate leaves
+                // still write their exact caller-owned destination slots.
+                var result = destination == null ? b.createLocal("case decision result", FrameSlotKind.Object) : null;
+                var complete = b.createLabel();
+                for (var alt : explicit) {
+                    b.beginUnprofiledIfThen();
+                    b.beginMatchDataValue((DataLayout) alt.value);
+                    read(binder, false).emit(e); b.endMatchDataValue();
+                    b.beginBlock();
+                    if (result != null) b.beginStaticStoreObject(result);
+                    choice.emitAlternative(alt);
+                    if (result != null) b.endStaticStoreObject();
+                    b.emitBranch(complete);
+                    b.endBlock(); b.endUnprofiledIfThen();
+                }
+                if (fallback == null) b.emitFailCase();
+                else {
+                    if (result != null) b.beginStaticStoreObject(result);
+                    choice.emitAlternative(fallback);
+                    if (result != null) b.endStaticStoreObject();
+                }
+                b.emitLabel(complete);
+                if (result != null) b.emitStaticLoadObject(result);
+            } else if (ordered == null) choice.emit(0);
             else {
                 // One copy of each arm and one shared default avoid nested merge growth.
                 var result = destination == null ? b.createLocal("literal case result", null) : null;
@@ -6862,7 +6990,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     target.builder.beginPrepareThreadDelay(); for (var operand : operands) operand.emit(target); target.builder.endPrepareThreadDelay();
                 };
                 if (enableAsync) emitBlockingRequest(e, List.of(token), true, values -> {
-                    b.beginAwaitThreadDelay(true); b.emitLoadLocal(values.getFirst()); b.endAwaitThreadDelay();
+                    b.beginAwaitThreadDelay(true); b.emitStaticLoadObject(values.getFirst()); b.endAwaitThreadDelay();
                 });
                 else {
                     b.beginBlock(); b.beginAwaitThreadDelay(false); token.emit(e); b.endAwaitThreadDelay();
@@ -6920,7 +7048,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     target.builder.beginPrepareFileWait(writing); for (var operand : operands) operand.emit(target); target.builder.endPrepareFileWait();
                 };
                 if (enableAsync) emitBlockingRequest(e, List.of(token), true, values -> {
-                    b.beginAwaitFileWait(payload, true); b.emitLoadLocal(values.getFirst()); b.endAwaitFileWait();
+                    b.beginAwaitFileWait(payload, true); b.emitStaticLoadObject(values.getFirst()); b.endAwaitFileWait();
                 });
                 else {
                     b.beginBlock(); b.beginAwaitFileWait(payload, false); token.emit(e); b.endAwaitFileWait();
@@ -7076,10 +7204,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                     var slots = tupleSlots(new TupleShape(tupleProof, language), destination);
                     if (enableAsync) emitBlockingRequest(e, operands, false, values -> {
                         // Restart the discarded attempt with saved original operands, not its abandoned continuation.
-                        b.beginInvokeSTM(operation, slots, metrics, true); b.emitLoadLocal(values.get(0));
-                        if (values.size() == 3) b.emitLoadLocal(values.get(1)); else b.emitLoadNull();
+                        b.beginInvokeSTM(operation, slots, metrics, true); b.emitStaticLoadObject(values.get(0));
+                        if (values.size() == 3) b.emitStaticLoadObject(values.get(1)); else b.emitLoadNull();
                         if (nested != null) b.emitReadGlobal(nested); else b.emitLoadNull();
-                        b.emitLoadLocal(values.getLast()); b.endInvokeSTM();
+                        b.emitStaticLoadObject(values.getLast()); b.endInvokeSTM();
                     });
                     else {
                         b.beginInvokeSTM(operation, slots, metrics, enableAsync); operands.get(0).emit(e);
@@ -7106,7 +7234,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var b = e.builder;
                 if (enableAsync && (operation == MVarOp.TAKE || operation == MVarOp.READ)) emitBlockingRequest(e, operands, false, values -> {
                     b.beginReadMVar(destination.get(0), operation == MVarOp.TAKE, true);
-                    for (var value : values) b.emitLoadLocal(value); b.endReadMVar();
+                    for (var value : values) b.emitStaticLoadObject(value); b.endReadMVar();
                 });
                 else {
                     switch (operation) {
@@ -7128,7 +7256,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return new ProvenExpression(e -> {
                 var b = e.builder;
                 if (enableAsync && operation == MVarOp.PUT) emitBlockingRequest(e, operands, true, values -> {
-                    b.beginPutMVar(true); for (var value : values) b.emitLoadLocal(value); b.endPutMVar();
+                    b.beginPutMVar(true); for (var value : values) b.emitStaticLoadObject(value); b.endPutMVar();
                 });
                 else { b.beginPutMVar(false); for (var operand : operands) operand.emit(e); b.endPutMVar(); }
             }, evaluatedProof(tupleProof, true));

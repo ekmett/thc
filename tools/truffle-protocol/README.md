@@ -159,10 +159,16 @@ candidate body deliberately. Only the edge introduced after the actual bailout
 has an inlining veto. The test's smaller graph budget makes the model bounded;
 production graph limits are unchanged.
 
-No THC function root currently overrides this hook. These changes establish the
-compilation lifecycle, not automatic case-arm selection, demand-only candidate
-allocation, or a complete application graph-budget policy. In particular, a
-callee inlining veto alone cannot reduce an oversized caller's own partial
-evaluation graph: its body must actually be made smaller. The model has no
-continuation or Bloom protocol of its own; existing typed side-root tests cover
-those separate runtime contracts.
+THC AST function roots and eligible bytecode constructor decisions opt into this
+hook with finite, preprepared side targets. Bytecode recovery retains the original
+target and instruction positions. A pinned, source-checked lowering of its private
+choice instruction selects the reduced region before operand-stack escape
+analysis: a late-folded Boolean alone still exposes the old body to the early
+graph-size listener. This bridge changes no ordinary guest branch profiles.
+Side calls preserve the caller's Bloom protocol without introducing a new catcher.
+
+These are bounded extraction policies, not demand-only candidate allocation or a
+complete application graph-budget solution. A callee inlining veto alone cannot
+reduce an oversized caller's own partial-evaluation graph: its body must actually
+be made smaller. The standalone lifecycle model has no continuation or Bloom
+protocol of its own; runtime side-root tests cover those separate contracts.

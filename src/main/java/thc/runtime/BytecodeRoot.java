@@ -63,6 +63,27 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     private String label = "bytecode";
+    @CompilerDirectives.CompilationFinal private boolean passThrough;
+    @CompilerDirectives.CompilationFinal private BytecodeCaseRegion.Plan casePlan;
+    @Children private BytecodeCaseRegion[] caseRegions = new BytecodeCaseRegion[0];
+    final void configureCaseRegions(boolean passThrough, BytecodeCaseRegion[] regions) {
+        this.passThrough = passThrough;
+        caseRegions = insert(regions);
+        if (regions.length != 0) casePlan = new BytecodeCaseRegion.Plan();
+    }
+    final long entryMask() { return passThrough ? 0L : mask; }
+    final boolean useInlineCaseRegions() {
+        if (casePlan == null) throw new IllegalStateException("Unconfigured bytecode case decision");
+        return casePlan.inline.isValid();
+    }
+    @Override public final long getGraphBudgetGeneration() { return casePlan == null ? 0 : casePlan.generation(); }
+    @Override public final long prepareGraphBudgetRetry(long failedGeneration) {
+        return casePlan == null ? failedGeneration : casePlan.recover(failedGeneration);
+    }
+    @Override protected boolean prepareForCompilation(boolean rootCompilation, int tier, boolean lastTier) {
+        // These private roots can only be called by the recovered case edge.
+        return (!passThrough || rootCompilation) && super.prepareForCompilation(rootCompilation, tier, lastTier);
+    }
     @CompilerDirectives.CompilationFinal private boolean asyncEnabled;
     public final void configureAsync(boolean enabled) { asyncEnabled = enabled; }
     public final boolean isAsyncEnabled() { return asyncEnabled; }
@@ -88,7 +109,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @Override public final String toString() { return label; }
     @Override public final long bloom(VirtualFrame frame) {
         // Self backedges restore DSL locals, leaving the incoming ancestry intact.
-        if (typedBloom == null) return (long) frame.getArguments()[0] | mask;
+        if (typedBloom == null) return (long) frame.getArguments()[0] | entryMask();
         try { return typedBloom.getLong(getBytecodeNode(), frame); }
         catch (com.oracle.truffle.api.nodes.UnexpectedResultException invalid) { throw fail("Invalid typed input bloom"); }
     }
@@ -114,6 +135,24 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             if (metrics.getEnabled() && CompilerDirectives.inCompiledCode()) {
                 metrics.incrementCompiledEntries();
             }
+        }
+    }
+
+    @Operation public static final class InlineCaseRegions {
+        @Specialization public static boolean test(@Bind("$node") Node node) {
+            BytecodeRoot root = (BytecodeRoot) node.getRootNode();
+            return root.useInlineCaseRegions();
+        }
+    }
+
+    @Operation
+    @ConstantOperand(type = int.class, name = "index")
+    @ConstantOperand(type = BytecodeCaseRegion.Source.class, name = "source")
+    public static final class CallCaseRegion {
+        @Specialization public static Object call(VirtualFrame frame, int index, BytecodeCaseRegion.Source source,
+                Object scrutinee, MaskingState callerMask, @Bind("$node") Node node) {
+            BytecodeRoot root = (BytecodeRoot) node.getRootNode();
+            return root.caseRegions[index].execute(frame, root, source, scrutinee, callerMask);
         }
     }
 
@@ -731,14 +770,19 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation public static final class ParkCallMask {
-        @Specialization public static DelimitedCut parkDelimited(DelimitedCut cut,
-                MaskingState rootEntry, MaskingState callerActive) { return cut; }
-        @Specialization public static CallSegmentSuspended park(CallSegmentSuspended suspended,
+        @Specialization public static Object park(Object value,
                 MaskingState rootEntry, MaskingState callerActive, @Bind("$node") Node node) {
+            if (value instanceof DelimitedCut cut) return cut;
+            if (value instanceof CallSegmentSuspended suspended) return park(suspended, rootEntry, callerActive, node);
+            throw new com.oracle.truffle.api.dsl.UnsupportedSpecializationException(node, null, value, rootEntry, callerActive);
+        }
+        public static CallSegmentSuspended park(CallSegmentSuspended suspended,
+                MaskingState rootEntry, MaskingState callerActive, Node node) {
             try {
                 if (SynchronousMasking.current(node) != callerActive)
                     throw new IllegalStateException("Captured caller lost its logical mask before Yield");
-                return new CallSegmentSuspended(suspended.getSegment(), callerActive, suspended.getAsyncRequest());
+                return new CallSegmentSuspended(suspended.getSegment(), callerActive,
+                        suspended.getAsyncRequest(), suspended.getStackSpill());
             } finally {
                 // Yield skips lexical finally. Each root parks to its own entry
                 // mask, so a chain of callers unwinds to the carrier ambient.
@@ -759,10 +803,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     public static final class CallSuspensionOnly {
         @Specialization public static Object capture(AbstractTruffleException failure) {
             if (failure instanceof DelimitedCut cut) return cut;
-            if (failure instanceof CapturedCallSuspension captured) return new CallSegmentSuspended(captured.getSegment());
+            if (failure instanceof CapturedCallSuspension captured) return captured(captured.getSegment());
             if (failure instanceof AsyncBlocked blocked) return blocked.getRequest();
             if (failure instanceof STMRestart restart) return restart.getRequest();
             throw failure;
+        }
+        // The first cold packet must classify its real saved continuation without
+        // specializing compiled code on whichever continuation subtype loaded first.
+        @TruffleBoundary(transferToInterpreterOnException = false)
+        private static CallSegmentSuspended captured(CallSegment segment) {
+            return new CallSegmentSuspended(segment);
         }
     }
 
