@@ -30,7 +30,7 @@ def contains_sum(proof):
 
 
 def lifted_payload(proof):
-    if isinstance(proof, dict) and proof.get('primReps') == [UNKNOWN_BOXED]:
+    if isinstance(proof, dict) and 'aggregate' not in proof and proof.get('primReps') == [UNKNOWN_BOXED]:
         return None
     return (isinstance(proof, dict) and 'aggregate' not in proof and
             proof.get('primReps') == [LIFTED])

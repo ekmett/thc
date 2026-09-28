@@ -95,6 +95,16 @@ def run(module,entry='root',cap=ENABLED):
 
 
 class SumProofTest(unittest.TestCase):
+    def test_unknown_boxed_singleton_tuple_remains_unlifted(self):
+        pointer=dict(kind='object',primReps=['BoxedRep Nothing'],evaluated=False)
+        singleton=tup(pointer)
+        self.assertIsNone(sums.lifted_payload(pointer))
+        self.assertTrue(sums.payload_levity_matches(pointer,pointer,None))
+        self.assertIs(sums.lifted_payload(singleton),False)
+        self.assertTrue(sums.payload_levity_matches(singleton,singleton,False))
+        self.assertFalse(sums.payload_levity_matches(singleton,singleton,True))
+        self.assertFalse(sums.payload_levity_matches(singleton,singleton,None))
+
     def test_unknown_boxed_payload_retains_absent_native_layout_but_exact_logical_shape(self):
         pointer=dict(kind='object',primReps=['BoxedRep Nothing'],evaluated=False)
         proof=dict(kind='unknown',aggregate='unboxed-sum',alternatives=[pointer,INT],
@@ -173,6 +183,19 @@ class SumProofTest(unittest.TestCase):
 
 
 class SumAuditTest(unittest.TestCase):
+    def test_unknown_boxed_singleton_sum_payload_and_binder_reject_lifted_flags(self):
+        pointer=dict(kind='object',primReps=['BoxedRep Nothing'],evaluated=False)
+        module=fixture(summ(tup(pointer),INT))
+        module['bindings'][1]['expr'][2][3][0]=False
+        module['bindings'][0]['expr'][2][3][0][4]['binders'][0]['lifted']=False
+        self.accepted(module)
+        constructor=copy.deepcopy(module)
+        constructor['bindings'][1]['expr'][2][3][0]=True
+        self.rejected(constructor)
+        binder=copy.deepcopy(module)
+        binder['bindings'][0]['expr'][2][3][0][4]['binders'][0]['lifted']=True
+        self.rejected(binder)
+
     def test_unknown_boxed_sum_argument_result_constructor_and_case_are_not_forced(self):
         pointer=dict(kind='object',primReps=['BoxedRep Nothing'],evaluated=False)
         proof=dict(kind='unknown',aggregate='unboxed-sum',alternatives=[pointer,INT],
