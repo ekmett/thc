@@ -65,7 +65,8 @@ class BigNatLiteralTest {
         val artifacts = listOf("$directory/requests.tsv", "$directory/oracle.tsv", "$directory/boot/boot-provenance.json") +
             modules.map { "$directory/boot/core/GHC.Internal.Bignum.$it.json" } +
             listOf("bignat-literal-oracle", "Main.hi", "Main.o", "BigNatLiteralAudit.hi", "BigNatLiteralAudit.o").map { "$directory/native/$it" } +
-            listOf("pre", "post").flatMap { stage -> listOf("$directory/$stage-core/BigNatLiteralAudit.json", "$directory/$stage-core/THC.InterfaceClosure.json") +
+            listOf("pre", "post").flatMap { stage -> listOf("BigNatLiteralAudit", "THC.InterfaceClosure").flatMap { module ->
+                listOf("$directory/$stage-core/$module.json", "$directory/$stage-core/$module.json.symbols") } +
                 (entries + arithmetic + "missing-source").map { "$directory/$stage-$it.audit.json" } } +
             commands.flatMap { name -> listOf("stdout", "stderr", "command.json").map { "$directory/commands/$name.$it" } }
         for ((kind, required) in listOf("sources" to sources, "artifacts" to artifacts)) {
