@@ -11,6 +11,7 @@ final class OriginalStdioExpression extends Expr {
     private final OriginalStdioOp operation;
     @Children private Expr[] operands;
     @CompilerDirectives.CompilationFinal(dimensions = 1) private final NarrowInteger[] argumentIntegers;
+    @CompilerDirectives.CompilationFinal(dimensions = 1) private final boolean[] argumentAddresses;
 
     OriginalStdioExpression(OriginalStdioOp operation, Expr[] operands, CoreRepresentation proof) {
         this.operation = operation;
@@ -19,8 +20,12 @@ final class OriginalStdioExpression extends Expr {
             proof.getPrimReps(), proof.getComponents(), proof.getVector(), proof.getAlternatives(),
             proof.getTagSlot(), proof.getAlternativeSlots()));
         argumentIntegers = new NarrowInteger[operation.getArguments().size()];
-        for (int index = 0; index < argumentIntegers.length; index++)
-            argumentIntegers[index] = NarrowInteger.fromRep(operation.getArguments().get(index));
+        argumentAddresses = new boolean[argumentIntegers.length];
+        for (int index = 0; index < argumentIntegers.length; index++) {
+            var argument = operation.getArguments().get(index);
+            argumentIntegers[index] = NarrowInteger.fromRep(argument);
+            argumentAddresses[index] = "AddrRep".equals(argument);
+        }
     }
     @Override public Object execute(VirtualFrame frame) {
         throw fault("Original stdio call requires a State/result tuple destination");
@@ -48,7 +53,7 @@ final class OriginalStdioExpression extends Expr {
         if (operation.getUnixNative()) {
             var arguments = new Object[operands.length - 1];
             for (int i = 0; i < arguments.length; i++)
-                arguments[i] = "AddrRep".equals(operation.getArguments().get(i))
+                arguments[i] = argumentAddresses[i]
                     ? operands[i].executeRequiredAddress(frame) : readInteger(frame, i);
             TupleResults.requireVoidCarrier(operands[operands.length - 1].execute(frame));
             writeInteger(frame, slots[offset], NativeUnix.execute(operation, arguments));
