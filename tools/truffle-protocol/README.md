@@ -159,13 +159,19 @@ candidate body deliberately. Only the edge introduced after the actual bailout
 has an inlining veto. The test's smaller graph budget makes the model bounded;
 production graph limits are unchanged.
 
-THC AST function roots and eligible bytecode constructor decisions opt into this
+THC AST function roots and eligible bytecode case decisions opt into this
 hook with finite, preprepared side targets. Bytecode recovery retains the original
 target and instruction positions. A pinned, source-checked lowering of its private
 choice instruction selects the reduced region before operand-stack escape
 analysis: a late-folded Boolean alone still exposes the old body to the early
 graph-size listener. This bridge changes no ordinary guest branch profiles.
 Side calls preserve the caller's Bloom protocol without introducing a new catcher.
+Besides wide constructor decisions, bytecode can preprepare a small exact-wide-
+integral decision whose arms have substantial local syntax. This bounded
+preparation filter does not predict graph size or identify a cold default: only
+an actual budget bailout activates the side targets. Literal order, duplicate
+labels and the original default are retained. An ambient join does not exclude
+a region unless that region references the join's activation.
 
 These are bounded extraction policies, not demand-only candidate allocation or a
 complete application graph-budget solution. A callee inlining veto alone cannot

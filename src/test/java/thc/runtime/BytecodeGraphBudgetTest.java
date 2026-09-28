@@ -165,6 +165,184 @@ class BytecodeGraphBudgetTest {
         return result;
     }
 
+    private static Map<String, Object> smallDecision(int depth) {
+        var alternatives = new ArrayList<List<Object>>();
+        for (int arm = 0; arm < 3; arm++) {
+            List<Object> body = number(arm * 1000L);
+            for (int i = depth - 1; i >= 0; i--) {
+                String value = "value" + i, next = "next" + i;
+                body = node("app", node("prim", "+#"), List.of(variable(value, LONG), body),
+                        List.of(false, false), false, false, Map.of("rep", LONG));
+                body = node("case", variable(i == 0 ? "list" : "next" + (i - 1), DATA), "link" + i,
+                        List.of(node("data", "Link", List.of(value, next), body,
+                                Map.of("binders", List.of(binder(value, LONG, false), binder(next, DATA, true))))),
+                        Map.of("rep", LONG, "binder", binder("link" + i, DATA, true)));
+            }
+            alternatives.add(arm == 2 ? node("default", null, List.of(), body)
+                    : node("lit", List.of("int", Long.toString(arm)), List.of(), body));
+        }
+        var expression = node("case", variable("selector", LONG), "selected", alternatives,
+                Map.of("rep", LONG, "binder", binder("selected", LONG, false)));
+        return Map.of("constructors", List.of(
+                Map.of("id", "Link", "name", "Link", "kind", "boxed", "arity", 2,
+                        "fieldReps", List.of(List.of("IntRep"), List.of("BoxedRep (Just Lifted)")),
+                        "fieldLifted", List.of(false, true), "strictFields", List.of(false, true)),
+                Map.of("id", "End", "name", "End", "kind", "boxed", "arity", 0,
+                        "fieldReps", List.of(), "fieldLifted", List.of(), "strictFields", List.of())),
+                "bindings", List.of(Map.of("id", "entry", "name", "entry", "lifted", true, "rep", CLOSURE,
+                        "expr", node("lam", List.of(binder("selector", LONG, false), binder("list", DATA, true)),
+                                expression, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false, false))))));
+    }
+
+    private static Object chain(BytecodeProgram program, int depth) {
+        Object value = program.constructorLayout("End").allocate();
+        var layout = program.constructorLayout("Link");
+        for (int i = 0; i < depth; i++) {
+            var next = layout.allocate(); layout.initializeLong(next, 0, 1L); layout.initialize(next, 1, value); value = next;
+        }
+        return value;
+    }
+
+    @Test void smallIntegralCaseRecoveryPreservesAllArmsAndTheOriginalTarget() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, smallDecision(24));
+                var target = ((Closure) program.entryValue("entry")).target;
+                var root = (BytecodeRoot) target.getRootNode();
+                assertEquals(1, root.prepareGraphBudgetRetry(0), "explicit transport control, not the real bailout test");
+                var original = instructions(root);
+                root.getRootNodes().ensureSourceInformation();
+                assertEquals(original, instructions(root));
+                var method = root.getClass().getDeclaredMethod("cloneUninitialized"); method.setAccessible(true);
+                var clone = (BytecodeRoot) method.invoke(root);
+                assertEquals(1, clone.getGraphBudgetGeneration());
+                assertEquals(original, instructions(clone));
+                var value = chain(program, 24);
+                for (var selected : List.of(target, clone.getCallTarget())) {
+                    assertTrue(compile(selected)); bypass(selected);
+                    long before = entries(program);
+                    assertEquals(24L, Calls.target(selected, new Object[]{0L, 0L, value}));
+                    assertEquals(before + 1, entries(program)); assertTrue(valid(selected));
+                    assertEquals(1024L, Calls.target(selected, new Object[]{0L, 1L, value}));
+                    assertEquals(2024L, Calls.target(selected, new Object[]{0L, Long.MIN_VALUE, value}));
+                }
+                assertSame(target, ((Closure) program.entryValue("entry")).target);
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void scalarPartitionsKeepDuplicateOrderAndTheOriginalDefault() throws Exception {
+        var input = new LinkedHashMap<>(smallDecision(24));
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var expression = new ArrayList<>((List<Object>) lambda.get(2));
+        var alternatives = (List<List<Object>>) expression.get(3);
+        var duplicate = new ArrayList<>(alternatives.get(1));
+        duplicate.set(1, alternatives.getFirst().get(1));
+        expression.set(3, List.of(alternatives.getLast(), alternatives.getFirst(), duplicate));
+        lambda.set(2, expression); entry.put("expr", lambda); input.put("bindings", List.of(entry));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
+                assertEquals(1, ((BytecodeRoot) target.getRootNode()).prepareGraphBudgetRetry(0));
+                assertTrue(compile(target)); bypass(target);
+                long before = entries(program); var value = chain(program, 24);
+                assertEquals(24L, Calls.target(target, new Object[]{0L, 0L, value}));
+                assertEquals(before + 1, entries(program)); assertTrue(valid(target));
+                assertEquals(2024L, Calls.target(target, new Object[]{0L, 1L, value}));
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"Int8Rep", "Int32Rep", "missing", "unknown"})
+    void scalarPartitionRequiresAnExactWideCarrier(String representation) {
+        var proof = new LinkedHashMap<String, Object>();
+        proof.put("kind", representation.equals("unknown") ? "unknown" : "long");
+        proof.put("evaluated", true);
+        if (!representation.equals("missing") && !representation.equals("unknown"))
+            proof.put("primReps", List.of(representation));
+        var input = new LinkedHashMap<>(smallDecision(24));
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        lambda.set(1, List.of(binder("selector", proof, false), binder("list", DATA, true)));
+        var expression = new ArrayList<>((List<Object>) lambda.get(2));
+        expression.set(1, variable("selector", proof));
+        expression.set(4, Map.of("rep", LONG, "binder", binder("selected", proof, false)));
+        lambda.set(2, expression); entry.put("expr", lambda); input.put("bindings", List.of(entry));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                if (representation.equals("missing")) {
+                    var rejected = assertThrows(RuntimeFault.class, () -> new BytecodeProgram(language, input));
+                    assertEquals("Core Long proof lacks a supported primitive representation", rejected.getMessage());
+                    return;
+                }
+                var program = new BytecodeProgram(language, input);
+                var root = (BytecodeRoot) program.entryTarget("entry").getRootNode();
+                assertEquals(0, root.prepareGraphBudgetRetry(0));
+                assertEquals(0, entries(program), "preparation-only exclusion control");
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void originalTargetRecoversARealSmallFanoutGraphBeforeAnyGuestCall() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, smallDecision(192));
+                var target = ((Closure) program.entryValue("entry")).target;
+                var root = (BytecodeRoot) target.getRootNode();
+                var original = instructions(root);
+                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
+                assertTrue(compile(target));
+                assertEquals(1, root.getGraphBudgetGeneration(), "only a real compiler bailout activates the plan");
+                assertEquals(0, entries(program), "no training guest calls");
+                assertEquals(original, instructions(root), "parked PCs and operands remain stable");
+                bypass(target); long before = entries(program);
+                assertEquals(2192L, Calls.target(target, new Object[]{0L, -1L, chain(program, 192)}));
+                assertEquals(before + 1, entries(program)); assertTrue(valid(target));
+                assertSame(target, ((Closure) program.entryValue("entry")).target);
+                assertEquals(1, root.prepareGraphBudgetRetry(1), "finite generation is exhausted");
+            } finally { context.leave(); }
+        }
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {false, true})
+    void ambientJoinIsAllowedOnlyWhenNoArmReferencesItsActivation(boolean referenced) {
+        var input = new LinkedHashMap<>(smallDecision(24));
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var expression = new ArrayList<>((List<Object>) lambda.get(2));
+        if (referenced) {
+            var alternatives = new ArrayList<>((List<List<Object>>) expression.get(3));
+            var selected = new ArrayList<>(alternatives.getFirst());
+            selected.set(3, node("app", variable("finish", CLOSURE), List.of(number(73)), List.of(false), false, false,
+                    Map.of("rep", LONG)));
+            alternatives.set(0, selected); expression.set(3, alternatives);
+        }
+        var join = new LinkedHashMap<>(binder("finish", CLOSURE, true));
+        join.put("joinValueArity", 1); join.put("joinResultRep", LONG);
+        join.put("expr", node("lam", List.of(binder("answer", LONG, false)), variable("answer", LONG), Map.of("resultRep", LONG)));
+        lambda.set(2, node("let", false, List.of(join), expression, Map.of("rep", LONG)));
+        entry.put("expr", lambda); input.put("bindings", List.of(entry));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var target = program.entryTarget("entry");
+                assertEquals(referenced ? 0 : 1, ((BytecodeRoot) target.getRootNode()).prepareGraphBudgetRetry(0));
+                assertEquals(referenced ? 73L : 24L, Calls.target(target, new Object[]{0L, 0L, chain(program, 24)}));
+                assertEquals(0, entries(program), "separate join-activation transport control");
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void explicitProtocolControlPreservesPreparedSelectionWithoutClaimingACompilerBailout() throws Exception {
         try (Context context = context()) {
             context.initialize("thc"); context.enter();

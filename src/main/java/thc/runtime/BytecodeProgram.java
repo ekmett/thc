@@ -5210,32 +5210,59 @@ public final class BytecodeProgram implements ExecutableProgram {
         var alternatives = (List<List<Object>>) expr.get(3);
         var context = scope.function;
         long dataCount = alternatives.stream().filter(a -> "data".equals(a.getFirst())).count();
-        if (!context.preparingCaseRegion && context.caseRegions.isEmpty() && scope.joins.isEmpty()
-                && dataCount >= 64 && dataCount <= BytecodeCaseRegion.MAX_ALTERNATIVES
+        boolean constructorPartition = dataCount >= 64 && dataCount <= BytecodeCaseRegion.MAX_ALTERNATIVES
                 && alternatives.stream().allMatch(a -> "data".equals(a.getFirst()) || "default".equals(a.getFirst()))
-                && CoreRepresentations.caseBinder(expr).getKind() == CoreKind.DATA) {
+                && CoreRepresentations.caseBinder(expr).getKind() == CoreKind.DATA;
+        long literalCount = alternatives.stream().filter(a -> "lit".equals(a.getFirst())).count();
+        boolean scalarPartition = staticWideLong(CoreRepresentations.caseBinder(expr).withEvaluated(true))
+                && literalCount >= 2 && literalCount <= 8
+                && alternatives.stream().allMatch(a -> "lit".equals(a.getFirst()) || "default".equals(a.getFirst()))
+                && caseRegionWork(expr, 64) >= 64;
+        if (!context.preparingCaseRegion && context.caseRegions.isEmpty() && (constructorPartition || scalarPartition)
+                && CoreFreeVariables.coreFreeVariables(expr).stream().noneMatch(scope.joins::containsKey)) {
             context.preparingCaseRegion = true;
-            try { return partitionedCase(expr, scope, tail); }
+            try { return partitionedCase(expr, scope, tail, scalarPartition); }
             finally { context.preparingCaseRegion = false; }
         }
         return inlineCase(expr, scope, tail);
     }
 
-    private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail) {
+    // A bounded preparation-size filter, not a prediction of Graal graph size.
+    // Only the real bailout can activate the prepublished alternatives.
+    private static int caseRegionWork(Object value, int remaining) {
+        if (remaining <= 0) return 0;
+        if (value instanceof Map<?, ?> binding) return caseRegionWork(binding.get("expr"), remaining);
+        if (!(value instanceof List<?> list) || list.isEmpty() || "lam".equals(list.getFirst())) return 0;
+        int count = 1;
+        for (Object child : list) {
+            count += caseRegionWork(child, remaining - count);
+            if (count >= remaining) break;
+        }
+        return count;
+    }
+
+    private Expression partitionedCase(List<Object> expr, Scope scope, boolean tail, boolean scalar) {
         var inline = inlineCase(expr, scope, tail, true);
         var alternatives = (List<List<Object>>) expr.get(3);
-        var explicit = alternatives.stream().filter(a -> "data".equals(a.getFirst())).toList();
+        var explicit = alternatives.stream().filter(a -> !"default".equals(a.getFirst())).toList();
         var fallback = alternatives.stream().filter(a -> "default".equals(a.getFirst())).toList();
         var binder = (String) expr.get(2);
-        var binderMetadata = Map.<String, Object>of("id", binder, "name", binder, "lifted", true,
+        var binderMetadata = Map.<String, Object>of("id", binder, "name", binder, "lifted", !scalar,
                 "rep", ((Map<String, Object>) expr.getLast()).get("binder") instanceof Map<?, ?> record
                         ? record.get("rep") : Map.of());
         var specs = new ArrayList<FunctionSpec>();
-        var guards = new DataLayout[explicit.size()];
-        for (int i = 0; i < guards.length; i++) guards[i] = dataLayout((String) explicit.get(i).get(1));
-        for (int start = 0; start < explicit.size(); start += BytecodeCaseRegion.WIDTH) {
-            var chunk = new ArrayList<>(explicit.subList(start, Math.min(start + BytecodeCaseRegion.WIDTH, explicit.size())));
-            if (start + BytecodeCaseRegion.WIDTH >= explicit.size()) chunk.addAll(fallback);
+        var guards = new Object[explicit.size()];
+        for (int i = 0; i < guards.length; i++) {
+            if (scalar) {
+                var value = (List<Object>) explicit.get(i).get(1);
+                guards[i] = (Long) literal((String) value.getFirst(), value.get(1), UNKNOWN);
+            } else guards[i] = dataLayout((String) explicit.get(i).get(1));
+        }
+        int width = scalar ? 1 : BytecodeCaseRegion.WIDTH;
+        int end = explicit.size() + (scalar && !fallback.isEmpty() ? 1 : 0);
+        for (int start = 0; start < end; start += width) {
+            var chunk = new ArrayList<>(explicit.subList(Math.min(start, explicit.size()), Math.min(start + width, explicit.size())));
+            if (start + width >= end) chunk.addAll(fallback);
             var body = new ArrayList<>(expr);
             body.set(1, List.of("var", binder));
             body.set(3, chunk);
@@ -5248,7 +5275,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             targets[i] = specs.get(i).target; layouts[i] = specs.get(i).captureLayout;
         }
         int index = scope.function.caseRegions.size();
-        scope.function.caseRegions.add(new BytecodeCaseRegion(guards, targets, layouts, tail));
+        scope.function.caseRegions.add(new BytecodeCaseRegion(guards, width, targets, layouts, tail));
         var scrutinee = force(compile((List<Object>) expr.get(1), scope, false));
         return new LoweredCaseExpression(new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
@@ -5448,7 +5475,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (staticWideLong(binderProof)) e.staticLocals.add(binder.id);
             else if (binderProof.getKind() == CoreKind.VOID || staticBoxedReference(binderProof))
                 e.staticObjectLocals.add(binder.id);
-            if (category == CaseCategory.GENERIC) {
+            if (category == CaseCategory.GENERIC && !e.staticLocals.contains(binder.id)) {
                 if (e.staticObjectLocals.contains(binder.id)) {
                     b.beginStaticStoreObject(e.locals.get(binder.id)); scrutinee.emit(e); b.endStaticStoreObject();
                 } else {
@@ -5527,8 +5554,10 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var complete = b.createLabel();
                 for (var alt : explicit) {
                     b.beginUnprofiledIfThen();
-                    b.beginMatchDataValue((DataLayout) alt.value);
-                    read(binder, false).emit(e); b.endMatchDataValue();
+                    if ("data".equals(alt.kind)) b.beginMatchDataValue((DataLayout) alt.value);
+                    else b.beginLiteralEqual((Long) alt.value);
+                    read(binder, false).emit(e);
+                    if ("data".equals(alt.kind)) b.endMatchDataValue(); else b.endLiteralEqual();
                     b.beginBlock();
                     if (result != null) b.beginStaticStoreObject(result);
                     choice.emitAlternative(alt);

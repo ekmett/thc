@@ -15,7 +15,7 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.runtime.OptimizedCallTarget;
 
-/** Prepublished, finite constructor-case partitions. No guest profile is seeded. */
+/** Prepublished, finite case partitions. No guest profile is seeded. */
 public final class BytecodeCaseRegion extends Node {
     static final int WIDTH = 32;
     static final int MAX_ALTERNATIVES = 1024;
@@ -32,12 +32,14 @@ public final class BytecodeCaseRegion extends Node {
     /** Recreated by bytecode source replay; contains no activation or guest values. */
     public record Source(@CompilationFinal(dimensions = 2) LocalAccessor[][] captures, BytecodeTupleSlots destination) {}
 
-    @CompilationFinal(dimensions = 1) private final DataLayout[] guards;
+    @CompilationFinal(dimensions = 1) private final Object[] guards;
+    private final int width;
     @Children private Side[] sides;
     private final boolean tail;
 
-    BytecodeCaseRegion(DataLayout[] guards, RootCallTarget[] targets, CaptureLayout[] captures, boolean tail) {
+    BytecodeCaseRegion(Object[] guards, int width, RootCallTarget[] targets, CaptureLayout[] captures, boolean tail) {
         this.guards = guards;
+        this.width = width;
         this.tail = tail;
         this.sides = new Side[targets.length];
         for (int i = 0; i < targets.length; i++) {
@@ -52,7 +54,12 @@ public final class BytecodeCaseRegion extends Node {
     // These are the very same immutable constructor guards, in their original order.
     @TruffleBoundary(transferToInterpreterOnException = false)
     private int select(Object value) {
-        for (int i = 0; i < guards.length; i++) if (guards[i].matches(value)) return i / WIDTH;
+        for (int i = 0; i < guards.length; i++) {
+            Object guard = guards[i];
+            boolean matches = guard instanceof DataLayout layout ? layout.matches(value)
+                    : value instanceof Long number && ((Long) guard).longValue() == number.longValue();
+            if (matches) return i / width;
+        }
         return sides.length - 1; // That region owns the original default (or FailCase).
     }
 
