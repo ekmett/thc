@@ -391,12 +391,12 @@ void exactSliceSignaturesAndColdPublicFrontierRemainEnforced() throws Exception 
                                 case 2 -> meta.remove("rep");
                                 case 3 -> flags.set(0, true);
                                 case 4 ->
-                                    ((Map<String, Object>) CoreRepresentations.INSTANCE
+                                    ((Map<String, Object>) CoreRepresentations
                                             .metadata((List<Object>) args.get(0))
                                             .get("rep"))
                                         .put("primReps", List.of("BoxedRep (Just Lifted)"));
                                 case 5, 6, 7, 8 ->
-                                    ((Map<String, Object>) CoreRepresentations.INSTANCE
+                                    ((Map<String, Object>) CoreRepresentations
                                             .metadata((List<Object>) args.get(mutation % 2 == 0 ? 2 : 1))
                                             .get("rep"))
                                         .put("primReps", List.of(mutation < 7 ? "WordRep" : "Int64Rep"));

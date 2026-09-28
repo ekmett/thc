@@ -69,7 +69,7 @@ class CompactImagesTest {
             thunk.setValue(value); thunk.setState(2); assertTrue(address.sameLocation(state.heapAddresses.address(thunk)));
             // Deterministically exercise the weak-reference-cleared state, without
             // relying on a collector schedule or retaining the object through Addr#.
-            state.heapAddresses.require(address).getValue().clear();
+            state.heapAddresses.require(address).getValue$org_intelligence_thc().clear();
             assertThrows(RuntimeFault.class, () -> state.heapAddresses.dereference(address));
         });
     }
@@ -82,7 +82,7 @@ class CompactImagesTest {
             var small = ManagedSmallArray.freeze(new SmallArrayStorage(new Object[]{original, storage}));
             var array = ManagedArray.freeze(new Object[]{original, original, small}); layout.initialize(original, 3, array);
             var region = newRegion(state, original, array, small, storage); var pointer = state.heapAddresses.address(original); var bytes = snapshot(state.compactImages, region);
-            state.heapAddresses.require(pointer).getValue().clear(); // Import must not recover the source graph from the handle.
+            state.heapAddresses.require(pointer).getValue$org_intelligence_thc().clear(); // Import must not recover the source graph from the handle.
             var fixed = state.compactImages.fixup(copyBlocks(state.compactImages, bytes), pointer);
             var result = (DataValue) state.heapAddresses.dereference(fixed.getRoot()); assertNotSame(original, result);
             assertEquals(Long.MIN_VALUE, layout.readLong(result, 0)); assertEquals(0x7fc01234, Float.floatToRawIntBits(layout.readFloat(result, 1)));

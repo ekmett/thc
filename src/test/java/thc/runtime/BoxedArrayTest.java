@@ -362,7 +362,7 @@ class BoxedArrayTest {
                                     case 2 -> metadata.remove("rep");
                                     case 3 -> flags.set(0, !(Boolean) flags.get(0));
                                     case 4 ->
-                                        ((Map<String, Object>) CoreRepresentations.INSTANCE
+                                        ((Map<String, Object>) CoreRepresentations
                                                 .metadata((List<Object>) args.get(0))
                                                 .get("rep"))
                                             .put("kind", "unknown");
@@ -391,7 +391,7 @@ class BoxedArrayTest {
                                             fields.getLast().put("primReps", List.of("BoxedRep Nothing"));
                                             proof.put("primReps", List.of("BoxedRep Nothing"));
                                         } else
-                                            ((Map<String, Object>) CoreRepresentations.INSTANCE
+                                            ((Map<String, Object>) CoreRepresentations
                                                     .metadata((List<Object>) args.get(2))
                                                     .get("rep"))
                                                 .put("primReps", List.of("BoxedRep (Just Unlifted)"));
