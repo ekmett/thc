@@ -104,6 +104,17 @@ The explicit additional inventory contains individually reviewed metadata;
 it does not authorize initialization of whole packages, native resources or
 context-owned state.
 
+The `HostArrayGen` and `HostReferenceGen` export families are explicit generated
+host-ABI metadata. Their declaring initializers resolve the existing dynamic
+dispatch library and register literal receiver/library class descriptors.
+`HostReference`'s export and library class initializers only record assertion
+status; its cached `HostDispatch` remains lazily created by ordinary execution.
+`HostArray`'s export additionally creates two fieldless, unadoptable library
+singletons. Their constructors only delegate to `InteropLibrary`. These eight
+entries do not construct a host receiver, guest value, context or dispatch node.
+They follow the existing explicit export-family preparation contract, without
+adding a general generated-class recognizer.
+
 The manual Windows additions are:
 
 ```diff

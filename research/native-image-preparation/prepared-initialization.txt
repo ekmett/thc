@@ -2,6 +2,17 @@
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 # Individually inspected additions to the generated research inventory.
 # This is not the public pure-interpreter initialization inventory.
+# Generated host-ABI library descriptors and assertion flags only. HostArray's
+# two shared libraries are fieldless/unadoptable; HostReference dispatch remains
+# instance-lazy. No host receiver, context, guest value or dispatch is created.
+thc.HostArrayGen
+thc.HostArrayGen$InteropLibraryExports
+thc.HostArrayGen$InteropLibraryExports$Cached
+thc.HostArrayGen$InteropLibraryExports$Uncached
+thc.HostReferenceGen
+thc.HostReferenceGen$InteropLibraryExports
+thc.HostReferenceGen$InteropLibraryExports$Cached
+thc.HostReferenceGen$InteropLibraryExports$Uncached
 # The unique fieldless guest state/void value; no guest context is captured.
 thc.runtime.Unit
 thc.runtime.Applications
