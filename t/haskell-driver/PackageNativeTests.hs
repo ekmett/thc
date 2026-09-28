@@ -58,6 +58,9 @@ tests = TestLabel "package-owned native C acquisition" $ TestList
       assertEqual "retained interruptible import does not reject unrelated ordinary adapters"
         (Right [("identity","ccall","unsafe",["WordRep"],"WordRep")])
         (installedNativeSignatures "fixture-unit" (moduleWith [ordinary,interruptible]))
+      assertEqual "inlined CAPI calls retain their actual stub translation unit" (Right 2)
+        (nativeCapiSource "wrapper" ["", "int wrapper_extra(void) { return 1; }", "int wrapper(void) { return 2; }"])
+      assertBool "missing retained CAPI source stays explicit" (isLeft (nativeCapiSource "wrapper" [""]))
   , TestCase $ do
       let named modName name args = object ["kind" .= ("tycon"::String), "name" .= object
             ["unit" .= ("ghc-internal"::String), "module" .= (modName::String),

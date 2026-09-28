@@ -16,7 +16,7 @@
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
-  , linkInstalledNative, installedNativeSignatures
+  , linkInstalledNative, installedNativeSignatures, nativeCapiSource
   , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
   ) where
 
@@ -116,8 +116,7 @@ linkInstalledNative compiler libdir arguments directory unit modules = do
     createDirectoryIfMissing True directory
     root <- canonicalizePath directory
     configured <- either fail pure (nativeCompilerArguments arguments)
-    sources <- mapM (\((_,value),ownedSignatures) ->
-      if null ownedSignatures then pure "" else stubSource value) (zip selected perModule)
+    sources <- mapM (stubSource . snd) selected
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
       unit root signatures [] sources perModule [] (const Nothing) True
     let original = [(name,BL.toStrict (encode value)) | (name,value) <- selected]
@@ -563,6 +562,10 @@ writeNativeWrappers :: FilePath -> FilePath -> [String] -> [String] -> String ->
   [Signature] -> [String] -> [String] -> [[Signature]] -> [Value] -> (String -> Maybe String) -> Bool -> IO ()
 writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule providers wrapperHeader installed = do
   let nativeDirectory = directory </> "native"
+  capiOwners <- if installed then forM (nub [symbol | (symbol,"capi",_,_,_) <- signatures]) $ \symbol -> do
+      owner <- either fail pure (nativeCapiSource symbol sources)
+      pure (symbol,owner)
+    else pure []
   let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
         "sources" .= sources,"providers" .= providers,
         "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers]
@@ -587,9 +590,10 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
           (index,(source,ownedSignatures)) <- zip [0::Int ..] (zip sources perModule),
           convention <- ["ccall","capi"],
           let earlier = concat (take index perModule),
-          let selectedEntries = [entry | entry@(signature@(_,callConvention,_,_,_),_) <- makeEntries component,
+          let selectedEntries = [entry | entry@(signature@(symbol,callConvention,_,_,_),_) <- makeEntries component,
                 callConvention == convention,
-                signature `elem` ownedSignatures && signature `notElem` earlier],
+                if installed && convention == "capi" then lookup symbol capiOwners == Just index
+                else signature `elem` ownedSignatures && signature `notElem` earlier],
           (variant,entries) <- zip [0::Int ..] (if installed then foldr insertEntry [] selectedEntries else [selectedEntries]),
           not (null entries)] $ \(index,variant,convention,source,entries) -> do
             let output = nativeDirectory </> show index </> convention </> if installed then show variant else ""
@@ -628,6 +632,16 @@ writeNativeWrappers compiler root arguments configured unit directory signatures
      "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
        "arguments" .= arguments',"result" .= result] |
        ((symbol,convention,safety,arguments',result),entry) <- entries]])
+
+-- An inlined FCallId still names the original generated CAPI wrapper. Place
+-- its adapter with that retained source, not with whichever caller was seen
+-- first. The C compiler checks the actual declaration and native ABI.
+nativeCapiSource :: String -> [String] -> Either String Int
+nativeCapiSource symbol sources = case [index | (index,source) <- zip [0..] sources,
+  symbol `elem` words (map (\c -> if isAlphaNum c || c == '_' then c else ' ') source)] of
+  [index] -> Right index
+  [] -> Left ("No retained CAPI source for emitted wrapper: " ++ symbol)
+  _ -> Left ("Ambiguous retained CAPI source for emitted wrapper: " ++ symbol)
 
 hasFunctionAddress :: Value -> Bool
 hasFunctionAddress (Array values) = case foldr (:) [] values of
