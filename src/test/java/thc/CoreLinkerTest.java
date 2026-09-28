@@ -136,11 +136,11 @@ class CoreLinkerTest {
     private void manifest(Path path, List<Map<String, Object>> units) throws Exception { Files.writeString(path, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", units))); }
     @Test void packageManifestLinksSameModuleNameInDistinctUnitsAndRejectsTampering() throws Exception {
         var units = List.of(record("pkg-a"), record("pkg-b")); var manifest = temporary.resolve("packages.json"); manifest(manifest, units);
-        var request = (Map<?, ?>) Json.parse(request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, null, false));
+        var request = (Map<?, ?>) Json.parse(request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, false, false));
         assertEquals(true, request.get("strictLink")); assertEquals(2, ((List<?>) request.get("modules")).size());
         Files.writeString(temporary.resolve("pkg-b.json"), "{}");
-        assertThrows(IllegalArgumentException.class, () -> request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, null, false));
+        assertThrows(IllegalArgumentException.class, () -> request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, false, false));
         manifest(manifest, List.of(units.get(0), units.get(0)));
-        assertThrows(IllegalArgumentException.class, () -> request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, null, false));
+        assertThrows(IllegalArgumentException.class, () -> request(List.of("@" + manifest), "pkg-a:Shared.entry", Main.defaultBackend(), true, null, false, false));
     }
 }

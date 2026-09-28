@@ -110,6 +110,10 @@ class CoreJsonPackageTest {
         for (var order : List.of(valid.subList(0, valid.size() - 1), extra, reversedExtra))
             assertThrows(IllegalArgumentException.class, () -> visit(request(manifest(module(), order), false)));
     }
+    @Test void looseModulePathsRetainSafeRelativeAliases() throws Exception {
+        var path = manifest(with(module(), "path", "./LazyJson.json"), null);
+        visit(request(path, true));
+    }
     @Test void retiredIndexReferencesAreRejectedAndModuleOwnersRemainExact() {
         for (var index : Arrays.asList(null, map("path", "../outside.idx", "sha256", "0".repeat(64)),
                 map("path", "LazyJson.json", "sha256", "0".repeat(64)), map("path", "manifest.json", "sha256", "0".repeat(64)),

@@ -77,7 +77,7 @@ class CoreZipBundleTest {
     }
     private Path manifest(List<Map<String, Object>> units) throws Exception { var path = temporary.resolve("packages.json"); Files.writeString(path, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", units))); return path; }
     private String request(Path path) { return request(path, Main.defaultBackend(), false); }
-    private String request(Path path, String backend, boolean verify) { return CoreModules.request(List.of("@" + path), "pkg-a:Shared.entry", true, false, backend, true, false, null, null, null, verify); }
+    private String request(Path path, String backend, boolean verify) { return CoreModules.request(List.of("@" + path), "pkg-a:Shared.entry", true, false, backend, true, false, null, null, false, verify); }
     private RuntimeException rejected(List<Map<String, Object>> units) { return assertThrows(RuntimeException.class, () -> request(manifest(units))); }
     private byte[] inputs(String buildKey) { return Json.stringify(map("format", "thc-core-build-inputs", "schema", 1, "unit", "pkg-a", "buildKey", buildKey, "exportKey", "1".repeat(64))).getBytes(UTF_8); }
     @Test void nativeBuildInputsAreVerifiedWhenPresent() throws Exception {

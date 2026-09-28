@@ -104,7 +104,7 @@ class CoreCompactLoadTest {
         return path;
     }
     private String request(Path path, String backend, boolean verify) {
-        return CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, false, false, null, verify);
+        return CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, false, false, false, verify);
     }
     private long count(Value entry, String key) { return ((Number) document(entry.getMember("diagnostics").asString()).get(key)).longValue(); }
     @Test void selectedBindingAndCrossModuleDemandLeaveColdBodiesFilesAndDebugUnread() throws Exception {
@@ -131,7 +131,7 @@ class CoreCompactLoadTest {
     @Test void sourceEnabledOrdinaryLoadAndExecutionDoNotReadOptionalDebugTables() throws Exception {
         var path = fixture();
         for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {
-            var entry = context.eval("thc", CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, true, false, null, false));
+            var entry = context.eval("thc", CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, true, false, false, false));
             assertEquals(0L, count(entry, "coreCompactDebugBytesRead"));
             assertEquals(7L, entry.execute(0).asLong()); assertEquals(6L, entry.execute(5).asLong());
             assertEquals(0L, count(entry, "coreCompactDebugBytesRead")); assertEquals(2L, count(entry, "coreCompactModuleOpens"));

@@ -53,7 +53,7 @@ class NarrowPublicEntryTest {
             "symbols", map("path", symbols.toString(), "sha256", hash(Files.readAllBytes(symbols))), "modules", list(record));
         var manifest = directory.resolve("packages.json");
         Files.writeString(manifest, Json.stringify(map("format", "thc-core-packages", "schema", 1, "ghc", "9.14.1", "units", list(unit))));
-        return CoreModules.request(list("@" + manifest), "uN:N.entry", true, false, backend, false, false, null, false, null, true);
+        return CoreModules.request(list("@" + manifest), "uN:N.entry", true, false, backend, false, false, null, false, false, true);
     }
     private void check(List<Map<String, Object>> bindings, String backend, boolean indexed, Consumer<Value> body) throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")

@@ -29,7 +29,6 @@ public final class CorePackageManifest {
             var module = record(item, "Invalid module record in GHC unit " + id);
             String name = text(module.get("path"), "Missing module path in " + id);
             var names = new ArrayList<String>(); names.add(name);
-            require(!module.containsKey("index"), "JSON .idx sidecars are no longer supported; regenerate unit " + id);
             boolean valid = true;
             for (String path : names) if (!safeRelative(path) || Set.of("manifest.json", "inplace-manifest.json").contains(path)) { valid = false; break; }
             require(valid, "Invalid module path in " + id + ": " + names);
@@ -217,7 +216,9 @@ public final class CorePackageManifest {
                     require(validDepends && new HashSet<>(depends).size() == depends.size(),
                             "Invalid dependencies for GHC unit " + id);
                     var modules = list(unit.get("modules"), "Missing module list for GHC unit " + id);
-                    List<String> paths = inventory(id, modules);
+                    for (Object item : modules) require(!record(item, "Invalid module record in GHC unit " + id).containsKey("index"),
+                            "JSON .idx sidecars are no longer supported; regenerate unit " + id);
+                    List<String> paths = unit.containsKey("bundle") ? inventory(id, modules) : List.of();
                     require(new HashSet<>(paths).size() == paths.size(), "Duplicate module path in " + id);
                     class Consumer {
                         @SuppressWarnings("unchecked") void consume(Object item, byte[] bytes, boolean bundled) {
