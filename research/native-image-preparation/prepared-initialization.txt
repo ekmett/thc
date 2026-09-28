@@ -13,6 +13,9 @@ thc.HostReferenceGen
 thc.HostReferenceGen$InteropLibraryExports
 thc.HostReferenceGen$InteropLibraryExports$Cached
 thc.HostReferenceGen$InteropLibraryExports$Uncached
+# Sole static ELEMENT is an immutable CoreRepresentation/enum/string/List
+# descriptor. Receiver, Program, context, buffers and call targets stay per instance.
+thc.HostReference
 # Generated native-callback export metadata only: class literals, assertion flags
 # and two fieldless/unadoptable libraries. No receiver, callback registry, context,
 # native signature or handle is created; actual callback admission is unchanged.
