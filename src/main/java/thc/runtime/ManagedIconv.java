@@ -31,7 +31,7 @@ public final class ManagedIconv {
     }
     private Object nativeLibrary() {
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { return cbits.get().iconvLibrary(); } finally { threads.leaveForeign(previous); }
+        try { return cbits.get().iconvLibrary$org_intelligence_thc(); } finally { threads.leaveForeign(previous); }
     }
     private Object call(String symbol, Object... arguments) {
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);

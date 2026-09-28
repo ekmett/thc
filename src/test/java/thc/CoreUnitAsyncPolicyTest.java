@@ -79,7 +79,7 @@ class CoreUnitAsyncPolicyTest {
                 @Override public void write(byte[] bytes, int start, int length) {
                     if (!observed[0]) {
                         observed[0] = true; var threads = Language.currentState(null).getThreads();
-                        var slot = Objects.requireNonNull(threads.pollState$org_intelligence_thc(Thread.currentThread()).getCurrent$org_intelligence_thc());
+                        var slot = Objects.requireNonNull(threads.pollState(Thread.currentThread()).getCurrent());
                         assertEquals(async, slot.getExternalAsync(), backend + " wrapper policy");
                         // A different Java thread prevents self-throwTo from bypassing policy.
                         try { CompletableFuture.runAsync(() -> {
@@ -106,7 +106,7 @@ class CoreUnitAsyncPolicyTest {
             try {
                 var owner = Language.currentState(null); var language = TruffleLanguage.LanguageReference.create(Language.class).get(null); var program = program(owner);
                 assertEquals(async, program.getAsynchronousExceptions()); long decoded = count(program, "coreUnitDecodedBindings");
-                var signals = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.Companion.userSignalAvailable$org_intelligence_thc(),
+                var signals = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.userSignalAvailable(),
                     () -> { throw new IllegalStateException("binding alone must not acquire the native signal transport"); });
                 try {
                     if (async) signals.bind(program); else assertTrue(Objects.toString(assertThrows(RuntimeFault.class, () -> signals.bind(program)).getMessage(), "").contains("asyncExceptions=true"));

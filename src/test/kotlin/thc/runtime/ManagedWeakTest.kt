@@ -200,7 +200,7 @@ class ManagedWeakTest {
             val worker = Thread {
                 var entered = false
                 try {
-                    threads.enterCurrent(forked = forked); entered = true
+                    threads.enterCurrent(null, forked); entered = true
                     weak.set(owner.make(threads.currentIdentity(), Any(), null))
                     capability.set(owner.mainThreadKey(weak.get(), threads))
                     ready.countDown()

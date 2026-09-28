@@ -1202,7 +1202,7 @@ internal class ManagedFiles @JvmOverloads constructor(private val env: TruffleLa
             if (Language.currentState(node).env !== env) fault("Descriptor wait belongs to another context")
             val original = entry ?: throw ClosedChannelException()
             val outcome = awaitReady(original, fd, writing, -1, node) {
-                if (async) threads.poll(node, interruptible = true)?.let {
+                if (async) threads.poll(node, true)?.let {
                     it.compiledCapture = compiledAtCut
                     throw AsyncBlocked(it, node)
                 }

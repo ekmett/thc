@@ -71,7 +71,7 @@ public final class CoreModules {
         private void append(Map<String,Object> module, ManagedExportAdmission admission, CoreModuleAdmission prepared) {
             require(admission == null || admission.getModule() == (prepared == null ? module : prepared.getModule()), "Managed export admission belongs to a different Core module");
             count++;
-            var proof = prepared == null ? CoreForeignExceptionBridge.INSTANCE.read(module) : prepared.getBridge();
+            var proof = prepared == null ? CoreForeignExceptionBridge.read(module) : prepared.getBridge();
             if (proof != null) require(exceptionBridges.putIfAbsent((String) proof.get("unit"), proof) == null, "Duplicate foreign exception bridge unit");
             if (module.get("foreignExceptionBridgeUnit") instanceof String unit) {
                 require(exceptionBridgeUnit == null || exceptionBridgeUnit.equals(unit), "Conflicting foreign exception bridge selection"); exceptionBridgeUnit = unit;
@@ -185,8 +185,8 @@ public final class CoreModules {
                         Object head = function.size() > 1 ? function.get(1) : null;
                         boolean defined = !function.isEmpty() && Objects.equals(function.getFirst(), "var") && (head != null && bound.contains(head) || byId.containsKey(head) || head instanceof String id && demand != null && (foreignDescriptor ? demand.isDefined(id) : demand.contains(id)));
                         var packageLinks = module.get("packageScalarLinks") instanceof List<?> links ? (List<PackageScalarLink>) links : List.<PackageScalarLink>of();
-                        if (CoreForeignExceptionBridge.INSTANCE.executes(expression, defined, packageLinks)) {
-                            if (exceptionBridge == null) exceptionBridge = bridge != null ? bridge.get() : CoreForeignExceptionBridge.INSTANCE.select(module);
+                        if (CoreForeignExceptionBridge.executes(expression, defined, packageLinks)) {
+                            if (exceptionBridge == null) exceptionBridge = bridge != null ? bridge.get() : CoreForeignExceptionBridge.select(module);
                             reference((String) exceptionBridge.get("box"), Set.of()); reference((String) exceptionBridge.get("project"), Set.of());
                         }
                         if (CoreSignalForeign.named(metadata)) reference(CoreSignalForeign.dispatcher, Set.of());

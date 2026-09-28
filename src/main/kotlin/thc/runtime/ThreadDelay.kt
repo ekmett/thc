@@ -19,7 +19,7 @@ internal class ThreadDelayToken(private val owner: GuestThreads, microseconds: L
         TruffleSafepoint.setBlockedThreadInterruptibleFunction(node,
             TruffleSafepoint.InterruptibleFunction<ThreadDelayToken, Unit> { token ->
                 while (true) {
-                    if (async) owner.poll(node, interruptible = true)?.let {
+                    if (async) owner.poll(node, true)?.let {
                         it.compiledCapture = compiledAtCut
                         throw AsyncBlocked(it, node)
                     }

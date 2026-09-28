@@ -65,7 +65,7 @@ class GuestThreadsTest {
         val identity = AtomicReference<GuestThreadId>()
         val failure = AtomicReference<Throwable>()
         val worker = Thread {
-            threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, forked = true, externalAsync = false)
+            threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, true, false)
             try {
                 val self = threads.currentIdentity()
                 identity.set(self)
@@ -357,7 +357,7 @@ class GuestThreadsTest {
             val wakes = AtomicInteger()
             val caller = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { wakes.incrementAndGet() }
             val other = GuestThreads(ThreadLocal.withInitial { MaskingState.UNMASKED }) { }
-            caller.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, forked = true, externalAsync = false)
+            caller.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, true, false)
             val callerId = caller.currentIdentity()
             try {
                 val foreign = if (callback) caller.enterForeign(ForeignSafety.SAFE) else null

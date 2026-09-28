@@ -28,7 +28,7 @@ public final class CoreModuleAdmission {
             String prefix = module.get("unit") + ":THC.Internal.Exception.";
             var selected = new LinkedHashMap<>(module);
             selected.put("bindings", List.of(binding.apply(prefix + "boxForeign"), binding.apply(prefix + "projectForeign")));
-            bridge = CoreForeignExceptionBridge.INSTANCE.read(selected);
+            bridge = CoreForeignExceptionBridge.read(selected);
         } else bridge = null;
         for (String key : List.of("staticForeignImports", "staticForeignImportStubs")) {
             if (module.get(key) instanceof Map<?,?> proof && Objects.equals(proof.get("status"), "verified")) {

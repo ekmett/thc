@@ -106,10 +106,10 @@ public final class CoreForeignExceptionBridge {
             CoreBoundThreadForeign.validateHead((List<?>) expr.get(1), defined);
             return true;
         }
-        if (CoreJavaScript.INSTANCE.validate((List<Object>) expr, defined) != null) return true;
+        if (CoreJavaScript.validate((List<Object>) expr, defined) != null) return true;
         for (var operation : PolyglotOp.values()) {
             if (operation.getSymbol().equals(symbol)) {
-                CorePolyglot.INSTANCE.validate((List<Object>) expr, defined);
+                CorePolyglot.validate((List<Object>) expr, defined);
                 return true;
             }
         }

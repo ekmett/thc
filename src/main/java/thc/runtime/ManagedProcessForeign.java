@@ -50,7 +50,7 @@ public final class ManagedProcessForeign {
         try {
             try {
                 return execute(operation, arguments, node, operation == ProcessOp.WAIT ? () -> {
-                    if (threads.interruptibleForeignPending$org_intelligence_thc()) throw new InterruptedWait();
+                    if (threads.interruptibleForeignPending()) throw new InterruptedWait();
                 } : null);
             } catch (InterruptedWait ignored) {
                 // No waitpid/reap occurred and the caller's output is untouched.
