@@ -1,1 +1,0 @@
-python3 scripts/test-audit-core.py 

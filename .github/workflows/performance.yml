@@ -112,13 +112,6 @@ jobs:
           set -euo pipefail
           work/ci-baseline-checkout/gradlew -p work/ci-baseline-checkout --no-daemon installDist \
             2>&1 | tee work/ci-performance/logs/original-build.log
-      - name: Reparse and verify published compiler graphs once
-        if: inputs.suite == 'standard'
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash bench/results/entry-contracts/graphs/reparse.sh work/ci-graph-reparse \
-            2>&1 | tee work/ci-performance/logs/graph-reparse.log
       - name: Freeze selected runtimes, options and shared current corpus
         shell: bash
         run: |
@@ -166,7 +159,6 @@ jobs:
             work/ci-performance/compact-object-sizes/*.err
             work/ci-performance/logs/
             work/ci-performance/comparisons/
-            work/ci-graph-reparse/topology-verification.json
             build/map/audit.json
             build/map/oracle.tsv
             build/map/oracle-validation.json

@@ -139,8 +139,7 @@ Class-owned constructor layouts are enabled by default
 before publishing values. An exclusive carrier uses the fieldless `DataValue`
 base and obtains its cold layout metadata through a `ClassValue`; hot paths use
 an expected-class check. If a carrier is already shared, construction switches
-to `LayoutDataValue` with an explicit owner field. See the
-[class-owned layout measurements](../bench/results/class-owned-layouts/).
+to `LayoutDataValue` with an explicit owner field.
 
 On the pinned JVM, StaticShape's field strategy generates a storage subclass and
 factory with ASM and defines them through runtime class loaders. Each declared

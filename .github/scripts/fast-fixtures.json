@@ -140,9 +140,9 @@
         "thc.cabal",
         "t/fixtures/compiler/SimdWord32X4ByteArray.hs",
         "t/fixtures/compiler/SimdWord32X4ByteArrayNative.hs",
-        "bench/experiments/word32x4-bytearray/evidence-x86_64/pre-core.json.gz",
-        "bench/experiments/word32x4-bytearray/evidence-x86_64/post-core.json.gz",
-        "bench/experiments/word32x4-bytearray/evidence-x86_64/native/provenance.json.gz"
+        "t/fixtures/retained-core/word32x4-bytearray/pre-core.json.gz",
+        "t/fixtures/retained-core/word32x4-bytearray/post-core.json.gz",
+        "t/fixtures/retained-core/word32x4-bytearray/native/provenance.json.gz"
       ]
     },
     "simd-int32x4-bytearray": {
@@ -169,9 +169,9 @@
         "thc.cabal",
         "t/fixtures/compiler/SimdInt32X4ByteArray.hs",
         "t/fixtures/compiler/SimdInt32X4ByteArrayNative.hs",
-        "bench/experiments/int32x4-bytearray/evidence-x86_64/pre-core.json.gz",
-        "bench/experiments/int32x4-bytearray/evidence-x86_64/post-core.json.gz",
-        "bench/experiments/int32x4-bytearray/evidence-x86_64/native/provenance.json.gz"
+        "t/fixtures/retained-core/int32x4-bytearray/pre-core.json.gz",
+        "t/fixtures/retained-core/int32x4-bytearray/post-core.json.gz",
+        "t/fixtures/retained-core/int32x4-bytearray/native/provenance.json.gz"
       ]
     },
     "boxed-cas": {
@@ -832,9 +832,9 @@
         "thc.cabal",
         "t/fixtures/compiler/SimdFloatX4ByteArray.hs",
         "t/fixtures/compiler/SimdFloatX4ByteArrayNative.hs",
-        "bench/experiments/floatx4-bytearray/evidence-x86_64/pre-core.json.gz",
-        "bench/experiments/floatx4-bytearray/evidence-x86_64/post-core.json.gz",
-        "bench/experiments/floatx4-bytearray/evidence-x86_64/input-provenance.json.gz"
+        "t/fixtures/retained-core/floatx4-bytearray/pre-core.json.gz",
+        "t/fixtures/retained-core/floatx4-bytearray/post-core.json.gz",
+        "t/fixtures/retained-core/floatx4-bytearray/input-provenance.json.gz"
       ]
     },
     "simd-doublex2-bytearray": {
@@ -861,9 +861,9 @@
         "thc.cabal",
         "t/fixtures/compiler/SimdDoubleX2ByteArray.hs",
         "t/fixtures/compiler/SimdDoubleX2ByteArrayNative.hs",
-        "bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2/pre-core.json.gz",
-        "bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2/post-core.json.gz",
-        "bench/experiments/doublex2-bytearray/evidence-x86_64/captures/doublex2/input-provenance.json.gz"
+        "t/fixtures/retained-core/doublex2-bytearray/pre-core.json.gz",
+        "t/fixtures/retained-core/doublex2-bytearray/post-core.json.gz",
+        "t/fixtures/retained-core/doublex2-bytearray/input-provenance.json.gz"
       ]
     },
     "explicit64-arrays": {

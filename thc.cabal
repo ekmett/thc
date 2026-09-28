@@ -13,6 +13,21 @@ maintainer: Edward Kmett
 category: Development
 description: A GHC Core plugin and Cabal driver for running Haskell on Truffle/Graal.
 extra-source-files:
+  t/fixtures/retained-core/doublex2-bytearray/input-provenance.json.gz
+  t/fixtures/retained-core/doublex2-bytearray/post-core.json.gz
+  t/fixtures/retained-core/doublex2-bytearray/pre-core.json.gz
+  t/fixtures/retained-core/floatx4-bytearray/input-provenance.json.gz
+  t/fixtures/retained-core/floatx4-bytearray/post-core.json.gz
+  t/fixtures/retained-core/floatx4-bytearray/pre-core.json.gz
+  t/fixtures/retained-core/int32x4-bytearray/native/provenance.json.gz
+  t/fixtures/retained-core/int32x4-bytearray/post-core.json.gz
+  t/fixtures/retained-core/int32x4-bytearray/pre-core.json.gz
+  t/fixtures/retained-core/int32x4-multiply/input-provenance.json
+  t/fixtures/retained-core/int32x4-multiply/post-core.json.gz
+  t/fixtures/retained-core/int32x4-multiply/pre-core.json.gz
+  t/fixtures/retained-core/word32x4-bytearray/native/provenance.json.gz
+  t/fixtures/retained-core/word32x4-bytearray/post-core.json.gz
+  t/fixtures/retained-core/word32x4-bytearray/pre-core.json.gz
   nih/pinned/ghc-9.14.1-generated/README.md
   nih/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/Win32Utils.c

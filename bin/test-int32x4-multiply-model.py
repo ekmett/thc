@@ -70,7 +70,7 @@ def word_samples():
 class Int32X4MultiplyModelTest(unittest.TestCase):
     def test_genuine_pre_post_signedness_controls_keep_exact_issue_profiles(self):
         root = Path(__file__).resolve().parent.parent
-        retained = root / 'bench/experiments/int32x4-multiply/evidence-x86_64'
+        retained = root / 't/fixtures/retained-core/int32x4-multiply'
         provenance = json.loads((retained / 'input-provenance.json').read_text())['core']
         hashes = {item['path']: item['sha256'] for item in provenance['artifacts']}
         spec = importlib.util.spec_from_file_location('int32x4_signedness_auditor', root / 'bin/audit-core.py')

@@ -161,7 +161,7 @@ interruptible calls, CApi, dynamic targets and wrong CInt width.
 
 The implementation executes the pinned GHC 9.14.1 public-domain `md5.c`/`md5.h`
 through Sulong 25.3.4.1. The original files and notice remain unchanged under
-`bench/experiments/pinned-addresses/reference`. `bin/build-cbits.py` checks
+`nih/pinned/ghc-9.14.1/libraries/ghc-internal`. `bin/build-cbits.py` checks
 their pinned Git blob hashes and compiles them with a small byte-buffer ABI
 adapter during the Gradle resource build. Clang and the installed GHC 9.14.1
 headers are required. The compiler target must match the current Linux/macOS

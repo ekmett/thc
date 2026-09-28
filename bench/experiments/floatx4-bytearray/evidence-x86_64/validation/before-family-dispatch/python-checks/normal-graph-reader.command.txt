@@ -1,1 +1,0 @@
-python3 bench/experiments/floatx4-bytearray/test-runtime-audit.py 

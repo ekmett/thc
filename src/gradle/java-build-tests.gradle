@@ -66,10 +66,10 @@ tasks.register('verifyJavaOnlySources') {
 // Keep these existing native-backed graph controls compilable against the current
 // runtime. This task neither prepares inputs nor executes a guest/benchmark.
 tasks.register('compileRuntimeGraphProbes', JavaCompile) {
-    source('bench/experiments/doublex2-bytearray/DoubleX2ByteArrayRuntimeGraphProbe.java',
-        'bench/experiments/floatx4-bytearray/FloatX4ByteArrayRuntimeGraphProbe.java',
-        'bench/experiments/int32x4-bytearray/Int32X4ByteArrayRuntimeGraphProbe.java',
-        'bench/experiments/word32x4-bytearray/Word32X4ByteArrayRuntimeGraphProbe.java')
+    source('src/diagnostics/graphs/DoubleX2ByteArrayRuntimeGraphProbe.java',
+        'src/diagnostics/graphs/FloatX4ByteArrayRuntimeGraphProbe.java',
+        'src/diagnostics/graphs/Int32X4ByteArrayRuntimeGraphProbe.java',
+        'src/diagnostics/graphs/Word32X4ByteArrayRuntimeGraphProbe.java')
     dependsOn(tasks.named('compileJava'))
     classpath = files(tasks.named('compileJava', JavaCompile).flatMap { it.destinationDirectory }) + sourceSets.main.compileClasspath
     options.annotationProcessorPath = files()

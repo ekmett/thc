@@ -8,8 +8,6 @@
   - --ignore-glob=t/haskell-fixtures/**
   # Upstream source snapshots retain upstream style and compiler configuration.
   - --ignore-glob=nih/pinned/**
-  # Frozen benchmark source is retained evidence, not current implementation.
-  - --ignore-glob=bench/results/**
 
 # Keep the standard hints visible. In particular, do not generate a blanket
 # ignore list from the current tree.

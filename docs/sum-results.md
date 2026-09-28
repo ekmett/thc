@@ -135,11 +135,3 @@ branch groups all result stores without forcing an inactive lazy payload.
 The original join slice was exposed by the unchanged `ad`/`data-reify`
 graph-reification path; passing these focused
 controls is not itself a claim that the complete `ad` test executable runs.
-
-The [production graph controls](../bench/experiments/sum-results/README.md) capture
-actual exported pair-payload and lazy-reference consumers on both backends, with
-normal inlining and residual calls. All four inline graphs eliminate sum carrier
-allocations and field traffic; branch-local scalar Long Object-return boxes
-remain. The residual controls show real calls and typed result-slab fields. Their
-source/JAR/native/raw-graph hashes and physical LIR are retained separately from
-the instrumented correctness tests.

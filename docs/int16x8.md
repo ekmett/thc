@@ -145,10 +145,3 @@ guest entries, unchanged active target identities and valid last-tier code;
 there are no post-compilation settling calls or retries. Both result and argument
 handoff pools must be released after every call. With native pre/post inputs this
 is 48,256 checked invocations and 52,544 guest entries per handoff mode.
-
-The separate [packed graph harness](../bench/experiments/int16x8-foundation/README.md)
-checks actual result-connected i16x8 arithmetic, all eight observed output lanes,
-and allocated XMM word instructions. It disallows surviving vector/carrier/array
-allocations, lane boxing, field traffic and fallback calls, while allowing the
-public host Long result box. Instrumentation is disabled only for these graph
-captures, not for the correctness tests above.

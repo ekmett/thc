@@ -268,11 +268,6 @@ producer or two roots for a scalar consumer) and the selected target still
 installed. Cold special values are checked without a compilation retry. The CI
 handoff run repeats the same tests; source, auditor, native and export hashes are
 validated before execution.
-The [sqrt production graphs](../bench/experiments/sqrt-graphs/README.md) check
-dynamic native-backed scalar consumers on both backends. The recorded graphs
-contain one square-root node, no intermediate floating boxes or guest calls,
-and final `FSQRT SINGLE`/`FSQRT DOUBLE` instructions. One host-result Long box
-remains.
 
 For actual compiler evidence, `floatingLoop` has both f32 and f64 accumulators.
 Capture its graph with `bin/dump-graph.sh`, selecting

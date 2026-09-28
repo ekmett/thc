@@ -233,13 +233,13 @@ configurations you intend to run. Typed runtime storage and successful guest
 compilation do not by themselves establish allocation removal or a speedup.
 
 ```sh
-bin/benchmark.sh work/bench-kernels
-THC_DIAGNOSTIC_UNSUPPORTED=true bin/benchmark-map.sh work/bench-map
-THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true bin/benchmark-map.sh work/bench-ast
+make -C bench kernels OUT="$PWD/work/bench-kernels"
+THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/work/bench-map"
+THC_BACKEND=ast THC_DIAGNOSTIC_UNSUPPORTED=true make -C bench map OUT="$PWD/work/bench-ast"
 ```
 
-Run the corresponding `try` script first and choose an unused output directory:
-the scripts overwrite files in the supplied directory. Benchmarks vary their
+Choose an unused output directory; the targets prepare and check their inputs
+before measuring, then overwrite files in the supplied directory. Benchmarks vary their
 inputs, consume the results, warm the JVM and compare against native GHC. Graph capture is a
 separate run. Diagnostic Map execution does not establish strict support for
 its entire dependency closure.

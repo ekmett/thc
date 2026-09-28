@@ -833,7 +833,7 @@ private String text = "class FakeString { @Test }";
         self.full("python-test-used-as-helper")
 
     def test_historical_python_snapshots_are_data_not_executable_tests(self):
-        path = "bench/experiments/example/evidence-x86_64/test-smoke.py"
+        path = "t/fixtures/example/evidence-native/test-smoke.py"
         self.write(path, "historical failure snapshot, not executable")
         self.commit()
         result = self.full("unmapped-source-or-configuration")
