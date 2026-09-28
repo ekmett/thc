@@ -1377,7 +1377,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (!"0".equals(value)) throw new UnsupportedCore("Malformed null Addr# literal");
                 yield ManagedAddress.nullAddress();
             }
-            case "function-addr" -> CFinalizerLabels.INSTANCE.fromCore(value, proof);
+            case "function-addr" -> CFinalizerLabels.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof,
                 stackTargetLayout instanceof TargetLayout layout ? layout : null);
             case "bignat" -> BigNatLiterals.decode(value);
@@ -4283,7 +4283,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     }
                 }
             }
-        }, operation.isWrite() ? CoreVectorMemory.INSTANCE.getStateProof() : operation.getVectorProof());
+        }, operation.isWrite() ? CoreVectorMemory.getStateProof() : operation.getVectorProof());
     }
 
     private Expression vectorPrimitive(String name, List<Expression> operands, int[] shuffleIndices) {
@@ -4805,7 +4805,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var operands = compileOperands(read.getArguments(), scope);
         var value = vectorMemory(read.getOperation(), operands);
         var local = scope.child();
-        local.bindVoid(read.getStateBinder(), CoreVectorMemory.INSTANCE.getStateProof());
+        local.bindVoid(read.getStateBinder(), CoreVectorMemory.getStateProof());
         var vectorProof = read.getOperation().getVectorProof();
         var lanes = new ArrayList<Local>();
         for (var proof : TupleShape.flatten(vectorProof))
@@ -5132,7 +5132,7 @@ public final class BytecodeProgram implements ExecutableProgram {
     }
 
     private Expression compileCase(List<Object> expr, Scope scope, boolean tail) {
-        var vectorRead = CoreVectorMemory.INSTANCE.readCase(expr, constructors);
+        var vectorRead = CoreVectorMemory.readCase(expr, constructors);
         if (vectorRead != null) return vectorReadCase(vectorRead, scope, tail);
         var local = scope.child();
         var scrutineeExpr = (List<Object>) expr.get(1);
@@ -5504,7 +5504,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var representations = argumentMetadata(args);
         var resultRepresentation = metadata == null ? null : metadata.get("rep");
         var packageScalar = cpuAffinity == null && runtimeService == null
-            ? CorePackageScalarForeign.INSTANCE.validate(metadata, representations, flags, resultRepresentation, packageScalarLinks) : null;
+            ? CorePackageScalarForeign.validate(metadata, representations, flags, resultRepresentation, packageScalarLinks) : null;
         // Verified package ownership takes precedence over matching RTS symbol names.
         var foreignMetadata = packageScalar == null ? metadata : null;
         boolean stackClone = CoreStackForeign.validate(foreignMetadata, representations, flags);
@@ -5683,7 +5683,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CorePackageScalarForeign.INSTANCE.validateOperand(packageScalar, index, operand.proof(), lexicalProof(argument, scope));
+                CorePackageScalarForeign.validateOperand(packageScalar, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -7226,8 +7226,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }, evaluatedProof(tupleProof, true));
         }
-        if (VectorMemoryOp.Companion.named(name) != null) {
-            var operation = VectorMemoryOp.Companion.named(name);
+        if (VectorMemoryOp.named(name) != null) {
+            var operation = VectorMemoryOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             return vectorMemory(operation, compileOperands(args, scope));
         }

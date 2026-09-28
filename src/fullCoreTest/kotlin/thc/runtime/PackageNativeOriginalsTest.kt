@@ -4,6 +4,7 @@
 package thc.runtime
 
 import thc.Main.withContextProfile
+import thc.runtime.PackageScalarAccess.packageCInteger
 
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.RootCallTarget

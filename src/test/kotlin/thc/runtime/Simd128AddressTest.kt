@@ -13,7 +13,7 @@ import java.nio.ByteOrder
 class Simd128AddressTest {
     private val families = setOf(VectorMemoryFamily.INT8, VectorMemoryFamily.WORD8,
         VectorMemoryFamily.INT16, VectorMemoryFamily.WORD16, VectorMemoryFamily.INT64, VectorMemoryFamily.WORD64)
-    private val operations = VectorMemoryOp.entries.filter { it.isAddress && it.vectorBytes == 16 && it.family in families }
+    private val operations = VectorMemoryOp.values().filter { it.isAddress && it.vectorBytes == 16 && it.family in families }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
         "primReps" to listOfNotNull(rep), "evaluated" to true)
     private val state = scalar("void", null)
@@ -255,7 +255,13 @@ class Simd128AddressTest {
                 }
                 rejects { (it.app[3] as MutableList<Boolean>)[0] = true }
                 rejects { (it.app[2] as MutableList<Any?>).removeLast() }
-                for (alias in listOf("IntRep","WordRep","Int8Rep","Word16Rep","Int64Rep","Word64Rep")) {
+                for (alias in listOf("Int8Rep","Word8Rep","Int16Rep","Word16Rep","Int32Rep","Word32Rep")) {
+                    rejects { f ->
+                        val offset = (f.app[2] as MutableList<Any?>)[1] as MutableList<Any?>
+                        offset[2] = mapOf("rep" to scalar("long",alias))
+                    }
+                }
+                for (alias in listOf("IntRep","WordRep","Int64Rep","Word64Rep")) {
                     val f = fixture(op)
                     val offset = (f.app[2] as MutableList<Any?>)[1] as MutableList<Any?>
                     offset[2] = mapOf("rep" to scalar("long",alias))

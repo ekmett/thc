@@ -21,7 +21,7 @@ import java.nio.ByteOrder
 
 class FloatVectorMemoryProofTest {
     // These fixtures use 128-bit vectors and ByteArray#, not wider vectors or Addr#.
-    private val operations = VectorMemoryOp.entries.filter {
+    private val operations = VectorMemoryOp.values().filter {
         it.family == VectorMemoryFamily.FLOAT32 && it.vectorBytes == 16 && !it.isAddress
     }
     private fun scalar(kind: String, rep: String?) = mapOf("kind" to kind,
@@ -380,6 +380,10 @@ class FloatVectorMemoryProofTest {
                 assertEquals(0L, count(), "$label no automatic compiled entries")
                 assertFalse(valid(target), "$label no automatic installation")
                 target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)
+                // Restore the shared entry stub without executing a settling guest call.
+                val runtime = Truffle.getRuntime()
+                runtime.javaClass.getMethod("bypassedInstalledCode",
+                    Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget")).invoke(runtime, target)
                 assertTrue(valid(target), "$label installed guest")
                 val before = count()
                 validCall("installed")
