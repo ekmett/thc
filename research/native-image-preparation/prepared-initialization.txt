@@ -70,6 +70,10 @@ thc.runtime.TupleShape
 thc.runtime.ConstructorClassIdentity
 # The allocated prototype's concrete type has no fields or class initializer.
 thc.runtime.ConstructorClassIdentity$1
+# Payload-free continuation enum singletons; only Enum(name, ordinal) and the
+# values array are initialized. AstResumeStep has no fields or default methods.
+thc.runtime.GcForeignExpression$ResumeCompleted
+thc.runtime.RtsEventForeignExpression$ResumeCompleted
 
 # Finite Java metadata compatibility inventory; see the closure audit in README.
 # Literal enum descriptors and argument lists only, not their runtime operations.
