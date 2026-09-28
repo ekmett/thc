@@ -224,7 +224,7 @@ class SimdFamiliesTest(unittest.TestCase):
                 self.assertEqual(2, proof.count(f'case "{operation}{name}#" ->'))
             if 'insert' in family['operations']:
                 body = ast.split(f'final class Generated{name}Operation', 1)[1].split('\n}\n', 1)[0]
-                vector_read = body.index('value = vector(frame, 0);')
+                vector_read = body.index('value = vector(arguments[0].execute(frame));')
                 lane_read = body.index('lane = ', vector_read)
                 index_read = body.index('long index = arguments[2].executeRequiredLong(frame);')
                 self.assertLess(vector_read, lane_read)

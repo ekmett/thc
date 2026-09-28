@@ -602,20 +602,22 @@ public final class BytecodeProgram implements ExecutableProgram {
         };
     }
 
+    @Override public Map<String, Object> rootCounts() {
+        int sourceRootCount = 0;
+        for (var root : roots)
+            if (root.getBytecodeNode().hasSourceInformation() && root.getSourceSection() != null) ++sourceRootCount;
+        return Map.of("bytecodeRootCount", roots.size(), "loweredRootCount", roots.size(),
+            "hostEntryRootCount", hostEntries.size(), "initializedBindingCount", initializedBindingCount,
+            "sourceRootCount", sourceRootCount);
+    }
+
     @Override public Map<String, Object> diagnostics() {
         var result = new LinkedHashMap<String, Object>();
         result.put("backend", "bytecode");
         result.put("asyncExceptions", enableAsync);
-        result.put("bytecodeRootCount", roots.size());
-        result.put("loweredRootCount", roots.size());
-        result.put("hostEntryRootCount", hostEntries.size());
-        result.put("initializedBindingCount", initializedBindingCount);
+        result.putAll(rootCounts());
         result.put("sourceNotesEnabled", sources.getEnabled());
         result.put("sourceSpanCount", sources.getSpanCount());
-        int sourceRootCount = 0;
-        for (var root : roots)
-            if (root.getBytecodeNode().hasSourceInformation() && root.getSourceSection() != null) ++sourceRootCount;
-        result.put("sourceRootCount", sourceRootCount);
         result.put("localJoinCount", localJoinCount);
         result.put("localJoinTransfers", metrics.getLocalJoinTransfers());
         result.put("instrumented", metrics.getEnabled());

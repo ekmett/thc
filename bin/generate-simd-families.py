@@ -230,7 +230,7 @@ def ast_code(fs):
                   f'        setRepresentation(GeneratedVectors.proof{n});', '    }',
                   f'    @Override public {vector_type(f)} execute(VirtualFrame frame) {{', '        return switch (operation) {']
         for i,op in enumerate(ops):
-            operands = [f'{cast}arguments[0].executeRequired{access}(frame)'] if op == 'broadcast' else ['vector(frame, 0)', f'{cast}arguments[1].executeRequired{access}(frame)', 'arguments[2].executeRequiredLong(frame)'] if op == 'insert' else ['vector(frame, 0)'] if op == 'negate' else ['vector(frame, 0)', 'vector(frame, 1)']
+            operands = [f'{cast}arguments[0].executeRequired{access}(frame)'] if op == 'broadcast' else ['vector(arguments[0].execute(frame))', f'{cast}arguments[1].executeRequired{access}(frame)', 'arguments[2].executeRequiredLong(frame)'] if op == 'insert' else ['vector(arguments[0].execute(frame))'] if op == 'negate' else ['vector(arguments[0].execute(frame))', 'vector(arguments[1].execute(frame))']
             if op == 'insert':
                 # Evaluate Core operands in source order before withLane's index-first API.
                 lines += [f'            case {i} -> {{', f'                {vector_type(f)} value = {operands[0]};',
@@ -240,7 +240,7 @@ def ast_code(fs):
                 lines.append(f'            case {i} -> {operation_expression(f, op, operands)};')
         lines += ['            default -> {', '                CompilerDirectives.transferToInterpreterAndInvalidate();',
                   f'                throw new RuntimeFault("Invalid {n} operation");', '            }','        };','    }',
-                  f'    private {vector_type(f)} vector(VirtualFrame frame, int index) {{ return {checked(f, "arguments[index].execute(frame)")}; }}','}\n']
+                  f'    private static {vector_type(f)} vector(Object value) {{ return {checked(f, "value")}; }}','}\n']
     return '\n'.join(lines)+'\n'
 
 

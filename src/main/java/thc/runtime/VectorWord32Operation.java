@@ -27,9 +27,9 @@ public final class VectorWord32Operation extends Expr {
     @Override public IntVector execute(VirtualFrame frame) {
         return switch (operation) {
             case 0 -> IntVector.broadcast(IntVector.SPECIES_128, arguments[0].executeRequiredInt(frame));
-            case 1 -> vector(frame, 0).add(vector(frame, 1));
-            case 2 -> vector(frame, 0).sub(vector(frame, 1));
-            case 3 -> vector(frame, 0).mul(vector(frame, 1));
+            case 1 -> vector(arguments[0].execute(frame)).add(vector(arguments[1].execute(frame)));
+            case 2 -> vector(arguments[0].execute(frame)).sub(vector(arguments[1].execute(frame)));
+            case 3 -> vector(arguments[0].execute(frame)).mul(vector(arguments[1].execute(frame)));
             default -> {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new RuntimeFault("Invalid Word32X4 operation");
@@ -37,7 +37,7 @@ public final class VectorWord32Operation extends Expr {
         };
     }
 
-    private IntVector vector(VirtualFrame frame, int index) {
-        return CoreVectors.requireInt(arguments[index].execute(frame), IntVector.SPECIES_128);
+    private static IntVector vector(Object value) {
+        return CoreVectors.requireInt(value, IntVector.SPECIES_128);
     }
 }

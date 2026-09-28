@@ -20,6 +20,10 @@ public final class CoreSources {
     public CoreSources(Map<String, ?> moduleData) {
         enabled = !Boolean.FALSE.equals(moduleData.get("sourceNotesEnabled"));
         if (!enabled) { notes = Map.of(); return; }
+        if (moduleData.get("preparedSources") instanceof CoreSources prepared) {
+            notes = prepared.notes;
+            return;
+        }
         var files = new LinkedHashMap<String, FileSources>();
         var sourceFiles = moduleData.get("sourceFiles") instanceof List<?> list ? list : List.of();
         for (var item : sourceFiles) {

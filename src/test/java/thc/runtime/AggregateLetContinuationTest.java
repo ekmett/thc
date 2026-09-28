@@ -13,6 +13,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import thc.Language;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.*;
 import static thc.runtime.RepresentationTestSupport.*;
 import static thc.runtime.ScalarTestCalls.callScalarTestTarget;
 
@@ -77,8 +78,23 @@ class AggregateLetContinuationTest {
         var values = TupleResults.ownedTupleResult(result, shape);
         assertSame(before, shape.getLayout().getObject(values, 0)); assertSame(after, shape.getLayout().getObject(values, 1));
     }
+    private static boolean declaredReturnPolicy(RootCallTarget target) throws ReflectiveOperationException {
+        try {
+            // FunctionRoot declares this policy even when stock Truffle cannot consume it.
+            var version = target.getClass().getMethod("declaredReturnPolicyVersion");
+            assertEquals(1, version.invoke(null), "Unsupported declared-return runtime protocol");
+            return true;
+        } catch (NoSuchMethodException stockRuntime) { return false; }
+    }
     @ParameterizedTest @ValueSource(strings = {"ast-tuple", "ast-sum", "ast-nested", "bytecode-tuple", "bytecode-sum", "bytecode-nested"})
-    void compiledLetRhsResumesWithoutReplayingCompletedBinding(String mode) throws Exception {
+    void declaredReturnPolicyRetainsInstalledAggregateContinuation(String mode) throws Exception {
+        compiledLetRhsResumesWithoutReplayingCompletedBinding(mode, true);
+    }
+    @ParameterizedTest @ValueSource(strings = {"ast-tuple", "ast-sum", "ast-nested", "bytecode-tuple", "bytecode-sum", "bytecode-nested"})
+    void stockRuntimeResumesAggregateLetWithoutReplayingCompletedBinding(String mode) throws Exception {
+        compiledLetRhsResumesWithoutReplayingCompletedBinding(mode, false);
+    }
+    private static void compiledLetRhsResumesWithoutReplayingCompletedBinding(String mode, boolean retainInstalled) throws Exception {
         boolean ast = mode.startsWith("ast"), sum = mode.endsWith("sum"), nested = mode.endsWith("nested");
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.BackgroundCompilation", "false")
             .option("engine.MultiTier", "false").option("engine.Splitting", "false").option("engine.CompilationFailureAction", "Throw").build()) {
@@ -88,6 +104,8 @@ class AggregateLetContinuationTest {
                 language = TruffleLanguage.LanguageReference.create(Language.class).get(null); owner = Language.currentState();
                 program = ast ? new Program(language, module(sum, nested), true) : new BytecodeProgram(language, module(sum, nested), true);
                 target = program.entryTarget("entry"); shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
+                assumeTrue(declaredReturnPolicy(target) == retainInstalled,
+                    retainInstalled ? "Requires the declared-return-policy runtime" : "Requires the stock runtime");
                 for (int i = 0; i < 5; i++) {
                     var prefix = new ManagedMVar(); var blocked = new ManagedMVar(); var a = new Object(); var b = new Object();
                     assertTrue(prefix.tryPut(a)); assertTrue(blocked.tryPut(b));
@@ -127,8 +145,12 @@ class AggregateLetContinuationTest {
                         var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
                         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
-                        assertSame(target, program.entryTarget("entry")); assertEquals(true, retained, "The first blocking cut retains installed code");
-                        assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "Resumption retains installed code"); resumed.complete(Unit.INSTANCE);
+                        assertSame(target, program.entryTarget("entry"));
+                        if (retainInstalled) {
+                            assertEquals(true, retained, "The first blocking cut retains installed code");
+                            assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target), "Resumption retains installed code");
+                        }
+                        resumed.complete(Unit.INSTANCE);
                     } catch (Throwable failure) { resumed.completeExceptionally(failure); } finally { context.leave(); }
                 });
                 resumer.start();

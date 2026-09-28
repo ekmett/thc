@@ -160,4 +160,53 @@ class CoreUnitLoadTest {
         }
         try (var context = executionContext()) { var entry = context.eval("thc", request(manifest, "bytecode")); assertEquals(0L, count(entry, "coreUnitPhysicalMappingOpens"), "closed contexts release leases into bounded idle reuse"); assertEquals(2L, count(entry, "coreUnitMappingCacheHits")); assertEquals(1L, count(entry, "coreUnitDecodedBindings"), "decoded state is not process-shared"); assertEquals(7L, entry.execute(0).asLong()); }
     }
+    @Test void demandedBindingsShareModuleSourceSectionsWithoutSharingAcrossContexts() throws Exception {
+        var manifest = fixture(); var loose = directory.resolve("SourceNotes.json");
+        var span = map("id", "span", "file", "source", "startLine", 1, "startColumn", 1,
+            "endLine", 1, "endColumn", 6, "charIndex", 0, "charLength", 5);
+        var first = with(binding("main:Main.entry", literal(7)), "source", "span");
+        var second = with(binding("main:Main.second", literal(8)), "source", "span");
+        var model = map("schema", 1, "ghc", "9.14.1", "unit", "main", "module", "Main", "boundary", boundary,
+            "bindings", list(first, second), "constructors", List.of(),
+            "sourceFiles", list(map("id", "source", "path", "Main.hs", "content", "entry\n")), "sourceSpans", list(span));
+        Files.writeString(loose, Json.stringify(model));
+        var other = directory.resolve("Other.json");
+        Files.writeString(other, Json.stringify(with(model, "unit", "other", "module", "Other",
+            "bindings", list(with(binding("other:Other.entry", literal(9)), "source", "span")),
+            "sourceFiles", list(map("id", "source", "path", "Other.hs", "content", "other\n")))));
+        for (String backend : List.of("ast", "bytecode")) {
+            com.oracle.truffle.api.source.SourceSection previous = null;
+            for (boolean notes : new boolean[]{true, true, false}) try (var context = executionContext()) {
+                var request = CoreModules.request(List.of(loose.toString(), other.toString(), "@" + manifest), "main:Main.entry", true, false, backend, notes, false, null, true, true, false);
+                @SuppressWarnings("unchecked") var input = (Map<String,Object>) Json.parse(request);
+                context.initialize("thc"); context.enter(); var owner = Language.currentState(null); owner.getThreads().enterCurrent(null, false, true, null);
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    try (var program = new CoreUnitProgram(language, Objects.requireNonNull(CoreModules.unitDirectory(input)), input, "main:Main.entry", backend, true, owner)) {
+                        var a = program.entryTarget("main:Main.entry").getRootNode().getSourceSection();
+                        var b = program.entryTarget("main:Main.second").getRootNode().getSourceSection();
+                        var c = program.entryTarget("other:Other.entry").getRootNode().getSourceSection();
+                        if (notes) {
+                            assertNotNull(a); assertEquals("entry", a.getCharacters().toString());
+                            assertEquals(a, b);
+                            if (backend.equals("ast")) assertSame(a, b, "Demanded bindings must retain one immutable module source section");
+                            assertNotNull(c); assertEquals("other", c.getCharacters().toString()); assertNotSame(a, c);
+                            assertNotSame(previous, a, "Resolved source-note tables belong to one context"); previous = a;
+                        } else { assertNull(a); assertNull(b); assertNull(c); }
+                        assertEquals(7L, thc.runtime.Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:Main.entry"), new Object[]{0L}}));
+                        assertEquals(8L, thc.runtime.Calls.target(program.hostEntryTarget(1), new Object[]{program.entryValue("main:Main.second"), new Object[]{0L}}));
+                        assertEquals(0L, statistic(program, "coreUnitSourceOpens"));
+                        var counts = program.rootCounts();
+                        assertEquals(3L, counts.get("loweredRootCount"));
+                        assertEquals(3L, counts.get("initializedBindingCount"));
+                        assertEquals(notes ? 3L : 0L, counts.get("sourceRootCount"));
+                        assertEquals(backend.equals("bytecode"), counts.containsKey("bytecodeRootCount"));
+                        assertEquals(backend.equals("bytecode") ? 5 : 4, counts.size());
+                        var diagnostics = program.diagnostics();
+                        counts.forEach((name, count) -> assertEquals(count, diagnostics.get(name)));
+                    }
+                } finally { owner.getThreads().leaveCurrent(thc.runtime.GuestThreadStatus.FINISHED); context.leave(); }
+            }
+        }
+    }
 }
