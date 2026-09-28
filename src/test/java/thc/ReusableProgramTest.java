@@ -15,6 +15,56 @@ import static thc.CoreExecutionTestSupport.*;
 
 /** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
+    @Test void unusedConstructorMetadataDoesNotAdmitConstructorCode() {
+        var data = module(list(binding("read", lambda(plus(variable("x"), literal(1))), true),
+            binding("constructed", list("con", "Unused", list()), true)));
+        data.put("constructors", list(map("id", "Unused", "name", "Unused", "arity", 0, "tag", 1,
+            "kind", "boxed", "strictFields", list(), "fieldLifted", list(), "fieldReps", list())));
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var code = Program.prepareCode(language, data, List.of("read"));
+                var instance = code.newInstance(language);
+                assertEquals(8L, call(instance, instance.entryValue("read"), 7L));
+                assertTrue(assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, data, List.of("constructed")))
+                    .getMessage().contains("Reusable AST node is not yet admitted: con"));
+                assertThrows(UnsupportedCore.class, () -> instance.entryValue("constructed"));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void cachedLauncherRejectsUninstalledFactoryBeforeCreatingAnInstance() {
+        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("x"), literal(1)),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        reader.put("arity", 1); reader.put("rep", closureRep);
+        var source = org.graalvm.polyglot.Source.newBuilder("thc", Json.stringify(map(
+            "modules", list(module(list(reader))), "entry", "read", "backend", "ast",
+            "asyncExceptions", false, "prepareCode", true)), "cached-launcher-guard").cached(true).buildLiteral();
+        String previous = System.getProperty("thc.requireCompiledCode");
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            try (var preparation = Context.newBuilder("thc").engine(engine).build()) { preparation.parse(source); }
+            System.setProperty("thc.requireCompiledCode", "true");
+            try (var runtime = Context.newBuilder("thc").engine(engine).build()) {
+                var failure = assertThrows(org.graalvm.polyglot.PolyglotException.class,
+                    () -> runtime.parse(source).execute());
+                assertTrue(failure.getMessage().contains("Cached compiled target required"), failure.getMessage());
+                System.clearProperty("thc.requireCompiledCode");
+                var interpretedEntry = runtime.parse(source).execute();
+                System.setProperty("thc.requireCompiledCode", "true");
+                var fallback = assertThrows(org.graalvm.polyglot.PolyglotException.class,
+                    () -> interpretedEntry.execute(5L));
+                assertTrue(fallback.getMessage().contains("Cached guest entered the interpreter"), fallback.getMessage());
+                assertEquals(0L, publicCount(interpretedEntry, "compiledEntries"));
+            }
+        } finally {
+            if (previous == null) System.clearProperty("thc.requireCompiledCode");
+            else System.setProperty("thc.requireCompiledCode", previous);
+        }
+    }
+
     private Map<String, Object> binding(String id, List<Object> body, boolean lifted) {
         return map("id", id, "name", id, "type", "Synthetic", "lifted", lifted, "expr", body);
     }
@@ -203,6 +253,17 @@ class ReusableProgramTest {
                     var diagnostics = (Map<?, ?>) Json.parse((String) interop.readMember(result, "diagnostics"));
                     assertEquals(0L, ((Number) diagnostics.get("loweredRootCount")).longValue());
                     assertEquals(true, type.getMethod("isValidLastTier").invoke(factory));
+                    // Check rejection after the original success/retention control:
+                    // stock exception deoptimization is permitted on this negative path.
+                    String previous = System.getProperty("thc.requireCompiledCode");
+                    try {
+                        System.setProperty("thc.requireCompiledCode", "true");
+                        assertTrue(assertThrows(IllegalStateException.class, factory::call).getMessage()
+                            .contains("Cached compiled target required"), "installed factory must not admit uninstalled guest code");
+                    } finally {
+                        if (previous == null) System.clearProperty("thc.requireCompiledCode");
+                        else System.setProperty("thc.requireCompiledCode", previous);
+                    }
                 } finally { context.leave(); }
             }
         }

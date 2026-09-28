@@ -23,7 +23,7 @@ are different claims; each report identifies which it establishes.
 | MVars | [Managed cells, lazy payloads and blocking handoff](managed-mvars.md); a Handle IO foundation, not complete Handle support |
 | Weak pointers | [Retained registrations and explicit finalization](weak-explicit.md), including [bounded C finalizers](c-finalizers.md); no automatic GC/ephemerons |
 | Managed exports | [Declared scalar and IO actions](site/embedding.md) through polyglot bindings; not native C callback addresses |
-| Native executable probe | [Native Image feasibility](native-image-feasibility.md); pure-Core interpretation in a native executable, not guest JIT/AOT or a complete native FFI lifecycle |
+| Native executable probe | [Native Image feasibility](native-image-feasibility.md) for pure-Core interpretation; [experimental selected-Core cache](native-code-cache.md) for the admitted compiled AST scalar family; neither establishes a complete native FFI lifecycle |
 | Locale and iconv | [Original native glibc/Sulong imports](original-iconv.md); explicit full-Core proof group, not complete Handle/IO |
 | Byte comparison and search | [Original libc `memcmp`/`memchr`](original-memory-search.md), unsigned byte semantics and allocation-preserving interior pointers |
 | Byte sorting | [Original ByteString `fps_sort`](original-bytestring-sort.md), unsigned ordering in checked writable slices |

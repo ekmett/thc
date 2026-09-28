@@ -430,6 +430,11 @@ public final class Language extends TruffleLanguage<Language.State> {
         }
         @Override public Object execute(VirtualFrame frame) { return instantiate(); }
         @TruffleBoundary private EntryValue instantiate() {
+            if (Boolean.getBoolean("thc.requireCompiledCode")) {
+                if (!(getCallTarget() instanceof com.oracle.truffle.runtime.OptimizedCallTarget target) || !target.isValidLastTier())
+                    throw new IllegalStateException("Cached compiled target required: " + getName());
+                code.requireInstalledCode();
+            }
             var language = getLanguage(Language.class);
             return new EntryValue(code.newInstance(language), entry, arity, null, null, language,
                 null, null, false, inputs, result);

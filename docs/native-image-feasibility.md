@@ -12,6 +12,11 @@ does not establish guest JIT or guest AOT in the native executable.
 Sulong/FFI execution and the full Haskell executable/resource lifecycle remain
 unverified by this recipe.
 
+The separate [selected-Core native code cache](native-code-cache.md) provides an
+opt-in `bin/native-cache build/store/run` workflow for the admitted synchronous
+AST scalar family. It stores compiled guest code before a fresh run process;
+its pinned platform/toolchain limits do not broaden the pure recipe below.
+
 ## Build and run the pure interpreter
 
 Use GHC 9.14.1 and GraalVM 25.3.4.1 / JDK 25, with `JAVA_HOME` selecting the

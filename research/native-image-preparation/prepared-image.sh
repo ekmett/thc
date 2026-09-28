@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # SPDX-FileCopyrightText: 2026 Edward Kmett
 # SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
-# Experimental runtime-graph preparation; retain normal compiler checks.
-# Not the supported pure-interpreter recipe or evidence of guest JIT/AOT.
+# Experimental runtime-graph and selected-code cache preparation.
+# Retain normal compiler checks; separate from the pure-interpreter recipe.
 set -euo pipefail
 if (( $# < 1 || $# > 2 )); then
-    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build]' >&2
+    echo 'Usage: JAVA_HOME=PINNED_JDK bash prepared-image.sh REPO [prepare-only|build|cache|cache-prepare-only]' >&2
     exit 2
 fi
 recipe_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$1" && pwd)
 mode=${2:-build}
-[[ "$mode" == prepare-only || "$mode" == build ]] || exit 2
+case "$mode" in prepare-only|build|cache|cache-prepare-only) ;; *) exit 2 ;; esac
 : "${JAVA_HOME:?Select GraalVM 25.3.4.1}"
 unset JAVA_TOOL_OPTIONS THC_BACKEND JAVA_OPTS THC_OPTS JDK_JAVA_OPTIONS GHC_PACKAGE_PATH GHC_ENVIRONMENT
 [[ "$("$JAVA_HOME/bin/native-image" --version)" == *25.3.4.1* ]] || exit 2
@@ -47,6 +47,25 @@ while IFS= read -r prepared; do
     [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
     initialization="${initialization:+$initialization,}$prepared"
 done < "$recipe_dir/prepared-initialization.txt"
+cache_options=()
+main_class=thc.Main
+image_path="$repo_dir/build/native-image/thc-reproduced-prepared"
+if [[ "$mode" == cache* ]]; then
+    # This configuration is qualified only for the pinned Linux AMD64 provider.
+    [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || {
+        echo 'Experimental cached code currently requires Linux AMD64' >&2; exit 2;
+    }
+    while IFS= read -r prepared; do
+        [[ -z "$prepared" || "$prepared" == \#* ]] && continue
+        [[ "$prepared" =~ ^[a-zA-Z0-9_.$]+$ ]] || exit 2
+        initialization="${initialization:+$initialization,}$prepared"
+    done < "$recipe_dir/cache-initialization.txt"
+    # CPUFeatures ADDS to -march on this pinned toolchain. HT is a topology bit;
+    # normalize it without dropping any instruction feature or installer check.
+    cache_options=(-march=x86-64-v3 -H:CPUFeatures=HT -H:+AuxiliaryEngineCache)
+    main_class=thc.NativeCache
+    image_path="$repo_dir/build/native-image/thc-native-cache"
+fi
 # Native Image interprets an empty class/package entry as the whole hierarchy.
 # Empty generated categories must not broaden policy.
 [[ "$initialization" =~ ^[a-zA-Z0-9_.$]+(,[a-zA-Z0-9_.$]+)*$ ]] || {
@@ -62,7 +81,7 @@ if [[ -n "${THC_NATIVE_IMAGE_PROCESS_IDENTITY:-}" ]]; then
     test -f "$recipe_dir/process-identity/reachability-metadata.json"
     printf '"-H:ConfigurationFileDirectories=%s"\n' "$recipe_dir/process-identity" > "$foreign_args"
 fi
-[[ "$mode" == prepare-only ]] && exit 0
+[[ "$mode" == *prepare-only ]] && exit 0
 builder_overlays=
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
     [[ "$THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS" == 1 ]] || exit 2
@@ -99,7 +118,7 @@ exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --p
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
     "@$initialization_args" "@$foreign_args" \
-    -H:+UnlockExperimentalVMOptions -H:+PrintCanonicalGraphStrings \
+    -H:+UnlockExperimentalVMOptions "${cache_options[@]}" -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \
-    -cp "$classpath" thc.Main "$repo_dir/build/native-image/thc-reproduced-prepared"
+    -cp "$classpath" "$main_class" "$image_path"

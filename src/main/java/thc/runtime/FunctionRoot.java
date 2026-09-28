@@ -472,6 +472,10 @@ public final class FunctionRoot extends GuestRoot {
             buildFrame(frame.getArguments(), frame);
         }
         if (metrics == null) {
+            // Cached-code launchers fail closed on interpreter fallback. The check folds
+            // away in compiled code and is not used by ordinary program instances.
+            if (CompilerDirectives.inInterpreter() && Boolean.getBoolean("thc.requireCompiledCode"))
+                throw fault("Cached guest entered the interpreter: " + label);
             Metrics invocation = invocationMetrics(frame);
             if (invocation.getEnabled() && CompilerDirectives.inCompiledCode()) invocation.incrementCompiledEntries();
         }

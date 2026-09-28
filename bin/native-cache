@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Edward Kmett
+# SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+set -euo pipefail
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+image=${THC_NATIVE_CACHE_IMAGE:-$repo_dir/build/native-image/thc-native-cache}
+case "${1:---help}" in
+    build)
+        [[ $# == 1 ]] || exit 2
+        export THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS=1 THC_NATIVE_IMAGE_RUNTIME_SNIPPETS=1 THC_NATIVE_IMAGE_RUNTIME_SIMULATED_FOLDS=1 THC_NATIVE_IMAGE_PROCESS_IDENTITY=1
+        exec bash "$repo_dir/research/native-image-preparation/prepared-image.sh" "$repo_dir" cache ;;
+    store)
+        [[ $# == 4 ]] || { echo 'Usage: bin/native-cache store CACHE MODULES ENTRY' >&2; exit 2; }
+        exec "$image" "$@" ;;
+    run)
+        [[ $# -ge 2 ]] || { echo 'Usage: bin/native-cache run CACHE [INTEGER...]' >&2; exit 2; }
+        # Reserve address space, but let Engine.CacheLoad perform the ONLY load.
+        # AuxiliaryImagePath would eagerly map it and make CacheLoad reject it.
+        cache_bytes=$(wc -c < "$2")
+        reserved_bytes=$((cache_bytes + 1048576))
+        (( reserved_bytes > cache_bytes )) || exit 2
+        exec "$image" "-XX:AuxiliaryImageBytes=$reserved_bytes" "$@" ;;
+    -h|--help)
+        echo 'Experimental Linux AMD64 / GraalVM 25.3.4.1 cached AST code'
+        echo 'bin/native-cache build | store CACHE MODULES ENTRY | run CACHE [INTEGER...]' ;;
+    *) echo 'Unknown native-cache command; use --help' >&2; exit 2 ;;
+esac

@@ -196,8 +196,11 @@ public final class Program implements ExecutableProgram {
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
         if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
         if (module.containsKey("demandBindings") || !absentOrEmpty(module.get("foreignLinks")) || !absentOrEmpty(module.get("packageScalarLinks")) ||
-                module.get("selectedForeignExceptionBridge") != null || module.get("constructors") instanceof List<?> cs && !cs.isEmpty())
-            throw new UnsupportedCore("Reusable AST admission currently requires a constructor- and foreign-free module");
+                module.get("selectedForeignExceptionBridge") != null)
+            throw new UnsupportedCore("Reusable AST admission currently requires a foreign-free, non-demand-loaded module");
+        // Real GHC modules carry unused $trModule constructor descriptors. Retain
+        // them during ordinary validation, but requireReusableBody still rejects
+        // every reachable constructor/case. None enters PreparedCode below.
         Program builder = new Program(language, module, false, false, false, true, null);
         Map<String, CodeValue> values = new LinkedHashMap<>();
         ArrayDeque<String> pending = new ArrayDeque<>(entries);
@@ -231,6 +234,14 @@ public final class Program implements ExecutableProgram {
             if (language != this.language || language != LANGUAGES.get(null))
                 throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
             return new Program(language, module, false, false, false, true, this);
+        }
+        /** Observe existing installation only: no binding demand, execution or compilation. */
+        public void requireInstalledCode() {
+            for (CodeValue value : values.values()) {
+                if (value.target == null) continue;
+                if (!(value.target instanceof com.oracle.truffle.runtime.OptimizedCallTarget target) || !target.isValidLastTier())
+                    throw new IllegalStateException("Cached compiled target required: " + value.target.getRootNode().getName());
+            }
         }
     }
     private record CodeValue(RootCallTarget target, CaptureLayout captures, int arity, Object literal) {
