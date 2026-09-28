@@ -541,7 +541,7 @@ existing scope.
 Source-built store packages require a Cabal source hash and a successful Core
 capture; unsupported build modes fail before producing an incomplete manifest.
 Selected `ghc-internal` definitions come from exact, unmodified GHC 9.14.1
-sources pinned under `compiler/pinned-ghc-internal`. The driver compiles them
+sources pinned under `third-party/pinned/ghc-9.14.1/libraries/ghc-internal`. The driver compiles them
 against installed dynamic interfaces in disposable staging under Cabal's build
 directory, then caches their post-Tidy Core in one checked ZIP under the OS
 cache. Other installed GHC/base units remain dependency identities without

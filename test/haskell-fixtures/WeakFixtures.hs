@@ -25,7 +25,7 @@ import System.Exit (die)
 import System.FilePath ((</>), takeExtension)
 
 source, directory :: FilePath
-source = "compiler/test-fixtures/WeakAudit.hs"
+source = "test/fixtures/compiler/WeakAudit.hs"
 directory = "build/weak-explicit"
 
 values :: [Integer]
@@ -54,7 +54,7 @@ prepareWeaks root = do
   unless (version == "9.14.1\n") (die "Explicit weak fixture requires GHC 9.14.1")
   writeFile (root </> driver) nativeDriver
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", root </> native,
     "-hidir", root </> native, root </> driver, "-o", executable] ""
   observations <- runWithTimeout (Just 30000000) root [] executable [] (unlines (map show values))
   let rows = map words (lines observations)
@@ -70,22 +70,22 @@ prepareWeaks root = do
         core = stageDir </> "core"
         modules = [core </> "WeakAudit.json", core </> "THC.InterfaceClosure.json"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=weakComposite", source]) ""
     exported <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     unless (exported == ["THC.InterfaceClosure.json", "WeakAudit.json"]) $
       die ("Unexpected explicit weak module inventory: " ++ show exported)
-    _ <- run root [] "python3" (["scripts/audit-core.py", "--entry", "weakComposite", "--output",
+    _ <- run root [] "python3" (["bin/audit-core.py", "--entry", "weakComposite", "--output",
       stageDir </> "audit.json"] ++ modules) ""
     pure (stage, modules)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, "test/haskell-fixtures/WeakFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/core-capabilities.json", "scripts/audit-core.py",
-        "src/main/resources/thc/scalar-primop-signatures.json", "compiler/plugin.py",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh"] ++
-        ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/core-capabilities.json", "bin/audit-core.py",
+        "src/main/resources/thc/scalar-primop-signatures.json", "bin/plugin.py",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh"] ++
+        ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
       artifacts = [driver, oracle] ++ concat [modules ++ [directory </> stage </> "audit.json"] | (stage, modules) <- stages]
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

@@ -77,7 +77,7 @@ driver = unlines $
 prepareIntegerCompletion :: FilePath -> IO ()
 prepareIntegerCompletion root = do
   let dir = "build/integer-completion"; logs = dir </> "commands"
-      source = "compiler/test-fixtures/IntegerCompletionAudit.hs"
+      source = "test/fixtures/compiler/IntegerCompletionAudit.hs"
       manifest = root </> dir </> "manifest.json"
       command = runLogged 600 root logs
   createDirectoryIfMissing True (root </> dir)
@@ -94,8 +94,8 @@ prepareIntegerCompletion root = do
     let core = dir </> stage ++ "-core"; obj = dir </> stage ++ "-ghc"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     exported <- command (stage ++ "-export") [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> obj)]
-      "compiler/export.sh" (options ++ [source])
-    audited <- command (stage ++ "-audit") [] "python3" (["scripts/audit-core.py"] ++
+      "bin/export-core.sh" (options ++ [source])
+    audited <- command (stage ++ "-audit") [] "python3" (["bin/audit-core.py"] ++
       concatMap (\n -> ["--entry",n]) names ++ ["--output",dir </> stage ++ "-audit.json",core </> "IntegerCompletionAudit.json"])
     pure [exported,audited]
   let native = dir </> "native"; nativeSource = dir </> "NativeIntegerCompletion.hs"
@@ -105,7 +105,7 @@ prepareIntegerCompletion root = do
   writeFile (root </> input) (unlines [n ++ "\t" ++ show x ++ "\t" ++ show y ++ "\t" ++ show z | (n,x,y,z) <- requests])
   unless (length requests == 3373) (die "Integer completion request count drift")
   built <- command "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures","-odir",root </> native,"-hidir",root </> native,
+    "-i" ++ root </> "test/fixtures/compiler","-odir",root </> native,"-hidir",root </> native,
     root </> nativeSource,"-o",root </> executable]
   oracle <- runLoggedWithInput input 600 root logs "native-oracle" [] (root </> executable) []
   let parse line = case splitTab line of
@@ -117,14 +117,14 @@ prepareIntegerCompletion root = do
   unless (traverse parse (lines (BS.unpack (commandStdout oracle))) == Just requests)
     (die "Native oracle omitted, duplicated, reordered, or corrupted requests")
   BS.writeFile (root </> dir </> "oracle.tsv") (commandStdout oracle)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/IntegerCompletionFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py",
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       artifacts = [input,nativeSource,executable,dir </> "oracle.tsv"] ++
         [dir </> stage ++ suffix | stage <- ["pre","post"], suffix <- ["-audit.json","-core/IntegerCompletionAudit.json"]] ++
         concatMap commandArtifacts ([version,info,built,oracle] ++ concat stages)

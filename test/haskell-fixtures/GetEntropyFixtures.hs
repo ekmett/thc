@@ -61,7 +61,7 @@ prepareGetEntropy root = do
   driverHash <- hashFile driver
   libdir <- line . commandStdout <$> execute "ghc-libdir" [] ghc ["--print-libdir"]
   registry <- either fail pure . eitherDecodeStrict' . commandStdout =<< execute "plugin-unit" [] python
-    [root </> "compiler/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
+    [root </> "bin/plugin.py","--root",root,"--ghc-pkg",ghcPkg,"--registry-only"]
   plugin <- field registry "unitId"
   pluginDb <- field registry "packageDb"
   let key = take 16 driverHash
@@ -101,40 +101,40 @@ prepareGetEntropy root = do
      "-fplugin-opt=THC.Plugin:" ++ entryOutput,"-fplugin-opt=THC.Plugin:source-notes",
      "-fplugin-opt=THC.Plugin:unit-qualified","-fplugin-opt=THC.Plugin:post-tidy",
      "-fplugin-opt=THC.Plugin:foreign-import-provenance","-fwrite-if-simplified-core",
-     "-dcore-lint","-outputdir",output </> "entry-objects","compiler/test-fixtures/OriginalSplitmixEntry.hs"]
+     "-dcore-lint","-outputdir",output </> "entry-objects","test/fixtures/compiler/OriginalSplitmixEntry.hs"]
   audited <- execute "splitmix-audit" [] "python3"
-    (["scripts/audit-core.py","--entry","original-splitmix-entry:OriginalSplitmixEntry.sample",
+    (["bin/audit-core.py","--entry","original-splitmix-entry:OriginalSplitmixEntry.sample",
       "--output",output </> "audit.json",entryPath] ++ [output </> name | (name,_) <- linked])
   audit <- readJson (output </> "audit.json")
   accepted <- field audit "accepted"
   unless accepted (fail "strict original splitmix audit rejected")
   splitmixBuilt <- execute "splitmix-native-build" [] ghc
     ["-O1","-package-db",native </> "packagedb/ghc-9.14.1","-package-id",unit,
-     "compiler/test-fixtures/OriginalSplitmixNative.hs","-outputdir",output </> "splitmix-oracle-objects",
+     "test/fixtures/compiler/OriginalSplitmixNative.hs","-outputdir",output </> "splitmix-oracle-objects",
      "-o",output </> "splitmix-oracle"]
   splitmixOracle <- execute "splitmix-native-run" [] (output </> "splitmix-oracle") []
   unless (length (BSC.lines (commandStdout splitmixOracle)) == 8) (fail "original splitmix native row inventory differs")
   BS.writeFile (output </> "splitmix-native.tsv") (commandStdout splitmixOracle)
   nativeBuilt <- execute "native-build" [] clang
-    ["-O1","-DTHC_NATIVE_ORACLE","compiler/test-fixtures/NativeGetEntropy.c","-o",output </> "oracle"]
+    ["-O1","-DTHC_NATIVE_ORACLE","test/fixtures/compiler/NativeGetEntropy.c","-o",output </> "oracle"]
   oracle <- execute "native-run" [] (output </> "oracle") []
   unless (length (BSC.lines (commandStdout oracle)) == 9) (fail "getentropy native row inventory differs")
   BS.writeFile (output </> "native.tsv") (commandStdout oracle)
   controlBuilt <- execute "control-build" [] clang
     ["--target=x86_64-unknown-linux-gnu","-O1","-fembed-bitcode","-shared","-fPIC",
-     "compiler/test-fixtures/NativeGetEntropy.c","-lc","-o",output </> "control.so"]
+     "test/fixtures/compiler/NativeGetEntropy.c","-lc","-o",output </> "control.so"]
   irBuilt <- execute "control-ir" [] clang
     ["--target=x86_64-unknown-linux-gnu","-O1","-emit-llvm","-S",
-     "compiler/test-fixtures/NativeGetEntropy.c","-o",output </> "control.ll"]
+     "test/fixtures/compiler/NativeGetEntropy.c","-o",output </> "control.ll"]
   either fail pure . validateNativeEntropyIR "x86_64-unknown-linux-gnu" =<< readFile (output </> "control.ll")
   sourceHashes <- hashes root (map (makeRelative root) retained)
-  inputHashes <- hashes root ["compiler/test-fixtures/NativeGetEntropy.c","compiler/test-fixtures/OriginalSplitmixNative.hs",
-    "compiler/test-fixtures/OriginalSplitmixEntry.hs",
-    "test/haskell-fixtures/GetEntropyFixtures.hs","compiler/plugin.py","test/haskell-fixtures/FixtureSupport.hs",
-    "src/THC/Driver/PackageNative.hs","src/THC/Driver/NativeArgumentBridge.hs",
-    "src/THC/Driver/NativeLibrarySources.hs","src/THC/Driver/GhcProxy.hs",
-    "compiler/THC/Plugin.hs","compiler/THC/ForeignImportProvenance.hs","compiler/THC/Interface.hs",
-    "scripts/audit-core.py","scripts/core_package_manifest.py"]
+  inputHashes <- hashes root ["test/fixtures/compiler/NativeGetEntropy.c","test/fixtures/compiler/OriginalSplitmixNative.hs",
+    "test/fixtures/compiler/OriginalSplitmixEntry.hs",
+    "test/haskell-fixtures/GetEntropyFixtures.hs","bin/plugin.py","test/haskell-fixtures/FixtureSupport.hs",
+    "src/driver/THC/Driver/PackageNative.hs","src/driver/THC/Driver/NativeArgumentBridge.hs",
+    "src/driver/THC/Driver/NativeLibrarySources.hs","src/driver/THC/Driver/GhcProxy.hs",
+    "src/compiler/THC/Plugin.hs","src/compiler/THC/ForeignImportProvenance.hs","src/compiler/THC/Interface.hs",
+    "bin/audit-core.py","bin/core_package_manifest.py"]
   artifactHashes <- hashes root ([relative </> path | path <-
     ["System.Random.SplitMix.Init.json","System.Random.SplitMix.json","System.Random.SplitMix32.json",
      "entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json",

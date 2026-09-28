@@ -28,8 +28,8 @@ import Text.Read (readMaybe)
 prepareOriginalOpen :: FilePath -> IO ()
 prepareOriginalOpen root = do
   let directory = "build/original-open"
-      source = "compiler/test-fixtures/OriginalOpenAudit.hs"
-      driver = "compiler/test-fixtures/OriginalOpenNative.hs"
+      source = "test/fixtures/compiler/OriginalOpenAudit.hs"
+      driver = "test/fixtures/compiler/OriginalOpenNative.hs"
       execute = runLogged 180 root (directory </> "logs")
       binary = directory </> "native/oracle"
       manifest = root </> directory </> "manifest.json"
@@ -49,7 +49,7 @@ prepareOriginalOpen root = do
                       lookup "Target platform" target == Just host, lookup "target word size" target == Just "8" -> pure ()
         _ -> die "Original open requires native 64-bit GHC"
       compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
-        "-package", "ghc-internal", "-package", "unix", "-icompiler/test-fixtures", "-threaded",
+        "-package", "ghc-internal", "-package", "unix", "-itest/fixtures/compiler", "-threaded",
         "-optc-DTHC_OPEN_REQUEST_TEST", "-optc-std=c11", "-optc-Wall", "-optc-Wextra", "-optc-Werror",
         "-optl-pthread", "src/main/c/native-open-request.c",
         "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
@@ -69,22 +69,22 @@ prepareOriginalOpen root = do
               ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
         exported <- execute (stage ++ "-export")
           [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-          "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [source])
+          "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [source])
         audits <- forM entries $ \entry -> do
           let output = directory </> stage </> entry ++ ".audit.json"
           command <- runLoggedExpect 0 180 root (directory </> "logs")
             (stage ++ "-audit-" ++ entry) [] "python3"
-            (["scripts/audit-core.py", "--entry", entry, "--output", output] ++ modules)
+            (["bin/audit-core.py", "--entry", entry, "--output", output] ++ modules)
           pure (output,command)
         pure (modules,exported,audits)
-      plugin <- listDirectory (root </> "compiler/THC")
-      scripts <- listDirectory (root </> "scripts")
-      inputHashes <- hashes root $ sort $ [source,driver,"compiler/test-fixtures/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c", "thc.cabal","test/haskell-fixtures/Main.hs",
+      plugin <- listDirectory (root </> "src/compiler/THC")
+      scripts <- listDirectory (root </> "bin")
+      inputHashes <- hashes root $ sort $ [source,driver,"test/fixtures/compiler/OriginalOpenRequestNative.hs", "src/main/c/native-open-request.c", "thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/OriginalOpenFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
       let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]
           artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (modules,_,audits) <- exports] ++ concatMap commandArtifacts commands
       artifactHashes <- hashes root artifacts

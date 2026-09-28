@@ -79,7 +79,7 @@ variables expression = case expression of
 prepareByteStringDecimal :: FilePath -> IO ()
 prepareByteStringDecimal root = do
   let directory = "build/bytestring-decimal"
-      source = "compiler/test-fixtures/ByteStringDecimalAudit.hs"
+      source = "test/fixtures/compiler/ByteStringDecimalAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       manifest = root </> directory </> "manifest.json"
       oneLine result = case BS.lines (commandStdout result) of
@@ -186,13 +186,13 @@ prepareByteStringDecimal root = do
       _ -> die "Missing compiled original decimal consumers"
   writeJson (root </> directory </> "oracle.json") (toJSON oracle)
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["scripts/audit-core.py", "--entry", name,
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
       "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "src/test/resources/core/original-bytestring-decimal-descriptors.json", "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
-    "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java",
+    "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/core_original_foreign.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java",
     "src/main/java/thc/runtime/ByteStringDecimal.java", "src/main/java/thc/runtime/ByteStringDecimalOp.java",
     "src/main/java/thc/runtime/ByteStringDecimalExpression.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++

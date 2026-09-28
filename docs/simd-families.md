@@ -1,6 +1,6 @@
 # SIMD families and guest transport
 
-The [capability contract](../scripts/core-capabilities.json) admits 30 exact
+The [capability contract](../bin/core-capabilities.json) admits 30 exact
 `VecRep` shapes. Their fixed-species raw JDK representation is described in
 [SIMD execution and storage](simd.md).
 
@@ -24,7 +24,7 @@ representation is admitted.
 
 ## Generated operations
 
-[`scripts/simd-families.json`](../scripts/simd-families.json) declares generated
+[`bin/simd-families.json`](../bin/simd-families.json) declares generated
 arithmetic, pack/unpack, broadcast, insertion, extrema, division and shuffle
 families, complementing handwritten foundations. The
 [primop checklist](primops.md) records implemented names. Individual
@@ -47,8 +47,8 @@ lane fields.
 Refresh checked regions and verify pinned GHC machine contracts with:
 
 ```sh
-python3 scripts/generate-simd-families.py --write --verify-ghc
-python3 scripts/test-simd-families.py
+python3 bin/generate-simd-families.py --write --verify-ghc
+python3 bin/test-simd-families.py
 ```
 
 `--write` changes the marked source regions deliberately; ordinary Gradle
@@ -63,7 +63,7 @@ composite contracts with the canonical capability declaration. Its default
 native oracle uses scalar lanes and does not require native AVX512 code:
 
 ```sh
-python3 scripts/prepare-simd-capability-smoke.py
+python3 bin/prepare-simd-capability-smoke.py
 ./gradlew --no-daemon test --tests thc.runtime.SimdCapabilitySmokeTest --rerun
 ```
 
@@ -74,7 +74,7 @@ This finite smoke does not replace the larger edge corpus or graph inspection.
 Prepare the larger scalar-entry experiment without native code generation:
 
 ```sh
-python3 scripts/prepare-simd-families.py --export-only
+python3 bin/prepare-simd-families.py --export-only
 ```
 
 Its independent model uses modular integer arithmetic and rational floating
@@ -94,5 +94,5 @@ Ordinary tests retain fixture-free vector/proof checks and exclude the four
 tagged prepared experiment methods. The native gates require both Core stages
 and byte-identical native/model TSVs. Separately named wider-shape controls use
 the prepared model. Both retain exact guest-entry, active-target and handoff
-cleanup checks. Use `python3 scripts/prepare-simd-families.py --check-only`
+cleanup checks. Use `python3 bin/prepare-simd-families.py --check-only`
 to verify an existing manifest's input/artifact hashes without regenerating it.

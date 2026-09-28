@@ -116,10 +116,10 @@ class Simd128ArrayNativeTest {
             for (var item : files.entrySet()) assertEquals(item.getValue(), digest(item.getKey()), "Stale " + kind + ": " + item.getKey());
         }
         var inputs = (Map<String, String>) proof.get("inputHashes");
-        for (var path : List.of("compiler/test-fixtures/Simd128ArrayAudit.hs", "compiler/test-fixtures/Simd128ArrayNative.hs",
+        for (var path : List.of("test/fixtures/compiler/Simd128ArrayAudit.hs", "test/fixtures/compiler/Simd128ArrayNative.hs",
                 "test/haskell-fixtures/Simd128ArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/export.sh", "scripts/core_vector_memory.py",
-                "scripts/core_vectors.py", "scripts/simd-families.json", "scripts/core-capabilities.json"))
+                "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/core_vector_memory.py",
+                "bin/core_vectors.py", "bin/simd-families.json", "bin/core-capabilities.json"))
             assertTrue(inputs.containsKey(path), "Unfingerprinted source: " + path);
         var artifacts = (Map<String, String>) proof.get("artifactHashes");
         assertTrue(artifacts.containsKey(directory + "/inputs.tsv"));

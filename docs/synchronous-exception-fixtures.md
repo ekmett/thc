@@ -35,16 +35,16 @@ implementation must not advertise complete catch semantics while ignoring it.
 ## Reproduce
 
 Use the repository's pinned GHC 9.14.1, Python 3.12+, and Cabal toolchain. The
-preparer invokes `compiler/build.sh`, reads `build/compiler/plugin.json`, and
+preparer invokes `bin/build-compiler.sh`, reads `build/compiler/plugin.json`, and
 passes its actual `unitId` and `packageDb` to GHC. It never synthesizes a package
 record or assumes a versioned plugin unit name. Normal `GHC`, `GHC_PKG`, `CABAL`,
 and Cabal configuration settings still apply.
 
 ```sh
-python3 scripts/test-synchronous-exception-fixtures.py
-python3 -O scripts/test-synchronous-exception-fixtures.py
-python3 scripts/prepare-synchronous-exceptions.py
-python3 scripts/prepare-synchronous-exceptions.py --check-only
+python3 bin/test-synchronous-exception-fixtures.py
+python3 -O bin/test-synchronous-exception-fixtures.py
+python3 bin/prepare-synchronous-exceptions.py
+python3 bin/prepare-synchronous-exceptions.py --check-only
 ```
 
 Preparation requires a fresh output directory. Use `--out build/another-name`

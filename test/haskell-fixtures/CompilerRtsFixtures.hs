@@ -69,7 +69,7 @@ variables expr = case expr of
 prepareCompilerRts :: FilePath -> IO ()
 prepareCompilerRts root = do
   let directory = "build/compiler-rts"
-      source = "compiler/test-fixtures/CompilerRtsAudit.hs"
+      source = "test/fixtures/compiler/CompilerRtsAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       oneLine result = case lines (BS.unpack (commandStdout result)) of
         [value] -> value
@@ -153,7 +153,7 @@ prepareCompilerRts root = do
       nativeBinary = directory </> "unique-oracle"
   writeFile (root </> oracleSource) $ unlines ["module Main where", "import CompilerRtsAudit",
     "main :: IO ()", "main = mapM_ (\\x -> print (x, nativeUnique x)) [-17,0,1,42,65535]"]
-  _ <- execute "unique-build" [] ghc ["--make", "-O2", "-dynamic", "-package", "ghc", "-i" ++ (root </> "compiler/test-fixtures"),
+  _ <- execute "unique-build" [] ghc ["--make", "-O2", "-dynamic", "-package", "ghc", "-i" ++ (root </> "test/fixtures/compiler"),
     "-odir", root </> directory </> "ghc", "-hidir", root </> directory </> "ghc", root </> oracleSource, "-o", root </> nativeBinary]
   unique <- execute "unique-oracle" [] (root </> nativeBinary) []
   unless (lines (BS.unpack (commandStdout unique)) == [show (x, x + 4) | x <- [-17,0,1,42,65535] :: [Int]])
@@ -163,10 +163,10 @@ prepareCompilerRts root = do
     Nothing -> die "Invalid native unique observation"
   writeFile (root </> directory </> "oracle.tsv") (unlines (rows ++ uniqueRows))
   _ <- forM ["pre", "post"] $ \stage -> forM entries $ \entry ->
-    execute (stage ++ "-audit-" ++ entry) [] "python3" ["scripts/audit-core.py", "--entry", entry,
+    execute (stage ++ "-audit-" ++ entry) [] "python3" ["bin/audit-core.py", "--entry", entry,
       "--output", directory </> stage ++ "-" ++ entry ++ ".audit.json", directory </> stage ++ ".json"]
-  inputHashes <- hashes root [source, "test/haskell-fixtures/CompilerRtsFixtures.hs", "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs",
-    "scripts/core_original_foreign.py", "scripts/audit-core.py", "scripts/core-capabilities.json"]
+  inputHashes <- hashes root [source, "test/haskell-fixtures/CompilerRtsFixtures.hs", "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs",
+    "bin/core_original_foreign.py", "bin/audit-core.py", "bin/core-capabilities.json"]
   artifactHashes <- hashes root [directory </> file | file <- ["pre.json", "post.json", "oracle.tsv", "UniqueOracle.hs", "unique-oracle"]]
   interfaceHashes <- hashes root interfaces
   writeJson (root </> directory </> "manifest.json") $ object

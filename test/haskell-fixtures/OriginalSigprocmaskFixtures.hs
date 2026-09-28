@@ -30,15 +30,15 @@ directory = "build/original-sigprocmask"
 
 fixtureSources :: FilePath -> IO [FilePath]
 fixtureSources root = do
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  pure $ sort $ ["compiler/test-fixtures/OriginalSigprocmaskAudit.hs", "compiler/test-fixtures/OriginalSigprocmaskNative.hs",
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  pure $ sort $ ["test/fixtures/compiler/OriginalSigprocmaskAudit.hs", "test/fixtures/compiler/OriginalSigprocmaskNative.hs",
     "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json", "compiler/export.sh", "compiler/build.sh",
-    "compiler/toolchain.sh", "compiler/plugin.py"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+    "src/main/resources/thc/scalar-primop-signatures.json", "bin/export-core.sh", "bin/build-compiler.sh",
+    "bin/toolchain.sh", "bin/plugin.py"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
 
 prepareOriginalSigprocmask :: FilePath -> IO ()
 prepareOriginalSigprocmask root = do
@@ -68,7 +68,7 @@ prepareOriginalSigprocmask root = do
     let binary = directory </> "native/oracle"
     compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-threaded", "-fforce-recomp", "-dcore-lint",
       "-package", "ghc-internal", "-package", "unix", "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native",
-      "compiler/test-fixtures/OriginalSigprocmaskNative.hs", "-o", root </> binary]
+      "test/fixtures/compiler/OriginalSigprocmaskNative.hs", "-o", root </> binary]
     observed <- execute "native-run" [] (root </> binary) []
     (size, rows) <- maybe (die "Malformed original sigprocmask observations") pure
       (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe (Int, [(Int,Int,Int,Int,Int,Bool,Bool,Bool)]))
@@ -82,11 +82,11 @@ prepareOriginalSigprocmask root = do
             ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
       exported <- execute (stage ++ "-export")
         [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-        "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ ["compiler/test-fixtures/OriginalSigprocmaskAudit.hs"])
+        "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["test/fixtures/compiler/OriginalSigprocmaskAudit.hs"])
       audits <- forM entries $ \entry -> do
         let path = directory </> stage </> entry ++ ".audit.json"
         command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-          (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+          (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
         pure (path,command)
       pure (modules,exported,audits)
     let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]

@@ -28,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          submodules: true
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -45,7 +46,7 @@ jobs:
           check-for-updates: false
       - name: Prepare fresh native and Core inputs
         id: prepare
-        run: python3 scripts/prepare-short-bytes-slices.py
+        run: python3 bin/prepare-short-bytes-slices.py
       - name: Check compiled-code stability with ordinary handoffs
         id: ordinary
         continue-on-error: true

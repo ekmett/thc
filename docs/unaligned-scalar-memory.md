@@ -47,7 +47,7 @@ still checks the originating context and explicit free/disposal.
 
 ## Example and checks
 
-[UnalignedScalarMemoryAudit.hs](../compiler/test-fixtures/UnalignedScalarMemoryAudit.hs)
+[UnalignedScalarMemoryAudit.hs](../test/fixtures/compiler/UnalignedScalarMemoryAudit.hs)
 is an executable example for every scalar type. Each entry writes through the
 array alias, reads through both views, writes a distinct value through a
 one-past address with a negative displacement, and indexes both views. Sentinel

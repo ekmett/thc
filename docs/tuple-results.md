@@ -77,7 +77,7 @@ unsupported physical leaves remain rejected. The
 [Core host ABI](site/embedding.md#load-a-core-entry) returns supported tuples as
 read-only logical arrays, copied before temporary result storage is released.
 
-`scripts/prepare-floating-tuples.py` checks genuine `Data.Complex` multiplication
+`bin/prepare-floating-tuples.py` checks genuine `Data.Complex` multiplication
 and `conjugate`: ordinary NOINLINE boxed producers become GHC CPR workers returning
 `(# Float#, Float# #)` and `(# Double#, Double# #)`. The public `Complex` datatype
 itself remains boxed. Both export stages are strict-audited, and 44 native results
@@ -99,7 +99,7 @@ retain the typed result slab and existing Object argument ABI.
 
 The exporter preserves native proofs through `runRW# f` to `f realWorld#` only
 when GHC's exact type equality confirms the rewrite. Representation-changing
-wired rewrites remain uncertified. `scripts/prepare-state-tuple-audit.py` checks
+wired rewrites remain uncertified. `bin/prepare-state-tuple-audit.py` checks
 the genuine pre/post-Tidy metadata and 21 native rows against independent
 wraparound formulas. `StateTupleTest` runs these rows with and without guest
 inlining on both backends, checks installed entry validity after every compiled

@@ -68,7 +68,7 @@ public class OriginalIconvNativeTest {
     }
     @Test public void actualOriginalImportsMatchNativeIncludingFirstCompiledCalls() throws Exception {
         var oracle = document("oracle.json"); var manifest = document("manifest.json"); assertEquals(10L, manifest.get("nativeRows"));
-        for (var field : List.of("inputHashes", "artifactHashes")) OriginalStdioChecks.hashes(root, manifest.get(field), field.equals("inputHashes") ? Set.of("compiler/test-fixtures/OriginalIconvAudit.hs", "compiler/test-fixtures/OriginalIconvAuditNative.hs") : Set.of("build/original-iconv/OriginalIconvAudit.json", "build/original-iconv/oracle.json"), null);
+        for (var field : List.of("inputHashes", "artifactHashes")) OriginalStdioChecks.hashes(root, manifest.get(field), field.equals("inputHashes") ? Set.of("test/fixtures/compiler/OriginalIconvAudit.hs", "test/fixtures/compiler/OriginalIconvAuditNative.hs") : Set.of("build/original-iconv/OriginalIconvAudit.json", "build/original-iconv/oracle.json"), null);
         var declarations = document("declarations.json"); assertEquals(false, declarations.get("completeModule")); assertEquals(false, declarations.get("installedArtifactsHashed")); assertEquals(true, declarations.get("typeEqualityChecked")); assertEquals(true, declarations.get("originalIdentityChecked")); var originals = OriginalStdioChecks.foreignCalls(declarations);
         for (var stage : List.of("pre", "post")) {
             var module = document(stage.equals("pre") ? "PreIconvAudit.json" : "OriginalIconvAudit.json"); assertEquals(stage.equals("pre") ? "optimized-Core-before-Tidy" : "optimized-Core-after-Tidy-before-CorePrep", module.get("boundary")); var actual = new ArrayList<List<Object>>();

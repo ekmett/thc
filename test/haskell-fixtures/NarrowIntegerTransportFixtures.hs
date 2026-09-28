@@ -49,8 +49,8 @@ prepareNarrowIntegerTransport :: FilePath -> IO ()
 prepareNarrowIntegerTransport root = do
   let directory = "build/narrow-integer-transport"
       output = root </> directory
-      source = "compiler/test-fixtures/NarrowIntegerTransport.hs"
-      driver = "compiler/test-fixtures/NarrowIntegerTransportNative.hs"
+      source = "test/fixtures/compiler/NarrowIntegerTransport.hs"
+      driver = "test/fixtures/compiler/NarrowIntegerTransportNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
       logs = directory </> "commands"
@@ -63,7 +63,7 @@ prepareNarrowIntegerTransport root = do
   check (commandStdout version == "9.14.1\n") "requires pinned GHC 9.14.1"
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make","-O2","-dynamic","-Wall","-Werror","-fforce-recomp","-dcore-lint","-dstg-lint",
-     "-icompiler/test-fixtures","-odir",native,"-hidir",native,driver,"-o",binary]
+     "-itest/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",binary]
   observed <- runLogged 30 root logs "native-run" [] (root </> binary) []
   let parse line = case splitTab line of
         [name,bits,result] -> (,,) name <$> readInteger bits <*> readInteger result
@@ -78,7 +78,7 @@ prepareNarrowIntegerTransport root = do
         reportPath = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core),("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint",source])
     original <- readJson (root </> core </> "NarrowIntegerTransport.json")
     let proofs = walk original
@@ -91,20 +91,20 @@ prepareNarrowIntegerTransport root = do
     modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     let paths = map (core </>) modules
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py","--output",reportPath] ++
+      (["bin/audit-core.py","--output",reportPath] ++
        concatMap (\entry -> ["--entry","main:NarrowIntegerTransport." ++ entry]) entries ++ paths)
     report <- readJson (root </> reportPath)
     check (field "accepted" report == Just (Bool True) && field "issues" report == Just (Array mempty) &&
       field "missingGlobals" report == Just (Array mempty)) "strict audit rejected genuine Core"
     pure (stage, reportPath : paths ++ commandArtifacts exported ++ commandArtifacts audited)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/NarrowIntegerTransportFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py","scripts/audit-core.py",
-    "scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+    "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py","bin/audit-core.py",
+    "bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   artifactHashes <- hashes root $ [directory </> "oracle.tsv",binary] ++ concatMap snd stages ++
     concatMap commandArtifacts [version,compiled,observed]
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

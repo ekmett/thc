@@ -6,9 +6,9 @@ Core to Truffle's Bytecode DSL, with typed operations and locals. It is not
 GHC bytecode or a call into the AST interpreter.
 
 ```sh
-scripts/try.sh
-THC_BACKEND=bytecode scripts/run.sh sumLoop 100000 --compile
-THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
+bin/try.sh
+THC_BACKEND=bytecode bin/run.sh sumLoop 100000 --compile
+THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true bin/try-map.sh
 ```
 
 `THC_BACKEND=ast` selects the AST interpreter. Java callers can use
@@ -65,7 +65,7 @@ Graal graph capture uses the same driver for both backends:
 
 ```sh
 THC_BACKEND=bytecode THC_DIAGNOSTIC_UNSUPPORTED=true \
-  scripts/dump-map-packets.sh work/graphs/map-bytecode
+  bin/dump-map-packets.sh work/graphs/map-bytecode
 ```
 
 Capture graphs separately from throughput timing. The controlled comparison

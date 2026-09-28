@@ -5,9 +5,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 safe_build_dir="${THC_SAFE_HASKELL_BUILD:-build/runtime-services-safe}"
 mkdir -p "$safe_build_dir"
-ghc --make -XHaskell2010 -fno-code -Wall -Werror -iruntime -odir "$safe_build_dir" -hidir "$safe_build_dir" \
+ghc --make -XHaskell2010 -fno-code -Wall -Werror -isrc/runtime -odir "$safe_build_dir" -hidir "$safe_build_dir" \
   test/haskell-runtime/SafeClient.hs
-if ghc --make -XHaskell2010 -fno-code -Wall -Werror -iruntime -odir "$safe_build_dir" -hidir "$safe_build_dir" \
+if ghc --make -XHaskell2010 -fno-code -Wall -Werror -isrc/runtime -odir "$safe_build_dir" -hidir "$safe_build_dir" \
     test/haskell-runtime/UnsafeClient.hs >"$safe_build_dir/unsafe-client.log" 2>&1; then
   echo 'Unsafe THC.Internal.JIT unexpectedly accepted by Safe Haskell' >&2
   exit 1

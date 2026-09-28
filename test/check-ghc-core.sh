@@ -23,7 +23,7 @@ HS
 "$ghc" -O2 -fforce-recomp -this-unit-id core-thin-1-test -odir "$scratch/without" -hidir "$scratch/without" -c "$scratch/Probe.hs"
 
 probe() {
-  GHC="$ghc" "$runner" -f "$ghc" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal scripts/check-ghc-core.hs probe-interface "$1"
+  GHC="$ghc" "$runner" -f "$ghc" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal bin/check-ghc-core.hs probe-interface "$1"
 }
 probe "$scratch/with/Probe.hi" > "$scratch/output"
 grep -q 'interface contains simplified Core' "$scratch/output"
@@ -44,7 +44,7 @@ cat > "$scratch/other-ghc-pkg" <<'SH'
 printf '/tmp/a-different-ghc-package-database\n'
 SH
 chmod +x "$scratch/other-ghc-pkg"
-if GHC="$ghc" GHC_PKG="$scratch/other-ghc-pkg" "$runner" -f "$ghc" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal scripts/check-ghc-core.hs check > "$scratch/output" 2>&1; then
+if GHC="$ghc" GHC_PKG="$scratch/other-ghc-pkg" "$runner" -f "$ghc" --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal bin/check-ghc-core.hs check > "$scratch/output" 2>&1; then
   echo 'mismatched ghc-pkg incorrectly accepted' >&2
   exit 1
 fi
@@ -72,7 +72,7 @@ chmod +x "$scratch/space-ghc-pkg"
 GHC="$ghc" GHC_PKG="$scratch/space-ghc-pkg" REAL_GHC_PKG="$real_pkg" \
   SPACE_IMPORT="$scratch/import dir with spaces" "$runner" -f "$ghc" \
   --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal \
-  scripts/check-ghc-core.hs advisory > "$scratch/output" 2> "$scratch/advisory-error"
+  bin/check-ghc-core.hs advisory > "$scratch/output" 2> "$scratch/advisory-error"
 grep -q '/space-ghc-pkg$' "$scratch/output"
 
 # Synthetic package metadata selects genuine interfaces compiled above. This
@@ -119,7 +119,7 @@ check_packages() {
   GHC="$ghc" GHC_PKG="$scratch/fixture-ghc-pkg" REAL_GHC_PKG="$real_pkg" \
     CORE_FIXTURE="$scratch" "$runner" -f "$ghc" \
     --ghc-arg=-package --ghc-arg=ghc --ghc-arg=-package --ghc-arg=Cabal \
-    scripts/check-ghc-core.hs check "$@"
+    bin/check-ghc-core.hs check "$@"
 }
 reject_packages() {
   reason=$1

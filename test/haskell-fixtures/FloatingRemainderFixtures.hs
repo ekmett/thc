@@ -73,8 +73,8 @@ requests = concatMap rows entries where
 prepareFloatingRemainder :: FilePath -> IO ()
 prepareFloatingRemainder root = do
   let dir = "build/floating-remainder"
-      source = "compiler/test-fixtures/FloatingRemainderAudit.hs"
-      driver = "compiler/test-fixtures/FloatingRemainderNative.hs"
+      source = "test/fixtures/compiler/FloatingRemainderAudit.hs"
+      driver = "test/fixtures/compiler/FloatingRemainderNative.hs"
       example = "examples/THC/InverseHyperbolic.hs"
       binary = dir </> "native/oracle"
       logs = dir </> "commands"
@@ -95,7 +95,7 @@ prepareFloatingRemainder root = do
     _ -> die "Floating remainder requires native 64-bit GHC"
   writeFile (root </> input) (unlines [unwords [name,show a,show b] | (name,a,b) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures","-iexamples",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-iexamples",
      "-odir",root </> dir </> "native","-hidir",root </> dir </> "native",driver,"-o",root </> binary]
   executed <- runLoggedWithInput input 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case words line of
@@ -108,12 +108,12 @@ prepareFloatingRemainder root = do
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> dir </> stage ++ "-core"),("THC_GHC_OUT",root </> dir </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
     let cores = [dir </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatingRemainderAudit","THC.InverseHyperbolic"]]
     audits <- forM entries $ \name -> do
       let path = dir </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["scripts/audit-core.py"] ++ cores ++ ["--entry",name,"--output",path])
+        (["bin/audit-core.py"] ++ cores ++ ["--entry",name,"--output",path])
       report <- BS.readFile (root </> path) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
@@ -122,15 +122,15 @@ prepareFloatingRemainder root = do
         _ -> die ("Rejected floating remainder Core: " ++ stage ++ "/" ++ name)
       pure (path:commandArtifacts audited)
     pure (cores ++ commandArtifacts exported ++ concat audits)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $
     [source,driver,example,"thc.cabal","test/haskell-fixtures/Main.hs",
      "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/FloatingRemainderFixtures.hs",
-     "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-     "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> f | f <- plugins, takeExtension f == ".hs"] ++
-    ["scripts" </> f | f <- scripts, take 5 f == "core_" && takeExtension f == ".py"]
+     "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py",
+     "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> f | f <- plugins, takeExtension f == ".hs"] ++
+    ["bin" </> f | f <- scripts, take 5 f == "core_" && takeExtension f == ".py"]
   artifactHashes <- hashes root $ [input,output,binary] ++ concat stages ++
     commandArtifacts compiled ++ commandArtifacts executed
   writeJson manifest $ object ["schema" .= (1 :: Int),"ghc" .= ("9.14.1" :: String),

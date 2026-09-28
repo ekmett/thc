@@ -42,7 +42,7 @@ Run the producer, auditor controls and both runtime modes with the pinned toolch
 
 ```sh
 cabal run exe:thc-fixtures --offline -- mutable-bytearray-size
-python3 scripts/test-core-bytearrays.py
+python3 bin/test-core-bytearrays.py
 ./gradlew --max-workers=2 --continue \
   testDefault --tests thc.runtime.MutableByteArraySizeTest \
   testDense --tests thc.runtime.MutableByteArraySizeTest

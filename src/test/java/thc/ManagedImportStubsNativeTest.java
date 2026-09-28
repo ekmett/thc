@@ -86,7 +86,7 @@ class ManagedImportStubsNativeTest {
     }
     private Map<String, Object> audit(String variant, String entry, int status) throws Exception {
         var output = directory.resolve("import-stubs-runtime-audit.json");
-        var process = new ProcessBuilder("python3", root.resolve("scripts/audit-core.py").toString(), directory.resolve("import-stubs/" + variant + ".json").toString(),
+        var process = new ProcessBuilder("python3", root.resolve("bin/audit-core.py").toString(), directory.resolve("import-stubs/" + variant + ".json").toString(),
             "--entry", entry, "--output", output.toString()).directory(root.toFile()).redirectErrorStream(true).start();
         var log = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8); assertEquals(status, process.waitFor(), log);
         return object(Json.parse(Files.readString(output)));

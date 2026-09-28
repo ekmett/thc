@@ -23,7 +23,7 @@ import static thc.runtime.RawVectorTestValues.rawVectorTestValue;
 /** Heap ownership is independent of transient carriers and reusable call storage. */
 public class VectorHeapStorageTest {
     private List<CoreRepresentation> vectors() throws Exception {
-        var catalog = (Map<?, ?>) Json.parse(Files.readString(new File(System.getProperty("thc.projectRoot"), "scripts/simd-families.json").toPath()));
+        var catalog = (Map<?, ?>) Json.parse(Files.readString(new File(System.getProperty("thc.projectRoot"), "bin/simd-families.json").toPath()));
         var result = new ArrayList<CoreRepresentation>();
         for (var raw : (List<?>) catalog.get("families")) {
             var shape = (Map<?, ?>) raw; result.add(CoreRepresentations.parse(Map.of("kind", "vector", "evaluated", true,

@@ -28,7 +28,7 @@ public final class ClasspathSelectionTest {
         }
         int failures = 0;
         for (String[] recipe : List.of(
-                new String[]{"scripts/native-image-pure.sh", "image_jar", "image_classpath"},
+                new String[]{"bin/native-image-pure.sh", "image_jar", "image_classpath"},
                 new String[]{"research/native-image-preparation/prepared-image.sh", "jar", "classpath"})) {
             String source = Files.readString(repo.resolve(recipe[0]));
             int start = source.indexOf("for " + recipe[1] + " in ");

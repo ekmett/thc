@@ -69,13 +69,13 @@ behavior from an attached descriptor. Unknown symbols under `thc_io_v1_` fail
 closed. Both lowerings evaluate operands and validate State before service
 effects, erase only State, and store the payload in a typed long/address slot.
 
-`compiler/THC/Plugin.hs` must recognize these exact symbols in its prim/safe
+`src/compiler/THC/Plugin.hs` must recognize these exact symbols in its prim/safe
 foreign-import closure check; this does not authorize recognition of arbitrary
 symbols under the prefix. The auditor additionally requires each supported
-symbol in `scripts/core-capabilities.json`'s `managedForeignCalls` list.
+symbol in `bin/core-capabilities.json`'s `managedForeignCalls` list.
 
 The focused controls are `CoreManagedFilesTest`, `ManagedFileCallTest`, and
-`python3 scripts/test-core-managed-files.py`. They cover all eleven contracts,
+`python3 bin/test-core-managed-files.py`. They cover all eleven contracts,
 mutated descriptors and bound heads, normal and explicitly installed compiled
 AST/bytecode calls, binary buffers, EOF, seeking, resizing, append, typed error
 messages, and invalid State before effects. These synthetic ABI controls are

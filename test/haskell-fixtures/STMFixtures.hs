@@ -39,8 +39,8 @@ prepareSTM root = do
   let directory = "build/stm"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/STMAudit.hs"
-      driver = "compiler/test-fixtures/STMNative.hs"
+      source = "test/fixtures/compiler/STMAudit.hs"
+      driver = "test/fixtures/compiler/STMNative.hs"
   createDirectoryIfMissing True output
   old <- doesFileExist manifest
   when old (removeFile manifest)
@@ -53,7 +53,7 @@ prepareSTM root = do
         core = stageDir </> "core"
         consumer = core </> "STMAudit.json"
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries ++ contextEntries] ++ [source]) ""
     -- Whole-package discovery encounters Conc.Bound's unrelated foreign export
     -- registration. Retain that failure, select ONLY whole original modules
@@ -61,7 +61,7 @@ prepareSTM root = do
     -- No binding, dictionary, metadata, or source bytes are rewritten.
     let discoveryPath = stageDir </> "dependency-discovery.json"
     _ <- runLoggedExpect 1 180 root (directory </> "logs") (stage ++ "-dependency-discovery") [] "python3"
-      (["scripts/audit-core.py", "--package-manifest", fixturePackages installed,
+      (["bin/audit-core.py", "--package-manifest", fixturePackages installed,
         "--output", discoveryPath] ++ concat [["--entry", name] | name <- entries ++ contextEntries] ++ [consumer])
     discovery <- readJson (root </> discoveryPath)
     missing <- field discovery "missingGlobals" :: IO [Value]
@@ -97,7 +97,7 @@ prepareSTM root = do
     writeJson (root </> stageDir </> "original-selection.json") (toJSON (Map.fromList selected))
     let modules = consumer : map fst selected
     mapM_ (\name -> do
-      _ <- run root [] "python3" (["scripts/audit-core.py", "--entry", name,
+      _ <- run root [] "python3" (["bin/audit-core.py", "--entry", name,
         "--output", stageDir </> name ++ ".audit.json"] ++ modules) ""
       pure ()) (entries ++ contextEntries)
     pure (stage, modules)
@@ -106,7 +106,7 @@ prepareSTM root = do
       oracle = directory </> "oracle.tsv"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-threaded", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", native, "-hidir", native,
     root </> driver, "-o", executable] ""
   observations <- runWithTimeout (Just 60000000) root [] executable ["+RTS", "-N2"] ""
   rows <- forM (lines observations) $ \line -> case words line of
@@ -119,18 +119,18 @@ prepareSTM root = do
   unless (length rows == Set.size expected && Set.fromList rows == expected) $
     die "Native STM oracle has missing or duplicate rows"
   writeFile (root </> oracle) observations
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  drivers <- listDirectory (root </> "src/THC/Driver")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  drivers <- listDirectory (root </> "src/driver/THC/Driver")
   inputHashes <- hashes root (sort $ [source, driver, "test/haskell-fixtures/STMFixtures.hs",
     "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
     "test/haskell-fixtures/InstalledCoreFixtures.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "compiler/interface/Main.hs", "compiler/target-layout.c",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["src/THC/Driver" </> name | name <- drivers, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "src/compiler/interface/Main.hs", "src/driver/cbits/target-layout.c",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["src/driver/THC/Driver" </> name | name <- drivers, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root (oracle : fixtureArtifacts installed ++ concat [modules ++
     [directory </> stage </> "dependency-discovery.json", directory </> stage </> "original-selection.json"] ++
     [directory </> stage </> name ++ ".audit.json" | name <- entries ++ contextEntries] | (stage,modules) <- stages])

@@ -103,7 +103,7 @@ prepareWindowsCodePages root = do
       logs = directory </> stamp
       overlay = root </> logs </> "interfaces"
       output = root </> logs </> "consumer"
-      source = "compiler/test-fixtures/WindowsCodePageAudit.hs"
+      source = "test/fixtures/compiler/WindowsCodePageAudit.hs"
       execute = runLogged 180 root logs
       pkg = takeDirectory ghc </> "ghc-pkg.exe"
       oneLine = BS.unpack . BS.takeWhile (/= '\r') . BS.takeWhile (/= '\n') . commandStdout
@@ -120,7 +120,7 @@ prepareWindowsCodePages root = do
   version <- execute "version" [] ghc ["--numeric-version"]
   unless (oneLine version == "9.14.1") (die "Windows code pages require pinned GHC 9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
-  catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "compiler/windows-ghc-internal.json")
+  catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "config/ghc/9.14.1/windows-ghc-internal.json")
   archive <- field "archive" catalog
   archiveHash <- field "sha256" archive
   archiveUrl <- field "url" archive
@@ -225,15 +225,15 @@ prepareWindowsCodePages root = do
     liftIO $ observe (Map.fromList natives)
   writeJson (root </> logs </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre","post"] $ \stage -> forM (map fst operations) $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] python ["scripts/audit-core.py","--entry",name,
+    execute (stage ++ "-audit-" ++ name) [] python ["bin/audit-core.py","--entry",name,
       "--output",logs </> stage ++ "-" ++ name ++ ".audit.json",logs </> stage ++ ".json"]
   afterHashes <- hashes root [upstream </> path | path <- copiedSource]
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
   let commands = [version,library,extraction,registration,rtsRegistration] ++ compiled ++ audits
-      inputs = [source,"compiler/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
+      inputs = [source,"config/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/WindowsCodePageFixtures.hs",
-        "compiler/THC/Plugin.hs","compiler/THC/Interface.hs","scripts/audit-core.py","scripts/core_original_foreign.py",
-        "scripts/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
+        "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
+        "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]
   inputHashes <- hashes root inputs
   rawArtifacts <- hashes root ([logs </> file | file <- ["pre.json","post.json","oracle.json"]] ++
     [makeRelative root (overlay </> relative name ++ ".hi") | name <- modules] ++ concatMap commandArtifacts commands ++

@@ -95,8 +95,8 @@ class WindowsDirectoryStreamsTest {
         assertEquals(true, manifest.get("privateRebuiltWin32"));
         assertEquals(true, manifest.get("originalFCallIds"));
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
-            "compiler/test-fixtures/WindowsDirectoryAudit.hsc", "test/haskell-fixtures/WindowsDirectoryFixtures.hs",
-            "scripts/core_original_foreign.py", "scripts/core-capabilities.json"), null);
+            "test/fixtures/compiler/WindowsDirectoryAudit.hsc", "test/haskell-fixtures/WindowsDirectoryFixtures.hs",
+            "bin/core_original_foreign.py", "bin/core-capabilities.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"),
             Set.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json", prefix + "/win32-source.json"), prefix + "/");
         var receipt = json(prefix + "/win32-source.json");

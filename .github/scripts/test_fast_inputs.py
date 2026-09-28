@@ -32,7 +32,7 @@ class FastInputTests(unittest.TestCase):
                     artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.original_path_stat_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathStat', 'pathLstat']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -44,7 +44,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_path_stat_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathStatAudit.o', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-path-stat/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-path-stat/' + suffix))
 
     def test_original_path_mode_closed_receipt(self):
         name = 'build/original-path-mode/manifest.json'
@@ -57,7 +57,7 @@ class FastInputTests(unittest.TestCase):
                     artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.original_path_mode_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathMkdir']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -69,7 +69,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_path_mode_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathModeAudit.o', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-path-mode/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-path-mode/' + suffix))
 
     def test_original_path_link_closed_receipt(self):
         name = 'build/original-path-link/manifest.json'
@@ -82,7 +82,7 @@ class FastInputTests(unittest.TestCase):
                     artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.original_path_link_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathSymlink']), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -94,7 +94,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_path_link_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathLinkAudit.o', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-path-link/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-path-link/' + suffix))
 
     def test_original_directory_paths_closed_receipt(self):
         name = 'build/original-directory-paths/manifest.json'
@@ -107,7 +107,7 @@ class FastInputTests(unittest.TestCase):
                     readlinkUnit="ghc-internal", artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.original_directory_paths_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=['pathRemoveDirectory']), dict(installedArtifactsHashed=True), dict(readlinkUnit="main"),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -119,7 +119,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_directory_paths_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalDirectoryPathsAudit.o', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-directory-paths/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-directory-paths/' + suffix))
 
     def test_original_path_access_closed_receipt(self):
         name = 'build/original-path-access/manifest.json'
@@ -132,7 +132,7 @@ class FastInputTests(unittest.TestCase):
                     artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.original_path_access_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -144,7 +144,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_path_access_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalPathAccessAudit.o', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-path-access/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-path-access/' + suffix))
 
     def test_original_unlinkat_closed_receipt(self):
         name = 'build/original-unlinkat/manifest.json'
@@ -165,7 +165,7 @@ class FastInputTests(unittest.TestCase):
             with self.assertRaises(cache.CacheMiss, msg=unit):
                 cache.original_unlinkat_artifact_hashes(dict(good, directoryUnit=unit))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(directoryUnit='directory-1.3.10.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -177,7 +177,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_unlinkat_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalUnlinkAtAudit.o', 'ghc/abi-probe', 'native/oracle', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-unlinkat/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-unlinkat/' + suffix))
 
     def test_original_fstatat_closed_receipt(self):
         name = 'build/original-fstatat/manifest.json'
@@ -198,7 +198,7 @@ class FastInputTests(unittest.TestCase):
             with self.assertRaises(cache.CacheMiss, msg=unit):
                 cache.original_fstatat_artifact_hashes(dict(good, directoryUnit=unit))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(directoryUnit='directory-1.3.10.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(artifactHashes={}), dict(artifactHashes=dict(artifacts, unknown='a' * 64)),
@@ -210,7 +210,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_fstatat_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalFstatAtAudit.o', 'ghc/abi-probe', 'native/oracle', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-fstatat/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-fstatat/' + suffix))
 
     def test_original_current_directory_closed_receipt(self):
         name = 'build/original-current-directory/manifest.json'
@@ -234,7 +234,7 @@ class FastInputTests(unittest.TestCase):
         for label in ('pre-audit-pathChdir', 'post-audit-pathGetCwd', 'native-child', 'unix-extract', 'unix-build'):
             self.assertIn('build/original-current-directory/logs/' + label + '.command.json', outputs)
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(nativeIsolatedChild=False), dict(coordinatorCwdUnchanged=False),
@@ -248,7 +248,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_current_directory_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalCurrentDirectoryAudit.o', 'ghc/abi-probe', 'native/oracle', 'unix-source/unix.cabal', 'unix-build/build/libHSunix.so', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-current-directory/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-current-directory/' + suffix))
 
     def test_original_directory_streams_closed_receipt(self):
         name = 'build/original-directory-streams/manifest.json'
@@ -272,7 +272,7 @@ class FastInputTests(unittest.TestCase):
         for label in ('pre-audit-directoryOpen', 'post-audit-directoryFree'):
             self.assertIn('build/original-directory-streams/logs/' + label + '.command.json', outputs)
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(schema=True), dict(ghc='9.14.0'), dict(unixUnit='unix-2.8.8.0-ABC'),
                         dict(entries=[]), dict(installedArtifactsHashed=True),
                         dict(privateRebuiltUnix=False), dict(unixSourceReceipt="wrong"), dict(unixArchiveSha256="a" * 64),
@@ -285,7 +285,7 @@ class FastInputTests(unittest.TestCase):
                 cache.original_directory_streams_artifact_hashes(dict(good,
                     artifactHashes={key: value for key, value in artifacts.items() if key != path}))
         for suffix in ('native-paths/file', 'native-paths/link', 'ghc/OriginalDirectoryStreamsAudit.o', 'ghc/abi-probe', 'native/oracle', 'unix-source/unix.cabal', 'unix-build/build/libHSunix.so', 'unknown.json'):
-            self.assertFalse(cache.allowed_payload('build/original-directory-streams/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/original-directory-streams/' + suffix))
 
     def test_original_current_directory_archive_roundtrip_preserves_source_receipt(self):
         name = 'build/original-current-directory/manifest.json'
@@ -339,14 +339,14 @@ class FastInputTests(unittest.TestCase):
                     strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.bytestring_utf8_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(nativeRows=799), dict(strictAccepted=False), dict(runtimeVerified=True),
                         dict(entries=['validateSafe']), dict(artifactHashes={}),
                         dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
             with self.assertRaises(cache.CacheMiss):
                 cache.bytestring_utf8_artifact_hashes(dict(good, **changes))
         for path in ('native/ByteStringUtf8Native.o', 'native/other-oracle', 'unreviewed.json'):
-            self.assertFalse(cache.allowed_payload('build/bytestring-utf8/' + path, {}))
+            self.assertFalse(cache.allowed_payload('build/bytestring-utf8/' + path))
 
     def test_memset_closed_receipt(self):
         manifest_path = 'build/original-memset/manifest.json'
@@ -358,14 +358,14 @@ class FastInputTests(unittest.TestCase):
                     strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.memset_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(nativeRows=197), dict(strictAccepted=False), dict(runtimeVerified=True),
                         dict(entries=['wrongEntry']), dict(artifactHashes={}),
                         dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
             with self.assertRaises(cache.CacheMiss):
                 cache.memset_artifact_hashes(dict(good, **changes))
         for path in ('native/OriginalMemsetNative.o', 'native/other-oracle', 'unreviewed.json'):
-            self.assertFalse(cache.allowed_payload('build/original-memset/' + path, {}))
+            self.assertFalse(cache.allowed_payload('build/original-memset/' + path))
 
     def test_integer_simd_migration_keeps_closed_native_and_export_only_receipts(self):
         for family, (_, rows) in cache.INTEGER_SIMD_FAMILIES.items():
@@ -378,13 +378,13 @@ class FastInputTests(unittest.TestCase):
                             artifacts=[dict(path=name, sha256=digest) for name, digest in artifacts.items()])
                 self.assertEqual(artifacts, cache.integer_simd_artifact_hashes(family, good))
                 for path in outputs:
-                    self.assertTrue(cache.allowed_payload(path, {}), path)
+                    self.assertTrue(cache.allowed_payload(path), path)
                 for changes in (dict(nativeRows=rows-1), dict(modelRows=0), dict(proofNegativeControlsPassed=False),
                                 dict(artifacts=good['artifacts'][1:]), dict(artifacts=good['artifacts'] + good['artifacts'][:1])):
                     with self.assertRaises(cache.CacheMiss):
                         cache.integer_simd_artifact_hashes(family, dict(good, **changes))
             for extra in ('commands/unknown.stdout', 'native/foreign-oracle', 'MUTATED-unreviewed.json'):
-                self.assertFalse(cache.allowed_payload(f'build/{family}/{extra}', {}))
+                self.assertFalse(cache.allowed_payload(f'build/{family}/{extra}'))
 
     def test_memory_search_closed_receipt(self):
         manifest_path = 'build/original-memory-search/manifest.json'
@@ -396,14 +396,14 @@ class FastInputTests(unittest.TestCase):
                     strictAccepted=True, runtimeVerified=False, artifactHashes=artifacts)
         self.assertEqual(artifacts, cache.memory_search_artifact_hashes(good))
         for path in outputs:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for changes in (dict(nativeRows=391), dict(strictAccepted=False), dict(runtimeVerified=True),
                         dict(entries=['originalFind']), dict(artifactHashes={}),
                         dict(artifactHashes=dict(artifacts, unknown='a' * 64))):
             with self.assertRaises(cache.CacheMiss):
                 cache.memory_search_artifact_hashes(dict(good, **changes))
         for path in ('native/OriginalMemorySearchNative.o', 'native/other-oracle', 'unreviewed.json'):
-            self.assertFalse(cache.allowed_payload('build/original-memory-search/' + path, {}))
+            self.assertFalse(cache.allowed_payload('build/original-memory-search/' + path))
 
     def test_simd_memory_closed_receipts_and_export_only_archives(self):
         counts = {"simd-int32x4-bytearray": (259, 386), "simd-word32x4-bytearray": (259, 386),
@@ -416,11 +416,11 @@ class FastInputTests(unittest.TestCase):
                 self.assertEqual(sizes[int(native)], len(required))
                 self.assertIn(name, DECLARED_REQUIRED)
                 for path in required:
-                    self.assertTrue(cache.allowed_payload(path, {}), path)
+                    self.assertTrue(cache.allowed_payload(path), path)
                     self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
                 for suffix in ("prepare-run-Abc123/previous/old.json", "native/extra.o", "pre-core/Other.json",
                                "prepare-run-Abc123/audits/extra.json", "prepare-run-Abc123/commands/extra.stdout"):
-                    self.assertFalse(cache.allowed_payload(f"build/{family}/{suffix}", {}), suffix)
+                    self.assertFalse(cache.allowed_payload(f"build/{family}/{suffix}"), suffix)
                 rows = cache.SIMD_BYTEARRAY_FAMILIES[family][1]
                 good = dict(schema=1, vector=family.removeprefix("simd-"), attempt=attempt,
                     stages=["pre", "post"] if native else ["pre"], modelRows=rows, modelByteOrder="little",
@@ -455,14 +455,14 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(124, len(cache.FLOATING_REMAINDER_OUTPUTS))
         self.assertIn(name, DECLARED_REQUIRED)
         for path in cache.FLOATING_REMAINDER_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             if path == binary:
                 self.assertEqual(0o755, cache.safe_mode(0o755, path))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         for suffix in ('native/other', 'native/FloatingRemainderNative.o', 'pre-core/Other.json',
                        'commands/extra.stdout', 'post-ghc/Main.hi', 'test-results/result.xml'):
-            self.assertFalse(cache.allowed_payload('build/floating-remainder/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/floating-remainder/' + suffix), suffix)
         artifacts = cache.FLOATING_REMAINDER_OUTPUTS - {name}
         for path in artifacts:
             self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
@@ -490,9 +490,9 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(25, len(cache.SCALAR_MEMORY_OUTPUTS))
         self.assertIn('build/scalar-memory-utilities/manifest.json', DECLARED_REQUIRED)
         for path in cache.SCALAR_MEMORY_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('extra.json', 'native/other', 'post/core/Other.json', 'failed-native-import/command.json'):
-            self.assertFalse(cache.allowed_payload('build/scalar-memory-utilities/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/scalar-memory-utilities/' + suffix))
         name = 'build/scalar-memory-utilities/manifest.json'
         binary = 'build/scalar-memory-utilities/native/oracle'
         artifacts = cache.SCALAR_MEMORY_OUTPUTS - {name}
@@ -517,17 +517,17 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(154, len(cache.DELIMITED_OUTPUTS))
         self.assertIn('build/delimited-continuations/manifest.json', DECLARED_REQUIRED)
         for path in cache.DELIMITED_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('native/oracle', 'other.json', 'pre/core/Other.json', 'commands/extra.stdout'):
-            self.assertFalse(cache.allowed_payload('build/delimited-continuations/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/delimited-continuations/' + suffix))
 
     def test_simd_address_archive_roundtrip_and_missing_native_binary(self):
         self.assertEqual(43 if cache.SIMD_ADDRESS_NATIVE128 else 26, len(cache.SIMD_ADDRESS_OUTPUTS))
         self.assertIn('build/simd-address-families/manifest.json', DECLARED_REQUIRED)
         for path in cache.SIMD_ADDRESS_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('extra.json', 'source/Other.hs', 'scalar/other', 'pre-core/Other.json'):
-            self.assertFalse(cache.allowed_payload('build/simd-address-families/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/simd-address-families/' + suffix))
         name = 'build/simd-address-families/manifest.json'
         binary = 'build/simd-address-families/scalar/oracle'
         artifacts = cache.SIMD_ADDRESS_OUTPUTS - {name}
@@ -553,9 +553,9 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(23, len(cache.THREAD_INVENTORY_OUTPUTS))
         self.assertIn('build/thread-inventory/manifest.json', DECLARED_REQUIRED)
         for path in cache.THREAD_INVENTORY_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('extra.json', 'native/oracle', 'post/core/Other.json', 'pre/other-audit.json'):
-            self.assertFalse(cache.allowed_payload('build/thread-inventory/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/thread-inventory/' + suffix))
         name = 'build/thread-inventory/manifest.json'
         artifacts = cache.THREAD_INVENTORY_OUTPUTS - {name}
         for path in artifacts:
@@ -585,7 +585,7 @@ class FastInputTests(unittest.TestCase):
             self.assertEqual(count, len(outputs)); self.assertIn(name, DECLARED_REQUIRED)
             artifacts = outputs - {name}
             for path in artifacts:
-                self.assertTrue(cache.allowed_payload(path, {}), path)
+                self.assertTrue(cache.allowed_payload(path), path)
                 self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
                 if path == binary:
                     self.assertEqual(0o755, cache.safe_mode(0o755, path))
@@ -593,7 +593,7 @@ class FastInputTests(unittest.TestCase):
                     with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
             (self.root / binary).chmod(0o755)
             for suffix in ('commands/extra.stdout', 'pre-core/Other.json', 'native/extra.o', 'previous-manifests/old.json'):
-                self.assertFalse(cache.allowed_payload(f'build/{family}/' + suffix, {}))
+                self.assertFalse(cache.allowed_payload(f'build/{family}/' + suffix))
             good = dict(schema=1, ghc='9.14.1', wordBits=64, entries=list(cache.BYTEARRAY_FAMILIES[family][1]),
                         inputHashes=self.manifest['inputHashes'], artifactHashes={path: cache.digest(self.root / path) for path in artifacts})
             self.assertEqual(good['artifactHashes'], cache.bytearray_artifact_hashes(family, good))
@@ -621,13 +621,13 @@ class FastInputTests(unittest.TestCase):
         binary = "build/integer-completion/native/integer-completion-oracle"
         self.assertIn(name, DECLARED_REQUIRED)
         for path in cache.INTEGER_COMPLETION_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             if path == binary:
                 self.assertEqual(0o755, cache.safe_mode(0o755, path))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         for suffix in ("commands/unknown.stdout", "native/other", "extra.json", "pre-core/Other.json"):
-            self.assertFalse(cache.allowed_payload("build/integer-completion/" + suffix, {}))
+            self.assertFalse(cache.allowed_payload("build/integer-completion/" + suffix))
         artifacts = cache.INTEGER_COMPLETION_OUTPUTS - {name}
         for path in artifacts:
             self.put(path, b"{}\n" if path.endswith(".json") else b"native evidence\n")
@@ -667,7 +667,7 @@ class FastInputTests(unittest.TestCase):
                 self.assertEqual(expected_counts[directory], len(outputs))
                 self.assertIn(f'build/{directory}/manifest.json', DECLARED_REQUIRED)
                 for name in outputs:
-                    self.assertTrue(cache.allowed_payload(name, {}), name)
+                    self.assertTrue(cache.allowed_payload(name), name)
                     if name == 'build/address-array-copy/native/oracle':
                         self.assertEqual(0o755, cache.safe_mode(0o755, name))
                     else:
@@ -675,13 +675,13 @@ class FastInputTests(unittest.TestCase):
                             cache.safe_mode(0o755, name)
                 for suffix in ('logs/extra.stdout', 'commands/extra.stderr', 'native/other-oracle',
                                'pre/core/Extra.json', 'native/Main.o', 'retained/oracle.tsv'):
-                    self.assertFalse(cache.allowed_payload(f'build/{directory}/{suffix}', {}), suffix)
+                    self.assertFalse(cache.allowed_payload(f'build/{directory}/{suffix}'), suffix)
         # These are recorded inputs/logs that the former generic suffix policy rejected.
         for name in ('address-array-copy/commands/native-build.stdout',
                      'atomic-int-arrays/commands/pre-export.stderr',
                      'atomic-address/inputs.txt', 'atomic-address/logs/export-post.command.json',
                      'unaligned-scalar-memory/inputs.txt', 'unaligned-scalar-memory/logs/ghc-inventory.stdout'):
-            self.assertTrue(cache.allowed_payload('build/' + name, {}), name)
+            self.assertTrue(cache.allowed_payload('build/' + name), name)
 
     def test_memory_manifest_rejects_omitted_extra_and_invalid_artifact_hashes(self):
         for directory in cache.MEMORY_FIXTURE_OUTPUTS:
@@ -765,14 +765,14 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(89, len(cache.FLOAT_DECODE_OUTPUTS))
         self.assertIn(name, DECLARED_REQUIRED)
         for path in cache.FLOAT_DECODE_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             if path == binary:
                 self.assertEqual(0o755, cache.safe_mode(0o755, path))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         for suffix in ('native/other', 'native/FloatDecodeNative.o', 'original/Other.json',
                        'commands/extra.stdout', 'boot-ghc/Integer.hi', 'test-results/result.xml'):
-            self.assertFalse(cache.allowed_payload('build/float-decode/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/float-decode/' + suffix), suffix)
         artifacts = cache.FLOAT_DECODE_OUTPUTS - {name}
         for path in artifacts:
             self.put(path, b'{}\n' if path.endswith('.json') else b'\x00\x80\xff\n')
@@ -800,27 +800,27 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(18, len(cache.HINT_TRACE_OUTPUTS))
         self.assertIn('build/hint-trace/manifest.json', DECLARED_REQUIRED)
         for name in cache.HINT_TRACE_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/hint-trace/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'native/other.eventlog', 'native/HintTraceNative.o',
                        'test-results/TEST.xml', 'pre/unknown.audit.json', 'pre/core/Other.json'):
-            self.assertFalse(cache.allowed_payload('build/hint-trace/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/hint-trace/' + suffix), suffix)
 
     def test_tcsetattr_exact_native_image_fixture_inventory(self):
         self.assertEqual(33, len(cache.ORIGINAL_TCSETATTR_OUTPUTS))
         self.assertIn('build/original-tcsetattr/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TCSETATTR_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-tcsetattr/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
                        'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTcsetattrNative.o'):
-            self.assertFalse(cache.allowed_payload('build/original-tcsetattr/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-tcsetattr/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-tcsetattr/' + suffix)
         name = 'build/original-tcsetattr/manifest.json'
@@ -848,14 +848,14 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(33, len(cache.ORIGINAL_TCGETATTR_OUTPUTS))
         self.assertIn('build/original-tcgetattr/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TCGETATTR_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-tcgetattr/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
                        'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTcgetattrNative.o'):
-            self.assertFalse(cache.allowed_payload('build/original-tcgetattr/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-tcgetattr/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-tcgetattr/' + suffix)
         name = 'build/original-tcgetattr/manifest.json'
@@ -883,14 +883,14 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(33, len(cache.ORIGINAL_SIGPROCMASK_OUTPUTS))
         self.assertIn('build/original-sigprocmask/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_SIGPROCMASK_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-sigprocmask/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
                        'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalSigprocmaskNative.o'):
-            self.assertFalse(cache.allowed_payload('build/original-sigprocmask/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-sigprocmask/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-sigprocmask/' + suffix)
         name = 'build/original-sigprocmask/manifest.json'
@@ -921,14 +921,14 @@ class FastInputTests(unittest.TestCase):
         self.assertIn(name, DECLARED_REQUIRED)
         binary = 'build/pinned-addresses/native/pinned-address-oracle'
         for path in artifacts:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
             if path == binary: self.assertEqual(0o755, cache.safe_mode(0o755, path))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         (self.root / binary).chmod(0o755)
         for suffix in ('commands/extra.stdout', 'previous-manifests/old.json', 'pre/ghc/Unknown.hi', 'native/extra.o', 'pre/negative/extra.json'):
-            self.assertFalse(cache.allowed_payload('build/pinned-addresses/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/pinned-addresses/' + suffix), suffix)
         records = {path: cache.digest(self.root / path) for path in artifacts}
         manifest = dict(schema=1, mode='full', strictAccepted=True, inputHashes=self.manifest['inputHashes'], artifactHashes=records)
         original = json.dumps(manifest); self.put(name, original)
@@ -952,10 +952,10 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(121, len(artifacts))
         self.assertIn(name, DECLARED_REQUIRED)
         for path in artifacts:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             self.put(path, b'{}\n' if path.endswith('.json') else b'fixture\n')
         for suffix in ('commands/extra.stdout', 'boot/interfaces/Unknown.hi', 'run-1/oracle.tsv', 'native/extra.o'):
-            self.assertFalse(cache.allowed_payload('build/bignat-literals/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/bignat-literals/' + suffix), suffix)
         records = [{'path': path, 'sha256': cache.digest(self.root / path)} for path in sorted(artifacts)]
         original = json.dumps({'schema': 1, 'inputHashes': self.manifest['inputHashes'], 'artifacts': records})
         self.put(name, original)
@@ -982,10 +982,10 @@ class FastInputTests(unittest.TestCase):
             'artifactHashes': {oracle_path: cache.digest(self.root / oracle_path)}})
         self.put(manifest_path, original)
         for path in (manifest_path, oracle_path):
-            self.assertTrue(cache.allowed_payload(path, {}))
+            self.assertTrue(cache.allowed_payload(path))
             with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         for suffix in ('native/oracle', 'native/oracle.o', 'logs/extra.stdout', 'other.txt'):
-            self.assertFalse(cache.allowed_payload('build/native-malloc/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/native-malloc/' + suffix), suffix)
         with patch.object(cache, 'REQUIRED', (*cache.REQUIRED, manifest_path)):
             packed = self.pack()
             self.assertLessEqual({manifest_path, oracle_path}, packed['payload'].keys())
@@ -1002,14 +1002,14 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(41, len(cache.ORIGINAL_SIGSET_OUTPUTS))
         self.assertIn('build/original-sigset/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_SIGSET_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-sigset/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'logs/extra.stdout', 'pre/unknown.audit.json',
                        'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalSigsetNative.o'):
-            self.assertFalse(cache.allowed_payload('build/original-sigset/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-sigset/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-sigset/' + suffix)
 
@@ -1019,7 +1019,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(8, len(cache.SIMD_FLOAT_FMA_OUTPUTS))
         artifacts = cache.SIMD_FLOAT_FMA_OUTPUTS - {manifest_path}
         for path in artifacts:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             self.put(path, b'{}\n' if path.endswith('.json') else b'original native rows\n')
             with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         original = json.dumps({'schema': 1, 'inputHashes': self.manifest['inputHashes'],
@@ -1039,32 +1039,32 @@ class FastInputTests(unittest.TestCase):
             self.rejected_without_writes(changed)
         for suffix in ('native/oracle', 'native/SimdFloatFma.o', 'logs/extra.command.json',
                        'other.txt', 'pre-core/Other.json', 'test-results/pass.json'):
-            self.assertFalse(cache.allowed_payload('build/simd-floatx4-fma/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/simd-floatx4-fma/' + suffix), suffix)
 
     def test_wide_fma_scalar_oracle_payload_is_closed(self):
         self.assertIn('build/simd-wide-floating-fma/manifest.json', DECLARED_REQUIRED)
         self.assertEqual(5, len(cache.SIMD_WIDE_FMA_OUTPUTS))
         for path in cache.SIMD_WIDE_FMA_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
             with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
         for suffix in ('native/scalar-lane-oracle', 'native/SimdWideFloatFmaNative.o',
                        'post-core/SimdWideFloatFma.json', 'pre-core/Other.json', 'logs/extra.stdout'):
-            self.assertFalse(cache.allowed_payload('build/simd-wide-floating-fma/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/simd-wide-floating-fma/' + suffix), suffix)
 
     def test_arithmetic_installed_bundle_hashes_do_not_escape_into_zip_member_paths(self):
         path = 'build/arithmetic-exceptions/installed/bundles/ghc-internal.zip'
         package = dict(format='thc-core-packages', units=[dict(bundle=dict(path=path, sha256='a'*64),
             modules=[dict(path='core/0.json', sha256='b'*64)])])
         self.assertEqual([(path, 'a'*64)], list(cache.hashes_in(package, {})))
-        self.assertFalse(cache.allowed_payload(path, {}))
-        self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip', {}))
+        self.assertFalse(cache.allowed_payload(path))
+        self.assertFalse(cache.allowed_payload('build/arithmetic-exceptions/native/other.zip'))
         with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, path)
 
     def test_termios_exact_image_and_saved_pointer_fixture_inventory(self):
         self.assertEqual(163, len(cache.ORIGINAL_TERMIOS_OUTPUTS))
         self.assertIn('build/original-termios/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_TERMIOS_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name in ('build/original-termios/native/oracle', 'build/original-termios/saved/native/oracle'):
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
@@ -1073,7 +1073,7 @@ class FastInputTests(unittest.TestCase):
                        'attempt-0/oracle.json', 'pre/core/Other.json', 'native/OriginalTermiosAudit.o',
                        'saved/native/other', 'saved/native/OriginalSavedTermiosNative.o',
                        'saved/pre/core/Other.json', 'logs/saved-extra.stdout'):
-            self.assertFalse(cache.allowed_payload('build/original-termios/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-termios/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-termios/' + suffix)
 
@@ -1081,14 +1081,14 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(49, len(cache.ORIGINAL_OPEN_OUTPUTS))
         self.assertIn('build/original-open/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_OPEN_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-open/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
                 with self.assertRaises(cache.CacheMiss): cache.safe_mode(0o755, name)
         for suffix in ('native/other', 'native/cases/f', 'ghc/OriginalOpenAudit.o', 'logs/extra.stdout',
                        'pre/unknown.audit.json', 'attempt-0/pre.json', 'pre/core/Other.json'):
-            self.assertFalse(cache.allowed_payload('build/original-open/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-open/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss): cache.file_path(self.root, 'build/original-open/' + suffix)
 
@@ -1126,12 +1126,12 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(34, len(cache.ORIGINAL_RTS_LOCK_OUTPUTS))
         self.assertIn('build/original-rts-locks/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_RTS_LOCK_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             with self.assertRaises(cache.CacheMiss):
                 cache.safe_mode(0o755, name)
         for suffix in ('native/oracle', 'ghc/OriginalRtsLocksAudit.o', 'logs/unknown.stdout',
                        'pre-unknown.audit.json', 'attempt-0/pre.json', 'pre/other.json'):
-            self.assertFalse(cache.allowed_payload('build/original-rts-locks/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-rts-locks/' + suffix), suffix)
         for suffix in ('../outside', 'logs/../../outside'):
             with self.assertRaises(cache.CacheMiss):
                 cache.file_path(self.root, 'build/original-rts-locks/' + suffix)
@@ -1140,7 +1140,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(168, len(cache.ORIGINAL_POSIX_DUP_OUTPUTS))
         self.assertIn('build/original-posix-dup/manifest.json', DECLARED_REQUIRED)
         for name in cache.ORIGINAL_POSIX_DUP_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-posix-dup/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
@@ -1150,7 +1150,7 @@ class FastInputTests(unittest.TestCase):
                        'logs/pre-audit-unknown.command.json', 'pre/core/Other.json',
                        'native/another-executable', 'native/OriginalPosixDupAudit.o',
                        'attempt-0/oracle.json'):
-            self.assertFalse(cache.allowed_payload('build/original-posix-dup/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-posix-dup/' + suffix), suffix)
         for suffix in ('../outside', 'native/../../outside'):
             with self.assertRaises(cache.CacheMiss):
                 cache.file_path(self.root, 'build/original-posix-dup/' + suffix)
@@ -1182,7 +1182,7 @@ class FastInputTests(unittest.TestCase):
         for unexpected in ('build/generated/simd/java/Unexpected.java',
                            'build/generated/simd/fixtures/Unexpected.hs',
                            'build/simd-capability-smoke/native/unreviewed'):
-            self.assertFalse(cache.allowed_payload(unexpected, {}))
+            self.assertFalse(cache.allowed_payload(unexpected))
 
     def gmp_fixture(self):
         manifest_path = 'build/original-gmp/manifest.json'
@@ -1204,7 +1204,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(cache.GMP_NATIVE_HOST, 'build/original-gmp/manifest.json' in DECLARED_REQUIRED)
         self.assertIn('original-gmp', cache.BUILD_DIRS)
         for name in cache.ORIGINAL_GMP_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
             if name == 'build/original-gmp/native/oracle':
                 self.assertEqual(0o755, cache.safe_mode(0o755, name))
             else:
@@ -1214,10 +1214,10 @@ class FastInputTests(unittest.TestCase):
                      'another.conf', 'native/other-oracle', 'native/OriginalGmpNative.o',
                      'logs/extra.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json',
                      'logs/pre-audit-other.stdout', 'test-results/pass.json'):
-            self.assertFalse(cache.allowed_payload('build/original-gmp/' + name, {}), name)
+            self.assertFalse(cache.allowed_payload('build/original-gmp/' + name), name)
         for name in ('../original-stdio/manifest.json', 'native/../../outside'):
             with self.assertRaises(cache.CacheMiss):
-                cache.allowed_payload('build/original-gmp/' + name, {})
+                cache.allowed_payload('build/original-gmp/' + name)
 
     def test_gmp_archive_roundtrip_retains_metadata_not_package_database(self):
         path, artifacts, original = self.gmp_fixture()
@@ -1286,7 +1286,7 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual((54, 70), (len(modules), len(pins)))
         handle_boot = 'GHC/Internal/IO/Handle/Types.hs-boot'
         self.assertIn(handle_boot, pins)
-        self.assertIn('  compiler/pinned-ghc-internal/' + handle_boot + '\n', (project / 'thc.cabal').read_text())
+        self.assertIn('  ' + cache.wired_source_path(handle_boot) + '\n', (project / 'thc.cabal').read_text())
         boot = (project / cache.WIRED_SOURCE).read_text().split('bootSources =', 1)[1].split('moduleSources ::', 1)[0]
         self.assertLess(boot.index('"' + handle_boot + '"'), boot.index('"GHC/Internal/IO/Exception.hs-boot"'))
         self.assertEqual('GHC.Internal.Enum', modules['GHC/Internal/Enum.hs'])
@@ -1304,7 +1304,7 @@ class FastInputTests(unittest.TestCase):
                               ('IO/Encoding/Types.hs', 'IO/Encoding/Failure.hs'),
                               ('IO/Encoding/Failure.hs', 'Foreign/C/String/Encoding.hs')):
             self.assertLess(list(modules).index('GHC/Internal/' + first), list(modules).index('GHC/Internal/' + second))
-        self.assertIn('  compiler/pinned-ghc-internal/GHC/Internal/Enum.hs\n',
+        self.assertIn('  third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs\n',
                       (project / 'thc.cabal').read_text())
         for source in ('Classes.hs', 'Num.hs', 'ForeignPtr.hs', 'Foreign/C/String/Encoding.hs', 'IO/Encoding/Types.hs',
                        'IO/Encoding/Failure.hs', 'IO/Encoding/UTF8.hs', 'IO/Encoding.hs'):
@@ -1314,16 +1314,16 @@ class FastInputTests(unittest.TestCase):
                 self.assertLess(list(modules).index('GHC/Internal/IO/Handle/Types.hs'), list(modules).index(path))
             else:
                 self.assertLess(list(modules).index(path), list(modules).index('GHC/Internal/InfoProv/Types.hsc'))
-            self.assertIn('  compiler/pinned-ghc-internal/' + path + '\n', (project / 'thc.cabal').read_text())
+            self.assertIn('  ' + cache.wired_source_path(path) + '\n', (project / 'thc.cabal').read_text())
         for name, expected in pins.items():
-            self.assertEqual(expected, cache.digest(project / 'compiler/pinned-ghc-internal' / name), name)
+            self.assertEqual(expected, cache.digest(project / cache.wired_source_path(name)), name)
         files = cache.original_stack_formatter_files(project)
         self.assertEqual(95, len(files))
         self.assertIn('build/original-stack-formatter/manifest.json', DECLARED_REQUIRED)
         for attempt in ('run-1', 'run-42'):
             for suffix in files:
                 name = f'build/original-stack-formatter/{attempt}/{suffix}'
-                self.assertTrue(cache.allowed_payload(name, {}), name)
+                self.assertTrue(cache.allowed_payload(name), name)
                 if suffix == 'native/formatter':
                     self.assertEqual(0o755, cache.safe_mode(0o755, name))
                 else:
@@ -1335,9 +1335,9 @@ class FastInputTests(unittest.TestCase):
                        'run-1/pre-core/THC.InterfaceClosure.json',
                        'run-1/originals/core/Extra.json', 'run-1/originals/generated/Extra.hs',
                        'run-1/originals/interfaces/GHC/Internal/Base.hi'):
-            self.assertFalse(cache.allowed_payload('build/original-stack-formatter/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-stack-formatter/' + suffix), suffix)
         with self.assertRaises(cache.CacheMiss):
-            cache.allowed_payload('build/original-stack-formatter/run-1/../native/formatter', {})
+            cache.allowed_payload('build/original-stack-formatter/run-1/../native/formatter')
 
     def test_formatter_round_trip_preserves_bytes_mode_and_complete_attempt(self):
         manifest_path, attempt, artifacts, original = self.formatter_fixture()
@@ -1409,7 +1409,7 @@ class FastInputTests(unittest.TestCase):
         for attempt in ("run-1", "run-42"):
             for suffix in cache.ORIGINAL_STACK_FILES:
                 name = f"build/original-stack/{attempt}/{suffix}"
-                self.assertTrue(cache.allowed_payload(name, {}), name)
+                self.assertTrue(cache.allowed_payload(name), name)
             self.assertTrue(cache.native_executable(
                 f"build/original-stack/{attempt}/native/original-stack-native"))
         for name in ("proof.json", "run-0/logs/ghc-version.stdout",
@@ -1417,19 +1417,19 @@ class FastInputTests(unittest.TestCase):
                      "run-1/logs/unknown.stdout", "run-1/pre-core/Extra.json",
                      "run-1/native/OriginalStackAudit.o", "run-1/native/other-oracle",
                      "run-1/logs/native-invariants.sh", "run-1/retained/Decode.json"):
-            self.assertFalse(cache.allowed_payload("build/original-stack/" + name, {}), name)
+            self.assertFalse(cache.allowed_payload("build/original-stack/" + name), name)
     def test_boxed_array_extensions_only_admit_reviewed_attempt_artifacts(self):
         self.assertIn('build/boxed-array-extensions/manifest.json', DECLARED_REQUIRED)
         for attempt in ('run-1', 'run-42'):
             for suffix in cache.BOXED_ARRAY_EXTENSION_FILES:
                 name = f'build/boxed-array-extensions/{attempt}/{suffix}'
-                self.assertTrue(cache.allowed_payload(name, {}), name)
+                self.assertTrue(cache.allowed_payload(name), name)
             self.assertEqual(0o755, cache.safe_mode(0o755,
                 f'build/boxed-array-extensions/{attempt}/native/boxed-array-extensions-oracle'))
         for suffix in ('proof.json', 'run-0/logs/ghc-info.stdout', 'run-01/logs/ghc-info.stdout',
                        'run-1/previous-manifest.json', 'run-1/logs/extra.stdout',
                        'run-1/pre-core/Extra.json', 'run-1/native/Main.o', 'run-1/native/other-oracle'):
-            self.assertFalse(cache.allowed_payload('build/boxed-array-extensions/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/boxed-array-extensions/' + suffix), suffix)
         with self.assertRaises(cache.CacheMiss):
             cache.safe_mode(0o755, 'build/boxed-array-extensions/run-1/logs/ghc-info.stdout')
 
@@ -1464,16 +1464,17 @@ class FastInputTests(unittest.TestCase):
         self.root = self.temp_root / "workspace"
         self.root.mkdir()
         subprocess.run(["git", "init", "-q", str(self.root)], check=True)
-        self.vendor_name = "vendor/ghc-9.14.1/GHC/Internal/CString.hs"
-        self.vendor = b"original GHC source\n"
-        self.put("compiler/export-boot.py", "exception_sources = " + repr({
-            "GHC/Internal/CString.hs": cache.sha(self.vendor)}) + "\n")
+        self.pinned_name = cache.wired_source_path("GHC/Internal/CString.hs")
+        self.pinned_source = b"original GHC source\n"
+        self.put(self.pinned_name, self.pinned_source)
+        self.put("bin/export-boot.py", "exception_sources = " + repr({
+            "GHC/Internal/CString.hs": cache.sha(self.pinned_source)}) + "\n")
         for name in (cache.SELF, cache.WIRED_SOURCE, *cache.RUNTIME_INPUTS, *cache.COMPILER_BUILD_INPUTS, *cache.SIMD_BYTEARRAY_RETAINED,
-                     "scripts/prepare-tests.sh", "examples/coverage.json",
+                     "bin/prepare-tests.sh", "examples/coverage.json",
                      "src/test/resources/core/original-unix-libc-descriptors.json",
                      "src/test/resources/core/original-bytestring-sort-descriptor.json",
                      "src/test/resources/core/original-bytestring-decimal-descriptors.json",
-                     "src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs"):
+                     "src/main/resources/thc/scalar-primop-signatures.json", "src/tools/primops/PrimopTools.hs"):
             self.put(name, "source: " + name)
         self.put("src/main/java/thc/runtime/Program.java", "unrelated runtime\n")
         subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
@@ -1485,11 +1486,10 @@ class FastInputTests(unittest.TestCase):
         self.required_patch = patch.object(cache, "REQUIRED", ("build/data-to-tag/manifest.json",))
         self.required_patch.start(); self.addCleanup(self.required_patch.stop)
         self.current = cache.identity(self.root)
-        self.put(self.vendor_name, self.vendor)
         self.put("build/data-to-tag/oracle.tsv", "0\t17\n")
         self.put("build/core/Fixture.json", json.dumps({"module": "Fixture", "bindings": []}))
-        self.manifest = {"inputHashes": {"scripts/prepare-tests.sh": self.current["sources"]["scripts/prepare-tests.sh"],
-                                         self.vendor_name: cache.sha(self.vendor)},
+        self.manifest = {"inputHashes": {"bin/prepare-tests.sh": self.current["sources"]["bin/prepare-tests.sh"],
+                                         self.pinned_name: cache.sha(self.pinned_source)},
                          "artifactHashes": {"build/data-to-tag/oracle.tsv": cache.digest(self.root / "build/data-to-tag/oracle.tsv")}}
         self.write_manifest()
         self.bundle = self.temp_root / "bundle.tar.gz"
@@ -1543,12 +1543,34 @@ class FastInputTests(unittest.TestCase):
         self.assertEqual(before, p.stat().st_mtime_ns)
 
     def test_compiled_primop_source_changes_invalidate_fixture_identity(self):
-        name = "tools/primops/PrimopTools.hs"
+        name = "src/tools/primops/PrimopTools.hs"
         self.assertIn(name, self.current["sources"])
         self.put(name, "changed compiled GHC API query\n")
         changed = cache.identity(self.root)
         self.assertNotEqual(self.current["sources"][name], changed["sources"][name])
         self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(changed))
+
+    def test_submodule_identity_reads_only_declared_used_files(self):
+        name = "third-party/pinned/probe"
+        module = self.root / name
+        self.put(name + "/used.c", "used source\n")
+        self.put(name + "/unrelated.c", "unrelated source\n")
+        subprocess.run(["git", "init", "-q", str(module)], check=True)
+        subprocess.run(["git", "-C", str(module), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(module), "-c", "user.name=Test", "-c",
+                        "user.email=test@example.invalid", "commit", "-qm", "fixture"], check=True)
+        revision = cache.command(["git", "rev-parse", "HEAD"], module)
+        subprocess.run(["git", "-C", str(self.root), "update-index", "--add", "--cacheinfo",
+                        "160000," + revision + "," + name], check=True)
+        self.put("thc.cabal", "extra-source-files:\n  " + name + "/used.c\n")
+        before = cache.identity(self.root)
+        self.assertIn(name + "/used.c", before["sources"])
+        self.assertNotIn(name, before["sources"])
+        self.assertNotIn(name + "/unrelated.c", before["sources"])
+        self.put(name + "/unrelated.c", "changed unrelated source\n")
+        self.assertEqual(before, cache.identity(self.root))
+        self.put(name + "/used.c", "changed used source\n")
+        self.assertNotEqual(cache.cache_key(before), cache.cache_key(cache.identity(self.root)))
 
     def test_noncanonical_workspace_alias_is_still_rejected(self):
         alias = self.temp_root / "workspace-alias"
@@ -1593,16 +1615,27 @@ class FastInputTests(unittest.TestCase):
         self.put(cache.SELF, "changed cache schema implementation")
         self.assertNotEqual(cache.cache_key(self.current), cache.cache_key(cache.identity(self.root)))
 
-    def test_original_source_artifact_vendor_hash_mismatch_rejected(self):
-        for section, name in (("inputHashes", "scripts/prepare-tests.sh"),
+    def test_original_source_and_artifact_hash_mismatch_rejected(self):
+        for section, name in (("inputHashes", "bin/prepare-tests.sh"),
                               ("artifactHashes", "build/data-to-tag/oracle.tsv"),
-                              ("inputHashes", self.vendor_name)):
+                              ("inputHashes", self.pinned_name)):
             with self.subTest(name=name):
                 old = self.manifest[section][name]; self.manifest[section][name] = "f" * 64
                 self.write_manifest()
                 with self.assertRaises(cache.CacheMiss): self.pack()
                 self.assertFalse(self.bundle.exists())
                 self.manifest[section][name] = old
+
+    def test_pinned_ghc_sources_are_inputs_and_never_restored_from_payload(self):
+        self.assertIn(self.pinned_name, self.current["sources"])
+        self.assertFalse(cache.allowed_payload(self.pinned_name))
+        self.assertNotIn(self.pinned_name, self.pack()["payload"])
+        self.put(self.pinned_name, "modified upstream source\n")
+        with self.assertRaisesRegex(cache.CacheMiss, "Pinned GHC source missing or changed"):
+            cache.identity(self.root)
+        (self.root / self.pinned_name).unlink()
+        with self.assertRaises((OSError, cache.CacheMiss)):
+            cache.identity(self.root)
 
     def test_unkeyed_runtime_source_fails_closed(self):
         self.manifest["inputHashes"]["src/main/java/thc/runtime/Program.java"] = cache.digest(
@@ -1634,8 +1667,8 @@ class FastInputTests(unittest.TestCase):
         interface = Path(self.tc["ghcLibdir"]) / "pkg/Foo.dyn_hi"
         interface.parent.mkdir(parents=True); interface.write_bytes(b"actual interface")
         self.manifest["installedShortInterface"] = {"path": str(interface), "sha256": cache.digest(interface)}
-        self.manifest["sources"] = [{"path": str(self.root / "scripts/prepare-tests.sh"),
-            "sha256": self.current["sources"]["scripts/prepare-tests.sh"], "url": "original/source"}]
+        self.manifest["sources"] = [{"path": str(self.root / "bin/prepare-tests.sh"),
+            "sha256": self.current["sources"]["bin/prepare-tests.sh"], "url": "original/source"}]
         self.write_manifest(); manifest = self.pack(); self.remove_payload(manifest)
         interface.write_bytes(b"modified same package/version")
         digest = cache.digest
@@ -1646,7 +1679,7 @@ class FastInputTests(unittest.TestCase):
             cache.restore(self.root, self.current, self.bundle)
 
     def test_conflicting_original_records_and_external_escape(self):
-        self.manifest["sources"] = [{"path": "scripts/prepare-tests.sh", "sha256": "f" * 64}]
+        self.manifest["sources"] = [{"path": "bin/prepare-tests.sh", "sha256": "f" * 64}]
         self.write_manifest()
         with self.assertRaises(cache.CacheMiss): self.pack()
         self.manifest["sources"] = [{"path": "/etc/passwd", "sha256": "f" * 64}]
@@ -1679,7 +1712,7 @@ class FastInputTests(unittest.TestCase):
     def test_self_consistent_unknown_or_tracked_payload_is_not_accepted(self):
         manifest = self.pack(); self.remove_payload(manifest)
         for name in ("build/fast/pass.json", "build/test-results/test/pass.xml", "build/classes/Evil.class",
-                     "build/data-to-tag/evil.sh", "scripts/prepare-tests.sh", "vendor/ghc-9.14.1/unknown.hs"):
+                     "build/data-to-tag/evil.sh", "bin/prepare-tests.sh", "vendor/ghc-9.14.1/unknown.hs"):
             def mutate(es):
                 doc = json.loads(es[0][1]); doc["payload"][name] = cache.sha(b"evil")
                 return [(es[0][0], cache.canonical(doc)), *es[1:], (tarfile.TarInfo("files/"+name), b"evil")]
@@ -1754,38 +1787,36 @@ class FastInputTests(unittest.TestCase):
         with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
             self.assertEqual(0, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
-        self.put("scripts/prepare-tests.sh", "changed after the key step")
+        self.put("bin/prepare-tests.sh", "changed after the key step")
         with patch.object(cache, "identity", wraps=cache.identity) as identify, patch("sys.stderr", io.StringIO()) as stderr:
             self.assertEqual(1, cache.main(command), stderr.getvalue())
             identify.assert_called_once_with(self.root)
             self.assertIn("Current identity changed since key step", stderr.getvalue())
 
     def test_payload_scope_has_no_runtime_or_test_outputs(self):
-        pins = cache.vendor_pins(self.root)
-        self.assertTrue(cache.allowed_payload("build/unsafe-equality/api/predicate", pins))
-        self.assertTrue(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o", pins))
-        self.assertTrue(cache.allowed_payload("build/compiler/plugin.json", pins))
-        self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.dylib", pins))
-        self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.so", pins))
+        self.assertTrue(cache.allowed_payload("build/unsafe-equality/api/predicate"))
+        self.assertTrue(cache.allowed_payload("build/aggregate-layout/pre-ghc/A.dyn_o"))
+        self.assertTrue(cache.allowed_payload("build/compiler/plugin.json"))
+        self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.dylib"))
+        self.assertTrue(cache.allowed_payload("build/compiler/libHSthc-0.1.0.0-inplace-ghc9.14.1.so"))
         for name in ("build/install/thc/lib/runtime.jar", "build/test-results/test/TEST.xml",
                      "build/reports/tests/index.html", "build/fast/native-inputs.tar.gz",
                      "build/compiler/thc-core-plugin.conf", "build/compiler/package.conf.d/package.cache",
                      "dist-newstyle/packagedb/ghc-9.14.1/package.cache", ".gradle/cache.bin"):
-            self.assertFalse(cache.allowed_payload(name, pins), name)
+            self.assertFalse(cache.allowed_payload(name), name)
 
     def test_original_native_executable_names_and_cstring_are_in_scope(self):
-        pins = cache.vendor_pins(self.root)
         for name in ("state-tuple", "tuple-input", "tuple-return", "empty-tuple-input"):
-            self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}", pins))
+            self.assertTrue(cache.allowed_payload(f"build/{name}/native/{name}"))
         self.assertIn("build/map/boot-core", cache.CORE_DIRS)
 
     def test_word_floating_manifest_and_semantic_payload_are_cache_inputs(self):
         self.assertIn("build/word-floating/manifest.json", DECLARED_REQUIRED)
         for name in ("oracle.tsv", "pre-audit.json", "post-audit.json",
                      "pre-core/WordFloatingAudit.json", "post-core/WordFloatingAudit.json"):
-            self.assertTrue(cache.allowed_payload("build/word-floating/" + name, {}), name)
+            self.assertTrue(cache.allowed_payload("build/word-floating/" + name), name)
         for name in ("test-results/results.json", "classes/Main.class", "unreviewed.sh"):
-            self.assertFalse(cache.allowed_payload("build/word-floating/" + name, {}), name)
+            self.assertFalse(cache.allowed_payload("build/word-floating/" + name), name)
 
     def test_original_stdio_inventory_is_exact_and_manifest_is_required(self):
         # setUp replaces REQUIRED for the small archive tests.
@@ -1794,15 +1825,15 @@ class FastInputTests(unittest.TestCase):
         self.assertIn("original-stdio", cache.BUILD_DIRS)
         self.assertEqual(630, len(cache.ORIGINAL_STDIO_OUTPUTS))
         for name in cache.ORIGINAL_STDIO_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(name, {}), name)
+            self.assertTrue(cache.allowed_payload(name), name)
         self.assertIn("build/original-stdio/native/original-stdio-oracle", cache.NATIVE_EXECUTABLES)
         for name in ("other.json", "unknown.stdout", "logs/extra.stdout", "logs/native-144.stdout",
                      "logs/native-000.sh", "logs/pre-export.stdout.extra", "results/144.txt", "results/00.txt",
                      "native/other-oracle", "pre/ghc/OriginalStdioAudit.o", "post/core/Unreviewed.json",
                      "test-results/pass.json", "reports/pass.json", "previous-manifests/stale.json",
                      "expected.json", "pre/proofs.json", "logs/pre-audit-unknown.stdout"):
-            self.assertFalse(cache.allowed_payload("build/original-stdio/" + name, {}), name)
-        self.assertFalse(cache.allowed_payload("build/data-to-tag/logs/pre-export.stdout", {}))
+            self.assertFalse(cache.allowed_payload("build/original-stdio/" + name), name)
+        self.assertFalse(cache.allowed_payload("build/data-to-tag/logs/pre-export.stdout"))
 
     def test_original_stdio_archive_round_trip_preserves_complete_artifact_inventory(self):
         manifest_path = "build/original-stdio/manifest.json"
@@ -1991,14 +2022,14 @@ class RenamedInputContractTests(unittest.TestCase):
             sources = cache.identity(root)["sources"]
         for name in (*cache.RUNTIME_INPUTS, "json-index/THC/JsonIndex.hs",
                      "json-index/THC/JsonIndex/Scanner.hs", "compiler/json-index/json_index.c",
-                     "compiler/json-index/json_index.h", *("compiler/THC/" + name + ".hs" for name in
+                     "compiler/json-index/json_index.h", *("src/compiler/THC/" + name + ".hs" for name in
                                              ("CBV", "Demands", "Plugin", "Sources", "Wired"))):
             self.assertIn(name, sources)
             self.assertEqual(cache.digest(root / name), sources[name])
         self.assertNotIn("src/main/java/thc/runtime/RetiredVectorMemory.java", sources)
         self.assertFalse(any(name.startswith("compiler/Thc/") for name in sources))
         self.assertIn("test/haskell-fixtures/PinnedAddressFixtures.hs", sources)
-        self.assertIn("tools/primops/PrimopTools.hs", sources)
+        self.assertIn("src/tools/primops/PrimopTools.hs", sources)
         sort = "src/test/resources/core/original-bytestring-sort-descriptor.json"
         self.assertEqual(cache.digest(root / sort), sources[sort])
         decimal = "src/test/resources/core/original-bytestring-decimal-descriptors.json"
@@ -2006,9 +2037,9 @@ class RenamedInputContractTests(unittest.TestCase):
         declaration = "src/test/resources/core/original-unix-libc-descriptors.json"
         self.assertEqual(cache.digest(root / declaration), sources[declaration])
         for name in ("generate-scalar-signatures.py", "primop-coverage.py", "test-primop-coverage.py"):
-            self.assertNotIn("scripts/" + name, sources)
+            self.assertNotIn("bin/" + name, sources)
         for name in ("prepare-pinned-addresses.py", "pinned_address_model.py", "test-pinned-addresses.py"):
-            self.assertNotIn("scripts/" + name, sources)
+            self.assertNotIn("bin/" + name, sources)
 
     def test_required_cbv_modules_match_renamed_genuine_fixture_declarations(self):
         root = Path(__file__).resolve().parents[2]
@@ -2017,7 +2048,7 @@ class RenamedInputContractTests(unittest.TestCase):
         self.assertEqual(expected, {name for name in cache.REQUIRED if "CBV" in name})
         self.assertFalse(any("Cbv" in name for name in cache.REQUIRED))
         for module in ("CBVAudit", "CBVJoinAudit", "CBVCoercionAudit"):
-            source = (root / "compiler/test-fixtures" / (module + ".hs")).read_text()
+            source = (root / "test/fixtures/compiler" / (module + ".hs")).read_text()
             self.assertRegex(source, r"(?m)^module " + module + r"\b")
 
 

@@ -37,7 +37,7 @@ def main():
         sources={p:digest(ROOT/p) for p in paths}
         for path,sha in sources.items():
             require(hashlib.sha256(subprocess.check_output(['git','show',revision+':'+path],cwd=ROOT)).hexdigest()==sha,'Commit source before graph capture: '+path)
-        run(['python3',ROOT/'scripts/prepare-sum-result-audit.py','--check-existing'])
+        run(['python3',ROOT/'bin/prepare-sum-result-audit.py','--check-existing'])
         run([ROOT/'gradlew','--offline','--no-daemon','installDist'],out/'installDist.log')
         require(sources=={p:digest(ROOT/p) for p in paths},'Runtime changed during build')
         inputs=tools+[module,manifest,ROOT/'build/sum-result/oracle.tsv',ROOT/'build/sum-result/oracle-pairs.tsv',java/'release',*sorted((ROOT/'build/install/thc/lib').glob('*.jar'))]

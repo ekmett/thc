@@ -110,7 +110,7 @@ requestRows entries = [(name entry,a,b) | entry <- entries, (a,b) <- pairs entry
 
 prepareSimdArithmetic :: FilePath -> IO ()
 prepareSimdArithmetic root = do
-  specification <- readJson (root </> "scripts/simd-families.json")
+  specification <- readJson (root </> "bin/simd-families.json")
   raw <- field specification "families" :: IO [Value]
   admitted <- forM raw $ \item -> do
     shapeId <- field item "name"
@@ -162,23 +162,23 @@ prepareSimdArithmetic root = do
     (die "Native arithmetic domain changed")
   BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
   exported <- execute "pre-export" [("THC_CORE_OUT",root </> directory </> "pre-core"),("THC_GHC_OUT",root </> directory </> "ghc")]
-    "compiler/export.sh" ["-fno-code","-fwrite-if-simplified-core",source]
+    "bin/export-core.sh" ["-fno-code","-fwrite-if-simplified-core",source]
   audits <- forM entries $ \entry -> do
     let path = directory </> name entry ++ "-audit.json"
-    command <- execute (name entry ++ "-audit") [] "python3" ["scripts/audit-core.py",core,"--entry",name entry,"--output",path]
+    command <- execute (name entry ++ "-audit") [] "python3" ["bin/audit-core.py",core,"--entry",name entry,"--output",path]
     report <- readJson (root </> path)
     accepted <- field report "accepted"
     missing <- field report "missingGlobals" :: IO [Value]
     issues <- field report "issues" :: IO [Value]
     unless (accepted && null missing && null issues) (die ("SIMD arithmetic audit rejected " ++ name entry))
     pure (path:commandArtifacts command)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ ["test/haskell-fixtures/SimdArithmeticFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/Main.hs","thc.cabal","scripts/simd-families.json","scripts/core-capabilities.json","scripts/audit-core.py",
-    "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
-    ["scripts" </> path | path <- scripts,isPrefixOf "core_" path,takeExtension path == ".py"])
+    "test/haskell-fixtures/Main.hs","thc.cabal","bin/simd-families.json","bin/core-capabilities.json","bin/audit-core.py",
+    "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
+    ["bin" </> path | path <- scripts,isPrefixOf "core_" path,takeExtension path == ".py"])
   artifactHashes <- hashes root ([source,scalarSource,driver,inputs,binary,core,directory </> "oracle.tsv"] ++ concat audits ++
     concatMap commandArtifacts [version,nativeBuild,observed,exported])
   writeJson manifest (object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"rows" .= length requests,

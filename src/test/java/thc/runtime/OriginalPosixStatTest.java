@@ -48,7 +48,7 @@ class OriginalPosixStatTest {
     }
     @Test void realNativeImagesAndModePredicatesMatchBothBackendsOnFirstInstalledCalls() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L,manifest.get("schema")); assertEquals("linux",manifest.get("platform")); assertEquals(true,manifest.get("supported"));
-        hashes(root,manifest.get("inputHashes"),Set.of("compiler/test-fixtures/OriginalPosixStatAudit.hs","compiler/test-fixtures/OriginalPosixStatNative.hs","test/haskell-fixtures/OriginalPosixStatFixtures.hs","scripts/core_original_foreign.py"));
+        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalPosixStatAudit.hs","test/fixtures/compiler/OriginalPosixStatNative.hs","test/haskell-fixtures/OriginalPosixStatFixtures.hs","bin/core_original_foreign.py"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { for (var name : names) artifacts.add(prefix + "/" + stage + "/" + name + ".audit.json"); for (var part : List.of("OriginalPosixStatAudit","THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + part + ".json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var images = (List<List<List<Number>>>) oracle.get("images"); var modes = (List<List<Number>>) oracle.get("modes"); assertEquals(6,images.size());
         var expectedModes = new ArrayList<Long>(); for (long mode = 0; mode <= 65535; mode++) expectedModes.add(mode); expectedModes.addAll(List.of(-1L,2147483647L,2147483648L,4294967295L)); var actualModes = new ArrayList<Long>(); for (var row : modes) actualModes.add(row.get(0).longValue()); assertEquals(expectedModes,actualModes);
@@ -128,6 +128,6 @@ class OriginalPosixStatTest {
             for (var site : List.of("resultRep","rep")) mutate.call((c,d) -> ((Map<String,Object>) (site.equals("rep") ? (Map<?,?>) c.get(6) : d).get(site)).put("primReps",list("WordRep")));
             var aliased = (List<Object>) copy(original); var descriptor = (Map<String,Object>) ((Map<?,?>) aliased.get(6)).get("foreignCall"); var target = (Map<String,Object>) descriptor.get("target"); target.put("symbol","prefix" + target.get("symbol")); assertNull(validate(aliased)); target.put("symbol","__hscore_fstat"); assertThrows(RuntimeFault.class,() -> validate(aliased));
         }
-        assertTrue(Files.readString(new File(root,"scripts/core-capabilities.json").toPath()).contains("\"__hscore_fstat\""));
+        assertTrue(Files.readString(new File(root,"bin/core-capabilities.json").toPath()).contains("\"__hscore_fstat\""));
     }
 }

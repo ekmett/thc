@@ -101,7 +101,7 @@ variables expression = case expression of
 prepareByteStringSort :: FilePath -> IO ()
 prepareByteStringSort root = do
   let directory = "build/bytestring-sort"
-      source = "compiler/test-fixtures/ByteStringSortAudit.hs"
+      source = "test/fixtures/compiler/ByteStringSortAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       manifest = root </> directory </> "manifest.json"
       oneLine result = case BS.lines (commandStdout result) of
@@ -213,13 +213,13 @@ prepareByteStringSort root = do
       _ -> die "Missing compiled original sort consumer"
   writeJson (root </> directory </> "oracle.json") (toJSON oracle)
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["scripts/audit-core.py", "--entry", name,
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
       "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
     "src/test/resources/core/original-bytestring-sort-descriptor.json", "test/haskell-fixtures/ByteStringSortFixtures.hs",
-    "compiler/THC/Plugin.hs", "compiler/THC/Interface.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/java/thc/runtime/CoreByteStringSort.java",
+    "src/compiler/THC/Plugin.hs", "src/compiler/THC/Interface.hs", "bin/core_original_foreign.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/java/thc/runtime/CoreByteStringSort.java",
     "src/main/java/thc/runtime/ByteStringSort.java", "src/main/java/thc/runtime/ByteStringSortExpression.java"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.json"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre","post"], name <- entries] ++

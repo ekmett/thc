@@ -29,8 +29,8 @@ prepareSignalDispatch root = do
   let directory = "build/signal-dispatch"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/SignalDispatchAudit.hs"
-      driver = "compiler/test-fixtures/SignalDispatchNative.hs"
+      source = "test/fixtures/compiler/SignalDispatchAudit.hs"
+      driver = "test/fixtures/compiler/SignalDispatchNative.hs"
       entries = ["setupHandler", "awaitHandler", "ghc-internal:GHC.Internal.Conc.Signal.runHandlersPtr"] :: [String]
       native = directory </> "native"
       oracle = directory </> "oracle.txt"
@@ -41,13 +41,13 @@ prepareSignalDispatch root = do
   version <- run root [] ghc ["--numeric-version"] ""
   unless (version == "9.14.1\n") (die "Signal dispatcher requires GHC 9.14.1")
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp",
-    "-dcore-lint", "-dstg-lint", "-package", "ghc-internal", "-i./compiler/test-fixtures",
+    "-dcore-lint", "-dstg-lint", "-package", "ghc-internal", "-i./test/fixtures/compiler",
     "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"] ""
   observed <- runWithTimeout (Just 30000000) root [] (root </> native </> "oracle") ["+RTS", "-N2"] ""
   unless (observed == "1\n10010\n2\n20020\n3\n30030\n15\n150150\n")
     (die ("Original GHC signal dispatcher oracle mismatch: " ++ observed))
   writeFile (root </> oracle) observed
-  _ <- run root [] "compiler/build.sh" [] ""
+  _ <- run root [] "bin/build-compiler.sh" [] ""
   sourceRoot <- lookupEnv "THC_INSTALLED_CORE_GHC_SOURCE"
   installed <- maybe (prepareInstalledCore root directory)
     (prepareInstalledCoreWithForeign root directory) sourceRoot
@@ -56,26 +56,26 @@ prepareSignalDispatch root = do
         core = stageDir </> "core"
         consumer = core </> "SignalDispatchAudit.json"
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=auditMain"] ++
         ["-package", "ghc-internal", source]) ""
     -- Original forkIO reaches its uncaught exception handler and Posix Handle
     -- dependencies. They require the production annotated installed Core view;
     -- no source, metadata, module or binding is filtered to bypass admission.
-    _ <- run root [] "python3" ["scripts/audit-core.py", "--package-manifest", fixturePackages installed,
+    _ <- run root [] "python3" ["bin/audit-core.py", "--package-manifest", fixturePackages installed,
       "--entry", "auditMain", "--io-main", "--output", stageDir </> "audit.json", consumer] ""
     pure (stage, [consumer])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  drivers <- listDirectory (root </> "src/THC/Driver")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  drivers <- listDirectory (root </> "src/driver/THC/Driver")
   inputHashes <- hashes root (sort $ [source, driver, "test/haskell-fixtures/SignalDispatchFixtures.hs",
     "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-    "test/haskell-fixtures/InstalledCoreFixtures.hs", "compiler/build.sh", "compiler/export.sh",
-    "compiler/toolchain.sh", "compiler/plugin.py", "compiler/interface/Main.hs", "compiler/target-layout.c",
-    "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["src/THC/Driver" </> name | name <- drivers, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
+    "test/haskell-fixtures/InstalledCoreFixtures.hs", "bin/build-compiler.sh", "bin/export-core.sh",
+    "bin/toolchain.sh", "bin/plugin.py", "src/compiler/interface/Main.hs", "src/driver/cbits/target-layout.c",
+    "bin/audit-core.py", "bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["src/driver/THC/Driver" </> name | name <- drivers, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root (oracle : fixtureArtifacts installed ++ concat [modules ++
     [directory </> stage </> "audit.json"]
     | (stage, modules) <- stages])

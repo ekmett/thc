@@ -54,7 +54,7 @@ storage unchanged. Result pools must remain empty and reference-clean.
 
 ```sh
 cabal run exe:thc-fixtures --offline -- mutable-bytearrays
-python3 scripts/test-core-bytearrays.py
+python3 bin/test-core-bytearrays.py
 ./gradlew --max-workers=2 --continue \
   testDefault --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest \
   testDense --tests thc.runtime.MutableByteArrayTest --tests thc.runtime.ByteArrayTest

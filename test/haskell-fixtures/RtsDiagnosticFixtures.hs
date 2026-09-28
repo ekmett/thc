@@ -28,7 +28,7 @@ import System.FilePath ((</>))
 prepareRtsDiagnostics :: FilePath -> IO ()
 prepareRtsDiagnostics root = do
   let directory = "build/rts-diagnostics"
-      source = "compiler/test-fixtures/RtsDiagnosticsNative.hs"
+      source = "test/fixtures/compiler/RtsDiagnosticsNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
       manifest = directory </> "manifest.json"

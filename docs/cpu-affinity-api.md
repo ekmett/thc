@@ -34,8 +34,8 @@ pinning is not a promise against later OS/cpuset policy changes. This API does
 not establish bound foreign TLS or a scoped pin of the calling thread.
 
 The complete example is [THC.CpuAffinity](../examples/THC/CpuAffinity.hs). When
-building it outside Cabal, use `ghc --make -XHaskell2010 -threaded -iruntime
-examples/THC/CpuAffinity.hs runtime/cpu-affinity.c runtime/runtime-services.c
+building it outside Cabal, use `ghc --make -XHaskell2010 -threaded -isrc/runtime
+examples/THC/CpuAffinity.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c
 -main-is THC.CpuAffinity`.
 
 The same source compiles and links under ordinary native GHC. Its tiny C shim

@@ -33,8 +33,8 @@ public class FileWaitFullCoreTest {
     private Object invoke(RootCallTarget target, long fd) { return Calls.target(target, new Object[] {0L, fd, thc.runtime.Unit.INSTANCE}); }
     @Test public void originalWaitsMatchNativeAndRetainTheExactLazyBadFdPayload() throws Exception {
         var manifest = document("manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(new ArrayList<>(entries.keySet()), manifest.get("entries"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/FileWaitAudit.hs", "compiler/test-fixtures/FileWaitNative.hs",
-            "test/haskell-fixtures/FileWaitFixtures.hs", "scripts/core-capabilities.json"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/FileWaitAudit.hs", "test/fixtures/compiler/FileWaitNative.hs",
+            "test/haskell-fixtures/FileWaitFixtures.hs", "bin/core-capabilities.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/file-wait/oracle.txt", "build/file-wait/pre/core/FileWaitAudit.json", "build/file-wait/post/core/FileWaitAudit.json"), null);
         assertEquals("read-ready\nwrite-ready\noriginal-bad-fd\n", Files.readString(new File(root, (String) manifest.get("oracle")).toPath(), StandardCharsets.UTF_8));
         var originals = new ArrayList<Map<String, Object>>(); var targetLayout = CorePackageManifest.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout(); assertNotNull(targetLayout);

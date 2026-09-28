@@ -130,7 +130,7 @@ signature. `backend` selects `bytecode` or `ast`
 when loading; the default comes from `thc.backend`, then `THC_BACKEND`, then
 `bytecode`.
 
-The separate `scripts/audit-core.py` command still rejects vector, tuple and
+The separate `bin/audit-core.py` command still rejects vector, tuple and
 sum entry signatures. Its scalar-entry fixture frontiers do not describe the
 logical polyglot ABI above; `loadEntry` does not invoke that auditor. The
 command-line scalar runner still parses integer arguments. Native C exports,

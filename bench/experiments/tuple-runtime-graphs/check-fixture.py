@@ -39,7 +39,7 @@ assert plugin['schema']==1 and plugin['unitId']
 shared_library=pathlib.Path(plugin['sharedLibrary'])
 assert shared_library.is_file()
 files=[here/'TupleRuntimeGraph.hs',here/'TupleRuntimeGraphNative.hs',out/'core/TupleRuntimeGraph.json',out/'oracle.tsv',
-       *sorted((export_root/'compiler/THC').glob('*.hs')),
+       *sorted((export_root/'src/compiler/THC').glob('*.hs')),
        export_root/'thc.cabal',export_root/'cabal.project',plugin_manifest]
 manifest={'ghc':module['ghc'],'runtimeProof':False,'nativeRows':len(rows),
           'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in files},

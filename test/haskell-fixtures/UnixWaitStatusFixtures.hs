@@ -77,7 +77,7 @@ inputs = [0,1,2,9,15,19,31,63,64,126,127,128,129,137,143,147,191,192,254,255,
 prepareUnixWaitStatus :: FilePath -> IO ()
 prepareUnixWaitStatus root = do
   let directory = "build/unix-wait-status"
-      source = "compiler/test-fixtures/UnixWaitStatusAudit.hs"
+      source = "test/fixtures/compiler/UnixWaitStatusAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       manifest = root </> directory </> "manifest.json"
       oneLine result = case BS.lines (commandStdout result) of
@@ -174,12 +174,12 @@ prepareUnixWaitStatus root = do
         answer `seq` pure (name ++ "\t" ++ show bits ++ "\t" ++ show answer)
   writeFile (root </> directory </> "oracle.tsv") (unlines rows)
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
-    execute (stage ++ "-audit-" ++ name) [] "python3" ["scripts/audit-core.py", "--entry", name,
+    execute (stage ++ "-audit-" ++ name) [] "python3" ["bin/audit-core.py", "--entry", name,
       "--output", directory </> stage ++ "-" ++ name ++ ".audit.json", directory </> stage ++ ".json"]
   let commands = [version, library, imports, owner] ++ audits
   inputHashes <- hashes root [source, "test/haskell-fixtures/UnixWaitStatusFixtures.hs",
-    "compiler/THC/Plugin.hs", "test/haskell-fixtures/FixtureSupport.hs", "scripts/core_original_foreign.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/c/wait-status-api.c", "scripts/build-cbits.py"]
+    "src/compiler/THC/Plugin.hs", "test/haskell-fixtures/FixtureSupport.hs", "bin/core_original_foreign.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/c/wait-status-api.c", "bin/build-cbits.py"]
   artifactHashes <- hashes root ([directory </> file | file <- ["pre.json", "post.json", "oracle.tsv"]] ++
     [directory </> stage ++ "-" ++ name ++ ".audit.json" | stage <- ["pre", "post"], name <- entries] ++
     concatMap commandArtifacts commands)

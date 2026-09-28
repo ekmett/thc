@@ -77,7 +77,7 @@ public class RtsShutdownTest {
     private List<Map<String, Object>> cases() throws Exception {
         var root = new File(System.getProperty("thc.projectRoot")); var prefix = "build/rts-shutdown";
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/manifest.json").toPath()));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/RtsShutdownNative.hs", "test/haskell-fixtures/RtsShutdownFixtures.hs"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/RtsShutdownNative.hs", "test/haskell-fixtures/RtsShutdownFixtures.hs"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/oracle.json"), prefix + "/");
         return (List<Map<String, Object>>) ((Map<String, Object>) Json.parse(Files.readString(new File(root, prefix + "/oracle.json").toPath()))).get("cases");
     }

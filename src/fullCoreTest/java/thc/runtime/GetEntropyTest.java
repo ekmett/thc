@@ -36,8 +36,8 @@ public class GetEntropyTest {
             "build/getentropy/sources/splitmix-0.1.3.2/splitmix.cabal", "build/getentropy/sources/splitmix-0.1.3.2/cbits-unix/init.c",
             "build/getentropy/sources/splitmix-0.1.3.2/src/System/Random/SplitMix/Init.hs"), "build/getentropy/sources/");
         OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of(
-            "compiler/test-fixtures/NativeGetEntropy.c", "compiler/test-fixtures/OriginalSplitmixNative.hs", "compiler/test-fixtures/OriginalSplitmixEntry.hs",
-            "test/haskell-fixtures/GetEntropyFixtures.hs", "src/THC/Driver/PackageNative.hs", "src/THC/Driver/NativeLibrarySources.hs"), null);
+            "test/fixtures/compiler/NativeGetEntropy.c", "test/fixtures/compiler/OriginalSplitmixNative.hs", "test/fixtures/compiler/OriginalSplitmixEntry.hs",
+            "test/haskell-fixtures/GetEntropyFixtures.hs", "src/driver/THC/Driver/PackageNative.hs", "src/driver/THC/Driver/NativeLibrarySources.hs"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(
             "build/getentropy/System.Random.SplitMix.Init.json", "build/getentropy/System.Random.SplitMix.json",
             "build/getentropy/entry/units/u-original-splitmix-entry/OriginalSplitmixEntry.json", "build/getentropy/audit.json",

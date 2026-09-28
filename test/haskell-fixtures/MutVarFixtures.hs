@@ -32,7 +32,7 @@ entries = ["stRef", "lazyRef", "closureRef", "orderedRef", "unliftedRef", "stLoo
            "modifyRef", "lazyModifyRef", "lazyBottomModifierRef"]
 
 source, directory :: FilePath
-source = "compiler/test-fixtures/MutVarAudit.hs"
+source = "test/fixtures/compiler/MutVarAudit.hs"
 directory = "build/mutvar"
 
 values :: [Integer]
@@ -78,7 +78,7 @@ prepareMutVar root = do
         roots = ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries]
     _ <- run root [("THC_CORE_OUT", root </> core),
                    ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : postTidy ++ roots ++ [source]) ""
+      "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : postTidy ++ roots ++ [source]) ""
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine MutVar Core export: " ++ path))) modules
@@ -89,7 +89,7 @@ prepareMutVar root = do
     mapM_ (\name -> do
       let report = stageDir </> name ++ ".audit.json"
       _ <- run root [] "python3"
-        (["scripts/audit-core.py", "--entry", name, "--output", report] ++ modules) ""
+        (["bin/audit-core.py", "--entry", name, "--output", report] ++ modules) ""
       pure ()) entries
     pure (stage,modules)
   let native = directory </> "native"
@@ -99,7 +99,7 @@ prepareMutVar root = do
   createDirectoryIfMissing True (root </> native)
   writeFile (root </> driver) nativeDriver
   _ <- run root [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", root </> native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", root </> native,
     "-hidir", root </> native, root </> driver, "-o", executable] ""
   observations <- runWithTimeout (Just 60000000) root [] executable []
     (concat [name ++ "\t" ++ show x ++ "\n" | name <- entries, x <- values])
@@ -108,15 +108,15 @@ prepareMutVar root = do
   unless (length rows == Set.size expected && Set.fromList rows == expected) $
     die "Native MutVar oracle has missing or duplicate entry/input rows"
   writeFile (root </> oracle) observations
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, "test/haskell-fixtures/MutVarFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal",
-        "scripts/core-capabilities.json", "scripts/audit-core.py",
+        "bin/core-capabilities.json", "bin/audit-core.py",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh"] ++
-        ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"] ++
-        ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"]
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh"] ++
+        ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"] ++
+        ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"]
       artifacts = [driver,oracle] ++ concat
         [modules ++ [directory </> stage </> name ++ ".audit.json" | name <- entries]
           | (stage,modules) <- stages]

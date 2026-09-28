@@ -59,7 +59,7 @@ class OriginalErrnoTest {
     private List<Map<String,Object>> fixture() throws Exception {
         var manifest = (Map<String,Object>) json(prefix + "/manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(true, manifest.get("strictAccepted"));
-        hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalErrnoAudit.hs", "compiler/test-fixtures/OriginalErrnoNative.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs", "scripts/core_original_foreign.py"));
+        hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalErrnoAudit.hs", "test/fixtures/compiler/OriginalErrnoNative.hs", "test/haskell-fixtures/OriginalStdioFixtures.hs", "bin/core_original_foreign.py"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre", "post")) {
             artifacts.add(prefix + "/" + stage + "/core/OriginalErrnoAudit.json"); artifacts.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); artifacts.add(prefix + "/" + stage + "/originalResetErrno.audit.json");
         }

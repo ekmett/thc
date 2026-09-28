@@ -23,22 +23,22 @@
       "junit": ["thc.runtime.NativeEventWaitTest"], "python": []
     },
     "src/main/java/thc/runtime/RubbishLiterals.java": {
-      "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.RubbishLiteralTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CoreCpuAffinity.java": {
-      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CpuAffinityQuery.java": {
-      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CpuAffinityApiTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/GuestEnvironment.java": {
       "junit": ["thc.runtime.GuestEnvironmentTest"], "python": []
     },
     "src/main/java/thc/runtime/CoreEnvironmentForeign.java": {
-      "junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/EnvironmentOp.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/EnvironmentExpression.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/EnvironmentOp.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/EnvironmentExpression.java": {"junit": ["thc.runtime.UnixLibcTest", "thc.runtime.GuestEnvironmentTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/GhcBCO.java": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
@@ -52,49 +52,49 @@
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
     "src/main/java/thc/runtime/CoreMemoryCopyForeign.java": {
-      "junit": ["thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalMemcpyTest", "thc.runtime.OriginalMemmoveTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemcpyExpression.java": {"junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemmoveExpression.java": {"junit": ["thc.runtime.OriginalMemmoveTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreStringRtsForeign.java": {
-      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsOp.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/StringRtsExpression.java": {"junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/GuestArguments.java": {
       "junit": ["thc.runtime.GuestArgumentsTest", "thc.runtime.GuestArgumentsEncodingTest"], "python": []
     },
     "src/main/java/thc/runtime/CoreRtsArgumentsForeign.java": {
-      "junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.GuestArgumentsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/RtsArgumentsOp.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/RtsArgumentsExpression.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/RtsArgumentsOp.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/RtsArgumentsExpression.java": {"junit": ["thc.runtime.GuestArgumentsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/ManagedCompacts.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedCompact.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactCopyNode.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactOp.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactExpression.java": {
-      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedCompactsTest", "thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactImages.java": {
-      "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/HeapAddresses.java": {
       "junit": ["thc.runtime.CompactImagesTest"], "python": []
     },
     "src/main/java/thc/runtime/CompactImageOp.java": {
-      "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CompactImageExpression.java": {
-      "junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/PrefetchExpression.java": {
       "junit": ["thc.runtime.HintTraceTest"], "python": []
@@ -118,48 +118,48 @@
       "junit": ["thc.runtime.ManagedSTMTest"], "python": []
     },
     "src/main/java/thc/runtime/STMCall.java": {
-      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/STMExpression.java": {
-      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/STMOp.java": {
-      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/STMRestart.java": {
-      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.ManagedSTMTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/CoreThreadObservation.java": {
       "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ThreadObservation.java": {
       "junit": ["thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/AtomicIntArrayOp.java": {
       "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
     "src/main/java/thc/runtime/AtomicIntArrayExpression.java": {
       "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
     "src/main/java/thc/runtime/AddressArrayCopyOp.java": {
       "junit": ["thc.runtime.AddressArrayCopyTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/AddressToByteArrayExpression.java": {
       "junit": ["thc.runtime.AddressArrayCopyTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ByteArrayToAddressExpression.java": {
       "junit": ["thc.runtime.AddressArrayCopyTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/FloatDecodeExpression.java": {
       "junit": ["thc.runtime.FloatDecodeTest", "thc.runtime.FloatingRemainderTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/AtomicAddressOp.java": {
       "junit": ["thc.runtime.AtomicAddressTest"],
@@ -175,7 +175,7 @@
     },
     "src/main/java/thc/runtime/VectorAddressExpression.java": {
       "junit": ["thc.runtime.Simd128AddressTest", "thc.runtime.Simd128AddressNativeTest", "thc.runtime.SimdAddressFamiliesTest"],
-      "python": ["scripts/test-core-vector-memory.py"]
+      "python": ["bin/test-core-vector-memory.py"]
     },
     "src/main/java/thc/runtime/VectorIntegerDivision.java": {
       "junit": ["thc.runtime.SimdArithmeticTest"],
@@ -187,7 +187,7 @@
     },
     "src/main/java/thc/runtime/CoreDataLabels.java": {
       "junit": ["thc.runtime.EnabledCapabilitiesTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ByteStringDataLabelsTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedWeaks.java": {
       "junit": ["thc.runtime.ManagedWeakTest"],
@@ -217,23 +217,23 @@
       "junit": ["thc.runtime.CoreMainThreadForeignTest"],
       "python": []
     },
-    "src/main/java/thc/runtime/RtsShutdownOp.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/GuestShutdown.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/CoreRtsShutdown.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ShutdownRuntime.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/RtsShutdownOp.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/GuestShutdown.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreRtsShutdown.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ShutdownRuntime.java": {"junit": ["thc.runtime.RtsShutdownTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreBoundThreadForeign.java": {
       "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/BoundThreadSupport.java": {
       "junit": ["thc.runtime.CoreBoundThreadForeignTest", "thc.runtime.ThreadSchedulingTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/CoreFileWait.java": {"junit":["thc.runtime.FileWaitPrimitiveTest"],"python":["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/WaitFileDescriptor.java": {"junit":["thc.runtime.FileWaitPrimitiveTest"],"python":["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreFileWait.java": {"junit":["thc.runtime.FileWaitPrimitiveTest"],"python":["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/WaitFileDescriptor.java": {"junit":["thc.runtime.FileWaitPrimitiveTest"],"python":["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/FileWaitPrimitives.java": {
       "junit": ["thc.runtime.FileWaitPrimitiveTest"],
-      "python": ["scripts/test-audit-core.py"]
+      "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedMutVar.java": {
       "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
@@ -394,14 +394,14 @@
         "thc.runtime.TypedInputScalarSourceTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-sums.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py",
-        "scripts/test-sum-layout.py",
-        "scripts/test-tuple-inputs.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-sums.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py",
+        "bin/test-sum-layout.py",
+        "bin/test-tuple-inputs.py"
       ]
     },
     "src/main/java/thc/runtime/FloatingPrimitives.java": {
@@ -436,14 +436,14 @@
         "thc.runtime.TypedInputScalarSourceTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-sums.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py",
-        "scripts/test-sum-layout.py",
-        "scripts/test-tuple-inputs.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-sums.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py",
+        "bin/test-sum-layout.py",
+        "bin/test-tuple-inputs.py"
       ]
     },
     "src/main/java/thc/runtime/VectorPack.java": {
@@ -472,11 +472,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorUnpack.java": {
@@ -505,11 +505,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorOperation.java": {
@@ -538,11 +538,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector32Pack.java": {
@@ -571,11 +571,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector32Unpack.java": {
@@ -604,11 +604,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector32Operation.java": {
@@ -637,11 +637,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector16Pack.java": {
@@ -670,11 +670,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector16Unpack.java": {
@@ -703,11 +703,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector16Operation.java": {
@@ -736,11 +736,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector8Pack.java": {
@@ -769,11 +769,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector8Unpack.java": {
@@ -802,11 +802,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/Vector8Operation.java": {
@@ -835,11 +835,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord32Pack.java": {
@@ -868,11 +868,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord32Unpack.java": {
@@ -901,11 +901,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord32Operation.java": {
@@ -934,11 +934,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord16Pack.java": {
@@ -967,11 +967,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord16Unpack.java": {
@@ -1000,11 +1000,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord16Operation.java": {
@@ -1033,11 +1033,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord8Pack.java": {
@@ -1066,11 +1066,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord8Unpack.java": {
@@ -1099,11 +1099,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorWord8Operation.java": {
@@ -1132,11 +1132,11 @@
         "thc.runtime.Word32VectorStorageTest"
       ],
       "python": [
-        "scripts/test-core-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-core-word32-vector-memory.py",
-        "scripts/test-int32x4-multiply-model.py",
-        "scripts/test-word8x16-model.py"
+        "bin/test-core-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-core-word32-vector-memory.py",
+        "bin/test-int32x4-multiply-model.py",
+        "bin/test-word8x16-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorFloatPack.java": {
@@ -1156,11 +1156,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorFloatUnpack.java": {
@@ -1180,11 +1180,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorFloatOperation.java": {
@@ -1204,11 +1204,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorDoublePack.java": {
@@ -1228,11 +1228,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorDoubleUnpack.java": {
@@ -1252,11 +1252,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorDoubleOperation.java": {
@@ -1276,11 +1276,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorFloat8Fused.java": {
@@ -1300,11 +1300,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorDouble4Fused.java": {
@@ -1324,11 +1324,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorFloat16Fused.java": {
@@ -1348,11 +1348,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     },
     "src/main/java/thc/runtime/VectorDouble8Fused.java": {
@@ -1372,11 +1372,11 @@
         "thc.runtime.SimdWideFloatFmaTest"
       ],
       "python": [
-        "scripts/test-core-double-vector-memory.py",
-        "scripts/test-core-float-vector-memory.py",
-        "scripts/test-core-vectors.py",
-        "scripts/test-doublex2-model.py",
-        "scripts/test-floatx4-model.py"
+        "bin/test-core-double-vector-memory.py",
+        "bin/test-core-float-vector-memory.py",
+        "bin/test-core-vectors.py",
+        "bin/test-doublex2-model.py",
+        "bin/test-floatx4-model.py"
       ]
     }
   },
@@ -1387,7 +1387,7 @@
         "thc.runtime.SimdFamiliesTest"
       ],
       "python": [
-        "scripts/test-simd-families.py"
+        "bin/test-simd-families.py"
       ],
       "haskell": ["primop-tools"]
     },
@@ -1426,62 +1426,62 @@
       "junit": ["thc.runtime.ArithmeticExceptionLazinessTest","thc.runtime.BigNatLiteralTest","thc.runtime.ByteStringDecimalTest","thc.runtime.ByteStringSortTest","thc.runtime.ByteStringUtf8Test","thc.runtime.CoreFloatingLiteralTest","thc.runtime.CoreKeepAliveTest","thc.runtime.CoreTouchTest","thc.runtime.DataToTagTest","thc.runtime.EmptyArgumentRuntimeTest","thc.runtime.FloatDecodeTest","thc.runtime.FloatingPrimitiveTest","thc.runtime.FloatingRemainderTest","thc.runtime.FloatingTupleTest","thc.runtime.FusedFloatingTest","thc.runtime.IntegerCompletionTest","thc.runtime.NarrowIntegerCarrierTest","thc.runtime.NarrowIntegerContinuationTest","thc.runtime.ProxyVoidTest","thc.runtime.RubbishLiteralTest","thc.runtime.ScalarBitCastTest","thc.runtime.ScalarExceptionResultsNativeTest","thc.runtime.ShowIntTest","thc.runtime.ShowWordListTest","thc.runtime.SqrtPrimitiveTest","thc.runtime.TagToEnumTest","thc.runtime.TextCbitsTest","thc.runtime.UnsafeEqualityTest","thc.runtime.WordCarryTest","thc.runtime.WordFloatingTest"],
       "python": []
     },
-    "src/test/java/thc/runtime/ByteStringSortTest.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/CoreByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringSortExpression.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ByteStringSortAudit.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/ByteStringSortFixtures.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/resources/core/original-bytestring-sort-descriptor.json": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/ByteStringSortTest.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ByteStringSort.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ByteStringSortExpression.java": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ByteStringSortAudit.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/ByteStringSortFixtures.hs": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/resources/core/original-bytestring-sort-descriptor.json": {"junit": ["thc.runtime.ByteStringSortTest"], "python": ["bin/test-audit-core.py"]},
 
-    "src/test/java/thc/runtime/ByteStringDecimalTest.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/CoreByteStringDecimal.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringDecimal.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringDecimalOp.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringDecimalExpression.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ByteStringDecimalAudit.hs": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/ByteStringDecimalFixtures.hs": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/resources/core/original-bytestring-decimal-descriptors.json": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/java/thc/runtime/UnixWaitStatusTest.java": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/UnixWaitStatusAudit.hs": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": ["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/UnixWaitStatusFixtures.hs": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/ByteStringDecimalTest.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreByteStringDecimal.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ByteStringDecimal.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ByteStringDecimalOp.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ByteStringDecimalExpression.java": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ByteStringDecimalAudit.hs": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/ByteStringDecimalFixtures.hs": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/resources/core/original-bytestring-decimal-descriptors.json": {"junit": ["thc.runtime.ByteStringDecimalTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/java/thc/runtime/UnixWaitStatusTest.java": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/UnixWaitStatusAudit.hs": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": ["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/UnixWaitStatusFixtures.hs": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/c/wait-status-api.c": {"junit": ["thc.runtime.UnixWaitStatusTest"], "python": []},
-    "src/test/java/thc/runtime/UnixLibcTest.java": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/UnixLibcTest.java": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/resources/core/original-unix-libc-descriptors.json": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/UnixLibcFixtures.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/UnixLibcAudit.hs": {"junit": ["thc.runtime.UnixLibcTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/CoreTextForeign.java": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "src/main/java/thc/runtime/TextForeignOp.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/TextForeignExpression.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/main/java/thc/runtime/TextForeignOp.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/TextForeignExpression.java": {"junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/ManagedText.java": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": []
     },
-    "compiler/test-fixtures/TextCbitsAudit.hs": {
-      "junit": ["thc.runtime.TextCbitsTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/TextCbitsAudit.hs": {
+      "junit": ["thc.runtime.TextCbitsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/TextCbitsNative.hs": {
+    "test/fixtures/compiler/TextCbitsNative.hs": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": []
     },
     "test/haskell-fixtures/TextCbitsFixtures.hs": {
       "junit": ["thc.runtime.TextCbitsTest"], "python": []
     },
     "test/haskell-fixtures/ProxyVoidFixtures.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
-    "compiler/test-fixtures/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
-    "compiler/test-fixtures/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
-    "compiler/test-fixtures/ProxyVoidPredicate.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "test/fixtures/compiler/ProxyVoidAudit.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "test/fixtures/compiler/ProxyVoidAuditNative.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
+    "test/fixtures/compiler/ProxyVoidPredicate.hs": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
     "src/test/java/thc/runtime/ProxyVoidTest.java": {"junit": ["thc.runtime.ProxyVoidTest"], "python": []},
-    "test/haskell-fixtures/RubbishLiteralFixtures.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/RubbishLiteralAudit.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/java/thc/runtime/RubbishLiteralTest.java": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/haskell-fixtures/RubbishLiteralFixtures.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/RubbishLiteralAudit.hs": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/java/thc/runtime/RubbishLiteralTest.java": {"junit": ["thc.runtime.RubbishLiteralTest"], "python": ["bin/test-audit-core.py"]},
     "test/primop-tools/Main.hs": {
       "junit": [], "python": [], "haskell": ["primop-tools"]
     },
-    "compact-core/THC/Compact/Wire.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
-    "compact-core/THC/Compact/Writer.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
-    "compact-core/THC/Compact/Compression.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
-    "compact-core/THC/Compact/Zip.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "src/cbd/THC/Compact/Wire.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "src/cbd/THC/Compact/Writer.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "src/cbd/THC/Compact/Compression.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
+    "src/cbd/THC/Compact/Zip.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/Main.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/CbdTests.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
     "test/compact-core/CompressionTests.hs": {"junit": [], "python": [], "haskell": ["compact-core-tests"]},
@@ -1512,26 +1512,26 @@
     "examples/GhcBCO.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
-    "compiler/test-fixtures/GhcBCONative.hs": {
+    "test/fixtures/compiler/GhcBCONative.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
     "test/haskell-fixtures/GhcBCOFixtures.hs": {
       "junit": ["thc.runtime.GhcBCOTest"], "python": []
     },
     "src/test/resources/core/original-array-memcpy-descriptor.json": {
-      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/resources/core/original-ram-memcpy-descriptor.json": {
-      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalMemcpyTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/resources/core/original-memcpy-native.tsv": {
       "junit": ["thc.runtime.OriginalMemcpyTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalMemcpyNative.hs": {
+    "test/fixtures/compiler/OriginalMemcpyNative.hs": {
       "junit": ["thc.runtime.OriginalMemcpyTest"], "python": []
     },
     "src/test/resources/core/original-bytestring-strlen-descriptor.json": {
-      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalStringRtsTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/SimdByteArrayFixtures.hs": {
       "junit": [
@@ -1572,7 +1572,7 @@
     "examples/DelimitedContinuations.hs": {
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
-    "compiler/test-fixtures/DelimitedContinuationsNative.hs": {
+    "test/fixtures/compiler/DelimitedContinuationsNative.hs": {
       "junit": ["thc.runtime.DelimitedContinuationsTest"], "python": []
     },
     "test/haskell-fixtures/DelimitedContinuationsFixtures.hs": {
@@ -1586,12 +1586,12 @@
     "src/main/java/thc/runtime/MakeStableName.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "src/main/java/thc/runtime/HashStableName.java": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "examples/StableNames.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
-    "compiler/test-fixtures/StableNamesNative.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
+    "test/fixtures/compiler/StableNamesNative.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/haskell-fixtures/StableNameFixtures.hs": {"junit": ["thc.runtime.StableNamesTest"], "python": []},
     "test/haskell-fixtures/HintTraceFixtures.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "test/haskell-fixtures/ClosureInspectionFixtures.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
-    "compiler/test-fixtures/ClosureInspectionAudit.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
-    "compiler/test-fixtures/ClosureInspectionNative.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "test/fixtures/compiler/ClosureInspectionAudit.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
+    "test/fixtures/compiler/ClosureInspectionNative.hs": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "src/main/java/thc/runtime/ClosureImage.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "src/main/java/thc/runtime/ClosureInfoTables.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
     "src/main/java/thc/runtime/ClosureInspection.java": {"junit": ["thc.runtime.ClosureInspectionTest"], "python": []},
@@ -1605,33 +1605,33 @@
     "src/main/java/thc/runtime/AstAnnotationScope.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
     "src/main/java/thc/runtime/AnnotatedAction.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
     "src/main/java/thc/runtime/DelimitedAnnotationStep.java": {"junit": ["thc.runtime.ClosureInspectionTest", "thc.runtime.StackAnnotationsTest"], "python": []},
-    "compiler/test-fixtures/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
-    "compiler/test-fixtures/HintTraceNative.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
+    "test/fixtures/compiler/HintTraceAudit.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
+    "test/fixtures/compiler/HintTraceNative.hs": {"junit": ["thc.runtime.HintTraceTest"], "python": []},
     "test/haskell-fixtures/CompactRegionsFixtures.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
-    "compiler/test-fixtures/CompactRegionsAudit.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/CompactRegionsNative.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": []},
-    "compiler/test-fixtures/CompactSerializedAudit.hs": {"junit": ["thc.runtime.CompactImagesTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/CompactSerializedNative.hs": {"junit": ["thc.runtime.CompactImagesTest"], "python": []},
+    "test/fixtures/compiler/CompactRegionsAudit.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/CompactRegionsNative.hs": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": []},
+    "test/fixtures/compiler/CompactSerializedAudit.hs": {"junit": ["thc.runtime.CompactImagesTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/CompactSerializedNative.hs": {"junit": ["thc.runtime.CompactImagesTest"], "python": []},
     "src/test/java/thc/runtime/CompactImagesTest.java": {"junit": ["thc.runtime.CompactImagesTest"], "python": []},
     "src/test/java/thc/runtime/ManagedCompactsTest.java": {"junit": ["thc.runtime.ManagedCompactsTest"], "python": []},
     "test/haskell-fixtures/STMFixtures.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": [".github/scripts/test_fast_fixtures.py"]},
-    "compiler/test-fixtures/STMAudit.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/STMNative.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": []},
+    "test/fixtures/compiler/STMAudit.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/STMNative.hs": {"junit": ["thc.runtime.ManagedSTMTest"], "python": []},
     "src/test/java/thc/runtime/ManagedSTMTest.java": {"junit": ["thc.runtime.ManagedSTMTest"], "python": []},
     "test/haskell-fixtures/FloatingRemainderFixtures.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
-    "compiler/test-fixtures/FloatingRemainderAudit.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
-    "compiler/test-fixtures/FloatingRemainderNative.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "test/fixtures/compiler/FloatingRemainderAudit.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
+    "test/fixtures/compiler/FloatingRemainderNative.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
     "examples/THC/InverseHyperbolic.hs": {"junit": ["thc.runtime.FloatingRemainderTest"], "python": []},
     "examples/ThreadInventory.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
-    "compiler/test-fixtures/CallbackIdentityNative.hs": {
+    "test/fixtures/compiler/CallbackIdentityNative.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
-    "compiler/test-fixtures/callback-identity.c": {
+    "test/fixtures/compiler/callback-identity.c": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
-    "compiler/test-fixtures/ThreadInventoryNative.hs": {
+    "test/fixtures/compiler/ThreadInventoryNative.hs": {
       "junit": ["thc.runtime.ThreadInventoryNativeTest"], "python": []
     },
     "test/haskell-fixtures/ThreadInventoryFixtures.hs": {
@@ -1639,10 +1639,10 @@
     },
     "test/haskell-fixtures/ThreadSchedulingFixtures.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "examples/ThreadScheduling.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
-    "compiler/test-fixtures/ThreadSchedulingNative.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
-    "src/main/java/thc/runtime/CoreThreadScheduling.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/SparkResult.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/SetThreadAllocationCounter.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/fixtures/compiler/ThreadSchedulingNative.hs": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
+    "src/main/java/thc/runtime/CoreThreadScheduling.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/SparkResult.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/SetThreadAllocationCounter.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/ThreadDelayToken.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/DelayThread.java": {"junit": ["thc.runtime.ThreadSchedulingTest"], "python": []},
     "src/main/java/thc/runtime/GuestAllocationAccounting.java": {"junit": ["thc.runtime.ThreadSchedulingTest", "thc.runtime.GuestThreadsTest"], "python": []},
@@ -1650,11 +1650,11 @@
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
-    "compiler/test-fixtures/AlignedScalarMemoryAudit.hs": {
+    "test/fixtures/compiler/AlignedScalarMemoryAudit.hs": {
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
-    "compiler/test-fixtures/AlignedScalarMemoryNative.hs": {
+    "test/fixtures/compiler/AlignedScalarMemoryNative.hs": {
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
@@ -1662,14 +1662,14 @@
       "junit": ["thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
-    "test/haskell-fixtures/IntegerCompletionFixtures.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/IntegerCompletionAudit.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/java/thc/runtime/IntegerCompletionTest.java": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/UnalignedScalarMemoryAudit.hs": {
+    "test/haskell-fixtures/IntegerCompletionFixtures.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/IntegerCompletionAudit.hs": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/java/thc/runtime/IntegerCompletionTest.java": {"junit": ["thc.runtime.IntegerCompletionTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/UnalignedScalarMemoryAudit.hs": {
       "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
-    "compiler/test-fixtures/UnalignedScalarMemoryNative.hs": {
+    "test/fixtures/compiler/UnalignedScalarMemoryNative.hs": {
       "junit": ["thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
@@ -1678,45 +1678,45 @@
       "python": []
     },
     "test/haskell-fixtures/AddressArrayCopyFixtures.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
-    "compiler/test-fixtures/AddressArrayCopyAudit.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
-    "compiler/test-fixtures/AddressArrayCopyNative.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
+    "test/fixtures/compiler/AddressArrayCopyAudit.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
+    "test/fixtures/compiler/AddressArrayCopyNative.hs": {"junit": ["thc.runtime.AddressArrayCopyTest"], "python": []},
     "test/haskell-fixtures/FloatDecodeFixtures.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
-    "compiler/test-fixtures/FloatDecodeAudit.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
-    "compiler/test-fixtures/FloatDecodeNative.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
+    "test/fixtures/compiler/FloatDecodeAudit.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
+    "test/fixtures/compiler/FloatDecodeNative.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
     "examples/THC/FloatDecode.hs": {"junit": ["thc.runtime.FloatDecodeTest"], "python": []},
     "test/haskell-fixtures/ScalarBitCastFixtures.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/PinnedAddressFixtures.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
-    "compiler/test-fixtures/PinnedAddressAudit.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
-    "compiler/test-fixtures/PinnedAddressAuditNative.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
+    "test/fixtures/compiler/PinnedAddressAudit.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
+    "test/fixtures/compiler/PinnedAddressAuditNative.hs": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
     "src/test/java/thc/runtime/PinnedAddressTest.java": {"junit": ["thc.runtime.PinnedAddressTest"], "python": []},
-    "test/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/BigNatLiteralAuditNative.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/java/thc/runtime/BigNatLiteralTest.java": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ScalarBitCastAudit.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
-    "compiler/test-fixtures/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
+    "test/haskell-fixtures/BigNatLiteralFixtures.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/BigNatLiteralAudit.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/BigNatLiteralAuditNative.hs": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/java/thc/runtime/BigNatLiteralTest.java": {"junit": ["thc.runtime.BigNatLiteralTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ScalarBitCastAudit.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
+    "test/fixtures/compiler/ScalarBitCastNative.hs": {"junit": ["thc.runtime.ScalarBitCastTest"], "python": []},
     "test/haskell-fixtures/RtsShutdownFixtures.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
-    "compiler/test-fixtures/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
-    "src/main/java/thc/ManagedImportAdmission.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/test/java/thc/ManagedImportStubsNativeTest.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ImportStubsNative.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/OriginalTcsetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
-    "compiler/test-fixtures/OriginalSigprocmaskAudit.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "compiler/test-fixtures/OriginalSigprocmaskNative.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
+    "test/fixtures/compiler/RtsShutdownNative.hs": {"junit": ["thc.runtime.RtsShutdownTest"], "python": []},
+    "src/main/java/thc/ManagedImportAdmission.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
+    "src/test/java/thc/ManagedImportStubsNativeTest.java": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
+    "src/compiler/THC/ForeignImportProvenance.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ForeignImportStubs.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ImportStubsNative.hs": {"junit": ["thc.ManagedImportStubsNativeTest"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/OriginalTcsetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
+    "test/fixtures/compiler/OriginalSigprocmaskAudit.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
+    "test/fixtures/compiler/OriginalSigprocmaskNative.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "src/main/c/native-signal-api.c": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
     "src/main/java/thc/runtime/ManagedSignalMask.java": {"junit": ["thc.runtime.OriginalSigprocmaskTest"], "python": []},
-    "compiler/test-fixtures/OriginalTcgetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
-    "compiler/test-fixtures/OriginalTcsetattrNative.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
-    "compiler/test-fixtures/OriginalTcgetattrNative.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
+    "test/fixtures/compiler/OriginalTcgetattrAudit.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
+    "test/fixtures/compiler/OriginalTcsetattrNative.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
+    "test/fixtures/compiler/OriginalTcgetattrNative.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
     "test/haskell-fixtures/OriginalTcsetattrFixtures.hs": {"junit": ["thc.runtime.OriginalTcsetattrTest"], "python": []},
     "test/haskell-fixtures/OriginalTcgetattrFixtures.hs": {"junit": ["thc.runtime.OriginalTcgetattrTest"], "python": []},
-    "compiler/test-fixtures/OriginalSigsetAudit.hs": {
+    "test/fixtures/compiler/OriginalSigsetAudit.hs": {
       "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalSigsetNative.hs": {
+    "test/fixtures/compiler/OriginalSigsetNative.hs": {
       "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
     },
     "test/haskell-fixtures/OriginalSigsetFixtures.hs": {
@@ -1728,46 +1728,46 @@
     "src/main/c/sigset-abi-probe.c": {
       "junit": ["thc.runtime.OriginalSigsetTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalSavedTermiosAudit.hs": {
+    "test/fixtures/compiler/OriginalSavedTermiosAudit.hs": {
       "junit": ["thc.runtime.OriginalSavedTermiosTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalSavedTermiosNative.hs": {
+    "test/fixtures/compiler/OriginalSavedTermiosNative.hs": {
       "junit": ["thc.runtime.OriginalSavedTermiosTest"], "python": []
     },
     "src/main/java/thc/runtime/SavedTermios.java": {
       "junit": ["thc.runtime.SavedTermiosTest", "thc.runtime.OriginalSavedTermiosTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalFcntlAudit.hs": {
+    "test/fixtures/compiler/OriginalFcntlAudit.hs": {
       "junit": ["thc.runtime.OriginalFcntlTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalErrnoAudit.hs": {
+    "test/fixtures/compiler/OriginalErrnoAudit.hs": {
       "junit": ["thc.runtime.OriginalErrnoTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalProcessIdentityAudit.hs": {
+    "test/fixtures/compiler/OriginalProcessIdentityAudit.hs": {
       "junit": ["thc.runtime.OriginalProcessIdentityTest"], "python": []
     },
     "src/test/java/thc/runtime/OriginalErrnoTest.java": {
-      "junit": ["thc.runtime.OriginalErrnoTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalErrnoTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/java/thc/runtime/OriginalProcessIdentityTest.java": {
-      "junit": ["thc.runtime.OriginalProcessIdentityTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalProcessIdentityTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ProcessIdentity.java": {
-      "junit": ["thc.runtime.OriginalProcessIdentityTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalProcessIdentityTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalFcntlNative.hs": {
+    "test/fixtures/compiler/OriginalFcntlNative.hs": {
       "junit": ["thc.runtime.OriginalFcntlTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalErrnoNative.hs": {
+    "test/fixtures/compiler/OriginalErrnoNative.hs": {
       "junit": ["thc.runtime.OriginalErrnoTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalProcessIdentityNative.hs": {
+    "test/fixtures/compiler/OriginalProcessIdentityNative.hs": {
       "junit": ["thc.runtime.OriginalProcessIdentityTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalTermiosAudit.hs": {
+    "test/fixtures/compiler/OriginalTermiosAudit.hs": {
       "junit": ["thc.runtime.OriginalTermiosTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalTermiosNative.hs": {
+    "test/fixtures/compiler/OriginalTermiosNative.hs": {
       "junit": ["thc.runtime.OriginalTermiosTest"], "python": []
     },
     "test/haskell-fixtures/OriginalTermiosFixtures.hs": {
@@ -1779,10 +1779,10 @@
     "src/main/c/termios-abi-probe.c": {
       "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.TermiosAbiTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalOpenAudit.hs": {
+    "test/fixtures/compiler/OriginalOpenAudit.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalOpenRequestNative.hs": {
+    "test/fixtures/compiler/OriginalOpenRequestNative.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
     "src/main/c/native-open-request.c": {
@@ -1791,7 +1791,7 @@
     "src/main/java/thc/runtime/NativeOpenOperation.java": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalOpenNative.hs": {
+    "test/fixtures/compiler/OriginalOpenNative.hs": {
       "junit": ["thc.runtime.OriginalOpenTest"], "python": []
     },
     "test/haskell-fixtures/OriginalOpenFixtures.hs": {
@@ -1803,7 +1803,7 @@
     "src/main/java/thc/runtime/RtsDiagnosticExpression.java": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
     },
-    "compiler/test-fixtures/RtsDiagnosticsNative.hs": {
+    "test/fixtures/compiler/RtsDiagnosticsNative.hs": {
       "junit": ["thc.runtime.RtsDiagnosticsTest"], "python": []
     },
     "test/haskell-fixtures/RtsDiagnosticFixtures.hs": {
@@ -1812,64 +1812,64 @@
     "src/main/java/thc/runtime/RtsFileLocks.java": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalRtsLocksAudit.hs": {
+    "test/fixtures/compiler/OriginalRtsLocksAudit.hs": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"], "python": []
     },
     "test/haskell-fixtures/OriginalRtsLocksFixtures.hs": {
       "junit": ["thc.runtime.OriginalRtsLocksTest"], "python": []
     },
     "src/main/c/strerror-locale.c": {
-      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": ["scripts/test-build-cbits.py"]
+      "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": ["bin/test-build-cbits.py"]
     },
     "src/main/java/thc/runtime/ManagedStrerror.java": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStrerrorNative.hs": {
+    "test/fixtures/compiler/OriginalStrerrorNative.hs": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },
     "test/haskell-fixtures/OriginalStrerrorFixtures.hs": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalFdReadyAudit.hs": {
+    "test/fixtures/compiler/OriginalFdReadyAudit.hs": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalFdReadyAuditNative.hs": {
+    "test/fixtures/compiler/OriginalFdReadyAuditNative.hs": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"], "python": []
     },
     "test/haskell-fixtures/OriginalFdReadyFixtures.hs": {
       "junit": ["thc.runtime.OriginalFdReadyNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStdioTruncateAudit.hs": {
+    "test/fixtures/compiler/OriginalStdioTruncateAudit.hs": {
       "junit": ["thc.runtime.OriginalStdioTruncateNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStdioTruncateAuditNative.hs": {
+    "test/fixtures/compiler/OriginalStdioTruncateAuditNative.hs": {
       "junit": ["thc.runtime.OriginalStdioTruncateNativeTest"], "python": []
     },
     "test/haskell-fixtures/OriginalStdioTruncateFixtures.hs": {
       "junit": ["thc.runtime.OriginalStdioTruncateNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStdioSeekAudit.hs": {
+    "test/fixtures/compiler/OriginalStdioSeekAudit.hs": {
       "junit": ["thc.runtime.OriginalStdioSeekNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStdioSeekAuditNative.hs": {
+    "test/fixtures/compiler/OriginalStdioSeekAuditNative.hs": {
       "junit": ["thc.runtime.OriginalStdioSeekNativeTest"], "python": []
     },
     "test/haskell-fixtures/OriginalStdioSeekFixtures.hs": {
       "junit": ["thc.runtime.OriginalStdioSeekNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalPosixDupAudit.hs": {
+    "test/fixtures/compiler/OriginalPosixDupAudit.hs": {
       "junit": ["thc.runtime.OriginalPosixDupNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalPosixDupAuditNative.hs": {
+    "test/fixtures/compiler/OriginalPosixDupAuditNative.hs": {
       "junit": ["thc.runtime.OriginalPosixDupNativeTest"], "python": []
     },
     "test/haskell-fixtures/OriginalPosixDupFixtures.hs": {
       "junit": ["thc.runtime.OriginalPosixDupNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStdioCloseAudit.hs": {
+    "test/fixtures/compiler/OriginalStdioCloseAudit.hs": {
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalStdioCloseAuditNative.hs": {
+    "test/fixtures/compiler/OriginalStdioCloseAuditNative.hs": {
       "junit": ["thc.runtime.OriginalStdioCloseNativeTest"], "python": []
     },
     "test/haskell-fixtures/OriginalStdioCloseFixtures.hs": {
@@ -1949,11 +1949,11 @@
       "junit": ["thc.runtime.UnixWaitStatusTest", "thc.runtime.OriginalUnlinkTest", "thc.runtime.OriginalTcsetattrTest", "thc.runtime.OriginalTcgetattrTest", "thc.runtime.OriginalSigprocmaskTest", "thc.runtime.OriginalSigsetTest", "thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest", "thc.runtime.TermiosAbiTest", "thc.runtime.OriginalOpenTest", "thc.runtime.OriginalRtsLocksTest", "thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixDupNativeTest", "thc.runtime.ManagedDescriptorDupTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFdReadyNativeTest", "thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.CoreOriginalStdioTest", "thc.runtime.OriginalStdioCallTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest", "thc.runtime.OriginalHandleReadinessNativeTest", "thc.runtime.OriginalStdioCloseNativeTest", "thc.runtime.OriginalStdioSeekNativeTest", "thc.runtime.OriginalStdioTruncateNativeTest", "thc.runtime.OriginalStrerrorNativeTest", "thc.runtime.GuestThreadsTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStdioReadAudit.hs": {
+    "test/fixtures/compiler/OriginalStdioReadAudit.hs": {
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStdioReadNative.hs": {
+    "test/fixtures/compiler/OriginalStdioReadNative.hs": {
       "junit": ["thc.runtime.OriginalStdioReadTest"],
       "python": []
     },
@@ -1961,7 +1961,7 @@
       "junit": ["thc.runtime.OriginalFcntlTest", "thc.runtime.OriginalErrnoTest", "thc.runtime.OriginalProcessIdentityTest", "thc.runtime.OriginalStdioNativeTest", "thc.runtime.OriginalStdioReadTest"],
       "python": []
     },
-    "compiler/interface/Main.hs": {
+    "src/compiler/interface/Main.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "test/haskell-fixtures/InterfaceFixtures.hs": {
@@ -1970,32 +1970,32 @@
     "test/haskell-fixtures/InstalledCacheFixtures.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
-    "compiler/test-fixtures/InterfaceCacheRoot.hs": {
+    "test/fixtures/compiler/InterfaceCacheRoot.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
-    "compiler/test-fixtures/InterfaceCacheDependency.hs": {
+    "test/fixtures/compiler/InterfaceCacheDependency.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
-    "compiler/test-fixtures/InterfaceLibrary.hs": {
+    "test/fixtures/compiler/InterfaceLibrary.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
-    "compiler/test-fixtures/InterfaceNative.hs": {
+    "test/fixtures/compiler/InterfaceNative.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
-    "compiler/test-fixtures/InterfaceForeign.hs": {
+    "test/fixtures/compiler/InterfaceForeign.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
-    "compiler/test-fixtures/InterfaceForeignAlias.hs": {
+    "test/fixtures/compiler/InterfaceForeignAlias.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": []
     },
     "test/haskell-fixtures/InterfaceForeignFacts.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.ManagedImportStubsNativeTest"], "python": []
     },
-    "compiler/test-fixtures/LiveAsyncAudit.hs": {
+    "test/fixtures/compiler/LiveAsyncAudit.hs": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/LiveAsyncNative.hs": {
+    "test/fixtures/compiler/LiveAsyncNative.hs": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
     },
@@ -2003,67 +2003,67 @@
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStackFormatter.hs": {
+    "test/fixtures/compiler/OriginalStackFormatter.hs": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStackFormatterNative.hs": {
+    "test/fixtures/compiler/OriginalStackFormatterNative.hs": {
       "junit": ["thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
-    "scripts/prepare-boxed-arrays.py": {
+    "bin/prepare-boxed-arrays.py": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/BoxedArrayAudit.hs": {
+    "test/fixtures/compiler/BoxedArrayAudit.hs": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest"],
       "python": []
     },
-    "scripts/prepare-floating-audit.py": {
+    "bin/prepare-floating-audit.py": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest"],
       "python": []
     },
-    "compiler/test-fixtures/FloatingAudit.hs": {
+    "test/fixtures/compiler/FloatingAudit.hs": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest", "thc.runtime.FusedFloatingTest"],
       "python": []
     },
-    "compiler/test-fixtures/FloatingAuditNative.hs": {
+    "test/fixtures/compiler/FloatingAuditNative.hs": {
       "junit": ["thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest", "thc.runtime.FusedFloatingTest"],
       "python": []
     },
-    "compiler/test-fixtures/SimdCallAudit.hs": {
+    "test/fixtures/compiler/SimdCallAudit.hs": {
       "junit": ["thc.runtime.SimdCallNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/SimdCallNative.hs": {
+    "test/fixtures/compiler/SimdCallNative.hs": {
       "junit": ["thc.runtime.SimdCallNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/SimdFloatFma.hs": {
+    "test/fixtures/compiler/SimdFloatFma.hs": {
       "junit": ["thc.runtime.SimdFloatFmaTest"],
       "python": []
     },
-    "compiler/test-fixtures/SimdFloatFmaNative.hs": {
+    "test/fixtures/compiler/SimdFloatFmaNative.hs": {
       "junit": ["thc.runtime.SimdFloatFmaTest"],
       "python": []
     },
-    "compiler/test-fixtures/SimdWideFloatFma.hs": {
+    "test/fixtures/compiler/SimdWideFloatFma.hs": {
       "junit": ["thc.runtime.SimdWideFloatFmaTest"],
       "python": []
     },
-    "compiler/test-fixtures/SimdWideFloatFmaNative.hs": {
+    "test/fixtures/compiler/SimdWideFloatFmaNative.hs": {
       "junit": ["thc.runtime.SimdWideFloatFmaTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStackAudit.hs": {
+    "test/fixtures/compiler/OriginalStackAudit.hs": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStackAuditNative.hs": {
+    "test/fixtures/compiler/OriginalStackAuditNative.hs": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalStackProof.json": {
+    "test/fixtures/compiler/OriginalStackProof.json": {
       "junit": ["thc.runtime.OriginalStackConsumerProofTest", "thc.runtime.OriginalStackDecoderCallTest"],
       "python": []
     },
@@ -2075,36 +2075,36 @@
       "junit": ["thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest", "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest", "thc.runtime.ReturnedForeignPointerTest"],
       "python": []
     },
-    "compiler/test-fixtures/BoxedArrayExtensionsAudit.hs": {
+    "test/fixtures/compiler/BoxedArrayExtensionsAudit.hs": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
     },
-    "compiler/test-fixtures/BoxedCasAudit.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
-    "compiler/test-fixtures/BoxedCasNative.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
+    "test/fixtures/compiler/BoxedCasAudit.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
+    "test/fixtures/compiler/BoxedCasNative.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
     "examples/THC/BoxedCasCounter.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
     "test/haskell-fixtures/BoxedCasFixtures.hs": {"junit": ["thc.runtime.BoxedCasTest"], "python": []},
-    "compiler/test-fixtures/BoxedArrayExtensionsNative.hs": {
+    "test/fixtures/compiler/BoxedArrayExtensionsNative.hs": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
     },
     "test/haskell-fixtures/BoxedArrayExtensionsFixtures.hs": {
       "junit": ["thc.runtime.BoxedArrayExtensionsTest"], "python": []
     },
-    "compiler/test-fixtures/AddressIdentityAudit.hs": {
+    "test/fixtures/compiler/AddressIdentityAudit.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/AddressIdentityAuditNative.hs": {
+    "test/fixtures/compiler/AddressIdentityAuditNative.hs": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/PinnedPointerCellsAudit.hs": {
+    "test/fixtures/compiler/PinnedPointerCellsAudit.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
-    "compiler/test-fixtures/Explicit64ArrayAudit.hs": {
+    "test/fixtures/compiler/Explicit64ArrayAudit.hs": {
       "junit": ["thc.runtime.Explicit64ArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/Explicit64ArrayNative.hs": {
+    "test/fixtures/compiler/Explicit64ArrayNative.hs": {
       "junit": ["thc.runtime.Explicit64ArrayTest"],
       "python": []
     },
@@ -2112,15 +2112,15 @@
       "junit": ["thc.runtime.Explicit64ArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/FloatingAddressAudit.hs": {
+    "test/fixtures/compiler/FloatingAddressAudit.hs": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
     },
-    "compiler/test-fixtures/AtomicAddressAudit.hs": {
+    "test/fixtures/compiler/AtomicAddressAudit.hs": {
       "junit": ["thc.runtime.AtomicAddressTest"],
       "python": []
     },
-    "compiler/test-fixtures/AtomicAddressNative.hs": {
+    "test/fixtures/compiler/AtomicAddressNative.hs": {
       "junit": ["thc.runtime.AtomicAddressTest"],
       "python": []
     },
@@ -2132,7 +2132,7 @@
       "junit": ["thc.runtime.AtomicAddressTest"],
       "python": []
     },
-    "compiler/test-fixtures/FloatingAddressNative.hs": {
+    "test/fixtures/compiler/FloatingAddressNative.hs": {
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
     },
@@ -2140,11 +2140,11 @@
       "junit": ["thc.runtime.FloatingAddressTest"],
       "python": []
     },
-    "compiler/test-fixtures/FloatingByteOffsetAudit.hs": {
+    "test/fixtures/compiler/FloatingByteOffsetAudit.hs": {
       "junit": ["thc.runtime.FloatingByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/FloatingByteOffsetNative.hs": {
+    "test/fixtures/compiler/FloatingByteOffsetNative.hs": {
       "junit": ["thc.runtime.FloatingByteOffsetTest"],
       "python": []
     },
@@ -2152,11 +2152,11 @@
       "junit": ["thc.runtime.FloatingByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/NarrowByteOffsetAudit.hs": {
+    "test/fixtures/compiler/NarrowByteOffsetAudit.hs": {
       "junit": ["thc.runtime.NarrowByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/NarrowByteOffsetNative.hs": {
+    "test/fixtures/compiler/NarrowByteOffsetNative.hs": {
       "junit": ["thc.runtime.NarrowByteOffsetTest"],
       "python": []
     },
@@ -2164,11 +2164,11 @@
       "junit": ["thc.runtime.NarrowByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/Int32ByteOffsetAudit.hs": {
+    "test/fixtures/compiler/Int32ByteOffsetAudit.hs": {
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/Int32ByteOffsetNative.hs": {
+    "test/fixtures/compiler/Int32ByteOffsetNative.hs": {
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
@@ -2176,11 +2176,11 @@
       "junit": ["thc.runtime.Int32ByteOffsetTest"],
       "python": []
     },
-    "compiler/test-fixtures/ThreadLabelAudit.hs": {
+    "test/fixtures/compiler/ThreadLabelAudit.hs": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ThreadLabelNative.hs": {
+    "test/fixtures/compiler/ThreadLabelNative.hs": {
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "python": []
     },
@@ -2188,11 +2188,11 @@
       "junit": ["thc.runtime.ThreadLabelNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ThreadStatusAudit.hs": {
+    "test/fixtures/compiler/ThreadStatusAudit.hs": {
       "junit": ["thc.runtime.ThreadStatusNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ThreadStatusNative.hs": {
+    "test/fixtures/compiler/ThreadStatusNative.hs": {
       "junit": ["thc.runtime.ThreadStatusNativeTest"],
       "python": []
     },
@@ -2200,19 +2200,19 @@
       "junit": ["thc.runtime.ThreadStatusNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ThreadAsyncAudit.hs": {
+    "test/fixtures/compiler/ThreadAsyncAudit.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ThreadAsyncNative.hs": {
+    "test/fixtures/compiler/ThreadAsyncNative.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/LazyForkAudit.hs": {
+    "test/fixtures/compiler/LazyForkAudit.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/LazyForkNative.hs": {
+    "test/fixtures/compiler/LazyForkNative.hs": {
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
@@ -2220,11 +2220,11 @@
       "junit": ["thc.runtime.ThreadAsyncNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/UncaughtSelfAudit.hs": {
+    "test/fixtures/compiler/UncaughtSelfAudit.hs": {
       "junit": ["thc.runtime.UncaughtSelfNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/UncaughtSelfNative.hs": {
+    "test/fixtures/compiler/UncaughtSelfNative.hs": {
       "junit": ["thc.runtime.UncaughtSelfNativeTest"],
       "python": []
     },
@@ -2232,31 +2232,31 @@
       "junit": ["thc.runtime.UncaughtSelfNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/PinnedPointerCellsNative.hs": {
+    "test/fixtures/compiler/PinnedPointerCellsNative.hs": {
       "junit": ["thc.runtime.PinnedPointerCellsTest"],
       "python": []
     },
-    "compiler/test-fixtures/WideCharAddressAudit.hs": {
+    "test/fixtures/compiler/WideCharAddressAudit.hs": {
       "junit": ["thc.runtime.WideCharAddressTest"],
       "python": []
     },
-    "compiler/test-fixtures/WideCharAddressNative.hs": {
+    "test/fixtures/compiler/WideCharAddressNative.hs": {
       "junit": ["thc.runtime.WideCharAddressTest"],
       "python": []
     },
-    "compiler/test-fixtures/SmallArrayAudit.hs": {
+    "test/fixtures/compiler/SmallArrayAudit.hs": {
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/SmallArrayAuditNative.hs": {
+    "test/fixtures/compiler/SmallArrayAuditNative.hs": {
       "junit": ["thc.runtime.SmallArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/ScalarMemoryUtilities.hs": {
+    "test/fixtures/compiler/ScalarMemoryUtilities.hs": {
       "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
-    "compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs": {
+    "test/fixtures/compiler/ScalarMemoryUtilitiesNative.hs": {
       "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
@@ -2264,7 +2264,7 @@
       "junit": ["thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
-    "scripts/prepare-address-identity.sh": {
+    "bin/prepare-address-identity.sh": {
       "junit": ["thc.runtime.AddressIdentityNativeTest"],
       "python": []
     },
@@ -2329,26 +2329,26 @@
       ],
       "python": []
     },
-    "compiler/test-fixtures/IoMainPapAudit.hs": {
+    "test/fixtures/compiler/IoMainPapAudit.hs": {
       "junit": [
         "thc.runtime.IoMainPapNativeTest"
       ],
       "python": [
-        "scripts/test-audit-core.py"
+        "bin/test-audit-core.py"
       ]
     },
-    "compiler/test-fixtures/IoMainPapNative.hs": {
+    "test/fixtures/compiler/IoMainPapNative.hs": {
       "junit": [
         "thc.runtime.IoMainPapNativeTest"
       ],
       "python": []
     },
-    "scripts/prepare-io-main-pap.py": {
+    "bin/prepare-io-main-pap.py": {
       "junit": [
         "thc.runtime.IoMainPapNativeTest"
       ],
       "python": [
-        "scripts/test-audit-core.py"
+        "bin/test-audit-core.py"
       ]
     },
     "app/Main.hs": {
@@ -2356,17 +2356,17 @@
       "python": [],
       "haskell": ["driver-tests"]
     },
-    "src/THC/Driver/Cabal.hs": {
+    "src/driver/THC/Driver/Cabal.hs": {
       "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
     },
-    "src/THC/Driver/Json.hs": {
+    "src/driver/THC/Driver/Json.hs": {
       "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
     },
-    "src/THC/Driver/Run.hs": {
+    "src/driver/THC/Driver/Run.hs": {
       "junit": [],
       "python": [],
       "haskell": ["driver-tests"]
@@ -2416,25 +2416,25 @@
       "python": [],
       "haskell": ["driver-tests"]
     },
-    "compiler/test-fixtures/BitPrimopsAudit.hs": {
+    "test/fixtures/compiler/BitPrimopsAudit.hs": {
       "junit": [
         "thc.runtime.BitPrimopsTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/CBVAudit.hs": {
+    "test/fixtures/compiler/CBVAudit.hs": {
       "junit": [
         "thc.RealCoreEntryContractTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/CBVJoinAudit.hs": {
+    "test/fixtures/compiler/CBVJoinAudit.hs": {
       "junit": [
         "thc.RealCoreEntryContractTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/CBVCoercionAudit.hs": {
+    "test/fixtures/compiler/CBVCoercionAudit.hs": {
       "junit": [
         "thc.runtime.InterfaceCoreNativeTest",
         "thc.RealCoreEntryContractTest",
@@ -2444,85 +2444,85 @@
       ],
       "python": []
     },
-    "compiler/test-fixtures/DataToTagAudit.hs": {
+    "test/fixtures/compiler/DataToTagAudit.hs": {
       "junit": [
         "thc.runtime.DataToTagTest"
       ],
       "python": [
-        "scripts/test-core-data-tags.py"
+        "bin/test-core-data-tags.py"
       ]
     },
-    "compiler/test-fixtures/DemandAudit.hs": {
+    "test/fixtures/compiler/DemandAudit.hs": {
       "junit": [
         "thc.RealCoreEntryContractTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/Explicit64PrimopsAudit.hs": {
+    "test/fixtures/compiler/Explicit64PrimopsAudit.hs": {
       "junit": [
         "thc.runtime.Explicit64PrimopsTest",
         "thc.runtime.ScalarPrimitiveSignatureTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/Int8ArrayAudit.hs": {
+    "test/fixtures/compiler/Int8ArrayAudit.hs": {
       "junit": [
         "thc.runtime.Int8ArrayNativeTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/Int16ArrayAudit.hs": {
+    "test/fixtures/compiler/Int16ArrayAudit.hs": {
       "junit": [
         "thc.runtime.Int16ArrayNativeTest",
         "thc.runtime.Int16BoundaryCompilationTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/Int32ArrayAudit.hs": {
+    "test/fixtures/compiler/Int32ArrayAudit.hs": {
       "junit": [
         "thc.runtime.Int32ArrayNativeTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/IntegerPrimopsAudit.hs": {
+    "test/fixtures/compiler/IntegerPrimopsAudit.hs": {
       "junit": [
         "thc.IntegerPrimopsTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/MutableByteArraySizeAudit.hs": {
+    "test/fixtures/compiler/MutableByteArraySizeAudit.hs": {
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/MutableByteArraySizeNative.hs": {
+    "test/fixtures/compiler/MutableByteArraySizeNative.hs": {
       "junit": ["thc.runtime.MutableByteArraySizeTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/ResizeByteArrayAudit.hs": {
+    "test/fixtures/compiler/ResizeByteArrayAudit.hs": {
       "junit": ["thc.runtime.ResizeByteArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/ResizeByteArrayNative.hs": {
+    "test/fixtures/compiler/ResizeByteArrayNative.hs": {
       "junit": ["thc.runtime.ResizeByteArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/ByteArrayFixtureInputs.hs": {
+    "test/fixtures/compiler/ByteArrayFixtureInputs.hs": {
       "junit": ["thc.runtime.MutableByteArraySizeTest", "thc.runtime.ResizeByteArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/SignedNarrowPrimopsAudit.hs": {
+    "test/fixtures/compiler/SignedNarrowPrimopsAudit.hs": {
       "junit": [
         "thc.SignedNarrowPrimopsTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/TupleInputAudit.hs": {
+    "test/fixtures/compiler/TupleInputAudit.hs": {
       "junit": [
         "thc.runtime.TupleInputNativeTest"
       ],
       "python": []
     },
-    "compiler/test-fixtures/TupleInputAuditNative.hs": {
+    "test/fixtures/compiler/TupleInputAuditNative.hs": {
       "junit": [
         "thc.runtime.TupleInputNativeTest"
       ],
@@ -2580,19 +2580,19 @@
       ],
       "python": []
     },
-    "scripts/check-cbv-metadata.py": {
+    "bin/check-cbv-metadata.py": {
       "junit": [
         "thc.RealCoreEntryContractTest"
       ],
       "python": []
     },
-    "scripts/check-demand-metadata.py": {
+    "bin/check-demand-metadata.py": {
       "junit": [
         "thc.RealCoreEntryContractTest"
       ],
       "python": []
     },
-    "scripts/native-oracle.sh": {
+    "bin/native-oracle.sh": {
       "junit": [
         "thc.FastSmokeTest",
         "thc.RuntimeTest",
@@ -2600,64 +2600,64 @@
       ],
       "python": []
     },
-    "scripts/generate-simd-families.py": {
+    "bin/generate-simd-families.py": {
       "junit": [
         "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
       "python": [
-        "scripts/test-simd-families.py"
+        "bin/test-simd-families.py"
       ]
     },
-    "scripts/prepare-data-to-tag.py": {
+    "bin/prepare-data-to-tag.py": {
       "junit": [
         "thc.runtime.DataToTagTest"
       ],
       "python": [
-        "scripts/test-core-data-tags.py"
+        "bin/test-core-data-tags.py"
       ]
     },
     "test/haskell-fixtures/ByteArrayFixtures.hs": {
       "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
     "src/test/java/thc/runtime/ByteArrayFixtureEvidence.java": {
       "junit": ["thc.runtime.ByteArrayTest", "thc.runtime.MutableByteArrayTest", "thc.runtime.ResizeByteArrayTest", "thc.runtime.MutableByteArraySizeTest", "thc.runtime.CompareByteArraysTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/ByteArrayAudit.hs": {
+    "test/fixtures/compiler/ByteArrayAudit.hs": {
       "junit": ["thc.runtime.ByteArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/MutableByteArrayAudit.hs": {
+    "test/fixtures/compiler/MutableByteArrayAudit.hs": {
       "junit": ["thc.runtime.MutableByteArrayTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "compiler/test-fixtures/CompareByteArraysAudit.hs": {
+    "test/fixtures/compiler/CompareByteArraysAudit.hs": {
       "junit": ["thc.runtime.CompareByteArraysTest"],
-      "python": ["scripts/test-core-bytearrays.py"]
+      "python": ["bin/test-core-bytearrays.py"]
     },
-    "scripts/prepare-simd-capability-smoke.py": {
+    "bin/prepare-simd-capability-smoke.py": {
       "junit": [
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
       "python": [
-        "scripts/test-simd-families.py"
+        "bin/test-simd-families.py"
       ]
     },
-    "scripts/prepare-simd-families.py": {
+    "bin/prepare-simd-families.py": {
       "junit": [],
       "python": [
-        "scripts/test-simd-families.py"
+        "bin/test-simd-families.py"
       ]
     },
-    "scripts/prepare-tuple-input-audit.py": {
+    "bin/prepare-tuple-input-audit.py": {
       "junit": [
         "thc.runtime.TupleInputNativeTest"
       ],
       "python": []
     },
-    "scripts/simd-families.json": {
+    "bin/simd-families.json": {
       "junit": [
         "thc.runtime.SimdArithmeticTest",
         "thc.runtime.SimdWideArrayNativeTest",
@@ -2667,13 +2667,13 @@
         "thc.runtime.SimdCapabilitySmokeTest"
       ],
       "python": [
-        "scripts/test-simd-families.py"
+        "bin/test-simd-families.py"
       ]
     },
-    "scripts/simd_family_model.py": {
+    "bin/simd_family_model.py": {
       "junit": [],
       "python": [
-        "scripts/test-simd-families.py"
+        "bin/test-simd-families.py"
       ]
     },
     "src/test/java/thc/runtime/Simd128ArrayProofTest.java": {
@@ -2818,15 +2818,15 @@
     },
     "test/haskell-fixtures/IntegerSimdFixtures.hs": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "python": ["scripts/test-core-vectors.py"]
+      "python": ["bin/test-core-vectors.py"]
     },
     "src/test/java/thc/runtime/IntegerSimdModelTest.java": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "python": ["scripts/test-core-vectors.py"]
+      "python": ["bin/test-core-vectors.py"]
     },
     "src/test/java/thc/runtime/IntegerSimdModel.java": {
       "junit": ["thc.runtime.IntegerSimdModelTest", "thc.runtime.SimdInt8VectorTest", "thc.runtime.SimdInt16VectorTest", "thc.runtime.SimdWord16VectorTest", "thc.runtime.SimdWord32VectorTest"],
-      "python": ["scripts/test-core-vectors.py"]
+      "python": ["bin/test-core-vectors.py"]
     },
     "test/haskell-fixtures/SimdAddressFixtures.hs": {
       "junit": ["thc.runtime.SimdAddressFamiliesTest"],
@@ -2951,55 +2951,55 @@
       "python": []
     },
     "test/haskell-fixtures/LibdwUnavailableFixtures.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
-    "compiler/test-fixtures/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
-    "src/main/java/thc/runtime/CoreLibdwForeign.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/LibdwForeignOp.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/fixtures/compiler/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/main/java/thc/runtime/CoreLibdwForeign.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/LibdwForeignOp.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["bin/test-audit-core.py"]},
     "src/main/java/thc/runtime/OriginalLibdwExpression.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
-    "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
+    "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["bin/test-audit-core.py"]},
     "test/haskell-fixtures/NativeAddressFixtures.hs": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
-    "compiler/test-fixtures/NativeAddressNative.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
-    "compiler/test-fixtures/NativeMallocNative.hs": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
+    "test/fixtures/compiler/NativeAddressNative.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
+    "test/fixtures/compiler/NativeMallocNative.hs": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeMallocAllocation.java": {"junit": ["thc.runtime.NativeFileBuffersTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/test/resources/core/original-malloc-descriptors.json": {"junit": ["thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeAddresses.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeReadOnlyImage.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "src/main/java/thc/runtime/NativeReadOnlyPointer.java": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
-    "test/haskell-fixtures/ByteStringUtf8Fixtures.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ByteStringUtf8Audit.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/ByteStringUtf8Native.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/CoreByteStringUtf8Foreign.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ByteStringUtf8Expression.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/ManagedByteStringUtf8.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/c/bytestring-utf8-api.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "compiler/pinned-bytestring/0.12.2.0/cbits/is-valid-utf8.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
+    "test/haskell-fixtures/ByteStringUtf8Fixtures.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ByteStringUtf8Audit.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/ByteStringUtf8Native.hs": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/CoreByteStringUtf8Foreign.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ByteStringUtf8Expression.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/ManagedByteStringUtf8.java": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "src/main/c/bytestring-utf8-api.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c": {"junit": ["thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
     "test/haskell-fixtures/MemsetFixtures.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "compiler/test-fixtures/OriginalMemsetAudit.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "compiler/test-fixtures/OriginalMemsetNative.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
-    "src/main/java/thc/runtime/CoreMemsetForeign.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemsetExpression.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/fixtures/compiler/OriginalMemsetAudit.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
+    "test/fixtures/compiler/OriginalMemsetNative.hs": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": []},
+    "src/main/java/thc/runtime/CoreMemsetForeign.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemsetExpression.java": {"junit": ["thc.runtime.OriginalMemsetTest"], "python": ["bin/test-audit-core.py"]},
     "test/haskell-fixtures/MemorySearchFixtures.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "compiler/test-fixtures/OriginalMemorySearchAudit.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "compiler/test-fixtures/OriginalMemorySearchNative.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
-    "src/main/java/thc/runtime/CoreMemorySearchForeign.java": {"junit": ["thc.runtime.OriginalMemorySearchTest", "thc.runtime.OriginalMemsetTest", "thc.runtime.OriginalStringRtsTest", "thc.runtime.ByteStringDecimalTest", "thc.runtime.ByteStringSortTest", "thc.runtime.ByteStringUtf8Test"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemorySearchOp.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/java/thc/runtime/MemorySearchExpression.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["scripts/test-audit-core.py"]},
+    "test/fixtures/compiler/OriginalMemorySearchAudit.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
+    "test/fixtures/compiler/OriginalMemorySearchNative.hs": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": []},
+    "src/main/java/thc/runtime/CoreMemorySearchForeign.java": {"junit": ["thc.runtime.OriginalMemorySearchTest", "thc.runtime.OriginalMemsetTest", "thc.runtime.OriginalStringRtsTest", "thc.runtime.ByteStringDecimalTest", "thc.runtime.ByteStringSortTest", "thc.runtime.ByteStringUtf8Test"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemorySearchOp.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["bin/test-audit-core.py"]},
+    "src/main/java/thc/runtime/MemorySearchExpression.java": {"junit": ["thc.runtime.OriginalMemorySearchTest"], "python": ["bin/test-audit-core.py"]},
     "test/haskell-fixtures/OriginalGmpFixtures.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalGmpAudit.hs": {
+    "test/fixtures/compiler/OriginalGmpAudit.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalGmpNative.hs": {
+    "test/fixtures/compiler/OriginalGmpNative.hs": {
       "junit": ["thc.runtime.OriginalGmpTest"], "python": []
     },
     "src/main/java/thc/runtime/CoreGmpForeign.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/GmpForeignOp.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/GmpForm.java": {
-      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/main/java/thc/runtime/ManagedGmp.java": {
       "junit": ["thc.runtime.SulongLimbProviderTest", "thc.runtime.OriginalGmpTest"], "python": []
@@ -3018,89 +3018,89 @@
       "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
     "src/test/java/thc/runtime/OriginalPathStatTest.java": {
-      "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/java/thc/runtime/OriginalPathModeTest.java": {
-      "junit": ["thc.runtime.OriginalPathModeTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathModeTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/java/thc/runtime/OriginalPathLinkTest.java": {
-      "junit": ["thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/java/thc/runtime/OriginalUnlinkAtTest.java": {
-      "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/java/thc/runtime/NativeDirectoryFileSystemTest.java": {"junit":["thc.runtime.NativeDirectoryFileSystemTest"],"python":[]},
-    "src/test/java/thc/runtime/OriginalDirectoryPathsTest.java": {"junit":["thc.runtime.OriginalDirectoryPathsTest"],"python":["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/OriginalDirectoryPathsAudit.hs": {"junit":["thc.runtime.OriginalDirectoryPathsTest"],"python":["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/OriginalDirectoryPathsFixtures.hs": {"junit":["thc.runtime.OriginalDirectoryPathsTest"],"python":["scripts/test-audit-core.py"]},
-    "src/test/java/thc/runtime/OriginalDirectoryStreamsTest.java": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/OriginalDirectoryStreamsAudit.hs": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/OriginalDirectoryPathsTest.java": {"junit":["thc.runtime.OriginalDirectoryPathsTest"],"python":["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/OriginalDirectoryPathsAudit.hs": {"junit":["thc.runtime.OriginalDirectoryPathsTest"],"python":["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/OriginalDirectoryPathsFixtures.hs": {"junit":["thc.runtime.OriginalDirectoryPathsTest"],"python":["bin/test-audit-core.py"]},
+    "src/test/java/thc/runtime/OriginalDirectoryStreamsTest.java": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/OriginalDirectoryStreamsAudit.hs": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/OriginalDirectoryStreamsFixtures.hs": {"junit":["thc.runtime.OriginalDirectoryStreamsTest"],"python":["bin/test-audit-core.py"]},
     "src/test/java/thc/runtime/NativeDirectoryStreamsTest.java": {"junit":["thc.runtime.NativeDirectoryStreamsTest"],"python":[]},
     "src/main/java/thc/runtime/NativeDirectoryStreams.java": {"junit":["thc.runtime.NativeDirectoryStreamsTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":[]},
-    "src/test/java/thc/runtime/OriginalCurrentDirectoryTest.java": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
-    "compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
-    "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["scripts/test-audit-core.py"]},
+    "src/test/java/thc/runtime/OriginalCurrentDirectoryTest.java": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["bin/test-audit-core.py"]},
+    "test/fixtures/compiler/OriginalCurrentDirectoryAudit.hs": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["bin/test-audit-core.py"]},
+    "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs": {"junit":["thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"],"python":["bin/test-audit-core.py"]},
     "src/test/java/thc/runtime/OriginalFstatAtTest.java": {
-      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalUnlinkAtAudit.hs": {
-      "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/OriginalUnlinkAtAudit.hs": {
+      "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalFstatAtAudit.hs": {
-      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/OriginalFstatAtAudit.hs": {
+      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs": {
-      "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalUnlinkAtTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalFstatAtFixtures.hs": {
-      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalFstatAtTest"], "python": ["bin/test-audit-core.py"]
     },
     "src/test/java/thc/runtime/OriginalPathAccessTest.java": {
-      "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalPathStatAudit.hs": {
-      "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/OriginalPathStatAudit.hs": {
+      "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalPathModeAudit.hs": {
-      "junit": ["thc.runtime.OriginalPathModeTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/OriginalPathModeAudit.hs": {
+      "junit": ["thc.runtime.OriginalPathModeTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalPathLinkAudit.hs": {
-      "junit": ["thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/OriginalPathLinkAudit.hs": {
+      "junit": ["thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest"], "python": ["bin/test-audit-core.py"]
     },
-    "compiler/test-fixtures/OriginalPathAccessAudit.hs": {
-      "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["scripts/test-audit-core.py"]
+    "test/fixtures/compiler/OriginalPathAccessAudit.hs": {
+      "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalPathStatFixtures.hs": {
-      "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathStatTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalPathModeFixtures.hs": {
-      "junit": ["thc.runtime.OriginalPathModeTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathModeTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalPathLinkFixtures.hs": {
-      "junit": ["thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalPathAccessFixtures.hs": {
-      "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["scripts/test-audit-core.py"]
+      "junit": ["thc.runtime.OriginalPathAccessTest"], "python": ["bin/test-audit-core.py"]
     },
     "test/haskell-fixtures/OriginalPosixStatFixtures.hs": {
       "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest", "thc.runtime.OriginalUnlinkAtTest", "thc.runtime.OriginalFstatAtTest", "thc.runtime.OriginalCurrentDirectoryTest", "thc.runtime.OriginalDirectoryStreamsTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalPosixStatAudit.hs": {
+    "test/fixtures/compiler/OriginalPosixStatAudit.hs": {
       "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
-    "compiler/test-fixtures/OriginalPosixStatNative.hs": {
+    "test/fixtures/compiler/OriginalPosixStatNative.hs": {
       "junit": ["thc.runtime.OriginalPathStatTest", "thc.runtime.OriginalPathModeTest", "thc.runtime.OriginalPathLinkTest", "thc.runtime.OriginalDirectoryPathsTest", "thc.runtime.OriginalPathAccessTest", "thc.runtime.OriginalFstatTest", "thc.runtime.OriginalPosixStatTest", "thc.runtime.PosixStatAbiTest"], "python": []
     },
     "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs": {
       "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalHandleReadinessAudit.hs": {
+    "test/fixtures/compiler/OriginalHandleReadinessAudit.hs": {
       "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/OriginalHandleReadinessNative.hs": {
+    "test/fixtures/compiler/OriginalHandleReadinessNative.hs": {
       "junit": ["thc.runtime.OriginalHandleReadinessNativeTest"],
       "python": []
     },
@@ -3116,7 +3116,7 @@
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
-    "compiler/test-fixtures/WeakAudit.hs": {
+    "test/fixtures/compiler/WeakAudit.hs": {
       "junit": ["thc.runtime.ManagedWeakTest"],
       "python": []
     },
@@ -3128,7 +3128,7 @@
       "junit": ["thc.runtime.AtomicIntArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/AtomicIntArrayAudit.hs": {
+    "test/fixtures/compiler/AtomicIntArrayAudit.hs": {
       "junit": ["thc.runtime.AtomicIntArrayTest"],
       "python": []
     },
@@ -3136,54 +3136,54 @@
       "junit": ["thc.runtime.FetchAddIntArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/FetchAddIntArrayAudit.hs": {
+    "test/fixtures/compiler/FetchAddIntArrayAudit.hs": {
       "junit": ["thc.runtime.FetchAddIntArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/StablePointerAudit.hs": {
+    "test/fixtures/compiler/StablePointerAudit.hs": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "compiler/test-fixtures/SharedCAFNative.hs": {
+    "test/fixtures/compiler/SharedCAFNative.hs": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "compiler/test-fixtures/SharedCAFOriginalCalls.json": {
+    "test/fixtures/compiler/SharedCAFOriginalCalls.json": {
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "compiler/test-fixtures/ShrinkMutableByteArrayAudit.hs": {
+    "test/fixtures/compiler/ShrinkMutableByteArrayAudit.hs": {
       "junit": ["thc.runtime.ShrinkByteArrayTest"],
       "python": []
     },
-    "compiler/test-fixtures/MutVarAudit.hs": {
+    "test/fixtures/compiler/MutVarAudit.hs": {
       "junit": ["thc.runtime.MutVarTest"],
       "python": []
     },
-    "compiler/test-fixtures/LargeLiteralCaseAudit.hs": {
+    "test/fixtures/compiler/LargeLiteralCaseAudit.hs": {
       "junit": ["thc.runtime.LargeLiteralCaseNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/LazyIOCallbackAudit.hs": {
+    "test/fixtures/compiler/LazyIOCallbackAudit.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/LazyIOCallbackNative.hs": {
+    "test/fixtures/compiler/LazyIOCallbackNative.hs": {
       "junit": ["thc.runtime.CoreContinuationNativeTest"],
       "python": []
     },
     "test/haskell-fixtures/DeepEvaluationFixtures.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
-    "compiler/test-fixtures/DeepEvaluation.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
-    "compiler/test-fixtures/DeepEvaluationNative.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
+    "test/fixtures/compiler/DeepEvaluation.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
+    "test/fixtures/compiler/DeepEvaluationNative.hs": {"junit": ["thc.runtime.AstStackNativeTest"], "python": []},
     "test/haskell-fixtures/ScalarExceptionResultsFixtures.hs": {
       "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ScalarExceptionResultsAudit.hs": {
+    "test/fixtures/compiler/ScalarExceptionResultsAudit.hs": {
       "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/ScalarExceptionResultsNative.hs": {
+    "test/fixtures/compiler/ScalarExceptionResultsNative.hs": {
       "junit": ["thc.runtime.ScalarExceptionResultsNativeTest"],
       "python": []
     },
@@ -3191,11 +3191,11 @@
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/MaskFunctionAudit.hs": {
+    "test/fixtures/compiler/MaskFunctionAudit.hs": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "python": []
     },
-    "compiler/test-fixtures/MaskFunctionNative.hs": {
+    "test/fixtures/compiler/MaskFunctionNative.hs": {
       "junit": ["thc.runtime.MaskFunctionNativeTest"],
       "python": []
     },
@@ -3248,36 +3248,36 @@
       ],
       "python": []
     },
-    "compiler/putstrln/Main.hs": {
+    "test/fixtures/putstrln/Main.hs": {
       "junit": [],
       "python": [
-        "scripts/test-putstrln-export.py"
+        "bin/test-putstrln-export.py"
       ]
     },
-    "scripts/putstrln_export.py": {
+    "bin/putstrln_export.py": {
       "junit": [],
       "python": [
-        "scripts/test-putstrln-export.py"
+        "bin/test-putstrln-export.py"
       ]
     },
-    "scripts/putstrln_hsc.py": {
+    "bin/putstrln_hsc.py": {
       "junit": [],
       "python": [
-        "scripts/test-putstrln-export.py"
+        "bin/test-putstrln-export.py"
       ]
     },
-    "scripts/putstrln_inventory.py": {
+    "bin/putstrln_inventory.py": {
       "junit": [],
       "python": [
-        "scripts/test-putstrln-export.py"
+        "bin/test-putstrln-export.py"
       ]
     },
-    "src/THC/Driver/Project.hs": {
+    "src/driver/THC/Driver/Project.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"],
       "python": [],
       "haskell": ["driver-tests"]
     },
-    "src/THC/Driver/Installed.hs": {
+    "src/driver/THC/Driver/Installed.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest"], "python": [],
       "haskell": ["driver-tests"]
     },
@@ -3285,11 +3285,11 @@
       "junit": ["thc.CoreZipBundleTest", "thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"],
       "python": []
     },
-    "src/THC/Driver/Wired.hs": {
+    "src/driver/THC/Driver/Wired.hs": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
       "haskell": ["driver-tests"]
     },
-    "compiler/target-layout.c": {
+    "src/driver/cbits/target-layout.c": {
       "junit": ["thc.runtime.InterfaceCoreNativeTest", "thc.runtime.OriginalStackFormatterTest"], "python": [],
       "haskell": ["driver-tests"]
     },

@@ -38,7 +38,7 @@ class BytecodeVectorTransportTest {
         }
     }
     private List<Family> families() throws Exception {
-        var table = (Map<String, Object>) Json.parse(Files.readString(new File(System.getProperty("thc.projectRoot"), "scripts/simd-families.json").toPath()));
+        var table = (Map<String, Object>) Json.parse(Files.readString(new File(System.getProperty("thc.projectRoot"), "bin/simd-families.json").toPath()));
         var result = new ArrayList<Family>(); for (var record : (List<Map<String, Object>>) table.get("families"))
             result.add(new Family((String) record.get("name"), (String) record.get("element"), ((Number) record.get("lanes")).intValue()));
         assertEquals(30, result.size()); return result;

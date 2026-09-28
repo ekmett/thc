@@ -336,7 +336,7 @@ def execute(recorder, base, head, identity_path):
             failures.append("haskell-compile: " + str(error))
     if "driver-tests" in selected_haskell:
         try:
-            recorder.command("driver-plugin", ["compiler/build.sh"])
+            recorder.command("driver-plugin", ["bin/build-compiler.sh"])
         except RuntimeError as error:
             failures.append("driver-plugin: " + str(error))
     automation_sha = os.environ.get("FAST_AUTOMATION_SHA", "")
@@ -366,7 +366,7 @@ def execute(recorder, base, head, identity_path):
         except (RuntimeError, ValueError, ET.ParseError) as error:
             failures.append(f"polyglot: {error}")
         try:
-            recorder.command("javascript-demo", ["scripts/javascript-demo.sh"])
+            recorder.command("javascript-demo", ["bin/javascript-demo.sh"])
         except RuntimeError as error:
             failures.append(f"javascript-demo: {error}")
     recorder.data.update(testSummaries=summaries, polyglotSummary=polyglot_summary,

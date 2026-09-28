@@ -91,19 +91,19 @@ public class AddressArrayCopyTest {
         assertEquals(names, manifest.get("entries"));
         assertEquals(16L, manifest.get("bytesPerRow"));
         assertEquals((long) names.size() * seeds.size() * ranges.size(), manifest.get("nativeRows"));
-        var sources = new HashSet<>(Set.of("compiler/test-fixtures/AddressArrayCopyAudit.hs",
-            "compiler/test-fixtures/AddressArrayCopyNative.hs", "thc.cabal", "test/haskell-fixtures/Main.hs",
+        var sources = new HashSet<>(Set.of("test/fixtures/compiler/AddressArrayCopyAudit.hs",
+            "test/fixtures/compiler/AddressArrayCopyNative.hs", "thc.cabal", "test/haskell-fixtures/Main.hs",
             "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/AddressArrayCopyFixtures.hs",
-            "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-            "scripts/audit-core.py", "scripts/core-capabilities.json",
+            "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+            "bin/audit-core.py", "bin/core-capabilities.json",
             "src/main/resources/thc/scalar-primop-signatures.json"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) {
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) {
             files.filter(it -> it.toString().endsWith(".hs"))
                 .map(root::relativize)
                 .map(Path::toString)
                 .forEach(sources::add);
         }
-        try (var files = Files.list(root.resolve("scripts"))) {
+        try (var files = Files.list(root.resolve("bin"))) {
             files.filter(it -> it.getFileName().toString().startsWith("core_") && it.toString().endsWith(".py"))
                 .map(root::relativize)
                 .map(Path::toString)
@@ -801,7 +801,7 @@ public class AddressArrayCopyTest {
                     var input = temporary.resolve(label + ".json");
                     Files.writeString(input, Json.stringify(linked));
                     var report = temporary.resolve(label + "-report.json");
-                    var process = new ProcessBuilder("python3", "scripts/audit-core.py", input.toString(), "--entry",
+                    var process = new ProcessBuilder("python3", "bin/audit-core.py", input.toString(), "--entry",
                         name, "--output", report.toString())
                                       .directory(root.toFile())
                                       .redirectOutput(temporary.resolve(label + ".stdout").toFile())

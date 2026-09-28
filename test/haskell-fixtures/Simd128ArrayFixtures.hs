@@ -90,8 +90,8 @@ prepareSimd128Arrays root = do
   let directory = "build/simd128-arrays"
       logs = directory </> "commands"
       manifest = root </> directory </> "manifest.json"
-      source = "compiler/test-fixtures/Simd128ArrayAudit.hs"
-      driver = "compiler/test-fixtures/Simd128ArrayNative.hs"
+      source = "test/fixtures/compiler/Simd128ArrayAudit.hs"
+      driver = "test/fixtures/compiler/Simd128ArrayNative.hs"
       inputs = directory </> "inputs.tsv"
       binary = directory </> "native/oracle"
       execute = runLogged 300 root logs
@@ -106,7 +106,7 @@ prepareSimd128Arrays root = do
   writeFile (root </> inputs) (unlines [name ++ "\t" ++ show seed ++ "\t" ++ show offset | (name,seed,offset) <- requests])
   nativeArtifacts <- if exportedOnly then pure [] else do
     built <- execute "native-build" [] ghc ["--make","-O2","-fllvm","-fforce-recomp","-dcore-lint","-dstg-lint",
-      "-icompiler/test-fixtures","-odir",directory </> "native","-hidir",directory </> "native",driver,"-o",binary]
+      "-itest/fixtures/compiler","-odir",directory </> "native","-hidir",directory </> "native",driver,"-o",binary]
     observed <- runLoggedWithInput inputs 120 root logs "native-oracle" [] (root </> binary) []
     rows <- maybe (die "Invalid native SIMD128 row") pure $ traverse (\row -> case splitTab row of
       [name,seed,offset,result] -> do s <- readInteger seed; i <- readInteger offset; _ <- readInteger result; pure (name,s,fromInteger i)
@@ -118,13 +118,13 @@ prepareSimd128Arrays root = do
     let corePath = directory </> stage ++ "-core/Simd128ArrayAudit.json"
     compilation <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
-      "compiler/export.sh" ((if exportedOnly then ["-fno-code","-fwrite-if-simplified-core"] else ["-fllvm"]) ++
+      "bin/export-core.sh" ((if exportedOnly then ["-fno-code","-fwrite-if-simplified-core"] else ["-fllvm"]) ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     core <- readJson (root </> corePath)
     reports <- forM entries $ \(name,_,_) -> do
       let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
       command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["scripts/audit-core.py",corePath,"--entry",name,"--output",path]
+        ["bin/audit-core.py",corePath,"--entry",name,"--output",path]
       report <- readJson (root </> path)
       accepted <- field report "accepted"
       missing <- field report "missingGlobals" :: IO [Value]
@@ -134,14 +134,14 @@ prepareSimd128Arrays root = do
       pure (name,object ["audit" .= path,"structure" .= shape],path:commandArtifacts command)
     pure (stage,object ["core" .= corePath,"entries" .= Map.fromList [(name,record) | (name,record,_) <- reports]],
       corePath : commandArtifacts compilation ++ concat [paths | (_,_,paths) <- reports])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ [source,driver,"test/haskell-fixtures/Simd128ArrayFixtures.hs",
-    "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","compiler/export.sh",
-    "compiler/build.sh","compiler/toolchain.sh","compiler/plugin.py","scripts/audit-core.py",
-    "scripts/core-capabilities.json","scripts/simd-families.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
-    ["scripts" </> path | path <- scripts,"core_" `isPrefixOf` path,takeExtension path == ".py"])
+    "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","bin/export-core.sh",
+    "bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py","bin/audit-core.py",
+    "bin/core-capabilities.json","bin/simd-families.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
+    ["bin" </> path | path <- scripts,"core_" `isPrefixOf` path,takeExtension path == ".py"])
   artifactHashes <- hashes root (inputs : nativeArtifacts ++ commandArtifacts version ++ concat [paths | (_,_,paths) <- exported])
   writeJson manifest (object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"entries" .= [name | (name,_,_) <- entries],
     "requests" .= length requests,"nativeRows" .= (if exportedOnly then Nothing else Just (length requests)),

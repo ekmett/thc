@@ -1,0 +1,378 @@
+-- SPDX-FileCopyrightText: 2026 Edward Kmett
+-- SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+
+{-# LANGUAGE OverloadedStrings #-}
+
+-- |
+-- Module      : THC.Driver.Wired
+-- Copyright   : (C) 2026 Edward Kmett
+-- License     : UPL-1.0 AND BSD-3-Clause
+-- Maintainer  : Edward Kmett <ekmett@gmail.com>
+-- Stability   : experimental
+-- Portability : Host filesystem/process services and the configured native toolchain
+--
+-- Produce wired-module and source artifacts used by project Core acquisition.
+module THC.Driver.Wired
+  ( WiredArtifacts(..), bootSources, moduleSources, sourceHashes, pinnedSourcePath
+  , exportPinnedCore, exportPinnedWindowsCore, probeTargetLayout ) where
+
+import Control.Monad (forM, forM_, unless, when)
+import qualified Data.ByteString.Lazy.Char8 as BL
+import Data.Aeson (Value(..), encode, eitherDecodeStrict', object, (.=))
+import qualified Data.Aeson as Aeson
+import qualified Data.Aeson.KeyMap as KeyMap
+import Data.List (isInfixOf, isPrefixOf, isSuffixOf, nub, sort)
+import qualified Data.Text as Text
+import qualified Data.Text.Encoding as Text
+import qualified Distribution.InstalledPackageInfo as Package
+import System.Directory (copyFile, createDirectoryIfMissing, createFileLink, doesDirectoryExist, doesFileExist,
+                         findExecutable, listDirectory, removeFile)
+import System.Exit (ExitCode(..))
+import System.Environment (lookupEnv)
+import qualified System.Info as Host
+import System.FilePath ((</>), makeRelative, replaceExtension, takeDirectory, takeExtension)
+import System.Process (CreateProcess(..), createProcess, proc, readProcess, rawSystem, waitForProcess)
+import THC.Driver.Installed (boundedInterfaceProcess)
+
+-- These are the original GHC 9.14.1 sources. Boot interfaces are compiled
+-- first; the installed ghc-internal dynamic interfaces fill the remaining
+-- dependencies without changing the installed package database.
+bootSources :: [FilePath]
+bootSources =
+  [ "GHC/Internal/Num.hs-boot"
+  , "GHC/Internal/Enum.hs-boot"
+  , "GHC/Internal/Real.hs-boot"
+  , "GHC/Internal/Fingerprint.hs-boot"
+  , "GHC/Internal/Exception/Type.hs-boot"
+  , "GHC/Internal/Stack.hs-boot"
+  , "GHC/Internal/IO/Handle/Types.hs-boot"
+  , "GHC/Internal/IO/Exception.hs-boot"
+  , "GHC/Internal/IO.hs-boot"
+  , "GHC/Internal/Exception/Backtrace.hs-boot"
+  , "GHC/Internal/Exception.hs-boot"
+  , "GHC/Internal/Bignum/BigNat.hs-boot"
+  , "GHC/Internal/Bignum/Natural.hs-boot"
+  , "GHC/Internal/Bignum/Integer.hs-boot"
+  ]
+
+-- The order is the proven private-overlay compile order. Only these modules
+-- are put into the immutable ZIP; generated Core is never checked into Git.
+moduleSources :: [(FilePath, String)]
+moduleSources =
+  [ ("GHC/Internal/Data/Typeable/Internal.hs", "GHC.Internal.Data.Typeable.Internal")
+  , ("GHC/Internal/Types.hs", "GHC.Internal.Types")
+  , ("GHC/Internal/Classes.hs", "GHC.Internal.Classes")
+  , ("GHC/Internal/Fingerprint.hs", "GHC.Internal.Fingerprint")
+  , ("GHC/Internal/Arr.hs", "GHC.Internal.Arr")
+  , ("GHC/Internal/Ix.hs", "GHC.Internal.Ix")
+  , ("GHC/Internal/List.hs", "GHC.Internal.List")
+  , ("GHC/Internal/Data/Tuple.hs", "GHC.Internal.Data.Tuple")
+  , ("GHC/Internal/Foreign/Storable.hs", "GHC.Internal.Foreign.Storable")
+  , ("GHC/Internal/Foreign/Marshal/Alloc.hs", "GHC.Internal.Foreign.Marshal.Alloc")
+  , ("GHC/Internal/Bignum/Natural.hs", "GHC.Internal.Bignum.Natural")
+  , ("GHC/Internal/Bignum/Integer.hs", "GHC.Internal.Bignum.Integer")
+  , ("GHC/Internal/Base.hs", "GHC.Internal.Base")
+  , ("GHC/Internal/Num.hs", "GHC.Internal.Num")
+  , ("GHC/Internal/IO/Unsafe.hs", "GHC.Internal.IO.Unsafe")
+  , ("GHC/Internal/Show.hs", "GHC.Internal.Show")
+  , ("GHC/Internal/Err.hs", "GHC.Internal.Err")
+  , ("GHC/Internal/Enum.hs", "GHC.Internal.Enum")
+  , ("GHC/Internal/Real.hs", "GHC.Internal.Real")
+  , ("GHC/Internal/Numeric.hs", "GHC.Internal.Numeric")
+  , ("GHC/Internal/Ptr.hs", "GHC.Internal.Ptr")
+  , ("GHC/Internal/Data/Either.hs", "GHC.Internal.Data.Either")
+  , ("GHC/Internal/Word.hs", "GHC.Internal.Word")
+  , ("GHC/Internal/ClosureTypes.hs", "GHC.Internal.ClosureTypes")
+  , ("GHC/Internal/Heap/Constants.hsc", "GHC.Internal.Heap.Constants")
+  , ("GHC/Internal/Heap/InfoTable/Types.hsc", "GHC.Internal.Heap.InfoTable.Types")
+  , ("GHC/Internal/Heap/InfoTable.hsc", "GHC.Internal.Heap.InfoTable")
+  , ("GHC/Internal/Heap/Closures.hs", "GHC.Internal.Heap.Closures")
+  , ("GHC/Internal/Stack/Constants.hsc", "GHC.Internal.Stack.Constants")
+  , ("GHC/Internal/Stack/Annotation.hs", "GHC.Internal.Stack.Annotation")
+  , ("GHC/Internal/Stack/CloneStack.hs", "GHC.Internal.Stack.CloneStack")
+  , ("GHC/Internal/ForeignPtr.hs", "GHC.Internal.ForeignPtr")
+  , ("GHC/Internal/IO/Encoding/Types.hs", "GHC.Internal.IO.Encoding.Types")
+  , ("GHC/Internal/IO/Encoding/Failure.hs", "GHC.Internal.IO.Encoding.Failure")
+  , ("GHC/Internal/Foreign/C/String/Encoding.hs", "GHC.Internal.Foreign.C.String.Encoding")
+  , ("GHC/Internal/IO/Encoding/UTF8.hs", "GHC.Internal.IO.Encoding.UTF8")
+  , ("GHC/Internal/InfoProv/Types.hsc", "GHC.Internal.InfoProv.Types")
+  , ("GHC/Internal/Data/Maybe.hs", "GHC.Internal.Data.Maybe")
+  , ("GHC/Internal/Data/OldList.hs", "GHC.Internal.Data.OldList")
+  , ("GHC/Internal/Stack/Types.hs", "GHC.Internal.Stack.Types")
+  , ("GHC/Internal/Stack/CCS.hsc", "GHC.Internal.Stack.CCS")
+  , ("GHC/Internal/ExecutionStack/Internal.hsc", "GHC.Internal.ExecutionStack.Internal")
+  , ("GHC/Internal/Stack/Decode.hs", "GHC.Internal.Stack.Decode")
+  , ("GHC/Internal/Exception/Type.hs", "GHC.Internal.Exception.Type")
+  , ("GHC/Internal/IO/Exception.hs", "GHC.Internal.IO.Exception")
+  , ("GHC/Internal/IO.hs", "GHC.Internal.IO")
+  , ("GHC/Internal/Control/Monad/Fail.hs", "GHC.Internal.Control.Monad.Fail")
+  , ("GHC/Internal/Exception/Context.hs", "GHC.Internal.Exception.Context")
+  , ("GHC/Internal/Exception.hs", "GHC.Internal.Exception")
+  , ("GHC/Internal/Stack.hs", "GHC.Internal.Stack")
+  , ("GHC/Internal/IO/Handle/Types.hs", "GHC.Internal.IO.Handle.Types")
+  , ("GHC/Internal/IO/Encoding.hs", "GHC.Internal.IO.Encoding")
+  , ("GHC/Internal/Exception/Backtrace.hs", "GHC.Internal.Exception.Backtrace")
+  , ("GHC/Internal/CString.hs", "GHC.Internal.CString")
+  ]
+
+-- Exact upstream SHA-256 pins, including the unmodified upstream license.
+sourceHashes :: [(FilePath, String)]
+sourceHashes =
+  [ ("GHC/Internal/Arr.hs", "d91e8d645309242c5a7b849d6d14884816cd4b04f4fc741e21f62d75a4d2bc4d")
+  , ("GHC/Internal/Base.hs", "bc38ea9356f90aeb38298ef1269fbdc2dee433528374948375da112b273a89e2")
+  , ("GHC/Internal/Bignum/BigNat.hs-boot", "230a6ac303323e0d0716a39eef450af81bc81494a72192cbe9d20e74f5af45d4")
+  , ("GHC/Internal/Bignum/Integer.hs", "1f8ec2a8e12ecbab7eb0b59f249fae663d8066f2fb14224177a4538653bb17f4")
+  , ("GHC/Internal/Bignum/Integer.hs-boot", "f486bbc9637cbcc4b03ea5dcaab9dba71286cadd4a29df3e4f68d2d098eee779")
+  , ("GHC/Internal/Bignum/Natural.hs", "6895337089fc3ab8a5102b0853c28a4b70281b49ba7705b00eb9750a7e13d8df")
+  , ("GHC/Internal/Bignum/Natural.hs-boot", "2e7bb92e28f5fa9601b6874b449cfd75bad66a3144bfddb4a445996eaa991026")
+  , ("GHC/Internal/ClosureTypes.hs", "38ca5c8e07a5b807efdce7ac283f42f281347f36195b447067c71dd3c59647ca")
+  , ("GHC/Internal/Classes.hs", "9f07eab1df0c2c9892ba5b8e35236e45868f738cb6a755234a7c49e70fb150cd")
+  , ("GHC/Internal/CString.hs", "3b2e7a0fb2880d8f98cb002adfbaa36a8469667b7494f8f695fe1a6f181de573")
+  , ("GHC/Internal/Control/Monad/Fail.hs", "695c8290891399db66075b86ecb1fd0a6242788985023d3edfb9c7155b97ecb7")
+  , ("GHC/Internal/Data/Either.hs", "cbac81710a7e01a8a43616d8d88f9a387d6b0e1bbe5f4410dc1f172dc5f765e6")
+  , ("GHC/Internal/Data/Maybe.hs", "c1e3833e2becd8d0ac4ee9ccb9e7615cb7f469c25cf9cfde500e21b46f586057")
+  , ("GHC/Internal/Data/OldList.hs", "4b519356f7bcbd705866551e26552c84b08d527fe93b060cc89b27882aec6248")
+  , ("GHC/Internal/Data/Typeable/Internal.hs", "ff1a002f75f349dbc4699273c3ce6e8e4dba9841aa5ad4aee20d3beb8d8b54e8")
+  , ("GHC/Internal/Data/Tuple.hs", "97658f1c5b9be7910c23480641fb8f1aedbdbe96d0e2d68b5c6106aa48e7a7ad")
+  , ("GHC/Internal/Enum.hs", "e4dcf86915b01dcc732ed319fe02759858aea1534c68427826ba5f9c6908860f")
+  , ("GHC/Internal/Enum.hs-boot", "47353434d99287294958f62ae98303fa3cf6775dc416f95055bd41a2f95a8449")
+  , ("GHC/Internal/Err.hs", "f109ac925928a0e7fed063bcfd03c93e3d8629d8054d984e600aab26c0122478")
+  , ("GHC/Internal/ExecutionStack/Internal.hsc", "1ef77fe1313327ecb505c3d600e8324610bf31fc3de11266f767abe5da57442f")
+  , ("GHC/Internal/Exception/Backtrace.hs", "2f062109b7a7b40db88bffaef4c9529123008403600bbf6c87b529305625fba8")
+  , ("GHC/Internal/Exception/Backtrace.hs-boot", "7a57658044a20df0c72ea4ce2b15168b61542c94ed0a8befdf6e29792b549df7")
+  , ("GHC/Internal/Exception/Context.hs", "49ac1971d2e8f4947ef3d5dd28fe9497d178f24ac367f2767542257799fb4dc6")
+  , ("GHC/Internal/Exception/Type.hs", "70180e8a8a9a8c74e057a8ec1f4dce5f810eedffeff4ce8370cf33118d222d38")
+  , ("GHC/Internal/Exception/Type.hs-boot", "f2a0440d35e33a8688d692cf50e4d33e74e92f08e84b04ab8aec20fd4861d2e0")
+  , ("GHC/Internal/Exception.hs", "890128de0336c4762b44f709131a8959bf47bc0313b55bed4c071a17b62a9327")
+  , ("GHC/Internal/Exception.hs-boot", "7422fa92308439db3c0ca034b02522c96e7961cff00754d0bdca964a4f98bc15")
+  , ("GHC/Internal/Fingerprint.hs", "d97e24beb911ef802c3020690480eb4ac59ec0757ab9b482337c94a6963a7e5b")
+  , ("GHC/Internal/Foreign/C/String/Encoding.hs", "a1956c04e77737b5796af679df63e884fdb8d0acc6bff40373dbbbd732837d57")
+  , ("GHC/Internal/Foreign/Marshal/Alloc.hs", "76bbfcaf09561b667f49c595b9669f1e0808ac495b5754184bd6daa2a961458f")
+  , ("GHC/Internal/Foreign/Storable.hs", "dda27f3c55cda6fbce4d44c127b6b26f5f18aa1e8b7ade6510e51cd4eec9e9cd")
+  , ("GHC/Internal/ForeignPtr.hs", "8b7b040cd30b3e72c81957b616c13587e14caf9db9dec25e4a7580dac3ca3272")
+  , ("GHC/Internal/Heap/Closures.hs", "d2e891979f6c561db40168bdb736a9f3ce67e915459f7ca301a57b1a547c0539")
+  , ("GHC/Internal/Heap/Constants.hsc", "fe6012d406045f3808c8e2cb693b0bdc627a0bd524b44e0708769e59317a5b77")
+  , ("GHC/Internal/Heap/InfoTable.hsc", "3936cce70289fa88996eed01ecef793faa4a5f750eb182d195b9e6dbd33ee5a0")
+  , ("GHC/Internal/Heap/InfoTable/Types.hsc", "f1de0789ad600bd757fd27be9fc92bd9ef77e4520a17f4df2d759ef25b9ad8ef")
+  , ("GHC/Internal/InfoProv/Types.hsc", "63f455d41df424cf2dc20713a34d43991a261fb012a3f7f56895233a9b594315")
+  , ("GHC/Internal/Fingerprint.hs-boot", "72b19673ee571ca87ebc67470efc62b1ec75c4d4dfe579b4c33d7ac1a90bb246")
+  , ("GHC/Internal/IO/Exception.hs", "39aded90d3cce7be4282ea6df2fa0cbf754942ab1aa7c740b5409021170b7ce6")
+  , ("GHC/Internal/IO/Encoding.hs", "1b517e6f7c3cd2753c5dd9fe210873cfed7a545eaaf92605d8909d2643539b64")
+  , ("GHC/Internal/IO/Encoding/Types.hs", "17ab1ca2385becc376ed5727204999e07989848349fb9235abbb092a7eaabd8a")
+  , ("GHC/Internal/IO/Encoding/Failure.hs", "ce27efe1405d4e299d45af597cd6fddea3d205638d766f673241f7aa7f8c5f10")
+  , ("GHC/Internal/IO/Encoding/UTF8.hs", "00db78df7e4a9a5404bd3dc9e379d59392ab698c907393a5fe61d74b9020194a")
+  , ("GHC/Internal/IO/Exception.hs-boot", "bda7e1dd1ac680f0f1126b467207fd4682175ecf1e6871c7b2786b7a25506dcf")
+  , ("GHC/Internal/IO/Handle/Types.hs", "4c719b6081b5e689219380974f72ed294b231521312f5b9a53bd5202019c9c35")
+  , ("GHC/Internal/IO/Handle/Types.hs-boot", "8a319eb137cc03c8dbbb9d37b77703f3a962d894092cbd4d4e44c8381eaf3767")
+  , ("GHC/Internal/IO/Unsafe.hs", "407dad2a8abda44be6e689f6ac45079c9f6cdf6147e847a4a0f9147ecfb8330f")
+  , ("GHC/Internal/IO.hs", "e621ee438883f255d6a540ef761b9d462060f2ad3ed9557e118d55cf964ea25e")
+  , ("GHC/Internal/IO.hs-boot", "a687801a14b3b423d45bca16ea03facd5fa0a428f049bcf04c2d3726e272c702")
+  , ("GHC/Internal/Ix.hs", "485f592cb602e532a1a13a603aedb7f59b8d215123e8aa8982cd39320fed8c16")
+  , ("GHC/Internal/List.hs", "ae9f56a758942b6e937e7b430ac1137e3ebea171762120ad9c31ef1f4904ba39")
+  , ("GHC/Internal/Num.hs-boot", "b765e848138b1d4a22710c45db2e446d3e2c5c07c6b774a8d5cf83a5c4a9b92f")
+  , ("GHC/Internal/Num.hs", "a35a0fac5e44dde385bc98024d85a82924dac33c59de0996c9978e4295e4077a")
+  , ("GHC/Internal/Numeric.hs", "d4f2fdc9caff154a8c849724736c7acfc2f1e66825409cffd22bbdc54752a8fa")
+  , ("GHC/Internal/Ptr.hs", "92ef7f10fc4f23ffa860a729c3b2fe13a269c1288dc3d6a017a358c894ec23c6")
+  , ("GHC/Internal/Real.hs-boot", "843ed3133589748fbc65e0d7ef7e5a5491dc131b55ff73b67f6e3c3516bb99f4")
+  , ("GHC/Internal/Real.hs", "7546f4b80b562ba06feaab6be207e5320258f8734d8be870610c57eae4c8c5e1")
+  , ("GHC/Internal/Show.hs", "b37f6d9d376e837785d207f2cf784daf0a53a04db26723a456c073616512be98")
+  , ("GHC/Internal/Stack/Decode.hs", "0ea6a82ea41bdf14b28aec5cb36a586ed86eb6f87f373ea21095d2b1b018089f")
+  , ("GHC/Internal/Stack/Annotation.hs", "96ad02226d0f5a9dd57b4ad873ceb2056e3e27ce788149f1e94ba29d0c83bb15")
+  , ("GHC/Internal/Stack/CCS.hsc", "f146896b0038ad0a645e6b6dca39099d300157f77e443a0ac28545ae44fee5be")
+  , ("GHC/Internal/Stack/CloneStack.hs", "1d3bd4ca3252beb53f308bb68abb2a6adfdb21d232849b63bc7009dbc77f4cea")
+  , ("GHC/Internal/Stack/Constants.hsc", "7b02d3388f0a0c129bb73c10759a30733e641788ade399a8985f1063746fc4e6")
+  , ("GHC/Internal/Stack/Types.hs", "8a035fa9a684c3c3e0ebcc7bc418992503fc322c7ef3d5d6a24023870b29fc25")
+  , ("GHC/Internal/Stack.hs", "ab43f19c8fab1732afde9973838dcdfeb625a9af8565fcc493444574a3a8bb5c")
+  , ("GHC/Internal/Stack.hs-boot", "7d92acf93446e191068370934f911fea3bfc26a0fc3a78b251f7b399c644677f")
+  , ("GHC/Internal/Types.hs", "a8fe6ab5c7a84be9b0710078b549aa63e511e7cb12d056cef91403d05ca6d2bb")
+  , ("GHC/Internal/Word.hs", "9ca67ff65c2cc2a0f28442e4fedd7685b7bfac387d2c24f5333477ba38221fad")
+  , ("LICENSE", "768c070bd0b7d820d169ee8153d5487acfc262cbbc10dfce18d05c0bb2d2800d")
+  , ("include/WordSize.h", "16e46daa3e38bfc98adb9360e54af211cada707d551a7720c00af4af907af090")
+  ]
+
+-- | Locate a logical module path in the upstream package layout. Auxiliary
+-- files such as @include/WordSize.h@ remain relative to the package root.
+pinnedSourcePath :: FilePath -> FilePath
+pinnedSourcePath path = if "GHC/" `isPrefixOf` path then "src" </> path else path
+
+data WiredArtifacts = WiredArtifacts
+  { generatedSources :: [(FilePath, FilePath)]
+  , targetLayout :: FilePath
+  , sourceBuildReceipt :: Maybe Value
+  }
+
+exportPinnedCore :: FilePath -> FilePath -> FilePath -> FilePath -> String ->
+                    FilePath -> FilePath -> IO WiredArtifacts
+exportPinnedCore = exportPinnedUsing
+
+-- The Windows compiler has no dynamic plugin way. Compile unchanged pinned
+-- sources with full Core and read their actual vanilla interfaces through GHC.
+exportPinnedWindowsCore :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> FilePath -> FilePath -> IO WiredArtifacts
+exportPinnedWindowsCore upstream ghc ghcPkg helper expected layoutRecipe staging = do
+  let source = staging </> "src"
+      overlay = staging </> "interfaces"
+      core = staging </> "core"
+  copyTree (upstream </> "src") source
+  createDirectoryIfMissing True overlay
+  createDirectoryIfMissing True core
+  registration <- package "ghc-internal"
+  installed <- case Package.importDirs registration of
+    [path] -> pure path
+    _ -> fail "Windows ghc-internal requires one registered interface directory"
+  backend <- readProcess ghc ["--show-iface", installed </> "GHC/Internal/Bignum/Backend/Selected.hi"] ""
+  unless ("GHC.Internal.Bignum.Backend.GMP" `isInfixOf` backend)
+    (fail "Selected Windows GHC does not use the pinned GMP backend")
+  linkInterfaces True installed overlay installed
+  rts <- package "rts"
+  let includes = Package.includeDirs rts ++ Package.includeDirs registration ++ [upstream </> "include"]
+  let hsc2hs = takeDirectory ghc </> "hsc2hs.exe"
+      definitions = ["BIGNUM_GMP", "_WIN32_WINNT=0x06010000", "mingw32_HOST_OS", "x86_64_HOST_ARCH",
+                     "__GLASGOW_HASKELL__=914", "__IO_MANAGER_WINIO__=1", "__IO_MANAGER_MIO__=1"]
+  inputs <- treeFiles source
+  generated <- forM (filter ((== ".hsc") . takeExtension) inputs) $ \path -> do
+    let output = replaceExtension path "hs"
+    checked hsc2hs ([path, "-o", output] ++ map ("--cflag=-D" ++) definitions ++ map ("--cflag=-I" ++) includes)
+    pure ("src" </> makeRelative source path, output)
+  libdir <- oneLine <$> readProcess ghc ["--print-libdir"] ""
+  (status, bytes, diagnostic) <- boundedInterfaceProcess helper
+    (["--windows-ghc-source-graph", libdir, source, overlay] ++ includes)
+  graph <- case eitherDecodeStrict' bytes of
+    Right (Object fields) | status == ExitSuccess, Just nodes <- KeyMap.lookup "nodes" fields,
+      KeyMap.lookup "unit" fields == Just (String "ghc-internal") -> case Aeson.fromJSON nodes of
+        Aeson.Success values -> mapM graphNode values
+        Aeson.Error message -> fail message
+    _ -> fail ("GHC source graph failed: " ++ show diagnostic)
+  let names = [name | (name, False) <- graph]
+  unless (sort names == sort expected && length graph == length (nub graph))
+    (fail "Compiler source graph differs from the pinned Windows module inventory")
+  BL.writeFile (staging </> "source-graph.json") (encode graph)
+  let common = ["-c", "-O2", "-g", "-dcore-lint", "-fwrite-if-simplified-core", "-fforce-recomp",
+        "-XNoImplicitPrelude", "-XNoPolyKinds", "-DBIGNUM_GMP", "-D_WIN32_WINNT=0x06010000",
+        "-this-unit-id", "ghc-internal", "-package", "ghc-internal", "-i" ++ overlay,
+        "-odir", overlay, "-hidir", overlay] ++ map ("-I" ++) includes
+      relative name = map (\c -> if c == '.' then '/' else c) name
+      command (name, boot) = common ++ [source </> relative name ++ if boot then ".hs-boot" else ".hs"]
+  forM_ graph $ \node -> checked ghc (command node)
+  forM_ names $ \name -> do
+    (code, payload, errors) <- boundedInterfaceProcess helper
+      ["--libdir", libdir, "--unit", "ghc-internal", "--module", name,
+       "--interface", overlay </> relative name ++ ".hi", "--way", "vanilla", "--source-notes",
+       "--home-interfaces", overlay]
+    case eitherDecodeStrict' payload of
+      Right (Object fields) | code == ExitSuccess, KeyMap.lookup "status" fields == Just (String "loaded"),
+        Just value@(Object _) <- KeyMap.lookup "core" fields -> BL.writeFile (core </> name ++ ".json") (encode value)
+      _ -> fail ("Windows source interface lacks genuine complete Core: " ++ name ++ " " ++ show errors)
+  layout <- probeTargetLayout includes layoutRecipe staging
+  pure (WiredArtifacts generated layout (Just (object
+    ["schema" .= (1 :: Int), "compiler" .= ghc, "hsc2hs" .= hsc2hs,
+     "hscDefinitions" .= definitions, "includeDirectories" .= includes,
+     "graphCommand" .= ([helper, "--windows-ghc-source-graph", libdir, source, overlay] ++ includes),
+     "steps" .= [object ["module" .= name, "boot" .= boot, "arguments" .= command node,
+                          "exit" .= (0 :: Int)] | node@(name, boot) <- graph]])))
+  where
+    package name = do
+      description <- readProcess ghcPkg ["--expand-pkgroot", "describe", name] ""
+      (_, registered) <- either (fail . show) pure
+        (Package.parseInstalledPackageInfo (Text.encodeUtf8 (Text.pack description)))
+      pure registered
+    oneLine = reverse . dropWhile (`elem` ("\r\n" :: String)) . reverse
+    checked program arguments = do
+      status <- rawSystem program arguments
+      unless (status == ExitSuccess) (fail ("Windows source build failed: " ++ program ++ " " ++ show arguments))
+    graphNode (Object fields) | Just (String name) <- KeyMap.lookup "module" fields,
+      Just (Bool boot) <- KeyMap.lookup "boot" fields = case Aeson.fromJSON (String name) of
+        Aeson.Success value -> pure (value, boot)
+        Aeson.Error message -> fail message
+    graphNode _ = fail "Invalid source graph node"
+
+treeFiles :: FilePath -> IO [FilePath]
+treeFiles directory = do
+  names <- sort <$> listDirectory directory
+  concat <$> forM names (\name -> do
+    let path = directory </> name
+    isDirectory <- doesDirectoryExist path
+    if isDirectory then treeFiles path else pure [path])
+
+copyTree :: FilePath -> FilePath -> IO ()
+copyTree source destination = do
+  files <- treeFiles source
+  forM_ files $ \path -> do
+    let target = destination </> makeRelative source path
+    createDirectoryIfMissing True (takeDirectory target)
+    copyFile path target
+
+exportPinnedUsing :: FilePath -> FilePath -> FilePath -> FilePath -> String -> FilePath -> FilePath -> IO WiredArtifacts
+exportPinnedUsing packageRoot ghc ghcPkg pluginLibrary pluginUnit layoutRecipe staging = do
+  let sourceRoot = packageRoot </> "src"
+      overlay = staging </> "interfaces"
+      core = staging </> "core"
+  createDirectoryIfMissing True overlay
+  createDirectoryIfMissing True core
+  installedText <- readProcess ghcPkg
+    ["field", "ghc-internal", "import-dirs", "--simple-output"] ""
+  installed <- case lines installedText of
+    [path] | not (null path) -> pure path
+    _ -> fail "ghc-internal must have one installed interface directory"
+  linkInterfaces False installed overlay installed
+  includeDirs <- concatMap words <$> mapM (\package ->
+    readProcess ghcPkg ["field", package, "include-dirs", "--simple-output"] "")
+    ["rts", "ghc-internal"]
+  when (null includeDirs) (fail "GHC target include directories are unavailable")
+  let sibling = takeDirectory ghc </> if Host.os == "mingw32" then "hsc2hs.exe" else "hsc2hs"
+  siblingExists <- doesFileExist sibling
+  hsc2hs <- if siblingExists then pure sibling else
+    findExecutable "hsc2hs" >>= maybe (fail "hsc2hs is unavailable") pure
+  generated <- forM [path | (path, _) <- moduleSources, takeExtension path == ".hsc"] $ \path -> do
+    let output = staging </> "generated" </> replaceExtension path "hs"
+        flags = [path, "-o", output] ++ map ("--cflag=-I" ++) includeDirs
+    createDirectoryIfMissing True (takeDirectory output)
+    (_, _, _, process) <- createProcess (proc hsc2hs flags) { cwd = Just sourceRoot }
+    status <- waitForProcess process
+    when (status /= ExitSuccess) (fail ("GHC source preprocessing failed: " ++ path))
+    pure (path, output)
+  layoutJson <- probeTargetLayout includeDirs layoutRecipe staging
+  let common = ["-c", "-dynamic", "-fforce-recomp", "-XNoPolyKinds",
+                "-this-unit-id", "ghc-internal", "-package", "ghc-internal",
+                "-odir", overlay, "-hidir", overlay, "-I" ++ (packageRoot </> "include")]
+      exportFlags = ["-fplugin-library=" ++ pluginLibrary ++ ";" ++ pluginUnit ++ ";THC.Plugin;" ++ BL.unpack
+        (encode [core, "post-tidy", "source-notes", "foreign-import-provenance"])]
+      compile boot path = do
+        let target = overlay </> replaceExtension path (if boot then "hi-boot" else "hi")
+        exists <- doesFileExist target
+        when exists (removeFile target)
+        let flags = if boot then [] else
+              ["-O2", "-dcore-lint", "-g"] ++ exportFlags ++
+              ["-XNoImplicitPrelude" | path `elem`
+                ["GHC/Internal/Stack/Decode.hs", "GHC/Internal/ExecutionStack/Internal.hsc"]]
+            source = maybe (sourceRoot </> path) id (lookup path generated)
+        status <- rawSystem ghc (common ++ flags ++ [source])
+        when (status /= ExitSuccess) $ fail ("pinned GHC source export failed: " ++ path)
+  forM_ bootSources (compile True)
+  forM_ moduleSources (compile False . fst)
+  pure (WiredArtifacts generated layoutJson Nothing)
+
+probeTargetLayout :: [FilePath] -> FilePath -> FilePath -> IO FilePath
+probeTargetLayout includeDirs recipe staging = do
+  selected <- if Host.os == "mingw32" then lookupEnv "THC_CLANG" else pure Nothing
+  compiler <- maybe (findExecutable (if Host.os == "mingw32" then "clang" else "cc") >>=
+    maybe (fail "C compiler is unavailable") pure) pure selected
+  createDirectoryIfMissing True staging
+  let binary = staging </> if Host.os == "mingw32" then "target-layout.exe" else "target-layout"
+      receipt = staging </> "target-layout.json"
+  status <- rawSystem compiler
+    (["-Wall", "-Werror"] ++ map ("-I" ++) includeDirs ++ [recipe, "-o", binary])
+  when (status /= ExitSuccess) (fail "GHC target layout receipt compilation failed")
+  writeFile receipt =<< readProcess binary [] ""
+  pure receipt
+
+linkInterfaces :: Bool -> FilePath -> FilePath -> FilePath -> IO ()
+linkInterfaces vanilla installed overlay directory = do
+  names <- listDirectory directory
+  forM_ names $ \name -> do
+    let source = directory </> name
+    isDirectory <- doesDirectoryExist source
+    if isDirectory then linkInterfaces vanilla installed overlay source
+    else when ((if vanilla then ".hi" else ".dyn_hi") `isSuffixOf` name) $ do
+      let target = overlay </> replaceExtension (makeRelative installed source) "hi"
+      createDirectoryIfMissing True (takeDirectory target)
+      if vanilla then copyFile source target else createFileLink source target

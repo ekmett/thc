@@ -41,7 +41,7 @@ export TEST_DB_A="$scratch/db A" TEST_DB_B="$scratch/db B"
 (
   unset GHC_PKG
   GHC="$scratch/shim/ghc"
-  . compiler/toolchain.sh
+  . bin/toolchain.sh
   [ "$GHC" = "$(realpath "$scratch/install A/bin/ghc-9.14.1")" ]
   [ "$GHC_PKG" = "$(realpath "$scratch/install A/bin/ghc-pkg-9.14.1")" ]
 )
@@ -50,7 +50,7 @@ export TEST_DB_A="$scratch/db A" TEST_DB_B="$scratch/db B"
 if (
   GHC="$scratch/shim/ghc"
   GHC_PKG="$scratch/install B/bin/ghc-pkg-9.14.1"
-  . compiler/toolchain.sh
+  . bin/toolchain.sh
 ) > "$scratch/output" 2>&1; then
   echo 'different global package databases incorrectly accepted' >&2
   exit 1
@@ -70,7 +70,7 @@ chmod +x "$scratch/failing-ghc-pkg"
 if (
   GHC="$scratch/shim/ghc"
   GHC_PKG="$scratch/failing-ghc-pkg"
-  . compiler/toolchain.sh
+  . bin/toolchain.sh
 ) > "$scratch/output" 2>&1; then
   echo 'failed ghc-pkg query incorrectly accepted' >&2
   exit 1
@@ -81,7 +81,7 @@ grep -q 'could not list ghc-internal' "$scratch/output"
 (
   GHC="$scratch/shim/ghc"
   GHC_PKG="$scratch/compatible pkg"
-  . compiler/toolchain.sh
+  . bin/toolchain.sh
   [ "$GHC_PKG" = "$(realpath "$scratch/install A/bin/ghc-pkg-9.14.1")" ]
 )
 
@@ -92,7 +92,7 @@ exit 27
 SH
 chmod +x "$scratch/cabal stub"
 if GHC="$scratch/shim/ghc" GHC_PKG= CABAL="$scratch/cabal stub" \
-   TEST_CABAL_ARGS="$scratch/cabal-args" compiler/build.sh > "$scratch/output" 2>&1; then
+   TEST_CABAL_ARGS="$scratch/cabal-args" bin/build-compiler.sh > "$scratch/output" 2>&1; then
   echo 'Cabal stub unexpectedly succeeded' >&2
   exit 1
 fi

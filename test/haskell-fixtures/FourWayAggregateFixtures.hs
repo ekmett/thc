@@ -144,8 +144,8 @@ prepareFourWayAggregate :: FilePath -> IO ()
 prepareFourWayAggregate root = do
   let directory = "build/fourway-aggregate"
       output = root </> directory
-      source = "compiler/test-fixtures/FourWayAggregateFields.hs"
-      driver = "compiler/test-fixtures/FourWayAggregateFieldsNative.hs"
+      source = "test/fixtures/compiler/FourWayAggregateFields.hs"
+      driver = "test/fixtures/compiler/FourWayAggregateFieldsNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
       logs = directory </> "commands"
@@ -165,7 +165,7 @@ prepareFourWayAggregate root = do
     _ -> die "fourway-aggregate: requires native 64-bit GHC"
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-dynamic", "-Wall", "-Werror", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-package", "ghc", "-icompiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary]
+     "-package", "ghc", "-itest/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary]
   observed <- runLogged 30 root logs "native-run" [] (root </> binary) []
   let parse line = case splitTab line of
         [name, ordinal, selector, bits, result] -> (,,,,) name <$> readInteger ordinal <*>
@@ -188,26 +188,26 @@ prepareFourWayAggregate root = do
         reportPath = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-dstg-lint", "-package", "ghc", source])
     proof <- constructorProofs =<< readJson (root </> modulePath)
     modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     let paths = map (core </>) modules
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", "--output", reportPath] ++
+      (["bin/audit-core.py", "--output", reportPath] ++
        concatMap (\entry -> ["--entry", qualified entry]) entries ++ paths)
     report <- readJson (root </> reportPath)
     validateAudit report
     pure (stage, proof, field "summary" report,
       reportPath : paths ++ commandArtifacts exported ++ commandArtifacts audited)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source, driver, "thc.cabal",
     "test/haskell-fixtures/FourWayAggregateFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   artifactHashes <- hashes root $ [directory </> "oracle.tsv", binary] ++
     concat [paths | (_, _, _, paths) <- stages] ++ concatMap commandArtifacts [version, info, compiled, observed]
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

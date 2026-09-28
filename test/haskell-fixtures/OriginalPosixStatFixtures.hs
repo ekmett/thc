@@ -47,16 +47,16 @@ prepareOriginalPosixStat root
   | otherwise = prepareLinux root >> prepareOriginalPathStat root >> prepareOriginalPathMode root >> prepareOriginalPathLink root >> prepareOriginalPathAccess root >> prepareOriginalUnlinkAt root >> prepareOriginalFstatAt root >> prepareOriginalCurrentDirectory root >> prepareOriginalDirectoryStreams root >> prepareOriginalDirectoryPaths root
 
 fixtureSources :: [FilePath]
-fixtureSources = ["compiler/test-fixtures/OriginalPosixStatAudit.hs", "compiler/test-fixtures/OriginalPosixStatNative.hs",
+fixtureSources = ["test/fixtures/compiler/OriginalPosixStatAudit.hs", "test/fixtures/compiler/OriginalPosixStatNative.hs",
   "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-  "test/haskell-fixtures/OriginalPosixStatFixtures.hs", "scripts/audit-core.py", "scripts/core_original_foreign.py",
-  "scripts/core-capabilities.json", "compiler/export.sh", "compiler/build.sh", "compiler/THC/Plugin.hs"]
+  "test/haskell-fixtures/OriginalPosixStatFixtures.hs", "bin/audit-core.py", "bin/core_original_foreign.py",
+  "bin/core-capabilities.json", "bin/export-core.sh", "bin/build-compiler.sh", "src/compiler/THC/Plugin.hs"]
 
 prepareLinux :: FilePath -> IO ()
 prepareLinux root = do
   let directory = "build/original-posix-stat"
-      source = "compiler/test-fixtures/OriginalPosixStatAudit.hs"
-      driver = "compiler/test-fixtures/OriginalPosixStatNative.hs"
+      source = "test/fixtures/compiler/OriginalPosixStatAudit.hs"
+      driver = "test/fixtures/compiler/OriginalPosixStatNative.hs"
       entries = ["originalStatSize", "originalStatDev", "originalStatIno", "originalStatMode", "originalStatLength", "originalStatTypes",
         "originalFstat", "originalFstatErrno"]
       execute = runLogged 180 root (directory </> "logs")
@@ -72,7 +72,7 @@ prepareLinux root = do
     _ -> die "Original stat requires a native 64-bit GHC"
   let binary = directory </> "native/oracle"
   compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
-    "-package", "ghc-internal", "-icompiler/test-fixtures", "-odir", root </> directory </> "native",
+    "-package", "ghc-internal", "-itest/fixtures/compiler", "-odir", root </> directory </> "native",
     "-hidir", root </> directory </> "native", driver, "-o", root </> binary]
   observed <- execute "native-run" [] (root </> binary) [root </> directory </> "native"]
   (size,images,modes,fstats) <- maybe (die "Malformed original stat observations") pure
@@ -86,14 +86,14 @@ prepareLinux root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [source])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [source])
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing original Core export: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure (path,command)
     pure (modules,exported,audits)
   let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]

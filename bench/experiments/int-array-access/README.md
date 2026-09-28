@@ -48,7 +48,7 @@ Use GHC 9.14.1 and the pinned GraalVM installation (`JAVA_HOME`). From the
 repository root, first prepare fresh native/Core evidence:
 
 ```sh
-python3 scripts/prepare-int-arrays.py
+python3 bin/prepare-int-arrays.py
 python3 bench/experiments/int-array-access/run.py \
   /private/tmp/thc-int-array-access-new \
   --capture bench/experiments/int-array-access/captured

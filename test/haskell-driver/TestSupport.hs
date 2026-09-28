@@ -141,7 +141,7 @@ clipped value = show (take 512 value) ++ if length (take 513 value) > 512 then "
 copyTree :: FilePath -> FilePath -> IO ()
 copyTree source target = do
   createDirectoryIfMissing True target
-  children <- listDirectory source
+  children <- filter (/= ".git") <$> listDirectory source
   mapM_ (\name -> do
     let src = source </> name
         dst = target </> name

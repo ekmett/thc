@@ -63,7 +63,7 @@ variables expression = case expression of
 prepareOriginalTimeClock :: FilePath -> IO ()
 prepareOriginalTimeClock root = do
   let directory = "build/original-time-clock"
-      source = "compiler/test-fixtures/OriginalTimeClockAudit.hs"
+      source = "test/fixtures/compiler/OriginalTimeClockAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       oneLine result = case lines (BS.unpack (commandStdout result)) of
         [value] -> value
@@ -202,10 +202,10 @@ prepareOriginalTimeClock root = do
   unless (headersBefore == headersAfter) (die "Selected clock headers changed during fixture preparation")
   writeJson (root </> directory </> "oracle.json") $ object ["realtime" .= clock,"rows" .= (rows :: [Value])]
   audits <- forM [(stage,entry) | stage <- ["pre","post"], entry <- ["originalId","originalConstant","originalResolution","originalTime"]] $ \(stage,entry) ->
-    runLoggedExpect (if entry == "originalId" then 1 else 0) 180 root (directory </> "logs") (stage ++ "-" ++ entry) [] "python3" ["scripts/audit-core.py","--entry",entry,
+    runLoggedExpect (if entry == "originalId" then 1 else 0) 180 root (directory </> "logs") (stage ++ "-" ++ entry) [] "python3" ["bin/audit-core.py","--entry",entry,
       "--output",directory </> stage ++ "-" ++ entry ++ ".audit.json",directory </> "linked.json",directory </> stage ++ ".json"]
-  inputHashes <- hashes root [source,"test/haskell-fixtures/OriginalTimeClockFixtures.hs","src/THC/Driver/ForeignBitcode.hs",
-    "compiler/THC/Plugin.hs","compiler/THC/Interface.hs","scripts/core_package_manifest.py","scripts/audit-core.py"]
+  inputHashes <- hashes root [source,"test/haskell-fixtures/OriginalTimeClockFixtures.hs","src/driver/THC/Driver/ForeignBitcode.hs",
+    "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/core_package_manifest.py","bin/audit-core.py"]
   artifactHashes <- hashes root ([directory </> name | name <- ["oracle.json","original.json","linked.json","base-original.json","base-linked.json","specialized-closed.json","pre.json","post.json"]] ++
     [directory </> stage ++ "-" ++ entry ++ ".audit.json" | stage <- ["pre","post"], entry <- ["originalId","originalConstant","originalResolution","originalTime"]] ++
     concatMap commandArtifacts ([version,library,info,imports,include,identity,baseImports] ++ audits))

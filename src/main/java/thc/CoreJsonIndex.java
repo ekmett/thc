@@ -20,7 +20,7 @@ import static thc.CoreJsonRank.*;
  * Topology follows rust-works/succinctly (MIT), revision
  * 6ee3210413d1f180fd6a93ab30c5bc6aaad29b78, json/simple.rs. Rank follows Everett,
  * eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca, include/everett/rank.h;
- * see third-party-licenses/everett-BSD-2-Clause.txt. This is THC's wire format,
+ * see third-party/licenses/everett-BSD-2-Clause.txt. This is THC's wire format,
  * not an upstream compatibility or performance claim.
  *
  * Building checks container grammar and quoted boundaries, not scalar decoding,

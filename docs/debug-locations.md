@@ -2,11 +2,11 @@
 
 THC retains GHC source attribution in both runtime backends. Source and boot exports enable `-g` and structured source notes by default; `THC_SOURCE_NOTES=false` opts out. AST expressions and roots retain immutable source sections; bytecode emission uses the DSL's source-region metadata. There are no executable tick wrappers, logging calls, or debugger events on the normal path.
 
-The exporter records source files with their contents, span identities, original GHC coordinates, and exact UTF-16 character ranges where the contents resolve those coordinates. Expression metadata retains the innermost source and the full outer-to-inner note chain; binder spans provide root fallbacks. Module merging checks consistency when the same source identity occurs more than once. The schema is documented in [the exporter README](../compiler/README.md#optional-source-attribution).
+The exporter records source files with their contents, span identities, original GHC coordinates, and exact UTF-16 character ranges where the contents resolve those coordinates. Expression metadata retains the innermost source and the full outer-to-inner note chain; binder spans provide root fallbacks. Module merging checks consistency when the same source identity occurs more than once. The schema is documented in [the exporter README](../docs/compiler.md#optional-source-attribution).
 
 GHC columns begin at one, expand tabs to eight-column stops, count Unicode code points, and end exclusively. Truffle character ranges count UTF-16 units. `SourceNotes.hs` deliberately includes a supplementary Unicode character, a tab, and a `LINE` pragma naming a missing source file. An independent exporter checker verifies the character ranges; missing or remapped content retains original coordinates without invented offsets. The runtime uses a separate content-free `Source` when no exact character range is available, so GHC tab columns are never mistaken for Java character columns. If an exclusive range ends at column one of a later unavailable line, its primary section identifies the known start point and its provenance still retains the full original range.
 
-`scripts/prepare-tests.sh` always generates genuine source-enabled `SourceNotes` and `RepresentationAudit` fixtures under `build/source-core`, even when the ordinary workload opts out. Default CI Map exports also retain source notes. Runtime tests cover their locations and results, including recursive and polymorphic join lowering, with source attachment enabled and disabled. Synthetic fixtures also cover nested source notes and absent content.
+`bin/prepare-tests.sh` always generates genuine source-enabled `SourceNotes` and `RepresentationAudit` fixtures under `build/source-core`, even when the ordinary workload opts out. Default CI Map exports also retain source notes. Runtime tests cover their locations and results, including recursive and polymorphic join lowering, with source attachment enabled and disabled. Synthetic fixtures also cover nested source notes and absent content.
 
 The initial source export was checked against the frozen `work/core-proofs-v1` corpus. All existing test-fixture executable trees match after lexical alpha renaming. The same comparison retains representation, WHNF, speculation, strict-field and join metadata, not just expression tags. All **52 syntactically reachable Map definitions** also match exactly, including cold error paths. Across the whole Map bundle, `-g` changes some unreachable lookup variants and generated metadata; the supplied binding count changes from 1619 to 1621. The capability frontier stays at 52 reachable definitions, three missing globals and thirteen reported issues.
 
@@ -15,10 +15,10 @@ The source-enabled Map export has 8,995 span records and 40,654 references, incl
 Reproduce the executable comparison after retaining a no-source baseline:
 
 ```sh
-scripts/prepare-tests.sh
-compiler/export-map.sh
-python3 scripts/check-source-metadata.py build/map/core/*.json
-python3 scripts/compare-executable-core.py \
+bin/prepare-tests.sh
+bin/export-map.sh
+python3 bin/check-source-metadata.py build/map/core/*.json
+python3 bin/compare-executable-core.py \
   work/core-proofs-v1/map/modules.txt build/map/modules.txt \
   --strip-snapshot-prefix --entry mapAggregate
 ```

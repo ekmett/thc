@@ -205,8 +205,8 @@ deopt counts, and zero does not establish code liveness or absence of deopts.
 ```sh
 cabal test runtime-services-api cpu-affinity-api -fdevelopment
 bash test/haskell-runtime/check-safe-haskell.sh
-ghc --make -XHaskell2010 -threaded -Wall -Werror -iruntime \
-  examples/THC/RuntimeServices.hs runtime/cpu-affinity.c runtime/runtime-services.c \
+ghc --make -XHaskell2010 -threaded -Wall -Werror -isrc/runtime \
+  examples/THC/RuntimeServices.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c \
   -main-is THC.RuntimeServices
 ```
 

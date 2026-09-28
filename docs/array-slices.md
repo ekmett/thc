@@ -54,9 +54,9 @@ of a small array, full-width invalid ranges, bad carriers, State-before-copy,
 and exact arity/levity/result proofs in strict and diagnostic modes.
 
 ```sh
-python3 scripts/prepare-array-slices.py
-python3 scripts/test-array-slice-model.py
-python3 scripts/test-core-arrays.py
+python3 bin/prepare-array-slices.py
+python3 bin/test-array-slice-model.py
+python3 bin/test-core-arrays.py
 ./gradlew test --tests thc.runtime.ArraySliceTest --tests thc.runtime.BoxedArrayTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.ArraySliceTest --tests thc.runtime.BoxedArrayTest
 ```

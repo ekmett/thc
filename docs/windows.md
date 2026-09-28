@@ -17,10 +17,10 @@ Install a real Python interpreter first; the Microsoft Store alias does not work
 
 ~~~powershell
 $env:THC_PYTHON = 'C:\path\to\python.exe'
-. ./scripts/bootstrap-windows.ps1 -Prefix 'C:\path\to\thc-tools'
+. ./bin/bootstrap-windows.ps1 -Prefix 'C:\path\to\thc-tools'
 Invoke-ThcTool $env:CABAL @('update')
-./scripts/windows.ps1 -Action Build -Jobs 4
-./scripts/windows.ps1 -Action Test -Jobs 4
+./bin/windows.ps1 -Action Build -Jobs 4
+./bin/windows.ps1 -Action Test -Jobs 4
 ~~~
 
 Choose Jobs after inspecting available CPU and memory. Four is a conservative
@@ -38,7 +38,7 @@ still stop the workflow.
 ## Native JSON index checks
 
 ~~~powershell
-./scripts/windows.ps1 -Action JsonIndexTest -Jobs 4
+./bin/windows.ps1 -Action JsonIndexTest -Jobs 4
 ~~~
 
 This focused action runs `cabal test json-index -fdevelopment
@@ -60,7 +60,7 @@ real Cabal-registered plugin archive; it does not invent a Unix shared-library
 manifest or request an unavailable dynamic library way.
 
 ~~~powershell
-./compiler/export.ps1 examples/THC/Fixtures.hs
+./bin/export-core.ps1 examples/THC/Fixtures.hs
 $modules = 'build/core/THC.Prim.json,build/core/THC.Fixtures.json'
 $env:THC_BACKEND = 'ast'
 ./build/install/thc/bin/thc.bat $modules sumLoop 100
@@ -98,7 +98,7 @@ application Core, avoiding the batch launcher's command-length limit.
 Stock Windows GHC interfaces do not contain all executable Core needed by this
 support library. On a cold cache, THC acquires the official GHC 9.14.1 source
 archive, checks its SHA-256 and the file inventory in
-`compiler/windows-ghc-internal.json`, and builds a private source graph. Native
+`config/ghc/9.14.1/windows-ghc-internal.json`, and builds a private source graph. Native
 `hsc2hs` uses the selected Windows headers; GHC orders 211 modules and 24 boot
 interfaces. The compiler-provided virtual `GHC.Internal.Prim` has no source body
 in this graph. The selected x86_64 Windows compiler must use its GMP backend.
@@ -126,7 +126,7 @@ interface pragmas. This choice is recorded in cache inputs. Linux and macOS keep
 their existing dynamic export path.
 
 Without imported optimizations, the user's `main :: IO ()` can remain a thunk
-producing an action. `compiler/WindowsRunMain.hs` supplies a real Haskell host-entry
+producing an action. `src/driver/WindowsRunMain.hs` supplies a real Haskell host-entry
 adapter, compiled by GHC with the application. Its opaque state-transformer
 function leaves a genuine partial application with the existing strict IO entry
 ABI. The original `Main.main` binding and its laziness remain unchanged; neither
@@ -179,7 +179,7 @@ frequent integrations. The CI result is informative, not a manual-merge gate.
 ## Native array fixtures
 
 ~~~powershell
-./scripts/windows.ps1 -Action ArrayTest -Jobs 4
+./bin/windows.ps1 -Action ArrayTest -Jobs 4
 ~~~
 
 This runs the existing Int, Int8, Int16, Int32, Double and Float/Word array
@@ -201,7 +201,7 @@ An arbitrary embedding context, including one with file/native access enabled,
 does not acquire this fixed host-filesystem authority.
 
 ~~~powershell
-./scripts/windows.ps1 -Action DirectoryTest -Jobs 4
+./bin/windows.ps1 -Action DirectoryTest -Jobs 4
 ~~~
 
 This action builds the runtime and native Haskell tools, prepares the real
@@ -252,7 +252,7 @@ access. Directory calls and encoding calls share the context's captured Windows
 last-error slot. The original errno slot remains separate.
 
 ~~~powershell
-./scripts/windows.ps1 -Action CodePageTest -Jobs 4
+./bin/windows.ps1 -Action CodePageTest -Jobs 4
 ~~~
 
 The full Test action and native Windows CI include this test. The producer uses
@@ -298,7 +298,7 @@ This resolves their Sulong `KERNEL32.dll` dependency lookup without granting
 guest filesystem access. It does not enable native DWARF stack inspection.
 
 ~~~powershell
-./scripts/windows.ps1 -Action LibdwTest -Jobs 4
+./bin/windows.ps1 -Action LibdwTest -Jobs 4
 ~~~
 
 The full Test action and Windows CI include this slice. The native GHC producer
@@ -392,11 +392,11 @@ This does not use `GetLastError` for C allocation failures. The existing context
 ownership, ordered borrows, bounds, allocate/copy/retire realloc and disposal
 rules are shared with Linux; LocalFree allocations keep their own deallocator.
 
-Run `./scripts/windows.ps1 -Action WindowsServicesTest -Jobs 2` to build both native
+Run `./bin/windows.ps1 -Action WindowsServicesTest -Jobs 2` to build both native
 directory/code-page oracles and test both services plus the ABI parser controls
 in one Gradle invocation with both handoff modes.
 
-Run `./scripts/windows.ps1 -Action MallocTest -Jobs 2` to build the pinned native
+Run `./bin/windows.ps1 -Action MallocTest -Jobs 2` to build the pinned native
 GHC oracle and distribution and run the allocation/returned-pointer/descriptor
 checks in `testDefault` and `testDense` together. It also runs portable Linux/macOS
 stdio ABI parser controls; these model receipts do not establish native POSIX
@@ -426,7 +426,7 @@ repository's entire fixture/test suite.
 
 * The stock GHC 9.14.1 bindist has no complete installed-library Core: the
   initial native probe found 532 incomplete interfaces. Run
-  ./scripts/windows.ps1 -Action CheckCore to test a selected installation.
+  ./bin/windows.ps1 -Action CheckCore to test a selected installation.
   The command deliberately fails when Core is unavailable. Local CString
   recompilation does not make that compiler a full-Core installation.
   See [the compiler build requirements](ghc-core.md).

@@ -335,7 +335,7 @@ public class ProcessSignalsTest {
     @Test public void standaloneScriptReservesSignalWithoutOverwritingUserSettings(@TempDir Path directory) throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux")); var java = directory.resolve("bin/java").toFile(); java.getParentFile().mkdirs();
         Files.writeString(java.toPath(), "#!/bin/sh\nprintf 'reserved=%s\\n' \"\u0024{_JAVA_SR_SIGNUM-unset}\"\n"); assertTrue(java.setExecutable(true));
-        var script = new File(System.getProperty("thc.projectRoot"), "build/scripts/thc");
+        var script = new File(System.getProperty("thc.projectRoot"), "build/bin/thc");
         for (var setting : Arrays.asList(null, "64", "12", "")) {
             var builder = new ProcessBuilder("sh", script.getPath()).redirectErrorStream(true); builder.environment().put("JAVA_HOME", directory.toString());
             if (setting == null) builder.environment().remove("_JAVA_SR_SIGNUM"); else builder.environment().put("_JAVA_SR_SIGNUM", setting);
@@ -350,7 +350,7 @@ public class ProcessSignalsTest {
     @Test public void nativeChildControlsAndGhcActionOracleHaveMatchingInputs() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux")); var root = new File(System.getProperty("thc.projectRoot"));
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/process-signals/manifest.json").toPath()));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c",
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c",
             "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/process-signals/oracle.txt", "build/process-signals/native-controls.txt"), "build/process-signals/");
         assertEquals("[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(10,[-1,-2,-4,-5]),(12,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5]),(24,[-1,-2,-4,-5]),(25,[-1,-2,-4,-5])]\n", Files.readString(new File(root, "build/process-signals/oracle.txt").toPath()));

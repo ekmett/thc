@@ -16,7 +16,7 @@ runtime jars stayed unchanged.
 
 ```sh
 GHC=<ghc-9.14.1> GHC_PKG=<ghc-pkg-9.14.1> \
-  python3 scripts/prepare-simd-audit.py --vector int32x4 --export-only
+  python3 bin/prepare-simd-audit.py --vector int32x4 --export-only
 JAVA_HOME=<pinned-graalvm> ./gradlew --offline installDist
 JAVA_HOME=<pinned-graalvm> \
   bench/experiments/simd-foundation/run-runtime.sh build/simd-int32-native-graphs int32x4

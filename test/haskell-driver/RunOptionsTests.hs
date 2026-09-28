@@ -74,11 +74,11 @@ tests env = TestLabel "run options and target selection" $ TestList
         writeText launcher "not executed\n"
         ordinary <- run env package Nothing 30 arguments
         assertFailure ordinary
-        assertContains "compiler/build.sh" (err ordinary)
+        assertContains "bin/build-compiler.sh" (err ordinary)
         assertBool "default skips the missing auditor" (not ("audit-core.py" `isInfixOf` err ordinary))
         verified <- run env package Nothing 30 (arguments ++ ["--verify-artifacts"])
         assertFailure verified
-        assertContains "scripts/audit-core.py" (err verified)
+        assertContains "bin/audit-core.py" (err verified)
   , TestLabel "CLI rejects invalid selection before building" $ TestCase $
       forM_ ["", "MANAGED", "automatic", "native,managed"] $ \invalid -> do
         result <- run env (root env) Nothing 30 ["run", "--ffi", invalid]

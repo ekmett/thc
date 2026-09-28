@@ -102,7 +102,7 @@ evaluatedness rules still determine the outer record. Generic constructor
 application results, case binders, and lambda boundaries carry the actual
 logical layout. Ordinary scalar records keep the existing schema.
 
-Run `python3 scripts/check-aggregate-layout.py --prepare` with the pinned GHC and
+Run `python3 bin/check-aggregate-layout.py --prepare` with the pinned GHC and
 ghc-pkg to rebuild the plugin, compile the fixture natively without the plugin,
 and check genuine optimized exports before and after Tidy. It checks eleven exact
 recursive layouts, including mixed physical reps, lifted payloads, nested
@@ -162,7 +162,7 @@ Missing native layout is accepted only for known-pointer unknown levity with a
 complete logical shape, including nested sums. Abstract alternatives and tuple
 `components: null` still reject, even when their native vector is known.
 
-[SumLayoutAudit.hs](../compiler/test-fixtures/SumLayoutAudit.hs) and its native
+[SumLayoutAudit.hs](../test/fixtures/compiler/SumLayoutAudit.hs) and its native
 driver check 169 values against an independent arithmetic model. Genuine exports
 before and after Tidy retain 19 result shapes, including nested sums/tuples,
 newtype aliases, runtime/levity polymorphism, three-way sums, lazy boxed payloads,
@@ -170,7 +170,7 @@ and the zero-width distinctions above. Address/vector raising producers are
 native compilation and metadata controls, never native execution claims.
 An independent projection checker tests source field order, duplicate-slot
 rejection, tag indexing, pointer levity, floating width, and null layouts.
-`python3 scripts/check-sum-layout.py --prepare` freezes source, compiler, toolchain,
+`python3 bin/check-sum-layout.py --prepare` freezes source, compiler, toolchain,
 package, command and artifact hashes in `build/sum-layout/provenance.json`;
 running it without `--prepare` verifies those hashes before checking the exports.
 Normal test preparation and CI include these checks.

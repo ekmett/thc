@@ -45,7 +45,7 @@ import Unsafe.Coerce (unsafeCoerce)
 
 directory, source :: FilePath
 directory = "build/rubbish-literals"
-source = "compiler/test-fixtures/RubbishLiteralAudit.hs"
+source = "test/fixtures/compiler/RubbishLiteralAudit.hs"
 
 rubbish :: CoreExpr -> [Literal]
 rubbish expression = case expression of
@@ -177,19 +177,19 @@ prepareRubbishLiterals root = do
     "scope" .= ("Rubbish literals in retained unfoldings of installed Event.Manager, not a full-module execution" :: String)]
   audits <- forM ["pre","post"] $ \stage -> do
     let output = directory </> stage ++ ".audit.json"
-    result <- execute (stage ++ "-audit") [] "python3" $ ["scripts/audit-core.py", "--output", output] ++
+    result <- execute (stage ++ "-audit") [] "python3" $ ["bin/audit-core.py", "--output", output] ++
       concat [["--entry",name] | name <- entries] ++ [directory </> stage ++ ".json"]
     pure (output,result)
   frontierAudit <- runLoggedExpect 1 180 root (directory </> "logs") "frontiers-audit" [] "python3"
-    (["scripts/audit-core.py", "--output", directory </> "frontiers.audit.json"] ++
+    (["bin/audit-core.py", "--output", directory </> "frontiers.audit.json"] ++
       concat [["--entry",name] | name <- ["emptyTuple","singletonTuple","sum","vector"]] ++ [directory </> "frontiers.json"])
-  compilerFiles <- listDirectory (root </> "compiler/THC")
-  scriptFiles <- listDirectory (root </> "scripts")
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"test/haskell-fixtures/RubbishLiteralFixtures.hs",
     "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
-    "scripts/audit-core.py","scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    "bin/audit-core.py","bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
   installedInterfaces <- forM (map fst locations) $ \path -> do
     digest <- hashFile path
     pure (object ["path" .= path, "sha256" .= digest])

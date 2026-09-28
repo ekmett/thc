@@ -67,8 +67,8 @@ prepareOriginalGmp root requireSupported = do
   unless (os == "linux" && arch == "x86_64" && sizeOf (0 :: Int) == 8 && sizeOf (0 :: CLong) == 8)
     (die "Original GMP fixture currently requires the verified Linux x86_64 LP64 host")
   let directory = "build/original-gmp"
-      source = "compiler/test-fixtures/OriginalGmpAudit.hs"
-      driver = "compiler/test-fixtures/OriginalGmpNative.hs"
+      source = "test/fixtures/compiler/OriginalGmpAudit.hs"
+      driver = "test/fixtures/compiler/OriginalGmpNative.hs"
       binary = directory </> "native/oracle"
       execute = runLogged 180 root (directory </> "logs")
   createDirectoryIfMissing True (root </> directory </> "native")
@@ -108,7 +108,7 @@ prepareOriginalGmp root requireSupported = do
   registered <- execute "package-register" [] ghcPkg ["--package-db",root </> database,"update",root </> configuration]
   let packageOptions = ["-package-db",root </> database,"-package","ghc-internal"]
   compiled <- execute "native-build" [] ghc (["--make", "-j2", "-O2", "-fforce-recomp",
-    "-dcore-lint", "-dstg-lint", "-icompiler/test-fixtures",
+    "-dcore-lint", "-dstg-lint", "-itest/fixtures/compiler",
     "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native",
     driver, "-o", root </> binary] ++ packageOptions)
   observed <- execute "native-observations" [] (root </> binary) []
@@ -126,7 +126,7 @@ prepareOriginalGmp root requireSupported = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | (entry,_) <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (packageOptions ++ options ++ [source])
+      "bin/export-core.sh" (packageOptions ++ options ++ [source])
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine original GMP consumer: " ++ path))) modules
@@ -134,22 +134,22 @@ prepareOriginalGmp root requireSupported = do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- runLoggedExpect (if requireSupported then 0 else 1) 180 root (directory </> "logs")
         (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
       report <- either die pure . eitherDecodeStrict' =<< BS.readFile (root </> path)
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool requireSupported) -> pure ()
         _ -> die "Unexpected original GMP strict-audit status"
       pure (path,command)
     pure (stage,modules,exported,audits)
-  compilerFiles <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let commands = [version,info,registration,initialized,registered,compiled,observed] ++ concat [exported:map snd audits | (_,_,exported,audits) <- stages]
       inputs = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/OriginalGmpFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","compiler/build.sh","compiler/export.sh",
-        "compiler/toolchain.sh","compiler/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        ["compiler/THC" </> path | path <- compilerFiles, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json","bin/build-compiler.sh","bin/export-core.sh",
+        "bin/toolchain.sh","bin/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        ["src/compiler/THC" </> path | path <- compilerFiles, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
       artifacts = [binary,oracle,configuration] ++ concat [modules ++ map fst audits | (_,modules,_,audits) <- stages] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts

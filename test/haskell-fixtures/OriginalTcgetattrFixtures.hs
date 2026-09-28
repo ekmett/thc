@@ -30,15 +30,15 @@ directory = "build/original-tcgetattr"
 
 fixtureSources :: FilePath -> IO [FilePath]
 fixtureSources root = do
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  pure $ sort $ ["compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  pure $ sort $ ["test/fixtures/compiler/OriginalTcgetattrAudit.hs", "test/fixtures/compiler/OriginalTcgetattrNative.hs",
     "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json", "compiler/export.sh", "compiler/build.sh",
-    "compiler/toolchain.sh", "compiler/plugin.py"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+    "src/main/resources/thc/scalar-primop-signatures.json", "bin/export-core.sh", "bin/build-compiler.sh",
+    "bin/toolchain.sh", "bin/plugin.py"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
 
 prepareOriginalTcgetattr :: FilePath -> IO ()
 prepareOriginalTcgetattr root = do
@@ -68,7 +68,7 @@ prepareOriginalTcgetattr root = do
     let binary = directory </> "native/oracle"
     compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
       "-package", "ghc-internal", "-package", "unix", "-odir", root </> directory </> "native", "-hidir", root </> directory </> "native",
-      "compiler/test-fixtures/OriginalTcgetattrNative.hs", "-o", root </> binary]
+      "test/fixtures/compiler/OriginalTcgetattrNative.hs", "-o", root </> binary]
     observed <- execute "native-run" [] (root </> binary) []
     (size, rows) <- maybe (die "Malformed original tcgetattr observations") pure
       (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe (Int, [(Int,Int,[Int])]))
@@ -82,11 +82,11 @@ prepareOriginalTcgetattr root = do
             ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
       exported <- execute (stage ++ "-export")
         [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-        "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ ["compiler/test-fixtures/OriginalTcgetattrAudit.hs"])
+        "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["test/fixtures/compiler/OriginalTcgetattrAudit.hs"])
       audits <- forM entries $ \entry -> do
         let path = directory </> stage </> entry ++ ".audit.json"
         command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-          (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+          (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
         pure (path,command)
       pure (modules,exported,audits)
     let commands = [version,info,compiled,observed] ++ concat [exported : map snd audits | (_,exported,audits) <- exports]

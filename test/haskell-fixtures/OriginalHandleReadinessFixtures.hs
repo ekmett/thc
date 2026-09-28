@@ -27,8 +27,8 @@ import Text.Read (readMaybe)
 prepareOriginalHandleReadiness :: FilePath -> IO ()
 prepareOriginalHandleReadiness root = do
   let directory = "build/original-handle-readiness"
-      source = "compiler/test-fixtures/OriginalHandleReadinessAudit.hs"
-      driver = "compiler/test-fixtures/OriginalHandleReadinessNative.hs"
+      source = "test/fixtures/compiler/OriginalHandleReadinessAudit.hs"
+      driver = "test/fixtures/compiler/OriginalHandleReadinessNative.hs"
       execute = runLogged 120 root (directory </> "logs")
   createDirectoryIfMissing True (root </> directory </> "native")
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -59,20 +59,20 @@ prepareOriginalHandleReadiness root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- ["originalIsTerminal", "originalIsTerminalErrno"]]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ [source])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ [source])
     mapM_ (\path -> do
       present <- doesFileExist (root </> path)
       unless present (die ("Missing genuine GHC export: " ++ path))) modules
     audits <- forM ["originalIsTerminal", "originalIsTerminalErrno"] $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure (path,command)
     pure (modules, exported, audits)
   let sources = [source,driver,"thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/OriginalHandleReadinessFixtures.hs",
-        "scripts/audit-core.py", "scripts/core_original_foreign.py", "scripts/core-capabilities.json",
-        "compiler/export.sh", "compiler/build.sh", "compiler/THC/Plugin.hs"]
+        "bin/audit-core.py", "bin/core_original_foreign.py", "bin/core-capabilities.json",
+        "bin/export-core.sh", "bin/build-compiler.sh", "src/compiler/THC/Plugin.hs"]
       commands = [version,info,compiled] ++ [command | (_,command) <- rows] ++
         concat [exported : [command | (_,command) <- audits] | (_,exported,audits) <- exports]
       artifacts = [binary,oracle] ++ concat [modules ++ [path | (path,_) <- audits] | (modules,_,audits) <- exports] ++

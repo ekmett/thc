@@ -29,7 +29,7 @@ prepareDelimitedContinuations root = do
   let directory = "build/delimited-continuations"
       output = root </> directory
       source = "examples/DelimitedContinuations.hs"
-      driver = "compiler/test-fixtures/DelimitedContinuationsNative.hs"
+      driver = "test/fixtures/compiler/DelimitedContinuationsNative.hs"
       entries = ["promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest", "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin", "resumedScalar", "recapturedMask", "resumedApplication", "resumedScalarApplication", "polymorphicApplications", "polymorphicScalarApplications"]
       stages = ["pre", "post"]
       logs = directory </> "commands"
@@ -48,11 +48,11 @@ prepareDelimitedContinuations root = do
     let core = directory </> stage </> "core"
     exported <- runLogged 180 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     audits <- fmap concat $ forM entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
       audited <- runLogged 30 root logs (stage ++ "-audit-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", "--entry", entry, "--output", report, core </> "DelimitedContinuations.json"]
+        ["bin/audit-core.py", "--entry", entry, "--output", report, core </> "DelimitedContinuations.json"]
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
         Just (Object value) | KeyMap.lookup "accepted" value == Just (Bool True),
@@ -61,14 +61,14 @@ prepareDelimitedContinuations root = do
         _ -> die ("Strict continuation audit rejected " ++ entry)
       pure (report : commandArtifacts audited)
     pure ((core </> "DelimitedContinuations.json") : commandArtifacts exported ++ audits)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/DelimitedContinuationsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   sourceHashes <- hashes root sources
   artifactHashes <- hashes root (artifacts ++ concatMap commandArtifacts [version, compiled, observations])
   writeJson (output </> "manifest.json") $ object

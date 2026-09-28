@@ -30,9 +30,9 @@ prepareThreadInventory root = do
       output = root </> directory
       manifest = output </> "manifest.json"
       source = "examples/ThreadInventory.hs"
-      driver = "compiler/test-fixtures/ThreadInventoryNative.hs"
-      callbackDriver = "compiler/test-fixtures/CallbackIdentityNative.hs"
-      callbackC = "compiler/test-fixtures/callback-identity.c"
+      driver = "test/fixtures/compiler/ThreadInventoryNative.hs"
+      callbackDriver = "test/fixtures/compiler/CallbackIdentityNative.hs"
+      callbackC = "test/fixtures/compiler/callback-identity.c"
       entries = ["selfInventory", "boundQuery", "snapshotSize", "forkSnapshot", "lazyFork", "forkMasks", "selfKilledStatus", "parkedFork", "callbackObservation"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
@@ -45,10 +45,10 @@ prepareThreadInventory root = do
     let core = directory </> stage </> "core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
-      _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", entry,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
         "--output", report, core </> "ThreadInventory.json"] ""
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
@@ -73,14 +73,14 @@ prepareThreadInventory root = do
         ["Unmasked", "MaskedInterruptible", "MaskedUninterruptible"]
   unless (callbacks == expectedCallbacks ++ "(True,True,True,True)\n") (die "Native callback identity/mask contract disagreed")
   writeFile (output </> "callback-oracle.txt") callbacks
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, callbackDriver, callbackC, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ThreadInventoryFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "callback-oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
           suffix <- "core/ThreadInventory.json" : [entry ++ "-audit.json" | entry <- entries]]

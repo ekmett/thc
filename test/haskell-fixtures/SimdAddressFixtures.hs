@@ -186,10 +186,10 @@ prepareSimdAddresses root = do
           audit = directory </> stage ++ "-audit.json"
       compiled <- execute (stage ++ "-export")
         [("THC_CORE_OUT",root </> coreDirectory),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
-        "compiler/export.sh" ((if post then ["-fllvm","-fplugin-opt=THC.Plugin:post-tidy"]
+        "bin/export-core.sh" ((if post then ["-fllvm","-fplugin-opt=THC.Plugin:post-tidy"]
           else ["-fno-code","-fwrite-if-simplified-core"]) ++ [sourceDir </> moduleName <.> "hs"])
       audited <- execute (stage ++ "-audit") [] "python3"
-        (["scripts/audit-core.py",core,"--output",audit] ++ concatMap (\entry -> ["--entry",entryName entry]) selected)
+        (["bin/audit-core.py",core,"--output",audit] ++ concatMap (\entry -> ["--entry",entryName entry]) selected)
       report <- BS.readFile (root </> audit) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
@@ -198,15 +198,15 @@ prepareSimdAddresses root = do
         _ -> die "Strict vector address audit failed"
       pure (stage,object ["core" .= core,"audit" .= audit,"entries" .= map entryName selected],
         [core,audit] ++ commandArtifacts compiled ++ commandArtifacts audited)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ ["test/haskell-fixtures/SimdAddressFixtures.hs",
     "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
-    "compiler/export.sh","compiler/build.sh","compiler/toolchain.sh","compiler/plugin.py",
-    "scripts/audit-core.py","scripts/core-capabilities.json","scripts/simd-families.json",
+    "bin/export-core.sh","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py",
+    "bin/audit-core.py","bin/core-capabilities.json","bin/simd-families.json",
     "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
-    ["scripts" </> path | path <- scripts,"core_" `isPrefixOf` path,takeExtension path == ".py"])
+    ["src/compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
+    ["bin" </> path | path <- scripts,"core_" `isPrefixOf` path,takeExtension path == ".py"])
   sources <- listDirectory (root </> sourceDir)
   artifactHashes <- hashes root ([sourceDir </> path | path <- sources,takeExtension path == ".hs"] ++
     scalarArtifacts ++ vectorArtifacts ++ commandArtifacts version ++ concat [files | (_,_,files) <- exported])

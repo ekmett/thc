@@ -90,8 +90,8 @@ prepareStablePtrFFI root = do
     actual <- hashFile path
     unless (actual == expected) (die "stableptr-ffi: acquired artifact hash differs")
   inputs <- hashes root $ [fixture </> source | source <- sources] ++
-    ["test/haskell-fixtures/StablePtrFFIFixtures.hs","src/THC/Driver/PackageNative.hs",
-     "src/THC/Driver/NativeArgumentBridge.hs",
+    ["test/haskell-fixtures/StablePtrFFIFixtures.hs","src/driver/THC/Driver/PackageNative.hs",
+     "src/driver/THC/Driver/NativeArgumentBridge.hs",
      "src/main/java/thc/runtime/StablePointers.java","src/main/java/thc/runtime/PackageScalarAccess.java",
      "src/main/java/thc/runtime/PackagePointerLease.java","src/main/java/thc/runtime/PackageNativePointer.java"]
   artifacts <- hashes root $ [directory </> "packages.json",directory </> "audit.json",projectFile,packageFile] ++

@@ -30,8 +30,8 @@ prepareScalarMemoryUtilities root = do
       output = root </> directory
       manifest = output </> "manifest.json"
       logs = directory </> "commands"
-      fixture = "compiler/test-fixtures/ScalarMemoryUtilities.hs"
-      driver = "compiler/test-fixtures/ScalarMemoryUtilitiesNative.hs"
+      fixture = "test/fixtures/compiler/ScalarMemoryUtilities.hs"
+      driver = "test/fixtures/compiler/ScalarMemoryUtilitiesNative.hs"
       entries = ["memoryCase", "pinCase", "thawCase", "shrinkCase", "differenceCase", "remainderCase",
                  "numericDifference", "numericRemainder"]
       stages = ["pre", "post"]
@@ -44,7 +44,7 @@ prepareScalarMemoryUtilities root = do
   let native = output </> "native"
   createDirectoryIfMissing True native
   build <- runLogged 240 root logs "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-icompiler/test-fixtures",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-itest/fixtures/compiler",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   oracle <- runLogged 60 root logs "native-oracle" [] (native </> "oracle") []
   unless (length (BSC.lines (commandStdout oracle)) == 271) (die "Wrong scalar memory native corpus size")
@@ -55,9 +55,9 @@ prepareScalarMemoryUtilities root = do
         auditPath = directory </> stage </> "audit.json"
     exported <- runLogged 240 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [fixture])
+      "bin/export-core.sh" (options ++ [fixture])
     audited <- runLogged 120 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", core </> "ScalarMemoryUtilities.json", "--output", auditPath] ++
+      (["bin/audit-core.py", core </> "ScalarMemoryUtilities.json", "--output", auditPath] ++
        concatMap (\entry -> ["--entry",entry]) entries)
     bytes <- BS.readFile (root </> auditPath)
     case decodeStrict' bytes of
@@ -67,14 +67,14 @@ prepareScalarMemoryUtilities root = do
       _ -> die ("Strict scalar memory utilities audit rejected " ++ stage)
     pure ([core </> "ScalarMemoryUtilities.json", auditPath] ++
       commandArtifacts exported ++ commandArtifacts audited)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [fixture,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/ScalarMemoryUtilitiesFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
       artifacts = [directory </> "oracle.tsv", directory </> "native/oracle"] ++
         commandArtifacts build ++ commandArtifacts oracle ++ concat exported
   inputHashes <- hashes root inputs

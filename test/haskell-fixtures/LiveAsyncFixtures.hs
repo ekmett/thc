@@ -28,8 +28,8 @@ prepareLiveAsync root = do
   let directory = "build/live-async"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/LiveAsyncAudit.hs"
-      driver = "compiler/test-fixtures/LiveAsyncNative.hs"
+      source = "test/fixtures/compiler/LiveAsyncAudit.hs"
+      driver = "test/fixtures/compiler/LiveAsyncNative.hs"
       entries = ["forceShared", "strictWorker", "strictCall", "strictEntry", "takeReady", "takeRunning", "releaseGate", "prefixCount", "warmLoop", "asyncPayload"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
@@ -43,16 +43,16 @@ prepareLiveAsync root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
-      _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", entry,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
         "--output", directory </> stage </> (entry ++ "-audit.json"),
         core </> "LiveAsyncAudit.json"] ""
       pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   actual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["+RTS", "-N2", "-RTS"] ""
@@ -64,14 +64,14 @@ prepareLiveAsync root = do
   unless (strictActual == actual)
     (die "Live async strict-callee native oracle disagreed with interrupted-thunk resumption")
   writeFile (output </> "strict-oracle.txt") strictActual
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/LiveAsyncFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "strict-oracle.txt"] ++ [directory </> stage </> suffix |
         stage <- stages,
         suffix <- "core/LiveAsyncAudit.json" : [entry ++ "-audit.json" | entry <- entries]]

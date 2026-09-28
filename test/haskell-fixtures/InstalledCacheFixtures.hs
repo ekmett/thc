@@ -72,7 +72,7 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
   builds <- forM [(dependency, "InterfaceCacheDependency", baseUnit),
                   (target, "InterfaceCacheRoot", baseUnit ++ " " ++ dependency)] $ \(identifier, name, dependencies) -> do
     createDirectoryIfMissing True (output name </> "source")
-    copyFile (root </> "compiler/test-fixtures" </> name ++ ".hs") (source name)
+    copyFile (root </> "test/fixtures/compiler" </> name ++ ".hs") (source name)
     compiled <- run (name ++ "-compile") ghc
       (["-c", "-O0", "-g", "-dynamic-too", "-fforce-recomp", "-fwrite-if-simplified-core",
         "-i", "-this-unit-id", identifier, "-package-db", database, "-odir", output name, "-hidir", output name] ++
@@ -98,7 +98,7 @@ checkInstalledCache root directory ghc ghcPkg helper libdir baseUnit = withCurre
   context <- Installed.installedContext ghc ghcPkg wrapper [database] compiler
   unit <- Installed.discoverInstalled context target
   extraCommands <- newIORef []
-  let acquireUnit selected = Project.prepareInstalledBundle cache (work </> "staging") (root </> "compiler/target-layout.c")
+  let acquireUnit selected = Project.prepareInstalledBundle cache (work </> "staging") (root </> "src/driver/cbits/target-layout.c")
         "cache-fixture-driver" context selected
       acquire = acquireUnit unit
       loaded = do

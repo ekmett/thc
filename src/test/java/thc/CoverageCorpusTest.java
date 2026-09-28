@@ -21,9 +21,9 @@ class CoverageCorpusTest {
     private long labelCount(Value function, String label) { var value = object(diagnostics(function).get("thunkEvaluationsByLabel")).get(label); return value instanceof Number number ? number.longValue() : 0L; }
     @TestFactory List<DynamicTest> nativeOracleBeforeCompilationOnColdPathsAndAfterRecompilation() throws Exception {
         var corpus = object(Json.parse(Files.readString(root.resolve("build/corpus/corpus.json"))));
-        assertEquals(hash(root.resolve("examples/coverage.json")), corpus.get("sourceManifestSha256"), "Run scripts/prepare-tests.sh after changing the corpus");
+        assertEquals(hash(root.resolve("examples/coverage.json")), corpus.get("sourceManifestSha256"), "Run bin/prepare-tests.sh after changing the corpus");
         var hashes = new LinkedHashMap<>(object(corpus.get("inputHashes"))); hashes.putAll(object(corpus.get("artifactHashes")));
-        for (var item : hashes.entrySet()) assertEquals(item.getValue(), hash(root.resolve(item.getKey())), "Stale native corpus input/artifact: " + item.getKey() + "; run scripts/prepare-tests.sh");
+        for (var item : hashes.entrySet()) assertEquals(item.getValue(), hash(root.resolve(item.getKey())), "Stale native corpus input/artifact: " + item.getKey() + "; run bin/prepare-tests.sh");
         var allEntries = objects(corpus.get("entries")); assertFalse(allEntries.isEmpty(), "Coverage corpus must not be empty");
         var selectedEntry = System.getProperty("thc.corpusEntry"); var selectedBackend = System.getProperty("thc.corpusBackend");
         var entries = selectedEntry == null ? allEntries : allEntries.stream().filter(entry -> selectedEntry.equals(entry.get("id"))).toList();

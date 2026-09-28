@@ -46,7 +46,7 @@ Use the pinned Graal JDK and GHC from the project setup. Fresh native preparatio
 is required; no model-generated row can substitute for the native oracle.
 
 ```sh
-GHC=ghc GHC_PKG=ghc-pkg python3 scripts/prepare-tuple-input-audit.py
+GHC=ghc GHC_PKG=ghc-pkg python3 bin/prepare-tuple-input-audit.py
 JAVA_HOME=/path/to/pinned-graal \
   python3 bench/experiments/tuple-inputs/run.py /tmp/thc-tuple-input-graphs \
   --capture /tmp/thc-tuple-input-summary

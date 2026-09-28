@@ -29,12 +29,12 @@ import System.FilePath
 
 prepareCompactRegions :: FilePath -> IO ()
 prepareCompactRegions root = prepareCompactFixture root "build/compact-regions"
-  "compiler/test-fixtures/CompactRegionsAudit.hs" "compiler/test-fixtures/CompactRegionsNative.hs"
+  "test/fixtures/compiler/CompactRegionsAudit.hs" "test/fixtures/compiler/CompactRegionsNative.hs"
   ["ordinary", "sharing", "cycleCase", "rejectedObjects", "frozenArray"]
 
 prepareCompactSerialization :: FilePath -> IO ()
 prepareCompactSerialization root = prepareCompactFixture root "build/compact-serialization"
-  "compiler/test-fixtures/CompactSerializedAudit.hs" "compiler/test-fixtures/CompactSerializedNative.hs"
+  "test/fixtures/compiler/CompactSerializedAudit.hs" "test/fixtures/compiler/CompactSerializedNative.hs"
   ["roundTrip", "cycleRoundTrip", "multipleBlocks", "emptyRoundTrip"]
 
 prepareCompactFixture :: FilePath -> FilePath -> FilePath -> FilePath -> [String] -> IO ()
@@ -51,13 +51,13 @@ prepareCompactFixture root directory source driver entries = do
         consumer = stageDir </> "core" </> takeBaseName source ++ ".json"
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> stageDir </> "core"), ("THC_GHC_OUT", root </> stageDir </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
     -- Preserve and examine whole-package discovery, then select whole original
     -- reachable modules. Unrelated Conc.Bound export registration is not loaded.
     let discoveryPath = stageDir </> "dependency-discovery.json"
     _ <- runLoggedExpect 1 300 root logs (stage ++ "-discovery") [] "python3"
-      (["scripts/audit-core.py", "--package-manifest", fixturePackages installed,
+      (["bin/audit-core.py", "--package-manifest", fixturePackages installed,
         "--output", discoveryPath] ++ concat [["--entry", entry] | entry <- entries] ++ [consumer])
     discovery <- readJson (root </> discoveryPath)
     missing <- field discovery "missingGlobals" :: IO [Value]
@@ -94,24 +94,24 @@ prepareCompactFixture root directory source driver entries = do
     audits <- forM entries $ \entry -> do
       let path = stageDir </> entry ++ "-audit.json"
       _ <- runLogged 180 root logs (stage ++ "-" ++ entry ++ "-audit") [] "python3"
-        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure path
     pure (stage, modules, audits ++ [discoveryPath, stageDir </> "original-selection.json"])
   let native = directory </> "native"
   createDirectoryIfMissing True (root </> native)
   _ <- runLogged 180 root logs "native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-icompiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
+    "-itest/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observed <- runLogged 60 root logs "native-oracle" [] (root </> native </> "oracle") []
   let oracle = directory </> "oracle.tsv"
   BL.writeFile (root </> oracle) (BL.fromStrict (commandStdout observed))
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ [source, driver, "test/haskell-fixtures/CompactRegionsFixtures.hs",
     "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/export.sh", "compiler/build.sh",
-    "compiler/toolchain.sh", "compiler/plugin.py", "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
+    "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/build-compiler.sh",
+    "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py", "bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root (oracle : (native </> "oracle") : fixtureArtifacts installed ++
     concat [modules ++ audits | (_, modules, audits) <- stages])
   writeJson manifest (object ["schema" .= (1 :: Int), "entries" .= entries,

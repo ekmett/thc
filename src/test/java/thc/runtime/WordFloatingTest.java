@@ -132,10 +132,10 @@ class WordFloatingTest {
         assertEquals(names, manifest.get("entries")); assertEquals(list("pre", "post"), manifest.get("stages")); assertEquals((long) rows().size(), manifest.get("nativeRows"));
         var sources = object(manifest.get("inputHashes"));
         var required = new HashSet<>(list("thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/WordFloatingFixtures.hs",
-            "compiler/test-fixtures/WordFloatingAudit.hs", "compiler/test-fixtures/WordFloatingNative.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-            "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"));
-        try (var files = Files.list(root.resolve("compiler/THC"))) { files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> required.add(root.relativize(path).toString())); }
-        try (var files = Files.list(root.resolve("scripts"))) { files.filter(path -> path.getFileName().toString().startsWith("core_") && path.getFileName().toString().endsWith(".py")).forEach(path -> required.add(root.relativize(path).toString())); }
+            "test/fixtures/compiler/WordFloatingAudit.hs", "test/fixtures/compiler/WordFloatingNative.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+            "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"));
+        try (var files = Files.list(root.resolve("src/compiler/THC"))) { files.filter(path -> path.getFileName().toString().endsWith(".hs")).forEach(path -> required.add(root.relativize(path).toString())); }
+        try (var files = Files.list(root.resolve("bin"))) { files.filter(path -> path.getFileName().toString().startsWith("core_") && path.getFileName().toString().endsWith(".py")).forEach(path -> required.add(root.relativize(path).toString())); }
         assertEquals(required, sources.keySet()); var artifacts = object(manifest.get("artifactHashes")); var expectedArtifacts = new HashSet<>(list("build/word-floating/oracle.tsv"));
         for (var stage : list("pre", "post")) expectedArtifacts.addAll(list("build/word-floating/" + stage + "-core/WordFloatingAudit.json", "build/word-floating/" + stage + "-audit.json"));
         assertEquals(expectedArtifacts, artifacts.keySet()); var hashes = new LinkedHashMap<>(sources); hashes.putAll(artifacts);

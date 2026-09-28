@@ -36,10 +36,10 @@ final class ByteArrayFixtureEvidence {
     private static final Map<String, String> drivers = Map.of("bytearray", "NativeByteArray.hs", "mutable-bytearrays",
         "NativeMutableByteArrays.hs", "compare-byte-arrays", "NativeCompareByteArrays.hs");
     private static final Set<String> originalSources =
-        Set.of("vendor/ghc-9.14.1/LICENSE", "vendor/ghc-9.14.1/GHC/Internal/Base.hs",
-            "vendor/ghc-9.14.1/GHC/Internal/List.hs", "vendor/ghc-9.14.1/GHC/Internal/Exception/Type.hs-boot",
-            "vendor/ghc-9.14.1/GHC/Internal/IO.hs-boot", "vendor/ghc-9.14.1/GHC/Internal/Num.hs-boot",
-            "vendor/ghc-9.14.1/GHC/Internal/Enum.hs-boot", "vendor/ghc-9.14.1/GHC/Internal/Real.hs-boot");
+        Set.of("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
+            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
+            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
+            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot");
     private static Map<String, Object> read(File root, String path) throws IOException {
         return (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath()));
     }
@@ -75,26 +75,26 @@ final class ByteArrayFixtureEvidence {
                 paths.add(directory + "/" + stage + (original ? "/core/" : "-core/") + name + ".json");
             stages.put(stage, paths);
         }
-        var sourcePaths = new ArrayList<>(List.of("compiler/test-fixtures/" + module + ".hs",
+        var sourcePaths = new ArrayList<>(List.of("test/fixtures/compiler/" + module + ".hs",
             "test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-            "test/haskell-fixtures/Main.hs", "thc.cabal", "scripts/audit-core.py", "scripts/core-capabilities.json",
-            "src/main/resources/thc/scalar-primop-signatures.json", "compiler/build.sh", "compiler/export.sh",
-            "compiler/toolchain.sh", "compiler/plugin.py"));
-        for (var file : Objects.requireNonNull(new File(root, "compiler/THC").listFiles()))
+            "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json",
+            "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh",
+            "bin/toolchain.sh", "bin/plugin.py"));
+        for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles()))
             if (file.getName().endsWith(".hs"))
                 sourcePaths.add(root.toPath().relativize(file.toPath()).toString());
-        for (var file : Objects.requireNonNull(new File(root, "scripts").listFiles()))
+        for (var file : Objects.requireNonNull(new File(root, "bin").listFiles()))
             if (file.getName().startsWith("core_") && file.getName().endsWith(".py"))
                 sourcePaths.add(root.toPath().relativize(file.toPath()).toString());
         if (original) {
-            sourcePaths.add("compiler/export-boot.py");
+            sourcePaths.add("bin/export-boot.py");
             sourcePaths.addAll(originalSources);
         } else
-            sourcePaths.add("tools/primops/PrimopTools.hs");
+            sourcePaths.add("src/tools/primops/PrimopTools.hs");
         if (!generated)
             sourcePaths.addAll(List.of(
-                "compiler/test-fixtures/" + module.substring(0, module.length() - "Audit".length()) + "Native.hs",
-                "compiler/test-fixtures/ByteArrayFixtureInputs.hs"));
+                "test/fixtures/compiler/" + module.substring(0, module.length() - "Audit".length()) + "Native.hs",
+                "test/fixtures/compiler/ByteArrayFixtureInputs.hs"));
         var artifacts = new ArrayList<>(List.of(directory + "/requests.tsv", directory + "/oracle.tsv",
             directory + "/native/" + (group.equals("bytearray") ? "bytearray" : group) + "-oracle"));
         if (drivers.containsKey(group))

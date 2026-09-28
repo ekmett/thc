@@ -7,7 +7,7 @@ not a JVM formatting builtin.
 
 The pinned GHC 9.14.1 interface exposes `itos`, but its recursive digit worker
 `ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'` has no executable unfolding.
-`compiler/export-boot.py --frontier show` compiles the complete, unmodified,
+`bin/export-boot.py --frontier show` compiles the complete, unmodified,
 SHA256-verified source after Tidy and before CorePrep. This preserves the actual
 installed worker identity; no local pre-Tidy binding is renamed to impersonate it.
 
@@ -36,14 +36,14 @@ handoff runs exercise the same controls. No timing or allocation-elimination
 claim is made.
 
 ```sh
-python3 scripts/prepare-show-int.py
-python3 scripts/prepare-show-int.py --check-only
-python3 scripts/test-show-int-model.py
+python3 bin/prepare-show-int.py
+python3 bin/prepare-show-int.py --check-only
+python3 bin/test-show-int-model.py
 ./gradlew test --tests thc.runtime.ShowIntTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew test --rerun --tests thc.runtime.ShowIntTest
 ```
 
-Preparation is included in `scripts/prepare-tests.sh`; CI preserves the native
+Preparation is included in `bin/prepare-tests.sh`; CI preserves the native
 oracle, full source/public exports, strict audits and source/artifact provenance.
 No runtime or primitive capability is added. This export supplies Sequence's
 missing Show digit worker, but does not change the declared Sequence/Set exception

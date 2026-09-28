@@ -78,7 +78,7 @@ public final class LibraryCheck {
             require(!hashes.isEmpty());
             for (var entry : hashes.entrySet()) {
                 String actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(Path.of(entry.getKey()))));
-                check(actual.equals(entry.getValue()), "Stale library input/artifact: " + entry.getKey() + "; run scripts/prepare-library-tests.py");
+                check(actual.equals(entry.getValue()), "Stale library input/artifact: " + entry.getKey() + "; run bin/prepare-library-tests.py");
             }
         }
         var groups = (List<Map<String, Object>>) cases.get("groups");

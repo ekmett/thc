@@ -74,10 +74,10 @@ case-binder contracts.
 Run with pinned GHC 9.14.1 and GraalVM 25.3.4.1/JDK 25:
 
 ```sh
-compiler/build.sh
+bin/build-compiler.sh
 cabal run exe:thc-fixtures --offline -- int8-arrays
 ./gradlew test --tests thc.runtime.Int8ArrayNativeTest
-python3 scripts/test-core-bytearrays.py
+python3 bin/test-core-bytearrays.py
 ./gradlew --no-daemon test --tests 'thc.runtime.Int8Array*'
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun --tests 'thc.runtime.Int8Array*'
 ```

@@ -75,8 +75,8 @@ prepareTupleJoins :: Bool -> FilePath -> IO ()
 prepareTupleJoins originalLibrary root = do
   let directory = "build/tuple-join-input"
       output = root </> directory
-      source = "compiler/test-fixtures/TupleJoinInputAudit.hs"
-      driver = "compiler/test-fixtures/TupleJoinInputAuditNative.hs"
+      source = "test/fixtures/compiler/TupleJoinInputAudit.hs"
+      driver = "test/fixtures/compiler/TupleJoinInputAuditNative.hs"
       entries = ["forward", "recursiveSwap", "nested"] ++
         [entry | originalLibrary, entry <- ["originalRoundTo", "emptyRetry"]] ++ ["emptyException"] :: [String]
       logs = directory </> "commands"
@@ -90,7 +90,7 @@ prepareTupleJoins originalLibrary root = do
   unless (commandStdout version == "9.14.1\n") (die "Tuple joins require GHC 9.14.1")
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-package", "ghc-internal",
-     "-icompiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
+     "-itest/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observed <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   unless (length (BSC.lines (commandStdout observed)) == 222) (die "Unexpected tuple-join oracle row count")
   BS.writeFile (output </> "oracle.tsv") (commandStdout observed)
@@ -100,7 +100,7 @@ prepareTupleJoins originalLibrary root = do
         report = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-package", "ghc-internal", source])
     modules <- sort . filter (== "TupleJoinInputAudit.json") <$> listDirectory (root </> core)
     let paths = map (core </>) modules
@@ -118,21 +118,21 @@ prepareTupleJoins originalLibrary root = do
     unless (length tupleJoins >= 3 && length emptyCases >= 2 && not (null original))
       (die ("Tuple fixture lost original roundTo/tuple joins/empty cases: " ++ show (length tupleJoins, length emptyCases, length original)))
     audited <- runLogged 180 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", "--output", report] ++ [argument | originalLibrary, argument <- ["--package-manifest", packages]] ++
+      (["bin/audit-core.py", "--output", report] ++ [argument | originalLibrary, argument <- ["--package-manifest", packages]] ++
        concatMap (\entry -> ["--entry", "main:TupleJoinInputAudit." ++ entry]) entries ++ paths)
     result <- readJson (root </> report)
     case result of
       Object fields | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
       _ -> die ("Strict tuple-join audit rejected " ++ stage)
     pure (report : paths ++ commandArtifacts exported ++ commandArtifacts audited)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputs <- hashes root $ sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/TupleJoinFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/InstalledCoreFixtures.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   outputs <- hashes root $ [directory </> "oracle.tsv", native </> "oracle"] ++ packageArtifacts ++ artifacts ++
     concatMap commandArtifacts [version, compiled, observed]
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

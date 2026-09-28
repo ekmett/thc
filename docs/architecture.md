@@ -38,7 +38,7 @@ promises support for arbitrary Cabal packages. The
 [Cabal guide](cabal.md) and [driver guide](driver.md) describe target selection,
 caching, installed-library providers and platform limits.
 
-The [exporter](../compiler/README.md) serializes executable trees directly from
+The [exporter](../docs/compiler.md) serializes executable trees directly from
 the pinned GHC API, not from pretty-printed Core. Source fixtures can use the
 optimized pre-Tidy boundary; package manifests require post-Tidy Core before
 CorePrep. Both retain representation and evaluation evidence needed by lowering.

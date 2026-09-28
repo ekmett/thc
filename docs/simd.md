@@ -34,8 +34,8 @@ provide a native hardware vector calling convention.
 The Int64X2 and Int32X4 foundations retain separate original-Core producers:
 
 ```sh
-python3 scripts/prepare-simd-audit.py
-python3 scripts/prepare-simd-audit.py --vector int32x4
+python3 bin/prepare-simd-audit.py
+python3 bin/prepare-simd-audit.py --vector int32x4
 ```
 
 Full preparation requires a working native GHC SIMD toolchain and records both

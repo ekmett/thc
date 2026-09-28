@@ -178,7 +178,7 @@ prepareByteArrayFamily root command = do
   let directory = "build" </> command
       logs = directory </> "commands"
       manifest = root </> directory </> "manifest.json"
-      source = "compiler/test-fixtures" </> moduleName family ++ ".hs"
+      source = "test/fixtures/compiler" </> moduleName family ++ ".hs"
       names = entries family
       logRun label env executable args = runLogged 300 root logs label env executable args
   createDirectoryIfMissing True (root </> directory)
@@ -199,7 +199,7 @@ prepareByteArrayFamily root command = do
   check (BSC.unpack (commandStdout package) == "0.12.2.0\n") "Byte-array fixtures require bytestring-0.12.2.0"
   description <- logRun "bytestring-description" [] ghcPkg ["describe","bytestring"]
   signatureCommands <- if Map.null (signatureArities family) then pure [] else do
-    compiler <- logRun "compiler-build" [] "compiler/build.sh" []
+    compiler <- logRun "compiler-build" [] "bin/build-compiler.sh" []
     coverage <- logRun "primop-coverage" [] "cabal" ["run", "exe:thc-primops", "--", "coverage"]
     pure [compiler,coverage]
   signatures <- if Map.null (signatureArities family) then pure [] else do
@@ -215,10 +215,10 @@ prepareByteArrayFamily root command = do
         core = if originalList family then base </> "core" else directory </> stage ++ "-core"
         ghcOut = if originalList family then base </> "ghc" else directory </> stage ++ "-ghc"
         env = [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> ghcOut),("THC_SOURCE_NOTES","true")]
-    exported <- logRun (stage ++ "-export") env "compiler/export.sh"
+    exported <- logRun (stage ++ "-export") env "bin/export-core.sh"
       (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- names] ++ [source])
     boot <- if originalList family then do
-      commandResult <- logRun (stage ++ "-original-list") env "python3" ["compiler/export-boot.py","--frontier","lists","--build-dir",root </> base]
+      commandResult <- logRun (stage ++ "-original-list") env "python3" ["bin/export-boot.py","--frontier","lists","--build-dir",root </> base]
       let provenance = base </> "boot-provenance.json"
       sources <- readJson (root </> provenance) >>= field "sources" :: IO [Value]
       paths <- forM sources $ \item -> do
@@ -234,7 +234,7 @@ prepareByteArrayFamily root command = do
     check (boundary == (if stage == "pre" then "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep" :: String)) "Wrong byte-array Core stage"
     audited <- forM names $ \name -> do
       let reportPath = if originalList family then base </> name ++ ".audit.json" else directory </> stage ++ "-" ++ name ++ ".audit.json"
-      commandResult <- logRun (stage ++ "-" ++ name ++ "-audit") [] "python3" (["scripts/audit-core.py","--entry",name,"--output",reportPath] ++ paths)
+      commandResult <- logRun (stage ++ "-" ++ name ++ "-audit") [] "python3" (["bin/audit-core.py","--entry",name,"--output",reportPath] ++ paths)
       report <- readJson (root </> reportPath)
       validateAudit family name report
       reachable <- field "reachableBindings" report :: IO [Value]
@@ -256,10 +256,10 @@ prepareByteArrayFamily root command = do
       nativeModule = case family of Resize -> "ResizeByteArrayNative"; Size -> "MutableByteArraySizeNative"; _ -> "Main"
       driver = if generated then directory </> (case family of
                  Bytes -> "NativeByteArray.hs"; Mutable -> "NativeMutableByteArrays.hs"; _ -> "NativeCompareByteArrays.hs")
-               else "compiler/test-fixtures" </> nativeModule ++ ".hs"
+               else "test/fixtures/compiler" </> nativeModule ++ ".hs"
   createDirectoryIfMissing True (root </> native)
   when generated (writeFile (root </> driver) (nativeDriver family))
-  compiled <- logRun "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
+  compiled <- logRun "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler",
     "-odir",root </> native,"-hidir",root </> native] ++ [arg | not generated, arg <- ["-main-is",nativeModule ++ ".main"]] ++ [driver,"-o",root </> binary])
   (pairs,inputCommands) <- if generated then pure (mutableInputs,[]) else do
     result <- logRun "native-inputs" [] (root </> binary) ["--inputs"]
@@ -286,13 +286,13 @@ prepareByteArrayFamily root command = do
   let commands = [version,ghcInfo,package,description] ++ signatureCommands ++
         concat [stageCommands ++ [result | (_,_,_,_,result) <- audited] | (_,_,audited,stageCommands,_,_) <- stages] ++ [compiled] ++ inputCommands ++ [observed]
       originalSources = concat [paths | (_,_,_,_,_,paths) <- stages]
-  compilerInputs <- map ("compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "compiler/THC")
-  auditorInputs <- map ("scripts" </>) . filter (\name -> "core_" `isPrefixOf` name && takeExtension name == ".py") <$> listDirectory (root </> "scripts")
+  compilerInputs <- map ("src/compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "src/compiler/THC")
+  auditorInputs <- map ("bin" </>) . filter (\name -> "core_" `isPrefixOf` name && takeExtension name == ".py") <$> listDirectory (root </> "bin")
   inputHashes <- hashes root . sort . Set.toList . Set.fromList $ [source,"test/haskell-fixtures/ByteArrayFixtures.hs",
-    "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","scripts/audit-core.py","scripts/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-    ["compiler/export-boot.py" | originalList family] ++ ["tools/primops/PrimopTools.hs" | not (Map.null (signatureArities family))] ++
-    [path | not generated, path <- [driver,"compiler/test-fixtures/ByteArrayFixtureInputs.hs"]] ++ compilerInputs ++ auditorInputs ++ originalSources
+    "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","bin/audit-core.py","bin/core-capabilities.json",
+    "src/main/resources/thc/scalar-primop-signatures.json","bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+    ["bin/export-boot.py" | originalList family] ++ ["src/tools/primops/PrimopTools.hs" | not (Map.null (signatureArities family))] ++
+    [path | not generated, path <- [driver,"test/fixtures/compiler/ByteArrayFixtureInputs.hs"]] ++ compilerInputs ++ auditorInputs ++ originalSources
   artifactHashes <- hashes root . sort . Set.toList . Set.fromList $ [directory </> "requests.tsv",directory </> "oracle.tsv",binary] ++
     [driver | generated] ++ concatMap commandArtifacts commands ++ concat
       [paths ++ [path | (_,_,_,path,_) <- audited] ++ bootArtifacts | (_,paths,audited,_,bootArtifacts,_) <- stages]

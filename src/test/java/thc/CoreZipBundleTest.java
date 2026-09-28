@@ -37,10 +37,10 @@ class CoreZipBundleTest {
     private List<Map<String, Object>> generatedReceipts() throws Exception {
         var result = new ArrayList<Map<String, Object>>();
         if (hostPlatform().equals("x86_64-windows")) {
-            var catalog = document(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "compiler/windows-ghc-internal.json")));
+            var catalog = document(Files.readString(Path.of(System.getProperty("thc.projectRoot"), "config/ghc/9.14.1/windows-ghc-internal.json")));
             for (var file : (List<?>) catalog.get("files")) { var path = (String) ((Map<?, ?>) file).get("path"); if (path.endsWith(".hsc")) result.add(map("path", path, "sha256", "a".repeat(64))); } assertEquals(27, result.size());
         } else {
-            var source = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/THC/Driver/Wired.hs"));
+            var source = Files.readString(Path.of(System.getProperty("thc.projectRoot"), "src/driver/THC/Driver/Wired.hs"));
             var catalog = source.substring(source.indexOf("moduleSources =") + "moduleSources =".length()); catalog = catalog.substring(0, catalog.indexOf("sourceHashes ::"));
             var matcher = Pattern.compile("\\(\"([^\"]+\\.hsc)\", \"[^\"]+\"\\)").matcher(catalog); while (matcher.find()) result.add(map("path", matcher.group(1), "sha256", "a".repeat(64))); assertEquals(7, result.size());
         }
@@ -106,11 +106,11 @@ class CoreZipBundleTest {
     }
     private String selectedRequest(String rts, String recipe, String digest, Map<String, Object> receiptLayout) throws Exception { return request(manifest(List.of(unit("pkg-a", map("layout", targetLayout(), "generated", null, "inputs", selectedInputs(rts, recipe, digest, receiptLayout)))))); }
     @Test void selectedInstalledLayoutRequiresItsRtsAndRecipeReceipt() throws Exception {
-        var layout = targetLayout(); var accepted = document(selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), layout)); assertEquals(8, TargetLayout.fromDocument(accepted.get("targetLayout")).getWordBytes());
-        for (var invalid : List.of(list(null, "compiler/target-layout.c", "a".repeat(64)), list("", "compiler/target-layout.c", "a".repeat(64)), list("rts-1.0.3", null, "a".repeat(64)), list("rts-1.0.3", "other.c", "a".repeat(64)), list("rts-1.0.3", "compiler/target-layout.c", "z".repeat(64)))) {
+        var layout = targetLayout(); var accepted = document(selectedRequest("rts-1.0.3", "src/driver/cbits/target-layout.c", "a".repeat(64), layout)); assertEquals(8, TargetLayout.fromDocument(accepted.get("targetLayout")).getWordBytes());
+        for (var invalid : List.of(list(null, "src/driver/cbits/target-layout.c", "a".repeat(64)), list("", "src/driver/cbits/target-layout.c", "a".repeat(64)), list("rts-1.0.3", null, "a".repeat(64)), list("rts-1.0.3", "other.c", "a".repeat(64)), list("rts-1.0.3", "src/driver/cbits/target-layout.c", "z".repeat(64)))) {
             var error = assertThrows(RuntimeException.class, () -> selectedRequest((String) invalid.get(0), (String) invalid.get(1), (String) invalid.get(2), layout)); assertTrue(error.getMessage().contains("selected-GHC layout provenance"));
         }
-        var mismatch = assertThrows(RuntimeException.class, () -> selectedRequest("rts-1.0.3", "compiler/target-layout.c", "a".repeat(64), with(layout, "tablesNextToCode", false))); assertTrue(mismatch.getMessage().contains("receipts differ"));
+        var mismatch = assertThrows(RuntimeException.class, () -> selectedRequest("rts-1.0.3", "src/driver/cbits/target-layout.c", "a".repeat(64), with(layout, "tablesNextToCode", false))); assertTrue(mismatch.getMessage().contains("receipts differ"));
     }
     @Test void generatedReceiptCatalogRejectsMissingDuplicateStaleMalformedAndMismatchedSources() throws Exception {
         var generated = generatedReceipts(); var layout = targetLayout(); var reordered = manifest(List.of(unit("pkg-a", map("layout", layout, "generated", generated.reversed())))); assertEquals(8, TargetLayout.fromDocument(document(request(reordered)).get("targetLayout")).getWordBytes());

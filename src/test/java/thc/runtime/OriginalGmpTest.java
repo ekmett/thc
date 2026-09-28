@@ -48,7 +48,7 @@ public class OriginalGmpTest {
     }
     private List<Map<String, Object>> rows() throws Exception {
         var manifest = (Map<String, Object>) json(prefix + "/manifest.json"); assertEquals(true, manifest.get("strictAccepted"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalGmpAudit.hs", "compiler/test-fixtures/OriginalGmpNative.hs", "test/haskell-fixtures/OriginalGmpFixtures.hs", "scripts/core_original_foreign.py"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalGmpAudit.hs", "test/fixtures/compiler/OriginalGmpNative.hs", "test/haskell-fixtures/OriginalGmpFixtures.hs", "bin/core_original_foreign.py"), null);
         var required = new LinkedHashSet<String>(); required.add(prefix + "/oracle.json");
         for (var stage : List.of("pre", "post")) { required.add(prefix + "/" + stage + "/core/OriginalGmpAudit.json"); required.add(prefix + "/" + stage + "/core/THC.InterfaceClosure.json"); }
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");

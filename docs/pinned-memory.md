@@ -161,7 +161,7 @@ interruptible calls, CApi, dynamic targets and wrong CInt width.
 
 The implementation executes the pinned GHC 9.14.1 public-domain `md5.c`/`md5.h`
 through Sulong 25.3.4.1. The original files and notice remain unchanged under
-`bench/experiments/pinned-addresses/reference`. `scripts/build-cbits.py` checks
+`bench/experiments/pinned-addresses/reference`. `bin/build-cbits.py` checks
 their pinned Git blob hashes and compiles them with a small byte-buffer ABI
 adapter during the Gradle resource build. Clang and the installed GHC 9.14.1
 headers are required. The compiler target must match the current Linux/macOS
@@ -221,7 +221,7 @@ fixture. `fingerprintByte` is explicitly a byte-layout control, not a replacemen
 Haskell implementation. Full public Fingerprint/error execution must compose the
 genuine source exports separately; this checkpoint does not claim that result.
 
-`scripts/prepare-managed-md5.py` compiles the pinned original C with an ABI/layout
+`bin/prepare-managed-md5.py` compiles the pinned original C with an ABI/layout
 driver. It archives prior owned attempts intact in unique sibling directories;
 ambiguous contents and symlinked output paths are rejected. It checks 558 cases,
 2,247 full memory snapshots, seeded counter carries,

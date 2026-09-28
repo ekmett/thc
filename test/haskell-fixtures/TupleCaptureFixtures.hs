@@ -39,8 +39,8 @@ prepareTupleCaptures :: FilePath -> IO ()
 prepareTupleCaptures root = do
   let directory = "build/tuple-capture"
       output = root </> directory
-      source = "compiler/test-fixtures/TupleCaptureAudit.hs"
-      driver = "compiler/test-fixtures/TupleCaptureAuditNative.hs"
+      source = "test/fixtures/compiler/TupleCaptureAudit.hs"
+      driver = "test/fixtures/compiler/TupleCaptureAuditNative.hs"
       entries = ["escaped", "thunk", "independent", "papReuse", "nested", "emptyCapture",
                  "stateCapture", "lazyCapture"] :: [String]
       logs = directory </> "commands"
@@ -54,7 +54,7 @@ prepareTupleCaptures root = do
   unless (commandStdout version == "9.14.1\n") (die "Tuple captures require GHC 9.14.1")
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-icompiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
+     "-itest/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observed <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   unless (length (BSC.lines (commandStdout observed)) == 296) (die "Unexpected tuple capture oracle row count")
   BS.writeFile (output </> "oracle.tsv") (commandStdout observed)
@@ -63,7 +63,7 @@ prepareTupleCaptures root = do
         report = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ [source])
     let path = core </> "TupleCaptureAudit.json"
     nodes <- walk <$> readJson (root </> path)
@@ -76,21 +76,21 @@ prepareTupleCaptures root = do
           KeyMap.lookup "aggregate" proof == Just (String "unboxed-tuple")]
     unless (length captures >= 8) (die "Original Core lost its whole-tuple closure captures")
     audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py", "--output", report] ++
+      (["bin/audit-core.py", "--output", report] ++
        concatMap (\entry -> ["--entry", "main:TupleCaptureAudit." ++ entry]) entries ++ [path])
     result <- readJson (root </> report)
     case result of
       Object fields | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
       _ -> die ("Strict tuple capture audit rejected " ++ stage)
     pure (report : path : commandArtifacts exported ++ commandArtifacts audited)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputs <- hashes root $ sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/TupleCaptureFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   outputs <- hashes root $ [directory </> "oracle.tsv", native </> "oracle"] ++ artifacts ++
     concatMap commandArtifacts [version, compiled, observed]
   writeJson manifest $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

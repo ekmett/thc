@@ -31,8 +31,8 @@ prepareThreadLabel root = do
   let directory = "build/thread-label"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/ThreadLabelAudit.hs"
-      driver = "compiler/test-fixtures/ThreadLabelNative.hs"
+      source = "test/fixtures/compiler/ThreadLabelAudit.hs"
+      driver = "test/fixtures/compiler/ThreadLabelNative.hs"
       entries = ["selfLabel", "overwriteLabel", "emptyLabel", "deadLabel", "deadOverwrite"]
       stages = ["pre", "post"]
   createDirectoryIfMissing True output
@@ -45,10 +45,10 @@ prepareThreadLabel root = do
     let core = directory </> stage </> "core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
-      _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", entry,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
         "--output", report, core </> "ThreadLabelAudit.json"] ""
       bytes <- BS.readFile (root </> report)
       case decodeStrict' bytes of
@@ -61,7 +61,7 @@ prepareThreadLabel root = do
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", native, "-hidir", native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle") ["+RTS", "-N2", "-RTS"] ""
   let checksum seed = foldl (\acc byte -> acc * 31 + byte) 4 [206, 187, 0, seed `mod` 128]
@@ -69,14 +69,14 @@ prepareThreadLabel root = do
         | seed <- [0, 65, 127]] :: [Int]
   unless (observations == unlines (map show expected)) (die "Native thread labels disagreed")
   writeFile (output </> "oracle.txt") observations
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ThreadLabelFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt"] ++
         [directory </> stage </> suffix | stage <- stages,
           suffix <- "core/ThreadLabelAudit.json" : [entry ++ "-audit.json" | entry <- entries]]

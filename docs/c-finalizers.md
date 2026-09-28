@@ -55,7 +55,7 @@ invocation or callback order. Separate registry instrumentation checks order and
 the fact that invocation is outside the lock; the JVM integration check executes
 the actual Sulong members or Windows DLL functions. The native fixture producer
 supports static Windows GHC and uses canonical paths in its checked manifest.
-On Windows, `scripts/windows.ps1 -Action LibdwTest` runs the original eight-call
+On Windows, `bin/windows.ps1 -Action LibdwTest` runs the original eight-call
 oracle, eighteen C-finalizer checks, genuine function/data label export and both
 JVM handoff forks. Both backends retain first-compiled-call checks. Storage,
 context, native authority and expired-owner controls run with `IOAccess.NONE`.

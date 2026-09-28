@@ -10,7 +10,7 @@ This result uses **explicit diagnostic mode**. The complete syntactic dependency
 
 For input `n`, the workload builds a histogram with `Map.insertWith (+)`, adjusts existing values with `Map.adjust`, performs successful and unsuccessful `Map.findWithDefault` queries, and consumes the result through `Map.foldlWithKey'` and `Map.size`. Keys spread across 4,096 buckets; queries also include absent keys. The source uses ordinary `Int`, `foldl'`, range lists, and the public `Data.Map.Strict` API. GHC `-O2` removes range-list allocation and numeric dictionaries and produces the specialized loops being executed.
 
-[The export driver](../compiler/export-map.sh) downloads a hash-pinned `containers-0.8` archive, verifies every extracted source file, and compiles the workload and library sources together. Its source SHA-256 is `b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8`. The plugin exports executable Core expressions from GHC 9.14.1. Dependency closure uses actual interface unfoldings and targeted genuine boot-library source exports. Compiler-generated identities, unary dictionaries, `runRW#`, and zero-width tokens receive GHC's canonical erasure/expansion. No Map operation has a runtime intrinsic.
+[The export driver](../bin/export-map.sh) downloads a hash-pinned `containers-0.8` archive, verifies every extracted source file, and compiles the workload and library sources together. Its source SHA-256 is `b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8`. The plugin exports executable Core expressions from GHC 9.14.1. Dependency closure uses actual interface unfoldings and targeted genuine boot-library source exports. Compiler-generated identities, unary dictionaries, `runRW#`, and zero-width tokens receive GHC's canonical erasure/expansion. No Map operation has a runtime intrinsic.
 
 The retained [source provenance](map-graphs/provenance.json) and [dependency audit](map-graphs/reachability-audit.json) describe the exact bundle: 1,619 supplied bindings and 52 syntactically reachable globals across the 17-module manifest. Reachability respects lexical scope, including recursive groups and case binders. It intentionally includes unexecuted branches.
 
@@ -81,13 +81,13 @@ The thirteen capability issues are four unboxed-tuple construction/matching site
 Set `JAVA_HOME` to the required GraalVM JDK and make GHC 9.14.1 available as described in the repository setup. Default strict mode exposes the incomplete dependency frontier. The explicit diagnostic run used here is:
 
 ```sh
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/benchmark-map.sh bench/results/map-repeat
+THC_DIAGNOSTIC_UNSUPPORTED=true bin/try-map.sh
+THC_DIAGNOSTIC_UNSUPPORTED=true bin/benchmark-map.sh bench/results/map-repeat
 
 THC_DIAGNOSTIC_UNSUPPORTED=true \
 THC_GRAPH_MIN_WARM_CALLS=256 \
 THC_GRAPH_MODULES="$(paste -sd, build/map/modules.txt)" \
-scripts/dump-graph.sh mapAggregate 10000 work/graphs/map-repeat
+bin/dump-graph.sh mapAggregate 10000 work/graphs/map-repeat
 ```
 
 Graph dumping is separate from timing. Full CFG/phase dumps can be large; this report retains selected compressed raw graphs and small evidence extracts. All Map graph artifacts, including the failed compilation archive, total approximately 14.3 MB.

@@ -42,16 +42,16 @@ directory = "build/original-termios"
 
 fixtureSources :: FilePath -> IO [FilePath]
 fixtureSources root = do
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  pure $ sort $ ["compiler/test-fixtures/OriginalTermiosAudit.hs", "compiler/test-fixtures/OriginalTermiosNative.hs",
-    "compiler/test-fixtures/OriginalSavedTermiosAudit.hs", "compiler/test-fixtures/OriginalSavedTermiosNative.hs",
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  pure $ sort $ ["test/fixtures/compiler/OriginalTermiosAudit.hs", "test/fixtures/compiler/OriginalTermiosNative.hs",
+    "test/fixtures/compiler/OriginalSavedTermiosAudit.hs", "test/fixtures/compiler/OriginalSavedTermiosNative.hs",
     "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "test/haskell-fixtures/OriginalTermiosFixtures.hs", "scripts/audit-core.py", "scripts/core-capabilities.json",
-    "src/main/resources/thc/scalar-primop-signatures.json", "compiler/export.sh", "compiler/build.sh",
-    "compiler/toolchain.sh", "compiler/plugin.py"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    "test/haskell-fixtures/OriginalTermiosFixtures.hs", "bin/audit-core.py", "bin/core-capabilities.json",
+    "src/main/resources/thc/scalar-primop-signatures.json", "bin/export-core.sh", "bin/build-compiler.sh",
+    "bin/toolchain.sh", "bin/plugin.py"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
 
 prepareLinux :: FilePath -> IO ()
 prepareLinux root = do
@@ -74,8 +74,8 @@ prepareLinux root = do
     _ -> die "Original termios requires native Linux x86_64 GHC"
   let binary = directory </> "native/oracle"
   compiled <- execute "native-build" [] ghc ["--make", "-j2", "-O2", "-fforce-recomp", "-dcore-lint",
-    "-package", "ghc-internal", "-icompiler/test-fixtures", "-odir", root </> directory </> "native",
-    "-hidir", root </> directory </> "native", "compiler/test-fixtures/OriginalTermiosNative.hs", "-o", root </> binary]
+    "-package", "ghc-internal", "-itest/fixtures/compiler", "-odir", root </> directory </> "native",
+    "-hidir", root </> directory </> "native", "test/fixtures/compiler/OriginalTermiosNative.hs", "-o", root </> binary]
   observed <- execute "native-run" [] (root </> binary) []
   (constants, rows) <- maybe (die "Malformed original termios observations") pure
     (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe ([Integer], [(Integer,Integer,Integer,Integer,[Int])]))
@@ -88,12 +88,12 @@ prepareLinux root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ ["compiler/test-fixtures/OriginalTermiosAudit.hs"])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["test/fixtures/compiler/OriginalTermiosAudit.hs"])
     mapM_ (\path -> doesFileExist (root </> path) >>= \present -> unless present (die ("Missing original Core: " ++ path))) modules
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure (path,command)
     pure (modules,exported,audits)
   (savedCommands, savedArtifacts) <- prepareSavedTermios root ghc
@@ -121,7 +121,7 @@ prepareSavedTermios root ghc = do
   createDirectoryIfMissing True (root </> saved </> "native")
   compiled <- execute "saved-native-build" [] ghc ["--make", "-O2", "-fforce-recomp", "-dcore-lint",
     "-package", "ghc-internal", "-odir", root </> saved </> "native", "-hidir", root </> saved </> "native",
-    "compiler/test-fixtures/OriginalSavedTermiosNative.hs", "-o", root </> binary]
+    "test/fixtures/compiler/OriginalSavedTermiosNative.hs", "-o", root </> binary]
   observed <- execute "saved-native-run" [] (root </> binary) []
   rows <- maybe (die "Malformed original saved-termios observations") pure
     (readMaybe (BSC.unpack (commandStdout observed)) :: Maybe [[Integer]])
@@ -134,11 +134,11 @@ prepareSavedTermios root ghc = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute ("saved-" ++ stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> saved </> stage </> "ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal"] ++ options ++ ["compiler/test-fixtures/OriginalSavedTermiosAudit.hs"])
+      "bin/export-core.sh" (["-package", "ghc-internal"] ++ options ++ ["test/fixtures/compiler/OriginalSavedTermiosAudit.hs"])
     audits <- forM entries $ \entry -> do
       let path = saved </> stage </> entry ++ ".audit.json"
       audited <- execute ("saved-" ++ stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py", "--entry", entry, "--output", path] ++ modules)
+        (["bin/audit-core.py", "--entry", entry, "--output", path] ++ modules)
       pure (path, audited)
     pure (exported : map snd audits, modules ++ map fst audits)
   pure ([compiled, observed] ++ concatMap fst exports, [binary, oracle] ++ concatMap snd exports)

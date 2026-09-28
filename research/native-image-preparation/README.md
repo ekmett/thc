@@ -98,7 +98,7 @@ or Windows support.
 ## Inventory contract
 
 The script combines the existing
-[pure inventory](../../scripts/native-image/pure-initialization.txt), three
+[pure inventory](../../bin/native-image/pure-initialization.txt), three
 generated categories, and the explicit
 [additional inventory](prepared-initialization.txt). It excludes LLVM/NFI JARs
 just as the pure probe does. These additions remain separate from the public

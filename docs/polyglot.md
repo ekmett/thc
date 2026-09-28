@@ -12,7 +12,7 @@ foreign import javascript "(x) => x * 0.5"
   half :: Double -> IO Double
 ```
 
-Run `scripts/javascript-demo.sh` for the complete example. It checks unary,
+Run `bin/javascript-demo.sh` for the complete example. It checks unary,
 binary, floating-point, zero-argument, and unit-returning calls using real GHC
 exports before and after Tidy, on both THC backends with explicit compilation.
 
@@ -69,7 +69,7 @@ main = do
 ```
 
 The complete example is [PolyglotDemo.hs](../examples/THC/PolyglotDemo.hs).
-Run `scripts/polyglot-demo.sh` from the repository root. The script builds the
+Run `bin/polyglot-demo.sh` from the repository root. The script builds the
 pinned GHC plugin, exports optimized Core before and after Tidy, audits the
 reachable `IO ()` entry, and runs the demo with the optional GraalVM JavaScript
 dependency. The Gradle `polyglotDemo` task builds the separate `src/examples/`

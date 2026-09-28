@@ -203,7 +203,7 @@ public final class TargetLayout {
             Object item = items instanceof List<?> list && list.size() == 1 ? list.getFirst() : null;
             require(index.get("generatedSources") == null && inputs.get("rtsRegistration") instanceof String registration &&
                 !blank(registration) && item instanceof Map<?, ?> recipe && recipe.keySet().equals(Set.of("path", "sha256")) &&
-                "compiler/target-layout.c".equals(recipe.get("path")) && recipe.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"),
+                "src/driver/cbits/target-layout.c".equals(recipe.get("path")) && recipe.get("sha256") instanceof String sha && sha.matches("[0-9a-f]{64}"),
                 "Invalid selected-GHC layout provenance");
         } else {
             Set<String> expected = target.platform.equals("x86_64-windows") ? windowsGeneratedSources() : GENERATED_SOURCES;

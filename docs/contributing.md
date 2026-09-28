@@ -27,7 +27,7 @@ negative controls, strict Core audits, provenance, and all active CI callers.
 Install [HLint 3.10](https://github.com/ndmitchell/hlint/releases/tag/v3.10), then
 run `make lint-haskell` (or set `HLINT=/path/to/hlint`). It checks tracked `.hs`
 and `.lhs` sources, including tools, examples and unit tests, using `.hlint.yaml`.
-Fixture sources and producers (`compiler/test-fixtures`, `test/fixtures`, and
+Fixture sources and producers (`test/fixtures/compiler`, `test/fixtures`, and
 `test/haskell-fixtures`), vendored compiler sources and frozen benchmark snapshots
 are excluded. Build products and untracked files are not traversed. Stage new
 modules to include them.
@@ -203,14 +203,14 @@ are not selected by this wide-only rule.
 and widening. The strict JSON/compact interoperability checks must continue to
 enter the original installed target on their first invocation without warmup.
 
-`scripts/try.sh --handoff-modes` prepares the full fixture set once and batches
+`bin/try.sh --handoff-modes` prepares the full fixture set once and batches
 installation, diagnostic tools and both test forks. Native ABI probes still run
 once per Gradle graph because their complete host/compiler/header inputs are not
 modeled for safe cross-invocation caching. No fixture stamp or provenance hash is
 rewritten to approve stale artifacts.
 
 When adding a primop, update its existing entry in
-[`scripts/core-capabilities.json`](../scripts/core-capabilities.json) after both
+[`bin/core-capabilities.json`](../bin/core-capabilities.json) after both
 backends and the native checks pass. Then refresh the generated
 [primop checklist](primops.md):
 
@@ -243,8 +243,8 @@ target snapshots in its artifacts. Code retirement is tracked in
 [#72](https://github.com/ekmett/thc/issues/72); a failure here does not block
 the required PR checks. The complete native-result comparisons, strict
 closure checks and handoff cleanup checks remain in the required test suite.
-The active fixture producer is `scripts/prepare-short-bytes-slices.py`, also
-used by `scripts/prepare-tests.sh` and the advisory workflow. It produces native
+The active fixture producer is `bin/prepare-short-bytes-slices.py`, also
+used by `bin/prepare-tests.sh` and the advisory workflow. It produces native
 oracle rows, original Core and a checked manifest under `build/short-bytes-slices`.
 An existing preparation can be revalidated with its `--check-only` option;
 changed or missing inputs require fresh preparation, not edited hashes.
@@ -252,7 +252,7 @@ changed or missing inputs require fresh preparation, not edited hashes.
 Run the advisory checks locally, selecting each handoff mode explicitly:
 
 ```sh
-python3 scripts/prepare-short-bytes-slices.py
+python3 bin/prepare-short-bytes-slices.py
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=false ./gradlew --max-workers=2 --no-daemon jitStabilityTest
 JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --max-workers=2 --no-daemon jitStabilityTest
 ```
@@ -281,8 +281,8 @@ wait for its historical status/merge sequence as a publication prerequisite.
 To reproduce the main checks locally:
 
 ```sh
-scripts/try.sh --handoff-modes
-scripts/try-libraries.sh
-THC_DIAGNOSTIC_UNSUPPORTED=true scripts/try-map.sh
+bin/try.sh --handoff-modes
+bin/try-libraries.sh
+THC_DIAGNOSTIC_UNSUPPORTED=true bin/try-map.sh
 python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 ```

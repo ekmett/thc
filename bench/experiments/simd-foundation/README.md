@@ -31,7 +31,7 @@ logical vector representation even where its physical spill slots are two longs.
 
 ## Actual THC Core execution
 
-After `installDist` and `scripts/prepare-simd-audit.py` (or its explicit
+After `installDist` and `bin/prepare-simd-audit.py` (or its explicit
 `--export-only` AArch64 mode), run:
 
 ```sh

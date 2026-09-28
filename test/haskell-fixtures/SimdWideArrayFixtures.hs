@@ -90,8 +90,8 @@ prepareSimdWideArrays root = do
   let directory = "build/simd-wide-arrays"
       logs = directory </> "commands"
       manifest = root </> directory </> "manifest.json"
-      source = "compiler/test-fixtures/SimdWideArrayAudit.hs"
-      driver = "compiler/test-fixtures/SimdWideArrayNative.hs"
+      source = "test/fixtures/compiler/SimdWideArrayAudit.hs"
+      driver = "test/fixtures/compiler/SimdWideArrayNative.hs"
       inputs = directory </> "inputs.tsv"
       binary = directory </> "native/oracle"
       execute = runLogged 300 root logs
@@ -105,7 +105,7 @@ prepareSimdWideArrays root = do
   writeFile (root </> inputs) (unlines [name ++ "\t" ++ show seed ++ "\t" ++ show offset | (name,seed,offset) <- requests])
   nativeArtifacts <- do
     built <- execute "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-      "-icompiler/test-fixtures","-odir",directory </> "native","-hidir",directory </> "native",driver,"-o",binary]
+      "-itest/fixtures/compiler","-odir",directory </> "native","-hidir",directory </> "native",driver,"-o",binary]
     observed <- runLoggedWithInput inputs 120 root logs "native-oracle" [] (root </> binary) []
     rows <- maybe (die "Invalid native SIMD wide row") pure $ traverse (\row -> case splitTab row of
       [name,seed,offset,result,digest] -> do s <- readInteger seed; i <- readInteger offset; _ <- readInteger result; _ <- readInteger digest; pure (name,s,fromInteger i)
@@ -117,13 +117,13 @@ prepareSimdWideArrays root = do
     let corePath = directory </> stage ++ "-core/SimdWideArrayAudit.json"
     compilation <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fno-code","-fwrite-if-simplified-core"] ++
+      "bin/export-core.sh" (["-fno-code","-fwrite-if-simplified-core"] ++
         ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source])
     core <- readJson (root </> corePath)
     reports <- forM entries $ \(name,_,_,_) -> do
       let path = directory </> stage ++ "-" ++ name ++ "-audit.json"
       command <- execute (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        ["scripts/audit-core.py",corePath,"--entry",name,"--output",path]
+        ["bin/audit-core.py",corePath,"--entry",name,"--output",path]
       report <- readJson (root </> path)
       accepted <- field report "accepted"
       missing <- field report "missingGlobals" :: IO [Value]
@@ -133,14 +133,14 @@ prepareSimdWideArrays root = do
       pure (name,object ["audit" .= path,"structure" .= shape],path:commandArtifacts command)
     pure (stage,object ["core" .= corePath,"entries" .= Map.fromList [(name,record) | (name,record,_) <- reports]],
       corePath : commandArtifacts compilation ++ concat [paths | (_,_,paths) <- reports])
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  inputHashes <- hashes root (sort $ [source,driver,"compiler/test-fixtures/SimdWideArrayScalar.hs","test/haskell-fixtures/SimdWideArrayFixtures.hs",
-    "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","compiler/export.sh",
-    "compiler/build.sh","compiler/toolchain.sh","compiler/plugin.py","scripts/audit-core.py",
-    "scripts/core-capabilities.json","scripts/simd-families.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
-    ["scripts" </> path | path <- scripts,"core_" `isPrefixOf` path,takeExtension path == ".py"])
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  inputHashes <- hashes root (sort $ [source,driver,"test/fixtures/compiler/SimdWideArrayScalar.hs","test/haskell-fixtures/SimdWideArrayFixtures.hs",
+    "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal","bin/export-core.sh",
+    "bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py","bin/audit-core.py",
+    "bin/core-capabilities.json","bin/simd-families.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> path | path <- plugin,takeExtension path == ".hs"] ++
+    ["bin" </> path | path <- scripts,"core_" `isPrefixOf` path,takeExtension path == ".py"])
   artifactHashes <- hashes root (inputs : nativeArtifacts ++ commandArtifacts version ++ concat [paths | (_,_,paths) <- exported])
   writeJson manifest (object ["schema" .= (1::Int),"ghc" .= ("9.14.1"::String),"entries" .= [name | (name,_,_,_) <- entries],
     "requests" .= length requests,"nativeRows" .= length requests, "nativeMode" .= ("scalar-lane" :: String),

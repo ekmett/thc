@@ -109,7 +109,7 @@ API dependency. The upstream scanner and rank license notices are included in
 the package's `license-files`.
 
 Direct GHC plugin loads use the genuine dependency closure of the selected Cabal
-plan, including the encoder's store dependencies. `compiler/plugin.py
+plan, including the encoder's store dependencies. `bin/plugin.py
 --registry-only` prepares a private registry from those existing registrations
 without requiring a shared plugin library; the Windows vanilla exporter uses
 that same registry. It does not build or synthesize package registrations.

@@ -106,7 +106,7 @@ class ByteStringDecimalTest {
         var manifest = object(json("manifest.json")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(entries, manifest.get("entries"));
         assertTrue(CoreMemorySearchForeign.isOriginalByteStringUnit(manifest.get("bytestringUnit"))); assertEquals(false, manifest.get("installedArtifactsHashed"));
         assertTrue(((String) manifest.get("interface")).endsWith("/Data/ByteString/Internal/Type.hi"));
-        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("compiler/test-fixtures/ByteStringDecimalAudit.hs", "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
+        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("test/fixtures/compiler/ByteStringDecimalAudit.hs", "test/haskell-fixtures/ByteStringDecimalFixtures.hs",
             "src/test/resources/core/original-bytestring-decimal-descriptors.json", "src/main/java/thc/runtime/CoreByteStringDecimal.java", "src/main/java/thc/runtime/ByteStringDecimal.java",
             "src/main/java/thc/runtime/ByteStringDecimalOp.java", "src/main/java/thc/runtime/ByteStringDecimalExpression.java"), null);
         var artifacts = new HashSet<>(list(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json"));

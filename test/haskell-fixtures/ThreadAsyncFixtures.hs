@@ -32,10 +32,10 @@ prepareThreadAsync root = do
   let directory = "build/thread-async"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/ThreadAsyncAudit.hs"
-      driver = "compiler/test-fixtures/ThreadAsyncNative.hs"
-      lazySource = "compiler/test-fixtures/LazyForkAudit.hs"
-      lazyDriver = "compiler/test-fixtures/LazyForkNative.hs"
+      source = "test/fixtures/compiler/ThreadAsyncAudit.hs"
+      driver = "test/fixtures/compiler/ThreadAsyncNative.hs"
+      lazySource = "test/fixtures/compiler/LazyForkAudit.hs"
+      lazyDriver = "test/fixtures/compiler/LazyForkNative.hs"
       entries = ["forkAndThrow", "killUncaught", "selfThrow", "maskedUnmaskSelf",
         "promptSelfThrow", "promptMaskedUnmaskSelf", "savedSelfThrow", "savedMaskedSelf",
         "savedSuffixSelf", "savedMaskCatchSelf", "externalSaved", "scheduledSaved", "yieldProbe", "yieldMasked"]
@@ -51,11 +51,11 @@ prepareThreadAsync root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     forM_ entries $ \entry -> do
       let report = directory </> stage </> (entry ++ "-audit.json")
       (status, _, errors) <- readCreateProcessWithExitCode
-        ((proc "python3" ["scripts/audit-core.py", "--entry", entry,
+        ((proc "python3" ["bin/audit-core.py", "--entry", entry,
           "--output", report, core </> "ThreadAsyncAudit.json"]) { cwd = Just root }) ""
       unless (status == ExitSuccess)
         (die ("Public thread Core audit failed: " ++ errors))
@@ -65,10 +65,10 @@ prepareThreadAsync root = do
         _ -> die ("Public thread Core audit did not accept " ++ entry)
     _ <- run root [("THC_CORE_OUT", root </> core),
       ("THC_GHC_OUT", output </> stage </> "lazy-ghc")]
-      "compiler/export.sh" (options ++ [lazySource]) ""
+      "bin/export-core.sh" (options ++ [lazySource]) ""
     let lazyReport = directory </> stage </> "lazyFork-audit.json"
     (lazyStatus, _, lazyErrors) <- readCreateProcessWithExitCode
-      ((proc "python3" ["scripts/audit-core.py", "--entry", "lazyFork",
+      ((proc "python3" ["bin/audit-core.py", "--entry", "lazyFork",
         "--output", lazyReport, core </> "LazyForkAudit.json"]) { cwd = Just root }) ""
     unless (lazyStatus == ExitSuccess)
       (die ("Lazy fork Core audit failed: " ++ lazyErrors))
@@ -79,7 +79,7 @@ prepareThreadAsync root = do
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   actual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle")
     ["+RTS", "-N2", "-RTS"] ""
@@ -109,20 +109,20 @@ prepareThreadAsync root = do
   unless (yielded == "37\n39\n") (die "Public thread yield# State/mask oracle disagreed")
   writeFile (output </> "yield-oracle.txt") yielded
   _ <- run root [] ghc ["--make", "-O2", "-dynamic", "-threaded", "-dcore-lint", "-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures", "-odir", native, "-hidir", native,
+    "-i" ++ root </> "test/fixtures/compiler", "-odir", native, "-hidir", native,
     root </> lazyDriver, "-o", native </> "lazy-oracle"] ""
   lazyActual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "lazy-oracle")
     ["+RTS", "-N2", "-RTS"] ""
   unless (lazyActual == "52\n53\n") (die "Lazy fork native child ownership/resume oracle disagreed")
   writeFile (output </> "lazy-oracle.txt") lazyActual
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source, driver, lazySource, lazyDriver, "thc.cabal", "test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/ThreadAsyncFixtures.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> "oracle.txt", directory </> "extra-oracle.txt",
         directory </> "yield-oracle.txt", directory </> "lazy-oracle.txt", directory </> "saved-oracle.txt",
         directory </> "external-saved-oracle.txt", directory </> "scheduled-saved-oracle.txt"] ++

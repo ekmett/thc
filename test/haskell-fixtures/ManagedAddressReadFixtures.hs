@@ -46,8 +46,8 @@ prepareManagedAddressReads root = do
   let directory = "build/managed-address-reads"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/ManagedAddressReadAudit.hs"
-      driver = "compiler/test-fixtures/ManagedAddressReadNative.hs"
+      source = "test/fixtures/compiler/ManagedAddressReadAudit.hs"
+      driver = "test/fixtures/compiler/ManagedAddressReadNative.hs"
       native = directory </> "native"
       binary = native </> "managed-address-read-oracle"
       requestText = unlines (map (intercalate "\t") requests)
@@ -63,7 +63,7 @@ prepareManagedAddressReads root = do
   writeFile (output </> "requests.tsv") requestText
   createDirectoryIfMissing True (root </> native)
   _ <- run root [] ghc ["--make","-O2","-j2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-icompiler/test-fixtures","-odir",native,"-hidir",native,driver,"-o",binary] ""
+    "-itest/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",binary] ""
   observed <- runWithTimeout (Just (60 * 1000000)) root [] (root </> binary) [] requestText
   let validRow (request,row) = case splitTab row of
         [name,raw,base,offset,result] ->
@@ -79,25 +79,25 @@ prepareManagedAddressReads root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
           ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_,_) <- entries]
     _ <- run root [("THC_CORE_OUT",root </> core), ("THC_GHC_OUT",root </> ghcOut)]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     files <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     unless ("ManagedAddressReadAudit.json" `elem` files)
       (die ("Missing " ++ stage ++ " managed-address Core"))
     forM_ entries $ \(name,_,_) -> do
       let report = directory </> (stage ++ "-" ++ name ++ ".audit.json")
-      _ <- run root [] "python3" ["scripts/audit-core.py", "--entry",name,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry",name,
         "--output",report,core] ""
       pure ()
     pure (stage,map (core </>) files)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","cabal.project",
         "test/haskell-fixtures/Main.hs","test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/ManagedAddressReadFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json",
-        "compiler/export.sh","compiler/build.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json",
+        "bin/export-core.sh","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, "core_" `isPrefixOf` file, takeExtension file == ".py"]
       artifacts = [binary,directory </> "oracle.tsv",directory </> "requests.tsv"] ++
         concat [files ++ [directory </> (stage ++ "-" ++ name ++ ".audit.json")
                         | (name,_,_) <- entries] | (stage,files) <- stages]

@@ -86,17 +86,17 @@ prepareHashableFfi root = do
   retained <- mapM (retainUnitArtifacts root (directory </> "bundles")) records
   let packagePath = directory </> "packages.json"
   writeJson (root </> packagePath) (replace "units" (toJSON (map fst retained)) packages)
-  plugin <- listDirectory (root </> "compiler/THC")
-  driverSources <- listDirectory (root </> "src/THC/Driver")
-  auditors <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  driverSources <- listDirectory (root </> "src/driver/THC/Driver")
+  auditors <- listDirectory (root </> "bin")
   inputs <- hashes root $ sort $ map (fixture </>) sources ++
     ["thc.cabal", "test/haskell-fixtures/HashableFfiFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
      "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/Main.hs",
-     "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py", "compiler/interface/Main.hs",
-     "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-    ["src/THC/Driver" </> file | file <- driverSources, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- auditors, "core_" `isPrefixOf` file, takeExtension file == ".py"]
+     "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py", "src/compiler/interface/Main.hs",
+     "bin/audit-core.py", "bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+    ["src/driver/THC/Driver" </> file | file <- driverSources, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- auditors, "core_" `isPrefixOf` file, takeExtension file == ".py"]
   let commands = [built, located, managed, native]
   artifacts <- hashes root ([packagePath, acquired </> "packages.json", acquired </> "audit.json",
     acquired </> "native/cache/plan.json"] ++ concatMap snd retained ++ concatMap commandArtifacts commands)

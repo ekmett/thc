@@ -30,8 +30,8 @@ prepareOriginalStackDecoder :: FilePath -> IO ()
 prepareOriginalStackDecoder root = do
   let directory = "build/original-stack-decoder"
       manifest = root </> directory </> "manifest.json"
-      source = "compiler/test-fixtures/OriginalStackDecoder.hs"
-      driver = "compiler/test-fixtures/OriginalStackDecoderNative.hs"
+      source = "test/fixtures/compiler/OriginalStackDecoder.hs"
+      driver = "test/fixtures/compiler/OriginalStackDecoderNative.hs"
       entries = ["captureNamed", "observeSnapshot"]
       run label env program args = runLogged 300 root (directory </> "logs") label env program args
   createDirectoryIfMissing True (root </> directory)
@@ -40,7 +40,7 @@ prepareOriginalStackDecoder root = do
     present <- doesFileExist path
     when present (removeFile path)
   installed <- prepareInstalledCore root directory
-  plugin <- run "plugin-build" [] "compiler/build.sh" []
+  plugin <- run "plugin-build" [] "bin/build-compiler.sh" []
   stages <- forM ["pre", "post"] $ \stage -> do
     let core = directory </> stage </> "core"
         consumer = core </> "OriginalStackDecoder.json"
@@ -48,11 +48,11 @@ prepareOriginalStackDecoder root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (["-package", "ghc-internal", "-g", "-finfo-table-map"] ++ options ++ [source])
+      "bin/export-core.sh" (["-package", "ghc-internal", "-g", "-finfo-table-map"] ++ options ++ [source])
     audits <- forM entries $ \entry -> do
       let report = directory </> stage </> entry ++ "-audit.json"
       result <- try (run (stage ++ "-audit-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", "--package-manifest", fixturePackages installed, "--entry", entry,
+        ["bin/audit-core.py", "--package-manifest", fixturePackages installed, "--entry", entry,
          "--output", report, consumer]) :: IO (Either ExitCode CommandResult)
       pure (report, result)
     pure (stage, consumer, exported, audits)
@@ -64,20 +64,20 @@ prepareOriginalStackDecoder root = do
   createDirectoryIfMissing True (root </> native)
   compiled <- run "native-compile" [] (fixtureGhc installed)
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-g", "-finfo-table-map",
-     "-package", "ghc-internal", "-icompiler/test-fixtures", "-odir", native, "-hidir", native,
+     "-package", "ghc-internal", "-itest/fixtures/compiler", "-odir", native, "-hidir", native,
      driver, "-o", executable]
   observed <- run "native-invariants" [] (root </> executable) []
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  drivers <- listDirectory (root </> "src/THC/Driver")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  drivers <- listDirectory (root </> "src/driver/THC/Driver")
   let inputs = sort $ [source, driver, "test/haskell-fixtures/StackDecoderFixtures.hs",
         "test/haskell-fixtures/InstalledCoreFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project", "compiler/interface/Main.hs",
-        "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/target-layout.c", "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> name | name <- pluginFiles, takeExtension name == ".hs"] ++
-        ["src/THC/Driver" </> name | name <- drivers, takeExtension name == ".hs"] ++
-        ["scripts" </> name | name <- scripts, take 5 name == "core_", takeExtension name == ".py"]
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "cabal.project", "src/compiler/interface/Main.hs",
+        "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json",
+        "src/driver/cbits/target-layout.c", "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> name | name <- pluginFiles, takeExtension name == ".hs"] ++
+        ["src/driver/THC/Driver" </> name | name <- drivers, takeExtension name == ".hs"] ++
+        ["bin" </> name | name <- scripts, take 5 name == "core_", takeExtension name == ".py"]
       commands = fixtureCommands installed ++ [plugin] ++
         concat [exported : [result | (_, Right result) <- audits] | (_,_,exported,audits) <- stages] ++ [compiled, observed]
       artifacts = fixtureArtifacts installed ++ [executable] ++ concatMap commandArtifacts commands ++

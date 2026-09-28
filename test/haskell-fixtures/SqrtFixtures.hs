@@ -106,8 +106,8 @@ prepareSqrt root = do
   let directory = "build/sqrt"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/SqrtAudit.hs"
-      driver = "compiler/test-fixtures/SqrtAuditNative.hs"
+      source = "test/fixtures/compiler/SqrtAudit.hs"
+      driver = "test/fixtures/compiler/SqrtAuditNative.hs"
       native = output </> "native"
   createDirectoryIfMissing True native
   -- Retire receipts from the former Python producer on persistent runners.
@@ -120,7 +120,7 @@ prepareSqrt root = do
   ghcInfo <- run root [] ghc ["--info"] ""
   writeFile (output </> "inputs.tsv") (unlines [name ++ "\t" ++ show bits | (name,bits) <- inputRows])
   _ <- run root [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-icompiler/test-fixtures","-odir",native,"-hidir",native,driver,"-o",native </> "oracle"] ""
+    "-itest/fixtures/compiler","-odir",native,"-hidir",native,driver,"-o",native </> "oracle"] ""
   rows <- runWithTimeout (Just 120000000) root [] (native </> "oracle") [output </> "inputs.tsv"] ""
   checkRows rows
   writeFile (output </> "oracle.tsv") rows
@@ -129,23 +129,23 @@ prepareSqrt root = do
   forM_ ["pre","post"] $ \stage -> do
     _ <- run root [("THC_CORE_OUT",output </> stage ++ "-core"),
                    ("THC_GHC_OUT",output </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
-    _ <- run root [] "python3" (["scripts/audit-core.py",directory </> stage ++ "-core/SqrtAudit.json"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
+    _ <- run root [] "python3" (["bin/audit-core.py",directory </> stage ++ "-core/SqrtAudit.json"] ++
       concatMap (\name -> ["--entry",name]) entries ++
       ["--output",directory </> stage ++ "-audit.json"]) ""
     evidence <- BS.readFile (output </> stage ++ "-audit.json")
     case decodeStrict' evidence of
       Just (Object fields) | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
       _ -> die ("Strict sqrt audit rejected " ++ stage)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/SqrtFixtures.hs",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-        "scripts/audit-core.py","scripts/core-capabilities.json",
-        "src/main/resources/thc/scalar-primop-signatures.json","tools/primops/PrimopTools.hs"] ++
-        ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py",
+        "bin/audit-core.py","bin/core-capabilities.json",
+        "src/main/resources/thc/scalar-primop-signatures.json","src/tools/primops/PrimopTools.hs"] ++
+        ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [directory </> name | name <- ["inputs.tsv","oracle.tsv","integer-oracle.tsv",
         "native/oracle"]] ++
         [directory </> stage ++ suffix | stage <- ["pre","post"],

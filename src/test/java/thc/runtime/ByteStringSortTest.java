@@ -45,7 +45,7 @@ class ByteStringSortTest {
         var manifest = object(json("manifest.json")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(list("sortBytes"), manifest.get("entries"));
         assertTrue(CoreMemorySearchForeign.isOriginalByteStringUnit(manifest.get("bytestringUnit"))); assertEquals(false, manifest.get("installedArtifactsHashed"));
         assertTrue(((String) manifest.get("interface")).endsWith("/Data/ByteString/Internal/Type.hi"));
-        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("compiler/test-fixtures/ByteStringSortAudit.hs", "test/haskell-fixtures/ByteStringSortFixtures.hs",
+        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("test/fixtures/compiler/ByteStringSortAudit.hs", "test/haskell-fixtures/ByteStringSortFixtures.hs",
             "src/test/resources/core/original-bytestring-sort-descriptor.json", "src/main/java/thc/runtime/CoreByteStringSort.java",
             "src/main/java/thc/runtime/ByteStringSort.java", "src/main/java/thc/runtime/ByteStringSortExpression.java"), null);
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), Set.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/oracle.json",

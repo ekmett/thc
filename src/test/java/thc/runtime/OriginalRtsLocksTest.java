@@ -52,7 +52,7 @@ public class OriginalRtsLocksTest {
     private Object symbol(List<Object> call) { return ((Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) call.get(6)).get("foreignCall")).get("target")).get("symbol"); }
     @Test public void genuineNativeClaimsMatchPrePostBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json("manifest.json"); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("originalIdsChecked")); assertEquals(true, manifest.get("typeEqualityChecked")); assertEquals(false, manifest.get("installedArtifactsHashed"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("compiler/test-fixtures/OriginalRtsLocksAudit.hs", "test/haskell-fixtures/OriginalRtsLocksFixtures.hs", "scripts/core-capabilities.json"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalRtsLocksAudit.hs", "test/haskell-fixtures/OriginalRtsLocksFixtures.hs", "bin/core-capabilities.json"), null);
         var required = new LinkedHashSet<>(List.of(prefix + "/pre.json", prefix + "/post.json", prefix + "/declarations.json", prefix + "/template-pre.json", prefix + "/oracle.json"));
         for (var stage : List.of("pre", "post")) for (var entry : List.of("originalLock", "originalUnlock")) required.add(prefix + "/" + stage + "-" + entry + ".audit.json");
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), required, prefix + "/");

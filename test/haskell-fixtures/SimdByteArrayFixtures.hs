@@ -356,7 +356,7 @@ retainedControls family root attempt audit = do
   let source = if not (floating family) then parsed else get "core" parsed
       hashes = Map.fromList [(string (get "path" item),string (get "sha256" item)) | item <- items (get "artifacts" source)]
   when (family `elem` [Int32Lanes,Word32Lanes]) $ do
-    let fixture = "compiler/test-fixtures" </> moduleName family ++ ".hs"
+    let fixture = "test/fixtures/compiler" </> moduleName family ++ ".hs"
         wanted = [string (get "sha256" item) | item <- items (get "sources" source),get "path" item == toJSON fixture]
     current <- BS.readFile (root </> fixture)
     let path = attempt </> "retained-original-source.hs"
@@ -392,8 +392,8 @@ prepareSimdByteArray root name args = do
   (exportOnly,ghcOptions) <- options False [] args
   let directory = "build" </> "simd-" ++ name
       provenancePath = directory </> "provenance.json"
-      fixture = "compiler/test-fixtures" </> moduleName family ++ ".hs"
-      nativeSource = "compiler/test-fixtures" </> moduleName family ++ "Native.hs"
+      fixture = "test/fixtures/compiler" </> moduleName family ++ ".hs"
+      nativeSource = "test/fixtures/compiler" </> moduleName family ++ "Native.hs"
       stages = if exportOnly then ["pre"] else ["pre","post"]
   createDirectoryIfMissing True (root </> directory)
   -- Cabal returns the new directory's basename and appends its own hyphen.
@@ -419,7 +419,7 @@ prepareSimdByteArray root name args = do
         let reportPath = attempt </> "audits" </> label ++ ".json"
         createDirectoryIfMissing True (root </> attempt </> "audits")
         result <- runLoggedExpect (if rejected then 1 else 0) 120 root logs label [] "python3"
-          ["scripts/audit-core.py","--entry",entry,"--output",reportPath,path]
+          ["bin/audit-core.py","--entry",entry,"--output",reportPath,path]
         report <- readJson (root </> reportPath)
         pure (report,result,reportPath)
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
@@ -432,19 +432,19 @@ prepareSimdByteArray root name args = do
   host <- run "host" [] "uname" ["-n"]
   architecture <- run "architecture" [] "uname" ["-m"]
   system <- run "system" [] "uname" ["-s"]
-  compiler <- run "compiler-build" [] "compiler/build.sh" []
+  compiler <- run "compiler-build" [] "bin/build-compiler.sh" []
   let wanted = rows family
       expectedText = encodeRows wanted
   check (length wanted == expectedRows family && Set.size (Set.fromList [(entry,input) | (entry,input,_) <- wanted]) == length wanted) "Wrong SIMD model domain"
   writeFile (root </> directory </> "expected.tsv") expectedText
   writeFile (root </> directory </> "requests.tsv") (encodeRequests wanted)
-  capabilities <- readJson (root </> "scripts/core-capabilities.json")
+  capabilities <- readJson (root </> "bin/core-capabilities.json")
   prepared <- forM stages $ \stage -> do
     let corePath = directory </> stage ++ "-core" </> moduleName family ++ ".json"
     exists <- doesFileExist (root </> corePath)
     when exists (removeFile (root </> corePath))
     exported <- run (stage ++ "-export") [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
-      "compiler/export.sh" (ghcOptions ++ [x | exportOnly,x <- ["-fno-code","-fwrite-if-simplified-core"]] ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture])
+      "bin/export-core.sh" (ghcOptions ++ [x | exportOnly,x <- ["-fno-code","-fwrite-if-simplified-core"]] ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture])
     core <- readJson (root </> corePath)
     facts <- inventory family stage core
     reports <- forM (map entryName (entries family) ++ graphNames family ++ hostEntries ++ frontiers) $ \entry -> do
@@ -470,7 +470,7 @@ prepareSimdByteArray root name args = do
     let directoryNative = directory </> "native"
         binary = directoryNative </> name ++ "-oracle"
     createDirectoryIfMissing True (root </> directoryNative)
-    built <- run "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-icompiler/test-fixtures","-odir",root </> directoryNative,"-hidir",root </> directoryNative] ++ ghcOptions ++ [nativeSource,"-o",root </> binary])
+    built <- run "native-build" [] ghc (["--make","-O2","-fforce-recomp","-dcore-lint","-itest/fixtures/compiler","-odir",root </> directoryNative,"-hidir",root </> directoryNative] ++ ghcOptions ++ [nativeSource,"-o",root </> binary])
     observed <- runLoggedWithInput (directory </> "requests.tsv") 120 root logs "native-oracle" [] (root </> binary) []
     check (commandStdout observed == BSC.pack expectedText) "Native SIMD memory corpus differs from exact ordered byte model"
     BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout observed)
@@ -494,15 +494,15 @@ prepareSimdByteArray root name args = do
         case native of Nothing -> []; Just (built,observed,diagnostic,_) -> [built,observed] ++ [result | Just (_,result) <- [diagnostic]]
       artifacts = [directory </> "expected.tsv",directory </> "requests.tsv"] ++ concat [paths | (_,_,_,_,_,paths) <- prepared] ++ controlsPaths ++ retainedPaths ++ concatMap commandArtifacts commands ++
         case native of Nothing -> []; Just (_,_,diagnostic,binary) -> [directory </> "oracle.tsv",binary] ++ [directory </> path | Just _ <- [diagnostic],path <- ["snan-expected.tsv","snan-requests.tsv","snan-oracle.tsv"]]
-  compilerSources <- map ("compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "compiler/THC")
-  auditorSources <- map ("scripts" </>) . filter (\path -> "core_" `isPrefixOf` path && takeExtension path == ".py") <$> listDirectory (root </> "scripts")
+  compilerSources <- map ("src/compiler/THC" </>) . filter ((== ".hs") . takeExtension) <$> listDirectory (root </> "src/compiler/THC")
+  auditorSources <- map ("bin" </>) . filter (\path -> "core_" `isPrefixOf` path && takeExtension path == ".py") <$> listDirectory (root </> "bin")
   sources <- mapM (record root) . sort . Set.toList . Set.fromList $ [fixture,nativeSource,
     "test/haskell-fixtures/SimdByteArrayFixtures.hs","test/haskell-fixtures/SimdByteArrayModel.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
-    "scripts/audit-core.py","scripts/core-capabilities.json",
+    "bin/audit-core.py","bin/core-capabilities.json",
     "src/main/java/thc/runtime/VectorMemoryFamily.java","src/main/java/thc/runtime/VectorMemoryOp.java",
     "src/main/java/thc/runtime/VectorReadCase.java","src/main/java/thc/runtime/CoreVectorMemory.java",
     "src/main/java/thc/runtime/VectorByteArrayExpression.java",
-    "src/main/resources/thc/scalar-primop-signatures.json","compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
+    "src/main/resources/thc/scalar-primop-signatures.json","bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
     ["src/main/java/thc/runtime/VectorMemory.java" | family == DoubleLanes] ++ compilerSources ++ auditorSources ++ retainedSources
   artifactRecords <- mapM (record root) (sort (Set.toList (Set.fromList artifacts)))
   let controlKey = case family of Int32Lanes -> "unsignedNegativeControls"; Word32Lanes -> "signedNegativeControls"; _ -> "familyNegativeControls"

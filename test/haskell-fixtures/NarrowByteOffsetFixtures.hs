@@ -36,8 +36,8 @@ prepareNarrowByteOffset root = do
   let directory = "build/narrow-byte-offset"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/NarrowByteOffsetAudit.hs"
-      driver = "compiler/test-fixtures/NarrowByteOffsetNative.hs"
+      source = "test/fixtures/compiler/NarrowByteOffsetAudit.hs"
+      driver = "test/fixtures/compiler/NarrowByteOffsetNative.hs"
       entry = "narrowByteOffsetValues"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
@@ -50,15 +50,15 @@ prepareNarrowByteOffset root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT",root </> core),
       ("THC_GHC_OUT",output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
-    _ <- run root [] "python3" ["scripts/audit-core.py","--entry",entry,
+      "bin/export-core.sh" (options ++ [source]) ""
+    _ <- run root [] "python3" ["bin/audit-core.py","--entry",entry,
       "--output",directory </> stage </> "audit.json",
       core </> "NarrowByteOffsetAudit.json"] ""
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make","-O2","-dynamic","-dcore-lint","-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures","-odir",native,"-hidir",native,
+    "-i" ++ root </> "test/fixtures/compiler","-odir",native,"-hidir",native,
     root </> driver,"-o",native </> "oracle"] ""
   actual <- runWithTimeout (Just (30 * 1000000)) root [] (native </> "oracle") []
     (unlines [show f ++ " " ++ show d | (f,d) <- inputs])
@@ -73,15 +73,15 @@ prepareNarrowByteOffset root = do
         _ -> Nothing
   unless (traverse parse (lines actual) == Just inputs) (die "Malformed native narrow byte-offset rows")
   writeFile (output </> "oracle.tsv") actual
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/NarrowByteOffsetFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json",
+        "bin/audit-core.py","bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") : [directory </> stage </> suffix |
         stage <- ["pre","post"], suffix <- ["core/NarrowByteOffsetAudit.json","audit.json"]]
   sourceHashes <- hashes root sources

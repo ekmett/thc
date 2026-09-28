@@ -35,10 +35,10 @@ class StateTupleTest {
             var actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(root.resolve(path))));
             assertEquals(item.get("sha256"), actual, "Stale State# evidence: " + path);
         }
-        var required = new ArrayList<>(List.of("scripts/audit-core.py", "scripts/core-capabilities.json"));
-        for (var file : Objects.requireNonNull(root.resolve("scripts").toFile().listFiles()))
+        var required = new ArrayList<>(List.of("bin/audit-core.py", "bin/core-capabilities.json"));
+        for (var file : Objects.requireNonNull(root.resolve("bin").toFile().listFiles()))
             if (file.getName().startsWith("core_") && file.getName().endsWith(".py")) required.add(root.relativize(file.toPath()).toString());
-        for (var path : List.of("src/main/resources/thc/scalar-primop-signatures.json", "tools/primops/PrimopTools.hs")) if (Files.exists(root.resolve(path))) required.add(path);
+        for (var path : List.of("src/main/resources/thc/scalar-primop-signatures.json", "src/tools/primops/PrimopTools.hs")) if (Files.exists(root.resolve(path))) required.add(path);
         var paths = new ArrayList<String>(); for (var source : sources) paths.add(source.get("path"));
         assertTrue(paths.containsAll(required), "Missing current auditor input hashes");
         for (var stage : List.of("pre", "post")) {

@@ -10,9 +10,9 @@ cases=json.loads(cases_path.read_text());group=next(g for g in cases['groups'] i
 for name,expected in cases['artifactHashes'].items():
     assert hashlib.sha256(pathlib.Path(name).read_bytes()).hexdigest()==expected,name
 modules=[(p,json.loads(pathlib.Path(p).read_text())) for p in group['modules']]
-spec=importlib.util.spec_from_file_location('set_current_core_audit',root/'scripts/audit-core.py')
+spec=importlib.util.spec_from_file_location('set_current_core_audit',root/'bin/audit-core.py')
 audit=importlib.util.module_from_spec(spec);spec.loader.exec_module(audit)
-report=audit.Audit(modules,json.loads((root/'scripts/core-capabilities.json').read_text())).run(['setAggregate'])
+report=audit.Audit(modules,json.loads((root/'bin/core-capabilities.json').read_text())).run(['setAggregate'])
 (out/'current-audit.json').write_text(json.dumps(report,indent=2)+'\n')
 reachable={b['id'] for b in report['reachableBindings']}; tuples=[]
 def values(x):
@@ -35,7 +35,7 @@ for path,module in modules:
 selected=[j for j in tuples if j['reachableFromSetAggregate']]
 assert len(selected)==2 and {j['owner'] for j in selected}=={'main:Data.Set.Internal.$wgo','main:Data.Set.Internal.$wgo1'},selected
 assert not report['accepted'],'Strict Set unexpectedly accepted; review changed frontier'
-used=[cases_path,*map(pathlib.Path,group['modules']),cases_path.parent/'oracle.tsv',root/'scripts/audit-core.py',root/'scripts/core-capabilities.json']
+used=[cases_path,*map(pathlib.Path,group['modules']),cases_path.parent/'oracle.tsv',root/'bin/audit-core.py',root/'bin/core-capabilities.json']
 result={'root':'main:THC.SetWorkload.setAggregate','strictAccepted':False,'currentAuditSummary':report['summary'],
         'fullModuleTupleJoinCount':len(tuples),'reachableTupleJoinCount':len(selected),'tupleJoins':tuples,
         'sha256':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in used}}

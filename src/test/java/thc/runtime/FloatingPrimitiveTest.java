@@ -51,7 +51,7 @@ class FloatingPrimitiveTest {
         for (var record : records) {
             var file = new File(root, (String) record.get("path"));
             var hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(file.toPath())));
-            assertEquals(record.get("sha256"), hash, "Stale floating fixture: " + file + "; rerun scripts/prepare-tests.sh");
+            assertEquals(record.get("sha256"), hash, "Stale floating fixture: " + file + "; rerun bin/prepare-tests.sh");
         }
         var entries = new LinkedHashMap<String, List<Row>>();
         for (var row : rows()) entries.computeIfAbsent(row.entry, ignored -> new ArrayList<>()).add(row);

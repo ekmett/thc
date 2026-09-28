@@ -34,9 +34,9 @@ entries = [family ++ suffix | family <- ["float","double"], suffix <- ["Direct",
   ["floatExampleExponent","doubleExampleExponent"]
 
 vendorSources :: [FilePath]
-vendorSources = ["vendor/ghc-9.14.1/GHC/Internal/Bignum" </> name ++ suffix |
+vendorSources = ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
   name <- ["BigNat","Integer","Natural"], suffix <- [".hs",".hs-boot"]] ++
-  ["vendor/ghc-9.14.1/include/WordSize.h","vendor/ghc-9.14.1/LICENSE"]
+  ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
 
 -- Every exponent code, every leading subnormal bit, both signs, boundary
 -- fractions and deterministic integer-generated random encodings. No host FP.
@@ -59,9 +59,9 @@ prepareFloatDecode :: FilePath -> IO ()
 prepareFloatDecode root = do
   let directory = "build/float-decode"
       output = root </> directory
-      source = "compiler/test-fixtures/FloatDecodeAudit.hs"
+      source = "test/fixtures/compiler/FloatDecodeAudit.hs"
       example = "examples/THC/FloatDecode.hs"
-      driver = "compiler/test-fixtures/FloatDecodeNative.hs"
+      driver = "test/fixtures/compiler/FloatDecodeNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
       logs = directory </> "commands"
@@ -82,7 +82,7 @@ prepareFloatDecode root = do
       requestPath = directory </> "inputs.tsv"
   writeFile (root </> requestPath) (unlines [name ++ "\t" ++ show bits | (name,bits) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures","-iexamples",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-iexamples",
      "-odir",root </> native,"-hidir",root </> native,driver,"-o",root </> binary]
   executed <- runLoggedWithInput requestPath 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case splitTab line of
@@ -99,19 +99,19 @@ prepareFloatDecode root = do
       original = directory </> "original/GHC.Internal.Bignum.Integer.json"
       provenance = directory </> "original/boot-provenance.json"
   bootExport <- runLogged 300 root logs "boot-export" [] "python3"
-    ["compiler/export-boot.py","--frontier","bignum","--build-dir",boot]
+    ["bin/export-boot.py","--frontier","bignum","--build-dir",boot]
   createDirectoryIfMissing True (output </> "original")
   copyFile (root </> boot </> "core/GHC.Internal.Bignum.Integer.json") (root </> original)
   copyFile (root </> boot </> "boot-provenance.json") (root </> provenance)
   stages <- forM ["pre","post"] $ \stage -> do
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",output </> stage ++ "-core"),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source,example])
     let corePaths = [directory </> stage ++ "-core" </> name ++ ".json" | name <- ["FloatDecodeAudit","THC.FloatDecode"]]
     reports <- forM entries $ \name -> do
       let reportPath = directory </> stage ++ "-" ++ name ++ "-audit.json"
       audited <- runLogged 120 root logs (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["scripts/audit-core.py"] ++ corePaths ++ [original,"--entry",name,"--output",reportPath])
+        (["bin/audit-core.py"] ++ corePaths ++ [original,"--entry",name,"--output",reportPath])
       report <- BS.readFile (root </> reportPath) >>= either die pure . eitherDecodeStrict'
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True),
@@ -120,15 +120,15 @@ prepareFloatDecode root = do
         _ -> die ("Strict floating decode audit rejected " ++ stage ++ "/" ++ name)
       pure (reportPath:commandArtifacts audited)
     pure (corePaths ++ commandArtifacts exported ++ concat reports)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,example,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/FloatDecodeFixtures.hs",
-        "compiler/build.sh","compiler/export.sh","compiler/export-boot.py","compiler/toolchain.sh","compiler/plugin.py",
-        "scripts/audit-core.py","scripts/core-capabilities.json",
+        "bin/build-compiler.sh","bin/export-core.sh","bin/export-boot.py","bin/toolchain.sh","bin/plugin.py",
+        "bin/audit-core.py","bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json"] ++ vendorSources ++
-        ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+        ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = [requestPath,directory </> "oracle.tsv",binary,original,provenance] ++ concat stages ++
         commandArtifacts compiled ++ commandArtifacts executed ++ commandArtifacts bootExport
   inputHashes <- hashes root sources

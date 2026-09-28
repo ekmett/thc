@@ -26,8 +26,8 @@ import System.FilePath ((</>), takeExtension)
 prepareMaskFunctions :: FilePath -> IO ()
 prepareMaskFunctions root = do
   let directory = "build/mask-functions"
-      source = "compiler/test-fixtures/MaskFunctionAudit.hs"
-      driver = "compiler/test-fixtures/MaskFunctionNative.hs"
+      source = "test/fixtures/compiler/MaskFunctionAudit.hs"
+      driver = "test/fixtures/compiler/MaskFunctionNative.hs"
       entries = ["maskedFunction", "unmaskedFunction", "uninterruptibleFunction", "lazyFunctions", "bareMasks"]
       run label env program args = runLogged 180 root (directory </> "logs") label env program args
       native = directory </> "native"
@@ -38,7 +38,7 @@ prepareMaskFunctions root = do
   unless (BS.words (commandStdout version) == ["9.14.1"]) (die "Mask functions require GHC 9.14.1")
   compiled <- run "native-compile" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-i./compiler/test-fixtures", "-odir", native, "-hidir", native, driver, "-o", binary]
+     "-i./test/fixtures/compiler", "-odir", native, "-hidir", native, driver, "-o", binary]
   observed <- run "native-oracle" [] (root </> binary) []
   unless (length (BS.lines (commandStdout observed)) == 15) (die "Mask function oracle row count changed")
   stages <- forM ["pre", "post"] $ \stage -> do
@@ -48,19 +48,19 @@ prepareMaskFunctions root = do
     mapM_ (createDirectoryIfMissing True . (root </>)) [core, ghcOut]
     exported <- run (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", root </> ghcOut)]
-      "compiler/export.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : options ++ [source])
+      "bin/export-core.sh" ("-fplugin-opt=THC.Plugin:pretty-diagnostics" : options ++ [source])
     audits <- forM entries $ \entry -> run (stage ++ "-audit-" ++ entry) [] "python3"
-      ["scripts/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
+      ["bin/audit-core.py", "--entry", entry, "--output", directory </> stage </> entry ++ "-audit.json",
        core </> "MaskFunctionAudit.json"]
     pure (exported : audits)
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let inputs = sort $ [source, driver, "test/haskell-fixtures/MaskFunctionFixtures.hs",
         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "thc.cabal", "cabal.project", "scripts/audit-core.py", "scripts/core-capabilities.json",
-        "compiler/export.sh", "compiler/build.sh", "compiler/toolchain.sh", "compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
+        "thc.cabal", "cabal.project", "bin/audit-core.py", "bin/core-capabilities.json",
+        "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- plugin, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- scripts, take 5 file == "core_", takeExtension file == ".py"]
       commands = [version, compiled, observed] ++ concat stages
       artifacts = [binary] ++ concatMap commandArtifacts commands ++
         [directory </> stage </> "core/MaskFunctionAudit.json" | stage <- ["pre", "post"]] ++

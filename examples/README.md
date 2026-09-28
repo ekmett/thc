@@ -2,8 +2,8 @@
 
 The broader [coverage corpus](../docs/coverage.md) is described by
 [`coverage.json`](coverage.json), with separate ordinary list/function/tree and
-numeric modules. `scripts/prepare-corpus.py` generates its native driver and
-strict Core bundles; `scripts/try.sh` runs both backends through interpreted,
+numeric modules. `bin/prepare-corpus.py` generates its native driver and
+strict Core bundles; `bin/try.sh` runs both backends through interpreted,
 compiled, cold-input and recompiled checks. The fixtures below remain as
 smaller tests of individual runtime mechanisms.
 
@@ -91,7 +91,7 @@ From the project root:
 
 ```sh
 mkdir -p build/native
-scripts/native-oracle.sh > build/native/oracle.tsv
+bin/native-oracle.sh > build/native/oracle.tsv
 build/native/native-oracle under 20
 ```
 

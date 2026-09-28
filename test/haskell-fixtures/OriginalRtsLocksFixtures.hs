@@ -52,7 +52,7 @@ import Text.Read (readMaybe)
 
 directory, source :: FilePath
 directory = "build/original-rts-locks"
-source = "compiler/test-fixtures/OriginalRtsLocksAudit.hs"
+source = "test/fixtures/compiler/OriginalRtsLocksAudit.hs"
 
 target :: Id -> Maybe String
 target v = case isFCallId_maybe v of
@@ -197,18 +197,18 @@ prepareOriginalRtsLocks root requireSupported = do
     forM ["originalLock","originalUnlock"] $ \entry -> do
       let output = directory </> stage ++ "-" ++ entry ++ ".audit.json"
       command <- execute (stage ++ "-" ++ entry) [] "python3"
-        ["scripts/audit-core.py", "--entry", entry, "--output", output, directory </> stage ++ ".json"]
+        ["bin/audit-core.py", "--entry", entry, "--output", output, directory </> stage ++ ".json"]
       pure (output,command)
   let commands = [version,info,libdir,imports] ++ map snd (concat audits)
       artifacts = map (directory </>) ["oracle.json","declarations.json","template-pre.json","pre.json","post.json"] ++
         map fst (concat audits) ++ concatMap commandArtifacts commands
-  compilerFiles <- listDirectory (root </> "compiler/THC")
-  scriptFiles <- listDirectory (root </> "scripts")
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  scriptFiles <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source,"test/haskell-fixtures/OriginalRtsLocksFixtures.hs",
     "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
-    "scripts/audit-core.py","scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    "bin/audit-core.py","bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> name | name <- compilerFiles, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scriptFiles, "core_" `isPrefixOf` name, takeExtension name == ".py"]
   artifactHashes <- hashes root artifacts
   writeJson (root </> directory </> "manifest.json") $ object ["schema" .= (1::Int),
     "strictAccepted" .= requireSupported, "originalIdsChecked" .= True, "typeEqualityChecked" .= True,

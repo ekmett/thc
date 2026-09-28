@@ -92,7 +92,7 @@ variables expr = case expr of
 prepareRtsEvent :: FilePath -> IO ()
 prepareRtsEvent root = do
   let directory = "build/rts-event"
-      source = "compiler/test-fixtures/RtsEventAudit.hs"
+      source = "test/fixtures/compiler/RtsEventAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       oneLine result = case lines (BS.unpack (commandStdout result)) of
         [value] -> value
@@ -223,10 +223,10 @@ prepareRtsEvent root = do
       descriptorEntries = [(entry,"original" ++ consumer) | (entry,_,consumer) <- descriptorCalls]
       allEntries = entries ++ descriptorEntries
   _ <- forM allEntries $ \(entry,binder) -> forM ["pre","post"] $ \stage ->
-    execute (entry ++ "-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry",binder,
+    execute (entry ++ "-" ++ stage) [] "python3" ["bin/audit-core.py","--entry",binder,
       "--output",directory </> entry ++ "-" ++ stage ++ ".audit.json",directory </> entry ++ "-" ++ stage ++ ".json"]
-  inputHashes <- hashes root [source,"test/haskell-fixtures/RtsEventFixtures.hs","compiler/THC/Plugin.hs",
-    "compiler/THC/Interface.hs","scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json"]
+  inputHashes <- hashes root [source,"test/haskell-fixtures/RtsEventFixtures.hs","src/compiler/THC/Plugin.hs",
+    "src/compiler/THC/Interface.hs","bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json"]
   artifactHashes <- hashes root ([directory </> "oracle.json"] ++
     [directory </> entry ++ "-" ++ stage ++ extension | (entry,_) <- allEntries, stage <- ["pre","post"],
       extension <- [".json",".audit.json"]])

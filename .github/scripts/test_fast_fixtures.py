@@ -25,7 +25,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("thread-async", owners["thc.runtime.ThreadAsyncNativeTest"])
         self.assertEqual(["build/thread-async"], manifest["groups"]["thread-async"]["outputs"])
         producer = (project / "test/haskell-fixtures/ThreadAsyncFixtures.hs").read_text()
-        native = (project / "compiler/test-fixtures/ThreadAsyncNative.hs").read_text()
+        native = (project / "test/fixtures/compiler/ThreadAsyncNative.hs").read_text()
         self.assertIn("build/thread-async/saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/thread-async/external-saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/thread-async/scheduled-saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
@@ -38,14 +38,14 @@ class FixturePreparationTest(unittest.TestCase):
 
     def test_pretty_metadata_export_keeps_required_outputs_and_changes_receipt_plan(self):
         project = Path(__file__).resolve().parents[2]
-        source = (project / "scripts/prepare-tests.sh").read_text()
+        source = (project / "bin/prepare-tests.sh").read_text()
         option = "-fplugin-opt=THC.Plugin:pretty-diagnostics"
         commands = [line.split() for line in source.splitlines() if option in line]
         inputs = ["examples/THC/Fixtures.hs"] + [
-            "compiler/test-fixtures/" + name + ".hs" for name in (
+            "test/fixtures/compiler/" + name + ".hs" for name in (
                 "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
                 "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
-        self.assertEqual([["compiler/export.sh", option, *inputs]], commands)
+        self.assertEqual([["bin/export-core.sh", option, *inputs]], commands)
         self.assertIn("build/core", fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in inputs:
             self.assertTrue((project / path).is_file(), path)
@@ -53,7 +53,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn("build/core/" + module + ".json", fast_fixtures.FULL_REQUIRED)
         # The option changes existing JSON bytes, not the output inventory.
         # Removing it still invalidates the reviewed plan before any cache hit.
-        script = self.root / "scripts/prepare-tests.sh"
+        script = self.root / "bin/prepare-tests.sh"
         script.parent.mkdir(parents=True, exist_ok=True)
         script.write_text(source)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(self.root))
@@ -122,8 +122,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(24, len(outputs))
         self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/bytestring-sort", fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/bytestring-sort/ghc/ByteStringSortAudit.o", {}))
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/bytestring-sort/ghc/ByteStringSortAudit.o"))
 
     def test_bytestring_decimal_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -136,8 +136,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(32, len(outputs))
         self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/bytestring-decimal", fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/bytestring-decimal/ghc/ByteStringDecimalAudit.o", {}))
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/bytestring-decimal/ghc/ByteStringDecimalAudit.o"))
 
     def test_unix_libc_has_focused_preparation_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -150,8 +150,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(48, len(outputs))
         self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/unix-libc", fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/unix-libc/ghc/UnixLibcAudit.o", {}))
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload("build/unix-libc/ghc/UnixLibcAudit.o"))
 
     def test_unix_wait_status_cache_preserves_all_original_proofs(self):
         project = Path(__file__).resolve().parents[2]
@@ -162,15 +162,15 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(72, len(cache.UNIX_WAIT_OUTPUTS))
         self.assertTrue(cache.UNIX_WAIT_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/unix-wait-status', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('"$fixture_bin" unix-wait-status', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" unix-wait-status', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         name = 'build/unix-wait-status/manifest.json'
         artifacts = {}
         for item in cache.UNIX_WAIT_OUTPUTS - {name}:
-            self.assertTrue(cache.allowed_payload(item, {}), item)
+            self.assertTrue(cache.allowed_payload(item), item)
             path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
         for item in ('ghc/UnixWaitStatusAudit.o', 'private-core.json', 'logs/extra.stdout'):
-            self.assertFalse(cache.allowed_payload('build/unix-wait-status/' + item, {}), item)
+            self.assertFalse(cache.allowed_payload('build/unix-wait-status/' + item), item)
         receipt = dict(schema=1, ghc='9.14.1', unixUnit='unix-2.8.8.0-460b', strictAccepted=True,
                        entries=list(cache.UNIX_WAIT_ENTRIES), nativeRows=280, artifactHashes=artifacts)
         path = self.root / name; path.write_text(json.dumps(receipt))
@@ -203,8 +203,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(required <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/proxy-void', fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in required:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/proxy-void/baseline-audit.json', {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/proxy-void/baseline-audit.json'))
 
     def test_original_bytestring_utf8_registration_and_closed_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -214,7 +214,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/bytestring-utf8'], group['outputs'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'bytestring-utf8']}], group['commands'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" bytestring-utf8', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" bytestring-utf8', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertTrue(fast_fixtures.fast_inputs.BYTESTRING_UTF8_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/bytestring-utf8', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -228,7 +228,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/original-memset'], group['outputs'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-memset']}], group['commands'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" original-memset', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" original-memset', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertTrue(fast_fixtures.fast_inputs.MEMSET_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-memset', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -242,7 +242,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/original-memory-search'], group['outputs'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-memory-search']}], group['commands'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" original-memory-search', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" original-memory-search', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertTrue(fast_fixtures.fast_inputs.MEMORY_SEARCH_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-memory-search', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -262,13 +262,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertTrue(required <= set(fast_fixtures.fast_inputs.REQUIRED))
         self.assertIn('build/rubbish-literals', fast_fixtures.FULL_OUTPUT_ROOTS)
         for path in required:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rubbish-literals/unowned.json', {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rubbish-literals/unowned.json'))
 
     def test_recent_native_producers_remain_fail_closed_full_preparation_inputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
-        plan = (project / 'scripts/prepare-tests.sh').read_text().splitlines()
+        plan = (project / 'bin/prepare-tests.sh').read_text().splitlines()
         for family, junit, count, native in (
                 ('sum-join', 'thc.runtime.SumJoinResultTest', 28, 'oracle.tsv'),
                 ('record-fields', 'thc.runtime.RecordFieldNativeTest', 60, 'logs/post-native.stdout')):
@@ -302,7 +302,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['stable-names']
         self.assertEqual('stable-names', owners['thc.runtime.StableNamesTest'])
         self.assertIn('test/haskell-fixtures/StableNameFixtures.hs', group['sources'])
-        self.assertIn('"$fixture_bin" stable-names', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" stable-names', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(50, len(cache.STABLE_NAME_OUTPUTS))
         self.assertTrue(cache.STABLE_NAME_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/stable-names/manifest.json'
@@ -318,7 +318,7 @@ class FixturePreparationTest(unittest.TestCase):
                     dict(receipt, native=[0] * 19), dict(receipt, native=[False] * 20),
                     dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.stable_name_artifact_hashes(bad)
-        self.assertFalse(cache.allowed_payload('build/stable-names/unknown.json', {}))
+        self.assertFalse(cache.allowed_payload('build/stable-names/unknown.json'))
         (self.root / 'build/stable-names/commands/native-run.stdout').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
@@ -328,12 +328,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('closure-inspection', owners['thc.runtime.ClosureInspectionTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'closure-inspection']}],
                          manifest['groups']['closure-inspection']['commands'])
-        self.assertIn('"$fixture_bin" closure-inspection', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" closure-inspection', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(13, len(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS))
         self.assertTrue(fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         for name in fast_fixtures.fast_inputs.CLOSURE_INSPECTION_OUTPUTS:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(name, {}), name)
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/closure-inspection/native/Other.o', {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(name), name)
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/closure-inspection/native/Other.o'))
 
     def test_hint_trace_has_native_fixture_and_complete_cache_scope(self):
         project = Path(__file__).resolve().parents[2]
@@ -341,7 +341,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('hint-trace', owners['thc.runtime.HintTraceTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'hint-trace']}],
                          manifest['groups']['hint-trace']['commands'])
-        self.assertIn('"$fixture_bin" hint-trace', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" hint-trace', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/hint-trace/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
         self.assertEqual(18, len([path for path in fast_fixtures.FULL_REQUIRED if path.startswith('build/hint-trace/')]))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -351,7 +351,7 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         self.assertIn('thc.runtime.ManagedSTMTest', manifest['fixtureFreeJunit'])
         self.assertNotIn('thc.runtime.STMFullCoreTest', owners)
-        self.assertNotIn('"$fixture_bin" stm', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertNotIn('"$fixture_bin" stm', (project / 'bin/prepare-tests.sh').read_text())
         self.assertNotIn('build/stm/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertTrue((project / 'src/fullCoreTest/java/thc/runtime/STMFullCoreTest.java').is_file())
         build = (project / 'build.gradle').read_text()
@@ -369,12 +369,12 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('boxed-cas', owners['thc.runtime.BoxedCasTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-cas']}], group['commands'])
         self.assertIn('examples/THC/BoxedCasCounter.hs', group['sources'])
-        self.assertIn('"$fixture_bin" boxed-cas', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" boxed-cas', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/boxed-cas/manifest.json', fast_fixtures.FULL_REQUIRED)
         for suffix in cache.BOXED_CAS_FILES:
-            self.assertTrue(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
+            self.assertTrue(cache.allowed_payload('build/boxed-cas/run-1/' + suffix))
         for suffix in ('logs/secret.stdout', 'native/unowned', 'pre-core/Fake.json'):
-            self.assertFalse(cache.allowed_payload('build/boxed-cas/run-1/' + suffix, {}))
+            self.assertFalse(cache.allowed_payload('build/boxed-cas/run-1/' + suffix))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
     def test_scalar_memory_owns_closed_native_outputs_and_rejects_stale_receipts(self):
@@ -384,7 +384,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['scalar-memory-utilities']
         self.assertEqual('scalar-memory-utilities', owners['thc.runtime.ScalarMemoryUtilitiesTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'scalar-memory-utilities']}], group['commands'])
-        self.assertIn('"$fixture_bin" scalar-memory-utilities', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" scalar-memory-utilities', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertTrue(cache.SCALAR_MEMORY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         name = 'build/scalar-memory-utilities/manifest.json'
@@ -409,7 +409,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['ghc-bco']
         self.assertEqual('ghc-bco', owners['thc.runtime.GhcBCOTest'])
         self.assertIn('examples/GhcBCO.hs', group['sources'])
-        self.assertIn('"$fixture_bin" ghc-bco', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" ghc-bco', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(82, len(cache.BCO_OUTPUTS))
         self.assertTrue(cache.BCO_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/ghc-bco/manifest.json'
@@ -425,7 +425,7 @@ class FixturePreparationTest(unittest.TestCase):
                     dict(receipt, native=[0] * 23), dict(receipt, native=[False] * 24),
                     dict(receipt, stages=['pre']), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.bco_artifact_hashes(bad)
-        self.assertFalse(cache.allowed_payload('build/ghc-bco/unknown.json', {}))
+        self.assertFalse(cache.allowed_payload('build/ghc-bco/unknown.json'))
         (self.root / 'build/ghc-bco/commands/native-run.stdout').write_text('mutated')
         with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
@@ -437,7 +437,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('delimited-continuations', owners['thc.runtime.DelimitedContinuationsTest'])
         self.assertIn('examples/DelimitedContinuations.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'delimited-continuations']}], group['commands'])
-        self.assertIn('"$fixture_bin" delimited-continuations', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" delimited-continuations', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(154, len(cache.DELIMITED_OUTPUTS))
         self.assertTrue(cache.DELIMITED_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         name = 'build/delimited-continuations/manifest.json'
@@ -463,7 +463,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['simd-address-families']
         self.assertEqual('simd-address-families', owners['thc.runtime.SimdAddressFamiliesTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'simd-address-families']}], group['commands'])
-        self.assertIn('"$fixture_bin" simd-address-families', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" simd-address-families', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertTrue(cache.SIMD_ADDRESS_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         name = 'build/simd-address-families/manifest.json'
@@ -491,7 +491,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('thc.runtime.GuestThreadInventoryTest', manifest['fixtureFreeJunit'])
         self.assertIn('examples/ThreadInventory.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'thread-inventory']}], group['commands'])
-        self.assertIn('"$fixture_bin" thread-inventory', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" thread-inventory', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/thread-inventory', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(cache.THREAD_INVENTORY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -523,7 +523,7 @@ class FixturePreparationTest(unittest.TestCase):
         for item in cache.THREAD_SCHEDULING_OUTPUTS - {name}:
             path = self.root / item; path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('fixture\n'); artifacts[item] = fast_fixtures._digest(path)
-            self.assertTrue(cache.allowed_payload(item, {}))
+            self.assertTrue(cache.allowed_payload(item))
         receipt = dict(schema=1, ghc='9.14.1', entries=list(cache.THREAD_SCHEDULING_ENTRIES), stages=['pre', 'post'],
                        nativeRTS='non-threaded: direct delay# uses the POSIX I/O manager', artifactHashes=artifacts)
         (self.root / name).write_text(json.dumps(receipt))
@@ -531,7 +531,7 @@ class FixturePreparationTest(unittest.TestCase):
         for bad in (dict(receipt, schema=True), dict(receipt, entries=[]), dict(receipt, stages=['pre']),
                     dict(receipt, nativeRTS='threaded'), dict(receipt, artifactHashes={})):
             with self.assertRaises(cache.CacheMiss): cache.thread_scheduling_artifact_hashes(bad)
-        self.assertFalse(cache.allowed_payload('build/thread-scheduling/native/oracle', {}))
+        self.assertFalse(cache.allowed_payload('build/thread-scheduling/native/oracle'))
 
     def test_integer_completion_has_owned_native_inputs_and_cache_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -541,8 +541,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "integer-completion"]}], group["commands"])
         self.assertEqual(["build/integer-completion"], group["outputs"])
         self.assertEqual({"test/haskell-fixtures/Main.hs", "test/haskell-fixtures/IntegerCompletionFixtures.hs",
-                          "compiler/test-fixtures/IntegerCompletionAudit.hs"}, set(group["sources"]))
-        self.assertIn('"$fixture_bin" integer-completion', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                          "test/fixtures/compiler/IntegerCompletionAudit.hs"}, set(group["sources"]))
+        self.assertIn('"$fixture_bin" integer-completion', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/integer-completion/manifest.json", fast_fixtures.fast_inputs.REQUIRED)
         self.assertIn("build/integer-completion", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.native_executable("build/integer-completion/native/integer-completion-oracle"))
@@ -554,9 +554,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('atomic-int-arrays', owners['thc.runtime.AtomicIntArrayTest'])
         group = manifest['groups']['atomic-int-arrays']
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'atomic-int-arrays']}], group['commands'])
-        self.assertIn('compiler/test-fixtures/AtomicIntArrayAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/AtomicIntArrayAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/AtomicIntArrayFixtures.hs', group['sources'])
-        self.assertIn('"$fixture_bin" atomic-int-arrays', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" atomic-int-arrays', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/atomic-int-arrays/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
         self.assertEqual(6, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/atomic-int-arrays/')]))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -571,19 +571,19 @@ class FixturePreparationTest(unittest.TestCase):
                          group['commands'])
         self.assertEqual(['build/simd128-addresses'], group['outputs'])
         sources = fast_fixtures._source_hashes(project, group)
-        for path in ('compiler/test-fixtures/Simd128AddressAudit.hs', 'compiler/test-fixtures/Simd128AddressNative.hs',
-                     'test/haskell-fixtures/Simd128AddressFixtures.hs', 'scripts/core_vector_memory.py',
-                     'scripts/core_vectors.py', 'scripts/simd-families.json'):
+        for path in ('test/fixtures/compiler/Simd128AddressAudit.hs', 'test/fixtures/compiler/Simd128AddressNative.hs',
+                     'test/haskell-fixtures/Simd128AddressFixtures.hs', 'bin/core_vector_memory.py',
+                     'bin/core_vectors.py', 'bin/simd-families.json'):
             self.assertIn(path, sources)
         self.assertIn('build/simd128-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/simd128-addresses', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertEqual(36, len(fast_fixtures.fast_inputs.SIMD128_ARRAY_ENTRIES))
-        self.assertIn('"$fixture_bin" simd128-addresses', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" simd128-addresses', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         for path in fast_fixtures.fast_inputs.SIMD128_ADDRESS_OUTPUTS:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         for path in ('build/simd128-addresses/native/rogue', 'build/simd128-addresses/commands/fake.stdout',
                      'build/simd128-addresses/arbitrary.json'):
-            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path), path)
 
     def test_simd128_array_completion_has_native_owner_and_closed_cache_scope(self):
         project = Path(__file__).resolve().parents[2]
@@ -595,19 +595,19 @@ class FixturePreparationTest(unittest.TestCase):
                          group['commands'])
         self.assertEqual(['build/simd128-arrays'], group['outputs'])
         sources = fast_fixtures._source_hashes(project, group)
-        for path in ('compiler/test-fixtures/Simd128ArrayAudit.hs', 'compiler/test-fixtures/Simd128ArrayNative.hs',
-                     'test/haskell-fixtures/Simd128ArrayFixtures.hs', 'scripts/core_vector_memory.py',
-                     'scripts/core_vectors.py', 'scripts/simd-families.json'):
+        for path in ('test/fixtures/compiler/Simd128ArrayAudit.hs', 'test/fixtures/compiler/Simd128ArrayNative.hs',
+                     'test/haskell-fixtures/Simd128ArrayFixtures.hs', 'bin/core_vector_memory.py',
+                     'bin/core_vectors.py', 'bin/simd-families.json'):
             self.assertIn(path, sources)
         self.assertIn('build/simd128-arrays/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/simd128-arrays', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertEqual(36, len(fast_fixtures.fast_inputs.SIMD128_ARRAY_ENTRIES))
-        self.assertIn('"$fixture_bin" simd128-arrays', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" simd128-arrays', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         for path in fast_fixtures.fast_inputs.SIMD128_ARRAY_OUTPUTS:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         for path in ('build/simd128-arrays/native/rogue', 'build/simd128-arrays/commands/fake.stdout',
                      'build/simd128-arrays/arbitrary.json'):
-            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload(path), path)
 
     def test_thread_label_uses_its_native_core_fixture_and_baseline_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -616,7 +616,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('thc.runtime.GuestThreadLabelTest', manifest['fixtureFreeJunit'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'thread-label']}],
                          manifest['groups']['thread-label']['commands'])
-        self.assertIn('"$fixture_bin" thread-label', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" thread-label', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/thread-label/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
         self.assertEqual(14, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/thread-label/')]))
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -627,7 +627,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-tcsetattr']
         self.assertEqual('original-tcsetattr', owners['thc.runtime.OriginalTcsetattrTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-tcsetattr']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-tcsetattr', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-tcsetattr', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-tcsetattr', fast_fixtures.FULL_OUTPUT_ROOTS)
         cache = fast_fixtures.fast_inputs
@@ -658,7 +658,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-tcgetattr']
         self.assertEqual('original-tcgetattr', owners['thc.runtime.OriginalTcgetattrTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-tcgetattr']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-tcgetattr', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-tcgetattr', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-tcgetattr', fast_fixtures.FULL_OUTPUT_ROOTS)
         cache = fast_fixtures.fast_inputs
@@ -689,7 +689,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-sigprocmask']
         self.assertEqual('original-sigprocmask', owners['thc.runtime.OriginalSigprocmaskTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigprocmask']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-sigprocmask', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-sigprocmask', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-sigprocmask', fast_fixtures.FULL_OUTPUT_ROOTS)
         cache = fast_fixtures.fast_inputs
@@ -720,7 +720,7 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-sigset']
         self.assertEqual('original-sigset', owners['thc.runtime.OriginalSigsetTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-sigset']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-sigset', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-sigset', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-sigset', fast_fixtures.FULL_OUTPUT_ROOTS)
         cache = fast_fixtures.fast_inputs
@@ -755,7 +755,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertTrue((project / f'src/test/java/thc/runtime/{name}.java').is_file())
         self.assertNotIn('build/original-stack-decoder', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertNotIn('build/original-stack-decoder/manifest.json', fast_fixtures.FULL_REQUIRED)
-        self.assertNotIn('"$fixture_bin" original-stack-decoder', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertNotIn('"$fixture_bin" original-stack-decoder', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertFalse((project / 'src/test/java/thc/runtime/OriginalStackDecoderTest.java').exists())
         self.assertTrue((project / 'src/fullCoreTest/java/thc/runtime/OriginalStackDecoderTest.java').is_file())
@@ -769,7 +769,7 @@ class FixturePreparationTest(unittest.TestCase):
                                    'weak-explicit']}], group['commands'])
         self.assertEqual(['build/weak-explicit'], group['outputs'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" weak-explicit', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" weak-explicit', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/weak-explicit', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn('build/weak-explicit/manifest.json', fast_fixtures.FULL_REQUIRED)
@@ -780,8 +780,8 @@ class FixturePreparationTest(unittest.TestCase):
                        'pre/audit.json', 'post/audit.json',
                        'pre/core/WeakAudit.json', 'post/core/WeakAudit.json',
                        'pre/core/THC.InterfaceClosure.json', 'post/core/THC.InterfaceClosure.json'):
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/' + suffix, {}))
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/result.xml', {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/' + suffix))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/weak-explicit/result.xml'))
 
     def test_libdw_unavailable_native_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -793,13 +793,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/libdw-unavailable/manifest.json', 'build/libdw-unavailable/oracle.json',
                           'build/libdw-unavailable/foreign-labels.json'], group['outputs'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" libdw-unavailable', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/libdw-unavailable/manifest.json', fast_fixtures.FULL_REQUIRED)
         for suffix in ('manifest.json', 'oracle.json', 'foreign-labels.json'):
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix, {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/' + suffix))
             self.assertIn('"libdw-unavailable/' + suffix + '"', (project / 'build.gradle').read_text())
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle', {}))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/libdw-unavailable/native/oracle'))
         self.assertIn('build/libdw-unavailable/logs/', (project / '.github/workflows/build.yml').read_text())
 
     def test_native_addresses_fixture_registration(self):
@@ -812,24 +812,24 @@ class FixturePreparationTest(unittest.TestCase):
                                    'native-addresses']}], group['commands'])
         self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json',
                           'build/native-malloc/manifest.json', 'build/native-malloc/oracle.txt'], group['outputs'])
-        self.assertIn('compiler/test-fixtures/NativeMallocNative.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/NativeMallocNative.hs', group['sources'])
         self.assertIn('src/test/resources/core/original-malloc-descriptors.json', group['sources'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        self.assertIn('"$fixture_bin" native-addresses', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" native-addresses', (project / 'bin/prepare-tests.sh').read_text())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/native-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/native-malloc/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/native-malloc/oracle.txt', fast_fixtures.FULL_REQUIRED)
         for suffix in ('manifest.json', 'oracle.json'):
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix, {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/' + suffix))
             self.assertIn('"native-addresses/' + suffix + '"', (project / 'build.gradle').read_text())
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle', {}))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-addresses/native/oracle'))
         for suffix in ('manifest.json', 'oracle.txt'):
             path = 'build/native-malloc/' + suffix
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}))
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path))
             self.assertIn('"native-malloc/' + suffix + '"', (project / 'build.gradle').read_text())
             self.assertIn(path, (project / '.github/workflows/build.yml').read_text())
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-malloc/native/oracle', {}))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/native-malloc/native/oracle'))
 
     def test_original_gmp_registration_platform_and_exact_cache(self):
         project = Path(__file__).resolve().parents[2]
@@ -841,7 +841,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--',
                                    'original-gmp', '--require-supported']}], group['commands'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
-        script = (project / 'scripts/prepare-tests.sh').read_text()
+        script = (project / 'bin/prepare-tests.sh').read_text()
         self.assertIn('case "$(uname -s)-$(uname -m)" in\n'
                       '  Linux-x86_64) "$fixture_bin" original-gmp --require-supported ;;\nesac', script)
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -858,8 +858,8 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn('echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"', source)
             self.assertIn('for tool in clang llc opt; do', source)
         policy = json.loads((project / '.github/scripts/fast-tests.json').read_text())
-        for source in ('compiler/test-fixtures/OriginalGmpAudit.hs',
-                       'compiler/test-fixtures/OriginalGmpNative.hs',
+        for source in ('test/fixtures/compiler/OriginalGmpAudit.hs',
+                       'test/fixtures/compiler/OriginalGmpNative.hs',
                        'test/haskell-fixtures/OriginalGmpFixtures.hs', 'test/haskell-fixtures/Main.hs'):
             self.assertIn('thc.runtime.OriginalGmpTest', policy['owners'][source]['junit'])
 
@@ -952,14 +952,14 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-fcntl']
         cache = fast_fixtures.fast_inputs
         self.assertEqual('original-fcntl', owners['thc.runtime.OriginalFcntlTest'])
-        self.assertIn('"$fixture_bin" original-fcntl', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-fcntl', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-fcntl', fast_fixtures.FULL_OUTPUT_ROOTS)
         name = 'build/original-fcntl/manifest.json'
         self.assertEqual(137, len(cache.ORIGINAL_FCNTL_OUTPUTS))
         for item in cache.ORIGINAL_FCNTL_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(item, {}), item)
+            self.assertTrue(cache.allowed_payload(item), item)
         for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
-            self.assertFalse(cache.allowed_payload('build/original-fcntl/' + item, {}), item)
+            self.assertFalse(cache.allowed_payload('build/original-fcntl/' + item), item)
         with mock.patch.object(cache, 'GMP_NATIVE_HOST', True):
             artifacts = {}
             for item in cache.ORIGINAL_FCNTL_OUTPUTS - {name}:
@@ -992,14 +992,14 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-errno']
         cache = fast_fixtures.fast_inputs
         self.assertEqual('original-errno', owners['thc.runtime.OriginalErrnoTest'])
-        self.assertIn('"$fixture_bin" original-errno', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-errno', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-errno', fast_fixtures.FULL_OUTPUT_ROOTS)
         name = 'build/original-errno/manifest.json'
         self.assertEqual(34, len(cache.ORIGINAL_ERRNO_OUTPUTS))
         for item in cache.ORIGINAL_ERRNO_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(item, {}), item)
+            self.assertTrue(cache.allowed_payload(item), item)
         for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
-            self.assertFalse(cache.allowed_payload('build/original-errno/' + item, {}), item)
+            self.assertFalse(cache.allowed_payload('build/original-errno/' + item), item)
         with mock.patch.object(cache, 'ERRNO_NATIVE_HOST', True):
             artifacts = {}
             for item in cache.ORIGINAL_ERRNO_OUTPUTS - {name}:
@@ -1038,14 +1038,14 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest['groups']['original-process-identity']
         cache = fast_fixtures.fast_inputs
         self.assertEqual('original-process-identity', owners['thc.runtime.OriginalProcessIdentityTest'])
-        self.assertIn('"$fixture_bin" original-process-identity', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-process-identity', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-process-identity', fast_fixtures.FULL_OUTPUT_ROOTS)
         name = 'build/original-process-identity/manifest.json'
         self.assertEqual(45, len(cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS))
         for item in cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(item, {}), item)
+            self.assertTrue(cache.allowed_payload(item), item)
         for item in ('native/private-file', 'native/Main.o', 'pre/core/Other.json', 'logs/unknown.stdout'):
-            self.assertFalse(cache.allowed_payload('build/original-process-identity/' + item, {}), item)
+            self.assertFalse(cache.allowed_payload('build/original-process-identity/' + item), item)
         with mock.patch.object(cache, 'ERRNO_NATIVE_HOST', True):
             artifacts = {}
             for item in cache.ORIGINAL_PROCESS_IDENTITY_OUTPUTS - {name}:
@@ -1087,9 +1087,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
         self.assertIn('thc.runtime.SavedTermiosTest', manifest['fixtureFreeJunit'])
         for fixture in ('Audit', 'Native'):
-            self.assertIn(f'compiler/test-fixtures/OriginalSavedTermios{fixture}.hs', group['sources'])
+            self.assertIn(f'test/fixtures/compiler/OriginalSavedTermios{fixture}.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-termios']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-termios', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-termios', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-termios', fast_fixtures.FULL_OUTPUT_ROOTS)
         cache = fast_fixtures.fast_inputs
         name = 'build/original-termios/manifest.json'
@@ -1127,24 +1127,24 @@ class FixturePreparationTest(unittest.TestCase):
         for name in ('OriginalPosixStatTest', 'PosixStatAbiTest', 'OriginalFstatTest', 'OriginalPathStatTest', 'OriginalPathModeTest', 'OriginalPathLinkTest', 'OriginalPathAccessTest', 'OriginalUnlinkAtTest', 'OriginalFstatAtTest', 'OriginalCurrentDirectoryTest', 'OriginalDirectoryStreamsTest', 'OriginalDirectoryPathsTest'):
             self.assertEqual('original-posix-stat', owners['thc.runtime.' + name])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-posix-stat']}], group['commands'])
-        self.assertIn('"$fixture_bin" original-posix-stat', (project / 'scripts/prepare-tests.sh').read_text())
+        self.assertIn('"$fixture_bin" original-posix-stat', (project / 'bin/prepare-tests.sh').read_text())
         self.assertIn('build/original-posix-stat/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-posix-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertEqual(['build/original-posix-stat', 'build/original-path-stat', 'build/original-path-mode', 'build/original-path-link', 'build/original-path-access', 'build/original-unlinkat', 'build/original-fstatat', 'build/original-current-directory', 'build/original-directory-streams', 'build/original-directory-paths'], group['outputs'])
-        self.assertIn('compiler/test-fixtures/OriginalPathStatAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/OriginalPathStatAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalPathStatFixtures.hs', group['sources'])
         self.assertIn('build/original-path-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('compiler/test-fixtures/OriginalPathModeAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/OriginalPathModeAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalPathModeFixtures.hs', group['sources'])
         self.assertIn('build/original-path-mode', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('compiler/test-fixtures/OriginalPathLinkAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/OriginalPathLinkAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalPathLinkFixtures.hs', group['sources'])
         self.assertIn('build/original-path-link', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('compiler/test-fixtures/OriginalUnlinkAtAudit.hs', group['sources'])
-        self.assertIn('compiler/test-fixtures/OriginalFstatAtAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/OriginalUnlinkAtAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/OriginalFstatAtAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalUnlinkAtFixtures.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalFstatAtFixtures.hs', group['sources'])
-        self.assertIn('compiler/test-fixtures/OriginalCurrentDirectoryAudit.hs', group['sources'])
+        self.assertIn('test/fixtures/compiler/OriginalCurrentDirectoryAudit.hs', group['sources'])
         self.assertIn('test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs', group['sources'])
         self.assertIn('thc.runtime.NativeDirectoryFileSystemTest', manifest['fixtureFreeJunit'])
         self.assertIn('src/main/c/stdio-abi-probe.c', fast_fixtures.COMMON_SOURCES)
@@ -1162,12 +1162,12 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         self.assertEqual(90, len(cache.ORIGINAL_POSIX_STAT_OUTPUTS))
         for path in cache.ORIGINAL_POSIX_STAT_OUTPUTS:
-            self.assertTrue(cache.allowed_payload(path, {}), path)
+            self.assertTrue(cache.allowed_payload(path), path)
         for suffix in ('native/unknown', 'logs/unknown.stdout', 'pre/core/Other.json', 'attempt-0/oracle.json'):
-            self.assertFalse(cache.allowed_payload('build/original-posix-stat/' + suffix, {}), suffix)
+            self.assertFalse(cache.allowed_payload('build/original-posix-stat/' + suffix), suffix)
         for suffix in ('../original-stdio/manifest.json', 'native/../../outside'):
             with self.assertRaises(cache.CacheMiss):
-                cache.allowed_payload('build/original-posix-stat/' + suffix, {})
+                cache.allowed_payload('build/original-posix-stat/' + suffix)
         self.assertEqual(0o755, cache.safe_mode(0o755, 'build/original-posix-stat/native/oracle'))
         with self.assertRaises(cache.CacheMiss):
             cache.safe_mode(0o755, 'build/original-posix-stat/oracle.json')
@@ -1634,8 +1634,8 @@ class FixturePreparationTest(unittest.TestCase):
         sources = fast_fixtures.fast_inputs.SIMD_SMOKE_SOURCES
         self.assertEqual({'build/simd-capability-smoke'} | sources, set(group['outputs']))
         self.assertLessEqual(sources, fast_fixtures.FULL_REQUIRED)
-        self.assertNotIn('scripts/prepare-simd-families.py', group['sources'])
-        self.assertNotIn('scripts/simd_family_model.py', group['sources'])
+        self.assertNotIn('bin/prepare-simd-families.py', group['sources'])
+        self.assertNotIn('bin/simd_family_model.py', group['sources'])
 
     def test_original_fd_ready_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -1647,16 +1647,16 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/original-fd-ready'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" original-fd-ready',
-                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+                      (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-fd-ready', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
         self.assertIn('"original-fd-ready/**/*.json"', (project / 'build.gradle').read_text())
         for path in fast_fixtures.fast_inputs.ORIGINAL_FD_READY_OUTPUTS:
-            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path, {}), path)
+            self.assertTrue(fast_fixtures.fast_inputs.allowed_payload(path), path)
         for name in ('OriginalFD.json', 'native/unreviewed', 'logs/extra.stdout',
                      'negative/extra.json', 'native/OriginalFdReadyAudit.hi', 'test-results/pass.xml'):
-            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-fd-ready/' + name, {}))
+            self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/original-fd-ready/' + name))
 
     def test_rts_diagnostics_exact_fixture_registration(self):
         project = Path(__file__).resolve().parents[2]
@@ -1665,7 +1665,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('rts-diagnostics', owners['thc.runtime.RtsDiagnosticsTest'])
         self.assertEqual(['build/rts-diagnostics'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" rts-diagnostics', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" rts-diagnostics', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         outputs = fast_fixtures.fast_inputs.RTS_DIAGNOSTIC_OUTPUTS
         self.assertEqual(47, len(outputs))
@@ -1674,8 +1674,8 @@ class FixturePreparationTest(unittest.TestCase):
             for suffix in ('stdout', 'stderr', 'command.json'):
                 self.assertIn(f'build/rts-diagnostics/logs/{label}.{suffix}', outputs)
         self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
-        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rts-diagnostics/native/oracle', {}))
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rts-diagnostics/native/oracle'))
         artifacts = {path: '0' * 64 for path in outputs if not path.endswith('/manifest.json')}
         proof = dict(schema=1, artifactHashes=artifacts)
         self.assertEqual(artifacts, fast_fixtures.fast_inputs.rts_diagnostic_artifact_hashes(proof))
@@ -1693,7 +1693,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('exception-result-layouts', owners['thc.runtime.ExceptionResultLayoutsNativeTest'])
         self.assertEqual(['build/exception-result-layouts'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" exception-result-layouts', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" exception-result-layouts', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/exception-result-layouts', fast_fixtures.FULL_OUTPUT_ROOTS)
         expected = {'build/exception-result-layouts/manifest.json',
@@ -1714,7 +1714,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('scalar-exception-results', owners['thc.runtime.ScalarExceptionResultsNativeTest'])
         self.assertEqual(['build/scalar-exception-results'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" scalar-exception-results', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" scalar-exception-results', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/scalar-exception-results', fast_fixtures.FULL_OUTPUT_ROOTS)
         expected = {'build/scalar-exception-results/manifest.json',
@@ -1734,13 +1734,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('rts-shutdown', owners['thc.runtime.RtsShutdownTest'])
         self.assertEqual(['build/rts-shutdown'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" rts-shutdown', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" rts-shutdown', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         outputs = fast_fixtures.fast_inputs.RTS_SHUTDOWN_OUTPUTS
         self.assertEqual(53, len(outputs))
         self.assertTrue(outputs <= fast_fixtures.FULL_REQUIRED)
-        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path, {}) for path in outputs))
-        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rts-shutdown/native/oracle', {}))
+        self.assertTrue(all(fast_fixtures.fast_inputs.allowed_payload(path) for path in outputs))
+        self.assertFalse(fast_fixtures.fast_inputs.allowed_payload('build/rts-shutdown/native/oracle'))
         artifacts = {path: '0' * 64 for path in outputs if not path.endswith('/manifest.json')}
         proof = dict(schema=1, artifactHashes=artifacts)
         self.assertEqual(artifacts, fast_fixtures.fast_inputs.rts_shutdown_artifact_hashes(proof))
@@ -1758,7 +1758,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/original-rts-locks'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" original-rts-locks --require-supported',
-                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+                      (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-rts-locks', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertTrue(fast_fixtures.fast_inputs.ORIGINAL_RTS_LOCK_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
@@ -1772,7 +1772,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-open']}], group['commands'])
         self.assertEqual(['build/original-open'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" original-open', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-open', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-open', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn('"original-open/**/*.json"', (project / 'build.gradle').read_text())
@@ -1850,7 +1850,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/interface-core'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" interface-core',
-                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+                      (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/interface-core', fast_fixtures.FULL_OUTPUT_ROOTS)
         for name in ('manifest.json', 'InterfaceLibrary.json', 'logs/native-oracle.stdout',
@@ -1886,7 +1886,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(['build/original-stack-formatter'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
         self.assertIn('"$fixture_bin" original-stack-formatter',
-                      (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+                      (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/original-stack-formatter', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn('build/original-stack-formatter/manifest.json', fast_fixtures.FULL_REQUIRED)
@@ -1897,13 +1897,13 @@ class FixturePreparationTest(unittest.TestCase):
                         'original-stack-formatter/run-*/originals/generated.json',
                         'original-stack-formatter/run-*/originals/target-layout.json',
                         'original-stack-formatter/run-*/native/formatter',
-                        'src/THC/Driver/Wired.hs', 'compiler/target-layout.c',
-                        'compiler/pinned-ghc-internal', '**/*.hs-boot', '**/*.hsc', 'include/WordSize.h'):
+                        'src/driver/THC/Driver/Wired.hs', 'src/driver/cbits/target-layout.c',
+                        'third-party/pinned/ghc-9.14.1/libraries/ghc-internal', '**/*.hs-boot', '**/*.hsc', 'include/WordSize.h'):
             self.assertIn('"' + pattern + '"', gradle)
         self.assertIn('build/original-stack-formatter/', (project / '.github/workflows/build.yml').read_text())
         sources = fast_fixtures._source_hashes(project, group)
         _, pins = fast_fixtures.fast_inputs.wired_catalog(project)
-        self.assertLessEqual({'compiler/pinned-ghc-internal/' + name for name in pins}, sources.keys())
+        self.assertLessEqual({fast_fixtures.fast_inputs.wired_source_path(name) for name in pins}, sources.keys())
         self.assertIn(fast_fixtures.fast_inputs.WIRED_SOURCE, sources)
 
     def formatter_preparation(self):
@@ -1917,7 +1917,7 @@ class FixturePreparationTest(unittest.TestCase):
             path.write_bytes((project / name).read_bytes())
         _, pins = fast_fixtures.fast_inputs.wired_catalog(self.root)
         for name in pins:
-            path = self.root / 'compiler/pinned-ghc-internal' / name
+            path = self.root / fast_fixtures.fast_inputs.wired_source_path(name)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('pinned source\n')
         def run(name, argv, stdout=None):
@@ -1955,32 +1955,32 @@ class FixturePreparationTest(unittest.TestCase):
         # Includes the production exporter, all pinned source kinds and the
         # target-layout C probe, without a second hand-maintained source list.
         for name in (*group['sources'],
-                     'compiler/pinned-ghc-internal/GHC/Internal/Stack/Decode.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Unsafe.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable/Types.hsc',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Ptr.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Data/Either.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Word.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Classes.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Num.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Integer.hs-boot',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/BigNat.hs-boot',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Bignum/Natural.hs-boot',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Real.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Numeric.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Enum.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/ForeignPtr.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Foreign/C/String/Encoding.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/UTF8.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Types.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding/Failure.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Encoding.hs',
-                     'compiler/pinned-ghc-internal/GHC/Internal/IO/Handle/Types.hs-boot',
-                     'compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc',
-                     'compiler/pinned-ghc-internal/GHC/Internal/Num.hs-boot',
-                     'compiler/pinned-ghc-internal/include/WordSize.h',
-                     'compiler/pinned-ghc-internal/LICENSE'):
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Unsafe.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable/Types.hsc',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Ptr.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Data/Either.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Word.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Classes.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Numeric.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/ForeignPtr.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Foreign/C/String/Encoding.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/UTF8.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Types.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding/Failure.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Encoding.hs',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO/Handle/Types.hs-boot',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h',
+                     'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE'):
             with self.subTest(name=name):
                 path = self.root / name
                 path.write_bytes(path.read_bytes() + b'\n-- changed\n')
@@ -2031,7 +2031,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('boxed-array-extensions', owners['thc.runtime.BoxedArrayExtensionsTest'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'boxed-array-extensions']}], group['commands'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" boxed-array-extensions', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" boxed-array-extensions', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/boxed-array-extensions/manifest.json', fast_fixtures.FULL_REQUIRED)
         gradle = (project / 'build.gradle').read_text()
         for pattern in ('"boxed-array-extensions/manifest.json"', '"boxed-array-extensions/run-*/**"', 'inputs.file("thc.cabal")'):
@@ -2104,21 +2104,21 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(first, {"mode": "selected", "rebuilt": ["alpha"], "reused": []})
         self.assertEqual([argv for _, argv, _ in self.calls], [
             ["cabal", "run", "exe:thc-primops", "--", "scalars"],
-            ["compiler/build.sh"], ["make-alpha"]])
+            ["bin/build-compiler.sh"], ["make-alpha"]])
         self.assertEqual(self.prepare("thc.AlphaBackendTest"),
                          {"mode": "selected", "rebuilt": [], "reused": ["alpha"]})
         self.assertEqual(len(self.calls), 3)
 
     def test_only_changed_group_rebuilds_and_compiler_runs_once(self):
         self.prepare("thc.AlphaTest", "thc.BetaTest")
-        self.assertEqual([argv for _, argv, _ in self.calls].count(["compiler/build.sh"]), 1)
+        self.assertEqual([argv for _, argv, _ in self.calls].count(["bin/build-compiler.sh"]), 1)
         self.calls.clear()
         (self.root / "fixtures/beta.hs").write_text("changed")
         result = self.prepare("thc.AlphaTest", "thc.BetaTest")
         self.assertEqual(result, {"mode": "selected", "rebuilt": ["beta"], "reused": ["alpha"]})
         self.assertEqual([argv for _, argv, _ in self.calls], [
             ["cabal", "run", "exe:thc-primops", "--", "scalars"],
-            ["compiler/build.sh"], ["make-beta"]])
+            ["bin/build-compiler.sh"], ["make-beta"]])
 
     def test_missing_or_changed_output_rebuilds(self):
         self.prepare("thc.AlphaTest")
@@ -2140,7 +2140,7 @@ class FixturePreparationTest(unittest.TestCase):
     def test_common_source_or_toolchain_change_rebuilds(self):
         self.prepare("thc.AlphaTest")
         self.calls.clear()
-        (self.root / "compiler/THC/Plugin.hs").write_text("new plugin")
+        (self.root / "src/compiler/THC/Plugin.hs").write_text("new plugin")
         self.assertEqual(self.prepare("thc.AlphaTest")["rebuilt"], ["alpha"])
         self.calls.clear()
         self.toolchain["ghcVersion"] = "9.14.2"
@@ -2167,7 +2167,7 @@ class FixturePreparationTest(unittest.TestCase):
 
     def test_cabal_plugin_inputs_invalidate_selected_fixtures(self):
         self.prepare("thc.AlphaTest")
-        for name in ("thc.cabal", "cabal.project", "Setup.hs", "Makefile", "compiler/plugin.py"):
+        for name in ("thc.cabal", "cabal.project", "Setup.hs", "Makefile", "bin/plugin.py"):
             with self.subTest(name=name):
                 self.calls.clear()
                 (self.root / name).write_text("changed plugin build input")
@@ -2176,10 +2176,10 @@ class FixturePreparationTest(unittest.TestCase):
     def test_unknown_or_full_selection_runs_complete_preparation(self):
         self.assertEqual(self.prepare("thc.UnknownTest"),
                          {"mode": "full", "rebuilt": ["full"], "reused": []})
-        self.assertEqual(self.calls, [("fixtures-full", ["scripts/prepare-tests.sh"], None)])
+        self.assertEqual(self.calls, [("fixtures-full", ["bin/prepare-tests.sh"], None)])
         self.calls.clear()
         self.assertEqual(self.prepare("thc.AlphaTest", mode="full")["mode"], "full")
-        self.assertEqual(self.calls, [("fixtures-full", ["scripts/prepare-tests.sh"], None)])
+        self.assertEqual(self.calls, [("fixtures-full", ["bin/prepare-tests.sh"], None)])
 
     def test_fixture_free_selection_runs_no_commands(self):
         self.assertEqual(self.prepare("thc.FreeTest"),
@@ -2208,7 +2208,7 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", name]}], group["commands"])
                 self.assertEqual(["build/" + name], group["outputs"])
                 self.assertTrue(all((project / source).is_file() for source in group["sources"]))
-                self.assertIn('"$fixture_bin" ' + name, (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                self.assertIn('"$fixture_bin" ' + name, (project / "bin/prepare-tests.sh").read_text().splitlines())
                 self.assertIn("build/" + name, fast_fixtures.FULL_OUTPUT_ROOTS)
                 self.assertIn("build/" + name + "/manifest.json", fast_fixtures.FULL_REQUIRED)
                 self.assertIn("build/" + name + "/", (project / ".github/workflows/build.yml").read_text())
@@ -2223,7 +2223,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["build/explicit64-arrays"], group["outputs"])
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" explicit64-arrays',
-                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                      (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/explicit64-arrays", fast_fixtures.FULL_OUTPUT_ROOTS)
         for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
@@ -2240,7 +2240,7 @@ class FixturePreparationTest(unittest.TestCase):
                                    'simd-floatx4-fma']}], group['commands'])
         self.assertEqual(['build/simd-floatx4-fma'], group['outputs'])
         self.assertTrue(all((project / name).is_file() for name in group['sources']))
-        self.assertIn('"$fixture_bin" simd-floatx4-fma', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" simd-floatx4-fma', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn('build/simd-floatx4-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
         for suffix in ('manifest.json', 'pre-audit.json', 'pre-double-audit.json', 'pre-core/SimdFloatFma.json'):
@@ -2259,7 +2259,7 @@ class FixturePreparationTest(unittest.TestCase):
                                    'simd-wide-floating-fma']}], wide['commands'])
         self.assertEqual(['build/simd-wide-floating-fma'], wide['outputs'])
         self.assertTrue(all((project / name).is_file() for name in wide['sources']))
-        self.assertIn('"$fixture_bin" simd-wide-floating-fma', (project / 'scripts/prepare-tests.sh').read_text().splitlines())
+        self.assertIn('"$fixture_bin" simd-wide-floating-fma', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/simd-wide-floating-fma', fast_fixtures.FULL_OUTPUT_ROOTS)
         # Scalar FMA expectations are mandatory on every supported host; AVX512 is not required.
         for suffix in ('manifest.json', 'oracle.txt', 'pre-audit.json', 'pre-double-audit.json',
@@ -2277,7 +2277,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["build/floating-address"], group["outputs"])
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" floating-address',
-                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                      (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/floating-address", fast_fixtures.FULL_OUTPUT_ROOTS)
         for name in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
@@ -2293,7 +2293,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(["build/atomic-address"], group["outputs"])
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" atomic-address',
-                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                      (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/atomic-address", fast_fixtures.FULL_OUTPUT_ROOTS)
         for suffix in ("manifest.json", "oracle.tsv", "pre/audit.json", "post/audit.json",
                        "pre/core/AtomicAddressAudit.json", "post/core/AtomicAddressAudit.json"):
@@ -2320,7 +2320,7 @@ class FixturePreparationTest(unittest.TestCase):
             "thc.runtime.SimdFloatByteArrayTest": ("simd-floatx4-bytearray", ["simd-floatx4-bytearray"]),
             "thc.runtime.SimdDoubleByteArrayTest": ("simd-doublex2-bytearray", ["simd-doublex2-bytearray"]),
         }
-        full = " ".join((project / "scripts/prepare-tests.sh").read_text().split())
+        full = " ".join((project / "bin/prepare-tests.sh").read_text().split())
         for junit, (group_id, roots) in consumed.items():
             with self.subTest(junit=junit):
                 self.assertEqual(group_id, owners[junit])
@@ -2342,8 +2342,8 @@ class FixturePreparationTest(unittest.TestCase):
         # The aggregate producer also runs the recursive-layout rejection
         # checks. Keep their inputs and outputs in the same receipt.
         sums = manifest["groups"]["sum-results"]
-        self.assertIn("scripts/check-aggregate-layout.py", sums["sources"])
-        self.assertIn("compiler/test-fixtures/AggregateLayoutAudit.hs", sums["sources"])
+        self.assertIn("bin/check-aggregate-layout.py", sums["sources"])
+        self.assertIn("test/fixtures/compiler/AggregateLayoutAudit.hs", sums["sources"])
         self.assertIn("build/aggregate-layout", sums["outputs"])
         self.assertIn("build/aggregate-frontier.json", sums["outputs"])
 
@@ -2389,7 +2389,7 @@ class FixturePreparationTest(unittest.TestCase):
                     prefix = 'uname() { printf "%s\\n" ' + machine + '; }; python3() { printf "%s\\n" "$@"; }; cabal() { printf "%s\\n" "$@"; }; '
                     actual = subprocess.check_output([*command[:2], prefix + command[2]], text=True).splitlines()
                     self.assertEqual((["run", "exe:thc-fixtures", "--offline", "--", family] if family.endswith("-bytearray")
-                                      else ["scripts/prepare-" + family + "-audit.py"]) +
+                                      else ["bin/prepare-" + family + "-audit.py"]) +
                                      ([] if machine == "x86_64" else ["--export-only"]), actual)
 
     def test_complete_floating_selection_prepares_and_reuses_without_full_fallback(self):
@@ -2440,8 +2440,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([], self.calls)
         # Real transitive model and native fixture changes invalidate the
         # affected group only; unchanged inputs never rerun the full producer.
-        for group_id, source in (("sum-results", "scripts/sum_layout_model.py"),
-                                 ("floating-tuples", "compiler/test-fixtures/FloatingTupleAudit.hs")):
+        for group_id, source in (("sum-results", "bin/sum_layout_model.py"),
+                                 ("floating-tuples", "test/fixtures/compiler/FloatingTupleAudit.hs")):
             with self.subTest(source=source):
                 path = self.root / source
                 path.write_bytes(path.read_bytes() + b"\n# changed\n")
@@ -2467,13 +2467,13 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-addresses"]}], group["commands"])
         self.assertEqual(["build/pinned-addresses"], group["outputs"])
         self.assertEqual({"test/haskell-fixtures/PinnedAddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/PinnedAddressAudit.hs",
-                          "compiler/test-fixtures/PinnedAddressAuditNative.hs"}, set(group["sources"]))
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/PinnedAddressAudit.hs",
+                          "test/fixtures/compiler/PinnedAddressAuditNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" pinned-addresses', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" pinned-addresses', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         for name in ("prepare-pinned-addresses.py", "pinned_address_model.py", "test-pinned-addresses.py"):
-            self.assertFalse((project / "scripts" / name).exists())
+            self.assertFalse((project / "bin" / name).exists())
         cache = fast_fixtures.fast_inputs
         name = "build/pinned-addresses/manifest.json"
         records = {}
@@ -2494,29 +2494,23 @@ class FixturePreparationTest(unittest.TestCase):
         corrupt.unlink(); corrupt.symlink_to(archive)
         with self.assertRaises(cache.CacheMiss): fast_fixtures._output_hashes(self.root, group)
 
-    def test_bignat_uses_haskell_and_preserves_original_source_outputs(self):
+    def test_bignat_uses_haskell_and_tracks_original_source_inputs(self):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest["groups"]["bignat-literals"]
         self.assertEqual("bignat-literals", owners["thc.runtime.BigNatLiteralTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}], group["commands"])
-        originals = {"vendor/ghc-9.14.1/GHC/Internal/Bignum/" + name + suffix
-                     for name in ("BigNat", "Integer", "Natural") for suffix in (".hs", ".hs-boot")}
-        originals.update(("vendor/ghc-9.14.1/include/WordSize.h", "vendor/ghc-9.14.1/LICENSE"))
-        self.assertEqual({"build/bignat-literals"} | originals, set(group["outputs"]))
+        originals = fast_fixtures.fast_inputs.BIGNAT_SOURCES
+        self.assertEqual({"build/bignat-literals"}, set(group["outputs"]))
         self.assertEqual({"test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/BigNatLiteralAudit.hs",
-                          "compiler/test-fixtures/BigNatLiteralAuditNative.hs", "compiler/export-boot.py"}, set(group["sources"]))
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/BigNatLiteralAudit.hs",
+                          "test/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py"} | originals, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" bignat-literals', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" bignat-literals', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         for name in ("prepare-bignat-literals.py", "bignat_literal_model.py", "test-bignat-literals.py"):
-            self.assertFalse((project / "scripts" / name).exists())
+            self.assertFalse((project / "bin" / name).exists())
         cache = fast_fixtures.fast_inputs
-        pins = {}
-        for name in cache.BIGNAT_VENDOR:
-            path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text('original source\n'); pins[name] = fast_fixtures._digest(path)
         records = []
         manifest_path = 'build/bignat-literals/manifest.json'
         for name in cache.BIGNAT_OUTPUTS - {manifest_path}:
@@ -2532,18 +2526,17 @@ class FixturePreparationTest(unittest.TestCase):
         verification = 'build/bignat-literals/verification-control/commands/pre-integerRoundTrip-audit.stderr'
         recheck = self.root / verification
         recheck.parent.mkdir(parents=True); recheck.write_text('Audit working catalogue: fresh/catalogue.sqlite\n')
-        self.assertFalse(cache.allowed_payload(verification, {}))
-        with mock.patch.object(cache, 'vendor_pins', return_value=pins):
-            self.assertEqual(cache.BIGNAT_OUTPUTS | cache.BIGNAT_VENDOR, set(fast_fixtures._output_hashes(self.root, group)))
-            original_log = self.root / 'build/bignat-literals/commands/pre-integerRoundTrip-audit.stderr'
-            original_bytes = original_log.read_bytes()
-            original_log.write_bytes(recheck.read_bytes())
-            with self.assertRaisesRegex(RuntimeError, 'Stale original artifact'):
-                fast_fixtures._output_hashes(self.root, group)
-            original_log.write_bytes(original_bytes)
-            corrupted = self.root / 'build/bignat-literals/oracle.tsv'
-            corrupted.write_text('corrupt\n')
-            with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
+        self.assertFalse(cache.allowed_payload(verification))
+        self.assertEqual(cache.BIGNAT_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        original_log = self.root / 'build/bignat-literals/commands/pre-integerRoundTrip-audit.stderr'
+        original_bytes = original_log.read_bytes()
+        original_log.write_bytes(recheck.read_bytes())
+        with self.assertRaisesRegex(RuntimeError, 'Stale original artifact'):
+            fast_fixtures._output_hashes(self.root, group)
+        original_log.write_bytes(original_bytes)
+        corrupted = self.root / 'build/bignat-literals/oracle.tsv'
+        corrupted.write_text('corrupt\n')
+        with self.assertRaises(RuntimeError): fast_fixtures._output_hashes(self.root, group)
 
     def test_floating_remainder_has_native_haskell_preparation(self):
         project = Path(__file__).resolve().parents[2]
@@ -2553,10 +2546,10 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-remainder"]}], group["commands"])
         self.assertEqual(["build/floating-remainder"], group["outputs"])
         self.assertEqual({"test/haskell-fixtures/FloatingRemainderFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/FloatingRemainderAudit.hs",
-                          "compiler/test-fixtures/FloatingRemainderNative.hs", "examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatingRemainderAudit.hs",
+                          "test/fixtures/compiler/FloatingRemainderNative.hs", "examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
-        self.assertIn('"$fixture_bin" floating-remainder', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" floating-remainder', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"floating-remainder/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         for path in ("examples/THC/InverseHyperbolic.hs", "test/haskell-fixtures/FloatingRemainderFixtures.hs"):
@@ -2571,44 +2564,42 @@ class FixturePreparationTest(unittest.TestCase):
         group = manifest["groups"]["float-decode"]
         self.assertEqual("float-decode", owners["thc.runtime.FloatDecodeTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-decode"]}], group["commands"])
-        self.assertEqual({"build/float-decode"} | fast_fixtures.fast_inputs.BIGNAT_VENDOR, set(group["outputs"]))
+        self.assertEqual({"build/float-decode"}, set(group["outputs"]))
         self.assertEqual({"test/haskell-fixtures/FloatDecodeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/FloatDecodeAudit.hs",
-                          "compiler/test-fixtures/FloatDecodeNative.hs", "compiler/export-boot.py", "examples/THC/FloatDecode.hs"}, set(group["sources"]))
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatDecodeAudit.hs",
+                          "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "examples/THC/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
-        self.assertIn('"$fixture_bin" float-decode', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" float-decode', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"float-decode/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
         self.assertEqual(["thc.runtime.FloatDecodeTest"], policy["owners"]["examples/THC/FloatDecode.hs"]["junit"])
 
-    def test_float_decode_receipt_requires_pinned_vendor_inputs(self):
+    def test_float_decode_tracks_upstream_sources_without_bundling_them(self):
         cache = fast_fixtures.fast_inputs
         name = "build/float-decode/manifest.json"
-        artifacts, pins = {}, {}
+        artifacts = {}
         for item in cache.FLOAT_DECODE_OUTPUTS - {name}:
             path = self.root / item
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("fixture\n")
             artifacts[item] = fast_fixtures._digest(path)
         (self.root / name).write_text(json.dumps({"artifactHashes": artifacts}))
-        for item in cache.BIGNAT_VENDOR:
+        for item in cache.BIGNAT_SOURCES:
             path = self.root / item
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("pinned original\n")
-            pins[item] = fast_fixtures._digest(path)
-        with mock.patch.object(cache, "vendor_pins", return_value=pins):
-            group = {"outputs": ["build/float-decode", *sorted(cache.BIGNAT_VENDOR)]}
-            self.assertEqual(cache.FLOAT_DECODE_OUTPUTS | cache.BIGNAT_VENDOR,
-                             set(fast_fixtures._output_hashes(self.root, group)))
-            for item in sorted(cache.BIGNAT_VENDOR):
+        group = {"outputs": ["build/float-decode"], "sources": sorted(cache.BIGNAT_SOURCES)}
+        self.assertEqual(cache.FLOAT_DECODE_OUTPUTS, set(fast_fixtures._output_hashes(self.root, group)))
+        with mock.patch.object(fast_fixtures, "COMMON_SOURCES", ()):
+            original_key = fast_fixtures.cache_key(self.root, "float-decode", group, {})
+            for item in sorted(cache.BIGNAT_SOURCES):
                 path = self.root / item
                 original = path.read_bytes()
-                path.write_text("corrupt original\n")
-                with self.assertRaises(RuntimeError):
-                    fast_fixtures._output_hashes(self.root, group)
+                path.write_text("changed original\n")
+                self.assertNotEqual(original_key, fast_fixtures.cache_key(self.root, "float-decode", group, {}))
                 path.unlink()
-                with self.assertRaises((OSError, RuntimeError)):
-                    fast_fixtures._output_hashes(self.root, group)
+                with self.assertRaisesRegex(RuntimeError, "Missing fixture source"):
+                    fast_fixtures.cache_key(self.root, "float-decode", group, {})
                 path.write_bytes(original)
 
     def test_scalar_bitcasts_use_haskell_producer_and_keep_native_inputs(self):
@@ -2619,10 +2610,10 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}], group["commands"])
         self.assertEqual(["build/scalar-bitcasts"], group["outputs"])
         self.assertEqual({"test/haskell-fixtures/ScalarBitCastFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/ScalarBitCastAudit.hs",
-                          "compiler/test-fixtures/ScalarBitCastNative.hs"}, set(group["sources"]))
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/ScalarBitCastAudit.hs",
+                          "test/fixtures/compiler/ScalarBitCastNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" scalar-bitcasts', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" scalar-bitcasts', (project / "bin/prepare-tests.sh").read_text().splitlines())
 
     def test_address_array_copies_use_haskell_native_producer_and_full_cache_identity(self):
         project = Path(__file__).resolve().parents[2]
@@ -2632,10 +2623,10 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "address-array-copy"]}], group["commands"])
         self.assertEqual(["build/address-array-copy"], group["outputs"])
         self.assertEqual({"test/haskell-fixtures/AddressArrayCopyFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "compiler/test-fixtures/AddressArrayCopyAudit.hs",
-                          "compiler/test-fixtures/AddressArrayCopyNative.hs"}, set(group["sources"]))
+                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/AddressArrayCopyAudit.hs",
+                          "test/fixtures/compiler/AddressArrayCopyNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" address-array-copy', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" address-array-copy', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/address-array-copy", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("address-array-copy", fast_fixtures.fast_inputs.MANIFEST_DIRS)
@@ -2650,20 +2641,20 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "original-stack"]}], group["commands"])
         self.assertEqual(["build/original-stack"], group["outputs"])
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        self.assertIn('"$fixture_bin" original-stack', (project / "scripts/prepare-tests.sh").read_text().splitlines())
+        self.assertIn('"$fixture_bin" original-stack', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/original-stack", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("build/original-stack/manifest.json", fast_fixtures.FULL_REQUIRED)
         gradle = (project / "build.gradle").read_text()
         self.assertIn('"original-stack/manifest.json"', gradle)
         self.assertIn('"original-stack/run-*/**"', gradle)
         self.assertNotIn('"original-stack/proof.json"', gradle)
-        for name in ("thc.cabal", "compiler/pinned-ghc-internal/LICENSE",
-                     "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
-                     "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc"):
+        for name in ("thc.cabal", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+                     "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+                     "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc"):
             self.assertIn('"' + name + '"', gradle)
             self.assertIn(name, group["sources"])
         for name in ("Stack/CloneStack.hs", "Stack/Decode.hs"):
-            self.assertIn("compiler/pinned-ghc-internal/GHC/Internal/" + name, group["sources"])
+            self.assertIn("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/" + name, group["sources"])
 
     def test_compiled_thunk_retention_prepares_both_native_families(self):
         project = Path(__file__).resolve().parents[2]
@@ -2672,15 +2663,15 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual({"thc.runtime.CompiledThunkRetentionTest", "thc.runtime.BoxedArrayTest",
                           "thc.runtime.FloatingPrimitiveTest"}, set(group["junit"]))
         self.assertEqual({"compiled-thunk-retention"}, {owners[name] for name in group["junit"]})
-        self.assertEqual([{"argv": ["python3", "scripts/prepare-boxed-arrays.py"]},
-                          {"argv": ["python3", "scripts/prepare-floating-audit.py"]}], group["commands"])
+        self.assertEqual([{"argv": ["python3", "bin/prepare-boxed-arrays.py"]},
+                          {"argv": ["python3", "bin/prepare-floating-audit.py"]}], group["commands"])
         self.assertEqual(["build/boxed-arrays", "build/floating"], group["outputs"])
-        self.assertEqual({"scripts/prepare-boxed-arrays.py", "scripts/prepare-floating-audit.py",
-                          "compiler/test-fixtures/BoxedArrayAudit.hs",
-                          "compiler/test-fixtures/FloatingAudit.hs",
-                          "compiler/test-fixtures/FloatingAuditNative.hs"}, set(group["sources"]))
+        self.assertEqual({"bin/prepare-boxed-arrays.py", "bin/prepare-floating-audit.py",
+                          "test/fixtures/compiler/BoxedArrayAudit.hs",
+                          "test/fixtures/compiler/FloatingAudit.hs",
+                          "test/fixtures/compiler/FloatingAuditNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
-        full = (project / "scripts/prepare-tests.sh").read_text().splitlines()
+        full = (project / "bin/prepare-tests.sh").read_text().splitlines()
         for command in group["commands"]:
             self.assertIn(" ".join(command["argv"]), full)
         self.assertLessEqual(set(group["outputs"]), fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -2728,18 +2719,18 @@ class FixturePreparationTest(unittest.TestCase):
         project = Path(__file__).resolve().parents[2]
         manifest, owners = fast_fixtures._manifest(project)
         group = manifest["groups"]["original-stdio"]
-        command = ["scripts/prepare-original-stdio.sh", "--require-supported"]
+        command = ["bin/prepare-original-stdio.sh", "--require-supported"]
         self.assertEqual("original-stdio", owners["thc.runtime.OriginalStdioNativeTest"])
         self.assertEqual([{"argv": command}], group["commands"])
         self.assertEqual(["build/original-stdio"], group["outputs"])
-        self.assertEqual({"compiler/test-fixtures/OriginalStdioAudit.hs",
-                          "compiler/test-fixtures/OriginalStdioAuditNative.hs",
-                          "scripts/prepare-original-stdio.sh", "test/haskell-fixtures/Main.hs",
+        self.assertEqual({"test/fixtures/compiler/OriginalStdioAudit.hs",
+                          "test/fixtures/compiler/OriginalStdioAuditNative.hs",
+                          "bin/prepare-original-stdio.sh", "test/haskell-fixtures/Main.hs",
                           "test/haskell-fixtures/FixtureSupport.hs",
                           "test/haskell-fixtures/OriginalStdioFixtures.hs", "thc.cabal"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" original-stdio --require-supported',
-                      (project / "scripts/prepare-tests.sh").read_text().splitlines())
+                      (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
         self.assertIn("build/original-stdio", fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertIn("build/original-stdio/manifest.json", fast_fixtures.FULL_REQUIRED)
@@ -2797,7 +2788,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn("build/cbv-post-core/CBVCoercionAudit.json", cbv["outputs"])
         self.assertIn("build/tuple-arithmetic/pre-core/TupleArithmeticAudit.json", cbv["outputs"])
         self.assertIn("build/explicit64-primops/core/Explicit64PrimopsAudit.json", cbv["outputs"])
-        self.assertTrue(any("scripts/check-cbv-metadata.py" in command["argv"]
+        self.assertTrue(any("bin/check-cbv-metadata.py" in command["argv"]
                             for command in cbv["commands"]))
 
     def test_simd_memory_families_use_haskell_and_exact_attempt_receipts(self):
@@ -2816,7 +2807,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn(f"cabal run exe:thc-fixtures --offline -- {family}-bytearray --export-only", argv[2])
             self.assertNotIn("python", argv[2])
             for path in (f"prepare-{family}-bytearray-audit.py", f"{family}_bytearray_model.py", f"test-{family}-bytearray-model.py"):
-                self.assertFalse((project / "scripts" / path).exists())
+                self.assertFalse((project / "bin" / path).exists())
             for native in (False, True):
                 attempt = f"build/{group_id}/prepare-run-Abc123"; name = f"build/{group_id}/provenance.json"
                 rows = fast_fixtures.fast_inputs.SIMD_BYTEARRAY_FAMILIES[group_id][1]
@@ -2845,18 +2836,17 @@ class FixturePreparationTest(unittest.TestCase):
                 self.assertIn(path, group['sources']); self.assertTrue((project / path).is_file())
             name = f'build/{family}/manifest.json'; artifacts = fast_fixtures.fast_inputs.BYTEARRAY_OUTPUTS[family] - {name}
             expected = {path: '0'*64 for path in artifacts}
-            with mock.patch.object(fast_fixtures.fast_inputs, 'file_path') as file_path, mock.patch.object(fast_fixtures, '_manifest_output_hashes') as outputs, \
-                    mock.patch.object(fast_fixtures.fast_inputs, 'vendor_pins', return_value={path: '1'*64 for path in fast_fixtures.fast_inputs.BYTEARRAY_VENDOR}):
+            with mock.patch.object(fast_fixtures.fast_inputs, 'file_path') as file_path, mock.patch.object(fast_fixtures, '_manifest_output_hashes') as outputs:
                 file_path.return_value.read_text.return_value = json.dumps(dict(schema=1, ghc='9.14.1', wordBits=64,
                     entries=list(fast_fixtures.fast_inputs.BYTEARRAY_FAMILIES[family][1]), artifactHashes=expected))
                 fast_fixtures._output_hashes(project, group)
                 recorded = outputs.call_args.args[2]
-                self.assertTrue(set(expected) <= set(recorded))
+                self.assertEqual(set(expected), set(recorded))
                 if family in ('bytearray', 'compare-byte-arrays'):
-                    self.assertEqual(set(expected) | fast_fixtures.fast_inputs.BYTEARRAY_VENDOR, set(recorded))
+                    self.assertTrue(fast_fixtures.fast_inputs.BYTEARRAY_SOURCES <= set(group['sources']))
         for script in ('prepare-bytearray.py', 'prepare-mutable-bytearrays.py', 'prepare-resize-bytearrays.py',
                        'prepare-mutable-bytearray-size.py', 'prepare-compare-byte-arrays.py', 'mutable_bytearray_model.py', 'test-mutable-bytearray-model.py'):
-            self.assertFalse((project / 'scripts' / script).exists())
+            self.assertFalse((project / 'bin' / script).exists())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
 
     def test_int16_boundary_control_prepares_the_genuine_native_fixture(self):
@@ -2879,7 +2869,7 @@ class FullFixtureReceiptTest(unittest.TestCase):
         FixturePreparationTest.setUp(self)
         for name in ("build.gradle", "thc.cabal", "cabal.project", "Setup.hs",
                      ".github/scripts/fast_fixtures.py",
-                     "scripts/prepare-tests.sh"):
+                     "bin/prepare-tests.sh"):
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("prepare reviewed fixtures\n")
@@ -2895,8 +2885,6 @@ class FullFixtureReceiptTest(unittest.TestCase):
                                                frozenset({"build/alpha", "build/beta"})))
         self.patches.enter_context(mock.patch.object(fast_fixtures, "FULL_REQUIRED",
                                                frozenset({"build/alpha/oracle.tsv", "build/beta/result.tsv"})))
-        self.vendor_pins = self.patches.enter_context(mock.patch.object(
-            fast_fixtures.fast_inputs, "vendor_pins", return_value={}))
         def identity(_root):
             return {"source": hashlib.sha256((self.root / "fixtures/alpha.hs").read_bytes()).hexdigest(),
                     "toolchain": self.toolchain.copy()}
@@ -2904,7 +2892,7 @@ class FullFixtureReceiptTest(unittest.TestCase):
                                                side_effect=identity))
 
     def fake_run(self, name, argv, stdout=None):
-        if argv != ["scripts/prepare-tests.sh"]:
+        if argv != ["bin/prepare-tests.sh"]:
             return FixturePreparationTest.fake_run(self, name, argv, stdout)
         self.calls.append((name, argv, stdout))
         if self.fail_preparation:
@@ -3047,30 +3035,15 @@ class FullFixtureReceiptTest(unittest.TestCase):
 
     def test_unreviewed_preparer_command_or_new_output_never_gets_a_receipt(self):
         self.prepare("thc.UnknownTest")
-        (self.root / "scripts/prepare-tests.sh").write_text("prepare reviewed fixtures\nmake-new-output\n")
+        (self.root / "bin/prepare-tests.sh").write_text("prepare reviewed fixtures\nmake-new-output\n")
         self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
         self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
-        (self.root / "scripts/prepare-tests.sh").write_text("prepare reviewed fixtures\n")
+        (self.root / "bin/prepare-tests.sh").write_text("prepare reviewed fixtures\n")
         self.extra_output = True
         self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
         self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
         self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
         self.assertEqual(self.prepared, 4)
-
-    def test_vendored_source_bytes_and_presence_are_bound_to_receipt(self):
-        name = "vendor/ghc-9.14.1/GHC/Internal/Base.hs"
-        path = self.root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("pinned source")
-        self.vendor_pins.return_value = {name: hashlib.sha256(path.read_bytes()).hexdigest()}
-        self.prepare("thc.UnknownTest")
-        path.write_text("altered source")
-        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
-        self.assertFalse((self.root / fast_fixtures.FULL_STAMP).exists())
-        path.write_text("pinned source")
-        self.prepare("thc.UnknownTest")
-        path.unlink()
-        self.assertEqual(self.prepare("thc.UnknownTest")["rebuilt"], ["full"])
 
     def test_compiler_interface_link_is_ignored_but_fixture_link_is_rejected(self):
         self.prepare("thc.UnknownTest")

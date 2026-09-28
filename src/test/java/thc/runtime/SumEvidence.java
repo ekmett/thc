@@ -30,7 +30,7 @@ final class SumEvidence {
                 assertEquals(item.get("sha256"), hash, "Stale sum evidence: " + path);
             }
             var paths = new ArrayList<String>(); for (var item : sources) paths.add(item.get("path"));
-            assertTrue(paths.containsAll(List.of("scripts/audit-core.py", "scripts/core_sums.py", "scripts/core-capabilities.json",
+            assertTrue(paths.containsAll(List.of("bin/audit-core.py", "bin/core_sums.py", "bin/core-capabilities.json",
                 "src/main/resources/thc/scalar-primop-signatures.json")));
         }
         for (var stage : List.of("pre", "post")) {

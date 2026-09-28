@@ -2,7 +2,7 @@
   "schema": 1,
   "compiler": "GraalVM 25.3.4.1+1.1 / Truffle 25.3.4.1",
   "platform": "macOS aarch64",
-  "source": "compiler/test-fixtures/MutVarAudit.hs",
+  "source": "test/fixtures/compiler/MutVarAudit.hs",
   "sourceSha256": "085d62915e8a5fde87f44f9f555a5f0c8d96ef2df38bda509f45d7edfecbc0d1",
   "countExpression": "abs (input rem 33)",
   "initialFailure": {

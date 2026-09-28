@@ -48,7 +48,7 @@ globals. File-hash verification is opt-in. The separate auditor accepts
 guest `--` separator to check artifact hashes and complete source/index agreement.
 The JVM `loadEntry` and `loadManagedExports` APIs expose `verifyArtifacts = false`.
 
-`scripts/test-core-package-link.py` builds an independently registered library
+`bin/test-core-package-link.py` builds an independently registered library
 and importer with GHC 9.14.1, compares native output with compiled AST and
 bytecode execution, and checks that removing the library fails before execution.
 This focused proof uses binder/file provenance from `-g0`; it does not claim

@@ -40,9 +40,9 @@ prepareLibdwUnavailable root = do
       binary = native </> "oracle" ++ suffix
       finalizerBinary = native </> "c-finalizer" ++ suffix
       outputLines = map (takeWhile (/= '\r')) . lines . BS.unpack
-      source = "compiler/test-fixtures/LibdwUnavailableNative.hs"
-      cFinalizerSource = "compiler/test-fixtures/CFinalizerNative.hs"
-      labelSource = "compiler/test-fixtures/ForeignLabelAudit.hs"
+      source = "test/fixtures/compiler/LibdwUnavailableNative.hs"
+      cFinalizerSource = "test/fixtures/compiler/CFinalizerNative.hs"
+      labelSource = "test/fixtures/compiler/ForeignLabelAudit.hs"
       -- Manifest keys use repository-relative paths on every host.
       labelsFile = directory ++ "/foreign-labels.json"
       oracle = directory ++ "/oracle.json"
@@ -81,7 +81,7 @@ prepareLibdwUnavailable root = do
   writeJson (root </> oracle) $ object ["useLibdw" .= (False :: Bool), "observations" .= parsed,
     "cFinalizerObservations" .= cParsed]
   inputHashes <- hashes root [source, cFinalizerSource, labelSource, "test/haskell-fixtures/LibdwUnavailableFixtures.hs",
-    "compiler/THC/Plugin.hs", "compiler/THC/CBV.hs", "compiler/THC/Demands.hs", "compiler/THC/Sources.hs", "compiler/THC/Wired.hs",
+    "src/compiler/THC/Plugin.hs", "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs",
     "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
   artifactHashes <- hashes root [oracle, labelsFile]
   writeJson (root </> manifest) $ object ["schema" .= (1 :: Int), "ghc" .= ("9.14.1" :: String),

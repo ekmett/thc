@@ -40,9 +40,9 @@ entries = ["integerRoundTrip","naturalRoundTrip","integerLiteral","naturalLitera
 arithmetic = ["integerAddFrontier","naturalAddFrontier"]
 modules = ["BigNat","Integer","Natural"]
 originals = [directory </> "boot/core/GHC.Internal.Bignum." ++ name ++ ".json" | name <- modules]
-vendorSources = ["vendor/ghc-9.14.1/GHC/Internal/Bignum" </> name ++ suffix |
+vendorSources = ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum" </> name ++ suffix |
   name <- modules, suffix <- [".hs",".hs-boot"]] ++
-  ["vendor/ghc-9.14.1/include/WordSize.h","vendor/ghc-9.14.1/LICENSE"]
+  ["third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h","third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"]
 
 directory, logs, prefix :: String
 directory = "build/bignat-literals"
@@ -108,17 +108,17 @@ tree root path = do
 
 sourcePaths :: FilePath -> IO [FilePath]
 sourcePaths root = do
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   pure $ sort $ vendorSources ++
-    ["compiler/test-fixtures/BigNatLiteralAudit.hs","compiler/test-fixtures/BigNatLiteralAuditNative.hs",
+    ["test/fixtures/compiler/BigNatLiteralAudit.hs","test/fixtures/compiler/BigNatLiteralAuditNative.hs",
      "test/haskell-fixtures/BigNatLiteralFixtures.hs","test/haskell-fixtures/FixtureSupport.hs",
-     "test/haskell-fixtures/Main.hs","thc.cabal","compiler/export-boot.py","compiler/build.sh",
-     "compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py","scripts/audit-core.py",
-     "scripts/core-capabilities.json","tools/primops/PrimopTools.hs",
+     "test/haskell-fixtures/Main.hs","thc.cabal","bin/export-boot.py","bin/build-compiler.sh",
+     "bin/export-core.sh","bin/toolchain.sh","bin/plugin.py","bin/audit-core.py",
+     "bin/core-capabilities.json","src/tools/primops/PrimopTools.hs",
      "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    ["src/compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
 
 records :: FilePath -> [FilePath] -> IO [Value]
 records root paths = map (\(path,digest) -> object ["path" .= path,"sha256" .= digest]) . Map.toAscList <$> hashes root paths
@@ -225,7 +225,7 @@ inventory root auditDirectory = do
       let reportName = stage ++ "-" ++ name ++ ".audit.json"
           reportPath = auditDirectory </> reportName
       _ <- runLoggedExpect exitCode 120 root (auditDirectory </> "commands") (stage ++ "-" ++ name ++ "-audit") [] "python3"
-        (["scripts/audit-core.py"] ++ paths ++ concat [["--entry","main:BigNatLiteralAudit." ++ entry] | entry <- roots] ++ ["--output",reportPath])
+        (["bin/audit-core.py"] ++ paths ++ concat [["--entry","main:BigNatLiteralAudit." ++ entry] | entry <- roots] ++ ["--output",reportPath])
       report <- readJson (root </> reportPath)
       when (auditDirectory /= directory) $ do
         original <- readJson (root </> directory </> reportName)
@@ -257,19 +257,19 @@ prepareBigNatLiterals root checkOnly = do
       Just fields | lookup "target word size" fields == Just "8",
         lookup "target word big endian" fields == Just (if order == "big" then "YES" else "NO") -> pure ()
       _ -> die "BigNat requires native-order 64-bit GHC"
-    _ <- runLogged 300 root logs "plugin-build" [] "compiler/build.sh" []
+    _ <- runLogged 300 root logs "plugin-build" [] "bin/build-compiler.sh" []
     _ <- runLogged 600 root logs "boot-export" [] "python3"
-      ["compiler/export-boot.py","--pretty-diagnostics","--frontier","bignum","--build-dir",root </> directory </> "boot"]
+      ["bin/export-boot.py","--pretty-diagnostics","--frontier","bignum","--build-dir",root </> directory </> "boot"]
     forM_ ["pre","post"] $ \stage -> do
       _ <- runLogged 300 root logs (stage ++ "-export")
         [("THC_CORE_OUT",root </> directory </> stage ++ "-core"),("THC_GHC_OUT",root </> directory </> stage ++ "-ghc"),("THC_SOURCE_NOTES","true")]
-        "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-          ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries ++ arithmetic] ++ ["compiler/test-fixtures/BigNatLiteralAudit.hs"])
+        "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+          ["-fplugin-opt=THC.Plugin:closure=" ++ name | name <- entries ++ arithmetic] ++ ["test/fixtures/compiler/BigNatLiteralAudit.hs"])
       pure ()
     (stages,coverage,counts) <- inventory root directory
     _ <- runLogged 300 root logs "native-build" [] ghc
-      ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
-       "-odir",root </> native,"-hidir",root </> native,"-o",root </> binary,"compiler/test-fixtures/BigNatLiteralAuditNative.hs"]
+      ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler",
+       "-odir",root </> native,"-hidir",root </> native,"-o",root </> binary,"test/fixtures/compiler/BigNatLiteralAuditNative.hs"]
     writeFile (root </> directory </> "requests.tsv") requestText
     executed <- runLoggedWithInput (directory </> "requests.tsv") 120 root logs "native-oracle" [] (root </> binary) []
     BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout executed)

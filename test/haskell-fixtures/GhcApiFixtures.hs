@@ -32,12 +32,12 @@ prepareRecordFields root = do
   let directory = "build/record-fields"
       execute = runLogged 180 root (directory </> "logs")
       modules = ["RecordFieldLibrary", "RecordFieldClient"]
-      sources = map (\name -> "compiler/test-fixtures" </> name ++ ".hs") (modules ++ ["RecordFieldNative"])
+      sources = map (\name -> "test/fixtures/compiler" </> name ++ ".hs") (modules ++ ["RecordFieldNative"])
       single result = case BS.lines (commandStdout result) of
         [value] -> pure (BS.unpack value)
         _ -> die "record-fields: expected one output line"
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
-  plugin <- execute "plugin-build" [] "compiler/build.sh" []
+  plugin <- execute "plugin-build" [] "bin/build-compiler.sh" []
   pluginInfo <- readJson (root </> "build/compiler/plugin.json")
   packageDb <- field pluginInfo "packageDb"
   pluginUnit <- field pluginInfo "unitId"
@@ -52,7 +52,7 @@ prepareRecordFields root = do
     createDirectoryIfMissing True build
     compiled <- execute (stage ++ "-compile") [] ghc
       (["--make", "-O0", "-dynamic-too", "-fforce-recomp", "-fwrite-if-simplified-core",
-        "-i", "-icompiler/test-fixtures", "-odir", build, "-hidir", build,
+        "-i", "-itest/fixtures/compiler", "-odir", build, "-hidir", build,
         "-package-db", packageDb, "-plugin-package-id", pluginUnit,
         "-fplugin=THC.Plugin", "-fplugin-opt=THC.Plugin:" ++ output,
         "-o", output </> "oracle"] ++
@@ -69,10 +69,10 @@ prepareRecordFields root = do
     pure ([compiled, oracle] ++ recovered)
   audits <- forM [(stage, entry) | stage <- ["pre", "post", "installed"], entry <- ["fieldAlias", "duplicateFields"]] $
     \(stage, entry) -> execute (stage ++ "-audit-" ++ entry) [] "python3"
-      (["scripts/audit-core.py", "--entry", "main:RecordFieldClient." ++ entry,
+      (["bin/audit-core.py", "--entry", "main:RecordFieldClient." ++ entry,
         "--output", directory </> stage </> entry ++ "-audit.json"] ++
        map (\name -> directory </> stage </> name ++ ".json") modules)
-  inputs <- hashes root (sources ++ ["compiler/THC/Plugin.hs", "test/haskell-fixtures/GhcApiFixtures.hs"])
+  inputs <- hashes root (sources ++ ["src/compiler/THC/Plugin.hs", "test/haskell-fixtures/GhcApiFixtures.hs"])
   let records = [plugin, helperLocation, library] ++ commands ++ audits
   artifacts <- hashes root (concatMap commandArtifacts records ++
     [directory </> stage </> name ++ ".json" | stage <- ["pre", "post", "installed"], name <- modules])

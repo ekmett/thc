@@ -27,8 +27,8 @@ prepareHintTrace root = do
   let directory = "build/hint-trace"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/HintTraceAudit.hs"
-      driver = "compiler/test-fixtures/HintTraceNative.hs"
+      source = "test/fixtures/compiler/HintTraceAudit.hs"
+      driver = "test/fixtures/compiler/HintTraceNative.hs"
       entries = ["hints", "traces", "event", "marker", "binary", "addressHints"] :: [String]
       stages = ["pre", "post"] :: [String]
   createDirectoryIfMissing True output
@@ -40,16 +40,16 @@ prepareHintTrace root = do
   forM_ stages $ \stage -> do
     let core = directory </> stage </> "core"
     _ <- run root [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [source]) ""
     forM_ entries $ \entry -> do
-      _ <- run root [] "python3" ["scripts/audit-core.py", "--entry", entry,
+      _ <- run root [] "python3" ["bin/audit-core.py", "--entry", entry,
         "--output", directory </> stage </> entry ++ ".audit.json", core </> "HintTraceAudit.json"] ""
       pure ()
   let native = output </> "native"
       eventlog = native </> "oracle.eventlog"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make", "-O2", "-eventlog", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-    "-i" ++ (root </> "compiler/test-fixtures"), "-odir", native, "-hidir", native,
+    "-i" ++ (root </> "test/fixtures/compiler"), "-odir", native, "-hidir", native,
     root </> driver, "-o", native </> "oracle"] ""
   observations <- runWithTimeout (Just 30000000) root [] (native </> "oracle")
     ["+RTS", "-l", "-ol" ++ eventlog, "-RTS"] ""
@@ -60,14 +60,14 @@ prepareHintTrace root = do
   unless (all (`BS.isInfixOf` emitted) ["hint-trace-event", "hint-trace-marker", BS.pack [65,0,66,0]]) $
     die "Native GHC did not emit the expected user-event payloads"
   writeFile (output </> "oracle.tsv") observations
-  plugin <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugin <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root (sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/HintTraceFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json"] ++
-    ["compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "bin/audit-core.py", "bin/core-capabilities.json"] ++
+    ["src/compiler/THC" </> name | name <- plugin, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"])
   artifactHashes <- hashes root ([directory </> "oracle.tsv", directory </> "native/oracle",
     directory </> "native/oracle.eventlog"] ++
     [directory </> stage </> suffix | stage <- stages,

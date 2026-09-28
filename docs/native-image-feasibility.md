@@ -19,8 +19,8 @@ pinned JDK and its `native-image` command. From a built THC checkout:
 
 ```sh
 ./gradlew --max-workers=2 installDist
-./compiler/export.sh examples/THC/Fixtures.hs
-bash scripts/native-image-pure.sh
+./bin/export-core.sh examples/THC/Fixtures.hs
+bash bin/native-image-pure.sh
 build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json sumLoop 100
 build/native-image/thc-pure -Xmx2g build/core/THC.Prim.json,build/core/THC.Fixtures.json caseList 20
 ```
@@ -30,9 +30,9 @@ frozen guest program. The expected pure results are `5050` and `210`.
 The default backend is bytecode. Put `-Dthc.backend=ast` before the Core paths
 to select AST, and `-Dthc.handoffSlabs=true` to select dense handoff storage.
 
-The [probe script](../scripts/native-image-pure.sh) reads the installed runtime
+The [probe script](../bin/native-image-pure.sh) reads the installed runtime
 JARs, deliberately excludes LLVM/NFI dependencies, and uses the checked
-[initialization inventory](../scripts/native-image/pure-initialization.txt).
+[initialization inventory](../bin/native-image/pure-initialization.txt).
 It limits the image builder to an 8 GiB heap and two compiler threads.
 An optional script argument selects the output executable path.
 On a shared development host, hold its existing build-directory resource lease

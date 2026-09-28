@@ -27,6 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          submodules: true
           persist-credentials: false
       - name: Check dispatched revision
         env:
@@ -55,6 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          submodules: true
           persist-credentials: false
       - name: Check dispatched revision
         env:
@@ -116,7 +118,7 @@ jobs:
       - name: Check pinned guest protocol artifacts
         run: ./gradlew --no-daemon --max-workers=2 --continue testProtocolProcessor testMaterializableApi testReturnPolicy testReturnContinuations
       - name: Build and test both handoff modes from source
-        run: scripts/try.sh --handoff-modes
+        run: bin/try.sh --handoff-modes
       - name: Check original aggregate constructor fields against native GHC
         run: |
           cabal run exe:thc-fixtures --offline -- aggregate-heap
@@ -145,11 +147,11 @@ jobs:
           ./gradlew tupleCaptureFullCoreTest tupleCaptureFullCoreDenseTest
       - name: Check Haskell calls into JavaScript
         run: |
-          python3 scripts/test-polyglot-audit.py
-          python3 -O scripts/test-polyglot-audit.py
-          scripts/polyglot-demo.sh
-          python3 compiler/test-javascript-ffi.py
-          scripts/javascript-demo.sh
+          python3 bin/test-polyglot-audit.py
+          python3 -O bin/test-polyglot-audit.py
+          bin/polyglot-demo.sh
+          python3 bin/test-javascript-ffi.py
+          bin/javascript-demo.sh
           ./gradlew polyglotTest
       - name: Build and exercise the Cabal driver
         shell: bash
@@ -159,7 +161,7 @@ jobs:
           cabal run thc --offline -fdevelopment -- --help
           cabal test driver-tests cpu-affinity-api -fdevelopment --test-show-details=direct
       - name: Check registered cross-package Core on both compiled backends
-        run: python3 scripts/test-core-package-link.py
+        run: python3 bin/test-core-package-link.py
       - name: Require fresh native SIMD oracle and post-Tidy export on x86
         if: runner.os == 'Linux'
         run: |
@@ -196,7 +198,7 @@ jobs:
           assert proof['nativeRows'] == 4384 and proof['stages'] == ['pre', 'post'] and proof['positiveAuditsAccepted'], proof
           PY
       - name: Prepare fresh library source and native oracles
-        run: python3 scripts/prepare-library-tests.py
+        run: python3 bin/prepare-library-tests.py
       - name: Package verified library inputs and installed runtime
         run: python3 .github/scripts/library_bundle.py pack --output build/library-transfer.tar.gz
       - name: Share this platform's library inputs with this Build attempt
@@ -209,49 +211,49 @@ jobs:
           retention-days: 7
       - name: Check exact dependency auditor and library frontier
         run: |
-          python3 scripts/test-audit-core.py
-          python3 scripts/test-plugin.py
-          python3 scripts/test-core-enums.py
-          python3 scripts/test-sum-layout.py
-          python3 scripts/test-core-sums.py
-          python3 scripts/test-tuple-inputs.py
-          python3 scripts/test-empty-join-inputs.py
-          python3 scripts/test-library-frontier.py
-          python3 scripts/test-sequence-model.py
-          python3 scripts/test-core-vectors.py
-          python3 scripts/test-simd-families.py
-          python3 scripts/test-floatx4-model.py
-          python3 scripts/test-doublex2-model.py
-          python3 scripts/test-word8x16-model.py
-          python3 scripts/test-int32x4-multiply-model.py
-          python3 scripts/test-core-vector-memory.py
-          python3 scripts/test-core-word32-vector-memory.py
-          python3 scripts/test-core-float-vector-memory.py
-          python3 scripts/test-core-double-vector-memory.py
-          python3 scripts/test-core-bytearrays.py
-          python3 scripts/test-core-arrays.py
-          python3 scripts/test-address-fields.py
-          python3 scripts/test-core-data-tags.py
-          python3 scripts/test-show-int-model.py
-          python3 scripts/test-show-word-list-model.py
-          python3 scripts/test-narrow-literal-proofs.py
-          python3 scripts/test-short-bytes-slices-model.py
-          python3 scripts/test-array-slice-model.py
+          python3 bin/test-audit-core.py
+          python3 bin/test-plugin.py
+          python3 bin/test-core-enums.py
+          python3 bin/test-sum-layout.py
+          python3 bin/test-core-sums.py
+          python3 bin/test-tuple-inputs.py
+          python3 bin/test-empty-join-inputs.py
+          python3 bin/test-library-frontier.py
+          python3 bin/test-sequence-model.py
+          python3 bin/test-core-vectors.py
+          python3 bin/test-simd-families.py
+          python3 bin/test-floatx4-model.py
+          python3 bin/test-doublex2-model.py
+          python3 bin/test-word8x16-model.py
+          python3 bin/test-int32x4-multiply-model.py
+          python3 bin/test-core-vector-memory.py
+          python3 bin/test-core-word32-vector-memory.py
+          python3 bin/test-core-float-vector-memory.py
+          python3 bin/test-core-double-vector-memory.py
+          python3 bin/test-core-bytearrays.py
+          python3 bin/test-core-arrays.py
+          python3 bin/test-address-fields.py
+          python3 bin/test-core-data-tags.py
+          python3 bin/test-show-int-model.py
+          python3 bin/test-show-word-list-model.py
+          python3 bin/test-narrow-literal-proofs.py
+          python3 bin/test-short-bytes-slices-model.py
+          python3 bin/test-array-slice-model.py
       - name: Check merged fixture and runtime recipes with and without assertions
         shell: bash
         run: |
           set -euo pipefail
           for test in \
-            scripts/test-build-cbits.py \
-            scripts/test-core-managed-memory.py \
-            scripts/test-core-managed-files.py \
-            scripts/test-core-md5-foreign.py \
-            scripts/test-core-package-manifest.py \
-            scripts/test-managed-mvar-fixtures.py \
-            scripts/test-managed-mvars.py \
-            scripts/test-prepare-managed-md5.py \
-            scripts/test-putstrln-export.py \
-            scripts/test-synchronous-exception-fixtures.py; do
+            bin/test-build-cbits.py \
+            bin/test-core-managed-memory.py \
+            bin/test-core-managed-files.py \
+            bin/test-core-md5-foreign.py \
+            bin/test-core-package-manifest.py \
+            bin/test-managed-mvar-fixtures.py \
+            bin/test-managed-mvars.py \
+            bin/test-prepare-managed-md5.py \
+            bin/test-putstrln-export.py \
+            bin/test-synchronous-exception-fixtures.py; do
             python3 "$test"
             python3 -O "$test"
           done
@@ -260,7 +262,7 @@ jobs:
       - name: Prepare fresh Map source and native oracle
         env:
           THC_DIAGNOSTIC_UNSUPPORTED: 'true'
-        run: scripts/prepare-map.sh
+        run: bin/prepare-map.sh
       - name: Check diagnostic Map on both backends and handoff modes
         shell: bash
         run: |
@@ -569,6 +571,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then test "$GITHUB_REF" = refs/heads/main; fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          submodules: true
           persist-credentials: false
           path: work/foreign-exceptions
       - name: Check dispatched revision
@@ -632,6 +635,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7.0.1
         with:
+          submodules: true
           persist-credentials: false
       - name: Check dispatched revision
         env:

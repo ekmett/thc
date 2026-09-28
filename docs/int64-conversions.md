@@ -10,7 +10,7 @@ The `int64` literal kind accepts canonical signed decimal values from
 Malformed and out-of-range literals are load errors even in diagnostic mode.
 
 `THC.Int64Conversions` is part of the normal native-GHC coverage corpus:
-`scripts/prepare-tests.sh` regenerates its Core and oracle. The corpus checks
+`bin/prepare-tests.sh` regenerates its Core and oracle. The corpus checks
 cold boundary inputs and compiled entries on both backends. `Int64ConversionTest`
 also checks exact exported argument/result representations, direct compiled
 conversion entries, literal validation and malformed primitive arities.

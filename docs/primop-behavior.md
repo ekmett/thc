@@ -345,6 +345,6 @@ Core transport also has restrictions independent of any one primop: see the
 registered primop cannot make an otherwise unsupported whole program runnable.
 
 When changing a behavior above, update this page, its detailed guide and the
-machine-readable [capability notes](../scripts/core-capabilities.json) together.
+machine-readable [capability notes](../bin/core-capabilities.json) together.
 Keep concrete counterexamples/rejections separate from coverage percentages and
 from historical validation reports.

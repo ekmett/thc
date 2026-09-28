@@ -65,7 +65,7 @@ variables expr = case expr of
 prepareGcStats :: FilePath -> IO ()
 prepareGcStats root = do
   let directory = "build/gc-stats"
-      source = "compiler/test-fixtures/GcStatsAudit.hs"
+      source = "test/fixtures/compiler/GcStatsAudit.hs"
       execute = runLogged 180 root (directory </> "logs")
       oneLine result = case lines (BS.unpack (commandStdout result)) of
         [value] -> value
@@ -143,10 +143,10 @@ prepareGcStats root = do
   writeJson (root </> directory </> "oracle.json") $ object ["rows" .= rows]
   let entries = [(entry,"original" ++ consumer) | (entry,_,consumer) <- calls]
   _ <- forM entries $ \(entry,binder) -> forM ["pre","post"] $ \stage ->
-    execute (entry ++ "-" ++ stage) [] "python3" ["scripts/audit-core.py","--entry",binder,
+    execute (entry ++ "-" ++ stage) [] "python3" ["bin/audit-core.py","--entry",binder,
       "--output",directory </> entry ++ "-" ++ stage ++ ".audit.json",directory </> entry ++ "-" ++ stage ++ ".json"]
-  inputHashes <- hashes root [source,"test/haskell-fixtures/GcStatsFixtures.hs","compiler/THC/Plugin.hs",
-    "compiler/THC/Interface.hs","scripts/core_original_foreign.py","scripts/audit-core.py","scripts/core-capabilities.json"]
+  inputHashes <- hashes root [source,"test/haskell-fixtures/GcStatsFixtures.hs","src/compiler/THC/Plugin.hs",
+    "src/compiler/THC/Interface.hs","bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json"]
   artifactHashes <- hashes root ([directory </> "oracle.json"] ++
     [directory </> entry ++ "-" ++ stage ++ ".json" | (entry,_) <- entries, stage <- ["pre","post"]])
   interfaceHashes <- hashes root interfaces

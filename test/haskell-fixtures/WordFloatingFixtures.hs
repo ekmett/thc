@@ -39,8 +39,8 @@ prepareWordFloating root = do
   let directory = "build/word-floating"
       output = root </> directory
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/WordFloatingAudit.hs"
-      driver = "compiler/test-fixtures/WordFloatingNative.hs"
+      source = "test/fixtures/compiler/WordFloatingAudit.hs"
+      driver = "test/fixtures/compiler/WordFloatingNative.hs"
   createDirectoryIfMissing True output
   present <- doesFileExist manifest
   when present (removeFile manifest)
@@ -57,12 +57,12 @@ prepareWordFloating root = do
     let core = directory </> stage ++ "-core"
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     _ <- run root [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",output </> stage ++ "-ghc")]
-      "compiler/export.sh" (options ++ [source]) ""
+      "bin/export-core.sh" (options ++ [source]) ""
     pure ()
   let native = output </> "native"
   createDirectoryIfMissing True native
   _ <- run root [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-    "-i" ++ root </> "compiler/test-fixtures","-odir",native,"-hidir",native,
+    "-i" ++ root </> "test/fixtures/compiler","-odir",native,"-hidir",native,
     root </> driver,"-o",native </> "word-floating-oracle"] ""
   actual <- run root [] (native </> "word-floating-oracle") [] (unlines (map show inputs))
   let parse line = case splitTab line of
@@ -76,17 +76,17 @@ prepareWordFloating root = do
   unless (traverse parse (lines actual) == Just inputs) (die "Malformed native word-floating rows")
   writeFile (output </> "oracle.tsv") actual
   forM_ ["pre","post"] $ \stage -> do
-    _ <- run root [] "python3" ["scripts/audit-core.py","--entry","wordFloat","--entry","wordDouble",
+    _ <- run root [] "python3" ["bin/audit-core.py","--entry","wordFloat","--entry","wordDouble",
       "--output",directory </> stage ++ "-audit.json",directory </> stage ++ "-core/WordFloatingAudit.json"] ""
     pure ()
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/WordFloatingFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json",
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       artifacts = (directory </> "oracle.tsv") : [directory </> stage ++ suffix | stage <- ["pre","post"],
         suffix <- ["-core/WordFloatingAudit.json","-audit.json"]]
   sourceHashes <- hashes root sources

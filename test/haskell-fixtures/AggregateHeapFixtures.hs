@@ -82,8 +82,8 @@ prepareAggregateHeap :: FilePath -> Bool -> IO ()
 prepareAggregateHeap root exportOnly = do
   let directory = "build/aggregate-heap"
       output = root </> directory
-      source = "compiler/test-fixtures/AggregateHeapFields.hs"
-      driver = "compiler/test-fixtures/AggregateHeapFieldsNative.hs"
+      source = "test/fixtures/compiler/AggregateHeapFields.hs"
+      driver = "test/fixtures/compiler/AggregateHeapFieldsNative.hs"
       native = directory </> "native"
       binary = native </> "oracle"
       logs = directory </> "commands"
@@ -102,7 +102,7 @@ prepareAggregateHeap root exportOnly = do
     _ -> die "Aggregate heap fields require native 64-bit GHC"
   compiled <- runLogged 180 root logs "native-build" [] ghc
     ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint",
-     "-package", "ghc", "-icompiler/test-fixtures", "-odir", native, "-hidir", native,
+     "-package", "ghc", "-itest/fixtures/compiler", "-odir", native, "-hidir", native,
      driver, "-o", binary]
   observations <- runLogged 30 root logs "native-run" [] (root </> binary) []
   let parse line = case splitTab line of
@@ -121,14 +121,14 @@ prepareAggregateHeap root exportOnly = do
         report = directory </> stage </> "audit.json"
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT", root </> core), ("THC_GHC_OUT", output </> stage </> "ghc")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
         ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries] ++ ["-package", "ghc", source])
     proof <- constructorProofs =<< readJson (root </> modulePath)
     modules <- sort . filter ((== ".json") . takeExtension) <$> listDirectory (root </> core)
     let modulePaths = map (core </>) modules
     audits <- if exportOnly then pure [] else do
       audited <- runLogged 60 root logs (stage ++ "-audit") [] "python3"
-        (["scripts/audit-core.py", "--output", report] ++
+        (["bin/audit-core.py", "--output", report] ++
           concatMap (\entry -> ["--entry", "main:AggregateHeapFields." ++ entry]) entries ++ modulePaths)
       result <- readJson (root </> report)
       case result of
@@ -138,14 +138,14 @@ prepareAggregateHeap root exportOnly = do
         _ -> die ("aggregate-heap: strict audit rejected " ++ stage)
       pure (report : commandArtifacts audited)
     pure (stage, proof, modulePaths ++ audits ++ commandArtifacts exported)
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   inputHashes <- hashes root $ sort $ [source, driver, "thc.cabal", "test/haskell-fixtures/Main.hs",
     "test/haskell-fixtures/AggregateHeapFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-    "compiler/build.sh", "compiler/export.sh", "compiler/toolchain.sh", "compiler/plugin.py",
-    "scripts/audit-core.py", "scripts/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
-    ["scripts" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
+    "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
+    "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"] ++
+    ["src/compiler/THC" </> file | file <- plugins, takeExtension file == ".hs"] ++
+    ["bin" </> file | file <- scripts, take 5 file == "core_" && takeExtension file == ".py"]
   artifactHashes <- hashes root $ [directory </> "oracle.tsv", binary] ++
     concat [paths | (_, _, paths) <- stages] ++ concatMap commandArtifacts [version, info, compiled, observations]
   writeJson (if exportOnly then output </> "export-manifest.json" else manifest) $ object

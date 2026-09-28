@@ -44,8 +44,8 @@ prepareUnalignedScalarMemory root = do
       output = root </> directory
       logs = directory </> "logs"
       manifest = output </> "manifest.json"
-      source = "compiler/test-fixtures/UnalignedScalarMemoryAudit.hs"
-      driver = "compiler/test-fixtures/UnalignedScalarMemoryNative.hs"
+      source = "test/fixtures/compiler/UnalignedScalarMemoryAudit.hs"
+      driver = "test/fixtures/compiler/UnalignedScalarMemoryNative.hs"
       entries = map ("unaligned" ++) scalarTypes
       names = sort [verb ++ "Word8" ++ domain ++ "As" ++ scalar ++ "#" |
                     verb <- ["index","read","write"], domain <- ["Array","OffAddr"], scalar <- scalarTypes]
@@ -70,15 +70,15 @@ prepareUnalignedScalarMemory root = do
         options = ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"]
     exported <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",output </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audited <- runLogged 120 root logs (stage ++ "-audit") [] "python3"
-      (["scripts/audit-core.py"] ++ concatMap (\entry -> ["--entry",entry]) entries ++
+      (["bin/audit-core.py"] ++ concatMap (\entry -> ["--entry",entry]) entries ++
        ["--output",directory </> stage </> "audit.json",core </> "UnalignedScalarMemoryAudit.json"])
     pure [exported,audited]
   let native = output </> "native"
   createDirectoryIfMissing True native
   built <- runLogged 120 root logs "native-build" [] ghc
-    ["--make","-O2","-dynamic","-dcore-lint","-dstg-lint","-i" ++ root </> "compiler/test-fixtures",
+    ["--make","-O2","-dynamic","-dcore-lint","-dstg-lint","-i" ++ root </> "test/fixtures/compiler",
      "-odir",native,"-hidir",native,root </> driver,"-o",native </> "oracle"]
   writeFile (output </> "inputs.txt") inputs
   oracle <- runLoggedWithInput (directory </> "inputs.txt") 60 root logs "native-oracle" [] (native </> "oracle") []
@@ -92,15 +92,15 @@ prepareUnalignedScalarMemory root = do
         _ -> Nothing
   unless (traverse parse actual == Just rows) (die "Malformed scalar memory oracle")
   BS.writeFile (output </> "oracle.tsv") (commandStdout oracle)
-  pluginFiles <- listDirectory (root </> "compiler/THC")
-  coreScripts <- listDirectory (root </> "scripts")
+  pluginFiles <- listDirectory (root </> "src/compiler/THC")
+  coreScripts <- listDirectory (root </> "bin")
   let sources = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/UnalignedScalarMemoryFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json",
+        "bin/audit-core.py","bin/core-capabilities.json",
         "src/main/resources/thc/scalar-primop-signatures.json",
-        "compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py"] ++
-        ["compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
-        ["scripts" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
+        "bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py"] ++
+        ["src/compiler/THC" </> file | file <- pluginFiles, takeExtension file == ".hs"] ++
+        ["bin" </> file | file <- coreScripts, take 5 file == "core_" && takeExtension file == ".py"]
       commands = [version,inventory] ++ concat stages ++ [built,oracle]
       artifacts = [directory </> "oracle.tsv",directory </> "inputs.txt"] ++
         [directory </> stage </> suffix | stage <- ["pre","post"],

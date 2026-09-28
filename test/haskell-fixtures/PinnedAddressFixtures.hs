@@ -329,15 +329,15 @@ structureControls = do
 
 sourcePaths :: FilePath -> IO [FilePath]
 sourcePaths root = do
-  plugins <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
-  pure $ sort $ ["compiler/test-fixtures/PinnedAddressAudit.hs","compiler/test-fixtures/PinnedAddressAuditNative.hs",
+  plugins <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
+  pure $ sort $ ["test/fixtures/compiler/PinnedAddressAudit.hs","test/fixtures/compiler/PinnedAddressAuditNative.hs",
     "test/haskell-fixtures/PinnedAddressFixtures.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs",
-    "thc.cabal","compiler/build.sh","compiler/export.sh","compiler/toolchain.sh","compiler/plugin.py",
-    "scripts/audit-core.py","scripts/core-capabilities.json","tools/primops/PrimopTools.hs",
+    "thc.cabal","bin/build-compiler.sh","bin/export-core.sh","bin/toolchain.sh","bin/plugin.py",
+    "bin/audit-core.py","bin/core-capabilities.json","src/tools/primops/PrimopTools.hs",
     "src/main/resources/thc/scalar-primop-signatures.json"] ++
-    ["compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
-    ["scripts" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
+    ["src/compiler/THC" </> name | name <- plugins, takeExtension name == ".hs"] ++
+    ["bin" </> name | name <- scripts, "core_" `isPrefixOf` name, takeExtension name == ".py"]
 
 preparePinnedAddresses :: FilePath -> Bool -> Bool -> Bool -> IO ()
 preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
@@ -374,8 +374,8 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
         binary = native </> "pinned-address-oracle"
     createDirectoryIfMissing True (root </> native)
     _ <- runLogged 300 root logs "native-build" [] ghc ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint",
-      "-icompiler/test-fixtures","-odir",root </> native,"-hidir",root </> native,
-      "compiler/test-fixtures/PinnedAddressAuditNative.hs","-o",root </> binary]
+      "-itest/fixtures/compiler","-odir",root </> native,"-hidir",root </> native,
+      "test/fixtures/compiler/PinnedAddressAuditNative.hs","-o",root </> binary]
     result <- runLoggedWithInput (directory </> "requests.tsv") 60 root logs "native-oracle" [] (root </> binary) []
     BS.writeFile (root </> directory </> "oracle.tsv") (commandStdout result)
     output <- readFile (root </> directory </> "oracle.tsv")
@@ -387,8 +387,8 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
         paths = [base </> "core" </> name ++ ".json" | name <- ["PinnedAddressAudit","THC.InterfaceClosure"]]
     _ <- runLogged 300 root logs (stage ++ "-export")
       [("THC_CORE_OUT",root </> base </> "core"),("THC_GHC_OUT",root </> base </> "ghc"),("THC_SOURCE_NOTES","true")]
-      "compiler/export.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
-        ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_) <- entries ++ frontiers] ++ ["compiler/test-fixtures/PinnedAddressAudit.hs"])
+      "bin/export-core.sh" (["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++
+        ["-fplugin-opt=THC.Plugin:closure=" ++ name | (name,_) <- entries ++ frontiers] ++ ["test/fixtures/compiler/PinnedAddressAudit.hs"])
     modules <- toJSON <$> mapM (readJson . (root </>)) paths
     boundary <- either die pure (at [Index 0,Key "boundary"] modules)
     check (boundary == String (if stage == "pre" then "optimized-Core-before-Tidy" else "optimized-Core-after-Tidy-before-CorePrep")) "Wrong actual Core stage"
@@ -468,7 +468,7 @@ preparePinnedAddresses root nativeOnly exportOnly allowUnsupported = do
     commandFiles names = [directory </> "commands" </> name ++ "." ++ suffix | name <- names, suffix <- ["stdout","stderr","command.json"]]
     audit stage label paths entry expectedExit = do
       let output = directory </> stage </> label ++ ".audit.json"
-          args = ["scripts/audit-core.py"] ++ paths ++ ["--entry",prefix ++ entry,"--output",output]
+          args = ["bin/audit-core.py"] ++ paths ++ ["--entry",prefix ++ entry,"--output",output]
           commandPrefix = root </> directory </> "commands" </> stage ++ "-" ++ label ++ "-audit"
           permitted = maybe [0,1] (:[]) expectedExit
       createDirectoryIfMissing True (root </> directory </> "commands")

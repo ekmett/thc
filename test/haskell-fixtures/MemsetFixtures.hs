@@ -37,8 +37,8 @@ rowJSON ((offset,value,count,bytes),(returned,after)) = object
 prepareMemset :: FilePath -> IO ()
 prepareMemset root = do
   let directory = "build/original-memset"
-      source = "compiler/test-fixtures/OriginalMemsetAudit.hs"
-      driver = "compiler/test-fixtures/OriginalMemsetNative.hs"
+      source = "test/fixtures/compiler/OriginalMemsetAudit.hs"
+      driver = "test/fixtures/compiler/OriginalMemsetNative.hs"
       binary = directory </> "native/oracle"
       entries = ["originalFill"] :: [String]
       execute = runLogged 180 root (directory </> "logs")
@@ -47,7 +47,7 @@ prepareMemset root = do
   version <- execute "version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "Original memset requires GHC 9.14.1")
   compiled <- execute "native-build" [] ghc ["--make","-j2","-O2","-fforce-recomp",
-    "-dcore-lint","-dstg-lint","-icompiler/test-fixtures",
+    "-dcore-lint","-dstg-lint","-itest/fixtures/compiler",
     "-odir",root </> directory </> "native","-hidir",root </> directory </> "native",
     driver,"-o",root </> binary]
   observed <- execute "native-observations" [] (root </> binary) []
@@ -63,26 +63,26 @@ prepareMemset root = do
           ["-fplugin-opt=THC.Plugin:closure=" ++ entry | entry <- entries]
     exported <- execute (stage ++ "-export")
       [("THC_CORE_OUT",root </> core),("THC_GHC_OUT",root </> directory </> stage </> "ghc")]
-      "compiler/export.sh" (options ++ [source])
+      "bin/export-core.sh" (options ++ [source])
     audits <- forM entries $ \entry -> do
       let path = directory </> stage </> entry ++ ".audit.json"
       command <- execute (stage ++ "-audit-" ++ entry) [] "python3"
-        (["scripts/audit-core.py","--entry",entry,"--output",path] ++ modules)
+        (["bin/audit-core.py","--entry",entry,"--output",path] ++ modules)
       report <- either die pure . eitherDecodeStrict' =<< BS.readFile (root </> path)
       case report of
         Object fields | KeyMap.lookup "accepted" fields == Just (Bool True) -> pure ()
         _ -> die "Original memset audit rejected"
       pure (path,command)
     pure (stage,modules,exported,audits)
-  compilerFiles <- listDirectory (root </> "compiler/THC")
-  scripts <- listDirectory (root </> "scripts")
+  compilerFiles <- listDirectory (root </> "src/compiler/THC")
+  scripts <- listDirectory (root </> "bin")
   let commands = [version,compiled,observed] ++ concat [exported:map snd audits | (_,_,exported,audits) <- stages]
       inputs = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/MemsetFixtures.hs",
-        "scripts/audit-core.py","scripts/core-capabilities.json","compiler/build.sh","compiler/export.sh",
-        "compiler/toolchain.sh","compiler/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        ["compiler/THC" </> path | path <- compilerFiles, takeExtension path == ".hs"] ++
-        ["scripts" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
+        "bin/audit-core.py","bin/core-capabilities.json","bin/build-compiler.sh","bin/export-core.sh",
+        "bin/toolchain.sh","bin/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        ["src/compiler/THC" </> path | path <- compilerFiles, takeExtension path == ".hs"] ++
+        ["bin" </> path | path <- scripts, "core_" `isPrefixOf` path, takeExtension path == ".py"]
       artifacts = [binary,oracle] ++ concat [modules ++ map fst audits | (_,modules,_,audits) <- stages] ++ concatMap commandArtifacts commands
   inputHashes <- hashes root inputs
   artifactHashes <- hashes root artifacts
