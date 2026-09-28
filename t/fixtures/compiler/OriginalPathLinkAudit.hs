@@ -28,6 +28,9 @@ pathSymlink :: SymlinkCall -> Addr# -> Addr# -> Int#
 pathSymlink call target path = case call target path realWorld# of
   (# _, status #) -> int32ToInt# status
 
+pathRename :: SymlinkCall -> Addr# -> Addr# -> Int#
+pathRename = pathSymlink
+
 pathReadlink :: ReadlinkCall -> Addr# -> Addr# -> Word64# -> Int#
 pathReadlink call path buffer capacity = case call path buffer capacity realWorld# of
   (# _, status #) -> int32ToInt# status
@@ -36,6 +39,9 @@ nativePathSymlink :: SymlinkCall -> Ptr CChar -> Ptr CChar -> IO Int
 nativePathSymlink call (Ptr target) (Ptr path) = IO (\state ->
   case call target path state of
     (# next, status #) -> (# next, I# (int32ToInt# status) #))
+
+nativePathRename :: SymlinkCall -> Ptr CChar -> Ptr CChar -> IO Int
+nativePathRename = nativePathSymlink
 
 nativePathReadlink :: ReadlinkCall -> Ptr CChar -> Ptr () -> Word64 -> IO Int
 nativePathReadlink call (Ptr path) (Ptr buffer) (W64# capacity) = IO (\state ->

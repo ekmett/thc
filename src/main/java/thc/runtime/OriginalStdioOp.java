@@ -114,6 +114,7 @@ public enum OriginalStdioOp {
     FREE_DIRENT("__hscore_free_dirent", "ccall", "unsafe", Arrays.asList("AddrRep", null), null, "unix-2.8.8.0-inplace"),
     GETCWD("getcwd", "ccall", "unsafe", Arrays.asList("AddrRep", "Word64Rep", null), "AddrRep", "unix-2.8.8.0-inplace"),
     SYMLINK("symlink", "ccall", "unsafe", Arrays.asList("AddrRep", "AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
+    RENAME("rename", "ccall", "unsafe", Arrays.asList("AddrRep", "AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     RMDIR("rmdir", "ccall", "unsafe", Arrays.asList("AddrRep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     READLINK("readlink", "ccall", "unsafe", Arrays.asList("AddrRep", "AddrRep", "Word64Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
     MKDIR("mkdir", "ccall", "unsafe", Arrays.asList("AddrRep", "Word32Rep", null), "Int32Rep", "unix-2.8.8.0-inplace"),
@@ -193,8 +194,8 @@ public enum OriginalStdioOp {
             getWindowsDirectory() && value instanceof String text && WIN32_UNIT.matcher(text).matches() ||
             this == READLINK && "ghc-internal".equals(value) ||
             (this == UNLINKAT || this == FSTATAT) && value instanceof String text && DIRECTORY_UNIT.matcher(text).matches() ||
-            CoreOriginalStdio.isOriginalUnixUnit(value) && !getWindowsDirectory() && (this == CLOSE || this == DUP || this == ISATTY ||
-                this == UNIX_LSTAT || getCurrentDirectory() || getDirectoryStream() || getWaitStatus() || this == MKDIR || this == RMDIR || this == SYMLINK || this == READLINK || this == GET_EUID);
+            CoreOriginalStdio.isOriginalUnixUnit(value) && !getWindowsDirectory() && (this == CLOSE || this == DUP || this == DUP2 || this == PIPE || this == ISATTY ||
+                this == UNIX_LSTAT || getCurrentDirectory() || getDirectoryStream() || getWaitStatus() || this == MKDIR || this == RMDIR || getPathLink() || this == GET_EUID);
     }
     public boolean matchesSymbol(Object value) {
         return symbol.equals(value) ||
@@ -233,7 +234,8 @@ public enum OriginalStdioOp {
         this == READDIR || this == DIRENT_NAME || this == FREE_DIRENT; }
     public boolean getDirectoryPointer() { return this == OPENDIR || this == DIRENT_NAME; }
     public boolean getPathRemoval() { return this == UNLINK || this == RMDIR; }
-    public boolean getPathLink() { return this == SYMLINK || this == READLINK; }
+    public boolean getPathPair() { return this == SYMLINK || this == RENAME; }
+    public boolean getPathLink() { return getPathPair() || this == READLINK; }
     public boolean getPathMode() { return this == MKDIR || this == CHMOD; }
     public boolean getPathStat() { return this == STAT || this == LSTAT || this == UNIX_LSTAT; }
     public boolean getReadImage() { return this == FSTAT || this == TCGETATTR; }

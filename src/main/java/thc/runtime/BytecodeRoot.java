@@ -2180,12 +2180,13 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     }
 
     @Operation
+    @ConstantOperand(type = OriginalStdioOp.class, name = "operation")
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
-    public static final class OriginalSymlink {
-        @Specialization public static void apply(VirtualFrame frame, LocalAccessor destination,
+    public static final class OriginalPathPair {
+        @Specialization public static void apply(VirtualFrame frame, OriginalStdioOp operation, LocalAccessor destination,
                 ManagedAddress target, ManagedAddress path, Object state, @Bind("$node") Node node) {
             TupleResults.requireVoidCarrier(state);
-            long result = CoreOriginalStdio.current(node).symlink(target, path);
+            long result = CoreOriginalStdio.current(node).pathPair(operation, target, path);
             destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
     }

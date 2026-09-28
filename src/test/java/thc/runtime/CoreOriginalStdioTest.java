@@ -46,6 +46,24 @@ class CoreOriginalStdioTest {
         var error = assertThrows(RuntimeFault.class, input::validate);
         assertTrue(error.getMessage().startsWith("Invalid original stdio call: "), error.getMessage());
     }
+    @Test void unixPipeAndDupToKeepTheirOriginalOwnerAndExactAbi() {
+        // unix-2.8.8.0 System.Posix.IO.Common: c_pipe and c_dup2.
+        for (var symbol : List.of("pipe", "dup2")) {
+            var input = new Input(symbol.equals("pipe") ? "unlink" : "dup2");
+            input.target().put("symbol", symbol);
+            for (var owner : List.of("unix-2.8.8.0-inplace", "unix-2.8.8.0-0123abcdef")) {
+                input.target().put("unit", owner);
+                assertSame(symbol.equals("pipe") ? OriginalStdioOp.PIPE : OriginalStdioOp.DUP2, input.validate());
+            }
+            for (var owner : List.of("main", "unix-2.8.7.0-inplace", "unix-2.8.8.0-not-a-hash")) {
+                input.target().put("unit", owner);
+                reject(input);
+            }
+            input.target().put("unit", "unix-2.8.8.0-inplace");
+            input.declared().set(0, OriginalStdioFixtures.scalar("Word64Rep", false));
+            reject(input);
+        }
+    }
     @Test void allElevenExactContracts() {
         assertEquals(Set.of("safe_write", "unsafe_write", "errno", "set_errno", "dup", "dup2", "unlink",
             "seek_set", "seek_cur", "seek_end", "strerror"), OriginalStdioFixtures.signatures.keySet());

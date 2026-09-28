@@ -294,6 +294,18 @@ handle lifetime, disposal, and pre-effect output validation.
 
 ## Original directory pathname calls
 
+The genuine unsafe Unix 2.8.8.0 `rename` declaration keeps its two `Addr#`
+operands and `CInt`/`Int32Rep` result. On Linux x86_64, `renameat` anchors both
+paths to the same borrowed context directory descriptor, preserving native
+replacement, same-path and failure behavior without changing the process CWD.
+Path bytes are snapshotted before the call; invalid State or addresses fail
+before effects, and native filesystem authority is required. Native failures
+set guest errno; success preserves the previous guest errno. Arbitrary package
+owners and widened result declarations remain rejected.
+`OriginalPathLinkTest` compares pre/post-tidy genuine Core with native GHC for
+creation, replacement, missing source, same path and a directory destination,
+including first-compiled calls in both backends.
+
 The genuine unsafe Unix 2.8.8.0 `rmdir` declaration uses the same authenticated
 context directory anchor and Linux `unlinkat(AT_REMOVEDIR)` service as existing
 removal calls. It preserves raw names, symlink and trailing-slash behavior,

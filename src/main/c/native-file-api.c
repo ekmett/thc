@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/eventfd.h>
@@ -82,6 +83,12 @@ int64_t thc_file_open_raw(int *lease, const int *directory, const char *path, in
 
 int64_t thc_file_symlink(const int *directory, const char *target, const char *path, int64_t *error) {
   int result = symlinkat(target, *directory, path);
+  *error = result < 0 ? errno : 0;
+  return result;
+}
+
+int64_t thc_file_rename(const int *directory, const char *source, const char *destination, int64_t *error) {
+  int result = renameat(*directory, source, *directory, destination);
   *error = result < 0 ? errno : 0;
   return result;
 }

@@ -877,10 +877,10 @@ public final class ManagedFiles {
             }));
         });
     }
-    @TruffleBoundary public long symlinkOriginal(ManagedAddress target, ManagedAddress path) {
+    @TruffleBoundary public long pathPairOriginal(OriginalStdioOp operation, ManagedAddress target, ManagedAddress path) {
         byte[] targetBytes = originalPathBytes(target);
         byte[] pathBytes = originalPathBytes(path);
-        return result(() -> requireProvider("Original symlink requires the explicit native filesystem").symlinkRaw(targetBytes, pathBytes));
+        return result(() -> requireProvider("Original pathname operation requires the explicit native filesystem").pathPairRaw(operation, targetBytes, pathBytes));
     }
     @TruffleBoundary public long readlinkOriginal(ManagedAddress path, ManagedAddress output, long capacity) {
         if (capacity < 0 || capacity > Integer.MAX_VALUE) throw RuntimeFault.fault("Original readlink exceeds managed byte capacity");

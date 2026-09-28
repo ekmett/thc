@@ -167,7 +167,10 @@ public final class ManagedSignals {
                 }
             }, () -> { if (wasRegistered) owner.getThreads().leaveCurrent(terminalOutcome); });
         }
-        if (failure != null) owner.getEnv().getContext().closeCancelled(null, "Process signal dispatcher failed: " + failure.getClass().getSimpleName());
+        if (failure != null) {
+            GuestThreadOps.reportHostFailure(owner, failure);
+            throw propagate(failure);
+        }
     }
     /** Exit notification only: no guest call, context lookup or safepoint join. */
     public synchronized void requestStop() {

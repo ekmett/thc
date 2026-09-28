@@ -126,6 +126,7 @@
     "base_getErrorMessage",
     "LocalFree",
     "symlink",
+    "rename",
     "readlink",
     "rmdir",
     "mkdir",

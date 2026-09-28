@@ -63,13 +63,13 @@ import THC.Plugin (serializeOptimizedCore, serializePostTidyCore)
 import Unsafe.Coerce (unsafeCoerce)
 
 operations :: [(String, String)]
-operations = [("pathSymlink","symlink"),("pathReadlink","readlink")]
+operations = [("pathSymlink","symlink"),("pathReadlink","readlink"),("pathRename","rename")]
 
 originalSymbol :: String -> Id -> Maybe String
 originalSymbol owner value = case isFCallId_maybe value of
   Just (F.CCall (F.CCallSpec (F.StaticTarget _ name (Just unit) True) convention F.PlayRisky))
     | unitString unit == owner, isOriginalUnixUnit owner, convention == F.CCallConv,
-      unpackFS name `elem` ["symlink", "readlink"] -> Just (unpackFS name)
+      unpackFS name `elem` ["symlink", "readlink", "rename"] -> Just (unpackFS name)
   _ -> Nothing
 
 variables :: CoreExpr -> [Id]
@@ -180,9 +180,10 @@ prepareOriginalPathLink root = do
       (value, _, _) <- hscCompileCoreExpr current noSrcSpan (mkLets (mg_binds optimized) body)
       wormhole (hscInterp current) value
     liftIO $ case natives of
-      [symlinkValue, readlinkValue] -> observeLinks (root </> directory </> "native-paths")
+      [symlinkValue, readlinkValue, renameValue] -> observeLinks (root </> directory </> "native-paths")
         (unsafeCoerce symlinkValue :: CString -> CString -> IO Int)
         (unsafeCoerce readlinkValue :: CString -> Ptr () -> Word64 -> IO Int)
+        (unsafeCoerce renameValue :: CString -> CString -> IO Int)
       _ -> die "Missing native pathname link consumers"
   writeJson (root </> directory </> "oracle.json") oracle
   audits <- fmap concat $ forM ["pre", "post"] $ \stage -> forM entries $ \name ->
@@ -201,13 +202,14 @@ prepareOriginalPathLink root = do
      "consumerKind" .= ("typed consumers specialized with genuine installed GHC and Unix path-link FCallIds" :: String),
      "interfaces" .= interfaces, "installedArtifactsHashed" .= False, "inputHashes" .= inputHashes,
      "artifactHashes" .= artifactHashes, "commands" .= map commandRecord commands]
-  putStrLn "original-path-link: 2 original FCallIds, native pathname link observations and 4 strict audits"
+  putStrLn "original-path-link: 3 original FCallIds, native pathname observations and 6 strict audits"
 
 -- Each effect has fresh paths. Observe errno before inspecting the result;
 -- the target text itself is never canonicalized or required to exist.
 observeLinks :: FilePath -> (CString -> CString -> IO Int) ->
-                (CString -> Ptr () -> Word64 -> IO Int) -> IO Value
-observeLinks directory symlinkCall readlinkCall = do
+                (CString -> Ptr () -> Word64 -> IO Int) ->
+                (CString -> CString -> IO Int) -> IO Value
+observeLinks directory symlinkCall readlinkCall renameCall = do
   exists <- doesDirectoryExist directory
   if exists then removePathForcibly directory else pure ()
   createDirectoryIfMissing True directory
@@ -262,6 +264,23 @@ observeLinks directory symlinkCall readlinkCall = do
         pure (object ["name" .= label, "path" .= bytes path, "target" .= bytes target,
                       "capacity" .= capacity, "status" .= status, "errno" .= toInteger errno,
                       "bufferHex" .= hexBytes image])
-  pure (object ["symlinkRows" .= symlinkRows, "readlinkRows" .= readlinkRows])
+  renameRows <- forM [("new","source","new"),("replace","source","target"),
+                     ("missing","missing","target"),("self","source","source"),
+                     ("directory-target","source","sub")] $ \(label,source,destination) -> do
+    let scratch = directory </> "rename-" ++ label
+    setup scratch
+    withCurrentDirectory scratch $ do
+      BS.writeFile "source" "payload"
+      void (P.c_close (-1))
+      status <- BS.useAsCString (BS.pack source) $ \old ->
+        BS.useAsCString (BS.pack destination) (renameCall old)
+      Errno errno <- getErrno
+      sourceExists <- doesFileExist "source"
+      destinationExists <- doesFileExist destination
+      contents <- if destinationExists then Just . BS.unpack <$> BS.readFile destination else pure Nothing
+      pure (object ["name" .= label, "source" .= source, "destination" .= destination,
+                    "status" .= status, "errno" .= toInteger errno,
+                    "sourceExists" .= sourceExists, "contents" .= contents])
+  pure (object ["symlinkRows" .= symlinkRows, "readlinkRows" .= readlinkRows, "renameRows" .= renameRows])
 
 #endif

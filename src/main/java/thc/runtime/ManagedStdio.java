@@ -202,8 +202,8 @@ public final class ManagedStdio {
         if (result < 0) { lastError.set(fileError(abi)); return ManagedAddress.nullAddress(); }
         return output;
     }
-    @TruffleBoundary public long symlink(ManagedAddress target, ManagedAddress path) {
-        long result = files.symlinkOriginal(target, path);
+    @TruffleBoundary public long pathPair(OriginalStdioOp operation, ManagedAddress target, ManagedAddress path) {
+        long result = files.pathPairOriginal(operation, target, path);
         if (result < 0) lastError.set(fileError(hostAbi()));
         return result;
     }

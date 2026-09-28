@@ -246,11 +246,11 @@ final class OriginalStdioExpression extends Expr {
             var path = operands[0].executeRequiredAddress(frame);
             TupleResults.requireVoidCarrier(operands[1].execute(frame));
             result = CoreOriginalStdio.current(this).changeDirectory(path);
-        } else if (operation == OriginalStdioOp.SYMLINK) {
+        } else if (operation.getPathPair()) {
             var target = operands[0].executeRequiredAddress(frame);
             var path = operands[1].executeRequiredAddress(frame);
             TupleResults.requireVoidCarrier(operands[2].execute(frame));
-            result = CoreOriginalStdio.current(this).symlink(target, path);
+            result = CoreOriginalStdio.current(this).pathPair(operation, target, path);
         } else if (operation == OriginalStdioOp.READLINK) {
             var path = operands[0].executeRequiredAddress(frame);
             var output = operands[1].executeRequiredAddress(frame);
