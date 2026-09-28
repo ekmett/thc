@@ -8,13 +8,14 @@ identities. Snapshot storage never aliases the registry. Context close invalidat
 further observations without modifying arrays already returned.
 
 Both backends support this operation and `isCurrentThreadBound#`. Ordinary guest
-entries and `fork#` children remain unbound. In platform hosting, a managed foreign
+entries and `fork#` children remain unbound. In either hosting mode, a managed foreign
 reverse entry gets
 a fresh bound identity on its existing Java carrier, with a separate mailbox and
 an initially unmasked state. Nested ordinary guest calls keep that identity;
 nested reverse entries get another identity. Return restores the suspended caller
 and its mask. Finished callbacks remain observable through retained ThreadIds.
-Loom hosting rejects foreign callbacks.
+Loom callbacks acquire the destination HEC's exclusive guest permit on that same
+thread; blocking guest waits release it even when the native caller is pinned.
 
 The native fixture uses GHC's actual C callback trampoline to check distinct
 ThreadIds, unmasked entry, boundness, same native carrier and caller restoration

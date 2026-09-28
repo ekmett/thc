@@ -468,17 +468,18 @@ public final class Force extends Node {
     }
     @TruffleBoundary private void awaitCallOwner(CallSegment segment) {
         TruffleSafepoint.setBlockedThreadInterruptible(this, (CallSegment waiting) -> {
-            synchronized (waiting.getMonitor()) {
+            GuestThreads.checkpointCurrent(this);
+            GuestThreadExtent blocked = null;
+            try { synchronized (waiting.getMonitor()) {
                 if (waiting.getState() == 1 && waiting.getOwner() != Thread.currentThread()) {
                     if (asyncMode || AstControl.INSTANCE.enabled(this)) {
-                        AsyncRequest request = GuestThreads.pollCurrent(this, true);
+                        AsyncRequest request = GuestThreads.pollCurrentWithoutYield(this, true);
                         if (request != null) throw new AsyncBlocked(request, this);
                     }
-                    try (var blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE)) {
-                        waiting.getMonitor().wait();
-                    }
+                    blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE);
+                    waiting.getMonitor().wait();
                 }
-            }
+            } } finally { if (blocked != null) blocked.close(); }
         }, segment);
     }
 
@@ -588,17 +589,18 @@ public final class Force extends Node {
 
     @TruffleBoundary private void awaitOwner(Thunk thunk) {
         TruffleSafepoint.setBlockedThreadInterruptible(this, (Thunk waiting) -> {
-            synchronized (waiting.getMonitor()) {
+            GuestThreads.checkpointCurrent(this);
+            GuestThreadExtent blocked = null;
+            try { synchronized (waiting.getMonitor()) {
                 if (waiting.getState() == 1 && waiting.getOwner() != Thread.currentThread()) {
                     if (asyncMode || AstControl.INSTANCE.enabled(this)) {
-                        AsyncRequest request = GuestThreads.pollCurrent(this, true);
+                        AsyncRequest request = GuestThreads.pollCurrentWithoutYield(this, true);
                         if (request != null) throw new AsyncBlocked(request, this);
                     }
-                    try (var blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE)) {
-                        waiting.getMonitor().wait();
-                    }
+                    blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE);
+                    waiting.getMonitor().wait();
                 }
-            }
+            } } finally { if (blocked != null) blocked.close(); }
         }, thunk);
     }
 }

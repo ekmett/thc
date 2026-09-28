@@ -191,15 +191,22 @@ public final class ManagedSTM implements AutoCloseable {
             }
         }
         Object await() throws InterruptedException {
+            if (checkpoint != null) GuestThreads.checkpointCurrent(checkpoint);
             lock.lockInterruptibly();
             try {
                 live();
                 if (!submitted) { submitted = true; changedLocked(); if (!changed) waiters.add(this); }
                 while (!changed) {
                     live();
-                    var request = checkpoint == null ? null : GuestThreads.pollCurrent(checkpoint, true);
+                    var request = checkpoint == null ? null : GuestThreads.pollCurrentWithoutYield(checkpoint, true);
                     if (request != null) { waiters.remove(this); versions.clear(); throw new AsyncBlocked(request, checkpoint); }
-                    try (var blocked = GuestThreads.blocking(GuestThreadStatus.STM)) { ready.await(); }
+                    var blocked = GuestThreads.blocking(GuestThreadStatus.STM);
+                    try { ready.await(); }
+                    finally {
+                        lock.unlock();
+                        try { blocked.close(); }
+                        finally { lock.lock(); }
+                    }
                 }
                 live();
                 return thc.runtime.Unit.INSTANCE;

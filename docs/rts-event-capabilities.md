@@ -86,7 +86,7 @@ unregisters its logical identity before its number can be reused. Context shutdo
 writes GHC's eventfd wake value `0xff` and control-pipe die byte `0xfe`, then clears
 the registrations. Ordinary embedding streams cannot acquire this authority.
 The existing original process-signal dispatcher remains the only signal delivery
-path and requires platform hosting. Capability count changes update Loom HEC
+path, in either hosting mode. Capability count changes update Loom HEC
 routing but do not reconfigure event-manager threads automatically.
 
 `cabal run exe:thc-fixtures -- rts-event` recovers the prerequisite and descriptor declarations from

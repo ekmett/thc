@@ -1717,8 +1717,8 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
             TupleResults.requireVoidCarrier(state);
             ManagedStdio stdio = CoreOriginalStdio.current(node);
             long result;
-            if (operation.getPoll()) result = stdio.poll(address, first, second, node);
-            else if (operation.getEpollWait()) result = stdio.epollWait(first, address, second, third, node);
+            if (operation.getPoll()) result = stdio.poll(address, first, second, node, ForeignSafety.synchronous(operation.getSafety()));
+            else if (operation.getEpollWait()) result = stdio.epollWait(first, address, second, third, node, ForeignSafety.synchronous(operation.getSafety()));
             else if (operation == OriginalStdioOp.EPOLL_CTL) result = stdio.epollControl(first, second, third, address);
             else if (operation == OriginalStdioOp.EPOLL_CREATE) result = stdio.epollCreate(first);
             else { stdio.controlFd(operation, first, second); return; }

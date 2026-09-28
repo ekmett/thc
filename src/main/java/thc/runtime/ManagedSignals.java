@@ -7,6 +7,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 import com.sun.management.HotSpotDiagnosticMXBean;
 import java.lang.management.ManagementFactory;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -27,6 +28,7 @@ public final class ManagedSignals {
     private SignalDispatchRoot binding;
     private ProcessSignalTransport transport;
     private Thread worker;
+    private CountDownLatch starting;
     private volatile boolean stopping;
     private boolean closed;
     public ManagedSignals(Language.State owner, Language language) {
@@ -52,9 +54,13 @@ public final class ManagedSignals {
         this.program = program;
     }
     private void current() { if (Language.currentState(null) != owner) throw fault("Process signals belong to another context"); }
-    @TruffleBoundary(transferToInterpreterOnException = false) public synchronized long install(long signal, long action, ManagedAddress mask) {
+    @TruffleBoundary(transferToInterpreterOnException = false) public long install(long signal, long action, ManagedAddress mask) {
         current();
-        if (owner.getThreads().isLoom()) throw new UnsupportedCore("Loom hosting does not yet support the native process signal dispatcher; use platform hosting");
+        ProcessSignalTransport acquired = null;
+        SignalDispatchRoot selectedRoot = null;
+        CountDownLatch startup = null;
+        ProcessSignalTransport.Result result;
+        synchronized (this) {
         if (!authorized) throw fault("Process signals require explicit NativeIO launcher authority");
         if ((signal != 1 && signal != 2 && signal != 3 && signal != 10 && signal != 12 && signal != 15 && signal != 24 && signal != 25) ||
             (action != -1 && action != -2 && action != -4 && action != -5) || mask != ManagedAddress.nullAddress())
@@ -69,15 +75,42 @@ public final class ManagedSignals {
         }
         var nativeTransport = transport;
         if (nativeTransport == null) {
-            var acquired = factory.get(); transport = acquired;
-            var selectedRoot = root;
-            var child = owner.getEnv().newTruffleThreadBuilder(() -> consume(acquired, selectedRoot)).build();
-            worker = child;
-            try { child.start(); }
-            catch (Throwable failure) { transport = null; worker = null; closed = true; acquired.close(); throw propagate(failure); }
-            nativeTransport = acquired;
+            acquired = factory.get(); transport = nativeTransport = acquired;
+            selectedRoot = root; starting = startup = new CountDownLatch(1);
         }
-        var result = nativeTransport.install((int) signal, (int) action);
+        try { result = nativeTransport.install((int) signal, (int) action); }
+        catch (Throwable failure) {
+            if (acquired != null) {
+                transport = null; closed = true; starting = null;
+                try { failure = finishSignalConsumer(failure, acquired::close, () -> {}); }
+                finally { startup.countDown(); }
+            }
+            throw propagate(failure);
+        }
+        }
+        if (acquired != null) {
+            var input = acquired; var dispatch = selectedRoot;
+            try {
+                boolean started = false;
+                try {
+                    // Construction/readmission may block: never retain the service monitor.
+                    var child = owner.getThreads().newThread(owner.getEnv(), () -> consume(input, dispatch), null, null);
+                    synchronized (this) {
+                        if (!stopping) { worker = child; owner.getThreads().startThread(child); started = true; }
+                    }
+                } catch (Throwable failure) {
+                    synchronized (this) { transport = null; worker = null; closed = true; }
+                    throw propagate(finishSignalConsumer(failure, input::close, () -> {}));
+                }
+                if (!started) {
+                    synchronized (this) { transport = null; closed = true; }
+                    input.close();
+                }
+            } finally {
+                synchronized (this) { starting = null; }
+                startup.countDown();
+            }
+        }
         if (result.action() == -3) owner.getStdio().nativeError(result.errno());
         return result.action();
     }
@@ -106,7 +139,10 @@ public final class ManagedSignals {
             owner.getThreads().enterCurrent(MaskingState.UNMASKED, true);
             registered = true;
             while (!stopping) {
-                var event = TruffleSafepoint.getCurrent().setBlockedFunction(null, interrupter, reader, thc.runtime.Unit.INSTANCE, null, null);
+                ProcessSignalTransport.Event event;
+                var permission = owner.getThreads().enterForeign(ForeignSafety.SAFE);
+                try { event = TruffleSafepoint.getCurrent().setBlockedFunction(null, interrupter, reader, thc.runtime.Unit.INSTANCE, null, null); }
+                finally { owner.getThreads().leaveForeign(permission); }
                 if (event != null && !stopping) {
                     reader.pending = null;
                     var image = event.info();
@@ -137,16 +173,21 @@ public final class ManagedSignals {
     public synchronized void requestStop() {
         stopping = true;
         if (transport != null) transport.wake();
-        if (worker == null) { closed = true; binding = null; program = null; }
+        if (worker == null && starting == null) { closed = true; binding = null; program = null; }
     }
     /** Reader owns destruction after its safepoint interrupter is unregistered. */
     public void close() {
         requestStop();
+        CountDownLatch startup;
+        synchronized (this) { startup = starting; }
+        try (var admission = LoomScheduler.suspendCurrentGuest()) {
+        if (startup != null) TruffleSafepoint.setBlockedThreadInterruptible(null, CountDownLatch::await, startup);
         Thread child;
         synchronized (this) { child = worker; }
         if (child != null && child != Thread.currentThread() && child.isAlive())
             TruffleSafepoint.setBlockedThreadInterruptibleFunction(null,
                 (TruffleSafepoint.InterruptibleFunction<Thread, Object>) thread -> { thread.join(); return thc.runtime.Unit.INSTANCE; }, child);
+        }
     }
     /** Check the effective VM setting, including a later override of launcher -Xrs. */
     public static boolean hasReducedVmSignals() {

@@ -70,9 +70,12 @@ public final class CapturedAsyncRequest {
         catch (Throwable failure) { cancel(); throw failure; }
     }
     private CapturedRequestState waitForTerminal() throws InterruptedException {
-        synchronized (monitor) {
-            while (state == CapturedRequestState.PENDING || state == CapturedRequestState.COMMITTED) monitor.wait();
-            return state;
+        while (true) {
+            GuestThreadExtent blocked = null;
+            try { synchronized (monitor) {
+                if (state != CapturedRequestState.PENDING && state != CapturedRequestState.COMMITTED) return state;
+                blocked = GuestThreads.blocking(GuestThreadStatus.THROW_TO); monitor.wait();
+            } } finally { if (blocked != null) blocked.close(); }
         }
     }
     private static final TruffleSafepoint.InterruptibleFunction<CapturedAsyncRequest, CapturedRequestState>

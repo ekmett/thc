@@ -3,7 +3,8 @@
 
 # Standalone process signals
 
-This bridge requires platform hosting; Loom rejects handler installation.
+This bridge uses managed threads in either platform or Loom hosting. A Loom
+reader releases its HEC during the native wait and reacquires it before dispatch.
 
 On Linux x86_64, both backends translate original `stg_sig_install`
 for SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2, SIGTERM, SIGXCPU and SIGXFSZ.
@@ -96,9 +97,11 @@ host process dispositions; the isolated native/JVM controls above cover that
 boundary separately.
 
 The full-Core producer needs the production annotated acquisition view when the
-bare installation lacks retained Posix foreign-import products. Select that
-view with `THC_INSTALLED_CORE_GHC` and `THC_INSTALLED_CORE_GHC_PKG`, as described
-in the [complete installed-Core guide](driver.md). The native oracle still uses
+bare installation lacks retained Posix foreign-import products. Set
+`THC_INSTALLED_CORE_GHC_SOURCE` to the matching configured GHC source tree to
+acquire the production annotations, or select an existing annotated view with
+`THC_INSTALLED_CORE_GHC` and `THC_INSTALLED_CORE_GHC_PKG`, as described in the
+[complete installed-Core guide](driver.md). The native oracle still uses
 `GHC`; missing typed import provenance is an audit failure, not permission to
 remove original error-handler branches.
 
