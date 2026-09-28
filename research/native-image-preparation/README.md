@@ -84,15 +84,47 @@ The manual Windows additions are:
 +thc.runtime.WindowsLibdwFinalizers
 ```
 
-The `WindowsCodePages` declaring-class initializer creates a fieldless companion and a private
-`Object` ordering lock. `WindowsCodePages$Abi` and `$Api` contain native resources
-and are not added. Context instances and their carrier-local error state remain
-runtime-owned. Preparing the companion's class alone does not execute the
-declaring holder's initializer; the holder is the relevant constant provenance.
+The Java `WindowsCodePages` declaring-class initializer creates a private `Object`
+ordering lock and an empty `AbiValues` holder. The holder's constructor does not
+read its ABI resource; that lookup remains lazy. `WindowsCodePages$Api` contains
+native resources and is not added. Context instances and their carrier-local
+error state remain runtime-owned. The declaring holder, rather than a former
+Kotlin companion, is the relevant constant provenance.
 
-`WindowsLibdwFinalizers` initializes its singleton and an unforced lazy lookup.
+The Java `WindowsLibdwFinalizers` has no class initializer; its lookup starts null.
 Preparing that metadata does not extract or load a DLL or acquire native handles;
 those operations remain deferred until runtime.
+
+### Finite Java metadata compatibility
+
+The explicit inventory also restores individually inspected metadata owners
+whose Java collection calls lie outside the existing restricted enum recognizer.
+This is a finite list, not admission of arbitrary Java helpers or packages.
+
+| Owners in `thc.runtime` | Initialization closure |
+| --- | --- |
+| `ArrayOp`, `ByteArrayOp`, `CompactImageOp`, `MVarOp`, `MutVarOp`, `SmallArrayOp`, `WeakOp` | Literal operation/role/result strings, primitive flags and `List.of` descriptors; constructors only store metadata. |
+| `ByteStringDecimalOp`, `EnvironmentOp`, `LibdwForeignOp`, `ManagedFileOp`, `MemorySearchOp`, `NativeAllocationOp`, `OriginalStackInfoOp`, `PolyglotOp`, `ProcessOp`, `ProcessSignalOp`, `RtsArgumentsOp`, `RtsShutdownOp`, `STMOp`, `StringRtsOp`, `TextForeignOp` | Literal declaration strings/nulls and fresh argument arrays, using `Arrays.asList`, `Collections.singletonList` or `Collections.unmodifiableList`; no foreign operation or runtime owner is created. Lists are not uniformly claimed immutable. |
+| `GcForeignOp`, `RtsDiagnosticOp`, `RtsEventForeignOp`, `RuntimeServiceCall` | Literal foreign/reserved-call descriptors and private argument lists. Collection, clock, thread, native-service and reporting effects occur only in ordinary operation methods, not initialization. |
+| `NarrowInteger` | Six literal width/sign/representation descriptors and primitive `Byte.TYPE`, `Short.TYPE`, `Integer.TYPE` mirrors. `fromRep` is only a literal-string selection among those values. |
+| `OriginalStdioOp` | Literal foreign declarations and private argument arrays wrapped unmodifiable, cached `NarrowInteger.fromRep` results, and four fixed ASCII regular expressions compiled without flags. No host ABI, resource or function lookup is executed. |
+| `PinnedMemoryOp` | Literal descriptor lists plus previously audited `ManagedAddressRead` enum constants. That dependency selects native-target byte order and narrow-carrier metadata, not an address or native resource. |
+| `CompactOp` | Seven literal descriptors and a three-string array naming existing exception declarations. Initialization neither creates a compact region nor enters an exception value. The array is ordinary mutable metadata. |
+
+The exact javac switch-table names are listed individually in
+`prepared-initialization.txt`. Each audited holder has only static final int-array
+fields, its class initializer, enum `values()`/`ordinal()` calls, assignments and
+`NoSuchFieldError` compatibility handlers. Their enum dependencies are either
+in the restricted generated inventory or in the audited table above. Initializing
+one of these separate classes does not initialize its enclosing runtime class.
+The arrays remain ordinary mutable ordinal tables; they are not runtime profiles.
+
+Names and initializer/constructor closures must be re-audited when source or
+compiler shapes change. Do not substitute a wildcard, general helper recognizer,
+or missing-constant fallback if a synthetic class disappears. Initializing this
+metadata does not initialize contexts, carrier threads, native libraries or
+service state. Existing byte-order/VarHandle entries remain tied to the build
+target platform, not a cross-target preparation claim.
 
 ## Limits and interpretation
 

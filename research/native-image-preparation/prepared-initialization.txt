@@ -32,8 +32,8 @@ thc.runtime.SigsetImage
 thc.runtime.StdioHostAbi
 thc.runtime.SumShape
 thc.runtime.TermiosImage
-# Only a private Object lock is initialized here.
-# WindowsCodePages$Abi/$Api native resources and context instances stay runtime.
+# Private Object lock and empty lazy ABI holder only. The holder constructor
+# reads no resource; WindowsCodePages$Api native resources stay runtime-owned.
 thc.runtime.WindowsCodePages
 # An uninitialized, capture-free lazy lookup. Native
 # library extraction/loading and finalizer handles remain deferred until runtime.
@@ -56,3 +56,67 @@ thc.runtime.AstStackScope
 # Two empty ThreadLocal keys; no thread-local values,
 # threads, guest contexts, or foreign activations are created by initialization.
 thc.runtime.GuestThreads
+
+# Finite Java metadata compatibility inventory; see the closure audit in README.
+# Literal enum descriptors and argument lists only, not their runtime operations.
+thc.runtime.ArrayOp
+thc.runtime.ByteArrayOp
+thc.runtime.ByteStringDecimalOp
+thc.runtime.CompactImageOp
+thc.runtime.CompactOp
+thc.runtime.EnvironmentOp
+thc.runtime.GcForeignOp
+thc.runtime.LibdwForeignOp
+thc.runtime.MVarOp
+thc.runtime.ManagedFileOp
+thc.runtime.MemorySearchOp
+thc.runtime.MutVarOp
+thc.runtime.NarrowInteger
+thc.runtime.NativeAllocationOp
+thc.runtime.OriginalStackInfoOp
+thc.runtime.OriginalStdioOp
+thc.runtime.PinnedMemoryOp
+thc.runtime.PolyglotOp
+thc.runtime.ProcessOp
+thc.runtime.ProcessSignalOp
+thc.runtime.RtsArgumentsOp
+thc.runtime.RtsDiagnosticOp
+thc.runtime.RtsEventForeignOp
+thc.runtime.RtsShutdownOp
+thc.runtime.RuntimeServiceCall
+thc.runtime.STMOp
+thc.runtime.SmallArrayOp
+thc.runtime.StringRtsOp
+thc.runtime.TextForeignOp
+thc.runtime.WeakOp
+
+# Exact javac ordinal-table holders. Only enum values/ordinals and private int
+# arrays are used; preparing these does not initialize the enclosing runtime.
+thc.CoreJsonBindings$2
+thc.runtime.BytecodeJavaScriptArguments$1
+thc.runtime.BytecodeProgram$2
+thc.runtime.BytecodeRoot$1
+thc.runtime.CompactExpression$1
+thc.runtime.CompactImageExpression$1
+thc.runtime.CoreMd5Foreign$1
+thc.runtime.CoreRepresentation$1
+thc.runtime.EnvironmentExpression$1
+thc.runtime.GuestThreadOps$1
+thc.runtime.GuestThreads$2
+thc.runtime.JavaScriptAccess$1
+thc.runtime.JavaScriptExpression$1
+thc.runtime.ManagedAllocation$1
+thc.runtime.ManagedFiles$1
+thc.runtime.ManagedGmp$1
+thc.runtime.ManagedMVars$1
+thc.runtime.Md5ForeignExpression$1
+thc.runtime.PolyglotExpression$1
+thc.runtime.PosixStat$1
+thc.runtime.Program$1
+thc.runtime.RubbishLiterals$1
+thc.runtime.STMCall$1
+thc.runtime.STMExpression$2
+thc.runtime.SavedTermios$1
+thc.runtime.StdioHostAbi$1
+thc.runtime.SulongLimbProvider$1
+thc.runtime.TermiosImage$1
