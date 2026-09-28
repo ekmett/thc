@@ -225,7 +225,7 @@ public final class ManagedAddress {
         if (externalPointer() != null) return externalPointer().compare(other, "equal") != 0;
         if (other.externalPointer() != null) return other.externalPointer().compare(this, "equal") != 0;
         if (heap != null || other.heap != null) {
-            var registry = HeapAddresses.Companion.current();
+            var registry = HeapAddresses.current();
             if (heap != null) registry.require(heap); if (other.heap != null) registry.require(other.heap);
             return heap != null && heap == other.heap;
         }
@@ -320,7 +320,7 @@ public final class ManagedAddress {
         if (rtsFlags != null) {
             rtsFlags.requireCurrent(); return displacement == 0 ? this : new ManagedAddress(null, null, displacedOffset(displacement), null, null, null, null, null, null, null, null, null, rtsFlags);
         }
-        if (heap != null) { HeapAddresses.Companion.current().require(heap); if (displacement != 0) throw fault("Opaque guest heap address cannot be offset"); return this; }
+        if (heap != null) { HeapAddresses.current().require(heap); if (displacement != 0) throw fault("Opaque guest heap address cannot be offset"); return this; }
         if (capabilities != null) { readCapabilitiesWord32(0, 4); if (displacement != 0) throw fault("RTS data label cannot be offset"); return this; }
         if (foreign != null) return fromReturnedAddress(foreign.plus(displacement));
         if (numeric != null) return NativeAddresses.current(null).recover(numeric + displacement);

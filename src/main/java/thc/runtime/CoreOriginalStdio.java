@@ -25,7 +25,7 @@ public final class CoreOriginalStdio {
         requireProof(operation.getWaitStatus(), "wait-status operation");
         var state = Language.currentState(node);
         var previous = state.getThreads().enterForeign(ForeignSafety.UNSAFE);
-        try { return state.cbits().waitStatus$org_intelligence_thc(operation, (int) status); }
+        try { return state.cbits().waitStatus(operation, (int) status); }
         finally { state.getThreads().leaveForeign(previous); }
     }
     public static ManagedStdio current(Node node) { return Language.currentState(node).getStdio(); }

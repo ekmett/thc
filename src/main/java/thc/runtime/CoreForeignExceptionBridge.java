@@ -101,7 +101,7 @@ public final class CoreForeignExceptionBridge {
             var proof = CoreRepresentations.metadata((List<Object>) argument);
             proofs.add(proof == null ? null : proof.get("rep"));
         }
-        var scalar = CorePackageScalarForeign.INSTANCE.validate(metadata, proofs, flags, metadata.get("rep"), links);
+        var scalar = CorePackageScalarForeign.validate(metadata, proofs, flags, metadata.get("rep"), links);
         if (scalar != null) {
             CoreBoundThreadForeign.validateHead((List<?>) expr.get(1), defined);
             return true;

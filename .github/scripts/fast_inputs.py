@@ -48,8 +48,12 @@ RUNTIME_INPUTS = ("src/main/c/stdio-abi-probe.c",
                   "src/main/java/thc/runtime/ProcessIdentity.java",
                   "src/main/c/bytestring-utf8-api.c",
                   "src/main/java/thc/runtime/CoreEnvironmentForeign.java", "src/main/java/thc/runtime/EnvironmentOp.java", "src/main/java/thc/runtime/EnvironmentExpression.java",
-                  "src/main/kotlin/thc/runtime/VectorMemoryPrimitives.kt",
-                  "src/main/kotlin/thc/runtime/VectorMemory.kt",
+                  "src/main/java/thc/runtime/VectorMemoryFamily.java",
+                  "src/main/java/thc/runtime/VectorMemoryOp.java",
+                  "src/main/java/thc/runtime/VectorReadCase.java",
+                  "src/main/java/thc/runtime/CoreVectorMemory.java",
+                  "src/main/java/thc/runtime/VectorByteArrayExpression.java",
+                  "src/main/java/thc/runtime/VectorMemory.java",
                   "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt")
 MANIFEST_DIRS = """bytestring-sort bytestring-decimal unix-libc unix-wait-status proxy-void rubbish-literals ghc-bco simd-arithmetic stable-names simd-address-families simd128-addresses simd-wide-arrays delimited-continuations scalar-memory-utilities simd128-arrays address-array-copy address-fields aligned-scalar-memory array-slices atomic-address bignat-literals pinned-addresses bit-primops float-decode floating-remainder integer-completion unaligned-scalar-memory
 bytestring-utf8 original-memset original-memory-search thread-status thread-label hint-trace closure-inspection thread-inventory thread-scheduling boxed-arrays boxed-array-extensions boxed-cas bytearray compare-byte-arrays data-to-tag double-arrays

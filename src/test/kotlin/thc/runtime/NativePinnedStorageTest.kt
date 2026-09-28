@@ -127,7 +127,7 @@ class NativePinnedStorageTest {
         val interop = InteropLibrary.getUncached()
         val buffer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true)
         val pointer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true, CbitsBufferSize { storage.size }, 7,
-            nativeAddress = LongSupplier { base.toNativeBits() })
+            null, LongSupplier { base.toNativeBits() })
         assertTrue(interop.hasBufferElements(buffer))
         assertFalse(interop.isPointer(buffer))
         interop.toNative(buffer)
@@ -186,18 +186,18 @@ class NativePinnedStorageTest {
         lateinit var retainedBuffer: CbitsBuffer
         inside {
             val cbits = Language.currentState().cbits()
-            retainedBuffer = cbits.buffer(address, allowNativePointer = false)
+            retainedBuffer = cbits.buffer(address, false)
             assertFalse(interop.isPointer(retainedBuffer))
-            assertEquals(bits, interop.asPointer(cbits.buffer(address, allowNativePointer = true)))
+            assertEquals(bits, interop.asPointer(cbits.buffer(address, true)))
             interop.writeBufferByte(retainedBuffer, 2, 71)
         }
         // Closing one context does not close storage owned by a live ForeignPtr.
         assertEquals(71L, address.readWord8(2))
         inside {
             val cbits = Language.currentState().cbits()
-            assertEquals(bits, interop.asPointer(cbits.buffer(address, allowNativePointer = true)))
+            assertEquals(bits, interop.asPointer(cbits.buffer(address, true)))
             assertTrue(NativeAddresses.current(null).recover(bits + 2).sameLocation(address.plus(2)))
-            val second = cbits.buffer(address, allowNativePointer = false)
+            val second = cbits.buffer(address, false)
             interop.writeBufferByte(second, 2, 93)
             assertEquals(93.toByte(), interop.readBufferByte(retainedBuffer, 2))
         }
@@ -291,7 +291,7 @@ class NativePinnedStorageTest {
         val alias = base.plus(7)
         val interop = InteropLibrary.getUncached()
         val buffer = CbitsBuffer(storage.exposeSegment().asByteBuffer(), true, CbitsBufferSize { storage.size }, 7,
-            nativeAddress = LongSupplier { base.toNativeBits() })
+            null, LongSupplier { base.toNativeBits() })
         val bits = interop.asPointer(buffer)
         storage.shrink(16)
         assertEquals(16L, storage.size)

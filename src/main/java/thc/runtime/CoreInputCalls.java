@@ -131,11 +131,11 @@ public final class CoreInputCalls {
                 for (Map<String, Object> binding : group) visit((List<Object>) binding.get("expr"), recursive ? local : scope);
                 visit((List<Object>) expr.get(3), local);
             } else if ("case".equals(tag)) {
-                VectorReadCase read = CoreVectorMemory.INSTANCE.readCase(expr, constructors);
+                VectorReadCase read = CoreVectorMemory.readCase(expr, constructors);
                 if (read != null) {
                     for (List<Object> argument : read.getArguments()) visit(argument, scope);
                     Map<String, Binding> local = new LinkedHashMap<>(scope);
-                    local.put(read.getStateBinder(), new Binding(CoreVectorMemory.INSTANCE.getStateProof(), null));
+                    local.put(read.getStateBinder(), new Binding(CoreVectorMemory.getStateProof(), null));
                     local.put(read.getVectorBinder(), new Binding(read.getOperation().getVectorProof(), null));
                     visit(read.getBody(), local);
                     return;
