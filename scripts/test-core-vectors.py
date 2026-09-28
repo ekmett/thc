@@ -106,22 +106,24 @@ class VectorAuditTest(unittest.TestCase):
         alternative[4]['binders'][0]['rep'] = copy.deepcopy(VECTOR32_REP)
         self.assertIn('aggregate-shape', [issue['code'] for issue in run(module, capability=cap)['issues']])
 
-    def test_guest_transport_does_not_admit_host_arguments_or_results(self):
+    def test_retained_host_vector_signatures_are_admitted_and_still_checked(self):
         module = self.transport_fixture()
         self.assertTrue(self.transport(module)['accepted'])
         report = self.transport(module, 'worker')
-        self.assertEqual({('vector-boundary', '/entry', 'vector host argument'),
-                          ('vector-boundary', '/entry', 'vector host result')},
-                         {(i['code'], i['path'], i['detail']) for i in report['issues']})
+        self.assertTrue(report['accepted'], report['issues'])
+        malformed = copy.deepcopy(module)
+        malformed['bindings'][1]['expr'][1][0]['rep']['vector']['lanes'] = 3
+        self.assertFalse(self.transport(malformed, 'worker')['accepted'])
         worker = module['bindings'][1]
         worker['expr'][2] = ['lit', 'int', '1', dict(rep=LONG)]
         worker['expr'][3]['resultRep'] = LONG
-        self.assertEqual(['vector host argument'], [i['detail'] for i in self.transport(module, 'worker')['issues']])
+        self.assertTrue(self.transport(module, 'worker')['accepted'])
         worker['arity'] = 0
         worker['expr'][1] = []
         worker['expr'][2] = fixture()['bindings'][0]['expr'][2][1]
         worker['expr'][3]['resultRep'] = VECTOR_REP
-        self.assertEqual(['vector host result'], [i['detail'] for i in self.transport(module, 'worker')['issues']])
+        self.assertTrue(self.transport(module, 'worker')['accepted'])
+        self.assertFalse(self.transport(module, 'worker', without=('results',))['accepted'])
 
     def test_local_join_can_read_lexical_vector_lanes_but_residual_closure_cannot(self):
         for arity in (0, 1):
@@ -502,49 +504,49 @@ class VectorAuditTest(unittest.TestCase):
         if not path.exists(): self.skipTest('Double SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_int16_core_local_entries_and_formal_frontier(self):
         path=ROOT.parent/'build/simd-int16x8/pre-core/SimdInt16X8.json'
         if not path.exists(): self.skipTest('Int16 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
             self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_int8_core_local_entries_and_formal_frontier(self):
         path=ROOT.parent/'build/simd-int8x16/pre-core/SimdInt8X16.json'
         if not path.exists(): self.skipTest('Int8 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
             self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_word8_core_local_entries_and_formal_frontier(self):
         from word8x16_model import entries
         path=ROOT.parent/'build/simd-word8x16/pre-core/SimdWord8X16.json'
         if not path.exists(): self.skipTest('Word8 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_word16_core_local_entries_and_formal_frontier(self):
         path=ROOT.parent/'build/simd-word16x8/pre-core/SimdWord16X8.json'
         if not path.exists(): self.skipTest('Word16 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
             self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_word32_core_local_entries_and_formal_frontier(self):
         path=ROOT.parent/'build/simd-word32x4/pre-core/SimdWord32X4.json'
         if not path.exists(): self.skipTest('Word32 SIMD Core export not generated')
         m=json.loads(path.read_text())
         for entry in json.loads((path.parent.parent/'provenance.json').read_text())['entries']:
             self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_real_int32_multiply_core_entries_and_formal_frontier(self):
         from int32x4_multiply_model import entries
         path=ROOT.parent/'build/simd-int32x4-multiply/pre-core/SimdInt32X4Multiply.json'
         if not path.exists(): self.skipTest('Int32 multiplication Core export not generated')
         m=json.loads(path.read_text())
         for entry in entries(): self.assertTrue(run(m,entry['name'])['accepted'],entry['name'])
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_float_local_shape_requires_concrete_float_lanes(self):
         m=fixture(); body=m['bindings'][0]['expr'][2]
         body[1][1][1]='broadcastFloatX4#'
@@ -568,7 +570,7 @@ class VectorAuditTest(unittest.TestCase):
         m=json.loads(path.read_text())
         for name in ('plusCase','minusCase','timesCase','edgePlus','edgeMinus','edgeTimes','nonFmaCase'):
             self.assertTrue(run(m,name)['accepted'], name)
-        self.assertFalse(run(m,'vectorArgument')['accepted'])
+        self.assertTrue(run(m,'vectorArgument')['accepted'])
     def test_exact_local_vector_is_accepted(self): self.assertTrue(run(fixture())['accepted'])
     def test_missing_or_wrong_shape_is_rejected(self):
         for mutation in ('missing', 'lane-count', 'physical', 'boxed', 'tuple'):
@@ -579,9 +581,11 @@ class VectorAuditTest(unittest.TestCase):
             elif mutation=='boxed': r['kind']='object'
             else: r.clear(); r.update(copy.deepcopy(TUPLE_REP))
             self.assertFalse(run(m)['accepted'], mutation)
-    def test_vector_boundary_rejected(self):
+    def test_vector_result_contradicting_scalar_body_is_rejected(self):
         m=fixture(); m['bindings'][0]['expr'][3]['resultRep']=copy.deepcopy(VECTOR_REP)
-        self.assertIn('vector-boundary',{i['code'] for i in run(m)['issues']})
+        report=run(m)
+        self.assertFalse(report['accepted'])
+        self.assertIn('aggregate-shape',{i['code'] for i in report['issues']})
     def test_real_core_local_entries_and_vector_join_capability(self):
         path=ROOT.parent/'build/simd/pre-core/SimdInt64X2.json'
         if not path.exists(): self.skipTest('SIMD Core export not generated')

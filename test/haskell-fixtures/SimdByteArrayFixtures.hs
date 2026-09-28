@@ -244,16 +244,15 @@ inventory family stage core = do
   pure (object (["localReadSites" .= length readSites,Key.fromString (literalKind ++ "LiteralSites") .= length literals,
     "vectorProofs" .= length vectors,"memoryPrimitiveCounts" .= Map.restrictKeys ps (Set.fromList (operations family))] ++ floatingFacts))
 
-frontiers :: [String]
-frontiers = ["vectorArgument","readVectorEscape","readTupleEscape"] ++ [f ++ o ++ "Worker" | f <- ["vector","scalar"],o <- ["Read","Write"]]
+hostEntries, frontiers :: [String]
+hostEntries = ["vectorArgument","readVectorEscape"] ++ [f ++ o ++ "Worker" | f <- ["vector","scalar"],o <- ["Read","Write"]]
+frontiers = ["readTupleEscape"]
 
 frontierIssues :: Value -> String -> Map.Map (String,String) Int
 frontierIssues capabilities name = counts $ case name of
-  "vectorArgument" -> [("vector-boundary",if enabled "arguments" then "vector host argument" else "vector formal argument")]
-  "readVectorEscape" -> [("vector-boundary",if enabled "results" then "vector host result" else "vector function result")]
-  "readTupleEscape" -> [("aggregate-boundary","unboxed-tuple host result"),("malformed-expression","Invalid local vector memory intrinsic: read requires an immediate exact case")] ++
+  "readTupleEscape" -> [("malformed-expression","Invalid local vector memory intrinsic: read requires an immediate exact case")] ++
     [("aggregate-representation","unboxed-tuple: unsupported component") | not (enabled "tuple-fields"), _ <- [1,2 :: Int]]
-  _ -> [("aggregate-boundary","unboxed-tuple host result")]
+  _ -> error ("Unknown SIMD memory frontier: " ++ name)
   where enabled capability = toJSON (capability :: String) `elem` items (get "vectorTransport" capabilities)
 
 negative :: Map.Map (String,String) Int -> Value -> IO ()
@@ -448,7 +447,7 @@ prepareSimdByteArray root name args = do
       "compiler/export.sh" (ghcOptions ++ [x | exportOnly,x <- ["-fno-code","-fwrite-if-simplified-core"]] ++ ["-fplugin-opt=THC.Plugin:post-tidy" | stage == "post"] ++ [fixture])
     core <- readJson (root </> corePath)
     facts <- inventory family stage core
-    reports <- forM (map entryName (entries family) ++ graphNames family ++ frontiers) $ \entry -> do
+    reports <- forM (map entryName (entries family) ++ graphNames family ++ hostEntries ++ frontiers) $ \entry -> do
       triple@(report,_,_) <- audit (stage ++ "-" ++ entry) entry corePath (entry `elem` frontiers)
       if entry `elem` frontiers then negative (frontierIssues capabilities entry) report else
         check (get "accepted" report == Bool True && items (get "issues" report) == [] && items (get "missingGlobals" report) == []) (entry ++ ": positive audit")
@@ -513,7 +512,7 @@ prepareSimdByteArray root name args = do
         "nativeByteOrder" .= (if hasNative then Just ("little" :: String) else Nothing),"nativeRows" .= (if hasNative then Just (length wanted) else Nothing),
         "modelRows" .= length wanted,"modelMatched" .= (if hasNative then Just True else Nothing),"entries" .= map entryValue (entries family),"graphEntries" .= graphEntries family,
         "positiveAuditsAccepted" .= True,"audits" .= Map.fromList [(s,reports) | (s,_,reports,_,_,_) <- prepared],"structure" .= Map.fromList [(s,facts) | (s,facts,_,_,_,_) <- prepared],
-        "frontiers" .= frontiers,"expectedGuestCallsByEntry" .= Map.fromList [(entryName e,guestCalls family (entryName e)) | e <- entries family],
+        "hostEntries" .= hostEntries,"frontiers" .= frontiers,"expectedGuestCallsByEntry" .= Map.fromList [(entryName e,guestCalls family (entryName e)) | e <- entries family],
         "checkedGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ entryName e,guestCalls family (entryName e)) | s <- stages,e <- entries family],
         "expectedGraphGuestCallsByEntry" .= Map.fromList [(n,1 :: Int) | n <- graphNames family],
         "checkedGraphGuestCallsByStage" .= Map.fromList [(s ++ "/" ++ n,1 :: Int) | s <- stages,n <- graphNames family],
