@@ -1372,10 +1372,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             case "float" -> Float.parseFloat(value);
             case "double" -> Double.parseDouble(value);
             case "word8", "word16", "word32" -> ScalarLiterals.narrowWordLiteral(kind, value);
-            case "string-bytes" -> ManagedAddress.Companion.fromHex(value);
+            case "string-bytes" -> ManagedAddress.fromHex(value);
             case "null-addr" -> {
                 if (!"0".equals(value)) throw new UnsupportedCore("Malformed null Addr# literal");
-                yield ManagedAddress.Companion.nullAddress();
+                yield ManagedAddress.nullAddress();
             }
             case "function-addr" -> CFinalizerLabels.INSTANCE.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof,
@@ -5362,7 +5362,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (field.isLong()) b.emitLoadConstant(0L);
                     else if (field.isFloat()) b.emitLoadConstant(0.0f);
                     else if (field.isDouble()) b.emitLoadConstant(0.0);
-                    else if (field.getKind() == CoreKind.ADDRESS) b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                    else if (field.getKind() == CoreKind.ADDRESS) b.emitLoadConstant(ManagedAddress.nullAddress());
                     else if (field.isVector()) b.emitLoadConstant(new VectorLayout(field).getSpecies().zero());
                     else b.emitLoadNull();
                     b.endStoreLocal();
@@ -6139,7 +6139,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.beginRequireIOState(); operands.getLast().emit(e); b.endRequireIOState();
                 if (libdw != LibdwForeignOp.CLEAR) {
                     b.beginStoreLocal(destination.getFirst());
-                    if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1); else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                    if (libdw == LibdwForeignOp.LOOKUP) b.emitLoadConstant(1); else b.emitLoadConstant(ManagedAddress.nullAddress());
                     b.endStoreLocal();
                 }
                 b.endBlock();
@@ -6370,16 +6370,16 @@ public final class BytecodeProgram implements ExecutableProgram {
                     if (originalStdio == OriginalStdioOp.DBCS_LEAD_BYTE) b.emitLoadLocal(values.get(1)); else b.emitLoadConstant(0L);
                     if (originalStdio == OriginalStdioOp.CODE_PAGE_INFO) b.emitLoadLocal(values.get(1));
                     else if (originalStdio == OriginalStdioOp.LOCAL_FREE) b.emitLoadLocal(values.get(0));
-                    else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                    else b.emitLoadConstant(ManagedAddress.nullAddress());
                     operands.getLast().emit(e); b.endOriginalWindowsEncoding();
                 }
                 return;
             }
             if (originalStdio.getWindowsDirectory()) {
                 b.beginOriginalWindowsDirectory(result, originalStdio);
-                if (originalStdio != OriginalStdioOp.LAST_ERROR) operands.get(0).emit(e); else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                if (originalStdio != OriginalStdioOp.LAST_ERROR) operands.get(0).emit(e); else b.emitLoadConstant(ManagedAddress.nullAddress());
                 if (originalStdio == OriginalStdioOp.FIND_FIRST || originalStdio == OriginalStdioOp.FIND_NEXT) operands.get(1).emit(e);
-                else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                else b.emitLoadConstant(ManagedAddress.nullAddress());
                 operands.getLast().emit(e); b.endOriginalWindowsDirectory(); return;
             }
             if (originalStdio.getEventManager()) {
@@ -6397,7 +6397,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 else {
                     b.emitLoadLocal(values.get(0));
                     if (originalStdio == OriginalStdioOp.IO_CONTROL_FD) b.emitLoadLocal(values.get(1)); else b.emitLoadConstant(0L);
-                    b.emitLoadConstant(0L); b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                    b.emitLoadConstant(0L); b.emitLoadConstant(ManagedAddress.nullAddress());
                 }
                 operands.getLast().emit(e); b.endOriginalEvent(); return;
             }
@@ -6455,7 +6455,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.emitLoadLocal(termiosArguments.get(1)); operands.get(3).emit(e);
             } else if (originalStdio == OriginalStdioOp.SIGPROCMASK) {
                 for (var operand : operands.subList(0, 3)) operand.emit(e);
-                b.emitLoadConstant(ManagedAddress.Companion.nullAddress()); b.emitLoadConstant(ManagedAddress.Companion.nullAddress()); operands.getLast().emit(e);
+                b.emitLoadConstant(ManagedAddress.nullAddress()); b.emitLoadConstant(ManagedAddress.nullAddress()); operands.getLast().emit(e);
             } else if (originalStdio.getEventPair()) {
                 for (var operand : operands.subList(0, 2)) operand.emit(e);
                 b.emitLoadConstant(0L); b.emitLoadConstant(0L); operands.getLast().emit(e);
@@ -6465,13 +6465,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.emitLoadConstant(0L); operands.getLast().emit(e);
             } else if (originalStdio.getSavedTermios()) {
                 operands.get(0).emit(e);
-                if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands.get(1).emit(e); else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                if (originalStdio == OriginalStdioOp.SET_SAVED_TERMIOS) operands.get(1).emit(e); else b.emitLoadConstant(ManagedAddress.nullAddress());
                 operands.getLast().emit(e);
             } else if (originalStdio.getTermios() || originalStdio.getSigset()) {
                 if (originalStdio == OriginalStdioOp.POKE_LFLAG || originalStdio == OriginalStdioOp.SIGADDSET) operands.get(1).emit(e); else b.emitLoadConstant(0L);
                 if (imageAddress != null) b.emitLoadLocal(imageAddress);
                 else if (originalStdio.getTermiosAddress() || originalStdio.getSigset()) operands.get(0).emit(e);
-                else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                else b.emitLoadConstant(ManagedAddress.nullAddress());
                 operands.getLast().emit(e);
             } else if (status) {
                 if (originalStdio.getProcessIdentity() || originalStdio == OriginalStdioOp.PIPE || originalStdio.getPathRemoval()
@@ -6479,7 +6479,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                         || originalStdio == OriginalStdioOp.SIZEOF_STAT || originalStdio.getStatField()) b.emitLoadConstant(0L);
                 else operands.get(0).emit(e);
                 if (originalStdio == OriginalStdioOp.PIPE || originalStdio.getPathRemoval() || originalStdio.getStatField()) operands.get(0).emit(e);
-                else if (originalStdio.getReadImage()) operands.get(1).emit(e); else b.emitLoadConstant(ManagedAddress.Companion.nullAddress());
+                else if (originalStdio.getReadImage()) operands.get(1).emit(e); else b.emitLoadConstant(ManagedAddress.nullAddress());
                 operands.getLast().emit(e);
             } else if (originalStdio == OriginalStdioOp.SEEK) {
                 for (var operand : operands.subList(0, 3)) operand.emit(e);
@@ -6844,7 +6844,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (name.equals("getCurrentCCS#")) {
-            CoreCurrentCCS.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            CoreCurrentCCS.validate(argumentProofs(args), flags, tupleProof);
             argument(args.get(0), scope, true); // Prove the lifted dummy without entering it.
             var state = argument(args.get(1), scope, false);
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -7302,8 +7302,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             if (tupleProof.isAggregate()) return tupleExpression(tupleProof, emitKeepAlive);
             return new ProvenExpression(e -> emitKeepAlive.accept(e, null), evaluatedProof(tupleProof, true));
         }
-        if (AtomicAddressOp.Companion.named(name) != null) {
-            var operation = AtomicAddressOp.Companion.named(name);
+        if (AtomicAddressOp.named(name) != null) {
+            var operation = AtomicAddressOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = compileOperands(args, scope);
             if (operation == AtomicAddressOp.WRITE) return new ProvenExpression(e -> {
@@ -7315,13 +7315,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 operands.get(0).emit(e);
                 if (operation == AtomicAddressOp.READ) b.emitLoadConstant(0L); else operands.get(1).emit(e);
                 if (operation.getCas()) operands.get(2).emit(e);
-                else if (operation.getPointer()) b.emitLoadConstant(ManagedAddress.Companion.nullAddress()); else b.emitLoadConstant(0L);
+                else if (operation.getPointer()) b.emitLoadConstant(ManagedAddress.nullAddress()); else b.emitLoadConstant(0L);
                 operands.getLast().emit(e);
                 if (operation.getPointer()) b.endAtomicAddressPointer(); else b.endAtomicAddressNumeric();
             });
         }
-        if (FloatingAddressOp.Companion.named(name) != null) {
-            var operation = FloatingAddressOp.Companion.named(name);
+        if (FloatingAddressOp.named(name) != null) {
+            var operation = FloatingAddressOp.named(name);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = compileOperands(args, scope);
@@ -7346,8 +7346,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }, evaluatedProof(tupleProof, true));
         }
-        if (AddressArrayCopyOp.Companion.named(name) != null) {
-            var operation = AddressArrayCopyOp.Companion.named(name);
+        if (AddressArrayCopyOp.named(name) != null) {
+            var operation = AddressArrayCopyOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = compileOperands(args, scope);
             return new ProvenExpression(e -> {
@@ -7357,8 +7357,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (operation.getToArray()) b.endCopyAddressToByteArray(); else b.endCopyByteArrayToAddress();
             }, evaluatedProof(tupleProof, true));
         }
-        if (PinnedMemoryOp.Companion.named(name) != null) {
-            var operation = PinnedMemoryOp.Companion.named(name);
+        if (PinnedMemoryOp.named(name) != null) {
+            var operation = PinnedMemoryOp.named(name);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = compileOperands(args, scope);

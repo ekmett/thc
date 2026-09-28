@@ -181,7 +181,7 @@ class AtomicAddressTest {
             val audit = Json.parse(File(directory, "$stage/audit.json").readText()) as Map<String, Any?>
             assertEquals(true, audit["accepted"]); assertEquals(emptyList<Any>(), audit["missingGlobals"])
             val primitives = audit["primitives"] as List<Map<String, Any?>>
-            for (operation in AtomicAddressOp.entries) {
+            for (operation in AtomicAddressOp.values()) {
                 val evidence = primitives.single { it["name"] == operation.primitive }
                 val owners = (evidence["uses"] as List<Map<String, Any?>>).map { it["owner"] }.toSet()
                 val name = if (operation.pointer) "atomicAddressPointer" else "atomicAddressNumeric"

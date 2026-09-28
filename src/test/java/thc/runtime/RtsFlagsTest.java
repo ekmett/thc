@@ -88,7 +88,7 @@ class RtsFlagsTest {
             assertThrows(RuntimeFault.class, () -> field.writeNativeScalar(0, 4, 0));
             assertThrows(RuntimeFault.class, () -> AtomicAddressOp.READ.numeric(field, 0, 0));
             assertThrows(RuntimeFault.class, field::toNativeBits);
-            assertThrows(RuntimeFault.class, field::rawBacking$org_intelligence_thc);
+            assertThrows(RuntimeFault.class, field::rawBacking);
             assertThrows(RuntimeFault.class, field::availableBytes);
             assertThrows(RuntimeFault.class, () -> field.compareWithinAllocation(base));
         } finally { first.leave(); }
@@ -218,7 +218,7 @@ class RtsFlagsTest {
                     threads.enterCurrent(null, false, true, null);
                     try {
                         assertEquals(1L, CoreDataLabels.fromCore("RtsFlags", proof(), layout).readWord8(403));
-                        var text = ManagedAddress.Companion.fromByteArray(new byte[]{65, 0});
+                        var text = ManagedAddress.fromByteArray(new byte[]{65, 0});
                         for (var operation : TraceOp.values()) RtsDiagnostics.trace(null, operation, text, 1);
                     } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); context.leave(); }
                 }

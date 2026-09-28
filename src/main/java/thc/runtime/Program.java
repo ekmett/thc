@@ -609,10 +609,10 @@ public final class Program implements ExecutableProgram {
             case "float" -> Float.parseFloat(value);
             case "double" -> Double.parseDouble(value);
             case "word8", "word16", "word32" -> ScalarLiterals.narrowWordLiteral(kind, value);
-            case "string-bytes" -> ManagedAddress.Companion.fromHex(value);
+            case "string-bytes" -> ManagedAddress.fromHex(value);
             case "null-addr" -> {
                 if (!value.equals("0")) throw new UnsupportedCore("Malformed null Addr# literal");
-                yield ManagedAddress.Companion.nullAddress();
+                yield ManagedAddress.nullAddress();
             }
             case "function-addr" -> CFinalizerLabels.INSTANCE.fromCore(value, proof);
             case "data-addr" -> CoreDataLabels.fromCore(value, proof, stackTargetLayout instanceof TargetLayout target ? target : null);
@@ -1827,7 +1827,7 @@ public final class Program implements ExecutableProgram {
             return new ClosureInspectExpression(operation, operands, tupleProof);
         }
         if (primitive && "getCurrentCCS#".equals(fn.get(1))) {
-            CoreCurrentCCS.INSTANCE.validate(argumentProofs(args), flags, tupleProof);
+            CoreCurrentCCS.validate(argumentProofs(args), flags, tupleProof);
             return new GetCurrentCCS(argument(args.get(0), scope, true), argument(args.get(1), scope, false), tupleProof);
         }
 
@@ -1959,27 +1959,27 @@ public final class Program implements ExecutableProgram {
                 new Application(function, stateArgument, false, metrics);
             return new KeepAliveExpression(kept, state, action, tupleProof);
         }
-        if (primitive && AtomicAddressOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(AtomicAddressOp.Companion.named((String) fn.get(1)));
+        if (primitive && AtomicAddressOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(AtomicAddressOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new AtomicAddressExpression(operation, tupleProof, compileOperands(args, scope));
         }
-        if (primitive && FloatingAddressOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(FloatingAddressOp.Companion.named((String) fn.get(1)));
+        if (primitive && FloatingAddressOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(FloatingAddressOp.named((String) fn.get(1)));
             String name = (String) fn.get(1);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(argumentProofs(args), flags, tupleProof);
             return new FloatingAddressExpression(operation, tupleProof, compileOperands(args, scope), byteOffset);
         }
-        if (primitive && AddressArrayCopyOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(AddressArrayCopyOp.Companion.named((String) fn.get(1)));
+        if (primitive && AddressArrayCopyOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(AddressArrayCopyOp.named((String) fn.get(1)));
             operation.validate(argumentProofs(args), flags, tupleProof);
             Expr[] operands = compileOperands(args, scope);
             return operation.getToArray() ? new AddressToByteArrayExpression(tupleProof, operands[0], operands[1], operands[2], operands[3], operands[4]) :
                 new ByteArrayToAddressExpression(tupleProof, operands[0], operands[1], operands[2], operands[3], operands[4]);
         }
-        if (primitive && PinnedMemoryOp.Companion.named((String) fn.get(1)) != null) {
-            var operation = Objects.requireNonNull(PinnedMemoryOp.Companion.named((String) fn.get(1)));
+        if (primitive && PinnedMemoryOp.named((String) fn.get(1)) != null) {
+            var operation = Objects.requireNonNull(PinnedMemoryOp.named((String) fn.get(1)));
             String name = (String) fn.get(1);
             boolean byteOffset = name.contains("Word8") && name.contains("As");
             operation.validate(argumentProofs(args), flags, tupleProof);

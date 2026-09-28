@@ -101,7 +101,7 @@ internal class ManagedIconv(private val cbits: () -> SulongCbits, private val st
         outputCell: ManagedAddress, outputCount: ManagedAddress): Long = synchronized(lock) {
         val handle = handles[id] ?: fault("Unknown, closed or cross-context iconv handle")
         fun pointer(cell: ManagedAddress): ManagedAddress {
-            cell.requireRange(0, 8, writable = true)
+            cell.requireRange(0, 8, true)
             if (cell.cbitsOwner()?.addressWidth != 8 || cell.cbitsOffset() % 8 != 0L)
                 fault("Iconv pointer cell requires aligned native LP64 storage")
             return cell.readAddressElementIndex(0)
@@ -112,7 +112,7 @@ internal class ManagedIconv(private val cbits: () -> SulongCbits, private val st
         val discard = output === ManagedAddress.nullAddress()
         if (discard && !reset) fault("Iconv output pointer is null outside reset")
         fun count(cell: ManagedAddress): Long {
-            cell.requireByteRegion(8, writable = true)
+            cell.requireByteRegion(8, true)
             if (cell.cbitsOffset() % 8 != 0L) fault("Iconv count cell requires native size_t alignment")
             val count = ManagedAddressRead.WORD64.read(cell, 0)
             if (count < 0 || count > Int.MAX_VALUE) fault("Iconv count exceeds managed buffer capacity")
@@ -121,7 +121,7 @@ internal class ManagedIconv(private val cbits: () -> SulongCbits, private val st
         val inSize = if (reset) 0L else count(inputCount)
         val outSize = if (discard) 0L else count(outputCount)
         if (!reset) input.requireByteRegion(inSize)
-        if (!discard) output.requireByteRegion(outSize, writable = true)
+        if (!discard) output.requireByteRegion(outSize, true)
         // The bounded bridge rejects overlapping cells/buffers before native
         // state changes; copying them would otherwise invent alias semantics.
         val regions = mutableListOf<Pair<ManagedAddress, Long>>()

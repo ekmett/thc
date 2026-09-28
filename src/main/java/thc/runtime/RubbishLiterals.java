@@ -28,7 +28,7 @@ public final class RubbishLiterals {
             case LONG -> { if (proof.isInt()) yield Integer.valueOf(0); yield Long.valueOf(0L); }
             case FLOAT -> 0.0f;
             case DOUBLE -> 0.0;
-            case ADDRESS -> ManagedAddress.Companion.nullAddress();
+            case ADDRESS -> ManagedAddress.nullAddress();
             case CLOSURE -> closure();
             case DATA, OBJECT -> boxed();
             default -> throw new UnsupportedCore("Unsupported rubbish representation");

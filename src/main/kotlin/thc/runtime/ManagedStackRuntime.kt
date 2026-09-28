@@ -177,7 +177,7 @@ internal class ManagedStackRegistry {
         val entry = entries[key] ?: return 0L
         if (entry.layout != layout) fault("IPE key target layout changed")
         val count = layout.offset("infoProvEntBytes").toLong()
-        destination.requireRange(0, count, writable = true)
+        destination.requireRange(0, count, true)
         val template = entry.ipeTemplate ?: buildIpeTemplate(entry).also { entry.ipeTemplate = it }
         // A cached image containing key would strongly retain the weak index's owner.
         val scratch = ManagedAllocation.mutable(count, layout.wordBytes)

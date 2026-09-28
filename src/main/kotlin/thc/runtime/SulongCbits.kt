@@ -262,7 +262,7 @@ internal class SulongCbits(private val env: TruffleLanguage.Env) {
         // The original wrapper calls libc with a host-owned native timespec.
         // Its arena closes even if a guest copyback or context cancellation throws.
         val invoke = {
-            address.requireByteRegion(16, writable = true)
+            address.requireByteRegion(16, true)
             if (!call.timeClock) address.cbitsSegment()
             NativeLimbScope().use { scope ->
                 val native = if (!call.timeClock && address.cbitsOwner()?.isPinned == true) scope.borrow(address, 16) else scope.allocate(16)

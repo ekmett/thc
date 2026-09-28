@@ -19,17 +19,17 @@ final class ManagedByteStringUtf8 {
         // Language loading may block; do it before taking storage locks.
         Object function = cbits.utf8Function$org_intelligence_thc();
         // The original function returns true before inspecting the pointer.
-        if (address == ManagedAddress.Companion.nullAddress() && length == 0)
+        if (address == ManagedAddress.nullAddress() && length == 0)
             return call(state, cbits, function, address, 0L, length);
-        var allocation = address.nativeAllocation$org_intelligence_thc();
+        var allocation = address.nativeAllocation();
         if (allocation != null) {
             try (var borrow = allocation.borrow()) {
-                address.requireByteRegion$org_intelligence_thc(length, false);
+                address.requireByteRegion(length, false);
                 return view(state, cbits, function, address,
-                        borrow.segment().asSlice(address.cbitsOffset$org_intelligence_thc()).asByteBuffer(), 0, length);
+                        borrow.segment().asSlice(address.cbitsOffset()).asByteBuffer(), 0, length);
             }
         }
-        var owner = address.cbitsOwner$org_intelligence_thc();
+        var owner = address.cbitsOwner();
         if (owner != null) {
             synchronized (owner) {
                 return managed(state, cbits, function, address, length);
@@ -39,9 +39,9 @@ final class ManagedByteStringUtf8 {
     }
 
     private static long managed(Language.State state, SulongCbits cbits, Object function, ManagedAddress address, long length) {
-        address.requireByteRegion$org_intelligence_thc(length, false);
-        return view(state, cbits, function, address, address.cbitsBuffer$org_intelligence_thc(),
-                address.cbitsOffset$org_intelligence_thc(), length);
+        address.requireByteRegion(length, false);
+        return view(state, cbits, function, address, address.cbitsBuffer(),
+                address.cbitsOffset(), length);
     }
 
     private static long view(Language.State state, SulongCbits cbits, Object function, ManagedAddress address,

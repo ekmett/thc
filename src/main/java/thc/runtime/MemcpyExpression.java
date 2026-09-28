@@ -22,9 +22,9 @@ final class MemcpyExpression extends Expr {
     }
 
     @Override public Object executeTuple(VirtualFrame frame, int[] slots, int offset) {
-        var destination = byteArrays ? ManagedAddress.Companion.fromGuestByteArray(operands[0].execute(frame))
+        var destination = byteArrays ? ManagedAddress.fromGuestByteArray(operands[0].execute(frame))
             : operands[0].executeRequiredAddress(frame);
-        var source = byteArrays ? ManagedAddress.Companion.fromGuestByteArray(operands[1].execute(frame))
+        var source = byteArrays ? ManagedAddress.fromGuestByteArray(operands[1].execute(frame))
             : operands[1].executeRequiredAddress(frame);
         long count = operands[2].executeRequiredLong(frame);
         TupleResultsKt.requireVoidCarrier(operands[3].execute(frame));

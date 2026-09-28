@@ -34,7 +34,7 @@ class ManagedFileCallTest {
         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
     }
-    private ManagedAddress path(Path path) { return ManagedAddress.Companion.fromByteArray((path + "\u0000").getBytes(StandardCharsets.UTF_8)); }
+    private ManagedAddress path(Path path) { return ManagedAddress.fromByteArray((path + "\u0000").getBytes(StandardCharsets.UTF_8)); }
     @Test void normalAndInstalledCompiledCallsPreserveVisibleFilesTypedPayloadsAndErasedState() throws Exception {
         for (var backend : List.of("ast", "bytecode")) try (var context = context()) {
             context.initialize("thc"); context.enter();
@@ -58,14 +58,14 @@ class ManagedFileCallTest {
                         var file = directory.resolve(backend + "-" + pass + ".bin");
                         long fd = (Long) call("open", path(file), 3L); assertTrue(fd >= 3L);
                         var bytes = new byte[]{0,1,127,-128,-1,10};
-                        assertEquals(6L, call("write", fd, ManagedAddress.Companion.fromByteArray(bytes), 6L));
+                        assertEquals(6L, call("write", fd, ManagedAddress.fromByteArray(bytes), 6L));
                         assertArrayEquals(bytes, Files.readAllBytes(file)); assertEquals(6L, call("size", fd));
                         assertEquals(0L, call("device_type", fd)); assertEquals(0L, call("is_terminal", fd));
                         assertEquals(0L, call("seek", fd, 0L, 0L));
                         var buffer = new byte[10]; Arrays.fill(buffer, (byte) 0x55);
-                        assertEquals(6L, call("read", fd, ManagedAddress.Companion.fromByteArray(buffer).plus(2L), 8L));
+                        assertEquals(6L, call("read", fd, ManagedAddress.fromByteArray(buffer).plus(2L), 8L));
                         assertArrayEquals(new byte[]{0x55,0x55,0,1,127,-128,-1,10,0x55,0x55}, buffer);
-                        assertEquals(0L, call("read", fd, ManagedAddress.Companion.fromByteArray(buffer), 10L));
+                        assertEquals(0L, call("read", fd, ManagedAddress.fromByteArray(buffer), 10L));
                         assertEquals(4L, call("seek", fd, -2L, 2L)); assertEquals(3L, call("seek", fd, -1L, 1L));
                         assertEquals(0L, call("set_size", fd, 3L)); assertEquals(3L, call("size", fd));
                         assertArrayEquals(Arrays.copyOf(bytes, 3), Files.readAllBytes(file)); assertEquals(0L, call("close", fd));
@@ -73,7 +73,7 @@ class ManagedFileCallTest {
                         var error = (ManagedAddress) call("error_message"); assertTrue(error.indexChar(0L) != 0L);
                         assertEquals(4L, call("error_kind"));
                         long append = (Long) call("open", path(file), 2L); assertTrue(append >= 3L);
-                        assertEquals(2L, call("write", append, ManagedAddress.Companion.fromByteArray(new byte[]{9,8}), 2L));
+                        assertEquals(2L, call("write", append, ManagedAddress.fromByteArray(new byte[]{9,8}), 2L));
                         assertEquals(0L, call("close", append)); assertArrayEquals(new byte[]{0,1,127,9,8}, Files.readAllBytes(file));
                         long input = (Long) call("open", path(file), 0L); assertTrue(input >= 3L); assertEquals(0L, call("close", input));
                     }
@@ -86,7 +86,7 @@ class ManagedFileCallTest {
                 assertThrows(RuntimeFault.class, () -> Calls.target(targets.get("open"), new Object[]{0L,path(untouched),1L,9L}));
                 assertArrayEquals(new byte[]{8,7,6}, Files.readAllBytes(untouched));
                 long fd = (Long) caller.call("open", path(untouched), 3L); var buffer = new byte[]{4,5};
-                assertThrows(RuntimeFault.class, () -> Calls.target(targets.get("read"), new Object[]{0L,fd,ManagedAddress.Companion.fromByteArray(buffer),2L,9L}));
+                assertThrows(RuntimeFault.class, () -> Calls.target(targets.get("read"), new Object[]{0L,fd,ManagedAddress.fromByteArray(buffer),2L,9L}));
                 assertArrayEquals(new byte[]{4,5}, buffer); assertEquals(0L, caller.call("seek", fd, 0L, 1L));
                 assertEquals(0L, caller.call("close", fd)); released(language);
             } finally { context.leave(); }

@@ -114,7 +114,15 @@
       "junit": ["thc.runtime.AtomicIntArrayTest", "thc.runtime.FetchAddIntArrayTest", "thc.runtime.IntArrayTest"],
       "python": ["scripts/test-core-bytearrays.py"]
     },
-    "src/main/kotlin/thc/runtime/AddressArrayCopy.kt": {
+    "src/main/java/thc/runtime/AddressArrayCopyOp.java": {
+      "junit": ["thc.runtime.AddressArrayCopyTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/AddressToByteArrayExpression.java": {
+      "junit": ["thc.runtime.AddressArrayCopyTest"],
+      "python": ["scripts/test-audit-core.py"]
+    },
+    "src/main/java/thc/runtime/ByteArrayToAddressExpression.java": {
       "junit": ["thc.runtime.AddressArrayCopyTest"],
       "python": ["scripts/test-audit-core.py"]
     },
@@ -122,7 +130,15 @@
       "junit": ["thc.runtime.FloatDecodeTest", "thc.runtime.FloatingRemainderTest"],
       "python": ["scripts/test-audit-core.py"]
     },
-    "src/main/kotlin/thc/runtime/AtomicAddresses.kt": {
+    "src/main/java/thc/runtime/AtomicAddressOp.java": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/AtomicAddressExpression.java": {
+      "junit": ["thc.runtime.AtomicAddressTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/NativeNarrowAtomic.java": {
       "junit": ["thc.runtime.AtomicAddressTest"],
       "python": []
     },
@@ -233,7 +249,15 @@
       "junit": ["thc.runtime.StablePointerTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/FloatingAddresses.kt": {
+    "src/main/java/thc/runtime/FloatingAddresses.java": {
+      "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FloatingAddressOp.java": {
+      "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/FloatingAddressExpression.java": {
       "junit": ["thc.runtime.FloatingAddressTest", "thc.runtime.UnalignedScalarMemoryTest"],
       "python": []
     },
@@ -249,7 +273,39 @@
       "junit": ["thc.runtime.SmallArrayTest", "thc.runtime.BoxedCasTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/AddressIdentity.kt": {
+    "src/main/java/thc/runtime/CoreCurrentCCS.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/ManagedAddressOrder.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/CompareManagedAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/CompareOrderedManagedAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/GetCurrentCCS.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/AddressToInt.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/IntToAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/SubtractManagedAddress.java": {
+      "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/RemainderManagedAddress.java": {
       "junit": ["thc.runtime.AddressIdentityNativeTest", "thc.runtime.PinnedPointerCellsTest", "thc.runtime.NativeAddressTest", "thc.runtime.ScalarMemoryUtilitiesTest"],
       "python": []
     },

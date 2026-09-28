@@ -38,7 +38,7 @@ class GuestArgumentsTest {
         var vector = allocations.malloc(8);
         try {
             arguments.get(count, vector);
-            return new ArgumentImage(count.withNativeSegmentInt$org_intelligence_thc(
+            return new ArgumentImage(count.withNativeSegmentInt(
                 segment -> segment.get(ValueLayout.JAVA_INT_UNALIGNED, 0)), vector.readAddressElementIndex(0));
         } finally { allocations.free(count); allocations.free(vector); }
     }
@@ -50,7 +50,7 @@ class GuestArgumentsTest {
     }
 
     private static List<String> values(ArgumentImage image) {
-        assertSame(ManagedAddress.Companion.nullAddress(), image.vector().readAddressElementIndex(image.count()));
+        assertSame(ManagedAddress.nullAddress(), image.vector().readAddressElementIndex(image.count()));
         var values = new ArrayList<String>();
         for (int index = 0; index < image.count(); index++) values.add(text(image.vector().readAddressElementIndex(index)));
         return values;
@@ -62,12 +62,12 @@ class GuestArgumentsTest {
             arguments.initialize("program", new String[]{"", "\u03bb\uD834\uDD1E", "--help", "--"});
             var image = get(arguments);
             assertEquals(List.of("program", "", "\u03bb\uD834\uDD1E", "--help", "--"), values(image));
-            image.vector().withNativeSegmentInt$org_intelligence_thc(pointers -> {
+            image.vector().withNativeSegmentInt(pointers -> {
                 assertEquals(image.vector().readAddressElementIndex(0).toNativeBits(),
                     pointers.get(ValueLayout.JAVA_LONG_UNALIGNED, 0));
                 return 0;
             });
-            arguments.get(ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.nullAddress());
+            arguments.get(ManagedAddress.nullAddress(), ManagedAddress.nullAddress());
             assertThrows(RuntimeFault.class, () -> arguments.initialize("again", new String[0]));
         });
     }
@@ -82,7 +82,7 @@ class GuestArgumentsTest {
             assertEquals(List.of("one", "two"), values(get(arguments)));
             assertThrows(RuntimeFault.class, () -> old.vector().readAddressElementIndex(0));
             assertThrows(RuntimeFault.class, () -> oldString.readWord8(0));
-            arguments.set(0, ManagedAddress.Companion.nullAddress());
+            arguments.set(0, ManagedAddress.nullAddress());
             assertEquals(List.of(), values(get(arguments)));
         });
     }
@@ -91,15 +91,15 @@ class GuestArgumentsTest {
         inside(() -> {
             var arguments = Language.currentState(null).getArguments();
             var storage = ManagedAllocation.mutable(16, 8);
-            var vector = ManagedAddress.Companion.fromAllocation(storage);
-            vector.writeAddressElementIndex(0, ManagedAddress.Companion.fromHex("6100"));
+            var vector = ManagedAddress.fromAllocation(storage);
+            vector.writeAddressElementIndex(0, ManagedAddress.fromHex("6100"));
             arguments.set(1, vector);
-            vector.writeAddressElementIndex(0, ManagedAddress.Companion.fromHex("6200"));
+            vector.writeAddressElementIndex(0, ManagedAddress.fromHex("6200"));
             assertEquals(List.of("a"), values(get(arguments)));
             assertThrows(RuntimeFault.class, () -> arguments.set(-1, vector));
             assertThrows(RuntimeFault.class, () -> arguments.set((long) Integer.MAX_VALUE + 1, vector));
             assertThrows(RuntimeFault.class, () -> arguments.set(3, vector));
-            var unterminated = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(2, 8));
+            var unterminated = ManagedAddress.fromAllocation(ManagedAllocation.mutable(2, 8));
             unterminated.writeWord8(0, 97); unterminated.writeWord8(1, 98);
             vector.writeAddressElementIndex(0, unterminated);
             assertThrows(RuntimeFault.class, () -> arguments.set(1, vector));
@@ -151,8 +151,8 @@ class GuestArgumentsTest {
     @Test void invalidOutputStorageAndNulCannotMutateTheArguments() {
         inside(() -> {
             var arguments = Language.currentState(null).getArguments();
-            var nil = ManagedAddress.Companion.nullAddress();
-            assertThrows(RuntimeFault.class, () -> arguments.get(ManagedAddress.Companion.fromHex("00000000"), nil));
+            var nil = ManagedAddress.nullAddress();
+            assertThrows(RuntimeFault.class, () -> arguments.get(ManagedAddress.fromHex("00000000"), nil));
             arguments.initialize("program", new String[]{"bad\u0000argument"});
             assertThrows(RuntimeFault.class, () -> arguments.get(nil, nil));
             arguments.initialize("valid", new String[0]);

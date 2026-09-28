@@ -66,7 +66,7 @@ public final class CompactImages {
             catch (IOException failure) { throw propagate(failure); }
             var blocks = new ArrayList<ManagedAddress>();
             for (int offset = 0; offset < bytes.length; offset += BLOCK_BYTES)
-                blocks.add(ManagedAddress.Companion.fromAllocation(ManagedAllocation.immutable(
+                blocks.add(ManagedAddress.fromAllocation(ManagedAllocation.immutable(
                     Arrays.copyOfRange(bytes, offset, Math.min(bytes.length, offset + BLOCK_BYTES)), 8)));
             exports.put(region, new Export(region.getGeneration(), blocks));
             return blocks.getFirst();
@@ -81,37 +81,37 @@ public final class CompactImages {
             int index = -1;
             for (int i = 0; i < image.blocks().size(); i++) if (image.blocks().get(i).sameLocation(current)) { index = i; break; }
             if (index < 0) throw fault("Compact block belongs to another region");
-            return index + 1 < image.blocks().size() ? image.blocks().get(index + 1) : ManagedAddress.Companion.nullAddress();
+            return index + 1 < image.blocks().size() ? image.blocks().get(index + 1) : ManagedAddress.nullAddress();
         });
     }
     @TruffleBoundary public synchronized ManagedAddress allocate(long size, ManagedAddress previous) {
         requireOpen();
         if (size <= 0 || size > MAX_IMAGE_BYTES) throw fault("Compact import block size outside managed target domain");
         Import chain;
-        if (previous == ManagedAddress.Companion.nullAddress()) chain = new Import();
+        if (previous == ManagedAddress.nullAddress()) chain = new Import();
         else {
-            var allocation = previous.cbitsOwner$org_intelligence_thc();
+            var allocation = previous.cbitsOwner();
             chain = allocation == null ? null : imports.get(allocation);
             if (chain == null) throw fault("Previous compact import block is unknown or consumed");
-            if (previous.cbitsOffset$org_intelligence_thc() != 0L || chain.blocks.getLast() != allocation)
+            if (previous.cbitsOffset() != 0L || chain.blocks.getLast() != allocation)
                 throw fault("Compact import blocks must be appended at the chain tail");
         }
         if (size > MAX_IMAGE_BYTES - chain.size) throw fault("Compact import image exceeds managed target domain");
         var allocation = ManagedAllocation.mutable(size, 8, true);
         chain.blocks.add(allocation); chain.size += (int) size;
         imports.put(allocation, chain);
-        return ManagedAddress.Companion.fromAllocation(allocation);
+        return ManagedAddress.fromAllocation(allocation);
     }
     @TruffleBoundary public synchronized Fixed fixup(ManagedAddress first, ManagedAddress oldRoot) {
         requireOpen();
-        var allocation = first.cbitsOwner$org_intelligence_thc();
+        var allocation = first.cbitsOwner();
         var chain = allocation == null ? null : imports.get(allocation);
         if (chain == null) throw fault("Compact import block is unknown or already consumed");
-        if (first.cbitsOffset$org_intelligence_thc() != 0L || chain.blocks.getFirst() != allocation)
+        if (first.cbitsOffset() != 0L || chain.blocks.getFirst() != allocation)
             throw fault("compactFixupPointers# requires the first import block");
         for (var block : chain.blocks) imports.remove(block);
         var region = new ManagedCompact(regions, BLOCK_BYTES);
-        var handle = oldRoot.heapHandle$org_intelligence_thc();
+        var handle = oldRoot.heapHandle();
         if (handle == null || handle.getOwner() != heap) return failed(region);
         heap.require(handle);
         var bytes = new byte[chain.size];
@@ -140,7 +140,7 @@ public final class CompactImages {
             return new Fixed(region, heap.address(root));
         } catch (InvalidImage | IOException | IllegalArgumentException failure) { return failed(region); }
     }
-    private static Fixed failed(ManagedCompact region) { return new Fixed(region, ManagedAddress.Companion.nullAddress()); }
+    private static Fixed failed(ManagedCompact region) { return new Fixed(region, ManagedAddress.nullAddress()); }
     private static long bytesUsed(Object value) {
         if (value instanceof DataValue data) return data.getLayout().compactBytes();
         if (value instanceof ManagedAllocation allocation) return 16L + allocation.getSize();

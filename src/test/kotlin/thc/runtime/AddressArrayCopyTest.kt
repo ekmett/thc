@@ -35,7 +35,7 @@ class AddressArrayCopyTest {
     private val root = File(System.getProperty("thc.projectRoot"))
     private val directory = "build/address-array-copy"
     private val names = listOf("addrToArray", "arrayToAddr", "mutableArrayToAddr")
-    private val primitives = AddressArrayCopyOp.entries.map { it.primitive }
+    private val primitives = AddressArrayCopyOp.values().map { it.primitive }
     private val seeds = listOf(0L, 1L, 127L, 255L, -1L, Long.MAX_VALUE, Long.MIN_VALUE)
     private val ranges = buildList {
         for (from in 0..4) for (to in 0..4) for (count in 0..minOf(4 - from, 4 - to))
@@ -371,7 +371,7 @@ class AddressArrayCopyTest {
                 val registry = Language.currentState().nativeAllocations
                 val base = registry.malloc(24)
                 try {
-                    for (operation in AddressArrayCopyOp.entries) {
+                    for (operation in AddressArrayCopyOp.values()) {
                         val p = program(language, synthetic(operation), backend); val target = p.entryTarget("copy")
                         fun call(array: Any, state: Any = Unit) = Calls.target(target, if (operation.toArray)
                             arrayOf(0L, base.plus(4), array, 2L, 8L, state) else arrayOf(0L, array, 2L, base.plus(4), 8L, state))
@@ -512,7 +512,7 @@ class AddressArrayCopyTest {
                 } finally { context.leave() }
             }
         }
-        for (operation in AddressArrayCopyOp.entries) {
+        for (operation in AddressArrayCopyOp.values()) {
             val proofs = if (operation.toArray) listOf(CoreKind.ADDRESS, CoreKind.OBJECT, CoreKind.LONG, CoreKind.LONG, CoreKind.VOID)
                 else listOf(CoreKind.OBJECT, CoreKind.LONG, CoreKind.ADDRESS, CoreKind.LONG, CoreKind.VOID)
             for (register in listOf("IntRep", "WordRep", "Int64Rep", "Word64Rep"))

@@ -145,7 +145,7 @@ public final class ManagedFiles {
     @TruffleBoundary public long nativeErrno() { return failure.get().nativeErrno; }
     @TruffleBoundary public ManagedAddress errorMessage() {
         byte[] bytes = failure.get().message.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        return ManagedAddress.Companion.fromHex(java.util.HexFormat.of().formatHex(bytes));
+        return ManagedAddress.fromHex(java.util.HexFormat.of().formatHex(bytes));
     }
     private static RuntimeException fail(long kind, String message) { return propagate(new FileFailure(kind, message)); }
     private synchronized Descriptor descriptor(long fd) {
@@ -220,9 +220,9 @@ public final class ManagedFiles {
         return new FileIdentity(device, inode);
     }
     private OpenDescription nativeDescription(NativeFileResource resource, boolean readable, boolean writable, boolean append, boolean canExtend) {
-        var image = ManagedAddress.Companion.fromByteArray(resource.statImage());
+        var image = ManagedAddress.fromByteArray(resource.statImage());
         long mode = PosixStat.execute(OriginalStdioOp.ST_MODE, image, 0);
-        boolean regular = PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.Companion.nullAddress(), mode) == 1;
+        boolean regular = PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.nullAddress(), mode) == 1;
         var identity = regular ? new FileIdentity(PosixStat.execute(OriginalStdioOp.ST_DEV, image, 0), PosixStat.execute(OriginalStdioOp.ST_INO, image, 0)) : null;
         return new OpenDescription(null, null, resource, resource, null, null, identity, readable, writable, append, canExtend,
             regular ? Readiness.REGULAR_FILE : Readiness.UNAVAILABLE);
@@ -417,8 +417,8 @@ public final class ManagedFiles {
         }
     }
     private byte[] originalPathBytes(ManagedAddress path) {
-        var allocation = path.cbitsOwner$org_intelligence_thc();
-        return path.withNativeBorrow$org_intelligence_thc(() -> {
+        var allocation = path.cbitsOwner();
+        return path.withNativeBorrow(() -> {
             if (allocation == null) return snapshotPath(path);
             synchronized (allocation) { return snapshotPath(path); }
         });
@@ -432,7 +432,7 @@ public final class ManagedFiles {
     }
     @TruffleBoundary public ManagedAddress openDirectoryOriginal(ManagedAddress path) {
         byte[] bytes = originalPathBytes(path);
-        ManagedAddress[] address = {ManagedAddress.Companion.nullAddress()};
+        ManagedAddress[] address = {ManagedAddress.nullAddress()};
         result(() -> {
             NativeFileProvider provider;
             synchronized (this) {
@@ -446,7 +446,7 @@ public final class ManagedFiles {
         return address[0];
     }
     @TruffleBoundary public ManagedAddress openDirectoryDescriptor(long fd) {
-        ManagedAddress[] address = {ManagedAddress.Companion.nullAddress()};
+        ManagedAddress[] address = {ManagedAddress.nullAddress()};
         Throwable[] postCommitFailure = {null};
         result(() -> {
             var entry = descriptor(fd);
@@ -656,16 +656,16 @@ public final class ManagedFiles {
     }
     @TruffleBoundary public long epollCreate(int size) { return result(() -> anonymousDescriptors(AnonymousKind.EPOLL, size, 0, ignored -> {})[0]); }
     @TruffleBoundary public long pipe(ManagedAddress destination) {
-        destination.requireByteRegion$org_intelligence_thc(8, true);
-        return destination.withNativeBorrow$org_intelligence_thc(() -> {
-            var allocation = destination.cbitsOwner$org_intelligence_thc();
+        destination.requireByteRegion(8, true);
+        return destination.withNativeBorrow(() -> {
+            var allocation = destination.cbitsOwner();
             if (allocation == null) return acquirePipe(destination);
             synchronized (allocation) { return acquirePipe(destination); }
         });
     }
     private long acquirePipe(ManagedAddress destination) {
         return result(() -> {
-            destination.requireByteRegion$org_intelligence_thc(8, true);
+            destination.requireByteRegion(8, true);
             anonymousDescriptors(AnonymousKind.PIPE, 0, 0, fds -> {
                 for (int index = 0; index < fds.length; index++) for (int b = 0; b < 4; b++)
                     destination.writeWord8(index * 4L + b, fds[index] >>> (b * 8));
@@ -729,8 +729,8 @@ public final class ManagedFiles {
     }
     @TruffleBoundary public long poll(ManagedAddress address, long count, int timeout, Node node) {
         if (count < 0 || count > Integer.MAX_VALUE / 8) throw RuntimeFault.fault("poll descriptor image exceeds managed capacity");
-        if (count != 0) address.requireByteRegion$org_intelligence_thc(count * 8, true);
-        return address.withNativeBorrow$org_intelligence_thc(() -> result(() -> {
+        if (count != 0) address.requireByteRegion(count * 8, true);
+        return address.withNativeBorrow(() -> result(() -> {
             long[] fds = new long[(int) count];
             for (int i = 0; i < fds.length; i++) fds[i] = (int) integer(address, i * 8L, 4);
             short[] events = new short[fds.length];
@@ -769,7 +769,7 @@ public final class ManagedFiles {
                         }
                     }
                     var ready = request.await(node, timeout);
-                    if (count != 0) address.requireByteRegion$org_intelligence_thc(count * 8, true);
+                    if (count != 0) address.requireByteRegion(count * 8, true);
                     for (int i = 0; i < ready.length; i++) {
                         address.writeWord8(i * 8L + 6, ready[i]);
                         address.writeWord8(i * 8L + 7, (long) ready[i] >>> 8);
@@ -796,8 +796,8 @@ public final class ManagedFiles {
             if (nativeResource == null) throw fail(7, "THC stream has no native epoll capability: " + targetFd);
             byte[] bytes = null;
             if (operation != 2) {
-                event.requireByteRegion$org_intelligence_thc(12, false);
-                bytes = event.withNativeBorrow$org_intelligence_thc(() -> {
+                event.requireByteRegion(12, false);
+                bytes = event.withNativeBorrow(() -> {
                     var image = new byte[12];
                     for (int i = 0; i < image.length; i++) image[i] = (byte) event.readWord8(i);
                     return image;
@@ -825,12 +825,12 @@ public final class ManagedFiles {
         return result(() -> {
             if (maximum <= 0) throw new NativeFileException("epoll_wait", 22);
             if (maximum > Integer.MAX_VALUE / 12) throw RuntimeFault.fault("epoll output image exceeds managed capacity");
-            destination.requireByteRegion$org_intelligence_thc(maximum * 12L, true);
+            destination.requireByteRegion(maximum * 12L, true);
             var selected = descriptor(fd);
             var epoll = selected.owner.epoll;
             if (epoll == null) throw new NativeFileException("epoll_wait", 22);
             long started = System.nanoTime();
-            return destination.withNativeBorrow$org_intelligence_thc(() -> {
+            return destination.withNativeBorrow(() -> {
                 while (true) {
                     synchronized (this) {
                         if (disposed || selected.closed || descriptors.get(fd) != selected) throw propagate(new NativeFileException("epoll_wait", 9));
@@ -850,7 +850,7 @@ public final class ManagedFiles {
         return nativeProvider;
     }
     private long allocationLocked(ManagedAddress address, FileAction action) {
-        var allocation = address.cbitsOwner$org_intelligence_thc();
+        var allocation = address.cbitsOwner();
         try {
             if (allocation == null) return action.run();
             synchronized (allocation) { return action.run(); }
@@ -861,16 +861,16 @@ public final class ManagedFiles {
         return result(() -> requireProvider("Original chdir requires the explicit native filesystem").changeDirectory(bytes));
     }
     @TruffleBoundary public long currentDirectoryOriginal(ManagedAddress output, long capacity) {
-        if (output.sameLocation(ManagedAddress.Companion.nullAddress())) throw RuntimeFault.fault("Original getcwd NULL allocation is not supported");
+        if (output.sameLocation(ManagedAddress.nullAddress())) throw RuntimeFault.fault("Original getcwd NULL allocation is not supported");
         if (capacity < 0 || capacity > Integer.MAX_VALUE) throw RuntimeFault.fault("Original getcwd exceeds managed byte capacity");
-        output.requireByteRegion$org_intelligence_thc(capacity, true);
+        output.requireByteRegion(capacity, true);
         return result(() -> {
             var provider = requireProvider("Original getcwd requires the explicit native filesystem");
-            return output.withNativeBorrow$org_intelligence_thc(() -> allocationLocked(output, () -> {
-                output.requireByteRegion$org_intelligence_thc(capacity, true);
+            return output.withNativeBorrow(() -> allocationLocked(output, () -> {
+                output.requireByteRegion(capacity, true);
                 var observed = provider.currentDirectory((int) capacity);
                 var name = java.util.Arrays.copyOf(observed, observed.length + 1);
-                ManagedAddress.Companion.fromByteArray(name).copyNonOverlappingTo(output, name.length);
+                ManagedAddress.fromByteArray(name).copyNonOverlappingTo(output, name.length);
                 return 0;
             }));
         });
@@ -882,14 +882,14 @@ public final class ManagedFiles {
     }
     @TruffleBoundary public long readlinkOriginal(ManagedAddress path, ManagedAddress output, long capacity) {
         if (capacity < 0 || capacity > Integer.MAX_VALUE) throw RuntimeFault.fault("Original readlink exceeds managed byte capacity");
-        output.requireByteRegion$org_intelligence_thc(capacity, true);
+        output.requireByteRegion(capacity, true);
         byte[] bytes = originalPathBytes(path);
         return result(() -> {
             var provider = requireProvider("Original readlink requires the explicit native filesystem");
-            return output.withNativeBorrow$org_intelligence_thc(() -> allocationLocked(output, () -> {
-                output.requireByteRegion$org_intelligence_thc(capacity, true);
+            return output.withNativeBorrow(() -> allocationLocked(output, () -> {
+                output.requireByteRegion(capacity, true);
                 var prefix = provider.readlinkRaw(bytes, (int) capacity);
-                ManagedAddress.Companion.fromByteArray(prefix).copyNonOverlappingTo(output, prefix.length);
+                ManagedAddress.fromByteArray(prefix).copyNonOverlappingTo(output, prefix.length);
                 return prefix.length;
             }));
         });
@@ -926,13 +926,13 @@ public final class ManagedFiles {
         return result(() -> requireProvider("Original unlink requires the explicit native filesystem").unlinkRaw(bytes));
     }
     @TruffleBoundary public long statAtOriginal(long fd, ManagedAddress path, ManagedAddress destination, int flags, long cwd) {
-        long size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.Companion.nullAddress(), 0);
-        destination.requireByteRegion$org_intelligence_thc(size, true);
+        long size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0);
+        destination.requireByteRegion(size, true);
         byte[] bytes = originalPathBytes(path);
         return result(() -> {
             var provider = requireProvider("Original fstatat requires the explicit native filesystem");
-            return destination.withNativeBorrow$org_intelligence_thc(() -> allocationLocked(destination, () -> {
-                destination.requireByteRegion$org_intelligence_thc(size, true);
+            return destination.withNativeBorrow(() -> allocationLocked(destination, () -> {
+                destination.requireByteRegion(size, true);
                 byte[] image;
                 if (fd == cwd || bytes[0] == '/') image = provider.statAtRaw(bytes, flags);
                 else try {
@@ -946,22 +946,22 @@ public final class ManagedFiles {
                     image = provider.statAtInvalidRaw(bytes, flags);
                 }
                 if (image.length != size) throw RuntimeFault.fault("Native fstatat image has the wrong size");
-                ManagedAddress.Companion.fromByteArray(image).copyNonOverlappingTo(destination, size);
+                ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size);
                 return 0;
             }));
         });
     }
     @TruffleBoundary public long pathStatOriginal(ManagedAddress path, ManagedAddress destination, boolean followLinks) {
-        long size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.Companion.nullAddress(), 0);
-        destination.requireByteRegion$org_intelligence_thc(size, true);
+        long size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0);
+        destination.requireByteRegion(size, true);
         byte[] bytes = originalPathBytes(path);
         return result(() -> {
             var provider = requireProvider("Original path stat requires the explicit native filesystem");
-            return destination.withNativeBorrow$org_intelligence_thc(() -> allocationLocked(destination, () -> {
-                destination.requireByteRegion$org_intelligence_thc(size, true);
+            return destination.withNativeBorrow(() -> allocationLocked(destination, () -> {
+                destination.requireByteRegion(size, true);
                 var image = provider.statRaw(bytes, followLinks);
                 if (image.length != size) throw RuntimeFault.fault("Native stat image has the wrong size");
-                ManagedAddress.Companion.fromByteArray(image).copyNonOverlappingTo(destination, size);
+                ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size);
                 return 0;
             }));
         });
@@ -1016,8 +1016,8 @@ public final class ManagedFiles {
             case REGULAR_FILE -> true;
             case UNAVAILABLE -> false;
             case NATIVE_UNCLASSIFIED -> {
-                var image = ManagedAddress.Companion.fromByteArray(entry.nativeResource.statImage());
-                yield PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.Companion.nullAddress(), PosixStat.execute(OriginalStdioOp.ST_MODE, image, 0)) == 1;
+                var image = ManagedAddress.fromByteArray(entry.nativeResource.statImage());
+                yield PosixStat.execute(OriginalStdioOp.IS_REG, ManagedAddress.nullAddress(), PosixStat.execute(OriginalStdioOp.ST_MODE, image, 0)) == 1;
             }
         };
     }
@@ -1031,21 +1031,21 @@ public final class ManagedFiles {
         } finally { threads.leaveForeign(previous); }
     }
     @TruffleBoundary public long fstat(long fd, ManagedAddress destination) {
-        long size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.Companion.nullAddress(), 0);
-        destination.requireByteRegion$org_intelligence_thc(size, true);
+        long size = PosixStat.execute(OriginalStdioOp.SIZEOF_STAT, ManagedAddress.nullAddress(), 0);
+        destination.requireByteRegion(size, true);
         return result(() -> withDescriptor(fd, entry -> allocationLocked(destination, () -> {
-            destination.requireByteRegion$org_intelligence_thc(size, true);
+            destination.requireByteRegion(size, true);
             var resource = entry.nativeResource;
             if (resource == null) throw fail(7, "THC descriptor has no opened-resource metadata: " + fd);
             var image = resource.statImage();
             if (image.length != size) throw RuntimeFault.fault("Native stat image has the wrong size");
-            ManagedAddress.Companion.fromByteArray(image).copyNonOverlappingTo(destination, size);
+            ManagedAddress.fromByteArray(image).copyNonOverlappingTo(destination, size);
             return 0;
         })));
     }
     @TruffleBoundary public long tcgetattr(long fd, ManagedAddress destination) {
-        long size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.Companion.nullAddress(), 0);
-        destination.requireByteRegion$org_intelligence_thc(size, true);
+        long size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0);
+        destination.requireByteRegion(size, true);
         return result(() -> withDescriptor(fd, entry -> {
             var resource = entry.nativeResource;
             if (resource == null) throw fail(7, "THC descriptor has no native terminal capability: " + fd);
@@ -1053,8 +1053,8 @@ public final class ManagedFiles {
         }));
     }
     @TruffleBoundary public long tcsetattr(long fd, int action, ManagedAddress source) {
-        long size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.Companion.nullAddress(), 0);
-        source.requireByteRegion$org_intelligence_thc(size, false);
+        long size = TermiosImage.scalar(OriginalStdioOp.SIZEOF_TERMIOS, ManagedAddress.nullAddress(), 0);
+        source.requireByteRegion(size, false);
         return result(() -> withDescriptor(fd, entry -> {
             var resource = entry.nativeResource;
             if (resource == null) throw fail(7, "THC descriptor has no native terminal capability: " + fd);
@@ -1069,10 +1069,10 @@ public final class ManagedFiles {
             if (!entry.readable) throw fail(4, "THC file descriptor is not readable: " + fd);
             if (count == 0) return 0L;
             int n;
-            if (address.hasNativeIOStorage$org_intelligence_thc()) {
-                n = address.withNativeIOWindow$org_intelligence_thc(count, true, segment -> {
+            if (address.hasNativeIOStorage()) {
+                n = address.withNativeIOWindow(count, true, segment -> {
                     try {
-                        address.requireByteRegion$org_intelligence_thc(count, true);
+                        address.requireByteRegion(count, true);
                         var window = segment.asSlice(0, Math.min(count, Integer.MAX_VALUE)).asByteBuffer();
                         if (entry.input == null) return entry.channel.read(window);
                         var bytes = new byte[Math.min(window.remaining(), 1024 * 1024)];
@@ -1089,7 +1089,7 @@ public final class ManagedFiles {
                         return received;
                     } catch (Throwable failure) { throw propagate(failure); }
                 });
-            } else if (address.hasExternalStorage$org_intelligence_thc()) {
+            } else if (address.hasExternalStorage()) {
                 var bytes = new byte[(int) Math.min(count, 1024 * 1024L)];
                 address.copyToByteArray(bytes, 0, bytes.length);
                 int received;
@@ -1102,8 +1102,8 @@ public final class ManagedFiles {
                 if (received > 0) address.copyFromByteArray(bytes, 0, received);
                 n = received;
             } else {
-                byte[] bytes = address.rawBacking$org_intelligence_thc();
-                int offset = (int) address.cbitsOffset$org_intelligence_thc();
+                byte[] bytes = address.rawBacking();
+                int offset = (int) address.cbitsOffset();
                 n = entry.input != null ? entry.input.read(bytes, offset, (int) count) : entry.channel.read(ByteBuffer.wrap(bytes, offset, (int) count));
             }
             if (n < 0) return 0L;
@@ -1205,10 +1205,10 @@ public final class ManagedFiles {
         return result(safety, () -> withDescriptor(fd, entry -> {
             if (!entry.writable) throw fail(4, "THC file descriptor is not writable: " + fd);
             if (count == 0) return 0L;
-            if (address.hasNativeIOStorage$org_intelligence_thc()) {
-                return address.withNativeIOWindow$org_intelligence_thc(count, false, segment -> {
+            if (address.hasNativeIOStorage()) {
+                return address.withNativeIOWindow(count, false, segment -> {
                     try {
-                        address.requireByteRegion$org_intelligence_thc(count, false);
+                        address.requireByteRegion(count, false);
                         var window = segment.asSlice(0, Math.min(count, Integer.MAX_VALUE)).asByteBuffer().asReadOnlyBuffer();
                         if (entry.output == null) return (long) entry.channel.write(window);
                         var bytes = new byte[Math.min(window.remaining(), 1024 * 1024)];
@@ -1218,14 +1218,14 @@ public final class ManagedFiles {
                     } catch (Throwable failure) { throw propagate(failure); }
                 });
             }
-            if (address.hasExternalStorage$org_intelligence_thc()) {
+            if (address.hasExternalStorage()) {
                 var bytes = new byte[(int) Math.min(count, 1024 * 1024L)];
                 address.copyToByteArray(bytes, 0, bytes.length);
                 if (entry.output != null) { entry.output.write(bytes, 0, bytes.length); return (long) bytes.length; }
                 return (long) entry.channel.write(ByteBuffer.wrap(bytes));
             }
-            byte[] bytes = address.rawBacking$org_intelligence_thc();
-            int offset = (int) address.cbitsOffset$org_intelligence_thc();
+            byte[] bytes = address.rawBacking();
+            int offset = (int) address.cbitsOffset();
             if (entry.output != null) { entry.output.write(bytes, offset, (int) count); return count; }
             return (long) entry.channel.write(ByteBuffer.wrap(bytes, offset, (int) count));
         }));

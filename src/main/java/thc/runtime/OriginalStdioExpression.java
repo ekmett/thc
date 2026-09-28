@@ -196,14 +196,14 @@ final class OriginalStdioExpression extends Expr {
         }
         if (operation.getSavedTermios()) {
             long fd = readInteger(frame, 0);
-            var address = operation == OriginalStdioOp.SET_SAVED_TERMIOS ? operands[1].executeRequiredAddress(frame) : ManagedAddress.Companion.nullAddress();
+            var address = operation == OriginalStdioOp.SET_SAVED_TERMIOS ? operands[1].executeRequiredAddress(frame) : ManagedAddress.nullAddress();
             TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
             var result = SavedTermios.execute(this, operation, fd, address);
             if (operation == OriginalStdioOp.GET_SAVED_TERMIOS) FrameAccess.writeObject(frame, slots[offset], result);
             return null;
         }
         if (operation.getTermios()) {
-            var address = operation.getTermiosAddress() ? operands[0].executeRequiredAddress(frame) : ManagedAddress.Companion.nullAddress();
+            var address = operation.getTermiosAddress() ? operands[0].executeRequiredAddress(frame) : ManagedAddress.nullAddress();
             long value = operation == OriginalStdioOp.POKE_LFLAG ? readInteger(frame, 1) : 0L;
             TupleResultsKt.requireVoidCarrier(operands[operands.length - 1].execute(frame));
             if (operation == OriginalStdioOp.PTR_C_CC) FrameAccess.writeObject(frame, slots[offset], TermiosImage.pointer(address));
@@ -235,7 +235,7 @@ final class OriginalStdioExpression extends Expr {
             TupleResultsKt.requireVoidCarrier(operands[1].execute(frame));
             result = CoreOriginalStdio.waitStatus(this, operation, status);
         } else if (operation.getStat()) {
-            var address = operation.getStatField() ? operands[0].executeRequiredAddress(frame) : ManagedAddress.Companion.nullAddress();
+            var address = operation.getStatField() ? operands[0].executeRequiredAddress(frame) : ManagedAddress.nullAddress();
             long mode = operation == OriginalStdioOp.SIZEOF_STAT || operation.getStatField() ? 0L : readInteger(frame, 0);
             var statOperands = operands;
             var lastOperands = operands;

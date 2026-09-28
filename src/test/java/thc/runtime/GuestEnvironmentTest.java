@@ -57,7 +57,7 @@ class GuestEnvironmentTest {
         long index = 0;
         while (true) {
             var address = vector.readAddressElementIndex(index++);
-            if (address == ManagedAddress.Companion.nullAddress()) break;
+            if (address == ManagedAddress.nullAddress()) break;
             result.add(text(address));
         }
         return result;
@@ -151,7 +151,7 @@ class GuestEnvironmentTest {
                     assertEquals(Set.of("THC_INITIAL=lambda-\u03bb", "THC_LOCAL=first"),
                         new HashSet<>(entries((ManagedAddress) call(EnvironmentOp.ENUMERATE))));
                     assertEquals(0, call(EnvironmentOp.UNSET, name));
-                    assertSame(ManagedAddress.Companion.nullAddress(), call(EnvironmentOp.GET, name));
+                    assertSame(ManagedAddress.nullAddress(), call(EnvironmentOp.GET, name));
                 }
             }
             var caller = new Caller();
@@ -183,11 +183,11 @@ class GuestEnvironmentTest {
             assertEquals("", text(environment.get(name)));
             assertThrows(RuntimeFault.class, () -> firstVector.readAddressElementIndex(0));
             assertEquals(0L, environment.put(name)); // Linux putenv without '=' removes.
-            assertSame(ManagedAddress.Companion.nullAddress(), environment.get(name));
+            assertSame(ManagedAddress.nullAddress(), environment.get(name));
             assertEquals(-1L, environment.unset(string("invalid=name")));
             assertEquals(-1L, environment.unset(string("")));
             assertEquals(0L, environment.unset(name));
-            assertSame(ManagedAddress.Companion.nullAddress(), environment.get(string("")));
+            assertSame(ManagedAddress.nullAddress(), environment.get(string("")));
             var unterminated = Language.currentState(null).getNativeAllocations().malloc(1);
             unterminated.writeWord8(0, 65);
             assertThrows(RuntimeFault.class, () -> environment.put(unterminated));
@@ -206,7 +206,7 @@ class GuestEnvironmentTest {
                 try {
                     assertThrows(RuntimeFault.class, outer::environ);
                     var current = Language.currentState(null).getEnvironment();
-                    assertSame(ManagedAddress.Companion.nullAddress(), current.get(string("THC_LOCAL")));
+                    assertSame(ManagedAddress.nullAddress(), current.get(string("THC_LOCAL")));
                     assertEquals(List.of("THC_INITIAL=lambda-\u03bb"), entries(current.environ()));
                     escaped = current.get(string("THC_INITIAL"));
                 } finally { inner.leave(); }

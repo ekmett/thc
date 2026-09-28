@@ -41,8 +41,8 @@ public final class NativeDirectoryStreams implements Closeable {
         if (disposed) throw RuntimeFault.fault("Directory stream registry is closed");
     }
     private ManagedAllocation key(ManagedAddress address) {
-        if (address.cbitsOffset$org_intelligence_thc() != 0) throw RuntimeFault.fault("Directory handle requires its exact opaque base");
-        var owner = address.cbitsOwner$org_intelligence_thc();
+        if (address.cbitsOffset() != 0) throw RuntimeFault.fault("Directory handle requires its exact opaque base");
+        var owner = address.cbitsOwner();
         if (owner == null) throw RuntimeFault.fault("Directory handle has no managed identity");
         return owner;
     }
@@ -96,8 +96,8 @@ public final class NativeDirectoryStreams implements Closeable {
     }
     @TruffleBoundary public synchronized long read(ManagedAddress address, ManagedAddress output) {
         var stream = stream(address);
-        var allocation = output.cbitsOwner$org_intelligence_thc();
-        return output.withNativeBorrow$org_intelligence_thc(() -> {
+        var allocation = output.cbitsOwner();
+        return output.withNativeBorrow(() -> {
             if (allocation == null) return readChecked(stream, output, null);
             synchronized (allocation) { return readChecked(stream, output, allocation); }
         });
@@ -106,22 +106,22 @@ public final class NativeDirectoryStreams implements Closeable {
         if (allocation != null && stream.entry != null && allocation == stream.entry.name)
             throw RuntimeFault.fault("Directory output pointer cell overlaps the active directory-entry image");
         output.requireRange(0, 8, true);
-        if (output.cbitsOffset$org_intelligence_thc() % 8 != 0)
+        if (output.cbitsOffset() % 8 != 0)
             throw RuntimeFault.fault("Directory entry output requires an aligned pointer cell");
         if (allocation != null) {
             if (allocation.getAddressWidth() != 8) throw RuntimeFault.fault("Directory entry output requires an LP64 pointer cell");
-            allocation.requireAddressCell(output.cbitsOffset$org_intelligence_thc());
-        } else output.requireByteRegion$org_intelligence_thc(8, true);
+            allocation.requireAddressCell(output.cbitsOffset());
+        } else output.requireByteRegion(8, true);
         var token = token();
         // Reserve any native projection before advancing the directory.
-        if (output.nativeAllocation$org_intelligence_thc() != null) token.toNativeBits();
+        if (output.nativeAllocation() != null) token.toNativeBits();
         retireEntry(stream);
         int[] status = {-1};
         foreign(() -> {
             NativeDirectoryApi.readStream(stream.slot.get(ValueLayout.ADDRESS, 0), (int) context.getStdio().errno(), (result, error, name) -> {
                 status[0] = result;
                 ManagedAddress entryAddress;
-                if (name == null) entryAddress = ManagedAddress.Companion.nullAddress();
+                if (name == null) entryAddress = ManagedAddress.nullAddress();
                 else {
                     var bytes = ManagedAllocation.mutable(name.length, 8);
                     for (int i = 0; i < name.length; i++) bytes.writeByte(i, name[i]);
@@ -141,11 +141,11 @@ public final class NativeDirectoryStreams implements Closeable {
         current();
         var entry = entries.get(key(address));
         if (entry == null) throw RuntimeFault.fault("Directory entry is expired or belongs to another context");
-        return ManagedAddress.Companion.fromAllocation(entry.name);
+        return ManagedAddress.fromAllocation(entry.name);
     }
     @TruffleBoundary public synchronized void freeEntry(ManagedAddress address) {
         current();
-        if (address != ManagedAddress.Companion.nullAddress() && !entries.containsKey(key(address)))
+        if (address != ManagedAddress.nullAddress() && !entries.containsKey(key(address)))
             throw RuntimeFault.fault("Directory entry is expired or belongs to another context");
         // On the selected glibc platform free_dirent is a no-op. Only the next
         // read or closedir invalidates its reusable entry image.
@@ -178,7 +178,7 @@ public final class NativeDirectoryStreams implements Closeable {
     }
     public synchronized int liveCount() { return streams.size(); }
     private static ManagedAddress token() {
-        return ManagedAddress.Companion.fromAllocation(ManagedAllocation.immutable(new byte[0], 8, true));
+        return ManagedAddress.fromAllocation(ManagedAllocation.immutable(new byte[0], 8, true));
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E {
         throw (E) failure;
