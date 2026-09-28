@@ -1102,7 +1102,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         destination.requireByteRegion(size, writable = true)
         return result { withDescriptor(fd) { entry ->
             val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
-            TermiosImage.transfer(destination, copyBack = true) { image ->
+            TermiosImage.transfer(destination, true) { image ->
                 resource.readTermios(image)
                 0L
             }
@@ -1116,7 +1116,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
         source.requireByteRegion(size, writable = false)
         return result { withDescriptor(fd) { entry ->
             val resource = entry.native ?: fail(7, "THC descriptor has no native terminal capability: $fd")
-            TermiosImage.transfer(source, copyBack = false) { image ->
+            TermiosImage.transfer(source, false) { image ->
                 resource.writeTermios(action, image)
                 0L
             }

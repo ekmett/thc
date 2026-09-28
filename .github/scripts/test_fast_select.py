@@ -1185,7 +1185,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         original = "thc.runtime.OriginalSavedTermiosTest"
         self.assertEqual({"thc.runtime.SavedTermiosTest", original},
-                         set(owners["src/main/kotlin/thc/runtime/SavedTermios.kt"]["junit"]))
+                         set(owners["src/main/java/thc/runtime/SavedTermios.java"]["junit"]))
         for fixture in ("Audit", "Native"):
             self.assertEqual([original], owners[f"compiler/test-fixtures/OriginalSavedTermios{fixture}.hs"]["junit"])
         for path in ("test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/Main.hs",

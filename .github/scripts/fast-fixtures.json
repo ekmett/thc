@@ -338,7 +338,7 @@
       "outputs": ["build/original-process-identity"],
       "sources": ["compiler/test-fixtures/OriginalProcessIdentityAudit.hs", "compiler/test-fixtures/OriginalProcessIdentityNative.hs",
         "test/haskell-fixtures/OriginalStdioFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/main/kotlin/thc/runtime/ProcessIdentity.kt"]
+        "test/haskell-fixtures/Main.hs", "thc.cabal", "src/main/java/thc/runtime/ProcessIdentity.java"]
     },
     "original-termios": {
       "junit": ["thc.runtime.OriginalTermiosTest", "thc.runtime.OriginalSavedTermiosTest"],
