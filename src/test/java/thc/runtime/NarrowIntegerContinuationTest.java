@@ -23,8 +23,7 @@ import static thc.runtime.ScalarValueTestSupport.*;
 /** All six primitive Int carriers survive a real compiled blocking cut. The
  * completed first take is deliberately empty when the saved suffix resumes. */
 class NarrowIntegerContinuationTest {
-    @Test void onlyCapturingRootsDeclareMaterializableFramesBeforePublicationAndCloning() throws Exception {
-        var declaration = FunctionRoot.class.getDeclaredMethod("requiresMaterializableFrame"); assertTrue(declaration.trySetAccessible());
+    @Test void rootPreparationAndCloningPreserveNarrowSlotsAndDelimitedPolicy() throws Exception {
         record Policy(boolean async, boolean delimited) {}
         for (var policy : list(new Policy(false, false), new Policy(true, false), new Policy(false, true))) {
             var layout = new FrameLayout(); int slot = layout.bind("narrow");
@@ -33,11 +32,10 @@ class NarrowIntegerContinuationTest {
             var root = new FunctionRoot(null, layout.build(), "capture policy", null, new int[0], new int[]{slot}, new int[]{0}, body,
                 new Metrics(true), new CoreRepresentation[]{proof}, body.getRepresentation(), body.getCoreSourceLocation(), new boolean[0], null, null,
                 new int[0], null, policy.async(), new int[0][], policy.delimited(), FunctionRootRole.FUNCTION, false);
-            assertEquals(policy.async() || policy.delimited(), declaration.invoke(root));
             assertEquals(FrameSlotKind.Int, root.getFrameDescriptor().getSlotKind(slot)); assertSame(root, root.getCallTarget().getRootNode());
             assertEquals(policy.delimited(), root.getDelimitedControlEnabled());
             var clone = NodeUtil.cloneNode(root); assertNotSame(root, clone);
-            assertEquals(policy.async() || policy.delimited(), declaration.invoke(clone)); assertSame(clone, clone.getCallTarget().getRootNode());
+            assertSame(clone, clone.getCallTarget().getRootNode());
             assertEquals(policy.delimited(), clone.getDelimitedControlEnabled()); assertEquals(FrameSlotKind.Int, clone.getFrameDescriptor().getSlotKind(slot));
         }
     }

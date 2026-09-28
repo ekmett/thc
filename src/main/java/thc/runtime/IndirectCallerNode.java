@@ -20,8 +20,7 @@ public final class IndirectCallerNode extends Node {
     }
     public IndirectCallerNode(Metrics metrics, boolean coldGeneric) {
         this.metrics = metrics; entryArguments = new IndirectEntryArguments(metrics);
-        callNode = coldGeneric ? com.oracle.truffle.runtime.OptimizedIndirectCallNode.createUnprofiledExceptions()
-            : IndirectCallNode.create();
+        callNode = IndirectCallNode.create();
         loop = new TailCallLoop(metrics); tailCheck = new TailCheck(metrics, coldGeneric);
         normalProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
         tailProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
