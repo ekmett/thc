@@ -6,7 +6,12 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleSafepoint;
+import com.oracle.truffle.api.ThreadLocalAction;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.ControlFlowException;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
+import java.io.PrintStream;
+import java.util.concurrent.CancellationException;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,32 +67,46 @@ public final class GuestThreadOps {
             boolean registered = false;
             GuestThreadStatus outcome = GuestThreadStatus.FINISHED;
             AutoCloseable affinity = null;
+            Throwable failure = null;
             try {
-                threads.enterCurrent(inheritedMask, true, asyncEnabled, capability);
-                registered = true;
-                if (!threads.isLoom()) affinity = capability == null ? threads.getCpuAffinity().resetCurrent() : threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
-                GuestThreadId current = threads.currentIdentity();
-                if (!threads.isLoom()) current.setAffinityApplied(capability != null && affinity != null);
-                identity.set(current);
-                ready.countDown();
-                root.call(action);
-            } catch (UncaughtForkAsync uncaught) {
-                outcome = GuestThreadStatus.DIED;
-                uncaught.request.acknowledge();
-            } catch (AsyncDelivery uncaught) {
-                outcome = GuestThreadStatus.DIED;
-                uncaught.getRequest().acknowledge();
-            } catch (Throwable failure) {
-                outcome = GuestThreadStatus.uncaught(failure);
-                if (!registered) registrationFailure.set(failure);
-                GuestThreadOps.<RuntimeException, Object>rethrow(failure);
+                try {
+                    threads.enterCurrent(inheritedMask, true, asyncEnabled, capability);
+                    registered = true;
+                    if (!threads.isLoom()) affinity = capability == null ? threads.getCpuAffinity().resetCurrent() : threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
+                    GuestThreadId current = threads.currentIdentity();
+                    if (!threads.isLoom()) current.setAffinityApplied(capability != null && affinity != null);
+                    identity.set(current);
+                    ready.countDown();
+                    root.call(action);
+                } catch (UncaughtForkAsync uncaught) {
+                    outcome = GuestThreadStatus.DIED;
+                    uncaught.request.acknowledge();
+                } catch (AsyncDelivery uncaught) {
+                    outcome = GuestThreadStatus.DIED;
+                    uncaught.getRequest().acknowledge();
+                }
+            } catch (Throwable caught) {
+                failure = caught;
+                outcome = GuestThreadStatus.uncaught(caught);
+                if (!registered) registrationFailure.set(caught);
             } finally {
                 if (!registered) ready.countDown();
                 try { if (registered) threads.leaveCurrent(outcome); }
-                finally {
-                    if (affinity != null) try { affinity.close(); }
-                    catch (Throwable failure) { GuestThreadOps.<RuntimeException, Object>rethrow(failure); }
+                catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
+                try { if (affinity != null) affinity.close(); }
+                catch (Throwable cleanup) { failure = cleanupFailure(failure, cleanup); }
+            }
+            if (failure != null) {
+                if (identity.get() != null && fatalForkFailure(failure)) {
+                    // The language cannot closeCancelled its non-creator TruffleContext.
+                    // Unwind active entries at their safepoints; this does not permanently close the context.
+                    failure.printStackTrace(new PrintStream(state.getEnv().err(), true));
+                    Throwable cause = failure;
+                    state.getEnv().submitThreadLocal(null, new ThreadLocalAction(true, false) {
+                        @Override protected void perform(Access access) { throw new ForkFailure(cause); }
+                    });
                 }
+                GuestThreadOps.<RuntimeException, Object>rethrow(failure);
             }
         }, capability, node);
         var handler = child.getUncaughtExceptionHandler();
@@ -106,6 +125,27 @@ public final class GuestThreadOps {
         GuestThreadId result = identity.get();
         if (result == null) throw RuntimeFault.fault("fork# child did not publish its ThreadId#");
         return result;
+    }
+    /** A delivered host failure must neither enter a Haskell handler nor broadcast again. */
+    private static final class ForkFailure extends RuntimeException implements InternalGuestControl {
+        ForkFailure(Throwable cause) { super("Internal guest fork failure", cause); }
+    }
+    /** Guest/control transfers keep their existing thread and context semantics. */
+    @SuppressWarnings("removal") private static boolean fatalForkFailure(Throwable failure) {
+        if (failure instanceof org.graalvm.polyglot.PolyglotException polyglot &&
+            (polyglot.isCancelled() || polyglot.isInterrupted() || polyglot.isExit())) return false;
+        return !(failure instanceof ThreadDeath || failure instanceof AbstractTruffleException ||
+            failure instanceof ControlFlowException || failure instanceof InternalGuestControl ||
+            failure instanceof InterruptedException || failure instanceof CancellationException ||
+            failure instanceof PrivateIOUnwind || failure instanceof AsyncThunkUnwind);
+    }
+    /** Cleanup cannot replace the initial failure or a hard context exit. */
+    @SuppressWarnings("removal") private static Throwable cleanupFailure(Throwable failure, Throwable cleanup) {
+        if (failure == null || failure == cleanup) return cleanup;
+        if (cleanup instanceof ThreadDeath && !(failure instanceof ThreadDeath)) {
+            cleanup.addSuppressed(failure); return cleanup;
+        }
+        failure.addSuppressed(cleanup); return failure;
     }
     /** Enqueue exactly once; a retry retains this token rather than sending again. */
     @TruffleBoundary public static AsyncRequest beginKill(Node node, Object id, Object payload) {
