@@ -84,7 +84,8 @@ data CompileInput = CompileInput !BS.ByteString !BS.ByteString ![BS.ByteString]
 data NativeProvider = NativeProvider !BS.ByteString ![BS.ByteString] !BS.ByteString
   !BS.ByteString !BS.ByteString !CompileInput deriving (Eq, Show)
 data NativeLibrary = NativeLibrary !BS.ByteString ![BS.ByteString] !BS.ByteString
-  !BS.ByteString ![BS.ByteString] deriving (Eq, Show)
+  !BS.ByteString ![BS.ByteString] !(Presence [BS.ByteString]) !(Presence BS.ByteString)
+  !(Presence BS.ByteString) !(Presence [[BS.ByteString]]) deriving (Eq, Show)
 data ArgumentBridge = ArgumentBridge !BS.ByteString !BS.ByteString !BS.ByteString
   !BS.ByteString ![[BS.ByteString]] deriving (Eq, Show)
 data NativeDependency = NativeDependency !BS.ByteString !BS.ByteString !SourceIdentity

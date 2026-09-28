@@ -275,7 +275,14 @@ semanticTests = TestList
               KM.insert "nativeLibrary" (object ["sha256" .= (replicate 64 'a'), "hex" .= ("00ff427f" :: String)]) $
               KM.delete "availableEntries" link) fields)
           amend value = value
-          expected = amend original
+          extras (Object fields) | KM.lookup "provider" fields == Just (String "native-libc") =
+            Object $ KM.insert "dependencyArguments" (toJSON (["-shared","dependency.a"] :: [String])) $
+              KM.insert "objcopy" (String "llvm-objcopy") $ KM.insert "objcopySha256" (String "tool-hash") $
+              KM.insert "objcopyArguments" (toJSON ([["--remove-section=.llvmbc","dependencies.so"]] :: [[String]])) fields
+          extras (Object fields) = Object (fmap extras fields)
+          extras (Array values) = Array (fmap extras values)
+          extras value = value
+          expected = extras (amend original)
       (facts, bindings) <- either fail pure (parseModuleWithoutDebug expected)
       assertEqual "no companion bytes or data entry identity lost" expected (moduleJSON facts bindings)
       withEncoded (\_ encoder -> encodeFacts encoder facts) $ \_ strings payload ->
@@ -499,7 +506,7 @@ completeNativeLink = NativeLink completeLinkPayload [NativeABI "original" "adapt
         (Known "lib") (Known "source-sha") Unknown)
       "actual registration\n" "registration-sha" [ArchiveProduct "lib.a" "archive-sha" [("api.o","object-sha")]]
       [NativeProduct (NativePiece "/source" "api.o" "object-sha" "api.bc" "actual-target" input) "bitcode-sha"]])
-    [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"]] ["unknown"]
+    [NativeLibrary "native-libc" ["free"] "clang" "compiler-sha" ["-lc"] Missing Missing Missing Missing] ["unknown"]
     [ArgumentBridge "actual-integer-width-bridge" "actual LLVM\n" "source-sha" "input-sha" [["define caller","define callee"]]]))
   Missing Missing []
   where input = CompileInput "ghc" "clang" ["-c","api.c"] (Known "c") "native-target" "actual-target"

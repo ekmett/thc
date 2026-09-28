@@ -400,6 +400,12 @@ arguments, p(str language), str nativeTarget, str target, list(FileHash)`.
 str bitcodeSha256, str target, CompileInput`.
 `NativeLibrary` is `str provider, list(str) symbols, str compiler,
 str compilerSha256, list(str) arguments`.
+The build-input presence tag 3 denotes extended inputs, retaining the same
+layout except that each native-library record appends
+`p(list(str)) dependencyArguments, p(str) objcopy, p(str) objcopySha256,
+p(list(list(str))) objcopyArguments`. Tag 2 retains the original known-input
+layout; tags 0/1 remain missing/null. The extension preserves the actual native
+dependency-link and embedded-bitcode extraction recipe.
 `ArgumentBridge` is `str profile, str source, str sourceSha256,
 str inputBitcodeSha256, list(list(str)) definitions`.
 

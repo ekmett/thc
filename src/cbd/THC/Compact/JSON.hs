@@ -481,9 +481,12 @@ nativeBuildInputs = withObject "native build inputs" $ \fields -> do
         <*> bytesAt fields "bitcode" <*> bytesAt fields "bitcodeSha256" <*> bytesAt fields "target"
         <*> (fields .: "inputs" >>= compileInput)
     library = withObject "native library provider" $ \fields -> do
-      checked fields ["provider","symbols","compiler","compilerSha256","arguments"]
+      checked fields ["provider","symbols","compiler","compilerSha256","arguments",
+        "dependencyArguments","objcopy","objcopySha256","objcopyArguments"]
       NativeLibrary <$> bytesAt fields "provider" <*> (fields .: "symbols" >>= array bytes)
         <*> bytesAt fields "compiler" <*> bytesAt fields "compilerSha256" <*> (fields .: "arguments" >>= array bytes)
+        <*> optional fields "dependencyArguments" (array bytes) <*> optional fields "objcopy" bytes
+        <*> optional fields "objcopySha256" bytes <*> optional fields "objcopyArguments" (array (array bytes))
     bridge = withObject "native argument bridge" $ \fields -> do
       checked fields ["profile","source","sourceSha256","inputBitcodeSha256","definitions"]
       ArgumentBridge <$> bytesAt fields "profile" <*> bytesAt fields "source" <*> bytesAt fields "sourceSha256"

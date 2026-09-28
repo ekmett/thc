@@ -464,7 +464,13 @@ public final class CoreCompactRecords {
             var entry = strings(cursor, "symbol", "entry"); entry.put("convention", convention(cursor)); entry.put("safety", safety(cursor));
             entry.put("arguments", texts(cursor)); entry.put("result", text(cursor)); return entry;
         }));
-        field(cursor, result, "buildInputs", () -> nativeBuildInputs(cursor));
+        switch (cursor.readByte()) {
+            case 0 -> { }
+            case 1 -> result.put("buildInputs", null);
+            case 2 -> result.put("buildInputs", nativeBuildInputs(cursor, false));
+            case 3 -> result.put("buildInputs", nativeBuildInputs(cursor, true));
+            default -> throw error("Invalid compact native build-input tag");
+        }
         switch (cursor.readByte()) {
             case 0 -> { }
             case 3 -> {
@@ -483,7 +489,7 @@ public final class CoreCompactRecords {
         result.put("files", list(cursor, () -> strings(cursor, "path", "sha256")));
         return result;
     }
-    private Map<String,Object> nativeBuildInputs(CoreCompactCursor cursor) throws Throwable {
+    private Map<String,Object> nativeBuildInputs(CoreCompactCursor cursor, boolean extended) throws Throwable {
         var result = map();
         result.put("translationUnits", list(cursor, () -> {
             int tag = cursor.readByte();
@@ -496,7 +502,14 @@ public final class CoreCompactRecords {
         field(cursor, result, "dependencies", () -> list(cursor, () -> nativeDependency(cursor)));
         result.put("nativeLibraries", list(cursor, () -> {
             var entry = strings(cursor, "provider"); entry.put("symbols", texts(cursor)); entry.putAll(strings(cursor, "compiler", "compilerSha256"));
-            entry.put("arguments", texts(cursor)); return entry;
+            entry.put("arguments", texts(cursor));
+            if (extended) {
+                field(cursor, entry, "dependencyArguments", () -> texts(cursor));
+                field(cursor, entry, "objcopy", () -> text(cursor));
+                field(cursor, entry, "objcopySha256", () -> text(cursor));
+                field(cursor, entry, "objcopyArguments", () -> list(cursor, () -> texts(cursor)));
+            }
+            return entry;
         }));
         result.put("unresolved", texts(cursor));
         result.put("argumentBridges", list(cursor, () -> {

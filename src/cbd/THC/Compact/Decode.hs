@@ -115,7 +115,12 @@ nativeLink :: Decoder -> Get NativeLink
 nativeLink decoder = do
   payload@(LinkPayload schema _ _ _ _ _ _ _) <- linkPayload decoder
   abi <- list decoder entry
-  inputs <- present (nativeBuildInputs decoder)
+  inputs <- getWord8 >>= \kind -> case kind of
+    0 -> pure Missing
+    1 -> pure Unknown
+    2 -> Known <$> nativeBuildInputs decoder False
+    3 -> Known <$> nativeBuildInputs decoder True
+    _ -> fail "Invalid compact native build-input tag"
   (companion,dataSymbols) <- getWord8 >>= \kind -> case kind of
     0 -> pure (Missing,Missing)
     3 -> (,) <$> present ((,) <$> string decoder <*> blob decoder)
@@ -126,8 +131,8 @@ nativeLink decoder = do
   where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
           <*> list decoder (string decoder) <*> string decoder
 
-nativeBuildInputs :: Decoder -> Get NativeBuildInputs
-nativeBuildInputs decoder = NativeBuildInputs <$> list decoder group <*> list decoder provider
+nativeBuildInputs :: Decoder -> Bool -> Get NativeBuildInputs
+nativeBuildInputs decoder extended = NativeBuildInputs <$> list decoder group <*> list decoder provider
   <*> present (list decoder (nativeDependency decoder)) <*> list decoder library <*> strings <*> list decoder bridge
   where
     strings = list decoder (string decoder)
@@ -138,6 +143,8 @@ nativeBuildInputs decoder = NativeBuildInputs <$> list decoder group <*> list de
     provider = NativeProvider <$> string decoder <*> strings <*> string decoder <*> string decoder
       <*> string decoder <*> compileInput decoder
     library = NativeLibrary <$> string decoder <*> strings <*> string decoder <*> string decoder <*> strings
+      <*> extra strings <*> extra (string decoder) <*> extra (string decoder) <*> extra (list decoder strings)
+    extra parser = if extended then present parser else pure Missing
     bridge = ArgumentBridge <$> string decoder <*> string decoder <*> string decoder <*> string decoder
       <*> list decoder strings
 

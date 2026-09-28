@@ -313,9 +313,11 @@ nativeBuildInputs (NativeBuildInputs units providers dependencies libraries unre
     provider (NativeProvider name symbols path digest target input) = object
       ["provider" .= str name,"symbols" .= arr str symbols,"bitcode" .= str path,
        "bitcodeSha256" .= str digest,"target" .= str target,"inputs" .= compileInput input]
-    library (NativeLibrary name symbols compiler digest arguments) = object
+    library (NativeLibrary name symbols compiler digest arguments dependencyArguments objcopy objcopySha objcopyArguments) = object $
       ["provider" .= str name,"symbols" .= arr str symbols,"compiler" .= str compiler,
        "compilerSha256" .= str digest,"arguments" .= arr str arguments]
+      ++ p "dependencyArguments" (arr str) dependencyArguments ++ p "objcopy" str objcopy
+      ++ p "objcopySha256" str objcopySha ++ p "objcopyArguments" (arr (arr str)) objcopyArguments
     bridge (ArgumentBridge profile source sourceSha inputSha definitions) = object
       ["profile" .= str profile,"source" .= str source,"sourceSha256" .= str sourceSha,
        "inputBitcodeSha256" .= str inputSha,"definitions" .= arr (arr str) definitions]

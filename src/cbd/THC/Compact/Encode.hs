@@ -181,7 +181,15 @@ nativeLink :: Encoder -> NativeLink -> IO ()
 nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs companion dataSymbols finalizers) = do
   linkPayload encoder payload
   list encoder entry abi
-  present encoder (nativeBuildInputs encoder) inputs
+  case inputs of
+    Missing -> tag encoder 0
+    Unknown -> tag encoder 1
+    Known value@(NativeBuildInputs _ _ _ libraries _ _) -> do
+      let extended (NativeLibrary _ _ _ _ _ Missing Missing Missing Missing) = False
+          extended _ = True
+          extra = any extended libraries
+      tag encoder (if extra then 3 else 2)
+      nativeBuildInputs encoder extra value
   case (companion,dataSymbols) of
     (Missing,Missing) -> tag encoder 0
     _ -> do
@@ -197,8 +205,8 @@ nativeLink encoder (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi in
           list encoder (string encoder) arguments
           string encoder result
 
-nativeBuildInputs :: Encoder -> NativeBuildInputs -> IO ()
-nativeBuildInputs encoder (NativeBuildInputs units providers dependencies libraries unresolved bridges) = do
+nativeBuildInputs :: Encoder -> Bool -> NativeBuildInputs -> IO ()
+nativeBuildInputs encoder extended (NativeBuildInputs units providers dependencies libraries unresolved bridges) = do
   list encoder group units
   list encoder provider providers
   present encoder (list encoder (nativeDependency encoder)) dependencies
@@ -214,12 +222,17 @@ nativeBuildInputs encoder (NativeBuildInputs units providers dependencies librar
       strings symbols
       mapM_ (string encoder) [path,digest,target]
       compileInput encoder input
-    library (NativeLibrary name symbols compiler digest arguments) = do
+    library (NativeLibrary name symbols compiler digest arguments dependencyArguments objcopy objcopySha objcopyArguments) = do
       string encoder name
       strings symbols
       string encoder compiler
       string encoder digest
       strings arguments
+      when extended $ do
+        present encoder strings dependencyArguments
+        present encoder (string encoder) objcopy
+        present encoder (string encoder) objcopySha
+        present encoder (list encoder strings) objcopyArguments
     bridge (ArgumentBridge profile source sourceSha inputSha definitions) = do
       mapM_ (string encoder) [profile,source,sourceSha,inputSha]
       list encoder strings definitions

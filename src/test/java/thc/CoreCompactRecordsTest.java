@@ -51,9 +51,11 @@ class CoreCompactRecordsTest {
     private record LiteralCase(int kind, byte[] payload, String tag, Object expected) {}
     @Test void nativeCompanionAndDataEntriesDecodeWithoutReadingBodies() throws Exception {
         byte[] text = bytes(0, id.length);
-        for (int schema : List.of(1, 2)) {
+        byte[] extendedInputs = concat(bytes(3, 0, 0, 0, 1), text, bytes(1), text, text, text, bytes(1), text,
+            bytes(2, 1), text, bytes(2), text, bytes(2), text, bytes(2, 1, 1), text, bytes(0, 0));
+        for (int schema : List.of(1, 2)) for (byte[] inputs : List.of(bytes(0), extendedInputs)) {
             byte[] prefix = concat(bytes(1), text, text, text, text, new byte[12], bytes(2, schema),
-                text, text, text, text, text, text, bytes(0, 0, 0));
+                text, text, text, text, text, text, bytes(0, 0), inputs);
             byte[] suffix = schema == 2 ? bytes(0, 0) : bytes(0);
             byte[] extras = concat(bytes(3, 2), text, bytes(4, 0, 255, 66, 127, 2, 1), text);
             module(new byte[0], id, concat(prefix, extras, suffix), (records, file) -> {
@@ -61,6 +63,14 @@ class CoreCompactRecordsTest {
                 assertEquals(Map.of("sha256", "unit:M.f", "hex", "00ff427f"), link.get("nativeLibrary"));
                 assertEquals(List.of("unit:M.f"), link.get("dataSymbols"));
                 assertFalse(link.containsKey("availableEntries"));
+                if (inputs.length > 1) {
+                    var build = (Map<?, ?>) link.get("buildInputs");
+                    var receipt = (Map<?, ?>) ((List<?>) build.get("nativeLibraries")).getFirst();
+                    assertEquals(List.of("unit:M.f"), receipt.get("dependencyArguments"));
+                    assertEquals("unit:M.f", receipt.get("objcopy"));
+                    assertEquals("unit:M.f", receipt.get("objcopySha256"));
+                    assertEquals(List.of(List.of("unit:M.f")), receipt.get("objcopyArguments"));
+                }
             });
             module(new byte[0], id, concat(prefix, bytes(0), suffix), (records, file) -> {
                 var link = (Map<?, ?>) records.header().get("packageNativeLink");
