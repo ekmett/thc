@@ -26,10 +26,13 @@ class SemanticForeignOverrideTest {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
-                var module = OriginalStdioFixtures.module(List.of("dup"));
                 // This component must never execute: dup operates on THC's managed descriptor table.
-                module.put("packageScalarLinks", List.of(new PackageScalarLink("ghc-internal", "unused", "", "", new byte[0],
-                    List.of(new PackageScalarSignature("dup", "unused", List.of("Int32Rep"), "Int32Rep")))));
+                var links = List.of(new PackageScalarLink("ghc-internal", "unused", "", "", new byte[0],
+                    List.of(new PackageScalarSignature("dup", "unused", List.of("Int32Rep"), "Int32Rep"))));
+                var module = OriginalStdioFixtures.module(List.of("dup"), call ->
+                    assertFalse(CoreForeignExceptionBridge.executes(call, false, links),
+                        "exception preflight must use the same semantic override as lowering"));
+                module.put("packageScalarLinks", links);
                 var program = program(language, module, backend);
                 assertEquals(3, callScalarTestTarget(program.entryTarget("dup"), new Object[]{0L, 1, Unit.INSTANCE}));
                 assertEquals(0L, Language.currentState().getFiles().close(3));

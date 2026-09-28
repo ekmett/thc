@@ -94,6 +94,7 @@ public final class CoreForeignExceptionBridge {
         var runtime = CoreRuntimeServices.validate(expr, defined);
         if (runtime != null) return runtime == RuntimeServiceCall.EXCEPTION_TEXT;
         if (CoreCpuAffinity.validate(expr, defined) != null) return false;
+        if (CoreForeignOverride.select(metadata) != null) return false;
         if (!(expr.size() > 2 && expr.get(2) instanceof List<?> arguments)) return false;
         if (!(expr.size() > 3 && expr.get(3) instanceof List<?> flags)) return false;
         var proofs = new ArrayList<Object>(arguments.size());
