@@ -240,7 +240,7 @@
     "data-addr"
   ],
   "functionLabels": ["libdwPoolRelease", "backtraceFree", "free"],
-  "dataLabels": ["enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc", "RtsFlags"],
+  "dataLabels": ["enabled_capabilities", "ghc_unique_counter64", "ghc_unique_inc", "RtsFlags", "hs_bytestring_lower_hex_table"],
   "integerLiteralRanges": {
     "int8": [
       -128,
