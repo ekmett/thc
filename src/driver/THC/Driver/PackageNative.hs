@@ -40,7 +40,7 @@ import System.Process (CreateProcess(..), proc, readCreateProcessWithExitCode)
 import THC.Driver.ScalarBitcode (parseDependencies, sulongScalarTarget)
 import THC.Driver.NativeLibrarySources (zlibChecksumSources)
 import THC.Driver.NativeArgumentBridge (nativeArgumentBridge)
-import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces, nativeLinkInputs, nativeAddressArchives)
+import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProductPieces, nativeLinkInputs, nativeSymbolArchives)
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
@@ -110,19 +110,23 @@ linkInstalledNative compiler libdir arguments directory unit modules = do
           Just stubs -> member stubs "header" == Just "" &&
             all (\key -> member stubs key == Just (toJSON ([]::[Value]))) ["initializers","finalizers"]
       selected = [(name,value) | ((name,_),value) <- zip modules decoded, eligible value]
-  let requestedAddresses = nub (concatMap (addressLabels . snd) selected)
-  dataArchives <- nativeAddressArchives compiler libdir directory unit arguments requestedAddresses
-  declaredAddresses <- mapM (either fail pure . nativeAddressDeclarations unit . snd) selected
-  let addresses = sort . nub $ concat declaredAddresses ++ concatMap snd dataArchives
   perModule <- mapM (either fail pure . installedNativeSignatures unit . snd) selected
   let signatures = sort (nub (concat perModule))
+      requestedAddresses = nub (concatMap (addressLabels . snd) selected)
+      requestedSymbols = nub (requestedAddresses ++ [(symbol,True) | (symbol,_,_,_,_) <- signatures])
+  archives <- nativeSymbolArchives compiler libdir directory unit arguments requestedSymbols
+  declaredAddresses <- mapM (either fail pure . nativeAddressDeclarations unit . snd) selected
+  -- An ordinary callable root selects its native provider, not an address
+  -- getter. The final companion extracts only actually unresolved members.
+  let addresses = sort . nub $ concat declaredAddresses ++
+        [address | address <- concatMap snd archives, address `elem` requestedAddresses]
   if null signatures && null addresses then pure modules else do
     createDirectoryIfMissing True directory
     root <- canonicalizePath directory
     configured <- either fail pure (nativeCompilerArguments arguments)
     sources <- mapM (stubSource . snd) selected
     writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
-      unit root signatures [] sources perModule [] (const Nothing) addresses (map fst dataArchives) True
+      unit root signatures [] sources perModule [] (const Nothing) addresses (map fst archives) True
     let original = [(name,BL.toStrict (encode value)) | (name,value) <- selected]
     linked <- finishPackageNative (root </> "pieces") root unit (Just []) original
     pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]

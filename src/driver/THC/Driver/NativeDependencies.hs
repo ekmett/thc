@@ -14,7 +14,7 @@
 -- exact native archive membership, never from an unresolved symbol spelling.
 module THC.Driver.NativeDependencies
   ( COnlyProduct, cOnlyProductProof, cOnlyProductPieces, readCOnlyProduct
-  , selectCOnlyPieces, nativeLinkInputs, nativeAddressArchives
+  , selectCOnlyPieces, nativeLinkInputs, nativeSymbolArchives
   ) where
 
 import Control.Exception (evaluate)
@@ -98,12 +98,12 @@ nativeLinkInputs compiler libdir root owner arguments = do
           concatMap (\framework -> ["-framework",framework]) (Package.frameworks info))
   pure (linkPaths (nativeLinkOptions arguments) ++ concatMap libraries (reverse dependencies))
 
--- Address roots can live in a Haskell package's ordinary C object archive.
+-- Native call and address roots can live in a package's ordinary C archive.
 -- Select the actual declaring registration, never an inlining consumer or the
 -- RTS. The native linker extracts only the rooted archive members; no whole
 -- Haskell component is loaded alongside its Core implementation.
-nativeAddressArchives :: FilePath -> FilePath -> FilePath -> String -> [String] -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
-nativeAddressArchives compiler libdir root owner arguments symbols
+nativeSymbolArchives :: FilePath -> FilePath -> FilePath -> String -> [String] -> [(String,Bool)] -> IO [(FilePath,[(String,Bool)])]
+nativeSymbolArchives compiler libdir root owner arguments symbols
   | null symbols = pure []
   | otherwise = do
       let ghcPkg = takeDirectory compiler </> "ghc-pkg"
@@ -127,7 +127,7 @@ nativeAddressArchives compiler libdir root owner arguments symbols
           directory <- nub (Package.libraryDirsStatic info ++ Package.libraryDirs info), library <- Package.hsLibraries info]
         fmap concat $ forM (nub archives) $ \archive -> do
           (status,output,diagnostic) <- readProcessWithExitCode nm ["--defined-only","--extern-only","--format=posix",archive] ""
-          check (status == ExitSuccess) ("Cannot inspect native address archive: " ++ diagnostic)
+          check (status == ExitSuccess) ("Cannot inspect registered native archive: " ++ diagnostic)
           let defined = nub [(symbol,function) | line <- lines output, name:kind:_ <- [words line],
                 (symbol,function) <- symbols,
                 kind `elem` (if function then ["T","W"] else ["B","C","D","R","S","V"]),
