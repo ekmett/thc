@@ -68,6 +68,8 @@ thc.runtime.TupleShape
 # value or create Truffle assumptions; those remain lazy per-carrier operations.
 # Reaudit this closure if the registry or its anonymous initializer changes.
 thc.runtime.ConstructorClassIdentity
+# The allocated prototype's concrete type has no fields or class initializer.
+thc.runtime.ConstructorClassIdentity$1
 
 # Finite Java metadata compatibility inventory; see the closure audit in README.
 # Literal enum descriptors and argument lists only, not their runtime operations.
