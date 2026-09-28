@@ -43,8 +43,7 @@ public final class LibraryCheck {
         private Source request(boolean mode) {
             // Each fresh context owns its request; a cached Source could keep
             // the complete Core transport alive after context close.
-            return Source.newBuilder("thc", CoreModules.INSTANCE.request(modules, name, true, mode, backend,
-                true, false, null, null, null, false), "library:" + name).cached(false).buildLiteral();
+            return Source.newBuilder("thc", CoreModules.request(modules, name, true, mode, backend, true), "library:" + name).cached(false).buildLiteral();
         }
         private void checkPolicy(Value function) {
             var data = diagnostics(function);
