@@ -12,7 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/boxed-arrays'
-SOURCE = 'test/fixtures/compiler/BoxedArrayAudit.hs'
+SOURCE = 't/fixtures/compiler/BoxedArrayAudit.hs'
 ENTRIES = ['boxedSTRecursive', 'boxedZero', 'boxedSnapshot', 'boxedClosure']
 FRONTIERS = ['boxedLiteral', 'boxedST', 'boxedLazyRead', 'boxedChecked']
 OPS = {'newArray#', 'readArray#', 'writeArray#', 'unsafeFreezeArray#', 'indexArray#'}
@@ -82,7 +82,7 @@ def main():
                'emit _ = error "invalid input"','main = getContents >>= mapM_ (emit . words) . lines']
     source=BUILD/'NativeBoxedArray.hs'; source.write_text('\n'.join(driver)+'\n')
     native=BUILD/'native'; native.mkdir(exist_ok=True); executable=native/'boxed-array-oracle'
-    run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-i'+str(ROOT/'test/fixtures/compiler'),
+    run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-i'+str(ROOT/'t/fixtures/compiler'),
          '-odir',native,'-hidir',native,source,'-o',executable])
     requests=[]; expected=[]
     for name in ENTRIES+FRONTIERS:

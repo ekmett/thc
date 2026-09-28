@@ -179,7 +179,7 @@ same ordering works for `acquire`. To request the guest's help instead, use
 Pass guest command-line arguments after a literal `--`:
 
 ```sh
-cabal run thc -- run arguments --project-dir test/fixtures/run-arguments \
+cabal run thc -- run arguments --project-dir t/fixtures/run-arguments \
   --thc-root "$PWD" --installed-core required --ghc-source "$GHC_SOURCE" \
   -- "two words" "" "lambda-λ" --help
 ```
@@ -372,7 +372,7 @@ From the repository root:
 ```sh
 cabal build
 cabal run thc -- --help
-cabal run thc -- plan-package test/fixtures/tiny/tiny-fixture.cabal \
+cabal run thc -- plan-package t/fixtures/tiny/tiny-fixture.cabal \
   --dist-dir "$PWD/build/tiny-plan" --enable-tests --enable-benchmarks
 ```
 
@@ -383,7 +383,7 @@ driver executable. `thc run` locates the plugin through Cabal's build metadata.
 ```sh
 export JAVA_HOME=/path/to/graalvm-jdk-25
 make
-cabal run thc -- run completed --project-dir test/fixtures/run-pure \
+cabal run thc -- run completed --project-dir t/fixtures/run-pure \
   --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 cabal test driver-tests --test-show-details=direct
 ```
@@ -424,7 +424,7 @@ For a multi-package project, use a package-qualified selector:
 
 ```sh
 cabal run thc -- run app-run:exe:completed \
-  --project-dir test/fixtures/run-project --thc-root "$PWD" \
+  --project-dir t/fixtures/run-project --thc-root "$PWD" \
   --dist-dir "$PWD/build/run-project"
 ```
 
@@ -820,7 +820,7 @@ made that THC can execute any of the native components described by this plan.
 
 ## Verification
 
-`test/fixtures/tiny` is an ordinary unchanged package with a library, internal
+`t/fixtures/tiny` is an ordinary unchanged package with a library, internal
 library, executable, test and benchmark. Its common stanza, manual flag,
 automatic dependency-sensitive flag, OS condition and GHC condition are all
 handled by Cabal. Functional tests copy the fixture to a path with spaces,
@@ -837,7 +837,7 @@ are native Cabal planning checks; their test build is an independent oracle.
 The same suite checks the limited raw THC IO action on both backends and
 requires unsupported console IO under the pinned provider to fail before launch.
 
-`test/fixtures/run-benchmark` is a real Cabal benchmark component with a small
+`t/fixtures/run-benchmark` is a real Cabal benchmark component with a small
 strict numeric workload, not an executable renamed by the driver. The
 `driver-tests --runnable-targets-only` slice checks its acquisition without
 execution, strict audit and execution on both backends against native GHC. It
@@ -847,7 +847,7 @@ components, and explicit detailed-library test rejection. For example:
 
 ```sh
 cabal run thc -- run run-benchmark:bench:measured \
-  --project-dir test/fixtures/run-benchmark --thc-root "$PWD" \
+  --project-dir t/fixtures/run-benchmark --thc-root "$PWD" \
   --dist-dir "$PWD/build/run-benchmark"
 ```
 

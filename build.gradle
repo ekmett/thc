@@ -404,8 +404,8 @@ tasks.withType(Test).configureEach {
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("src/compiler") { include("**/*.hs") })
-    inputs.files(fileTree("test/fixtures/compiler") { include("**/*.hs", "**/*.hsc") })
-    inputs.file("test/fixtures/compiler/OriginalStackProof.json")
+    inputs.files(fileTree("t/fixtures/compiler") { include("**/*.hs", "**/*.hsc") })
+    inputs.file("t/fixtures/compiler/OriginalStackProof.json")
     inputs.files("src/driver/THC/Driver/Wired.hs", "src/driver/cbits/target-layout.c")
     inputs.files(fileTree("nih/pinned/ghc-9.14.1/libraries/ghc-internal") {
         include("**/*.hs", "**/*.hs-boot", "**/*.hsc", "include/WordSize.h", "LICENSE")
@@ -413,7 +413,7 @@ tasks.withType(Test).configureEach {
     inputs.files("thc.cabal", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
         "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc")
-    inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
+    inputs.files(fileTree("t/haskell-fixtures") { include("**/*.hs") })
     inputs.file("src/tools/primops/PrimopTools.hs")
     inputs.files(fileTree("bench/experiments") {
         include("int32x4-bytearray/evidence-x86_64/*-core.json.gz", "int32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
@@ -1265,8 +1265,8 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-p
 tasks.processResources { dependsOn(compileNativeProcesses) }
 
 def prepareProcessLifecycleOracle = tasks.register("prepareProcessLifecycleOracle") {
-    def source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
-    def policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
+    def source = layout.projectDirectory.file("t/fixtures/process-lifecycle/Main.hs")
+    def policySource = layout.projectDirectory.file("t/fixtures/process-lifecycle/sigchld-policy.c")
     def transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
     def output = layout.buildDirectory.dir("process-lifecycle/native")
     def ghc = providers.environmentVariable("GHC").orElse("ghc")

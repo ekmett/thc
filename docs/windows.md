@@ -53,7 +53,7 @@ $env:THC_BACKEND = 'bytecode'
 Both calls print 5050. For a Cabal executable, use:
 
 ~~~powershell
-cabal run thc -- run completed --project-dir test/fixtures/run-pure `
+cabal run thc -- run completed --project-dir t/fixtures/run-pure `
   --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ~~~
 

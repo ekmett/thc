@@ -537,7 +537,7 @@ slab independently of the archive owner.
 ## Shared controls
 
 Manual byte vectors live in
-[`test/compact-core/golden`](../test/compact-core/golden/integers-v1.json).
+[`t/compact-core/golden`](../t/compact-core/golden/integers-v1.json).
 `cbd-header-v1.hex` specifies the 32-byte prefix with version 1.0, summary flags
 10, one binding and no debug flags. It is not a valid typed module by itself.
 The integer vectors cover canonical

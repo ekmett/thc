@@ -14,8 +14,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/empty-tuple-input'
-FIXTURE = ROOT / 'test/fixtures/compiler/EmptyTupleInputAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/EmptyTupleInputAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/EmptyTupleInputAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/EmptyTupleInputAuditNative.hs'
 INPUTS = [-(1 << 63), -4097, -1, 0, 1, 4097, 3000000000, (1 << 63) - 1]
 FORMALS = {'before': [0], 'beforeBias': [1], 'between': [1], 'after': [2], 'identityEmpty': [0],
            'used': [0], 'emptyOnly': [0, 1], 'lazyInput': [0], 'pair': [0], 'self': [0],
@@ -137,7 +137,7 @@ def prepare():
         commands.append(dict(argv=argv, cwd=str(ROOT), environment=env or {}))
         subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
     run(['bin/build-compiler.sh'])
-    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-itest/fixtures/compiler',
+    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-it/fixtures/compiler',
          '-odir', str(native), '-hidir', str(native), '-o', str(native / 'empty-tuple-input'), str(NATIVE)])
     for file, flags in [('oracle.tsv', []), ('oracle-pairs.tsv', ['--pairs'])]:
         argv = [str(native / 'empty-tuple-input'), *flags]

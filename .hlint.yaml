@@ -3,9 +3,9 @@
 
 - arguments:
   # Fixtures and their producers deliberately preserve particular Core shapes.
-  - --ignore-glob=test/fixtures/compiler/**
-  - --ignore-glob=test/fixtures/**
-  - --ignore-glob=test/haskell-fixtures/**
+  - --ignore-glob=t/fixtures/compiler/**
+  - --ignore-glob=t/fixtures/**
+  - --ignore-glob=t/haskell-fixtures/**
   # Upstream source snapshots retain upstream style and compiler configuration.
   - --ignore-glob=nih/pinned/**
   # Frozen benchmark source is retained evidence, not current implementation.

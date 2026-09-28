@@ -30,7 +30,7 @@ Core is rewritten or cold branch discarded. Arithmetic uses bounded dyadic
 values, so the final floating-to-Int conversion is defined and the independent
 model can use integer fixed-point arithmetic.
 
-[Primitive movement fixtures](../test/fixtures/compiler/DoubleArrayAudit.hs)
+[Primitive movement fixtures](../t/fixtures/compiler/DoubleArrayAudit.hs)
 seed Int bits, move them through actual Double reads/writes, then inspect Int
 bits. One retains an opaque State/Double tuple-returning read helper; the other
 retains a scalar Double index helper. Both use separate allocations and obey

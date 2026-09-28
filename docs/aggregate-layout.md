@@ -162,7 +162,7 @@ Missing native layout is accepted only for known-pointer unknown levity with a
 complete logical shape, including nested sums. Abstract alternatives and tuple
 `components: null` still reject, even when their native vector is known.
 
-[SumLayoutAudit.hs](../test/fixtures/compiler/SumLayoutAudit.hs) and its native
+[SumLayoutAudit.hs](../t/fixtures/compiler/SumLayoutAudit.hs) and its native
 driver check 169 values against an independent arithmetic model. Genuine exports
 before and after Tidy retain 19 result shapes, including nested sums/tuples,
 newtype aliases, runtime/levity polymorphism, three-way sums, lazy boxed payloads,

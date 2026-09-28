@@ -31,7 +31,7 @@ checks cover zero physical locals, operand order, failure before transfer and
 malformed logical boundaries.
 
 The full retained Typeable exports in
-[`test/fixtures/compiler/empty-join-typeable`](../test/fixtures/compiler/empty-join-typeable/README.md)
+[`t/fixtures/compiler/empty-join-typeable`](../t/fixtures/compiler/empty-join-typeable/README.md)
 show six empty join formals and 34 calls becoming representable. They still have
 28 missing globals and fail strict auditing; this change does not claim complete
 Typeable or exception-library coverage.

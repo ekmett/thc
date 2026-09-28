@@ -350,7 +350,7 @@ public class ProcessSignalsTest {
     @Test public void nativeChildControlsAndGhcActionOracleHaveMatchingInputs() throws Exception {
         assumeTrue(System.getProperty("os.name").equals("Linux")); var root = new File(System.getProperty("thc.projectRoot"));
         var manifest = (Map<String, Object>) Json.parse(Files.readString(new File(root, "build/process-signals/manifest.json").toPath()));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c",
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ProcessSignalsNative.hs", "src/main/c/native-process-signal-api.c", "src/test/c/native-process-signals-test.c",
             "src/test/resources/core/original-signal-install-descriptor.json", "src/test/resources/core/original-unix-signal-install-descriptor.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/process-signals/oracle.txt", "build/process-signals/native-controls.txt"), "build/process-signals/");
         assertEquals("[(1,[-1,-2,-4,-5]),(2,[-1,-2,-4,-5]),(3,[-1,-2,-4,-5]),(10,[-1,-2,-4,-5]),(12,[-1,-2,-4,-5]),(15,[-1,-2,-4,-5]),(24,[-1,-2,-4,-5]),(25,[-1,-2,-4,-5])]\n", Files.readString(new File(root, "build/process-signals/oracle.txt").toPath()));

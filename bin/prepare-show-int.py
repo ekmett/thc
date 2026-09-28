@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/show-int'
 WORKER = "ghc-internal:GHC.Internal.Show.$fShowCallStack_itos'"
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
-FIXTURES = [ROOT / 'test/fixtures/compiler' / name for name in ('ShowIntAudit.hs', 'ShowIntAuditNative.hs')]
+FIXTURES = [ROOT / 't/fixtures/compiler' / name for name in ('ShowIntAudit.hs', 'ShowIntAuditNative.hs')]
 
 def check(condition, message):
     if not condition:
@@ -88,7 +88,7 @@ def main():
                  *['-fplugin-opt=THC.Plugin:closure='+name for name in ENTRIES], str(FIXTURES[0])],
                 dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc'), THC_SOURCE_NOTES='true'))
         stages, coverage = inventory()
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
              '-odir', str(OUT/'native'), '-hidir', str(OUT/'native'), '-o', str(OUT/'native/show-int-oracle'), str(FIXTURES[1])])
         text = ''.join(f'{name}\t{x}\t{i}\n' for name,x,i in requests())
         (OUT/'requests.tsv').write_text(text)

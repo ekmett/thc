@@ -134,7 +134,7 @@ public class GraphWorkloadTest {
             for (var e : hashes.entrySet()) assertEquals(e.getValue(), digest(e.getKey()), "Stale graph " + kind + ": " + e.getKey());
         }
         var inputs = (Map<String, String>) manifest.get("inputHashes"); var artifacts = (Map<String, String>) manifest.get("artifactHashes");
-        for (var path : List.of("src/examples/THC/GraphWorkload.hs", "src/examples/LibraryOracle.hs", "test/haskell-fixtures/GraphFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/export-boot.py", "bin/audit-core.py", "bin/core-capabilities.json")) assertTrue(inputs.containsKey(path));
+        for (var path : List.of("src/examples/THC/GraphWorkload.hs", "src/examples/LibraryOracle.hs", "t/haskell-fixtures/GraphFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/export-boot.py", "bin/audit-core.py", "bin/core-capabilities.json")) assertTrue(inputs.containsKey(path));
         for (var path : List.of(directory + "/oracle.tsv", directory + "/inputs.tsv", directory + "/boot/boot-provenance.json")) assertTrue(artifacts.containsKey(path));
         assertEquals("b1c1127ff57b6f844d0b30cea54a62c01ca146a49ed4953485be1af389a94bd8", artifacts.get("vendor/archives/containers-0.8.tar.gz"));
         var container = (Map<String, Object>) manifest.get("containers");

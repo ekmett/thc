@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /** These same manually specified bytes are checked by the native producer.
  * They test framing/primitives, not a fabricated executable Core module. */
 class CoreCompactGoldenTest {
-    private final Path directory = Path.of("test/compact-core/golden");
+    private final Path directory = Path.of("t/compact-core/golden");
     private byte[] hex(String text) { return HexFormat.of().parseHex(text.replaceAll("\\s", "")); }
     @Test void sharedUnsignedAndSignedVectorsDecodeIndependently() throws Exception {
         var vectors = (List<?>) Json.parse(Files.readString(directory.resolve("integers-v1.json")));

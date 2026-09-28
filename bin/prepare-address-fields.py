@@ -12,7 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/address-fields'
-SOURCE = 'test/fixtures/compiler/AddressFieldAudit.hs'
+SOURCE = 't/fixtures/compiler/AddressFieldAudit.hs'
 ENTRIES = ['natural', 'returned', 'captured', 'partial', 'twins', 'emptyLiteral', 'terminator', 'backwards', 'tupleFrontier']
 VALUES = sorted(set(range(-8, 9)) | {-2**63, -2**63+1, 2**63-2, 2**63-1, -4097, 4097, -2**32, 2**32})
 
@@ -98,7 +98,7 @@ def main():
         'emit _ = error "invalid input"', 'main = getContents >>= mapM_ (emit . words) . lines']
     source = BUILD/'NativeAddressFields.hs'; source.write_text('\n'.join(driver)+'\n')
     native = BUILD/'native'; native.mkdir(exist_ok=True); executable = native/'address-fields-oracle'
-    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-i'+str(ROOT/'test/fixtures/compiler'),
+    run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-i'+str(ROOT/'t/fixtures/compiler'),
          '-odir', native, '-hidir', native, source, '-o', executable])
     requests = ''.join(f'{name}\t{x}\n' for name in ENTRIES for x in VALUES)
     expected = ''.join(f'{name}\t{x}\t{model(name,x)}\n' for name in ENTRIES for x in VALUES)

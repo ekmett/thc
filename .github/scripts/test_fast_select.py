@@ -41,7 +41,7 @@ class FastSelectionTest(unittest.TestCase):
         affected = dict(junit=["example.OtherTest"], python=["bin/test-other.py"])
         self.policy = dict(schema=2, smoke=smoke,
                            leafSources={"src/main/java/Leaf.java": dict(junit=["example.LeafTest"], python=[])},
-                           owners={"test/fixtures/compiler/Family.hs": affected,
+                           owners={"t/fixtures/compiler/Family.hs": affected,
                                    "bin/prepare-family.py": affected,
                                    "src/test/java/example/SharedContext.java": affected},
                            primopFamilies={name: affected for name in
@@ -61,9 +61,9 @@ class FastSelectionTest(unittest.TestCase):
             "src/main/java/Critical.java": "package example;\nclass Critical {}\n",
             "bin/test-smoke.py": PYTHON_TEST,
             "bin/test-other.py": PYTHON_TEST,
-            "test/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
-            "test/primop-tools/Main.hs": "module Main where\nmain = pure ()\n",
-            "test/compact-core/Main.hs": "module Main where\nmain = pure ()\n",
+            "t/haskell-driver/Main.hs": "module Main where\nmain = pure ()\n",
+            "t/primop-tools/Main.hs": "module Main where\nmain = pure ()\n",
+            "t/compact-core/Main.hs": "module Main where\nmain = pure ()\n",
             "README.md": "Documentation\n",
         }
         for path, text in files.items():
@@ -115,7 +115,7 @@ class FastSelectionTest(unittest.TestCase):
 
 
     def test_store_project_tests_select_driver_suite_without_full_jvm_run(self):
-        path = "test/haskell-driver/StoreProjectTests.hs"
+        path = "t/haskell-driver/StoreProjectTests.hs"
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         self.policy["owners"][path] = policy["owners"][path]
         self.write(select.POLICY, json.dumps(self.policy))
@@ -137,11 +137,11 @@ class FastSelectionTest(unittest.TestCase):
                   "executable thc\n  main-is: Main.hs\n  build-depends: base\n"
                   "test-suite old-test\n  main-is: Old.hs\n")
         self.write("thc.cabal", before)
-        self.write("test/haskell-driver/TestSupport.hs", "module TestSupport where\n")
+        self.write("t/haskell-driver/TestSupport.hs", "module TestSupport where\n")
         base = self.commit()
-        prefix = "test/fixtures/run-added/"
+        prefix = "t/fixtures/run-added/"
         fixture_paths = [prefix + path for path in ("cabal.project", "run-added.cabal", "app/Main.hs")]
-        harness = "test/haskell-driver/AddedFullCore.hs"
+        harness = "t/haskell-driver/AddedFullCore.hs"
         for path in fixture_paths + [harness]:
             self.write(path, "new test input\n")
         after = before.replace("  README.md\n", "  README.md\n" +
@@ -168,7 +168,7 @@ class FastSelectionTest(unittest.TestCase):
             "active stanza": after.replace("if !flag(full-core-tests)", "if flag(full-core-tests)"),
             "unknown condition": after.replace("if !flag(full-core-tests)", "if os(linux)"),
             "overridden buildable": after.replace("  main-is: AddedFullCore.hs", "  buildable: True\n  main-is: AddedFullCore.hs"),
-            "production source dir": after.replace("hs-source-dirs: test/haskell-driver", "hs-source-dirs: src"),
+            "production source dir": after.replace("hs-source-dirs: t/haskell-driver", "hs-source-dirs: src"),
             "production module": after.replace("other-modules: TestSupport", "other-modules: THC.Driver.Project"),
             "production import": after.replace("test-suite added-full-core", "test-suite added-full-core\n  import: production"),
             "production dependency": after.replace("  build-depends: base\n", "  build-depends: base, containers\n"),
@@ -187,25 +187,25 @@ class FastSelectionTest(unittest.TestCase):
 
     def test_full_core_exception_does_not_hide_unowned_or_shared_inputs(self):
         base, _, _ = self.full_core_addition()
-        self.write("test/haskell-driver/TestSupport.hs", "module TestSupport where\nchanged = True\n")
+        self.write("t/haskell-driver/TestSupport.hs", "module TestSupport where\nchanged = True\n")
         self.commit()
         result = self.plan(base=base)
         self.assertEqual("full", result["mode"])
-        self.assertIn("test/haskell-driver/TestSupport.hs", [r.get("path") for r in result["reasons"]])
+        self.assertIn("t/haskell-driver/TestSupport.hs", [r.get("path") for r in result["reasons"]])
         self.assertEqual(["test:added-full-core"], result["haskell"]["compileTargets"])
 
     def test_full_core_exception_requires_new_exact_fixture_ownership(self):
         base, before, after = self.full_core_addition()
-        statuses = {"thc.cabal": "M", "test/haskell-driver/AddedFullCore.hs": "A",
-                    **{f"test/fixtures/run-added/{name}": "A" for name in
+        statuses = {"thc.cabal": "M", "t/haskell-driver/AddedFullCore.hs": "A",
+                    **{f"t/fixtures/run-added/{name}": "A" for name in
                        ("cabal.project", "run-added.cabal", "app/Main.hs")}}
         self.assertIsNotNone(select.additive_full_core_tests(before, after, statuses, []))
         self.assertIsNone(select.additive_full_core_tests(before, after, statuses,
-                          ["test/fixtures/run-added/existing.hs"]))
+                          ["t/fixtures/run-added/existing.hs"]))
         for path in statuses.keys() - {"thc.cabal"}:
             with self.subTest(path=path):
                 self.assertIsNone(select.additive_full_core_tests(before, after, statuses | {path: "M"}, []))
-        self.write("test/fixtures/run-added/unowned.hs", "unlisted input\n")
+        self.write("t/fixtures/run-added/unowned.hs", "unlisted input\n")
         self.commit()
         self.assertEqual("full", self.plan(base=base)["mode"])
 
@@ -224,7 +224,7 @@ class FastSelectionTest(unittest.TestCase):
         self.assertEqual(["driver-tests"], selected["affected"]["haskell"])
 
     def test_primop_tests_select_the_new_cabal_suite(self):
-        path = "test/primop-tools/Main.hs"
+        path = "t/primop-tools/Main.hs"
         self.policy["owners"][path] = dict(junit=[], python=[], haskell=["primop-tools"])
         self.write(select.POLICY, json.dumps(self.policy))
         before = self.commit()
@@ -259,13 +259,13 @@ class FastSelectionTest(unittest.TestCase):
         policy = json.loads(Path(__file__).with_name("fast-tests.json").read_text())
         for path in ("src/cbd/THC/Compact/Wire.hs", "src/cbd/THC/Compact/Writer.hs",
                      "src/cbd/THC/Compact/Compression.hs", "src/cbd/THC/Compact/Zip.hs",
-                     "test/compact-core/CbdTests.hs", "test/compact-core/CompressionTests.hs",
-                     "test/compact-core/Main.hs", "test/compact-core/golden/integers-v1.json",
-                     "test/compact-core/golden/cbd-header-v1.hex",
-                     "test/compact-core/golden/cbd-module-v1.json",
-                     "test/compact-core/golden/cbd-module-v1-stored.cbd",
-                     "test/compact-core/golden/cbd-module-v1-deflated.cbd",
-                     "test/compact-core/golden/cbd-module-v1-mixed.cbd"):
+                     "t/compact-core/CbdTests.hs", "t/compact-core/CompressionTests.hs",
+                     "t/compact-core/Main.hs", "t/compact-core/golden/integers-v1.json",
+                     "t/compact-core/golden/cbd-header-v1.hex",
+                     "t/compact-core/golden/cbd-module-v1.json",
+                     "t/compact-core/golden/cbd-module-v1-stored.cbd",
+                     "t/compact-core/golden/cbd-module-v1-deflated.cbd",
+                     "t/compact-core/golden/cbd-module-v1-mixed.cbd"):
             with self.subTest(path=path):
                 self.policy["owners"][path] = policy["owners"][path]
                 self.write(select.POLICY, json.dumps(self.policy))
@@ -279,7 +279,7 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertEqual(["compact-core-tests"], selected["haskell"]["suites"])
                 self.assertEqual(["compact-core-tests"], selected["affected"]["haskell"])
                 junit = ["example.SmokeTest"]
-                if path.startswith("test/compact-core/golden/"):
+                if path.startswith("t/compact-core/golden/"):
                     junit.append("thc.CoreCompactGoldenTest")
                 self.assertEqual(junit, selected["junit"]["classes"])
 
@@ -445,7 +445,7 @@ private String text = "class FakeString { @Test }";
                 self.base = result["head"]
 
     def test_unknown_fixture_and_preparer_still_widen(self):
-        for path in ("test/fixtures/compiler/Unknown.hs", "bin/prepare-unknown.py"):
+        for path in ("t/fixtures/compiler/Unknown.hs", "bin/prepare-unknown.py"):
             with self.subTest(path=path):
                 self.write(path, "unmapped\n")
                 self.commit()
@@ -952,9 +952,9 @@ private String text = "class FakeString { @Test }";
             self.write(path, PYTHON_TEST)
         for path in policy["leafSources"]:
             self.write(path, "// synthetic production source\n")
-        changed = ["test/fixtures/compiler/CBVCoercionAudit.hs",
-                   "test/fixtures/compiler/DataToTagAudit.hs",
-                   "test/fixtures/compiler/MutableByteArraySizeAudit.hs",
+        changed = ["t/fixtures/compiler/CBVCoercionAudit.hs",
+                   "t/fixtures/compiler/DataToTagAudit.hs",
+                   "t/fixtures/compiler/MutableByteArraySizeAudit.hs",
                    "src/examples/THC/Unboxed8Arrays.hs",
                    "src/examples/THC/Unboxed16Arrays.hs",
                    "src/examples/THC/Unboxed32Arrays.hs"]
@@ -1066,9 +1066,9 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_thread_inventory_lowering_and_example_keep_native_and_structural_owners(self):
         self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
                          set(self.family("ThreadObservation")["junit"]))
-        for path in ("src/examples/ThreadInventory.hs", "test/fixtures/compiler/ThreadInventoryNative.hs",
-                     "test/fixtures/compiler/CallbackIdentityNative.hs", "test/fixtures/compiler/callback-identity.c",
-                     "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/Main.hs"):
+        for path in ("src/examples/ThreadInventory.hs", "t/fixtures/compiler/ThreadInventoryNative.hs",
+                     "t/fixtures/compiler/CallbackIdentityNative.hs", "t/fixtures/compiler/callback-identity.c",
+                     "t/haskell-fixtures/ThreadInventoryFixtures.hs", "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
 
     def test_native_malloc_source_and_composite_owners_select_both_consumers(self):
@@ -1079,13 +1079,13 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         owners = self.policy["owners"]
         self.assertEqual([buffers, malloc], owners["src/main/java/thc/runtime/NativeMallocAllocation.java"]["junit"])
         self.assertEqual({malloc, addresses},
-                         set(owners["test/haskell-fixtures/NativeAddressFixtures.hs"]["junit"]))
+                         set(owners["t/haskell-fixtures/NativeAddressFixtures.hs"]["junit"]))
         self.assertEqual({malloc, addresses},
                          set(owners["src/main/java/thc/runtime/NativeAddresses.java"]["junit"]))
-        for path in ("test/fixtures/compiler/NativeMallocNative.hs",
+        for path in ("t/fixtures/compiler/NativeMallocNative.hs",
                      "src/test/resources/core/original-malloc-descriptors.json"):
             self.assertEqual([malloc], owners[path]["junit"])
-        self.assertIn(malloc, owners["test/haskell-fixtures/Main.hs"]["junit"])
+        self.assertIn(malloc, owners["t/haskell-fixtures/Main.hs"]["junit"])
 
     def test_saved_termios_owners_select_pointer_and_original_fixture_controls(self):
         owners = self.policy["owners"]
@@ -1093,8 +1093,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertEqual({"thc.runtime.SavedTermiosTest", original},
                          set(owners["src/main/java/thc/runtime/SavedTermios.java"]["junit"]))
         for fixture in ("Audit", "Native"):
-            self.assertEqual([original], owners[f"test/fixtures/compiler/OriginalSavedTermios{fixture}.hs"]["junit"])
-        for path in ("test/haskell-fixtures/OriginalTermiosFixtures.hs", "test/haskell-fixtures/Main.hs",
+            self.assertEqual([original], owners[f"t/fixtures/compiler/OriginalSavedTermios{fixture}.hs"]["junit"])
+        for path in ("t/haskell-fixtures/OriginalTermiosFixtures.hs", "t/haskell-fixtures/Main.hs",
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java"):
             self.assertIn(original, owners[path]["junit"])
 
@@ -1127,34 +1127,34 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                          set(owners["src/test/java/thc/PrimopTestContext.java"]["junit"]))
 
     def test_tcsetattr_sources_select_the_original_native_comparison(self):
-        for path in ("test/fixtures/compiler/OriginalTcsetattrAudit.hs", "test/fixtures/compiler/OriginalTcsetattrNative.hs",
-                     "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "src/main/c/native-file-api.c",
+        for path in ("t/fixtures/compiler/OriginalTcsetattrAudit.hs", "t/fixtures/compiler/OriginalTcsetattrNative.hs",
+                     "t/haskell-fixtures/OriginalTcsetattrFixtures.hs", "src/main/c/native-file-api.c",
                      "src/main/java/thc/runtime/NativeFileProvider.java", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/java/thc/runtime/ManagedStdio.java", "src/main/java/thc/runtime/ManagedFiles.java",
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java",
-                     "test/haskell-fixtures/Main.hs"):
+                     "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalTcsetattrTest", self.policy["owners"][path]["junit"], path)
     def test_sigprocmask_sources_select_the_platform_thread_controls(self):
-        for path in ("test/fixtures/compiler/OriginalSigprocmaskAudit.hs", "test/fixtures/compiler/OriginalSigprocmaskNative.hs",
-                     "test/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "src/main/c/native-signal-api.c",
+        for path in ("t/fixtures/compiler/OriginalSigprocmaskAudit.hs", "t/fixtures/compiler/OriginalSigprocmaskNative.hs",
+                     "t/haskell-fixtures/OriginalSigprocmaskFixtures.hs", "src/main/c/native-signal-api.c",
                      "src/main/java/thc/runtime/ManagedSignalMask.java", "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
-                     "src/main/java/thc/runtime/OriginalStdioExpression.java", "test/haskell-fixtures/Main.hs"):
+                     "src/main/java/thc/runtime/OriginalStdioExpression.java", "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalSigprocmaskTest", self.policy["owners"][path]["junit"], path)
 
     def test_tcgetattr_sources_select_the_original_native_comparison(self):
-        for path in ("test/fixtures/compiler/OriginalTcgetattrAudit.hs", "test/fixtures/compiler/OriginalTcgetattrNative.hs",
-                     "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "src/main/c/native-file-api.c",
+        for path in ("t/fixtures/compiler/OriginalTcgetattrAudit.hs", "t/fixtures/compiler/OriginalTcgetattrNative.hs",
+                     "t/haskell-fixtures/OriginalTcgetattrFixtures.hs", "src/main/c/native-file-api.c",
                      "src/main/java/thc/runtime/NativeFileProvider.java", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/java/thc/runtime/ManagedStdio.java", "src/main/java/thc/runtime/ManagedFiles.java",
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java", "src/main/java/thc/runtime/OriginalStdioExpression.java",
-                     "test/haskell-fixtures/Main.hs"):
+                     "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalTcgetattrTest", self.policy["owners"][path]["junit"], path)
 
     def test_unlinkat_sources_select_the_genuine_safe_call_comparison(self):
-        for path in ("test/fixtures/compiler/OriginalUnlinkAtAudit.hs",
-                     "test/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
+        for path in ("t/fixtures/compiler/OriginalUnlinkAtAudit.hs",
+                     "t/haskell-fixtures/OriginalUnlinkAtFixtures.hs",
                      "src/test/java/thc/runtime/OriginalUnlinkAtTest.java",
-                     "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
+                     "t/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/java/thc/runtime/NativeFileProvider.java",
                      "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
@@ -1162,16 +1162,16 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/main/java/thc/runtime/ManagedFiles.java",
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                      "src/main/java/thc/runtime/OriginalStdioExpression.java",
-                     "test/haskell-fixtures/Main.hs"):
+                     "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalUnlinkAtTest", self.policy["owners"][path]["junit"], path)
         self.assertIn("thc.runtime.StdioHostAbiTest",
                       self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
 
     def test_fstatat_sources_select_the_genuine_safe_call_comparison(self):
-        for path in ("test/fixtures/compiler/OriginalFstatAtAudit.hs",
-                     "test/haskell-fixtures/OriginalFstatAtFixtures.hs",
+        for path in ("t/fixtures/compiler/OriginalFstatAtAudit.hs",
+                     "t/haskell-fixtures/OriginalFstatAtFixtures.hs",
                      "src/test/java/thc/runtime/OriginalFstatAtTest.java",
-                     "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
+                     "t/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/java/thc/runtime/NativeFileProvider.java",
                      "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
@@ -1179,16 +1179,16 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/main/java/thc/runtime/ManagedFiles.java",
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                      "src/main/java/thc/runtime/OriginalStdioExpression.java",
-                     "test/haskell-fixtures/Main.hs"):
+                     "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalFstatAtTest", self.policy["owners"][path]["junit"], path)
         self.assertIn("thc.runtime.StdioHostAbiTest",
                       self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
 
     def test_current_directory_sources_select_the_genuine_context_directory_comparison(self):
-        for path in ("test/fixtures/compiler/OriginalCurrentDirectoryAudit.hs",
-                     "test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
+        for path in ("t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs",
+                     "t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs",
                      "src/test/java/thc/runtime/OriginalCurrentDirectoryTest.java",
-                     "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
+                     "t/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/java/thc/runtime/NativeDirectoryOwner.java",
                      "src/main/java/thc/NativeFileSystem.java",
@@ -1198,7 +1198,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/main/java/thc/runtime/ManagedFiles.java",
                      "src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java",
                      "src/main/java/thc/runtime/OriginalStdioExpression.java",
-                     "test/haskell-fixtures/Main.hs"):
+                     "t/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.OriginalCurrentDirectoryTest", self.policy["owners"][path]["junit"], path)
         self.assertIn("thc.runtime.StdioHostAbiTest",
                       self.policy["owners"]["src/main/c/stdio-abi-probe.c"]["junit"])
@@ -1249,8 +1249,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         expected = {"thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"}
         for path in ("src/test/java/thc/runtime/Int16ArrayNativeTest.java",
                      "src/test/java/thc/runtime/ArrayCoreEvidence.java",
-                     "test/fixtures/compiler/Int16ArrayAudit.hs",
-                     "src/examples/THC/Unboxed16Arrays.hs", "test/haskell-fixtures/Main.hs"):
+                     "t/fixtures/compiler/Int16ArrayAudit.hs",
+                     "src/examples/THC/Unboxed16Arrays.hs", "t/haskell-fixtures/Main.hs"):
             self.assertTrue(expected <= set(self.policy["owners"][path]["junit"]), path)
         self.assertTrue(expected <= self.classes)
 
@@ -1334,20 +1334,20 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_proxy_void_producer_and_native_sources_select_only_their_consumer(self):
         owners = self.policy["owners"]
-        for path in ("test/haskell-fixtures/ProxyVoidFixtures.hs",
-                     "test/fixtures/compiler/ProxyVoidAudit.hs", "test/fixtures/compiler/ProxyVoidAuditNative.hs",
-                     "test/fixtures/compiler/ProxyVoidPredicate.hs", "src/test/java/thc/runtime/ProxyVoidTest.java"):
+        for path in ("t/haskell-fixtures/ProxyVoidFixtures.hs",
+                     "t/fixtures/compiler/ProxyVoidAudit.hs", "t/fixtures/compiler/ProxyVoidAuditNative.hs",
+                     "t/fixtures/compiler/ProxyVoidPredicate.hs", "src/test/java/thc/runtime/ProxyVoidTest.java"):
             self.assertEqual({"junit": ["thc.runtime.ProxyVoidTest"], "python": []}, owners[path])
-        self.assertIn("thc.runtime.ProxyVoidTest", owners["test/haskell-fixtures/Main.hs"]["junit"])
+        self.assertIn("thc.runtime.ProxyVoidTest", owners["t/haskell-fixtures/Main.hs"]["junit"])
 
     def test_floating_haskell_producers_and_main_keep_their_consumers(self):
         owners = self.policy["owners"]
-        for path in ("test/haskell-fixtures/BigNatLiteralFixtures.hs",
-                     "test/fixtures/compiler/BigNatLiteralAudit.hs", "test/fixtures/compiler/BigNatLiteralAuditNative.hs",
+        for path in ("t/haskell-fixtures/BigNatLiteralFixtures.hs",
+                     "t/fixtures/compiler/BigNatLiteralAudit.hs", "t/fixtures/compiler/BigNatLiteralAuditNative.hs",
                      "src/test/java/thc/runtime/BigNatLiteralTest.java"):
             self.assertEqual(["thc.runtime.BigNatLiteralTest"], owners[path]["junit"])
             self.assertEqual(["bin/test-audit-core.py"], owners[path]["python"])
-        self.assertIn("thc.runtime.BigNatLiteralTest", owners["test/haskell-fixtures/Main.hs"]["junit"])
+        self.assertIn("thc.runtime.BigNatLiteralTest", owners["t/haskell-fixtures/Main.hs"]["junit"])
         for producer, consumer in (("FusedFloatingFixtures", "FusedFloatingTest"),
                                    ("ScalarBitCastFixtures", "ScalarBitCastTest"),
                                    ("SimdFloatFmaFixtures", "SimdFloatFmaTest"),
@@ -1356,24 +1356,24 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
             with self.subTest(producer=producer):
                 junit = "thc.runtime." + consumer
                 expected = {junit} | ({"thc.runtime.SimdWideFloatFmaTest"} if producer == "SimdFloatFmaFixtures" else set())
-                self.assertEqual(expected, set(owners["test/haskell-fixtures/" + producer + ".hs"]["junit"]))
-                self.assertIn(junit, owners["test/haskell-fixtures/Main.hs"]["junit"])
+                self.assertEqual(expected, set(owners["t/haskell-fixtures/" + producer + ".hs"]["junit"]))
+                self.assertIn(junit, owners["t/haskell-fixtures/Main.hs"]["junit"])
         # FMA shares these real native/exported fixtures with the earlier
         # floating suite; adding its producer must not replace their owners.
         for fixture in ("FloatingAudit", "FloatingAuditNative"):
             self.assertEqual({"thc.runtime.CompiledThunkRetentionTest", "thc.runtime.FloatingPrimitiveTest",
                               "thc.runtime.FusedFloatingTest"},
-                             set(owners["test/fixtures/compiler/" + fixture + ".hs"]["junit"]))
+                             set(owners["t/fixtures/compiler/" + fixture + ".hs"]["junit"]))
 
     def test_integer_simd_producer_and_shared_model_keep_every_consumer(self):
         expected = {"thc.runtime." + name for name in ("IntegerSimdModelTest", "SimdInt8VectorTest",
                     "SimdInt16VectorTest", "SimdWord16VectorTest", "SimdWord32VectorTest")}
-        for path in ("test/haskell-fixtures/IntegerSimdFixtures.hs",
+        for path in ("t/haskell-fixtures/IntegerSimdFixtures.hs",
                      "src/test/java/thc/runtime/IntegerSimdModelTest.java",
                      "src/test/java/thc/runtime/IntegerSimdModel.java"):
             self.assertEqual(expected, set(self.policy["owners"][path]["junit"]))
             self.assertEqual(["bin/test-core-vectors.py"], self.policy["owners"][path]["python"])
-        self.assertLessEqual(expected, set(self.policy["owners"]["test/haskell-fixtures/Main.hs"]["junit"]))
+        self.assertLessEqual(expected, set(self.policy["owners"]["t/haskell-fixtures/Main.hs"]["junit"]))
         self.assertIn("    IntegerSimdFixtures", (self.root / "thc.cabal").read_text())
         callers = [(self.root / path).read_text() for path in ("bin/prepare-tests.sh",
                    "bin/test-core-vectors.py", "build.gradle", ".github/workflows/build.yml")]

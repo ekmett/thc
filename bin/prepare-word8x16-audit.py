@@ -18,8 +18,8 @@ from word8x16_model import check, entries, model_rows, parse_rows, HELPERS
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd-word8x16'
-FIXTURE = ROOT / 'test/fixtures/compiler/SimdWord8X16.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/SimdWord8X16Native.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/SimdWord8X16.hs'
+NATIVE = ROOT / 't/fixtures/compiler/SimdWord8X16Native.hs'
 PRIMITIVES = {p+'Word8X16#' for p in ('pack', 'unpack', 'broadcast', 'plus', 'minus', 'times')}
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 EXPECTED_CALLS = {e['name']: 2 if e['name'] in HELPERS else 1 for e in entries()}
@@ -220,7 +220,7 @@ def main():
     if not args.export_only:
         native = OUT/'native'; native.mkdir(exist_ok=True)
         binary = native/'word8x16-oracle'
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
              '-odir', native, '-hidir', native, '-o', binary, NATIVE])
         requests = ''.join('\t'.join(map(str, key))+'\n' for key in wanted)
         output = run([binary], input=requests, text=True, capture_output=True, timeout=60).stdout

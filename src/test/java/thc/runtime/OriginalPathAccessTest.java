@@ -54,7 +54,7 @@ class OriginalPathAccessTest {
     }
     @Test void originalNativeAccessMatchesBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(List.of("pathAccess"),manifest.get("entries"));
-        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalPathAccessAudit.hs","test/haskell-fixtures/OriginalPathAccessFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
+        hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPathAccessAudit.hs","t/haskell-fixtures/OriginalPathAccessFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".json"); artifacts.add(prefix + "/" + stage + "-pathAccess.audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var rows = (List<Map<String,Object>>) json(prefix + "/oracle.json").get("rows"); assertEquals(68,rows.size()); var names = new ArrayList<Object>(); for (int i = 0; i < 60; i += 5) names.add(rows.get(i).get("name"));
         assertEquals(List.of("file","executable","zero","directory","locked-child","link","dangling","missing","empty","not-directory","raw","relative"),names);

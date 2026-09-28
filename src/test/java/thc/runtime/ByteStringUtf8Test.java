@@ -30,8 +30,8 @@ class ByteStringUtf8Test {
     }
     private List<Map<String, Object>> rows() throws Exception {
         var manifest = object(json(prefix + "/manifest.json")); assertEquals(true, manifest.get("strictAccepted")); assertEquals(800L, manifest.get("nativeRows"));
-        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("test/fixtures/compiler/ByteStringUtf8Audit.hs",
-            "test/fixtures/compiler/ByteStringUtf8Native.hs", "test/haskell-fixtures/ByteStringUtf8Fixtures.hs", "bin/core_original_foreign.py"), null);
+        OriginalStdioChecks.hashes(root.toFile(), manifest.get("inputHashes"), Set.of("t/fixtures/compiler/ByteStringUtf8Audit.hs",
+            "t/fixtures/compiler/ByteStringUtf8Native.hs", "t/haskell-fixtures/ByteStringUtf8Fixtures.hs", "bin/core_original_foreign.py"), null);
         var artifacts = new HashSet<>(list(prefix + "/oracle.json"));
         for (var stage : list("pre", "post")) for (var name : list("ByteStringUtf8Audit", "THC.InterfaceClosure")) artifacts.add(prefix + "/" + stage + "/core/" + name + ".json");
         OriginalStdioChecks.hashes(root.toFile(), manifest.get("artifactHashes"), artifacts, prefix + "/");

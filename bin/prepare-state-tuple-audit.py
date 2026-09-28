@@ -14,8 +14,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/state-tuple'
-FIXTURE = ROOT / 'test/fixtures/compiler/StateTupleAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/StateTupleAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/StateTupleAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/StateTupleAuditNative.hs'
 INPUTS = [-(1 << 63), -4097, -1, 0, 1, 4097, (1 << 63) - 1]
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 ENTRIES = ['pairCase', 'lazyCase', 'captureCase', 'effectCase']
@@ -91,7 +91,7 @@ def main():
             commands.append(dict(argv=argv, environment=env or {}))
             subprocess.run(argv, cwd=ROOT, env=dict(os.environ, **(env or {})), check=True)
         run(['bin/build-compiler.sh'])
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-it/fixtures/compiler',
              '-odir', str(OUT / 'native'), '-hidir', str(OUT / 'native'), '-o', str(OUT / 'native/state-tuple'), str(NATIVE)])
         commands.append(dict(argv=[str(OUT / 'native/state-tuple')], stdout=str(OUT / 'oracle.tsv')))
         (OUT / 'oracle.tsv').write_text(subprocess.check_output([str(OUT / 'native/state-tuple')], text=True))

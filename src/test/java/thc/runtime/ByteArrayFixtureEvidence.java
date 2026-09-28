@@ -75,9 +75,9 @@ final class ByteArrayFixtureEvidence {
                 paths.add(directory + "/" + stage + (original ? "/core/" : "-core/") + name + ".json");
             stages.put(stage, paths);
         }
-        var sourcePaths = new ArrayList<>(List.of("test/fixtures/compiler/" + module + ".hs",
-            "test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-            "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json",
+        var sourcePaths = new ArrayList<>(List.of("t/fixtures/compiler/" + module + ".hs",
+            "t/haskell-fixtures/ByteArrayFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+            "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/audit-core.py", "bin/core-capabilities.json",
             "src/main/resources/thc/scalar-primop-signatures.json", "bin/build-compiler.sh", "bin/export-core.sh",
             "bin/toolchain.sh", "bin/plugin.py"));
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles()))
@@ -93,8 +93,8 @@ final class ByteArrayFixtureEvidence {
             sourcePaths.add("src/tools/primops/PrimopTools.hs");
         if (!generated)
             sourcePaths.addAll(List.of(
-                "test/fixtures/compiler/" + module.substring(0, module.length() - "Audit".length()) + "Native.hs",
-                "test/fixtures/compiler/ByteArrayFixtureInputs.hs"));
+                "t/fixtures/compiler/" + module.substring(0, module.length() - "Audit".length()) + "Native.hs",
+                "t/fixtures/compiler/ByteArrayFixtureInputs.hs"));
         var artifacts = new ArrayList<>(List.of(directory + "/requests.tsv", directory + "/oracle.tsv",
             directory + "/native/" + (group.equals("bytearray") ? "bytearray" : group) + "-oracle"));
         if (drivers.containsKey(group))

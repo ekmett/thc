@@ -91,9 +91,9 @@ public class AddressArrayCopyTest {
         assertEquals(names, manifest.get("entries"));
         assertEquals(16L, manifest.get("bytesPerRow"));
         assertEquals((long) names.size() * seeds.size() * ranges.size(), manifest.get("nativeRows"));
-        var sources = new HashSet<>(Set.of("test/fixtures/compiler/AddressArrayCopyAudit.hs",
-            "test/fixtures/compiler/AddressArrayCopyNative.hs", "thc.cabal", "test/haskell-fixtures/Main.hs",
-            "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/AddressArrayCopyFixtures.hs",
+        var sources = new HashSet<>(Set.of("t/fixtures/compiler/AddressArrayCopyAudit.hs",
+            "t/fixtures/compiler/AddressArrayCopyNative.hs", "thc.cabal", "t/haskell-fixtures/Main.hs",
+            "t/haskell-fixtures/FixtureSupport.hs", "t/haskell-fixtures/AddressArrayCopyFixtures.hs",
             "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
             "bin/audit-core.py", "bin/core-capabilities.json",
             "src/main/resources/thc/scalar-primop-signatures.json"));

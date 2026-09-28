@@ -72,7 +72,7 @@ def main():
     inventories=[]
     for stage in ('pre','post'):
         flags=['-fplugin-opt=THC.Plugin:post-tidy'] if stage=='post' else []
-        run(['bin/export-core.sh',*flags,'test/fixtures/compiler/SumResultAudit.hs'],
+        run(['bin/export-core.sh',*flags,'t/fixtures/compiler/SumResultAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'),THC_GHC_OUT=str(OUT/f'{stage}-ghc'),THC_SOURCE_NOTES='true'))
         path=OUT/f'{stage}-core/SumResultAudit.json'; module=json.loads(path.read_text())
         require(module['ghc']=='9.14.1' and module['schema']==1 and module['boundary']==
@@ -94,14 +94,14 @@ def main():
         (OUT/f'{stage}-audit.json').write_text(json.dumps(report,indent=2)+'\n')
         inventories.append(dict(stage=stage,producerShapes=shapes,strictRoots=ENTRIES+['pairedInputs']))
     native=OUT/'native'; native.mkdir(exist_ok=True); binary=native/'oracle'
-    run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-itest/fixtures/compiler',
-         '-odir',str(native),'-hidir',str(native),'test/fixtures/compiler/SumResultAuditNative.hs','-o',str(binary)])
+    run([ghc,'--make','-O2','-fforce-recomp','-dcore-lint','-dstg-lint','-it/fixtures/compiler',
+         '-odir',str(native),'-hidir',str(native),'t/fixtures/compiler/SumResultAuditNative.hs','-o',str(binary)])
     oracle=run([str(binary)]); paired=run([str(binary),'--pairs'])
     require(oracle==''.join(f'{n}\t{x}\t{model(n,x)}\n' for n in ENTRIES for x in INPUTS),'Native unary result differs from independent wrap model')
     require(paired==''.join(f'pairedInputs\t{x}\t{y}\t{pair_model(x,y)}\n' for x,y in PAIRS),'Native pair result differs from independent wrap model')
     (OUT/'oracle.tsv').write_text(oracle); (OUT/'oracle-pairs.tsv').write_text(paired)
     (OUT/'checks.json').write_text(json.dumps(dict(nativeRows=110,independentPairRows=7,coverage=inventories),indent=2)+'\n')
-    sources=[ROOT/'test/fixtures/compiler/SumResultAudit.hs',ROOT/'test/fixtures/compiler/SumResultAuditNative.hs',Path(__file__).resolve(),
+    sources=[ROOT/'t/fixtures/compiler/SumResultAudit.hs',ROOT/'t/fixtures/compiler/SumResultAuditNative.hs',Path(__file__).resolve(),
              ROOT/'bin/audit-core.py',ROOT/'bin/core-capabilities.json',ROOT/'src/main/resources/thc/scalar-primop-signatures.json',
              ROOT/'src/tools/primops/PrimopTools.hs',*sorted((ROOT/'bin').glob('core_*.py')),*sorted((ROOT/'src/compiler/THC').glob('*.hs')),
              *[ROOT / 'bin' / name for name in ('build-compiler.sh', 'export-core.sh', 'toolchain.sh')],

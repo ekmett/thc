@@ -18,8 +18,8 @@ from int32x4_multiply_model import check, entries, model_rows, parse_rows, HELPE
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd-int32x4-multiply'
-FIXTURE = ROOT / 'test/fixtures/compiler/SimdInt32X4Multiply.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/SimdInt32X4MultiplyNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/SimdInt32X4Multiply.hs'
+NATIVE = ROOT / 't/fixtures/compiler/SimdInt32X4MultiplyNative.hs'
 PRIMITIVES = {p+'Int32X4#' for p in ('pack', 'unpack', 'times')}
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
 EXPECTED_CALLS = {e['name']: 2 if e['name'] in HELPERS else 1 for e in entries()}
@@ -214,7 +214,7 @@ def main():
     if not args.export_only:
         native = OUT/'native'; native.mkdir(exist_ok=True)
         binary = native/'int32x4-multiply-oracle'
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
              '-odir', native, '-hidir', native, '-o', binary, NATIVE])
         requests = ''.join('\t'.join(map(str, key))+'\n' for key in wanted)
         output = run([binary], input=requests, text=True, capture_output=True, timeout=60).stdout

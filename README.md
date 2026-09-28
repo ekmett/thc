@@ -59,7 +59,7 @@ is `cabal run thc -- --help`.
 Then run the included Cabal executable through THC:
 
 ```sh
-cabal run thc -- run completed --project-dir test/fixtures/run-pure \
+cabal run thc -- run completed --project-dir t/fixtures/run-pure \
   --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
@@ -82,7 +82,7 @@ Haskell helper, an internal library and an executable:
 
 ```sh
 cabal run thc -- run app-run:exe:completed \
-  --project-dir test/fixtures/run-project --thc-root "$PWD" \
+  --project-dir t/fixtures/run-project --thc-root "$PWD" \
   --dist-dir "$PWD/build/run-project"
 ```
 
@@ -252,7 +252,7 @@ describe implemented protocols and opt-in experiments.
 * [`src/compiler/`](src/compiler/) exports executable Core from GHC, with
   representation and evaluation information.
 * [`src/driver/`](src/driver/) builds the
-  command-line driver; [`test/`](test/) contains its Cabal fixtures and checks.
+  command-line driver; [`t/`](t/) contains its Cabal fixtures and checks.
 * [`src/cbd/`](src/cbd/) implements compact Core storage and inspection.
 * [`src/runtime/`](src/runtime/) provides the public Haskell runtime API.
 * [`nih/pinned/`](nih/pinned/) pins upstream Git submodules; [`nih/licenses/`](nih/licenses/) collects notices.

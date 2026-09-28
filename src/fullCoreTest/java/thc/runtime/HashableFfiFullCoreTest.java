@@ -35,8 +35,8 @@ public class HashableFfiFullCoreTest {
     private Fixture fixture() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(1L, manifest.get("schema")); assertEquals(true, manifest.get("strictAccepted")); assertEquals(true, manifest.get("runtimeVerified"));
         assertEquals("1.5.1.0", manifest.get("hashableVersion")); assertEquals(false, manifest.get("randomInitialSeed")); assertEquals(false, manifest.get("archNative")); assertEquals(300L, manifest.get("nativeRows"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/run-hashable-ffi/cabal.project", "test/fixtures/run-hashable-ffi/run-hashable-ffi.cabal",
-            "test/fixtures/run-hashable-ffi/src/HashableProbe.hs", "test/fixtures/run-hashable-ffi/app/Main.hs", "test/haskell-fixtures/HashableFfiFixtures.hs", "src/compiler/THC/Plugin.hs"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/run-hashable-ffi/cabal.project", "t/fixtures/run-hashable-ffi/run-hashable-ffi.cabal",
+            "t/fixtures/run-hashable-ffi/src/HashableProbe.hs", "t/fixtures/run-hashable-ffi/app/Main.hs", "t/haskell-fixtures/HashableFfiFixtures.hs", "src/compiler/THC/Plugin.hs"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of(prefix + "/packages.json", prefix + "/acquired/packages.json", prefix + "/acquired/audit.json",
             prefix + "/acquired/native/cache/plan.json", prefix + "/logs/native-oracle.stdout"), prefix + "/");
         var rows = new ArrayList<Row>(); for (var row : (List<Map<String, Object>>) manifest.get("observations")) {

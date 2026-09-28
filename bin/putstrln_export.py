@@ -406,7 +406,7 @@ def main():
         write(out / "export-state.json", state)
         return record["exit"] == 0
 
-    require(compile_module("Main", ROOT / "test/fixtures/putstrln/Main.hs", {"main"}, application=True),
+    require(compile_module("Main", ROOT / "t/fixtures/putstrln/Main.hs", {"main"}, application=True),
             "Main export failed; retained command/log and partial artifacts")
     verify_hashes(provenance_inputs)
     sys.path.insert(0, str(ROOT / "bin"))

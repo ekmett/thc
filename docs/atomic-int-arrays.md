@@ -40,7 +40,7 @@ state carriers, arity, and tuple order. Exact GHC `RuntimeRep` spelling belongs
 to the strict exporter audit, so runtime operations do not recheck lexical
 distinctions between integer values already represented by `Long`.
 
-`test/fixtures/compiler/AtomicIntArrayAudit.hs` is a small executable example of
+`t/fixtures/compiler/AtomicIntArrayAudit.hs` is a small executable example of
 each primitive. Its `casInt8Result` entry performs two comparisons on element
 one, returns a checksum of both old values and the final signed byte, and checks
 the two neighboring bytes. `atomicLoadStore` demonstrates state-threaded atomic

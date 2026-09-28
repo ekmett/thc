@@ -559,10 +559,10 @@ public class BoxedCasTest {
         assertEquals(90L, manifest.get("nativeRows"));
         assertEquals(false, manifest.get("installedArtifactsHashed"));
         assertEquals(false, manifest.get("runtimeVerified"));
-        var inputs = new HashSet<>(List.of("test/fixtures/compiler/BoxedCasAudit.hs",
-            "test/fixtures/compiler/BoxedCasNative.hs", "src/examples/THC/BoxedCasCounter.hs",
-            "test/haskell-fixtures/BoxedCasFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-            "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/build-compiler.sh",
+        var inputs = new HashSet<>(List.of("t/fixtures/compiler/BoxedCasAudit.hs",
+            "t/fixtures/compiler/BoxedCasNative.hs", "src/examples/THC/BoxedCasCounter.hs",
+            "t/haskell-fixtures/BoxedCasFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+            "t/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/build-compiler.sh",
             "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py", "bin/core-capabilities.json",
             "src/main/resources/thc/scalar-primop-signatures.json"));
         try (var files = Files.list(root.resolve("src/compiler/THC"))) {

@@ -56,7 +56,7 @@ class OriginalTcsetattrTest {
     }
     @BeforeEach void verifyOriginalInputsAndArtifacts() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(true,manifest.get("supported")); assertEquals(22L,manifest.get("nativeRows"));
-        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalTcsetattrAudit.hs","test/fixtures/compiler/OriginalTcsetattrNative.hs","test/haskell-fixtures/OriginalTcsetattrFixtures.hs"));
+        hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalTcsetattrAudit.hs","t/fixtures/compiler/OriginalTcsetattrNative.hs","t/haskell-fixtures/OriginalTcsetattrFixtures.hs"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json",prefix + "/native/oracle")); for (var stage : List.of("pre","post")) artifacts.add(prefix + "/" + stage + "/originalTcsetattr.audit.json"); hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
     }
     @Test void originalPrivatePtyChangesMatchNativeBeforeAndAfterCompilation() throws Exception {

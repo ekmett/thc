@@ -9,14 +9,14 @@ root=$(pwd)
 out="$root/build/addr-identity"
 rm -rf -- "$out"
 mkdir -p "$out/native-objects"
-"$GHC" --make -O2 -dynamic -i"$root/test/fixtures/compiler" \
+"$GHC" --make -O2 -dynamic -i"$root/t/fixtures/compiler" \
   -outputdir "$out/native-objects" -o "$out/native" \
-  test/fixtures/compiler/AddressIdentityAuditNative.hs
+  t/fixtures/compiler/AddressIdentityAuditNative.hs
 "$out/native" > "$out/oracle.txt"
 for stage in pre post; do
   if [ "$stage" = post ]; then set -- -fplugin-opt=THC.Plugin:post-tidy; else set --; fi
   THC_CORE_OUT="$out/$stage-core" THC_GHC_OUT="$out/$stage-ghc" \
-    bin/export-core.sh "$@" test/fixtures/compiler/AddressIdentityAudit.hs
+    bin/export-core.sh "$@" t/fixtures/compiler/AddressIdentityAudit.hs
   python3 bin/audit-core.py --entry probe --output "$out/$stage.audit.json" \
     "$out/$stage-core/AddressIdentityAudit.json"
 done

@@ -55,7 +55,7 @@ class OriginalPathModeTest {
     }
     @Test void originalNativeModesMatchBothBackendsAndFirstInstalledCalls() throws Exception {
         var manifest = json(prefix + "/manifest.json"); assertEquals(new ArrayList<>(operations.keySet()),manifest.get("entries")); assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest.get("unixUnit")));
-        hashes(root,manifest.get("inputHashes"),Set.of("test/fixtures/compiler/OriginalPathModeAudit.hs","test/haskell-fixtures/OriginalPathModeFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
+        hashes(root,manifest.get("inputHashes"),Set.of("t/fixtures/compiler/OriginalPathModeAudit.hs","t/haskell-fixtures/OriginalPathModeFixtures.hs","bin/core_original_foreign.py","bin/core-capabilities.json"));
         var artifacts = new HashSet<>(Set.of(prefix + "/oracle.json")); for (var stage : List.of("pre","post")) { artifacts.add(prefix + "/" + stage + ".json"); for (var name : operations.keySet()) artifacts.add(prefix + "/" + stage + "-" + name + ".audit.json"); } hashes(root,manifest.get("artifactHashes"),artifacts,prefix + "/");
         var oracle = json(prefix + "/oracle.json"); var rows = (List<Map<String,Object>>) oracle.get("rows"); var mkdir = new ArrayList<Object>(); var chmod = new ArrayList<Object>(); for (var row : rows) { if (Objects.equals(row.get("entry"),"pathMkdir")) mkdir.add(row.get("name")); if (Objects.equals(row.get("entry"),"pathChmod")) chmod.add(row.get("name")); }
         assertEquals(List.of("create","zero","wide","existing-file","existing-directory","missing-parent","not-directory","empty","relative","raw"),mkdir);

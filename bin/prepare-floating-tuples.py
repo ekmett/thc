@@ -14,8 +14,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/floating-tuple'
-FIXTURE = ROOT / 'test/fixtures/compiler/FloatingTupleAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/FloatingTupleAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/FloatingTupleAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/FloatingTupleAuditNative.hs'
 INPUTS = [-128, -31, -7, -1, 0, 1, 7, 31, 128]
 ENTRIES = ['complexFloatCase', 'complexDoubleCase', 'mixedCase', 'joinedCase', 'ieeeCase']
 STAGES = {'pre': 'optimized-Core-before-Tidy', 'post': 'optimized-Core-after-Tidy-before-CorePrep'}
@@ -112,7 +112,7 @@ def main():
             run(['bin/build-compiler.sh'])
         plugin = json.loads(plugin_manifest.read_text())
         check(plugin['schema'] == 1 and plugin['unitId'] and plugin['sharedLibrary'], 'Invalid plugin manifest')
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-itest/fixtures/compiler',
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-it/fixtures/compiler',
              '-odir', str(OUT / 'native'), '-hidir', str(OUT / 'native'), '-o', str(OUT / 'native/oracle'), str(NATIVE)])
         for filename, arguments in [('oracle.tsv', []), ('bits.tsv', ['bits'])]:
             argv = [str(OUT / 'native/oracle'), *arguments]

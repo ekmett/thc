@@ -144,7 +144,7 @@ The compiler-only speculation regression runs as part of `bin/try.sh`. To run it
 
 ```sh
 bin/build-compiler.sh
-bin/export-core.sh test/fixtures/compiler/SpeculationAudit.hs test/fixtures/compiler/RepresentationAudit.hs
+bin/export-core.sh t/fixtures/compiler/SpeculationAudit.hs t/fixtures/compiler/RepresentationAudit.hs
 python3 bin/check-speculation-metadata.py
 python3 bin/check-representation-metadata.py
 ```

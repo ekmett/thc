@@ -14,8 +14,8 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = 'test/fixtures/compiler/SynchronousExceptionsAudit.hs'
-NATIVE = 'test/fixtures/compiler/SynchronousExceptionsNative.hs'
+SOURCE = 't/fixtures/compiler/SynchronousExceptionsAudit.hs'
+NATIVE = 't/fixtures/compiler/SynchronousExceptionsNative.hs'
 ENTRIES = ['preciseCatch', 'erasedNestedCatch', 'actionHeadCatch', 'ignoredBottomPayload', 'nestedRethrow',
            'unusedHandler', 'lazyResultBoundary', 'restoreAndRethrow', 'handlerMaskState',
            'maskNested', 'maskRethrowRestore', 'noDuplicateProbe']
@@ -301,7 +301,7 @@ def main():
         options = [str(core), 'source-notes'] + (['post-tidy'] if stage == 'post' else [])
         options += ['closure=' + name for name in ENTRIES]
         run([ghc, '--make', '-no-link', '-O2', '-dynamic', '-fforce-recomp', '-dcore-lint', '-g', *flags,
-             *['-fplugin-opt=THC.Plugin:' + option for option in options], '-itest/fixtures/compiler',
+             *['-fplugin-opt=THC.Plugin:' + option for option in options], '-it/fixtures/compiler',
              '-odir', directory / 'ghc', '-hidir', directory / 'ghc', SOURCE], stage + '-export')
         paths = sorted(core.glob('*.json'))
         require(paths, 'Missing genuine Core export')
@@ -329,7 +329,7 @@ def main():
     native.mkdir()
     executable = native / 'synchronous-exception-oracle'
     run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint', '-package-env', '-',
-         '-itest/fixtures/compiler', '-odir', native, '-hidir', native, NATIVE, '-o', executable], 'native-build')
+         '-it/fixtures/compiler', '-odir', native, '-hidir', native, NATIVE, '-o', executable], 'native-build')
     artifacts.append(relative(executable))
     require(run([executable, '--word-bits'], 'native-word-bits').strip() == '64', 'Native oracle requires 64-bit Int#')
     values = input_vectors()

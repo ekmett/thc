@@ -114,16 +114,16 @@ def main():
     run(['bin/build-compiler.sh'])
     for stage in ('pre', 'post'):
         run(['bin/export-core.sh', *(['-fplugin-opt=THC.Plugin:post-tidy'] if stage == 'post' else []),
-             'test/fixtures/compiler/NarrowLiteralProofAudit.hs'],
+             't/fixtures/compiler/NarrowLiteralProofAudit.hs'],
             dict(THC_CORE_OUT=str(OUT/f'{stage}-core'), THC_GHC_OUT=str(OUT/f'{stage}-ghc')))
     native = OUT/'native'; native.mkdir(exist_ok=True)
-    run([ghc, '--make', '-O2', '-fforce-recomp', '-itest/fixtures/compiler',
-         '-odir', str(native), '-hidir', str(native), 'test/fixtures/compiler/NarrowLiteralProofAuditNative.hs',
+    run([ghc, '--make', '-O2', '-fforce-recomp', '-it/fixtures/compiler',
+         '-odir', str(native), '-hidir', str(native), 't/fixtures/compiler/NarrowLiteralProofAuditNative.hs',
          '-o', str(native/'narrow-literal-oracle')])
     run([str(native/'narrow-literal-oracle')], output=OUT/'oracle.tsv')
     evidence = check_inputs()
     sources = [ROOT/p for p in ['bin/prepare-narrow-literal-proofs.py', 'bin/test-narrow-literal-proofs.py',
-        'test/fixtures/compiler/NarrowLiteralProofAudit.hs', 'test/fixtures/compiler/NarrowLiteralProofAuditNative.hs',
+        't/fixtures/compiler/NarrowLiteralProofAudit.hs', 't/fixtures/compiler/NarrowLiteralProofAuditNative.hs',
         'bin/build-compiler.sh', 'bin/export-core.sh', 'bin/toolchain.sh', 'bin/audit-core.py',
         'bin/core-capabilities.json', 'src/tools/primops/PrimopTools.hs', 'thc.cabal', 'src/main/resources/thc/scalar-primop-signatures.json']]
     sources += sorted((ROOT/'src/compiler/THC').rglob('*.hs')) + sorted((ROOT/'bin').glob('core_*.py'))

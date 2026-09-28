@@ -12,7 +12,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/int32x4-bytearray-probe'
-FIXTURE = 'test/fixtures/compiler/SimdInt32X4ByteArray.hs'
+FIXTURE = 't/fixtures/compiler/SimdInt32X4ByteArray.hs'
 
 
 def run(name, argv, env=None):
@@ -59,14 +59,14 @@ def main():
     native = OUT / 'native'
     native.mkdir(exist_ok=True)
     run('native-build', [ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint',
-                        '-keep-s-files', '-itest/fixtures/compiler',
+                        '-keep-s-files', '-it/fixtures/compiler',
                         '-odir', str(native), '-hidir', str(native),
-                        'test/fixtures/compiler/SimdInt32X4ByteArrayNative.hs',
+                        't/fixtures/compiler/SimdInt32X4ByteArrayNative.hs',
                         '-o', str(native / 'int32x4-bytearray-probe')])
     # GHC -keep-s-files places these beside the input sources despite -odir.
     # Preserve the exact generated assembly under this probe's ignored output.
     for stem in ['SimdInt32X4ByteArray', 'SimdInt32X4ByteArrayNative']:
-        shutil.move(ROOT / 'test/fixtures/compiler' / (stem + '.s'),
+        shutil.move(ROOT / 't/fixtures/compiler' / (stem + '.s'),
                     native / (stem + '.s'))
     run('native', [str(native / 'int32x4-bytearray-probe')])
     rows = (OUT / 'native.log').read_text().splitlines()

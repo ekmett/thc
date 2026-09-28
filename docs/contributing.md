@@ -27,8 +27,8 @@ negative controls, strict Core audits, provenance, and all active CI callers.
 Install [HLint 3.10](https://github.com/ndmitchell/hlint/releases/tag/v3.10), then
 run `make lint-haskell` (or set `HLINT=/path/to/hlint`). It checks tracked `.hs`
 and `.lhs` sources, including tools, examples and unit tests, using `.hlint.yaml`.
-Fixture sources and producers (`test/fixtures/compiler`, `test/fixtures`, and
-`test/haskell-fixtures`), vendored compiler sources and frozen benchmark snapshots
+Fixture sources and producers (`t/fixtures/compiler`, `t/fixtures`, and
+`t/haskell-fixtures`), vendored compiler sources and frozen benchmark snapshots
 are excluded. Build products and untracked files are not traversed. Stage new
 modules to include them.
 HLint does not preprocess `.hsc` templates or check `.hs-boot` declarations;

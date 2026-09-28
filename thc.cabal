@@ -291,61 +291,61 @@ extra-source-files:
   nih/pinned/ghc-9.14.1/rts/LibdwPool.h
   nih/pinned/ghc-9.14.1/rts/RtsUtils.h
   docs/compact-core-format.md
-  test/compact-core/golden/*.json
-  test/compact-core/golden/*.hex
-  test/compact-core/golden/*.cbd
+  t/compact-core/golden/*.json
+  t/compact-core/golden/*.hex
+  t/compact-core/golden/*.cbd
   nih/licenses/succinctly-MIT.txt
   nih/licenses/everett-LICENSE.txt
   nih/licenses/everett-BSD-2-Clause.txt
   docs/foreign-exceptions.md
-  test/fixtures/compiler/ForeignExceptionNative.hs
-  test/fixtures/compiler/ForeignExceptionSafe.hs
-  test/fixtures/compiler/ForeignExceptionUnsafeImport.hs
-  test/fixtures/run-native-archive/cabal.project
-  test/fixtures/run-native-archive/mixed/native-archive-mixed.cabal
-  test/fixtures/run-native-archive/mixed/native.c
-  test/fixtures/run-native-archive/mixed/src/*.hs
-  test/fixtures/run-native-archive/mixed/include/*.h
-  test/fixtures/run-native-archive/mixed/app/Main.hs
-  test/fixtures/run-native-archive/unresolved/native-archive-unresolved.cabal
-  test/fixtures/run-native-archive/unresolved/native.c
-  test/fixtures/run-native-archive/unresolved/Unresolved.hs
-  test/fixtures/run-native-archive/poisoned/native-archive-poisoned.cabal
-  test/fixtures/run-native-archive/poisoned/native.c
-  test/fixtures/run-native-archive/poisoned/Poisoned.hs
-  test/fixtures/run-native-archive/provider/native-archive-provider.cabal
-  test/fixtures/run-native-archive/provider/native.c
-  test/fixtures/run-native-archive/provider/Provider.hs
-  test/fixtures/compiler/OriginalMemsetAudit.hs
-  test/fixtures/compiler/OriginalMemsetNative.hs
+  t/fixtures/compiler/ForeignExceptionNative.hs
+  t/fixtures/compiler/ForeignExceptionSafe.hs
+  t/fixtures/compiler/ForeignExceptionUnsafeImport.hs
+  t/fixtures/run-native-archive/cabal.project
+  t/fixtures/run-native-archive/mixed/native-archive-mixed.cabal
+  t/fixtures/run-native-archive/mixed/native.c
+  t/fixtures/run-native-archive/mixed/src/*.hs
+  t/fixtures/run-native-archive/mixed/include/*.h
+  t/fixtures/run-native-archive/mixed/app/Main.hs
+  t/fixtures/run-native-archive/unresolved/native-archive-unresolved.cabal
+  t/fixtures/run-native-archive/unresolved/native.c
+  t/fixtures/run-native-archive/unresolved/Unresolved.hs
+  t/fixtures/run-native-archive/poisoned/native-archive-poisoned.cabal
+  t/fixtures/run-native-archive/poisoned/native.c
+  t/fixtures/run-native-archive/poisoned/Poisoned.hs
+  t/fixtures/run-native-archive/provider/native-archive-provider.cabal
+  t/fixtures/run-native-archive/provider/native.c
+  t/fixtures/run-native-archive/provider/Provider.hs
+  t/fixtures/compiler/OriginalMemsetAudit.hs
+  t/fixtures/compiler/OriginalMemsetNative.hs
   docs/original-memset.md
-  test/fixtures/compiler/ByteStringUtf8Audit.hs
-  test/fixtures/compiler/ByteStringUtf8Native.hs
+  t/fixtures/compiler/ByteStringUtf8Audit.hs
+  t/fixtures/compiler/ByteStringUtf8Native.hs
   nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c
-  test/fixtures/compiler/TextCbitsAudit.hs
-  test/fixtures/compiler/ByteStringSortAudit.hs
-  test/fixtures/compiler/ByteStringDecimalAudit.hs
-  test/fixtures/compiler/UnixLibcAudit.hs
-  test/fixtures/compiler/UnixWaitStatusAudit.hs
-  test/fixtures/compiler/TextCbitsNative.hs
+  t/fixtures/compiler/TextCbitsAudit.hs
+  t/fixtures/compiler/ByteStringSortAudit.hs
+  t/fixtures/compiler/ByteStringDecimalAudit.hs
+  t/fixtures/compiler/UnixLibcAudit.hs
+  t/fixtures/compiler/UnixWaitStatusAudit.hs
+  t/fixtures/compiler/TextCbitsNative.hs
   nih/pinned/text-2.1.3/LICENSE
   nih/pinned/openbsd-memchr-1.8.c
   nih/pinned/text-2.1.3/cbits/utils.c
   nih/pinned/text-2.1.3/cbits/measure_off.c
-  test/fixtures/run-wcwidth/cabal.project
-  test/fixtures/run-wcwidth/wcwidth-ffi.cabal
-  test/fixtures/run-wcwidth/src/Width.hs
-  test/fixtures/run-wcwidth/app/Main.hs
-  test/fixtures/compiler/GcStatsAudit.hs
-  test/fixtures/compiler/OriginalTimeClockAudit.hs
-  test/fixtures/compiler/RtsEventAudit.hs
+  t/fixtures/run-wcwidth/cabal.project
+  t/fixtures/run-wcwidth/wcwidth-ffi.cabal
+  t/fixtures/run-wcwidth/src/Width.hs
+  t/fixtures/run-wcwidth/app/Main.hs
+  t/fixtures/compiler/GcStatsAudit.hs
+  t/fixtures/compiler/OriginalTimeClockAudit.hs
+  t/fixtures/compiler/RtsEventAudit.hs
   docs/rts-event-capabilities.md
   docs/gc-stats-clock.md
-  test/fixtures/compiler/RubbishLiteralAudit.hs
-  test/fixtures/compiler/OriginalDigestNative.hs
-  test/fixtures/compiler/OriginalMemcpyNative.hs
-  test/fixtures/compiler/OriginalErfNative.hs
-  test/fixtures/compiler/OriginalErfEntry.hs
+  t/fixtures/compiler/RubbishLiteralAudit.hs
+  t/fixtures/compiler/OriginalDigestNative.hs
+  t/fixtures/compiler/OriginalMemcpyNative.hs
+  t/fixtures/compiler/OriginalErfNative.hs
+  t/fixtures/compiler/OriginalErfEntry.hs
   nih/pinned/zlib-1.2.11/README
   nih/pinned/zlib-1.2.11/adler32.c
   nih/pinned/zlib-1.2.11/crc32.c
@@ -353,137 +353,137 @@ extra-source-files:
   nih/pinned/zlib-1.2.11/zconf.h
   nih/pinned/zlib-1.2.11/zlib.h
   nih/pinned/zlib-1.2.11/zutil.h
-  test/fixtures/run-native-variants/cabal.project
-  test/fixtures/run-native-variants/native-variants.cabal
-  test/fixtures/run-native-variants/Main.hs
-  test/fixtures/run-native-variants/variants.c
+  t/fixtures/run-native-variants/cabal.project
+  t/fixtures/run-native-variants/native-variants.cabal
+  t/fixtures/run-native-variants/Main.hs
+  t/fixtures/run-native-variants/variants.c
   src/examples/standard-apps/README.md
   src/examples/standard-apps/TinyLexer.x
   src/examples/standard-apps/TinyParser.y
   src/examples/standard-apps/TinyMath.hs
-  test/fixtures/run-library-memory/cabal.project
-  test/fixtures/run-library-memory/run-library-memory.cabal
-  test/fixtures/run-library-memory/Main.hs
+  t/fixtures/run-library-memory/cabal.project
+  t/fixtures/run-library-memory/run-library-memory.cabal
+  t/fixtures/run-library-memory/Main.hs
   src/examples/THC/GraphWorkload.hs
   src/examples/LibraryOracle.hs
-  test/fixtures/compiler/ScalarMemoryUtilities.hs
-  test/fixtures/compiler/ScalarMemoryUtilitiesNative.hs
+  t/fixtures/compiler/ScalarMemoryUtilities.hs
+  t/fixtures/compiler/ScalarMemoryUtilitiesNative.hs
   docs/scalar-memory-utilities.md
   src/examples/ThreadInventory.hs
   src/examples/ThreadScheduling.hs
-  test/fixtures/compiler/ThreadSchedulingNative.hs
+  t/fixtures/compiler/ThreadSchedulingNative.hs
   docs/thread-scheduling.md
-  test/fixtures/compiler/ThreadInventoryNative.hs
-  test/fixtures/compiler/CallbackIdentityNative.hs
-  test/fixtures/compiler/callback-identity.c
+  t/fixtures/compiler/ThreadInventoryNative.hs
+  t/fixtures/compiler/CallbackIdentityNative.hs
+  t/fixtures/compiler/callback-identity.c
   docs/thread-inventory.md
-  test/fixtures/compiler/SimdWideFloatFma.hs
-  test/fixtures/compiler/SimdWideFloatFmaNative.hs
-  test/fixtures/run-scalar-cbits/src/Scalar.hs
-  test/fixtures/run-scalar-cbits/src/ScalarAgain.hs
-  test/fixtures/run-scalar-cbits/app/Main.hs
-  test/fixtures/run-scalar-cbits/cbits/scalar.c
-  test/fixtures/run-scalar-cbits/cbits/scalar.h
-  test/fixtures/run-stableptr-ffi/src/StableForeign.hs
-  test/fixtures/run-stableptr-ffi/app/Main.hs
-  test/fixtures/run-stableptr-ffi/cbits/stable.c
-  test/fixtures/run-stableptr-ffi/cbits/stable.h
-  test/fixtures/run-native-capi/cabal.project
-  test/fixtures/run-native-capi/README.md
-  test/fixtures/run-native-capi/run-native-capi.cabal
-  test/fixtures/run-native-capi/src/NativeLeft.hs
-  test/fixtures/run-native-capi/src/NativeRight.hs
-  test/fixtures/run-native-capi/include/left.h
-  test/fixtures/run-native-capi/include/right.h
-  test/fixtures/run-native-capi/cbits/first.c
-  test/fixtures/run-native-capi/cbits/second.c
-  test/fixtures/run-native-capi/app/Main.hs
-  test/fixtures/compiler/OriginalStringRtsNative.hs
-  test/fixtures/compiler/RtsShutdownNative.hs
+  t/fixtures/compiler/SimdWideFloatFma.hs
+  t/fixtures/compiler/SimdWideFloatFmaNative.hs
+  t/fixtures/run-scalar-cbits/src/Scalar.hs
+  t/fixtures/run-scalar-cbits/src/ScalarAgain.hs
+  t/fixtures/run-scalar-cbits/app/Main.hs
+  t/fixtures/run-scalar-cbits/cbits/scalar.c
+  t/fixtures/run-scalar-cbits/cbits/scalar.h
+  t/fixtures/run-stableptr-ffi/src/StableForeign.hs
+  t/fixtures/run-stableptr-ffi/app/Main.hs
+  t/fixtures/run-stableptr-ffi/cbits/stable.c
+  t/fixtures/run-stableptr-ffi/cbits/stable.h
+  t/fixtures/run-native-capi/cabal.project
+  t/fixtures/run-native-capi/README.md
+  t/fixtures/run-native-capi/run-native-capi.cabal
+  t/fixtures/run-native-capi/src/NativeLeft.hs
+  t/fixtures/run-native-capi/src/NativeRight.hs
+  t/fixtures/run-native-capi/include/left.h
+  t/fixtures/run-native-capi/include/right.h
+  t/fixtures/run-native-capi/cbits/first.c
+  t/fixtures/run-native-capi/cbits/second.c
+  t/fixtures/run-native-capi/app/Main.hs
+  t/fixtures/compiler/OriginalStringRtsNative.hs
+  t/fixtures/compiler/RtsShutdownNative.hs
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c
-  test/fixtures/compiler/OriginalStrerrorNative.hs
-  test/fixtures/compiler/NativeMallocNative.hs
-  test/fixtures/compiler/ProcessSignalsNative.hs
-  test/fixtures/compiler/CBVCoercionAudit.hs
-  test/fixtures/compiler/InterfaceLibrary.hs
-  test/fixtures/compiler/InterfaceCacheRoot.hs
-  test/fixtures/compiler/InterfaceCacheDependency.hs
-  test/fixtures/compiler/InterfaceNative.hs
-  test/fixtures/compiler/InterfaceForeign.hs
-  test/fixtures/compiler/InterfaceForeignAlias.hs
-  test/fixtures/compiler/ForeignExportSignatures.hs
-  test/fixtures/compiler/ForeignExportManaged.hs
-  test/fixtures/compiler/ForeignExportRegistration.hs
-  test/fixtures/compiler/RegistrationNative.hs
-  test/fixtures/compiler/ManagedExportNative.hs
+  t/fixtures/compiler/OriginalStrerrorNative.hs
+  t/fixtures/compiler/NativeMallocNative.hs
+  t/fixtures/compiler/ProcessSignalsNative.hs
+  t/fixtures/compiler/CBVCoercionAudit.hs
+  t/fixtures/compiler/InterfaceLibrary.hs
+  t/fixtures/compiler/InterfaceCacheRoot.hs
+  t/fixtures/compiler/InterfaceCacheDependency.hs
+  t/fixtures/compiler/InterfaceNative.hs
+  t/fixtures/compiler/InterfaceForeign.hs
+  t/fixtures/compiler/InterfaceForeignAlias.hs
+  t/fixtures/compiler/ForeignExportSignatures.hs
+  t/fixtures/compiler/ForeignExportManaged.hs
+  t/fixtures/compiler/ForeignExportRegistration.hs
+  t/fixtures/compiler/RegistrationNative.hs
+  t/fixtures/compiler/ManagedExportNative.hs
   bin/check-ghc-core.hs
-  test/check-ghc-core.sh
-  test/fixtures/compiler/MaskFunctionAudit.hs
-  test/fixtures/compiler/MaskFunctionNative.hs
-  test/fixtures/compiler/BoxedArrayExtensionsAudit.hs
-  test/fixtures/compiler/BoxedArrayExtensionsNative.hs
-  test/fixtures/compiler/BoxedCasAudit.hs
-  test/fixtures/compiler/BoxedCasNative.hs
+  t/check-ghc-core.sh
+  t/fixtures/compiler/MaskFunctionAudit.hs
+  t/fixtures/compiler/MaskFunctionNative.hs
+  t/fixtures/compiler/BoxedArrayExtensionsAudit.hs
+  t/fixtures/compiler/BoxedArrayExtensionsNative.hs
+  t/fixtures/compiler/BoxedCasAudit.hs
+  t/fixtures/compiler/BoxedCasNative.hs
   src/examples/THC/BoxedCasCounter.hs
-  test/fixtures/compiler/LazyIOCallbackAudit.hs
-  test/fixtures/compiler/LazyIOCallbackNative.hs
+  t/fixtures/compiler/LazyIOCallbackAudit.hs
+  t/fixtures/compiler/LazyIOCallbackNative.hs
   src/driver/cbits/target-layout.c
   etc/ghc/9.14.1/windows-ghc-internal.json
   src/driver/WindowsRunMain.hs
-  test/fixtures/compiler/OriginalStackAudit.hs
-  test/fixtures/compiler/OriginalStackAuditNative.hs
-  test/fixtures/compiler/OriginalStackDecoder.hs
-  test/fixtures/compiler/OriginalStackDecoderNative.hs
-  test/fixtures/compiler/OriginalStackProof.json
-  test/fixtures/compiler/OriginalStackFormatter.hs
-  test/fixtures/compiler/OriginalStackFormatterNative.hs
-  test/fixtures/compiler/FileWaitAudit.hs
-  test/fixtures/compiler/FileWaitNative.hs
-  test/fixtures/compiler/OriginalFdReadyAudit.hs
-  test/fixtures/compiler/OriginalRtsLocksAudit.hs
-  test/fixtures/compiler/CompilerRtsAudit.hs
-  test/fixtures/compiler/RtsDiagnosticsNative.hs
-  test/fixtures/compiler/OriginalFcntlAudit.hs
-  test/fixtures/compiler/OriginalPathLinkAudit.hs
-  test/fixtures/compiler/OriginalDirectoryPathsAudit.hs
-  test/fixtures/compiler/OriginalPathAccessAudit.hs
-  test/fixtures/compiler/OriginalUnlinkAtAudit.hs
-  test/fixtures/compiler/OriginalFstatAtAudit.hs
-  test/fixtures/compiler/OriginalCurrentDirectoryAudit.hs
-  test/fixtures/compiler/OriginalDirectoryStreamsAudit.hs
-  test/fixtures/compiler/WindowsDirectoryAudit.hsc
-  test/fixtures/compiler/WindowsBridgeAudit.hs
-  test/fixtures/compiler/OriginalFcntlNative.hs
-  test/fixtures/compiler/OriginalErrnoAudit.hs
-  test/fixtures/compiler/OriginalErrnoNative.hs
-  test/fixtures/compiler/OriginalProcessIdentityAudit.hs
-  test/fixtures/compiler/ProcessLifecycleAudit.hs
-  test/fixtures/process-lifecycle/Main.hs
-  test/fixtures/process-lifecycle/sigchld-policy.c
-  test/fixtures/compiler/OriginalProcessIdentityNative.hs
-  test/fixtures/compiler/OriginalOpenAudit.hs
-  test/fixtures/compiler/OriginalOpenNative.hs
-  test/fixtures/compiler/OriginalTermiosAudit.hs
-  test/fixtures/compiler/OriginalSavedTermiosAudit.hs
-  test/fixtures/compiler/OriginalSavedTermiosNative.hs
-  test/fixtures/compiler/OriginalTermiosNative.hs
-  test/fixtures/compiler/OriginalTcsetattrAudit.hs
-  test/fixtures/compiler/OriginalTcgetattrAudit.hs
-  test/fixtures/compiler/OriginalTcsetattrNative.hs
-  test/fixtures/compiler/OriginalTcgetattrNative.hs
-  test/fixtures/compiler/OriginalSigprocmaskAudit.hs
-  test/fixtures/compiler/OriginalSigprocmaskNative.hs
-  test/fixtures/compiler/OriginalSigsetAudit.hs
-  test/fixtures/compiler/OriginalSigsetNative.hs
-  test/fixtures/compiler/OriginalFdReadyAuditNative.hs
-  test/fixtures/compiler/OriginalIconvAudit.hs
-  test/fixtures/compiler/OriginalIconvAuditNative.hs
-  test/fixtures/compiler/OriginalGmpAudit.hs
-  test/fixtures/compiler/OriginalGmpNative.hs
-  test/fixtures/compiler/OriginalPosixDupAudit.hs
-  test/fixtures/compiler/OriginalPosixDupAuditNative.hs
-  test/fixtures/compiler/TopHandlerMainThreadAbi.hs
-  test/fixtures/compiler/TopHandlerMainThreadAbiNative.hs
+  t/fixtures/compiler/OriginalStackAudit.hs
+  t/fixtures/compiler/OriginalStackAuditNative.hs
+  t/fixtures/compiler/OriginalStackDecoder.hs
+  t/fixtures/compiler/OriginalStackDecoderNative.hs
+  t/fixtures/compiler/OriginalStackProof.json
+  t/fixtures/compiler/OriginalStackFormatter.hs
+  t/fixtures/compiler/OriginalStackFormatterNative.hs
+  t/fixtures/compiler/FileWaitAudit.hs
+  t/fixtures/compiler/FileWaitNative.hs
+  t/fixtures/compiler/OriginalFdReadyAudit.hs
+  t/fixtures/compiler/OriginalRtsLocksAudit.hs
+  t/fixtures/compiler/CompilerRtsAudit.hs
+  t/fixtures/compiler/RtsDiagnosticsNative.hs
+  t/fixtures/compiler/OriginalFcntlAudit.hs
+  t/fixtures/compiler/OriginalPathLinkAudit.hs
+  t/fixtures/compiler/OriginalDirectoryPathsAudit.hs
+  t/fixtures/compiler/OriginalPathAccessAudit.hs
+  t/fixtures/compiler/OriginalUnlinkAtAudit.hs
+  t/fixtures/compiler/OriginalFstatAtAudit.hs
+  t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs
+  t/fixtures/compiler/OriginalDirectoryStreamsAudit.hs
+  t/fixtures/compiler/WindowsDirectoryAudit.hsc
+  t/fixtures/compiler/WindowsBridgeAudit.hs
+  t/fixtures/compiler/OriginalFcntlNative.hs
+  t/fixtures/compiler/OriginalErrnoAudit.hs
+  t/fixtures/compiler/OriginalErrnoNative.hs
+  t/fixtures/compiler/OriginalProcessIdentityAudit.hs
+  t/fixtures/compiler/ProcessLifecycleAudit.hs
+  t/fixtures/process-lifecycle/Main.hs
+  t/fixtures/process-lifecycle/sigchld-policy.c
+  t/fixtures/compiler/OriginalProcessIdentityNative.hs
+  t/fixtures/compiler/OriginalOpenAudit.hs
+  t/fixtures/compiler/OriginalOpenNative.hs
+  t/fixtures/compiler/OriginalTermiosAudit.hs
+  t/fixtures/compiler/OriginalSavedTermiosAudit.hs
+  t/fixtures/compiler/OriginalSavedTermiosNative.hs
+  t/fixtures/compiler/OriginalTermiosNative.hs
+  t/fixtures/compiler/OriginalTcsetattrAudit.hs
+  t/fixtures/compiler/OriginalTcgetattrAudit.hs
+  t/fixtures/compiler/OriginalTcsetattrNative.hs
+  t/fixtures/compiler/OriginalTcgetattrNative.hs
+  t/fixtures/compiler/OriginalSigprocmaskAudit.hs
+  t/fixtures/compiler/OriginalSigprocmaskNative.hs
+  t/fixtures/compiler/OriginalSigsetAudit.hs
+  t/fixtures/compiler/OriginalSigsetNative.hs
+  t/fixtures/compiler/OriginalFdReadyAuditNative.hs
+  t/fixtures/compiler/OriginalIconvAudit.hs
+  t/fixtures/compiler/OriginalIconvAuditNative.hs
+  t/fixtures/compiler/OriginalGmpAudit.hs
+  t/fixtures/compiler/OriginalGmpNative.hs
+  t/fixtures/compiler/OriginalPosixDupAudit.hs
+  t/fixtures/compiler/OriginalPosixDupAuditNative.hs
+  t/fixtures/compiler/TopHandlerMainThreadAbi.hs
+  t/fixtures/compiler/TopHandlerMainThreadAbiNative.hs
   README.md
   docs/driver.md
   docs/wide-floating-fma.md
@@ -508,12 +508,12 @@ extra-source-files:
   docs/runtime-services.md
   src/examples/THC/CpuAffinity.hs
   src/examples/THC/RuntimeServices.hs
-  test/haskell-runtime/SafeClient.hs
-  test/haskell-runtime/UnsafeClient.hs
-  test/haskell-runtime/check-safe-haskell.sh
-  test/fixtures/run-runtime-services/cabal.project
-  test/fixtures/run-runtime-services/runtime-services-smoke.cabal
-  test/fixtures/run-runtime-services/Main.hs
+  t/haskell-runtime/SafeClient.hs
+  t/haskell-runtime/UnsafeClient.hs
+  t/haskell-runtime/check-safe-haskell.sh
+  t/fixtures/run-runtime-services/cabal.project
+  t/fixtures/run-runtime-services/runtime-services-smoke.cabal
+  t/fixtures/run-runtime-services/Main.hs
   docs/original-posix-dup.md
   docs/original-termios.md
   docs/original-sigset.md
@@ -589,62 +589,62 @@ extra-source-files:
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Word.hs
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE
   nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h
-  test/fixtures/run-fail-frontier/cabal.project
-  test/fixtures/run-fail-frontier/fail-frontier.cabal
-  test/fixtures/run-fail-frontier/app/Main.hs
-  test/fixtures/run-cstring/cabal.project
-  test/fixtures/run-cstring/run-cstring.cabal
-  test/fixtures/run-cstring/app/Main.hs
-  test/fixtures/run-file-lifecycle/cabal.project
-  test/fixtures/run-file-lifecycle/run-file-lifecycle.cabal
-  test/fixtures/run-file-lifecycle/app/Main.hs
-  test/fixtures/run-arguments/cabal.project
-  test/fixtures/run-arguments/run-arguments.cabal
-  test/fixtures/run-arguments/app/Main.hs
-  test/fixtures/run-binary-buffers/cabal.project
-  test/fixtures/run-binary-buffers/run-binary-buffers.cabal
-  test/fixtures/run-binary-buffers/app/Main.hs
-  test/fixtures/run-environment/cabal.project
-  test/fixtures/run-environment/run-environment.cabal
-  test/fixtures/run-environment/app/Main.hs
-  test/fixtures/run-unlink/cabal.project
-  test/fixtures/run-unlink/run-unlink.cabal
-  test/fixtures/run-unlink/app/Main.hs
-  test/fixtures/run-pure/run-pure.cabal
-  test/fixtures/run-pure/app/Main.hs
-  test/fixtures/run-pure/app/Answer.hs
-  test/fixtures/run-benchmark/cabal.project
-  test/fixtures/run-benchmark/run-benchmark.cabal
-  test/fixtures/run-benchmark/src/Answer.hs
-  test/fixtures/run-benchmark/bench/Main.hs
-  test/fixtures/run-benchmark/bench/Check.hs
-  test/fixtures/run-benchmark/detailed/Detailed.hs
-  test/fixtures/run-project/cabal.project
-  test/fixtures/run-project/dep-data/dep-data.cabal
-  test/fixtures/run-project/dep-data/src/Answer.hs
-  test/fixtures/run-project/th-helper/th-helper.cabal
-  test/fixtures/run-project/th-helper/src/THHelper.hs
-  test/fixtures/run-project/app-run/app-run.cabal
-  test/fixtures/run-project/app-run/src/Bridge.hs
-  test/fixtures/run-project/app-run/app/Main.hs
-  test/fixtures/run-store-project/cabal.project
-  test/fixtures/run-store-project/app/app.cabal
-  test/fixtures/run-store-project/app/app/Main.hs
-  test/fixtures/run-store-project/dep-data/dep-data.cabal
-  test/fixtures/run-store-project/dep-data/src/Answer.hs
-  test/fixtures/run-store-project/dep-data/src/SafeDependency.hs
-  test/fixtures/tiny/tiny-fixture.cabal
-  test/fixtures/tiny/words/Words.hs
-  test/fixtures/tiny/src/Greeting.hs
-  test/fixtures/tiny/src/Platform/Linux.hs
-  test/fixtures/tiny/src/Platform/Other.hs
-  test/fixtures/tiny/loud/Message.hs
-  test/fixtures/tiny/quiet/Message.hs
-  test/fixtures/tiny/app/Main.hs
-  test/fixtures/tiny/test/Main.hs
-  test/fixtures/run-executable-failure/cabal.project
-  test/fixtures/run-executable-failure/run-executable-failure.cabal
-  test/fixtures/run-executable-failure/app/Main.hs
+  t/fixtures/run-fail-frontier/cabal.project
+  t/fixtures/run-fail-frontier/fail-frontier.cabal
+  t/fixtures/run-fail-frontier/app/Main.hs
+  t/fixtures/run-cstring/cabal.project
+  t/fixtures/run-cstring/run-cstring.cabal
+  t/fixtures/run-cstring/app/Main.hs
+  t/fixtures/run-file-lifecycle/cabal.project
+  t/fixtures/run-file-lifecycle/run-file-lifecycle.cabal
+  t/fixtures/run-file-lifecycle/app/Main.hs
+  t/fixtures/run-arguments/cabal.project
+  t/fixtures/run-arguments/run-arguments.cabal
+  t/fixtures/run-arguments/app/Main.hs
+  t/fixtures/run-binary-buffers/cabal.project
+  t/fixtures/run-binary-buffers/run-binary-buffers.cabal
+  t/fixtures/run-binary-buffers/app/Main.hs
+  t/fixtures/run-environment/cabal.project
+  t/fixtures/run-environment/run-environment.cabal
+  t/fixtures/run-environment/app/Main.hs
+  t/fixtures/run-unlink/cabal.project
+  t/fixtures/run-unlink/run-unlink.cabal
+  t/fixtures/run-unlink/app/Main.hs
+  t/fixtures/run-pure/run-pure.cabal
+  t/fixtures/run-pure/app/Main.hs
+  t/fixtures/run-pure/app/Answer.hs
+  t/fixtures/run-benchmark/cabal.project
+  t/fixtures/run-benchmark/run-benchmark.cabal
+  t/fixtures/run-benchmark/src/Answer.hs
+  t/fixtures/run-benchmark/bench/Main.hs
+  t/fixtures/run-benchmark/bench/Check.hs
+  t/fixtures/run-benchmark/detailed/Detailed.hs
+  t/fixtures/run-project/cabal.project
+  t/fixtures/run-project/dep-data/dep-data.cabal
+  t/fixtures/run-project/dep-data/src/Answer.hs
+  t/fixtures/run-project/th-helper/th-helper.cabal
+  t/fixtures/run-project/th-helper/src/THHelper.hs
+  t/fixtures/run-project/app-run/app-run.cabal
+  t/fixtures/run-project/app-run/src/Bridge.hs
+  t/fixtures/run-project/app-run/app/Main.hs
+  t/fixtures/run-store-project/cabal.project
+  t/fixtures/run-store-project/app/app.cabal
+  t/fixtures/run-store-project/app/app/Main.hs
+  t/fixtures/run-store-project/dep-data/dep-data.cabal
+  t/fixtures/run-store-project/dep-data/src/Answer.hs
+  t/fixtures/run-store-project/dep-data/src/SafeDependency.hs
+  t/fixtures/tiny/tiny-fixture.cabal
+  t/fixtures/tiny/words/Words.hs
+  t/fixtures/tiny/src/Greeting.hs
+  t/fixtures/tiny/src/Platform/Linux.hs
+  t/fixtures/tiny/src/Platform/Other.hs
+  t/fixtures/tiny/loud/Message.hs
+  t/fixtures/tiny/quiet/Message.hs
+  t/fixtures/tiny/app/Main.hs
+  t/fixtures/tiny/test/Main.hs
+  t/fixtures/run-executable-failure/cabal.project
+  t/fixtures/run-executable-failure/run-executable-failure.cabal
+  t/fixtures/run-executable-failure/app/Main.hs
 build-type: Simple
 
 -- Pinned GHC inventory and scalar-contract tooling; no JVM runtime dependency.
@@ -676,7 +676,7 @@ test-suite primop-tools
   import: primop-tool-dependencies
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: test/primop-tools, src/tools/primops
+  hs-source-dirs: t/primop-tools, src/tools/primops
   other-modules: PrimopTools
   build-tool-depends: thc:thc-primops
   build-depends: HUnit >= 1.6 && < 1.7
@@ -732,7 +732,7 @@ library runtime
 test-suite cpu-affinity-api
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: test/haskell-affinity
+  hs-source-dirs: t/haskell-affinity
   build-depends: base >= 4.22 && < 4.23, thc:runtime
   default-language: Haskell2010
   ghc-options: -Wall -threaded
@@ -742,7 +742,7 @@ test-suite cpu-affinity-api
 test-suite runtime-services-api
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: test/haskell-runtime
+  hs-source-dirs: t/haskell-runtime
   build-depends: base >= 4.22 && < 4.23, thc:runtime
   default-language: Haskell2010
   ghc-options: -Wall -threaded
@@ -825,7 +825,7 @@ executable thc-compact
 test-suite compact-core-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: test/compact-core
+  hs-source-dirs: t/compact-core
   other-modules: SemanticTests DebugTests CompressionTests CbdTests
   build-depends:
     thc:compact-core,
@@ -859,7 +859,7 @@ library core-symbols
 test-suite interface-json
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: test/interface-json, src/compiler
+  hs-source-dirs: t/interface-json, src/compiler
   other-modules: THC.JSON
   build-depends:
     thc:core-symbols,
@@ -941,7 +941,7 @@ executable thc
 test-suite driver-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
-  hs-source-dirs: test/haskell-driver, src/driver
+  hs-source-dirs: t/haskell-driver, src/driver
   other-modules:
     THC.Driver.CoreIndex
     THC.Driver.CoreSymbols
@@ -1016,7 +1016,7 @@ test-suite library-memory-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: LibraryMemoryFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1040,7 +1040,7 @@ test-suite arguments-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: ArgumentsFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1064,7 +1064,7 @@ test-suite file-lifecycle-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: FileLifecycleFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1089,7 +1089,7 @@ test-suite binary-buffers-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: BinaryBuffersFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1115,7 +1115,7 @@ test-suite executable-failure-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: ExecutableFailureFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1140,7 +1140,7 @@ test-suite environment-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: EnvironmentFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1164,7 +1164,7 @@ test-suite unlink-full-core
   if !flag(full-core-tests)
     buildable: False
   main-is: UnlinkFullCore.hs
-  hs-source-dirs: test/haskell-driver
+  hs-source-dirs: t/haskell-driver
   other-modules: TestSupport
   build-tool-depends: thc:thc
   build-depends:
@@ -1354,7 +1354,7 @@ executable thc-fixtures
     BoxedCasFixtures
     WideCharAddressFixtures
     ManagedAddressReadFixtures
-  hs-source-dirs: test/haskell-fixtures, src/driver
+  hs-source-dirs: t/haskell-fixtures, src/driver
   build-depends:
     thc:core-symbols,
     base >= 4.22 && < 4.23,
@@ -1384,7 +1384,7 @@ executable thc-fixtures
 test-suite ghc-api-fixture-policy
   type: exitcode-stdio-1.0
   main-is: GhcApiAuditTests.hs
-  hs-source-dirs: test/haskell-fixtures
+  hs-source-dirs: t/haskell-fixtures
   other-modules: GhcApiAudit
   build-depends:
     base >= 4.22 && < 4.23,
@@ -1401,7 +1401,7 @@ test-suite ghc-api-fixture-policy
 test-suite driver-lock-tests
   type: exitcode-stdio-1.0
   main-is: LockMain.hs
-  hs-source-dirs: test/haskell-driver, src/driver
+  hs-source-dirs: t/haskell-driver, src/driver
   other-modules: THC.Driver.Lock
   build-depends:
     base >= 4.22 && < 4.23,

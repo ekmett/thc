@@ -27,8 +27,8 @@ public class SignalDispatchFullCoreTest {
     private Map<String, Object> document(String path) throws Exception { return (Map<String, Object>) Json.parse(Files.readString(new File(directory, path).toPath(), StandardCharsets.UTF_8)); }
     private Map<String, Object> fixture() throws Exception {
         var manifest = document("manifest.json"); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(List.of("setupHandler", "awaitHandler", CoreSignalForeign.dispatcher), manifest.get("entries"));
-        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/SignalDispatchAudit.hs", "test/fixtures/compiler/SignalDispatchNative.hs",
-            "test/haskell-fixtures/SignalDispatchFixtures.hs", "bin/core-capabilities.json"), null);
+        OriginalStdioChecks.hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/SignalDispatchAudit.hs", "t/fixtures/compiler/SignalDispatchNative.hs",
+            "t/haskell-fixtures/SignalDispatchFixtures.hs", "bin/core-capabilities.json"), null);
         OriginalStdioChecks.hashes(root, manifest.get("artifactHashes"), Set.of("build/signal-dispatch/oracle.txt", "build/signal-dispatch/pre/audit.json", "build/signal-dispatch/post/audit.json"), null);
         assertEquals("1\n10010\n2\n20020\n3\n30030\n15\n150150\n", Files.readString(new File(directory, "oracle.txt").toPath(), StandardCharsets.UTF_8));
         for (String stage : List.of("pre", "post")) { assertEquals(true, document(stage + "/audit.json").get("accepted")); assertEquals(List.of(), document(stage + "/audit.json").get("missingGlobals")); }

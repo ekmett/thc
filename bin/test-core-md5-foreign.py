@@ -5,7 +5,7 @@
 """Synthetic closed-ABI proof tests; no Haskell replacement or FFI execution.
 
 The ghc-internal unit is grounded in the actual installed Fingerprint.hi, not
-relabeled main-unit Core: see test/fixtures/compiler/md5-foreign-unit-evidence.md.
+relabeled main-unit Core: see t/fixtures/compiler/md5-foreign-unit-evidence.md.
 """
 import copy
 import unittest

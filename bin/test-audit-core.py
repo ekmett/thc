@@ -2799,7 +2799,7 @@ class OriginalStackInfoAuditTest(unittest.TestCase):
         'getLargeBitmapzh', 'getBCOLargeBitmapzh', 'getRetFunLargeBitmapzh', 'getSmallBitmapzh',
         'getRetFunSmallBitmapzh', 'getStackClosurezh', 'getStackFieldszh', 'advanceStackFrameLocationzh')
     resource = ROOT.parent / 'src/test/resources/core/original-stack-info-calls.json'
-    reviewed_resource = ROOT.parent / 'test/fixtures/compiler/OriginalStackProof.json'
+    reviewed_resource = ROOT.parent / 't/fixtures/compiler/OriginalStackProof.json'
 
     @classmethod
     def setUpClass(cls):

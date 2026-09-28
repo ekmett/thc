@@ -24,8 +24,8 @@ class FixturePreparationTest(unittest.TestCase):
         manifest, owners = fast_fixtures._manifest(project)
         self.assertEqual("thread-async", owners["thc.runtime.ThreadAsyncNativeTest"])
         self.assertEqual(["build/thread-async"], manifest["groups"]["thread-async"]["outputs"])
-        producer = (project / "test/haskell-fixtures/ThreadAsyncFixtures.hs").read_text()
-        native = (project / "test/fixtures/compiler/ThreadAsyncNative.hs").read_text()
+        producer = (project / "t/haskell-fixtures/ThreadAsyncFixtures.hs").read_text()
+        native = (project / "t/fixtures/compiler/ThreadAsyncNative.hs").read_text()
         self.assertIn("build/thread-async/saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/thread-async/external-saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
         self.assertIn("build/thread-async/scheduled-saved-oracle.txt", fast_fixtures.FULL_REQUIRED)
@@ -42,7 +42,7 @@ class FixturePreparationTest(unittest.TestCase):
         option = "-fplugin-opt=THC.Plugin:pretty-diagnostics"
         commands = [line.split() for line in source.splitlines() if option in line]
         inputs = ["src/examples/THC/Fixtures.hs"] + [
-            "test/fixtures/compiler/" + name + ".hs" for name in (
+            "t/fixtures/compiler/" + name + ".hs" for name in (
                 "StrictFields", "SpeculationAudit", "RepresentationAudit", "SourceNotes",
                 "CBVAudit", "CBVJoinAudit", "CBVCoercionAudit", "ConstructorFieldAudit", "DemandAudit")]
         self.assertEqual([["bin/export-core.sh", option, *inputs]], commands)
@@ -72,7 +72,7 @@ class FixturePreparationTest(unittest.TestCase):
         sources = fast_fixtures._source_hashes(project, group)
         self.assertIn("src/test/java/thc/runtime/IntegerSimdModelTest.java", sources)
         self.assertIn("src/test/java/thc/runtime/IntegerSimdModel.java", sources)
-        self.assertIn("test/haskell-fixtures/IntegerSimdFixtures.hs", sources)
+        self.assertIn("t/haskell-fixtures/IntegerSimdFixtures.hs", sources)
         for native in (False, True):
             with tempfile.TemporaryDirectory() as directory:
                 root = Path(directory).resolve()
@@ -301,7 +301,7 @@ class FixturePreparationTest(unittest.TestCase):
         cache = fast_fixtures.fast_inputs
         group = manifest['groups']['stable-names']
         self.assertEqual('stable-names', owners['thc.runtime.StableNamesTest'])
-        self.assertIn('test/haskell-fixtures/StableNameFixtures.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/StableNameFixtures.hs', group['sources'])
         self.assertIn('"$fixture_bin" stable-names', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertEqual(50, len(cache.STABLE_NAME_OUTPUTS))
         self.assertTrue(cache.STABLE_NAME_OUTPUTS <= fast_fixtures.FULL_REQUIRED)
@@ -540,8 +540,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("integer-completion", owners["thc.runtime.IntegerCompletionTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "integer-completion"]}], group["commands"])
         self.assertEqual(["build/integer-completion"], group["outputs"])
-        self.assertEqual({"test/haskell-fixtures/Main.hs", "test/haskell-fixtures/IntegerCompletionFixtures.hs",
-                          "test/fixtures/compiler/IntegerCompletionAudit.hs"}, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/Main.hs", "t/haskell-fixtures/IntegerCompletionFixtures.hs",
+                          "t/fixtures/compiler/IntegerCompletionAudit.hs"}, set(group["sources"]))
         self.assertIn('"$fixture_bin" integer-completion', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn("build/integer-completion/manifest.json", fast_fixtures.fast_inputs.REQUIRED)
         self.assertIn("build/integer-completion", fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -554,8 +554,8 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual('atomic-int-arrays', owners['thc.runtime.AtomicIntArrayTest'])
         group = manifest['groups']['atomic-int-arrays']
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'atomic-int-arrays']}], group['commands'])
-        self.assertIn('test/fixtures/compiler/AtomicIntArrayAudit.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/AtomicIntArrayFixtures.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/AtomicIntArrayAudit.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/AtomicIntArrayFixtures.hs', group['sources'])
         self.assertIn('"$fixture_bin" atomic-int-arrays', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/atomic-int-arrays/manifest.json', fast_fixtures.fast_inputs.REQUIRED)
         self.assertEqual(6, len([p for p in fast_fixtures.FULL_REQUIRED if p.startswith('build/atomic-int-arrays/')]))
@@ -571,8 +571,8 @@ class FixturePreparationTest(unittest.TestCase):
                          group['commands'])
         self.assertEqual(['build/simd128-addresses'], group['outputs'])
         sources = fast_fixtures._source_hashes(project, group)
-        for path in ('test/fixtures/compiler/Simd128AddressAudit.hs', 'test/fixtures/compiler/Simd128AddressNative.hs',
-                     'test/haskell-fixtures/Simd128AddressFixtures.hs', 'bin/core_vector_memory.py',
+        for path in ('t/fixtures/compiler/Simd128AddressAudit.hs', 't/fixtures/compiler/Simd128AddressNative.hs',
+                     't/haskell-fixtures/Simd128AddressFixtures.hs', 'bin/core_vector_memory.py',
                      'bin/core_vectors.py', 'bin/simd-families.json'):
             self.assertIn(path, sources)
         self.assertIn('build/simd128-addresses/manifest.json', fast_fixtures.FULL_REQUIRED)
@@ -595,8 +595,8 @@ class FixturePreparationTest(unittest.TestCase):
                          group['commands'])
         self.assertEqual(['build/simd128-arrays'], group['outputs'])
         sources = fast_fixtures._source_hashes(project, group)
-        for path in ('test/fixtures/compiler/Simd128ArrayAudit.hs', 'test/fixtures/compiler/Simd128ArrayNative.hs',
-                     'test/haskell-fixtures/Simd128ArrayFixtures.hs', 'bin/core_vector_memory.py',
+        for path in ('t/fixtures/compiler/Simd128ArrayAudit.hs', 't/fixtures/compiler/Simd128ArrayNative.hs',
+                     't/haskell-fixtures/Simd128ArrayFixtures.hs', 'bin/core_vector_memory.py',
                      'bin/core_vectors.py', 'bin/simd-families.json'):
             self.assertIn(path, sources)
         self.assertIn('build/simd128-arrays/manifest.json', fast_fixtures.FULL_REQUIRED)
@@ -812,7 +812,7 @@ class FixturePreparationTest(unittest.TestCase):
                                    'native-addresses']}], group['commands'])
         self.assertEqual(['build/native-addresses/manifest.json', 'build/native-addresses/oracle.json',
                           'build/native-malloc/manifest.json', 'build/native-malloc/oracle.txt'], group['outputs'])
-        self.assertIn('test/fixtures/compiler/NativeMallocNative.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/NativeMallocNative.hs', group['sources'])
         self.assertIn('src/test/resources/core/original-malloc-descriptors.json', group['sources'])
         self.assertTrue(all((project / path).is_file() for path in group['sources']))
         self.assertIn('"$fixture_bin" native-addresses', (project / 'bin/prepare-tests.sh').read_text())
@@ -858,9 +858,9 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertIn('echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"', source)
             self.assertIn('for tool in clang llc opt; do', source)
         policy = json.loads((project / '.github/scripts/fast-tests.json').read_text())
-        for source in ('test/fixtures/compiler/OriginalGmpAudit.hs',
-                       'test/fixtures/compiler/OriginalGmpNative.hs',
-                       'test/haskell-fixtures/OriginalGmpFixtures.hs', 'test/haskell-fixtures/Main.hs'):
+        for source in ('t/fixtures/compiler/OriginalGmpAudit.hs',
+                       't/fixtures/compiler/OriginalGmpNative.hs',
+                       't/haskell-fixtures/OriginalGmpFixtures.hs', 't/haskell-fixtures/Main.hs'):
             self.assertIn('thc.runtime.OriginalGmpTest', policy['owners'][source]['junit'])
 
     def gmp_preparation(self):
@@ -1087,7 +1087,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('thc.runtime.TermiosAbiTest', manifest['fixtureFreeJunit'])
         self.assertIn('thc.runtime.SavedTermiosTest', manifest['fixtureFreeJunit'])
         for fixture in ('Audit', 'Native'):
-            self.assertIn(f'test/fixtures/compiler/OriginalSavedTermios{fixture}.hs', group['sources'])
+            self.assertIn(f't/fixtures/compiler/OriginalSavedTermios{fixture}.hs', group['sources'])
         self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', 'original-termios']}], group['commands'])
         self.assertIn('"$fixture_bin" original-termios', (project / 'bin/prepare-tests.sh').read_text().splitlines())
         self.assertIn('build/original-termios', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -1131,21 +1131,21 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertIn('build/original-posix-stat/manifest.json', fast_fixtures.FULL_REQUIRED)
         self.assertIn('build/original-posix-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
         self.assertEqual(['build/original-posix-stat', 'build/original-path-stat', 'build/original-path-mode', 'build/original-path-link', 'build/original-path-access', 'build/original-unlinkat', 'build/original-fstatat', 'build/original-current-directory', 'build/original-directory-streams', 'build/original-directory-paths'], group['outputs'])
-        self.assertIn('test/fixtures/compiler/OriginalPathStatAudit.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/OriginalPathStatFixtures.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/OriginalPathStatAudit.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/OriginalPathStatFixtures.hs', group['sources'])
         self.assertIn('build/original-path-stat', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('test/fixtures/compiler/OriginalPathModeAudit.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/OriginalPathModeFixtures.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/OriginalPathModeAudit.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/OriginalPathModeFixtures.hs', group['sources'])
         self.assertIn('build/original-path-mode', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('test/fixtures/compiler/OriginalPathLinkAudit.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/OriginalPathLinkFixtures.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/OriginalPathLinkAudit.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/OriginalPathLinkFixtures.hs', group['sources'])
         self.assertIn('build/original-path-link', fast_fixtures.FULL_OUTPUT_ROOTS)
-        self.assertIn('test/fixtures/compiler/OriginalUnlinkAtAudit.hs', group['sources'])
-        self.assertIn('test/fixtures/compiler/OriginalFstatAtAudit.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/OriginalUnlinkAtFixtures.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/OriginalFstatAtFixtures.hs', group['sources'])
-        self.assertIn('test/fixtures/compiler/OriginalCurrentDirectoryAudit.hs', group['sources'])
-        self.assertIn('test/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/OriginalUnlinkAtAudit.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/OriginalFstatAtAudit.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/OriginalUnlinkAtFixtures.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/OriginalFstatAtFixtures.hs', group['sources'])
+        self.assertIn('t/fixtures/compiler/OriginalCurrentDirectoryAudit.hs', group['sources'])
+        self.assertIn('t/haskell-fixtures/OriginalCurrentDirectoryFixtures.hs', group['sources'])
         self.assertIn('thc.runtime.NativeDirectoryFileSystemTest', manifest['fixtureFreeJunit'])
         self.assertIn('src/main/c/stdio-abi-probe.c', fast_fixtures.COMMON_SOURCES)
         self.assertIn('build/original-unlinkat', fast_fixtures.FULL_OUTPUT_ROOTS)
@@ -1171,7 +1171,7 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual(0o755, cache.safe_mode(0o755, 'build/original-posix-stat/native/oracle'))
         with self.assertRaises(cache.CacheMiss):
             cache.safe_mode(0o755, 'build/original-posix-stat/oracle.json')
-        producer = (project / 'test/haskell-fixtures/OriginalPosixStatFixtures.hs').read_text()
+        producer = (project / 't/haskell-fixtures/OriginalPosixStatFixtures.hs').read_text()
         self.assertIn('os /= "linux"', producer)
         self.assertIn('"supported" .= False', producer)
 
@@ -2342,7 +2342,7 @@ class FixturePreparationTest(unittest.TestCase):
         # checks. Keep their inputs and outputs in the same receipt.
         sums = manifest["groups"]["sum-results"]
         self.assertIn("bin/check-aggregate-layout.py", sums["sources"])
-        self.assertIn("test/fixtures/compiler/AggregateLayoutAudit.hs", sums["sources"])
+        self.assertIn("t/fixtures/compiler/AggregateLayoutAudit.hs", sums["sources"])
         self.assertIn("build/aggregate-layout", sums["outputs"])
         self.assertIn("build/aggregate-frontier.json", sums["outputs"])
 
@@ -2440,7 +2440,7 @@ class FixturePreparationTest(unittest.TestCase):
         # Real transitive model and native fixture changes invalidate the
         # affected group only; unchanged inputs never rerun the full producer.
         for group_id, source in (("sum-results", "bin/sum_layout_model.py"),
-                                 ("floating-tuples", "test/fixtures/compiler/FloatingTupleAudit.hs")):
+                                 ("floating-tuples", "t/fixtures/compiler/FloatingTupleAudit.hs")):
             with self.subTest(source=source):
                 path = self.root / source
                 path.write_bytes(path.read_bytes() + b"\n# changed\n")
@@ -2465,9 +2465,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("pinned-addresses", owners["thc.runtime.PinnedAddressTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "pinned-addresses"]}], group["commands"])
         self.assertEqual(["build/pinned-addresses"], group["outputs"])
-        self.assertEqual({"test/haskell-fixtures/PinnedAddressFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/PinnedAddressAudit.hs",
-                          "test/fixtures/compiler/PinnedAddressAuditNative.hs"}, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/PinnedAddressFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/PinnedAddressAudit.hs",
+                          "t/fixtures/compiler/PinnedAddressAuditNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" pinned-addresses', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -2501,9 +2501,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bignat-literals"]}], group["commands"])
         originals = fast_fixtures.fast_inputs.BIGNAT_SOURCES
         self.assertEqual({"build/bignat-literals"}, set(group["outputs"]))
-        self.assertEqual({"test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/BigNatLiteralAudit.hs",
-                          "test/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py"} | originals, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/BigNatLiteralFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/BigNatLiteralAudit.hs",
+                          "t/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py"} | originals, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" bignat-literals', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -2544,14 +2544,14 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("floating-remainder", owners["thc.runtime.FloatingRemainderTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "floating-remainder"]}], group["commands"])
         self.assertEqual(["build/floating-remainder"], group["outputs"])
-        self.assertEqual({"test/haskell-fixtures/FloatingRemainderFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatingRemainderAudit.hs",
-                          "test/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/FloatingRemainderFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatingRemainderAudit.hs",
+                          "t/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"}, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" floating-remainder', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"floating-remainder/commands/**"', (project / "build.gradle").read_text())
         policy = json.loads((project / ".github/scripts/fast-tests.json").read_text())
-        for path in ("src/examples/THC/InverseHyperbolic.hs", "test/haskell-fixtures/FloatingRemainderFixtures.hs"):
+        for path in ("src/examples/THC/InverseHyperbolic.hs", "t/haskell-fixtures/FloatingRemainderFixtures.hs"):
             self.assertEqual(["thc.runtime.FloatingRemainderTest"], policy["owners"][path]["junit"])
         for path in ("src/main/java/thc/runtime/FloatingPrimitives.java", "src/main/java/thc/runtime/FloatDecodeExpression.java"):
             self.assertIn("thc.runtime.FloatingRemainderTest", policy["leafSources"][path]["junit"])
@@ -2564,9 +2564,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("float-decode", owners["thc.runtime.FloatDecodeTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-decode"]}], group["commands"])
         self.assertEqual({"build/float-decode"}, set(group["outputs"]))
-        self.assertEqual({"test/haskell-fixtures/FloatDecodeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatDecodeAudit.hs",
-                          "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/FloatDecodeFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/FloatDecodeAudit.hs",
+                          "t/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs"} | fast_fixtures.fast_inputs.BIGNAT_SOURCES, set(group["sources"]))
         self.assertTrue(all((project / path).is_file() for path in group["sources"]))
         self.assertIn('"$fixture_bin" float-decode', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertIn('"float-decode/commands/**"', (project / "build.gradle").read_text())
@@ -2608,9 +2608,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("scalar-bitcasts", owners["thc.runtime.ScalarBitCastTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "scalar-bitcasts"]}], group["commands"])
         self.assertEqual(["build/scalar-bitcasts"], group["outputs"])
-        self.assertEqual({"test/haskell-fixtures/ScalarBitCastFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/ScalarBitCastAudit.hs",
-                          "test/fixtures/compiler/ScalarBitCastNative.hs"}, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/ScalarBitCastFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/ScalarBitCastAudit.hs",
+                          "t/fixtures/compiler/ScalarBitCastNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" scalar-bitcasts', (project / "bin/prepare-tests.sh").read_text().splitlines())
 
@@ -2621,9 +2621,9 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("address-array-copy", owners["thc.runtime.AddressArrayCopyTest"])
         self.assertEqual([{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "address-array-copy"]}], group["commands"])
         self.assertEqual(["build/address-array-copy"], group["outputs"])
-        self.assertEqual({"test/haskell-fixtures/AddressArrayCopyFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/AddressArrayCopyAudit.hs",
-                          "test/fixtures/compiler/AddressArrayCopyNative.hs"}, set(group["sources"]))
+        self.assertEqual({"t/haskell-fixtures/AddressArrayCopyFixtures.hs", "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/Main.hs", "thc.cabal", "t/fixtures/compiler/AddressArrayCopyAudit.hs",
+                          "t/fixtures/compiler/AddressArrayCopyNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" address-array-copy', (project / "bin/prepare-tests.sh").read_text().splitlines())
         self.assertEqual(fast_fixtures.FULL_PREPARATION_PLAN, fast_fixtures._preparation_plan(project))
@@ -2666,9 +2666,9 @@ class FixturePreparationTest(unittest.TestCase):
                           {"argv": ["python3", "bin/prepare-floating-audit.py"]}], group["commands"])
         self.assertEqual(["build/boxed-arrays", "build/floating"], group["outputs"])
         self.assertEqual({"bin/prepare-boxed-arrays.py", "bin/prepare-floating-audit.py",
-                          "test/fixtures/compiler/BoxedArrayAudit.hs",
-                          "test/fixtures/compiler/FloatingAudit.hs",
-                          "test/fixtures/compiler/FloatingAuditNative.hs"}, set(group["sources"]))
+                          "t/fixtures/compiler/BoxedArrayAudit.hs",
+                          "t/fixtures/compiler/FloatingAudit.hs",
+                          "t/fixtures/compiler/FloatingAuditNative.hs"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         full = (project / "bin/prepare-tests.sh").read_text().splitlines()
         for command in group["commands"]:
@@ -2722,11 +2722,11 @@ class FixturePreparationTest(unittest.TestCase):
         self.assertEqual("original-stdio", owners["thc.runtime.OriginalStdioNativeTest"])
         self.assertEqual([{"argv": command}], group["commands"])
         self.assertEqual(["build/original-stdio"], group["outputs"])
-        self.assertEqual({"test/fixtures/compiler/OriginalStdioAudit.hs",
-                          "test/fixtures/compiler/OriginalStdioAuditNative.hs",
-                          "bin/prepare-original-stdio.sh", "test/haskell-fixtures/Main.hs",
-                          "test/haskell-fixtures/FixtureSupport.hs",
-                          "test/haskell-fixtures/OriginalStdioFixtures.hs", "thc.cabal"}, set(group["sources"]))
+        self.assertEqual({"t/fixtures/compiler/OriginalStdioAudit.hs",
+                          "t/fixtures/compiler/OriginalStdioAuditNative.hs",
+                          "bin/prepare-original-stdio.sh", "t/haskell-fixtures/Main.hs",
+                          "t/haskell-fixtures/FixtureSupport.hs",
+                          "t/haskell-fixtures/OriginalStdioFixtures.hs", "thc.cabal"}, set(group["sources"]))
         self.assertTrue(all((project / name).is_file() for name in group["sources"]))
         self.assertIn('"$fixture_bin" original-stdio --require-supported',
                       (project / "bin/prepare-tests.sh").read_text().splitlines())
@@ -2797,8 +2797,8 @@ class FixturePreparationTest(unittest.TestCase):
             group_id = f"simd-{family}-bytearray"; group = manifest["groups"][group_id]
             self.assertEqual(group_id, owners[f"thc.runtime.Simd{klass}ByteArrayTest"])
             self.assertEqual(["build/"+group_id], group["outputs"])
-            for path in ("test/haskell-fixtures/SimdByteArrayFixtures.hs", "test/haskell-fixtures/SimdByteArrayModel.hs",
-                         "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs", "thc.cabal"):
+            for path in ("t/haskell-fixtures/SimdByteArrayFixtures.hs", "t/haskell-fixtures/SimdByteArrayModel.hs",
+                         "t/haskell-fixtures/Main.hs", "t/haskell-fixtures/FixtureSupport.hs", "thc.cabal"):
                 self.assertIn(path, group["sources"])
             self.assertTrue(all((project / path).is_file() for path in group["sources"]))
             argv = group["commands"][0]["argv"]
@@ -2831,7 +2831,7 @@ class FixturePreparationTest(unittest.TestCase):
             self.assertEqual(family, owners['thc.runtime.' + klass])
             self.assertEqual([{'argv': ['cabal', 'run', 'exe:thc-fixtures', '--offline', '--', family]}], group['commands'])
             self.assertEqual(['build/' + family], group['outputs'])
-            for path in ('test/haskell-fixtures/ByteArrayFixtures.hs', 'test/haskell-fixtures/FixtureSupport.hs', 'test/haskell-fixtures/Main.hs', 'thc.cabal'):
+            for path in ('t/haskell-fixtures/ByteArrayFixtures.hs', 't/haskell-fixtures/FixtureSupport.hs', 't/haskell-fixtures/Main.hs', 'thc.cabal'):
                 self.assertIn(path, group['sources']); self.assertTrue((project / path).is_file())
             name = f'build/{family}/manifest.json'; artifacts = fast_fixtures.fast_inputs.BYTEARRAY_OUTPUTS[family] - {name}
             expected = {path: '0'*64 for path in artifacts}

@@ -12,7 +12,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 BUILD = ROOT / 'build/data-to-tag'
-SOURCE = ROOT / 'test/fixtures/compiler/DataToTagAudit.hs'
+SOURCE = ROOT / 't/fixtures/compiler/DataToTagAudit.hs'
 ENTRIES = ['smallCase', 'largeCase', 'lazyCase', 'pairCase', 'unliftedCase', 'forceCase', 'wrappedCase']
 FRONTIERS = ['unknownFamily', 'closureFamily', 'newtypeFamily', 'wrongSmallFamily', 'barePrimitive']
 VALUES = sorted(set(range(-18, 19)) | {-2**63, -2**63+1, 2**63-2, 2**63-1, -4097, 4097, -2**32, 2**32})

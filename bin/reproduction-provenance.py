@@ -58,7 +58,7 @@ if digest(root / 'src/examples/THC/MapWorkload.hs') != original['workloadSha256'
 module_data = [json.loads(p.read_text()) for p in modules]
 source_paths = {
     root / 'src/examples/THC/MapWorkload.hs',
-    root / 'test/fixtures/package-roots/InterfaceRoots.hs',
+    root / 't/fixtures/package-roots/InterfaceRoots.hs',
     root / 'vendor/containers-0.8/containers.cabal',
     root / 'vendor/containers-0.8/LICENSE',
     root / 'vendor/archives/containers-0.8.tar.gz',
@@ -126,7 +126,7 @@ recipes = {
     'installedInterfaceRoot': shared_export + ['-fplugin-opt=THC.Plugin:$ROOT/build/map/interface-core',
                     '-odir', '$ROOT/build/map/interface-ghc', '-hidir', '$ROOT/build/map/interface-ghc',
                     '-package', 'ghc-internal', '-fplugin-opt=THC.Plugin:closure=exceptionInterfaceRoot',
-                    ] + source_note_flags + ['test/fixtures/package-roots/InterfaceRoots.hs'],
+                    ] + source_note_flags + ['t/fixtures/package-roots/InterfaceRoots.hs'],
 }
 flags_bytes = json.dumps(recipes, sort_keys=True, separators=(',', ':')).encode()
 result = {

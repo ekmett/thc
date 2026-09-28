@@ -45,8 +45,8 @@ class OriginalStdioCloseNativeTest {
     @Test void originalCloseAndErrnoMatchNativeBeforeAndAfterCompilation() throws Exception {
         var manifest = json(new File(fixture, "manifest.json")); assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc"));
         assertEquals(names, manifest.get("entries")); assertEquals(4L, manifest.get("nativeRows"));
-        hashes(root, manifest.get("inputHashes"), Set.of("test/fixtures/compiler/OriginalStdioCloseAudit.hs", "test/fixtures/compiler/OriginalStdioCloseAuditNative.hs",
-            "test/haskell-fixtures/OriginalStdioCloseFixtures.hs", "bin/core_original_foreign.py"));
+        hashes(root, manifest.get("inputHashes"), Set.of("t/fixtures/compiler/OriginalStdioCloseAudit.hs", "t/fixtures/compiler/OriginalStdioCloseAuditNative.hs",
+            "t/haskell-fixtures/OriginalStdioCloseFixtures.hs", "bin/core_original_foreign.py"));
         hashes(root, manifest.get("artifactHashes"), Set.of("build/original-stdio-close/oracle.json", "build/original-stdio-close/pre/core/OriginalStdioCloseAudit.json",
             "build/original-stdio-close/post/core/OriginalStdioCloseAudit.json"), "build/original-stdio-close/");
         var oracle = (List<Map<String, Object>>) Json.parse(Files.readString(new File(fixture, "oracle.json").toPath()));

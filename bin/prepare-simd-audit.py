@@ -13,8 +13,8 @@ from pathlib import Path
 import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/simd'
-FIXTURE = ROOT / 'test/fixtures/compiler/SimdInt64X2.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/SimdInt64X2Native.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/SimdInt64X2.hs'
+NATIVE = ROOT / 't/fixtures/compiler/SimdInt64X2Native.hs'
 INPUTS = [-(1 << 63), -3000000001, -1, 0, 1, 9000000003, (1 << 63) - 1]
 INPUTS32 = [-(1 << 63), -2147483649, -2147483648, -1, 0, 1, 2147483647, 2147483648, (1 << 63) - 1]
 
@@ -46,8 +46,8 @@ def main():
     shape32 = args.vector == 'int32x4'
     module_name = 'SimdInt32X4' if shape32 else 'SimdInt64X2'
     OUT = ROOT / ('build/simd-int32x4' if shape32 else 'build/simd')
-    FIXTURE = ROOT / f'test/fixtures/compiler/{module_name}.hs'
-    NATIVE = ROOT / f'test/fixtures/compiler/{module_name}Native.hs'
+    FIXTURE = ROOT / f't/fixtures/compiler/{module_name}.hs'
+    NATIVE = ROOT / f't/fixtures/compiler/{module_name}Native.hs'
     lanes, element = (4, 'Int32ElemRep') if shape32 else (2, 'Int64ElemRep')
     ghc = os.environ.get('GHC', 'ghc')
     assert subprocess.check_output([ghc, '--numeric-version'], text=True).strip() == '9.14.1'
@@ -75,7 +75,7 @@ def main():
     rows = None
     if not args.export_only:
         native = OUT / 'native'; native.mkdir(exist_ok=True)
-        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', *args.ghc_option, '-itest/fixtures/compiler', '-odir', str(native), '-hidir', str(native), '-o', str(native / 'simd'), str(NATIVE)])
+        run([ghc, '--make', '-O2', '-fforce-recomp', '-dcore-lint', *args.ghc_option, '-it/fixtures/compiler', '-odir', str(native), '-hidir', str(native), '-o', str(native / 'simd'), str(NATIVE)])
         commands.append(dict(argv=[str(native / 'simd')], stdout=str(OUT / 'oracle.tsv')))
         output = subprocess.check_output([str(native / 'simd')], cwd=ROOT, text=True)
         actual = {}

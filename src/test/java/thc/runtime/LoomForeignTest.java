@@ -209,7 +209,7 @@ public class LoomForeignTest {
 
     private MethodHandle callbackInvoker(Arena arena) throws Exception {
         var library = directory.resolve("callback.so");
-        var compile = new ProcessBuilder("cc", "-shared", "-fPIC", "test/fixtures/compiler/callback-identity.c", "-o", library.toString())
+        var compile = new ProcessBuilder("cc", "-shared", "-fPIC", "t/fixtures/compiler/callback-identity.c", "-o", library.toString())
             .redirectErrorStream(true).start();
         assertTrue(compile.waitFor(10, TimeUnit.SECONDS));
         assertEquals(0, compile.exitValue(), new String(compile.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));

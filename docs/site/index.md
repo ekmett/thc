@@ -86,7 +86,7 @@ separately.
 Run the included Cabal executable:
 
 ```sh
-cabal run thc -- run completed --project-dir test/fixtures/run-pure \
+cabal run thc -- run completed --project-dir t/fixtures/run-pure \
   --thc-root "$PWD" --dist-dir "$PWD/build/run-package"
 ```
 
@@ -151,7 +151,7 @@ stable embedding API.
 
 The [source repository](../../README.md) includes the full
 [documentation archive](../), [benchmark evidence](../../bench/) and
-[test fixtures](../../test/). THC uses the same license as Cadenza:
+[test fixtures](../../t/). THC uses the same license as Cadenza:
 **UPL-1.0 AND BSD-3-Clause**; see [LICENSE.txt](../../LICENSE.txt).
 
 ## Contact Information

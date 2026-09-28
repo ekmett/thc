@@ -13,8 +13,8 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/floating'
-FIXTURE = ROOT / 'test/fixtures/compiler/FloatingAudit.hs'
-NATIVE = ROOT / 'test/fixtures/compiler/FloatingAuditNative.hs'
+FIXTURE = ROOT / 't/fixtures/compiler/FloatingAudit.hs'
+NATIVE = ROOT / 't/fixtures/compiler/FloatingAuditNative.hs'
 GHC = os.environ.get('GHC', 'ghc')
 PRIMITIVES = ['plusFloat#', 'minusFloat#', 'timesFloat#', 'divideFloat#', 'negateFloat#',
               '+##', '-##', '*##', '/##', 'negateDouble#',
@@ -78,7 +78,7 @@ def main():
     native = OUT / 'native'
     native.mkdir(exist_ok=True)
     subprocess.run([GHC, '--make', '-O2', '-fforce-recomp', '-dcore-lint', '-dstg-lint',
-                    '-itest/fixtures/compiler', '-odir', str(native), '-hidir', str(native),
+                    '-it/fixtures/compiler', '-odir', str(native), '-hidir', str(native),
                     str(NATIVE), '-o', str(native / 'floating-oracle')], cwd=ROOT, check=True)
     rows = subprocess.check_output([str(native / 'floating-oracle')], cwd=ROOT, text=True)
     entries = set()

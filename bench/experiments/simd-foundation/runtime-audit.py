@@ -32,7 +32,7 @@ if mode == 'prepare':
     # Native GHC does not load THC's exporter plugin; validate its compiled Haskell
     # inputs. The current exporter has independent hashed Core provenance below.
     for source in native['sources']:
-        if source['path'].startswith('test/fixtures/compiler/'):
+        if source['path'].startswith('t/fixtures/compiler/'):
             assert digest(root / source['path']) == source['sha256'], 'Native fixture source mismatch: ' + source['path']
     oracle = native_dir / 'oracle.tsv'
     proof = next(a for a in native['artifacts'] if a['path'].endswith('/oracle.tsv'))
@@ -40,7 +40,7 @@ if mode == 'prepare':
     for artifact in core['artifacts']:
         assert digest(root / artifact['path']) == artifact['sha256'], 'Core artifact hash mismatch'
     for source in core['sources']:
-        if source['path'].startswith(('test/fixtures/compiler/', 'compiler/Thc/')):
+        if source['path'].startswith(('t/fixtures/compiler/', 'compiler/Thc/')):
             assert digest(root / source['path']) == source['sha256'], 'Core source mismatch: ' + source['path']
     (out / 'runtime-snapshot.json').write_text(json.dumps(runtime_snapshot(), indent=2)+'\n')
     shutil.copyfile(oracle, out / 'oracle.tsv')

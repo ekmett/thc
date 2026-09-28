@@ -45,7 +45,7 @@ Its 65,536 constructed lane samples do not exhaust the 32-bit value space.
 
 ## Genuine Core and independent observations
 
-`test/fixtures/compiler/SimdWord32X4.hs` uses the real pinned primitives.
+`t/fixtures/compiler/SimdWord32X4.hs` uses the real pinned primitives.
 The graph roots `plusCase`, `minusCase` and `timesCase` each have arity two.
 Inputs narrow through `int2Word#` and `wordToWord32#`; all four result lanes
 zero-extend through `word32ToWord#` and `word2Int#` before weighting.

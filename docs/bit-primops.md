@@ -32,7 +32,7 @@ lowering. Guest execution uses primitive `long` operands and results, with
 fixed masks/shifts and Java's population-count, zero-count, byte-reversal, and
 bit-reversal operations. No generic boxed arithmetic is added.
 
-`test/fixtures/compiler/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
+`t/fixtures/compiler/BitPrimopsAudit.hs` uses opaque wrappers with dynamic
 inputs. The Haskell fixture producer exports both pre-Tidy and post-Tidy Core.
 JVM tests load both exports and check retained
 primitive names and the pinned input/result representations. The manifest hashes source inputs,

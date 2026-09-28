@@ -157,7 +157,7 @@ def precise_exception_checks():
         work = Path(directory)
         env = dict(os.environ, THC_CORE_OUT=str(work / 'core'), THC_GHC_OUT=str(work / 'ghc'))
         subprocess.run([str(ROOT / 'bin/export-core.sh'), '-DTHC_PRECISE_EXCEPTION_AUDIT',
-                        str(ROOT / 'test/fixtures/compiler/DemandAudit.hs')],
+                        str(ROOT / 't/fixtures/compiler/DemandAudit.hs')],
                        check=True, cwd=ROOT, env=env)
         module = json.loads((work / 'core/DemandAudit.json').read_text())
         audit(module)
