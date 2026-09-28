@@ -1393,7 +1393,7 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
                 CapiCall call, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.zero(node, call);
-            if (call.getTimeClock()) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
+            if (call.timeClock()) destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
             else destination.setLong(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, result);
         }
     }
@@ -1619,14 +1619,14 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
     @ConstantOperand(type = LocalAccessor.class, name = "destination")
     @ConstantOperand(type = CapiCall.class, name = "call")
     public static final class LinkedCapiWordAddress {
-        @Specialization(guards = "!call.getTimeClock()") public static void apply(VirtualFrame frame, LocalAccessor destination,
+        @Specialization(guards = "!call.timeClock()") public static void apply(VirtualFrame frame, LocalAccessor destination,
                 CapiCall call, long word, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             long result = CoreCapiForeign.wordAddress(node, call, word, address);
             destination.setInt(((BytecodeRoot) node.getRootNode()).getBytecodeNode(), frame, (int) result);
         }
 
-        @Specialization(guards = "call.getTimeClock()") public static void narrow(VirtualFrame frame, LocalAccessor destination,
+        @Specialization(guards = "call.timeClock()") public static void narrow(VirtualFrame frame, LocalAccessor destination,
                 CapiCall call, int word, ManagedAddress address, Object state, @Bind("$node") Node node) {
             TupleResultsKt.requireVoidCarrier(state);
             int result = (int) CoreCapiForeign.wordAddress(node, call, word, address);

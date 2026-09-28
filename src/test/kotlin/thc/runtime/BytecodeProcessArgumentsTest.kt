@@ -18,7 +18,7 @@ class BytecodeProcessArgumentsTest {
             context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                for (operation in ProcessOp.entries) {
+                for (operation in ProcessOp.values()) {
                     val locals = mutableListOf<LocalAccessor>()
                     val root = BytecodeRootGen.create(language, BytecodeConfig.DEFAULT) { b ->
                         b.beginRoot()

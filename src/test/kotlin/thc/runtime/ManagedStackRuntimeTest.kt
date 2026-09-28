@@ -308,7 +308,7 @@ class ManagedStackRuntimeTest {
         val longMiss = assertThrows(com.oracle.truffle.api.nodes.UnexpectedResultException::class.java) {
             fields.executeAddress(frame)
         }
-        assertEquals(2L, longMiss.result)
+        assertEquals(2, longMiss.result)
         assertEquals(2, evaluations)
     }
 

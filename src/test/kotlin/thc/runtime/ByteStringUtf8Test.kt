@@ -271,8 +271,11 @@ class ByteStringUtf8Test {
                 }
                 val body = ByteStringUtf8Expression(safe, arrayOf(source, length, enqueue), proof)
                 val root = FunctionRoot(language, layout.build(), "UTF-8 completion control", null,
-                    intArrayOf(), intArrayOf(), intArrayOf(), body, Metrics(false),
-                    tuple = shape, tupleSlots = slots, enableAsync = true)
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    Metrics(false), emptyArray(), body.representation, body.coreSourceLocation,
+                    booleanArrayOf(), null, shape, slots,
+                    null, true, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, false)
                 val result = Calls.target(root.callTarget, arrayOf(0L))
                 val completed = if (safe) {
                     val saved = checkNotNull(SavedGuestContinuationKt.savedGuestContinuation(result))

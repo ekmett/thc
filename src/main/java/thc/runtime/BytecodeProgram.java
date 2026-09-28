@@ -477,26 +477,26 @@ public final class BytecodeProgram implements ExecutableProgram {
     private void validateBindings(List<Map<String, Object>> requested) {
         if (requested.isEmpty()) return;
         ArrayOp.validateApplications(requested);
-        CoreStackForeign.INSTANCE.validateHeads(requested);
-        CoreStackInfoForeign.INSTANCE.validateHeads(requested);
+        CoreStackForeign.validateHeads(requested);
+        CoreStackInfoForeign.validateHeads(requested);
         CoreOriginalStdio.INSTANCE.validateHeads(requested);
-        CoreProcessForeign.INSTANCE.validateHeads(requested);
-        CoreStablePointers.INSTANCE.validateHeads(requested);
+        CoreProcessForeign.validateHeads(requested);
+        CoreStablePointers.validateHeads(requested);
         CoreRtsShutdown.INSTANCE.validateHeads(requested);
-        CoreMainThreadForeign.INSTANCE.validateHeads(requested);
-        CoreBoundThreadForeign.INSTANCE.validateHeads(requested);
+        CoreMainThreadForeign.validateHeads(requested);
+        CoreBoundThreadForeign.validateHeads(requested);
         CoreStringRtsForeign.validateHeads(requested);
         CoreEnvironmentForeign.validateHeads(requested);
         CoreRtsDiagnosticForeign.validateHeads(requested);
         CoreRtsArgumentsForeign.validateHeads(requested);
-        CoreManagedFiles.INSTANCE.validateHeads(requested);
-        CoreMd5Foreign.INSTANCE.validateHeads(requested);
-        CoreGmpForeign.INSTANCE.validateHeads(requested);
-        CoreLibdwForeign.INSTANCE.validateHeads(requested);
-        CoreNativeAllocationForeign.INSTANCE.validateHeads(requested);
+        CoreManagedFiles.validateHeads(requested);
+        CoreMd5Foreign.validateHeads(requested);
+        CoreGmpForeign.validateHeads(requested);
+        CoreLibdwForeign.validateHeads(requested);
+        CoreNativeAllocationForeign.validateHeads(requested);
         CoreMemoryCopyForeign.MEMMOVE.validateHeads(requested);
         CoreMemoryCopyForeign.MEMCPY.validateHeads(requested);
-        CoreSignalForeign.INSTANCE.validateHeads(requested);
+        CoreSignalForeign.validateHeads(requested);
         if (!diagnosticUnsupported) {
             CoreRepresentations.INSTANCE.validateAggregates(requested, constructors);
             Objects.requireNonNull(validateInputs).accept(requested);
@@ -1378,9 +1378,9 @@ public final class BytecodeProgram implements ExecutableProgram {
                 yield ManagedAddress.Companion.nullAddress();
             }
             case "function-addr" -> CFinalizerLabels.INSTANCE.fromCore(value, proof);
-            case "data-addr" -> CoreDataLabels.INSTANCE.fromCore(value, proof,
+            case "data-addr" -> CoreDataLabels.fromCore(value, proof,
                 stackTargetLayout instanceof TargetLayout layout ? layout : null);
-            case "bignat" -> BigNatLiterals.INSTANCE.decode(value);
+            case "bignat" -> BigNatLiterals.decode(value);
             default -> throw new UnsupportedCore("Unsupported literal kind " + kind);
         };
     }
@@ -4960,8 +4960,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 yield switch (kind) {
                     case "int8", "word8", "int16", "word16", "int32", "word32" ->
                         new ProvenExpression(value, CoreRepresentations.INSTANCE.narrowLiteralProof(expr));
-                    case "bignat" -> new ProvenExpression(value, BigNatLiterals.INSTANCE.proof(expr));
-                    case "rubbish" -> new ProvenExpression(value, RubbishLiterals.Companion.proof(expr));
+                    case "bignat" -> new ProvenExpression(value, BigNatLiterals.proof(expr));
+                    case "rubbish" -> new ProvenExpression(value, RubbishLiterals.proof(expr));
                     default -> value;
                 };
             }
@@ -5472,7 +5472,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if ("var".equals(fn.getFirst()) && scope.joins.containsKey(fn.get(1))) return joinCall(scope.joins.get(fn.get(1)), operands);
         if ("prim".equals(fn.getFirst())) {
-            var value = primitive((String) fn.get(1), operands, CoreExceptionPayload.INSTANCE.validate(expr));
+            var value = primitive((String) fn.get(1), operands, CoreExceptionPayload.validate(expr));
             if ("raise#".equals(fn.get(1)) && tupleProof.isTypedTransport()) return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 b.beginBlock(); b.beginStoreLocal(b.createLocal("non-returning aggregate", null));
@@ -5498,7 +5498,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         boolean defined = "var".equals(fn.getFirst()) && (scope.locals.containsKey(fn.get(1)) || scope.joins.containsKey(fn.get(1))
             || (demand != null && metadata != null && metadata.containsKey("foreignCall")
                 ? demand.isDefined((String) fn.get(1)) : globals.containsKey(fn.get(1))));
-        var cpuAffinity = CoreCpuAffinity.INSTANCE.validate(expr, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
+        var cpuAffinity = CoreCpuAffinity.validate(expr, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
         var runtimeService = CoreRuntimeServices.validate(expr, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
         var representations = argumentMetadata(args);
         var resultRepresentation = metadata == null ? null : metadata.get("rep");
@@ -5506,32 +5506,32 @@ public final class BytecodeProgram implements ExecutableProgram {
             ? CorePackageScalarForeign.INSTANCE.validate(metadata, representations, flags, resultRepresentation, packageScalarLinks) : null;
         // Verified package ownership takes precedence over matching RTS symbol names.
         var foreignMetadata = packageScalar == null ? metadata : null;
-        boolean stackClone = CoreStackForeign.INSTANCE.validate(foreignMetadata, representations, flags);
-        var stackInfo = CoreStackInfoForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        boolean stackClone = CoreStackForeign.validate(foreignMetadata, representations, flags);
+        var stackInfo = CoreStackInfoForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var originalStdio = CoreOriginalStdio.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var originalProcess = CoreProcessForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var capi = CoreCapiForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation, foreignLinks);
-        boolean stableFree = CoreStablePointers.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var originalProcess = CoreProcessForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var capi = CoreCapiForeign.validate(foreignMetadata, representations, flags, resultRepresentation, foreignLinks);
+        boolean stableFree = CoreStablePointers.validate(foreignMetadata, representations, flags, resultRepresentation);
         var sharedCAF = CoreSharedCAFStores.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
         var shutdown = CoreRtsShutdown.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        boolean mainThreadForeign = CoreMainThreadForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        boolean boundThreadForeign = CoreBoundThreadForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation, false);
+        boolean mainThreadForeign = CoreMainThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
+        boolean boundThreadForeign = CoreBoundThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation, false);
         var gcForeign = CoreGcForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var rtsEventForeign = CoreRtsEventForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        boolean allocationCounterForeign = CoreBoundThreadForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation, true);
+        boolean allocationCounterForeign = CoreBoundThreadForeign.validate(foreignMetadata, representations, flags, resultRepresentation, true);
         var stringRts = CoreStringRtsForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var floatingForeign = CoreFloatForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var textForeign = CoreTextForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var textForeign = CoreTextForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var environment = CoreEnvironmentForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var rtsDiagnostic = CoreRtsDiagnosticForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var rtsArguments = CoreRtsArgumentsForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var managedFile = CoreManagedFiles.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var managedFile = CoreManagedFiles.validate(foreignMetadata, representations, flags, resultRepresentation);
         var javascript = packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null
             ? CoreJavaScript.INSTANCE.validate(expr, defined) : null;
-        var md5 = javascript == null ? CoreMd5Foreign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation) : null;
-        var gmp = CoreGmpForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var processSignal = CoreSignalForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var nativeAllocation = CoreNativeAllocationForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var md5 = javascript == null ? CoreMd5Foreign.validate(foreignMetadata, representations, flags, resultRepresentation) : null;
+        var gmp = CoreGmpForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var processSignal = CoreSignalForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var nativeAllocation = CoreNativeAllocationForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean memmove = CoreMemoryCopyForeign.MEMMOVE.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean memcpy = CoreMemoryCopyForeign.MEMCPY.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean byteStringSort = CoreByteStringSort.validate(foreignMetadata, representations, flags, resultRepresentation);
@@ -5539,7 +5539,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         var byteStringUtf8 = CoreByteStringUtf8Foreign.validate(foreignMetadata, representations, flags, resultRepresentation);
         boolean memset = CoreMemsetForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var memorySearch = CoreMemorySearchForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
-        var libdw = CoreLibdwForeign.INSTANCE.validate(foreignMetadata, representations, flags, resultRepresentation);
+        var libdw = CoreLibdwForeign.validate(foreignMetadata, representations, flags, resultRepresentation);
         var polyglot = originalProcess == null && rtsEventForeign == null && gcForeign == null && textForeign == null && !byteStringSort
                 && byteStringDecimal == null && byteStringUtf8 == null && memorySearch == null && floatingForeign == null && cpuAffinity == null
                 && runtimeService == null && !allocationCounterForeign && environment == null && packageScalar == null && !stackClone
@@ -5578,30 +5578,30 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (cpuAffinity != null) {
             var state = compile(args.getFirst(), scope, false);
-            CoreBoundThreadForeign.INSTANCE.validateOperand(state.proof(), lexicalProof(args.getFirst(), scope));
+            CoreBoundThreadForeign.validateOperand(state.proof(), lexicalProof(args.getFirst(), scope));
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginCpuAffinityQuery(destination.getFirst(), cpuAffinity);
                 state.emit(e); e.builder.endCpuAffinityQuery();
             });
         }
         if (stackClone) {
-            CoreStackForeign.INSTANCE.validateHead(fn, defined);
+            CoreStackForeign.validateHead(fn, defined);
             var state = args.getFirst();
-            CoreStackForeign.INSTANCE.validateBinding(lexicalProof(state, scope));
+            CoreStackForeign.validateBinding(lexicalProof(state, scope));
             var operand = compile(state, scope, false);
-            CoreStackForeign.INSTANCE.validateState(operand.proof());
+            CoreStackForeign.validateState(operand.proof());
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginCloneMyStack(destination.getFirst()); operand.emit(e); e.builder.endCloneMyStack();
             });
         }
         if (stackInfo != null) {
-            var layout = CoreStackInfoForeign.INSTANCE.requireLayout(stackTargetLayout);
-            CoreStackInfoForeign.INSTANCE.validateHead(fn, defined);
+            var layout = CoreStackInfoForeign.requireLayout(stackTargetLayout);
+            CoreStackInfoForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreStackInfoForeign.INSTANCE.validateOperand(stackInfo, index, operand.proof(), lexicalProof(argument, scope));
+                CoreStackInfoForeign.validateOperand(stackInfo, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             if (stackInfo == OriginalStackInfoOp.STACK_INFO) return new ProvenExpression(e -> {
@@ -5633,12 +5633,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (originalProcess != null) {
-            CoreProcessForeign.INSTANCE.validateHead(fn, defined);
+            CoreProcessForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreProcessForeign.INSTANCE.validateOperand(originalProcess, index, operand.proof(), lexicalProof(argument, scope));
+                CoreProcessForeign.validateOperand(originalProcess, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -5660,24 +5660,24 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (originalStdio != null) return compileOriginalStdio(originalStdio, fn, defined, args, scope, tupleProof);
         if (capi != null) {
-            CoreCapiForeign.INSTANCE.validateHead(fn, defined);
+            CoreCapiForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreCapiForeign.INSTANCE.validateOperand(capi, index, operand.proof(), lexicalProof(argument, scope));
+                CoreCapiForeign.validateOperand(capi, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
-                if (capi.getZeroArgument()) b.beginLinkedCapiZero(destination.getFirst(), capi);
+                if (capi.zeroArgument()) b.beginLinkedCapiZero(destination.getFirst(), capi);
                 else b.beginLinkedCapiWordAddress(destination.getFirst(), capi);
                 for (var operand : operands) operand.emit(e);
-                if (capi.getZeroArgument()) b.endLinkedCapiZero(); else b.endLinkedCapiWordAddress();
+                if (capi.zeroArgument()) b.endLinkedCapiZero(); else b.endLinkedCapiWordAddress();
             });
         }
         if (packageScalar != null) {
-            CoreCapiForeign.INSTANCE.validateHead(fn, defined);
+            CoreCapiForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
@@ -5723,7 +5723,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (stableFree) {
-            CoreStablePointers.INSTANCE.validateHead(fn, defined);
+            CoreStablePointers.validateHead(fn, defined);
             var operands = compileOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 if (!destination.isEmpty()) throw new RuntimeFault("StablePtr free has no result field");
@@ -5827,10 +5827,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (boundThreadForeign || allocationCounterForeign) {
-            CoreBoundThreadForeign.INSTANCE.validateHead(fn, defined);
+            CoreBoundThreadForeign.validateHead(fn, defined);
             var argument = args.getFirst();
             var state = compile(argument, scope, false);
-            CoreBoundThreadForeign.INSTANCE.validateOperand(state.proof(), lexicalProof(argument, scope));
+            CoreBoundThreadForeign.validateOperand(state.proof(), lexicalProof(argument, scope));
             return tupleExpression(tupleProof, (e, destination) -> {
                 e.builder.beginBoundThreadSupport(destination.getFirst(), allocationCounterForeign);
                 state.emit(e); e.builder.endBoundThreadSupport();
@@ -5861,12 +5861,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (textForeign != null) {
-            CoreTextForeign.INSTANCE.validateHead(fn, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
+            CoreTextForeign.validateHead(fn, defined || fn.size() > 1 && scope.joins.containsKey(fn.get(1)));
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreTextForeign.INSTANCE.validateOperand(textForeign, index, operand.proof(), lexicalProof(argument, scope));
+                CoreTextForeign.validateOperand(textForeign, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -5927,12 +5927,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (mainThreadForeign) {
-            CoreMainThreadForeign.INSTANCE.validateHead(fn, defined);
+            CoreMainThreadForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreMainThreadForeign.INSTANCE.validateOperand(index, operand.proof(), lexicalProof(argument, scope));
+                CoreMainThreadForeign.validateOperand(index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -5942,7 +5942,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (managedFile != null) {
-            CoreManagedFiles.INSTANCE.validateHead(fn, defined);
+            CoreManagedFiles.validateHead(fn, defined);
             var operands = compileOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
@@ -5978,12 +5978,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (processSignal != null) {
-            CoreSignalForeign.INSTANCE.validateHead(fn, defined);
+            CoreSignalForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreSignalForeign.INSTANCE.validateOperand(processSignal, index, operand.proof(), lexicalProof(argument, scope));
+                CoreSignalForeign.validateOperand(processSignal, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -5992,12 +5992,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (nativeAllocation != null) {
-            CoreNativeAllocationForeign.INSTANCE.validateHead(fn, defined);
+            CoreNativeAllocationForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreNativeAllocationForeign.INSTANCE.validateOperand(nativeAllocation, index, operand.proof(), lexicalProof(argument, scope));
+                CoreNativeAllocationForeign.validateOperand(nativeAllocation, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6123,12 +6123,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (libdw != null) {
-            CoreLibdwForeign.INSTANCE.validateHead(fn, defined);
+            CoreLibdwForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreLibdwForeign.INSTANCE.validateOperand(libdw, index, operand.proof(), lexicalProof(argument, scope));
+                CoreLibdwForeign.validateOperand(libdw, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6145,12 +6145,12 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (gmp != null) {
-            CoreGmpForeign.INSTANCE.validateHead(fn, defined);
+            CoreGmpForeign.validateHead(fn, defined);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) {
                 var argument = args.get(index);
                 var operand = compile(argument, scope, false);
-                CoreGmpForeign.INSTANCE.validateOperand(gmp, index, operand.proof(), lexicalProof(argument, scope));
+                CoreGmpForeign.validateOperand(gmp, index, operand.proof(), lexicalProof(argument, scope));
                 operands.add(operand);
             }
             return tupleExpression(tupleProof, (e, destination) -> {
@@ -6173,7 +6173,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             });
         }
         if (md5 != null) {
-            CoreMd5Foreign.INSTANCE.validateHead(fn, defined);
+            CoreMd5Foreign.validateHead(fn, defined);
             var operands = compileOperands(args, scope);
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
@@ -6619,7 +6619,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             return tupleExpression(tupleProof, (e, destination) -> {
                 var b = e.builder;
                 if (name.equals("raiseIO#")) {
-                    b.beginRaiseIO(CoreExceptionPayload.INSTANCE.validate(expr)); for (var operand : operands) operand.emit(e); b.endRaiseIO();
+                    b.beginRaiseIO(CoreExceptionPayload.validate(expr)); for (var operand : operands) operand.emit(e); b.endRaiseIO();
                 } else if (name.equals("getMaskingState#")) {
                     b.beginGetMaskingState(destination.get(0)); operands.get(0).emit(e); b.endGetMaskingState();
                 } else {
@@ -7003,8 +7003,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 else { b.beginPutMVar(false); for (var operand : operands) operand.emit(e); b.endPutMVar(); }
             }, evaluatedProof(tupleProof, true));
         }
-        if (CompactImageOp.Companion.named(name) != null) {
-            var operation = CompactImageOp.Companion.named(name);
+        if (CompactImageOp.named(name) != null) {
+            var operation = CompactImageOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -7109,8 +7109,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             });
         }
-        if (StableNameOp.Companion.named(name) != null) {
-            var operation = StableNameOp.Companion.named(name);
+        if (StableNameOp.named(name) != null) {
+            var operation = StableNameOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -7121,8 +7121,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 e.builder.beginHashStableName(); operands.getFirst().emit(e); e.builder.endHashStableName();
             }, evaluatedProof(tupleProof, true));
         }
-        if (StablePointerOp.Companion.named(name) != null) {
-            var operation = StablePointerOp.Companion.named(name);
+        if (StablePointerOp.named(name) != null) {
+            var operation = StablePointerOp.named(name);
             operation.validate(argumentProofs(args), flags, tupleProof);
             var operands = new ArrayList<Expression>();
             for (int index = 0; index < args.size(); ++index) operands.add(argument(args.get(index), scope, (Boolean) flags.get(index)));
@@ -7230,8 +7230,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             operation.validate(argumentProofs(args), flags, tupleProof);
             return vectorMemory(operation, compileOperands(args, scope));
         }
-        if (HintTracePrimopsKt.getPrefetchArities().containsKey(name)) {
-            if (args.size() != HintTracePrimopsKt.getPrefetchArities().get(name)) throw RuntimeFault.fault("Wrong prefetch arity");
+        if (PrefetchExpression.ARITIES.containsKey(name)) {
+            if (args.size() != PrefetchExpression.ARITIES.get(name)) throw RuntimeFault.fault("Wrong prefetch arity");
             var value = argument(args.get(0), scope, (Boolean) flags.get(0));
             var offset = args.size() == 3 ? compile(args.get(1), scope, false) : null;
             var state = compile(args.getLast(), scope, false);
@@ -7241,8 +7241,8 @@ public final class BytecodeProgram implements ExecutableProgram {
                 state.emit(e); e.builder.endPrefetch();
             }, evaluatedProof(tupleProof, true));
         }
-        if (TraceOp.Companion.named(name) != null) {
-            var operation = TraceOp.Companion.named(name);
+        if (TraceOp.named(name) != null) {
+            var operation = TraceOp.named(name);
             if (args.size() != operation.getArity()) throw RuntimeFault.fault("Wrong trace arity");
             var operands = compileOperands(args, scope);
             return new ProvenExpression(e -> {
@@ -7253,18 +7253,20 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (name.equals("touch#")) {
             var metadata = CoreRepresentations.INSTANCE.metadata(expr);
-            CoreTouch.INSTANCE.validateRaw(argumentMetadata(args), flags, metadata == null ? null : metadata.get("rep"));
+            CoreTouch.validateRaw(argumentMetadata(args), flags, metadata == null ? null : metadata.get("rep"));
             var lowered = argument(args.get(0), scope, (Boolean) flags.get(0));
             var kept = new ProvenExpression(lowered, lowered.proof().refine(evaluatedProof(CoreRepresentations.INSTANCE.expression(args.get(0)), false)));
             var state = compile(args.get(1), scope, false);
-            CoreTouch.INSTANCE.validate(List.of(kept.proof(), state.proof()), flags, tupleProof);
+            CoreTouch.validate(List.of(kept.proof(), state.proof()), flags, tupleProof);
             return new ProvenExpression(e -> {
                 e.builder.beginTouch(); kept.emit(e); state.emit(e); e.builder.endTouch();
             }, evaluatedProof(tupleProof, true));
         }
         if (name.equals("keepAlive#")) {
-            CoreKeepAlive.INSTANCE.validate(argumentProofs(args), flags, tupleProof,
-                args.size() > 2 ? CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings) : null);
+            var proofs = argumentProofs(args);
+            var signature = args.size() > 2 ? CoreRepresentations.INSTANCE.knownFunctionSignature(args.get(2), bindings) : null;
+            CoreKeepAlive.validate(proofs, flags, tupleProof,
+                signature == null ? null : signature.getFirst(), signature == null ? null : signature.getSecond());
             var kept = argument(args.get(0), scope, (Boolean) flags.get(0));
             var state = compile(args.get(1), scope, false);
             var function = argument(args.get(2), scope, true);

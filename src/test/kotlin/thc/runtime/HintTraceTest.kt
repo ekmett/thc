@@ -92,7 +92,7 @@ class HintTraceTest {
                     assertTrue(proof.guestLambdas(binding["expr"]).isEmpty())
                 }
             }
-            assertTrue(primitives(module).containsAll(prefetchArities.keys + TraceOp.entries.map { it.primitive }))
+            assertTrue(primitives(module).containsAll(PrefetchExpression.ARITIES.keys + TraceOp.values().map { it.primitive }))
             for (backend in listOf("ast", "bytecode")) {
                 val output = ByteArrayOutputStream()
                 context(output).use { context ->

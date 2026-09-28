@@ -10,6 +10,6 @@ public final class DelimitedRootStep implements DelimitedTransferStep {
     public DelimitedRootStep(FunctionRoot root) { this.root = root; }
     @Override public Object resume(MaterializedFrame frame, DelimitedResume input, MaskingState ambient, DelimitedStep outerMask) { return input.get(); }
     @Override public boolean accepts(ControlFlowException transfer) { return transfer == AstSelfCall.INSTANCE || transfer instanceof TailCall || transfer instanceof HandoffTailCall; }
-    @Override public Object transfer(MaterializedFrame frame, ControlFlowException transfer, DelimitedActionSite site) { return root.resumeDelimited$org_intelligence_thc(frame, transfer, site); }
+    @Override public Object transfer(MaterializedFrame frame, ControlFlowException transfer, DelimitedActionSite site) { return root.resumeDelimited(frame, transfer, site); }
     @Override public Object finish(Object result, DelimitedActionSite site) { return site.finish(result, root.getTupleResult()); }
 }

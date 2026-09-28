@@ -1136,8 +1136,8 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
 
     def test_every_mapping_target_is_a_real_test_and_each_path_is_explicit(self):
         self.assertEqual({"RubbishLiterals", "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
-                           "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
-                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CoreCompactImages", "STMPrimops", "HintTracePrimops", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
+                           "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression", "GuestEnvironment", "CoreEnvironmentForeign", "GuestArguments", "CoreRtsArgumentsForeign", "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression", "AddressIdentity", "AtomicAddresses", "BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatingAddresses", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "StablePointers", "CoreStablePointers", "StablePointerOp", "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer", "CoreSharedCAFStores", "ManagedWeaks", "CoreMainThreadForeign", "CoreBoundThreadForeign",
+                         "VectorAddresses", "VectorIntegerDivision", "FloatDecodeExpression", "CoreDataLabels", "FileWaitPrimitives", "CoreRtsShutdown", "AddressArrayCopy", "AtomicIntArrayOp", "AtomicIntArrayExpression", "ThreadObservation", "ManagedSTM", "ManagedCompacts", "CompactImages", "HeapAddresses", "CompactImageOp", "CompactImageExpression", "BoundThreadSupport", "RegisterMainThread", "CpuAffinityQuery", "STMPrimops", "PrefetchExpression", "TraceExpression", "TraceOp", "GhcBCO", "CoreCpuAffinity", "NativeEpoll", "NativeEventWait", "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt"} |
                          set(self.integer_vector_nodes + self.floating_vector_nodes),
                          {Path(path).stem for path in self.families})
         for path, group in self.families.items():
@@ -1510,9 +1510,14 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                           for name in self.integer_vector_nodes + self.floating_vector_nodes +
                           ("BitPrimitives", "RawBitCasts", "FloatingPrimitives", "FloatDecodeExpression",
                            "CoreMemoryCopyForeign", "MemcpyExpression", "MemmoveExpression",
+                           "RubbishLiterals", "PrefetchExpression", "TraceExpression", "TraceOp",
                            "CoreStringRtsForeign", "StringRtsOp", "StringRtsExpression",
                            "GuestArguments", "GuestEnvironment", "CoreEnvironmentForeign", "CoreRtsArgumentsForeign",
                            "EnvironmentOp", "EnvironmentExpression", "RtsArgumentsOp", "RtsArgumentsExpression",
+                           "CoreCpuAffinity", "CpuAffinityQuery", "CoreDataLabels", "CoreBoundThreadForeign",
+                           "BoundThreadSupport", "CoreMainThreadForeign", "RegisterMainThread",
+                           "CompactImageOp", "CompactImageExpression", "CoreStablePointers", "StablePointerOp",
+                           "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer",
                            "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "AtomicIntArrayOp", "AtomicIntArrayExpression")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
@@ -1533,7 +1538,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         self.assertLessEqual({"thc.runtime.NativeFileBuffersTest", "thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest",
                               "thc.GuestExceptionsTest"}, set(owners["src/main/kotlin/thc/runtime/ManagedFiles.kt"]["junit"]))
         self.assertLessEqual({"thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest"},
-                             set(owners["src/main/kotlin/thc/runtime/CoreManagedFiles.kt"]["junit"]))
+                             set(owners["src/main/java/thc/runtime/CoreManagedFiles.java"]["junit"]))
         self.assertLessEqual({"thc.runtime.StdioHostAbiTest", *native},
                              set(owners["src/main/c/stdio-abi-probe.c"]["junit"]))
         for path in ("src/main/kotlin/thc/runtime/Program.kt", "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
