@@ -112,8 +112,11 @@ blob :: Decoder -> Get BS.ByteString
 blob decoder = count decoder >>= getByteString
 
 nativeLink :: Decoder -> Get NativeLink
-nativeLink decoder = NativeLink <$> linkPayload decoder <*> list decoder entry
-  <*> present (nativeBuildInputs decoder) <*> present (list decoder (string decoder))
+nativeLink decoder = do
+  payload@(LinkPayload schema _ _ _ _ _ _ _) <- linkPayload decoder
+  NativeLink payload <$> list decoder entry <*> present (nativeBuildInputs decoder)
+    <*> present (list decoder (string decoder)) <*>
+      (if schema == 2 then list decoder (string decoder) else pure [])
   where entry = NativeABI <$> string decoder <*> string decoder <*> enumeration <*> enumeration
           <*> list decoder (string decoder) <*> string decoder
 
@@ -177,18 +180,25 @@ foreignType decoder = getWord8 >>= \kind -> case kind of
   where recurse = foreignType decoder
 
 importProof :: Decoder -> Get ImportProof
-importProof decoder = ImportProof <$> getUVar <*> string decoder <*> string decoder
-  <*> string decoder <*> string decoder <*> string decoder <*> status
+importProof decoder = do
+  schema <- getUVar
+  ImportProof schema <$> string decoder <*> string decoder
+    <*> string decoder <*> string decoder <*> string decoder <*> status schema
   where
-    status = getWord8 >>= \kind -> case kind of
+    status schema = getWord8 >>= \kind -> case kind of
       0 -> ImportsUnclassified <$> string decoder
       1 -> ImportsRejected <$> string decoder
       2 -> ImportsVerified <$> getUVar <*> foreignArtifacts decoder <*> list decoder association
         <*> list decoder (foreignCallWith decoder (inlineRepresentation decoder))
+        <*> (if schema == 2 then list decoder address else pure [])
       _ -> fail "Unknown compact import provenance status"
     association = ImportAssociation <$> qualifiedName decoder <*> present (string decoder)
       <*> string decoder <*> present (string decoder) <*> boolean <*> enumeration <*> enumeration
       <*> foreignType decoder <*> foreignType decoder <*> string decoder <*> emittedCall decoder
+    address = AddressAssociation <$> qualifiedName decoder <*> present (string decoder)
+      <*> string decoder <*> boolean <*> enumeration <*> foreignType decoder <*> foreignType decoder
+      <*> string decoder <*> (boolean >>= \known -> if known
+        then Just <$> ((,) <$> list decoder (string decoder) <*> string decoder) else pure Nothing)
 
 emittedCall :: Decoder -> Get EmittedCall
 emittedCall decoder = EmittedCall <$> string decoder <*> present (string decoder) <*> enumeration <*> enumeration

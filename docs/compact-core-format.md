@@ -328,6 +328,16 @@ every argument/result representation uses `InlineRep`, never a DATA shape
 reference. Complete expected-call order and multiplicity remain intact without
 reading executable bodies during metadata admission.
 
+Import proof schema 2 appends `list(AddressAssociation)` after the verified
+status's `expectedCalls`; schema 1 is unchanged. `AddressAssociation` is
+`QualifiedName binder, p(str header), str symbol, b isFunction, Convention,
+ForeignType declaredType, ForeignType normalizedType, str normalizationRole,
+b hasCallback`, followed, only when true, by `list(str) arguments, str result`.
+This preserves stock GHC address declarations separately from calls. The
+one-pointer IO-unit callback profile requires the actual normalized `FunPtr
+(Ptr a -> IO ())` identity and a checked native component; the address record
+alone does not grant executable authority.
+
 `Exports` is `u schema, str producer, str scope, str execution, str unit,
 str module, list(ExportAssociation)`. `ExportAssociation` is `QualifiedName
 binder, str symbol, Convention, ForeignType declaredType, ForeignType
@@ -360,6 +370,11 @@ str componentSha256, str bitcodeSha256, blob`.
 `packageNativeLink` is `LinkPayload, list(NativeABI), p(NativeBuildInputs),
 p(list(str)) availableEntries`. `NativeABI` is `str symbol, str entry,
 Convention, Safety, list(str) arguments, str result`.
+Native link schema 2 appends `list(str) finalizers` after `availableEntries`;
+these are existing namespaced ABI entry names, not original symbols or an
+invented foreign-call inventory. Every entry must be a proved `ccall unsafe`
+one-pointer/void adapter with its original definition retained by native
+linking. Schema 1 has no appended list and preserves its original bytes.
 
 `NativeBuildInputs` is `list(CompileGroup) translationUnits,
 list(NativeProvider), p(list(NativeDependency)), list(NativeLibrary),

@@ -975,7 +975,11 @@ class Audit:
         if kind == 'rubbish' and (not isinstance(value, str) or value not in RUBBISH_KINDS):
             self.issue('invalid-literal-value', owner, path, 'Unsupported rubbish representation')
         if kind == 'function-addr' and value not in self.cap.get('functionLabels', []):
-            self.issue('unsupported-literal', owner, path, f'uncertified C function label {value}')
+            selected = [(unit, entry['entry']) for unit, link in self.package_scalar_links.items()
+                for entry in link['abi'] if entry['symbol'] == value and entry['entry'] in link.get('finalizers', []) and
+                    entry['entry'] in self.package_scalar_proofs[unit]]
+            if len(selected) != 1:
+                self.issue('unsupported-literal', owner, path, f'uncertified or ambiguous C function label {value}')
         if kind == 'data-addr' and value not in self.cap.get('dataLabels', []):
             self.issue('unsupported-literal', owner, path, f'unsupported C data label {value}')
         if kind == 'bignat':

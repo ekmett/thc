@@ -73,7 +73,7 @@ data ScalarLink = ScalarLink !LinkPayload ![ScalarABI] deriving (Eq, Show)
 data NativeABI = NativeABI !BS.ByteString !BS.ByteString !Convention !Safety
   ![BS.ByteString] !BS.ByteString deriving (Eq, Show)
 data NativeLink = NativeLink !LinkPayload ![NativeABI] !(Presence NativeBuildInputs)
-  !(Presence [BS.ByteString]) deriving (Eq, Show)
+  !(Presence [BS.ByteString]) ![BS.ByteString] deriving (Eq, Show)
 data NativeBuildInputs = NativeBuildInputs ![CompileGroup] ![NativeProvider]
   !(Presence [NativeDependency]) ![NativeLibrary] ![BS.ByteString] ![ArgumentBridge]
   deriving (Eq, Show)
@@ -116,8 +116,11 @@ data ImportAssociation = ImportAssociation !QualifiedName !(Presence BS.ByteStri
   !BS.ByteString !(Presence BS.ByteString) !Bool !Convention !Safety !ForeignType !ForeignType
   !BS.ByteString !EmittedCall deriving (Eq, Show)
 data ImportStatus = ImportsUnclassified !BS.ByteString | ImportsRejected !BS.ByteString
-  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall]
+  | ImportsVerified !Word64 !ForeignArtifacts ![ImportAssociation] ![ForeignCall] ![AddressAssociation]
   deriving (Eq, Show)
+data AddressAssociation = AddressAssociation !QualifiedName !(Presence BS.ByteString)
+  !BS.ByteString !Bool !Convention !ForeignType !ForeignType !BS.ByteString
+  !(Maybe ([BS.ByteString],BS.ByteString)) deriving (Eq, Show)
 data ImportProof = ImportProof !Word64 !BS.ByteString !BS.ByteString !BS.ByteString
   !BS.ByteString !BS.ByteString !ImportStatus deriving (Eq, Show)
 data ExportEffect = PureExport | IOExport deriving (Eq, Ord, Enum, Bounded, Show)

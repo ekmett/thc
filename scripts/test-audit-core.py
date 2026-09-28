@@ -4071,6 +4071,29 @@ class OriginalMainThreadRegistrationTest(unittest.TestCase):
 
 class ExplicitWeakContractTest(unittest.TestCase):
     """Structural rejection controls; native semantics come from WeakAudit.hs."""
+    def test_package_callback_selection_requires_one_proved_finalizer_entry(self):
+        # Exercise label selection after inventory validation, independently of
+        # the manifest tests for nominal callback types and component ownership.
+        for mode in ('proved', 'unproved', 'ordinary-call', 'other-symbol', 'ambiguous'):
+            with self.subTest(mode=mode):
+                audit = audit_core.Audit([], CAP)
+                link = dict(abi=[dict(symbol='package_cleanup', entry='owned_entry')],
+                            finalizers=['owned_entry'])
+                audit.package_scalar_links['owner'] = link
+                audit.package_scalar_proofs['owner'] = {'owned_entry'}
+                if mode == 'unproved':
+                    audit.package_scalar_proofs['owner'].clear()
+                elif mode == 'ordinary-call':
+                    link['finalizers'].clear()
+                elif mode == 'other-symbol':
+                    link['abi'][0]['symbol'] = 'different_cleanup'
+                elif mode == 'ambiguous':
+                    audit.package_scalar_links['other'] = copy.deepcopy(link)
+                    audit.package_scalar_proofs['other'] = {'owned_entry'}
+                audit.literal('function-addr', 'package_cleanup', 'root', 'expr')
+                self.assertEqual([] if mode == 'proved' else ['unsupported-literal'],
+                                 [issue['code'] for issue in audit.issues])
+
     def fixture(self, name):
         state = dict(kind='void', primReps=[], evaluated=True)
         weak = dict(kind='object', primReps=['BoxedRep (Just Unlifted)'], evaluated=True)

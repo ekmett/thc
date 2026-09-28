@@ -290,7 +290,8 @@ hexBytes :: BS.ByteString -> Value
 hexBytes = toJSON . concatMap (\byte -> let digits = showHex byte "" in replicate (2-length digits) '0' ++ digits) . BS.unpack
 
 nativeLink :: NativeLink -> Value
-nativeLink (NativeLink payload abi inputs entries) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+nativeLink (NativeLink payload@(LinkPayload schema _ _ _ _ _ _ _) abi inputs entries finalizers) = object $ linkPayload payload ++ ["abi" .= arr entry abi]
+  ++ ["finalizers" .= arr str finalizers | schema == 2]
   ++ p "buildInputs" nativeBuildInputs inputs ++ p "availableEntries" (arr str) entries
   where entry (NativeABI symbol name convention safety arguments result) = object
           ["symbol" .= str symbol,"entry" .= str name,
@@ -373,9 +374,16 @@ importProof (ImportProof schema scope execution profile unit moduleName status) 
    "unit" .= str unit,"module" .= str moduleName] ++ case status of
     ImportsUnclassified reason -> ["status" .= String "unclassified","reason" .= str reason]
     ImportsRejected reason -> ["status" .= String "rejected","reason" .= str reason]
-    ImportsVerified wordBits original associations calls -> ["status" .= String "verified","wordBits" .= wordBits,
-      "expectedForeign" .= foreignArtifacts original,"imports" .= arr association associations,"expectedCalls" .= arr foreignCall calls]
+    ImportsVerified wordBits original associations calls addresses -> ["status" .= String "verified","wordBits" .= wordBits,
+      "expectedForeign" .= foreignArtifacts original,"imports" .= arr association associations,"expectedCalls" .= arr foreignCall calls] ++
+      ["addresses" .= arr address addresses | schema == 2]
   where
+    address (AddressAssociation binderName header symbol function convention declared normalized role callback) = object $
+      ["binder" .= qualifiedName binderName,"symbol" .= str symbol,"isFunction" .= function,
+       "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,
+       "declaredType" .= foreignType declared,"normalizedType" .= foreignType normalized,
+       "normalizationRole" .= str role,"callback" .= maybe Null (\(arguments,result) ->
+         object ["arguments" .= arr str arguments,"result" .= str result]) callback] ++ p "header" str header
     association (ImportAssociation binderName header symbol unitName function convention safety declared normalized role emitted) = object $
       ["binder" .= qualifiedName binderName,"symbol" .= str symbol,"isFunction" .= function,
        "convention" .= tagName ["ccall","capi","stdcall","prim","javascript"] convention,

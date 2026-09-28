@@ -266,9 +266,10 @@ project keys (Object fields) = Object (KM.filterWithKey (\key _ -> key `elem` ke
 project _ _ = Object KM.empty
 
 hasDeclarations :: Value -> Bool
-hasDeclarations value = case member value "staticForeignImports" >>= (`member` "imports") of
-  Just (Array imports) -> not (null imports)
-  _ -> False
+hasDeclarations value = any nonempty ["imports","addresses"]
+  where nonempty key = case member value "staticForeignImports" >>= (`member` key) of
+          Just (Array entries) -> not (null entries)
+          _ -> False
 
 containsControl :: Value -> Bool
 containsControl (Array values) = case toList values of

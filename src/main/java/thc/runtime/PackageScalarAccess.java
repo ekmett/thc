@@ -103,7 +103,7 @@ public final class PackageScalarAccess extends Node {
         try {
             try {
                 return pointers ? invokePointers(entry, arguments)
-                    : normalizeResult(entry, Calls.interop(calls, entry.getReceiver(), arguments), noPointerArguments, null, null);
+                    : normalizeResult(entry, Calls.interop(calls, entry.getReceiver(), arguments), noPointerArguments, null, null, null);
             } finally {
                 threads.leaveForeign(previous);
                 Reference.reachabilityFence(arguments);
@@ -130,10 +130,19 @@ public final class PackageScalarAccess extends Node {
             };
             if (address != null) { indices[addresses.size()] = index; addresses.add(address); }
         }
-        return ManagedAddress.withNativeBorrows(addresses, () -> {
-            Object[] converted = arguments.clone();
-            var lease = new PackagePointerLease();
-            try {
+        // Complete argument admission before a pointer-cell graph is materialized.
+        for (int i = 0; i < addresses.size(); i++) {
+            var address = addresses.get(i);
+            if (address == ManagedAddress.nullAddress()) continue;
+            if (address.stableHandle() != null) entry.getOwner().getStablePointers().validate(address);
+            else if (address.returnedAddress() != null) address.returnedAddress().requireCurrent();
+            else address.requireByteRegion(0, argumentReps[indices[i]].equals("MutableByteArray#"));
+        }
+        Object[] converted = arguments.clone();
+        var lease = new PackagePointerLease();
+        try {
+            return PackagePointerCells.invoke(entry, addresses, projection -> {
+              try {
                 var buffers = new IdentityHashMap<Object, PointerBuffer>();
                 var views = new IdentityHashMap<ManagedAddress, PointerBuffer>();
                 for (int i = 0; i < addresses.size(); i++) {
@@ -141,6 +150,7 @@ public final class PackageScalarAccess extends Node {
                     int index = indices[i];
                     if (address == ManagedAddress.nullAddress()) continue;
                     if (address.stableHandle() != null) { entry.getOwner().getStablePointers().validate(address); continue; }
+                    if (projection.contains(address)) continue;
                     if (address.returnedAddress() != null) { address.returnedAddress().requireCurrent(); continue; }
                     if (address.nativeAllocation() != null) { address.requireByteRegion(0, false); continue; }
                     address.requireByteRegion(0, argumentReps[index].equals("MutableByteArray#"));
@@ -171,20 +181,33 @@ public final class PackageScalarAccess extends Node {
                     Object convertedAddress;
                     if (address == ManagedAddress.nullAddress()) convertedAddress = new PackageNativePointer(0, lease);
                     else if (address.stableHandle() != null) convertedAddress = entry.getOwner().getStablePointers().nativeTransport(address);
+                    else if (projection.contains(address)) convertedAddress = new PackageNativePointer(projection.address(address), lease);
                     else if (address.returnedAddress() != null) convertedAddress = address.returnedAddress().transport();
                     else if (address.nativeAllocation() != null) {
                         address.requireByteRegion(0, false);
                         convertedAddress = new PackageNativePointer(address.toNativeBits(), lease);
                     } else convertedAddress = entry.getOwner().getPackageCbits().pointer(views.get(address).transport, address.cbitsOffset());
+                    // A static image otherwise projects lazily inside C. Complete that
+                    // registry operation before acquiring pointer-graph owner monitors,
+                    // including when the image arrived through a returned alias.
+                    if (projection.holdsAllocationMonitors() && address.nativeImageKey() != null)
+                        InteropLibrary.getUncached().toNative(convertedAddress);
                     converted[indices[i]] = convertedAddress;
                 }
-                return normalizeResult(entry, Calls.interop(calls, entry.getReceiver(), converted), addresses, indices, converted);
-            } catch (Exception failure) { throw rethrow(failure); }
-            finally {
-                lease.open = false;
-                Reference.reachabilityFence(addresses); Reference.reachabilityFence(converted);
-            }
-        });
+                return () -> {
+                    try { return Calls.interop(calls, entry.getReceiver(), converted); }
+                    catch (Exception failure) { throw rethrow(failure); }
+                };
+              } catch (Exception failure) { throw rethrow(failure); }
+            }, (projection, result) -> {
+                try { return normalizeResult(entry, result, addresses, indices, converted, projection); }
+                catch (Exception failure) { throw rethrow(failure); }
+            });
+        } catch (Exception failure) { throw rethrow(failure);
+        } finally {
+            lease.open = false;
+            Reference.reachabilityFence(addresses); Reference.reachabilityFence(converted);
+        }
     }
 
     public int executeInt(Object[] arguments, Object state) {
@@ -238,7 +261,7 @@ public final class PackageScalarAccess extends Node {
         return (ManagedAddress) invoke(prepare(arguments, state), arguments);
     }
     private Object normalizeResult(PackageScalarFunction entry, Object result, List<ManagedAddress> arguments,
-            int[] indices, Object[] carriers) throws com.oracle.truffle.api.interop.UnsupportedMessageException {
+            int[] indices, Object[] carriers, PackagePointerCells projection) throws com.oracle.truffle.api.interop.UnsupportedMessageException {
         if (!addressResult) return result;
         if (numbers.isNull(result)) return ManagedAddress.nullAddress();
         if (!(result instanceof TruffleObject)) throw fault("Package C returned a non-pointer carrier");
@@ -248,8 +271,8 @@ public final class PackageScalarAccess extends Node {
             var stable = entry.getOwner().getStablePointers().recoverToken(bits);
             if (stable != null) return stable;
         }
-        ManagedAddress backing = null;
-        for (int i = 0; i < arguments.size(); i++) {
+        ManagedAddress backing = bits != null && projection != null ? projection.recoverBacking(bits) : null;
+        for (int i = 0; backing == null && i < arguments.size(); i++) {
             var argument = arguments.get(i);
             var returned = argument.returnedAddress();
             var candidate = returned != null && returned.getBacking() != null ? returned.getBacking() : argument;
@@ -262,10 +285,13 @@ public final class PackageScalarAccess extends Node {
                 backing = candidate.plus(relative); break;
             }
             if (!candidate.hasNativeStorage()) continue;
-            long base = candidate.toNativeBits() - candidate.cbitsOffset();
+            var allocation = candidate.cbitsOwner();
+            long candidateBits = allocation != null && allocation.isPinned()
+                ? allocation.nativeSegment().address() + candidate.cbitsOffset() : candidate.toNativeBits();
+            long base = candidateBits - candidate.cbitsOffset();
             long displacement = bits - base;
             if (Long.compareUnsigned(displacement, candidate.cbitsSize()) <= 0) {
-                backing = candidate.plus(bits - candidate.toNativeBits()); break;
+                backing = candidate.plus(bits - candidateBits); break;
             }
         }
         if (backing == null && bits != null) {

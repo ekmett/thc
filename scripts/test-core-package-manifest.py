@@ -85,6 +85,66 @@ class ManagedImportTypeTest(unittest.TestCase):
                     with self.assertRaises(ValueError): core_package_manifest.managed_import_stubs(changed)
 
 
+class PackageFinalizerProvenanceTest(ManagedImportTypeTest):
+    @staticmethod
+    def named(module, name, *arguments):
+        return dict(kind='tycon', name=dict(unit='ghc-internal', module=module, occurrence=name,
+                                          namespace='type'), arguments=list(arguments))
+
+    def finalizer(self):
+        unit = self.named('GHC.Internal.Tuple', 'Unit')
+        pointer = self.named('GHC.Internal.Ptr', 'Ptr', unit)
+        function = dict(kind='function', multiplicity=self.tycon('Many'), argument=pointer,
+                        result=self.named('GHC.Internal.Types', 'IO', unit))
+        signature = self.named('GHC.Internal.Ptr', 'FunPtr', function)
+        original = self.module()
+        proof = original['staticForeignImportStubs']
+        proof.update(schema=2, addresses=[dict(binder=dict(unit='fixture', module='Imports',
+            occurrence='finalizer', namespace='value'), header=None, symbol='original_finalizer', isFunction=True,
+            convention='capi', declaredType=signature, normalizedType=signature,
+            normalizationRole='representational', callback=dict(arguments=['AddrRep'], result='void'))])
+        return original
+
+    def test_typed_pointer_callback_is_inert_until_native_link_proves_it(self):
+        self.assertTrue(core_package_manifest.managed_import_stubs(self.finalizer()))
+
+    def test_parallel_import_proof_cannot_hide_invalid_selected_stub_addresses(self):
+        for parallel in (self.module()['staticForeignImportStubs'], self.finalizer()['staticForeignImportStubs']):
+            valid = self.finalizer()
+            valid['staticForeignImports'] = parallel
+            self.assertTrue(core_package_manifest.managed_import_stubs(valid))
+            address = valid['staticForeignImportStubs']['addresses'][0]
+            for addresses in (None, [], ['not an address'],
+                    [dict(address, binder=dict(address['binder'], unit='other'))],
+                    [dict(address, callback=dict(arguments=['AddrRep', 'AddrRep'], result='void'))]):
+                with self.subTest(parallel_schema=parallel['schema'], addresses=addresses):
+                    changed = json.loads(json.dumps(valid))
+                    changed['staticForeignImportStubs']['addresses'] = addresses
+                    with self.assertRaises(ValueError): core_package_manifest.managed_import_stubs(changed)
+
+    def test_callback_profile_cannot_replace_the_actual_normalized_signature(self):
+        for change in ('integer-parameter', 'integer-result', 'two-parameters', 'pure-result', 'fake-unit',
+                       'fake-pointer', 'fake-funptr', 'data-address', 'environment', 'duplicate-binder'):
+            with self.subTest(change=change):
+                module = json.loads(json.dumps(self.finalizer()))
+                address = module['staticForeignImportStubs']['addresses'][0]
+                normalized = address['normalizedType']
+                function = normalized['arguments'][0]
+                integer = self.named('GHC.Internal.Int', 'Int32')
+                if change == 'integer-parameter': function['argument'] = integer
+                elif change == 'integer-result': function['result']['arguments'] = [integer]
+                elif change == 'two-parameters': function['result'] = dict(kind='function',
+                    multiplicity=self.tycon('Many'), argument=function['argument'], result=function['result'])
+                elif change == 'pure-result': function['result'] = function['result']['arguments'][0]
+                elif change == 'fake-unit': function['result']['arguments'][0]['name']['unit'] = 'impostor'
+                elif change == 'fake-pointer': function['argument']['name']['module'] = 'Other'
+                elif change == 'fake-funptr': normalized['name']['unit'] = 'impostor'
+                elif change == 'data-address': address['isFunction'] = False
+                elif change == 'environment': address['callback']['arguments'].append('AddrRep')
+                else: module['staticForeignImportStubs']['addresses'].append(dict(address, symbol='other'))
+                with self.assertRaises(ValueError): core_package_manifest.managed_import_stubs(module)
+
+
 class TimeClockLinkTest(unittest.TestCase):
     """Closed metadata controls; structural placeholder bytes are never executed."""
     def module(self):
@@ -170,6 +230,45 @@ class PackageNativeVariantsTest(unittest.TestCase):
         module['staticForeignImports']['imports'].pop()
         _, partial = core_package_manifest.package_scalar_link(module)
         self.assertEqual(1, len(partial), 'one symbol does not prove both semantic variants')
+
+    def test_ordinary_call_proof_cannot_authorize_a_marked_finalizer(self):
+        import importlib.util
+        root = Path(__file__).resolve().parent
+        spec = importlib.util.spec_from_file_location('finalizer_authority_audit', root / 'audit-core.py')
+        audit = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(audit)
+        capabilities = json.loads((root / 'core-capabilities.json').read_text())
+        ordinary = self.module(['AddrRep'])
+        link, proof = ordinary['packageNativeLink'], ordinary['staticForeignImports']
+        entry = link['abi'][0]['entry']
+        link.update(schema=2, finalizers=[entry]); link['abi'][0]['result'] = 'void'
+        declaration = PackageFinalizerProvenanceTest().finalizer()['staticForeignImportStubs']['addresses'][0]
+        declaration.update(symbol='read_bytes', binder=dict(unit='variants', module='Callbacks', occurrence='cleanup', namespace='value'))
+        call = proof['imports'][0]
+        call['emitted']['result'] = ['void']
+        call['declaredType'] = call['normalizedType'] = declaration['normalizedType']['arguments'][0]
+        self.assertEqual(set(), core_package_manifest.package_scalar_link(ordinary)[1])
+        self.assertFalse(audit.Audit([('ordinary', ordinary)], capabilities).run([])['accepted'])
+
+        # Removing the finalizer role preserves ordinary call admission.
+        unmarked = json.loads(json.dumps(ordinary))
+        unmarked['packageNativeLink']['schema'] = 1
+        del unmarked['packageNativeLink']['finalizers']
+        self.assertEqual({entry}, core_package_manifest.package_scalar_link(unmarked)[1])
+
+        typed = json.loads(json.dumps(ordinary))
+        typed['module'] = 'Callbacks'
+        typed['staticForeignImports'].update(module='Callbacks', schema=2, imports=[], addresses=[declaration])
+        self.assertEqual({entry}, core_package_manifest.package_scalar_link(typed)[1])
+        mismatch = json.loads(json.dumps(typed))
+        mismatch['staticForeignImports']['addresses'][0]['symbol'] = 'different_finalizer'
+        with TemporaryDirectory() as directory:
+            for index, (modules, accepted) in enumerate((([ordinary], False), ([ordinary, mismatch], False),
+                    ([ordinary, typed], True), ([typed, ordinary], True))):
+                inputs = [(str(position), module) for position, module in enumerate(modules)]
+                self.assertEqual(accepted, audit.Audit(inputs, capabilities).run([])['accepted'])
+                with audit.AuditStore(Path(directory) / (str(index) + '.sqlite'), {}) as store:
+                    self.assertEqual(accepted, audit.Audit(iter(inputs), capabilities, store=store).run([])['accepted'])
 
     def test_indexed_audit_keeps_cross_module_native_completeness_and_conflicts(self):
         import copy

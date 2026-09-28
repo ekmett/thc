@@ -83,9 +83,10 @@ public final class ManagedImportAdmission {
         requireProof(!module.containsKey("foreignLink"), "ambiguous native/managed link");
         requireProof(raw instanceof Map<?,?>, "proof record");
         Object status = ((Map<?,?>) raw).get("status");
+        boolean addresses = PackageFinalizers.version(((Map<?,?>) raw).get("schema"), 2);
         var proof = record(raw, "schema scope execution profile unit module status" +
-                (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" : " reason"));
-        requireProof(version(proof.get("schema"), 1) && Objects.equals(proof.get("scope"), "retained-static-import-products") &&
+                (Objects.equals(status, "verified") ? " wordBits expectedForeign imports expectedCalls" + (addresses ? " addresses" : "") : " reason"));
+        requireProof((version(proof.get("schema"), 1) || addresses) && Objects.equals(proof.get("scope"), "retained-static-import-products") &&
                 Objects.equals(proof.get("execution"), "not-linked") && Objects.equals(proof.get("profile"), "ghc-9.14.1-thc-only-static-c-imports-v1") &&
                 Objects.equals(proof.get("unit"), module.get("unit")) && Objects.equals(proof.get("module"), module.get("module")) && Objects.equals(module.get("ghc"), "9.14.1"),
                 "schema/profile/owner");
@@ -94,6 +95,7 @@ public final class ManagedImportAdmission {
             requireProof(in(status, "unclassified", "rejected"), "status"); text(proof.get("reason")); return null;
         }
         requireProof(version(proof.get("wordBits"), 64), "word width");
+        PackageFinalizers.declarations(module, proof); // Validate the selected inventory; this grants no callback execution.
         requireProof(Objects.equals(proof.get("expectedForeign"), module.get("foreign")), "retained foreign product differs");
         var foreign = record(module.get("foreign"), "schema execution stubs files");
         requireProof(version(foreign.get("schema"), 1) && Objects.equals(foreign.get("execution"), "not-linked"), "foreign schema/execution");

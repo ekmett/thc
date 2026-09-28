@@ -59,14 +59,15 @@ tests env = TestLabel "direct unit Core publication" $ TestList
       forM_ ["{}", "{\"bindings\":null}", "{\"bindings\":[{}]}",
              "{\"bindings\":[{\"id\":\"a\",\"id\":\"b\"}]}", "{\"bindings\":["] $ \bad ->
         assertBool "invalid or ambiguous binding inventory fails" (isLeft (bindingPositions bad))
-  , TestCase $ withFixtureNamed env "test/fixtures/run-pure" "unit publication" $ \directory -> do
+  , TestCase $ forM_ ["imports", "addresses"] $ \providerField ->
+      withFixtureNamed env "test/fixtures/run-pure" "unit publication" $ \directory -> do
       let first = utf8 "{\"schema\":1,\"ghc\":\"9.14.1\",\"unit\":\"test-unit\",\"module\":\"A\",\"boundary\":\"post-tidy\",\"sourceFiles\":[],\"bindings\":[{\"id\":\"test-unit:A.雪\",\"expr\":[\"lit\",\"string\",\"prompt#\"]}],\"constructors\":[]}\r\n"
           secondBase = utf8 "{\"schema\":2,\"ghc\":\"9.14.1\",\"unit\":\"test-unit\",\"module\":\"B\",\"boundary\":\"post-tidy\",\"bindings\":[{\"id\":\"test-unit:B.a space\",\"expr\":[\"prim\",\"control0#\"]}],\"foreign\":{\"files\":[],\"stubs\":{\"initializers\":[\"synthetic-init\"],\"finalizers\":[]}}}"
           -- Closed publication controls, not executable foreign provenance.
           -- Re-encoding also exercises final bytes after package amendment.
           second = case eitherDecodeStrict' secondBase of
             Right value@(Object fields) -> encoded (Object $ KM.insert "staticForeignImports"
-              (object ["imports" .= [object ["synthetic" .= True]]]) $ KM.insert "bindings"
+              (object [providerField .= [object ["synthetic" .= True]]]) $ KM.insert "bindings"
               (toJSON (objects value "bindings" ++ [object ["id" .= ("main::B.main" :: String),
                 "expr" .= (["lit", "int", "0"] :: [String])]])) fields)
             _ -> error "invalid test module"

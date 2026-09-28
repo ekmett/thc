@@ -13,7 +13,7 @@
 module THC.Driver.NativeLibrarySources
   ( zlibChecksumSources, nativeMathSymbols, validateNativeMathIR, validateNativeEntropyIR,
     validateNativeWidthIR, nativeCxxInitSymbols, nativeLifecycleSymbols, validateNativeLifecycleIR
-  , nativeLibcSymbols, validateNativeLibcIR ) where
+  , nativeLibcSymbols, validateNativeLibcIR, nativeZlibSymbols, validateNativeZlibIR ) where
 
 import Control.Monad (forM_, unless)
 import qualified Crypto.Hash.SHA256 as SHA
@@ -42,6 +42,49 @@ nativeLibcSignatures =
 
 nativeLibcSymbols :: [String]
 nativeLibcSymbols = [name | (name,_,_) <- nativeLibcSignatures]
+
+-- Original zlib.h declarations on Linux LP64. These are native dependencies,
+-- not replacements for the configured CAPI wrappers or a managed z_stream.
+-- In particular, uLong is 64 bits, uInt is 32 bits and zlibVersion returns an
+-- actual library-owned pointer. Init functions retain their version/size check.
+nativeZlibSignatures :: [(String,String,[String])]
+nativeZlibSignatures =
+  [ ("adler32","i64",["i64","ptr","i32"])
+  , ("crc32","i64",["i64","ptr","i32"])
+  , ("zlibVersion","ptr",[])
+  , ("deflate","i32",["ptr","i32"]), ("inflate","i32",["ptr","i32"])
+  , ("deflateInit2_","i32",["ptr","i32","i32","i32","i32","i32","ptr","i32"])
+  , ("inflateInit2_","i32",["ptr","i32","ptr","i32"])
+  , ("deflateSetDictionary","i32",["ptr","ptr","i32"])
+  , ("inflateSetDictionary","i32",["ptr","ptr","i32"])
+  , ("inflateReset","i32",["ptr"])
+  , ("deflateEnd","i32",["ptr"]), ("inflateEnd","i32",["ptr"])
+  ]
+
+nativeZlibSymbols :: [String]
+nativeZlibSymbols = [name | (name,_,_) <- nativeZlibSignatures]
+
+validateNativeZlibIR :: String -> [String] -> String -> Either String ()
+validateNativeZlibIR target symbols source = do
+  unless (target == "x86_64-unknown-linux-gnu")
+    (Left "native zlib package provider currently requires Linux x86_64")
+  forM_ symbols $ \symbol -> do
+    (result,parameters) <- case [(value,arguments) | (name,value,arguments) <- nativeZlibSignatures, name == symbol] of
+      [signature] -> Right signature
+      _ -> Left "unsupported native zlib symbol"
+    let declarations = [(before,drop (length symbol + 2) after) |
+          line <- lines source, "declare " `isPrefixOf` line,
+          let (before,after) = break (== '@') line, ("@" ++ symbol ++ "(") `isPrefixOf` after]
+        clean = filter (/= "noundef") . words
+        valid (before,after) = clean before == ["declare",result] &&
+          map clean (split (takeWhile (/= ')') after)) == map (:[]) parameters
+    unless (length declarations == 1 && all valid declarations)
+      (Left ("native zlib declaration has unsupported ABI: " ++ symbol))
+  where
+    split "" = []
+    split text = case break (== ',') text of
+      (first,[]) -> [first]
+      (first,_:rest) -> first : split rest
 
 -- | Check actual linked IR before constructing its native libc dependency.
 -- Only ordinary ABI-neutral parameter attributes are discarded. Calling
