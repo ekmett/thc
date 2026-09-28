@@ -62,8 +62,8 @@ public final class DataLayout {
             this.id = id; this.name = name; this.logicalFields = logicalFields;
             for (CoreRepresentation proof : logicalFields.getLogicalProofs())
                 if (!proof.getPresent() || !(proof.isInt() || proof.isLong() || proof.isFloat() || proof.isDouble() ||
-                        proof.getKind() == CoreKind.DATA) || proof.isTypedTransport())
-                    throw new UnsupportedCore("Reusable constructor fields require numeric scalar or data proofs");
+                        proof.getKind() == CoreKind.DATA || proof.getKind() == CoreKind.CLOSURE) || proof.isTypedTransport())
+                    throw new UnsupportedCore("Reusable constructor fields require numeric scalar, data or closure proofs");
             fields = newFields(logicalFields.getStorage(), logicalFields.getReferenceTypes(), logicalFields.getVectorProofs());
             // A shared carrier must carry its exact per-load owner, not use the
             // ordinary one-layout-per-class shortcut.

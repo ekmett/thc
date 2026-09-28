@@ -15,12 +15,13 @@ floating arithmetic/comparisons and integer/floating conversions. Floating cases
 may use defaults, not floating literal alternatives (which GHC Core disallows).
 Internal function formals and case binders/results require exact numeric, data or
 closure proofs; join results remain numeric. Constructor fields support numeric
-carriers and boxed data with exact field descriptors, including lazy tails.
+carriers, boxed data and ordinary guest closures with exact field descriptors,
+including strict function fields, lazy function thunks and lazy data tails.
 Recursive local joins use the existing local-loop lowering;
 ordinary self recursion uses the existing function loop, prepared before publication.
 Ordinary higher-order calls preserve each closure's captured program owner,
 including partial applications and lazy function values. Constructor functions
-must still be saturated; closure-bearing data fields remain outside this admission.
+must still be saturated; field values retain their own captured program owners.
 Reachable CAF code is prepared without evaluating the CAF;
 each load creates a fresh Program, CAF cells and metrics. Unselected definitions
 stay unprepared. Unused GHC module/constructor descriptors do not prevent scalar
@@ -144,6 +145,28 @@ The first argument is a nonnegative list length. Function arguments are ordinary
 THC closures, not foreign callbacks; the CLI entry itself still takes and returns
 numeric scalars. Shared code does not share captured values or CAF state between
 loads, and calling a retained closure in another context is rejected.
+
+`src/examples/THC/CachedFunctionFields.hs` stores strict and lazy guest functions
+inside an ordinary boxed constructor. It folds both functions and leaves a
+bottom-valued neighbouring field untouched:
+
+```sh
+THC_CORE_OUT="$PWD/build/cached-function-fields-core" \
+  bin/export-core.sh -fplugin-opt=THC.Plugin:post-tidy \
+  -fplugin-opt=THC.Plugin:unit-qualified src/examples/THC/CachedFunctionFields.hs
+bin/native-cache store build/function-fields.cache \
+  build/cached-function-fields-core/units/u-main/THC.CachedFunctionFields.json \
+  main:THC.CachedFunctionFields.calculate
+bin/native-cache run build/function-fields.cache 4 7 0
+# 47
+bin/native-cache run build/function-fields.cache 3 -10 -10
+# -25
+```
+
+Strict function fields hold evaluated closures; lazy fields can retain thunks
+until demanded. Neither field storage nor shared code transfers a closure's
+captured values or CAF ownership to the program invoking it. Constructor matching
+still authenticates the exact load's layout.
 
 An existing package manifest may be supplied as `@PACKAGES.json`, with an exact
 qualified binding such as `main:THC.CachedCalls.affine`. JSON unit directories and

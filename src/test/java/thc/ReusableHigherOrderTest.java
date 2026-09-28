@@ -19,6 +19,12 @@ class ReusableHigherOrderTest {
     private Map<String,Object> closure(boolean evaluated) {
         return map("kind", "closure", "evaluated", evaluated, "primReps", list("BoxedRep (Just Lifted)"));
     }
+    private Map<String,Object> data(boolean evaluated) {
+        return map("kind", "data", "evaluated", evaluated, "primReps", list("BoxedRep (Just Lifted)"));
+    }
+    private Map<String,Object> dataParameter(String id) {
+        return map("id", id, "name", id, "type", "Box", "lifted", true, "rep", data(false));
+    }
     private Map<String,Object> parameter(String id, boolean function) {
         return map("id", id, "name", id, "type", function ? "Int# -> Int#" : "Int#", "lifted", function,
             "rep", function ? closure(false) : word());
@@ -39,7 +45,7 @@ class ReusableHigherOrderTest {
         var value = binding(id, lambda(args, body, result));
         value.put("arity", args.size()); value.put("rep", closure(true)); return value;
     }
-    private Map<String,Object> module() {
+    @SuppressWarnings("unchecked") private Map<String,Object> module(boolean fields) {
         var sum = plus(variable("shared"), plus(variable("seed"), variable("x")));
         var choice = list("case", variable("which"), "tag", list(
             list("lit", list("int", "0"), list(), variable("f")),
@@ -47,7 +53,7 @@ class ReusableHigherOrderTest {
             map("rep", closure(false), "binder", parameter("tag", false)));
         var lazy = binding("lazyFunction", application(variable("capture"), list(literal(3)), closure(true)));
         lazy.put("rep", closure(false));
-        return map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.ReusableHigherOrder", "instrument", true,
+        var module = map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.ReusableHigherOrder", "instrument", true,
             "constructors", list(), "bindings", list(
                 binding("shared", plus(literal(17), literal(25))),
                 function("add", list(parameter("seed", false), parameter("x", false)), sum, word()),
@@ -57,6 +63,28 @@ class ReusableHigherOrderTest {
                     application(variable("f"), list(variable("x")), word()), word()),
                 function("choose", list(parameter("f", true), parameter("which", false)), choice, closure(false)),
                 lazy, binding("untouched", list("unsupported-never-selected"))));
+        if (fields) {
+            module.put("constructors", list(map("id", "Box", "name", "Box", "kind", "boxed", "arity", 3, "tag", 1,
+                "strictFields", list(true, false, false), "fieldLifted", list(true, true, true),
+                "fieldReps", Collections.nCopies(3, list("BoxedRep (Just Lifted)")),
+                "fieldTypes", list(closure(true), closure(false), data(false)))));
+            var bindings = new ArrayList<>((List<Map<String,Object>>)module.get("bindings"));
+            var box = list("app", list("con", "Box", 3), list(
+                application(variable("capture"), list(variable("seed")), closure(true)),
+                application(variable("partial"), list(plus(variable("seed"), literal(1))), closure(false)),
+                variable("neighbour")), list(true, true, true), null, null, map("rep", data(true)));
+            var strict = parameter("strict", true); strict.put("rep", closure(true));
+            var unbox = list("case", variable("box"), "whole", list(
+                list("data", "Box", list("strict", "lazy", "next"), variable("strict"),
+                    map("binders", list(strict, parameter("lazy", true), dataParameter("next"))))),
+                map("rep", closure(true), "binder", dataParameter("whole")));
+            bindings.add(function("box", list(parameter("seed", false)), box, data(true)));
+            bindings.add(function("unbox", list(dataParameter("box")), unbox, closure(true)));
+            var neighbour = binding("neighbour", variable("neighbour")); neighbour.put("rep", data(false));
+            bindings.add(neighbour);
+            module.put("bindings", bindings);
+        }
+        return module;
     }
     private Object call(Closure function, Object... arguments) {
         Object[] packet = new Object[2 + arguments.length];
@@ -67,7 +95,7 @@ class ReusableHigherOrderTest {
     private Object call(Program program, String id, Object... arguments) { return call((Closure)program.entryValue(id), arguments); }
     private long count(Program program, String name) { return ((Number)program.diagnostics().get(name)).longValue(); }
 
-    @SuppressWarnings("unchecked") private void checks(boolean compiled) throws Exception {
+    @SuppressWarnings("unchecked") private void checks(boolean compiled, boolean fields) throws Exception {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", Boolean.toString(compiled))
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").build()) {
@@ -75,7 +103,8 @@ class ReusableHigherOrderTest {
             try (var preparation = Context.newBuilder("thc").engine(engine).build()) {
                 preparation.initialize("thc"); preparation.enter();
                 try { code = Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null),
-                    module(), List.of("apply", "capture", "partial", "choose", "lazyFunction")); }
+                    module(fields), fields ? List.of("apply", "capture", "partial", "choose", "lazyFunction", "box", "unbox") :
+                        List.of("apply", "capture", "partial", "choose", "lazyFunction")); }
                 finally { preparation.leave(); }
             }
             if (compiled) {
@@ -126,6 +155,40 @@ class ReusableHigherOrderTest {
                         assertEquals(0L, count(first, "loweredRootCount")); assertEquals(0L, count(second, "loweredRootCount"));
                         assertThrows(UnsupportedCore.class, () -> first.entryValue("untouched"));
                         if (compiled) { code.requireInstalledCode(); assertTrue(count(first, "compiledEntries") > 0); assertTrue(count(second, "compiledEntries") > 0); }
+                        if (fields) {
+                            var owner = code.newInstance(language); var receiver = code.newInstance(language);
+                            var ownCaf = (Thunk)owner.entryValue("shared"); var otherCaf = (Thunk)receiver.entryValue("shared");
+                            var value = assertInstanceOf(DataValue.class, call(owner, "box", 3L));
+                            var layout = owner.constructorLayout("Box"); var otherLayout = receiver.constructorLayout("Box");
+                            assertTrue(layout.matches(value)); assertFalse(otherLayout.matches(value));
+                            var strictField = assertInstanceOf(Closure.class, layout.read(value, 0));
+                            var lazyField = assertInstanceOf(Thunk.class, layout.read(value, 1));
+                            var neighbour = assertInstanceOf(Thunk.class, layout.read(value, 2));
+                            assertSame(owner, strictField.environment.getProgram());
+                            assertSame(owner, lazyField.getEnvironment().getProgram());
+                            assertSame(owner.entryValue("neighbour"), neighbour);
+                            assertEquals(0, ownCaf.getState()); assertEquals(0, lazyField.getState()); assertEquals(0, neighbour.getState());
+                            assertSame(strictField, call(owner, "unbox", value));
+                            assertEquals(47L, call(receiver, "apply", strictField, 2L));
+                            assertEquals(2, ownCaf.getState()); assertEquals(0, otherCaf.getState());
+                            long before = count(owner, "thunkEvaluations");
+                            assertEquals(-25L, call(receiver, "apply", lazyField, -71L));
+                            // Demand counters belong to the forcing root; the thunk's
+                            // body and returned PAP retain their captured program.
+                            assertEquals(before, count(owner, "thunkEvaluations"));
+                            assertEquals(1L, count(receiver, "thunkEvaluations"));
+                            var storedPartial = assertInstanceOf(Closure.class, lazyField.getValue());
+                            assertSame(owner, storedPartial.environment.getProgram());
+                            assertEquals(1L, count(owner, "papAllocations"));
+                            assertEquals(0L, count(receiver, "papAllocations"));
+                            assertEquals(-25L, call(receiver, "apply", lazyField, -71L));
+                            assertEquals(before, count(owner, "thunkEvaluations"));
+                            assertEquals(2, lazyField.getState()); assertEquals(0, neighbour.getState());
+                            assertEquals(1L, count(receiver, "thunkEvaluations"));
+                            assertEquals(0L, count(owner, "loweredRootCount")); assertEquals(0L, count(receiver, "loweredRootCount"));
+                            if (compiled) { code.requireInstalledCode(); assertTrue(count(owner, "compiledEntries") > 0); }
+                            if (i == 1) assertThrows(RuntimeFault.class, () -> call(receiver, "unbox", value));
+                        }
                         if (escaped != null) {
                             var foreign = escaped;
                             assertThrows(RuntimeFault.class, () -> call(second, "apply", foreign, 0L));
@@ -137,6 +200,8 @@ class ReusableHigherOrderTest {
             } finally { if (previous == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", previous); }
         }
     }
-    @Test void higherOrderCallsKeepCapturedAndPartialOwnersAcrossInstances() throws Exception { checks(false); }
-    @Test void firstCompiledClosureInputsResultsAndLazyFunctionsNeedNoTraining() throws Exception { checks(true); }
+    @Test void higherOrderCallsKeepCapturedAndPartialOwnersAcrossInstances() throws Exception { checks(false, false); }
+    @Test void firstCompiledClosureInputsResultsAndLazyFunctionsNeedNoTraining() throws Exception { checks(true, false); }
+    @Test void constructorFunctionFieldsKeepLazyNeighboursAndCapturedOwners() throws Exception { checks(false, true); }
+    @Test void firstCompiledConstructorFunctionFieldsNeedNoTraining() throws Exception { checks(true, true); }
 }
