@@ -76,6 +76,12 @@ contract. Private poll registers and branches also admit their first real reques
 without training that transition. Both backends retain installed code on the
 first captured managed SAFE completion, with exact entry counts and no replay;
 the controls keep three ordinary calls and never warm up a capture.
+Exact tuple calls also retain the original installed caller and callee on their
+first async capture, for both tail forwarding and a non-tail tuple suffix.
+Bytecode capture packets cross a non-invalidating boundary; their Object scratch
+and internal tail-yield branch do not need first-use training. The controls use
+five ordinary pre-install calls, no previous cut or post-install settling call,
+and check request identity, compiled capture, masks, once-only effects and loans.
 
 The current managed errno slot is still carrier-local. Native GHC starts callback
 errno at zero and publishes callback changes on return; matching that transition
