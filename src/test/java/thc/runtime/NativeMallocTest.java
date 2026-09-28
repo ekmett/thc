@@ -964,8 +964,17 @@ public class NativeMallocTest {
                 for (String mutation : List.of("unit", "safety", "arity", "rep", "flag", "result")) {
                     var malformed = (Map<String, Object>) Json.parse(Json.stringify(module()));
                     change(malformed, mutation);
-                    assertThrows(
-                        RuntimeFault.class, () -> load(language, backend, malformed), backend + "/" + mutation);
+                    if (mutation.equals("unit")) {
+                        // Another owner is an ordinary unlinked import, not a forged
+                        // declaration of the original managed allocator.
+                        var program = load(language, backend, malformed);
+                        assertThrows(UnsupportedCore.class, () ->
+                            Calls.target(program.entryTarget("malloc"), new Object[] {0L, 8L, INSTANCE}));
+                        assertEquals(0, Language.currentState().getNativeAllocations().liveCount());
+                    } else {
+                        assertThrows(
+                            RuntimeFault.class, () -> load(language, backend, malformed), backend + "/" + mutation);
+                    }
                 }
         });
     }

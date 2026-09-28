@@ -77,7 +77,11 @@ class CoreOriginalStdioTest {
     }
     @Test void noSymbolAliasesAreAdmitted() {
         var symbol = OriginalStdioFixtures.symbols.get("safe_write");
-        for (var unknown : List.of("write", "read", "__hscore_set_errno64", "thc_io_v1_write",
+        // Direct Unix read/write are recognized declarations, not aliases of this capi wrapper.
+        for (var direct : List.of("write", "read")) {
+            var input = new Input("safe_write"); input.target().put("symbol", direct); reject(input);
+        }
+        for (var unknown : List.of("__hscore_set_errno64", "thc_io_v1_write",
             symbol.replace("ZC20ZC", "ZC22ZC"), symbol + "64", "prefix" + symbol)) {
             var input = new Input("safe_write"); input.target().put("symbol", unknown); assertNull(input.validate());
         }

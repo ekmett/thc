@@ -34,6 +34,14 @@ public class PackageNativeForeignTest {
             #include <stdint.h>
             #include <stddef.h>
             #include <errno.h>
+            #include <stdlib.h>
+            unsigned char *allocate_bytes(void) {
+              unsigned char *p = malloc(16);
+              if (p) { p[0] = 42; p[15] = 73; }
+              return p;
+            }
+            void release_bytes(void *p) { free(p); }
+            void *return_pointer(void *p) { return p; }
             int change_errno(int value) { errno = value; return -1; }
             int observe_errno(void) { return errno; }
             int pointer_errno(unsigned char *p, int value) { p[0] = 197; errno = value; return -1; }
@@ -125,7 +133,10 @@ public class PackageNativeForeignTest {
             new PackageScalarSignature("mixed_alias", "mixed_alias", List.of("MutableByteArray#", "ByteArray#"), "Word32Rep"),
             new PackageScalarSignature("change_errno", "change_errno", List.of("Int32Rep"), "Int32Rep"),
             new PackageScalarSignature("observe_errno", "observe_errno", List.of(), "Int32Rep"),
-            new PackageScalarSignature("pointer_errno", "pointer_errno", List.of("MutableByteArray#", "Int32Rep"), "Int32Rep"));
+            new PackageScalarSignature("pointer_errno", "pointer_errno", List.of("MutableByteArray#", "Int32Rep"), "Int32Rep"),
+            new PackageScalarSignature("allocate_bytes", "allocate_bytes", List.of(), "AddrRep"),
+            new PackageScalarSignature("release_bytes", "release_bytes", List.of("AddrRep"), "void"),
+            new PackageScalarSignature("return_pointer", "return_pointer", List.of("AddrRep"), "AddrRep"));
         var selected = pointerVariants ? List.of(abi.getFirst(), new PackageScalarSignature(abi.getFirst().symbol(), "sum_bytes_address", List.of("AddrRep", "Word64Rep"), abi.getFirst().result(), abi.getFirst().convention(), abi.getFirst().safety())) : abi;
         var signatures = new ArrayList<PackageScalarSignature>(); for (var signature : selected) signatures.add(new PackageScalarSignature(signature.symbol(), signature.entry(), signature.arguments(), signature.result(), signature.convention(), safety));
         return new PackageScalarLink("native-ffi-control", "test-host", sha, sha, bytes, signatures);
@@ -186,6 +197,84 @@ public class PackageNativeForeignTest {
         return Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").build();
+    }
+    @ParameterizedTest @ValueSource(strings = {"free", "realloc", "finalizer"})
+    public void returnedNativeMallocUsesNativeDeallocationWithoutClaimingOwnership(String operation) throws Exception {
+        var link = library();
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState();
+                state.getPackageCbits().link(link);
+                var allocate = globalEntry(link, "allocate_bytes").getCallTarget();
+                var release = globalEntry(link, "release_bytes").getCallTarget();
+                var address = (ManagedAddress) allocate.call();
+                assertNotSame(ManagedAddress.nullAddress(), address);
+                assertNotNull(address.returnedAddress()); assertNull(address.nativeAllocation());
+                assertNull(address.returnedAddress().getBacking());
+                assertEquals(42L, address.readWord8(0));
+                assertEquals(73L, address.readWord8(15));
+                assertEquals(0, state.getNativeAllocations().liveCount());
+                boolean consumed = false;
+                try {
+                    switch (operation) {
+                        case "free" -> { state.getNativeAllocations().free(address); consumed = true; }
+                        case "realloc" -> {
+                            var resized = state.getNativeAllocations().realloc(address, 32);
+                            assertNotSame(ManagedAddress.nullAddress(), resized);
+                            consumed = true;
+                            try {
+                                assertNull(resized.nativeAllocation()); assertNotNull(resized.returnedAddress());
+                                assertEquals(42L, resized.readWord8(0));
+                                assertEquals(73L, resized.readWord8(15));
+                                resized.writeWord8Int(31, 91);
+                                assertEquals(91L, resized.readWord8(31));
+                            } finally { release.call(resized); }
+                        }
+                        case "finalizer" -> {
+                            var weak = state.getWeaks().make(new Object(), new Object(), null);
+                            var provider = state.cbits();
+                            assertEquals(1L, state.getWeaks().addCFinalizer(provider.finalizerLabel("free"), address, 0L, weak, provider));
+                            state.getWeaks().finalize(weak);
+                            consumed = true;
+                            assertEquals(0L, state.getWeaks().finalize(weak).getFlag());
+                        }
+                        default -> throw new AssertionError(operation);
+                    }
+                    assertEquals(0, state.getNativeAllocations().liveCount(), "external allocations are never falsely adopted");
+                } finally { if (!consumed) release.call(address); }
+            } finally { context.leave(); }
+        }
+    }
+    @Test public void returnedAliasesKeepKnownAllocationOwnershipAndRejectForeignContexts() throws Exception {
+        var link = library();
+        try (var context = globalContext()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var state = Language.currentState(); var allocations = state.getNativeAllocations();
+                state.getPackageCbits().link(link);
+                var identity = globalEntry(link, "return_pointer").getCallTarget();
+                var original = allocations.malloc(16);
+                var returned = (ManagedAddress) identity.call(original);
+                assertSame(original.nativeAllocation(), returned.returnedAddress().getBacking().nativeAllocation());
+                assertThrows(RuntimeFault.class, () -> allocations.free(returned.plus(1)));
+                assertThrows(RuntimeFault.class, () -> allocations.free(returned, ManagedNativeAllocations.Allocator.WINDOWS_LOCAL));
+                allocations.requireFreeTarget(returned);
+                allocations.free(returned);
+                assertThrows(RuntimeFault.class, () -> original.readWord8(0));
+                assertThrows(RuntimeFault.class, () -> allocations.free(returned));
+                assertEquals(0, allocations.liveCount());
+                var external = (ManagedAddress) globalEntry(link, "allocate_bytes").getCallTarget().call();
+                try {
+                    try (var other = globalContext()) {
+                        other.initialize("thc"); other.enter();
+                        try { assertThrows(RuntimeFault.class, () -> Language.currentState().getNativeAllocations().free(external)); }
+                        finally { other.leave(); }
+                    }
+                    assertEquals(42L, external.readWord8(0), "rejected foreign free has no native effect");
+                } finally { allocations.free(external); }
+            } finally { context.leave(); }
+        }
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
     public void genericCallsShareOriginalErrnoWithoutLosingZeroOrThreadIsolation(String backend) throws Exception {
