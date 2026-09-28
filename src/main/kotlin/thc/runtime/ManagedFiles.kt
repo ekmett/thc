@@ -536,7 +536,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
      * this registry's commit. Foreign activation/completion belongs to the caller. */
     @TruffleBoundary internal fun launchProcess(arguments: List<ByteArray>, environment: List<ByteArray>,
         cwd: ByteArray?, streams: IntArray, flags: Int, childGroup: Long?, childUser: Long?, searchPath: ByteArray?,
-        publish: (Int, IntArray) -> Unit): Int {
+        publish: java.util.function.BiConsumer<Int, IntArray>): Int {
         require(streams.size == 3)
         val claims = arrayOfNulls<OpenClaim>(3)
         val pins = mutableListOf<OpenDescription>()
@@ -598,7 +598,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
             return synchronized(this) {
                 if (disposed) fail(4, "THC file context is closed")
                 val pid = processes.publishProcessId(launch.handle)
-                publish(pid, returned)
+                publish.accept(pid, returned)
                 for (index in opened.indices) opened[index]?.let { owner ->
                     owners.add(owner); descriptors[returned[index].toLong()] = Descriptor(owner)
                 }
@@ -628,7 +628,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     }
 
     @TruffleBoundary internal fun processOperation(operation: ProcessOp, pid: Int, node: Node? = null,
-        beforeBlock: (() -> Unit)? = null): ProcessResult {
+        beforeBlock: Runnable? = null): ProcessResult {
         val service = NativeFileProvider.current().processes
         val handle = service.fromProcessId(pid)
         return when (operation) {
