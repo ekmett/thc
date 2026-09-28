@@ -1734,7 +1734,7 @@
       "junit": ["thc.runtime.CoreManagedFilesTest", "thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/ManagedFileExpression.kt": {
+    "src/main/java/thc/runtime/ManagedFileExpression.java": {
       "junit": ["thc.runtime.ManagedFileCallTest", "thc.runtime.ManagedFilesTest", "thc.runtime.GuestThreadsTest"],
       "python": []
     },
@@ -2629,7 +2629,7 @@
     "compiler/test-fixtures/LibdwUnavailableNative.hs": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "src/main/java/thc/runtime/CoreLibdwForeign.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "src/main/java/thc/runtime/LibdwForeignOp.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
-    "src/main/kotlin/thc/runtime/OriginalLibdwExpression.kt": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
+    "src/main/java/thc/runtime/OriginalLibdwExpression.java": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": []},
     "src/test/resources/core/original-libdw-descriptors.json": {"junit": ["thc.runtime.LibdwUnavailableTest"], "python": ["scripts/test-audit-core.py"]},
     "test/haskell-fixtures/NativeAddressFixtures.hs": {"junit": ["thc.runtime.NativeAddressTest", "thc.runtime.NativeMallocTest"], "python": []},
     "compiler/test-fixtures/NativeAddressNative.hs": {"junit": ["thc.runtime.NativeAddressTest"], "python": []},
@@ -2677,7 +2677,7 @@
     "src/main/kotlin/thc/runtime/ManagedGmp.kt": {
       "junit": ["thc.runtime.SulongLimbProviderTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/GmpForeignExpression.kt": {
+    "src/main/java/thc/runtime/GmpForeignExpression.java": {
       "junit": ["thc.runtime.CoreGmpForeignTest", "thc.runtime.OriginalGmpTest"], "python": []
     },
     "test/haskell-fixtures/ContinuationFixtures.hs": {

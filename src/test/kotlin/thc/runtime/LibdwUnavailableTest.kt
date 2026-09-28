@@ -17,7 +17,7 @@ import java.io.File
 
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
 class LibdwUnavailableTest {
-    @Test fun brokenOperandArrayRetainsItsHelperNullDiagnostic() {
+    @Test fun brokenOperandArrayRetainsItsJavaNullDiagnostic() {
         val expression = OriginalLibdwExpression(LibdwForeignOp.CLEAR, emptyArray(),
             CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep")))
         val operands = OriginalLibdwExpression::class.java.getDeclaredField("operands").also { it.isAccessible = true }
@@ -28,7 +28,7 @@ class LibdwUnavailableTest {
             val failure = assertThrows(NullPointerException::class.java) {
                 expression.executeTuple(frame, intArrayOf(), 0)
             }
-            assertEquals("Parameter specified as non-null is null: method kotlin.collections.ArraysKt___ArraysKt.getLastIndex, parameter <this>", failure.message)
+            assertEquals("Cannot read the array length because \"firstOperands\" is null", failure.message)
         } finally { operands.set(expression, original) }
     }
 
