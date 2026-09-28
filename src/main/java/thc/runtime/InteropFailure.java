@@ -29,7 +29,7 @@ public final class InteropFailure extends AbstractTruffleException {
         Kind(Class<?> kind) { this.kind = kind; }
         @ExportMessage boolean isMetaObject() { return true; }
         @ExportMessage Object getMetaQualifiedName() { return kind.getName(); }
-        @ExportMessage Object getMetaSimpleName() { return kind.getSimpleName(); }
+        @ExportMessage @TruffleBoundary Object getMetaSimpleName() { return kind.getSimpleName(); }
         @ExportMessage boolean isMetaInstance(Object value) { return value instanceof InteropFailure failure && kind.isInstance(failure.original); }
     }
 }
