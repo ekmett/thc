@@ -17,7 +17,7 @@ class AstStackTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val state = Language.currentState()
-                state.threads.enterCurrent(externalAsync = false)
+                state.threads.enterCurrent(null, false, false)
                 try {
                     state.maskingState.set(MaskingState.MASKED_INTERRUPTIBLE)
                     val proof = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))

@@ -70,7 +70,7 @@ public final class CoreCompactModule implements AutoCloseable {
             var original = new LinkedHashMap<>(facts); original.put("bindings", bindings);
             CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
             CoreModules.admission(original, null);
-            CoreForeignExceptionBridge.INSTANCE.read(original);
+            CoreForeignExceptionBridge.read(original);
             verified = true;
         } catch (Throwable failure) { rethrow(failure); }
     }

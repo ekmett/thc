@@ -1329,7 +1329,7 @@ public final class Program implements ExecutableProgram {
         var managedFile = CoreManagedFiles.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
 
         var javascript = packageScalar == null && !stackClone && stackInfo == null && originalStdio == null && managedFile == null
-            ? CoreJavaScript.INSTANCE.validate(expr, defined) : null;
+            ? CoreJavaScript.validate(expr, defined) : null;
         var md5 = javascript == null ? CoreMd5Foreign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr)) : null;
         var gmp = CoreGmpForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
         var processSignal = CoreSignalForeign.validate(foreignMetadata, argumentMetadata(args), flags, metadataRepresentation(expr));
@@ -1349,7 +1349,7 @@ public final class Program implements ExecutableProgram {
             stackInfo == null && originalStdio == null && capi == null && !stableFree && shutdown == null && !mainThreadForeign &&
             !boundThreadForeign && stringRts == null && rtsDiagnostic == null && rtsArguments == null && sharedCAF == null &&
             managedFile == null && javascript == null && md5 == null && gmp == null && libdw == null && nativeAllocation == null &&
-            !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.INSTANCE.validate(expr, defined) : null;
+            !memmove && !memcpy && !memset && processSignal == null ? CorePolyglot.validate(expr, defined) : null;
         if ((packageScalar != null || javascript != null || polyglot != null || runtimeService == RuntimeServiceCall.EXCEPTION_TEXT) &&
             foreignExceptionBridge == null) throw fault("Foreign execution requires a linked genuine THC.Exception runtime bundle");
         if (runtimeService != null) {

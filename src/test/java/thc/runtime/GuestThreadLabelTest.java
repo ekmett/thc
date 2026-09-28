@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class GuestThreadLabelTest {
     private static GuestThreads registry() {
         return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED),
-            CpuAffinity.Companion.discover(false), ignored -> Unit.INSTANCE);
+            CpuAffinity.Companion.discover(false), ignored -> {});
     }
 
     @Test void exactArrayIdentityLogicalSizeAndHostNameSurviveReentry() {

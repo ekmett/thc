@@ -1168,7 +1168,7 @@ public final class ManagedFiles {
                 entry.readinessWaits.add(request);
             }
             if (beforeBlock == null) return request.await(node, writing, milliseconds);
-            try (var ignored = GuestThreads.Companion.blocking$org_intelligence_thc(writing ? GuestThreadStatus.WRITE : GuestThreadStatus.READ)) {
+            try (var ignored = GuestThreads.blocking(writing ? GuestThreadStatus.WRITE : GuestThreadStatus.READ)) {
                 return request.await(node, writing, milliseconds, beforeBlock);
             }
         } finally {
@@ -1360,7 +1360,7 @@ public final class ManagedFiles {
             for (var entry : entries) entry.references = 0;
             descriptors.clear();
         }
-        var previous = threads.enterForeignForDisposal$org_intelligence_thc();
+        var previous = threads.enterForeignForDisposal();
         try {
             for (var entry : entries) try { retire(entry); } catch (Throwable error) { failed = combineFailures(failed, error); }
             boolean interrupted = false;

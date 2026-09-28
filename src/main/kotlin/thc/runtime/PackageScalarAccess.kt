@@ -102,7 +102,7 @@ internal class PackageScalarAccess(private val call: PackageScalarCall) : Node()
                 threads.leaveForeign(previous)
                 Reference.reachabilityFence(arguments)
             }
-        } catch (error: com.oracle.truffle.api.exception.AbstractTruffleException) { foreignExceptions.raise(error) }
+        } catch (error: com.oracle.truffle.api.exception.AbstractTruffleException) { throw foreignExceptions.raise(error) }
     }
 
     @TruffleBoundary

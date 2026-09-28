@@ -244,7 +244,11 @@
       "junit": ["thc.runtime.MutVarTest", "thc.runtime.BoxedCasTest"],
       "python": []
     },
-    "src/main/kotlin/thc/runtime/StablePointers.kt": {
+    "src/main/java/thc/runtime/StablePointers.java": {
+      "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
+      "python": []
+    },
+    "src/main/java/thc/runtime/StablePointerToken.java": {
       "junit": ["thc.runtime.StablePointerTest", "thc.runtime.AlignedScalarMemoryTest"],
       "python": []
     },
@@ -1787,7 +1791,7 @@
     "src/main/c/strerror-locale.c": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": ["scripts/test-build-cbits.py"]
     },
-    "src/main/kotlin/thc/runtime/ManagedStrerror.kt": {
+    "src/main/java/thc/runtime/ManagedStrerror.java": {
       "junit": ["thc.runtime.OriginalStrerrorNativeTest"], "python": []
     },
     "compiler/test-fixtures/OriginalStrerrorNative.hs": {

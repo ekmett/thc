@@ -28,33 +28,33 @@ class GuestThreadsTest {
     private static <T, E extends Throwable> T rethrow(Throwable failure) throws E { throw (E) failure; }
 
     @Test void pollCellRetainsNestedEntriesButSeparatesContextsAndClearsCompletedTargets() {
-        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
-        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
         var carrier = Thread.currentThread();
-        var outerCell = outer.pollState$org_intelligence_thc(carrier); var innerCell = inner.pollState$org_intelligence_thc(carrier);
-        assertFalse(outerCell == innerCell); assertNull(outerCell.getCurrent$org_intelligence_thc());
+        var outerCell = outer.pollState(carrier); var innerCell = inner.pollState(carrier);
+        assertFalse(outerCell == innerCell); assertNull(outerCell.getCurrent());
         outer.enterCurrent(null, false, true, null);
-        var original = Objects.requireNonNull(outerCell.getCurrent$org_intelligence_thc());
+        var original = Objects.requireNonNull(outerCell.getCurrent());
         try {
-            assertSame(outerCell, outer.pollState$org_intelligence_thc(carrier));
+            assertSame(outerCell, outer.pollState(carrier));
             outer.enterCurrent(null, false, true, null);
-            try { assertSame(original, outerCell.getCurrent$org_intelligence_thc()); } finally { outer.leaveCurrent(GuestThreadStatus.FINISHED); }
-            assertSame(original, outerCell.getCurrent$org_intelligence_thc());
+            try { assertSame(original, outerCell.getCurrent()); } finally { outer.leaveCurrent(GuestThreadStatus.FINISHED); }
+            assertSame(original, outerCell.getCurrent());
             inner.enterCurrent(null, false, true, null);
-            try { assertFalse(original == innerCell.getCurrent$org_intelligence_thc()); assertSame(original, outerCell.getCurrent$org_intelligence_thc()); }
+            try { assertFalse(original == innerCell.getCurrent()); assertSame(original, outerCell.getCurrent()); }
             finally { inner.leaveCurrent(GuestThreadStatus.FINISHED); }
-            assertNull(innerCell.getCurrent$org_intelligence_thc());
+            assertNull(innerCell.getCurrent());
         } finally { outer.leaveCurrent(GuestThreadStatus.FINISHED); }
-        assertNull(outerCell.getCurrent$org_intelligence_thc());
+        assertNull(outerCell.getCurrent());
         outer.enterCurrent(null, false, true, null);
-        try { assertSame(outerCell, outer.pollState$org_intelligence_thc(carrier)); assertFalse(original == outerCell.getCurrent$org_intelligence_thc()); }
+        try { assertSame(outerCell, outer.pollState(carrier)); assertFalse(original == outerCell.getCurrent()); }
         finally { outer.leaveCurrent(GuestThreadStatus.FINISHED); }
-        assertNull(outerCell.getCurrent$org_intelligence_thc()); outer.close(); inner.close();
+        assertNull(outerCell.getCurrent()); outer.close(); inner.close();
     }
 
     @Test void nonresumableForkRejectsExternalSendBeforeWakeButAllowsSelfAndDeadTargets() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var wakes = new AtomicInteger();
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); return Unit.INSTANCE; });
+        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
         var ready = new CountDownLatch(1); var finish = new CountDownLatch(1);
         var identity = new AtomicReference<GuestThreadId>(); var failure = new AtomicReference<Throwable>();
         var worker = new Thread(() -> {
@@ -65,7 +65,7 @@ class GuestThreadsTest {
                 try {
                     ready.countDown(); assertTrue(await(finish));
                     assertNull(threads.poll(node, true), "Rejected external sends never enter the queue");
-                    var sent = threads.send(self, "self"); assertTrue(sent.getForceSelf$org_intelligence_thc());
+                    var sent = threads.send(self, "self"); assertTrue(sent.getForceSelf());
                     assertSame(sent, threads.poll(node, false)); sent.acknowledge();
                     assertEquals(AsyncRequestState.ACKNOWLEDGED, sent.getState());
                 } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
@@ -87,7 +87,7 @@ class GuestThreadsTest {
 
     @Test void javaThreadIdAndMaskingGateQueuedDelivery() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var wakes = new AtomicInteger();
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); return Unit.INSTANCE; });
+        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
         var ready = new CountDownLatch(1); var proceed = new CountDownLatch(1); var id = new AtomicLong();
         var firstSeen = new AtomicReference<AsyncRequest>(); var secondSeen = new AtomicReference<AsyncRequest>();
         var worker = new Thread(() -> {
@@ -103,8 +103,8 @@ class GuestThreadsTest {
             } finally { threads.completeCurrent(); }
         });
         worker.start(); assertTrue(await(ready));
-        assertEquals(worker.threadId(), Objects.requireNonNull(threads.pollState$org_intelligence_thc(worker).getCurrent$org_intelligence_thc()).getIdentity().getJavaId());
-        assertEquals(id.get(), Objects.requireNonNull(threads.pollState$org_intelligence_thc(worker).getCurrent$org_intelligence_thc()).getIdentity().getLogicalId());
+        assertEquals(worker.threadId(), Objects.requireNonNull(threads.pollState(worker).getCurrent()).getIdentity().getJavaId());
+        assertEquals(id.get(), Objects.requireNonNull(threads.pollState(worker).getCurrent()).getIdentity().getLogicalId());
         var first = threads.send(id.get(), "first"); var second = threads.send(id.get(), "second");
         assertEquals(2, wakes.get()); proceed.countDown(); join(worker); assertFalse(worker.isAlive());
         assertSame(first, firstSeen.get()); assertSame(second, secondSeen.get());
@@ -115,7 +115,7 @@ class GuestThreadsTest {
 
     @Test void cancellationAndTargetCompletionWakePendingSenders() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {});
         var ready = new CountDownLatch(1); var finish = new CountDownLatch(1); var id = new AtomicLong();
         var worker = new Thread(() -> {
             id.set(threads.registerCurrent()); ready.countDown();
@@ -130,7 +130,7 @@ class GuestThreadsTest {
 
     @Test void nestedEntryRetainsTargetAndInheritedMaskUntilOuterExit() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {});
         long id = threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
         assertEquals(MaskingState.MASKED_UNINTERRUPTIBLE, masks.get());
         assertEquals(id, threads.enterCurrent(MaskingState.UNMASKED, false, true, null));
@@ -146,8 +146,8 @@ class GuestThreadsTest {
         for (boolean crossContext : new boolean[]{false, true}) for (boolean alreadyEntered : new boolean[]{false, true}) {
             var outerMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
             var innerMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-            var outer = new GuestThreads(outerMasks, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
-            var inner = crossContext ? new GuestThreads(innerMasks, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE) : outer;
+            var outer = new GuestThreads(outerMasks, CpuAffinity.Companion.discover(false), target -> {});
+            var inner = crossContext ? new GuestThreads(innerMasks, CpuAffinity.Companion.discover(false), target -> {}) : outer;
             outer.enterCurrent(MaskingState.MASKED_INTERRUPTIBLE, false, true, null); var caller = outer.currentIdentity();
             if (crossContext && alreadyEntered) inner.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
             var innerIdentity = !crossContext || alreadyEntered ? inner.currentIdentity() : null;
@@ -158,11 +158,11 @@ class GuestThreadsTest {
                 try {
                     var failure = assertThrows(RuntimeFault.class, () -> inner.enterCurrent(null, false, true, null));
                     assertTrue(Objects.requireNonNull(failure.getMessage()).contains("Unsafe foreign call"));
-                    assertFalse(caller.getAllocationSuspended$org_intelligence_thc());
+                    assertFalse(caller.getAllocationSuspended());
                     assertEquals(previousMask, crossContext ? innerMasks.get() : outerMasks.get());
                     if (innerIdentity != null) {
                         assertSame(innerIdentity, inner.currentIdentity()); assertEquals(before, Arrays.asList(inner.snapshot()));
-                        assertFalse(innerIdentity.getAllocationSuspended$org_intelligence_thc());
+                        assertFalse(innerIdentity.getAllocationSuspended());
                     } else assertThrows(RuntimeFault.class, inner::currentIdentity);
                 } finally { outer.leaveForeign(foreign); }
                 // The denied entry leaves no permission or allocation residue.
@@ -180,8 +180,8 @@ class GuestThreadsTest {
     }
 
     @Test void innermostDeclarationAndClosedOriginControlNestedCallbacks() {
-        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
-        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var inner = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
         outer.enterCurrent(null, false, true, null); var caller = outer.currentIdentity(); var safe = outer.enterForeign(ForeignSafety.SAFE);
         try {
             inner.enterCurrent(null, false, true, null); var callback = inner.currentIdentity();
@@ -204,7 +204,7 @@ class GuestThreadsTest {
             assertThrows(RuntimeFault.class, () -> inner.enterCurrent(null, false, true, null));
         } finally { outer.leaveForeign(safe); outer.leaveCurrent(GuestThreadStatus.FINISHED); inner.close(); }
         // Popped activations must not poison subsequent contexts on this carrier.
-        var fresh = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var fresh = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
         fresh.enterCurrent(null, false, true, null);
         try { assertFalse(fresh.isCurrentBound()); } finally { fresh.leaveCurrent(GuestThreadStatus.FINISHED); fresh.close(); }
     }
@@ -213,8 +213,8 @@ class GuestThreadsTest {
         for (boolean callback : new boolean[]{false, true}) for (var mask : MaskingState.values()) {
             var callerMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var callbackMasks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
             var wakes = new AtomicInteger();
-            var caller = new GuestThreads(callerMasks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); return Unit.INSTANCE; });
-            var other = new GuestThreads(callbackMasks, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+            var caller = new GuestThreads(callerMasks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
+            var other = new GuestThreads(callbackMasks, CpuAffinity.Companion.discover(false), target -> {});
             caller.enterCurrent(mask, false, true, null); var callerId = caller.currentIdentity();
             AsyncRequest first; AsyncRequest second;
             try {
@@ -224,11 +224,11 @@ class GuestThreadsTest {
                     try {
                         var otherId = other.currentIdentity(); assertNotSame(callerId, otherId); assertEquals(callerId.getJavaId(), otherId.getJavaId());
                         first = caller.send(callerId, "first"); second = caller.send(callerId, "second");
-                        assertFalse(first.getForceSelf$org_intelligence_thc(), "A suspended context's slot is not the active sender"); assertFalse(second.getForceSelf$org_intelligence_thc());
+                        assertFalse(first.getForceSelf(), "A suspended context's slot is not the active sender"); assertFalse(second.getForceSelf());
                         assertEquals(2, wakes.get(), "Cross-context requests use external delivery");
                         assertNull(caller.poll(node, true), "Only the active guest may claim a request");
                         callbackMasks.set(MaskingState.MASKED_UNINTERRUPTIBLE);
-                        var self = other.send(otherId, "actual self"); assertTrue(self.getForceSelf$org_intelligence_thc());
+                        var self = other.send(otherId, "actual self"); assertTrue(self.getForceSelf());
                         assertSame(self, other.poll(node, false), "The actual sender still has self delivery"); self.acknowledge();
                     } finally { other.leaveCurrent(GuestThreadStatus.FINISHED); }
                 } finally { if (foreign != null) caller.leaveForeign(foreign); }
@@ -250,12 +250,12 @@ class GuestThreadsTest {
     }
 
     @Test void inactiveContextCannotClaimItsMailboxOnAnotherGuestsCarrier() {
-        var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
-        var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+        var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
         caller.enterCurrent(null, false, true, null); var callerId = caller.currentIdentity(); var submitted = new AtomicReference<AsyncRequest>();
         try {
             var sender = new Thread(() -> submitted.set(caller.send(callerId, "external"))); sender.start(); join(sender); assertFalse(sender.isAlive());
-            var request = submitted.get(); assertFalse(request.getForceSelf$org_intelligence_thc());
+            var request = submitted.get(); assertFalse(request.getForceSelf());
             other.enterCurrent(null, false, true, null);
             try {
                 assertNull(caller.poll(node, true), "A retained context slot cannot claim for an inactive guest");
@@ -269,8 +269,8 @@ class GuestThreadsTest {
     @Test void crossContextSendCannotBypassNonresumableTargetAdmission() {
         for (boolean callback : new boolean[]{false, true}) {
             var wakes = new AtomicInteger();
-            var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); return Unit.INSTANCE; });
-            var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+            var caller = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
+            var other = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
             caller.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, true, false, null); var callerId = caller.currentIdentity();
             try {
                 var foreign = callback ? caller.enterForeign(ForeignSafety.SAFE) : null;
@@ -280,7 +280,7 @@ class GuestThreadsTest {
                     finally { other.leaveCurrent(GuestThreadStatus.FINISHED); }
                 } finally { if (foreign != null) caller.leaveForeign(foreign); }
                 assertNull(caller.poll(node, true), "Rejected sends never entered the caller mailbox");
-                var self = caller.send(callerId, "actual self"); assertTrue(self.getForceSelf$org_intelligence_thc());
+                var self = caller.send(callerId, "actual self"); assertTrue(self.getForceSelf());
                 assertSame(self, caller.poll(node, false)); self.acknowledge();
             } finally { caller.leaveCurrent(GuestThreadStatus.FINISHED); other.close(); caller.close(); }
         }
@@ -288,12 +288,12 @@ class GuestThreadsTest {
     @Test void callbackIdentityMailboxAndMaskAreIsolatedOnTheSameCarrier() {
         for (var mask : MaskingState.values()) {
             var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-            var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+            var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> {});
             threads.enterCurrent(mask, false, true, null);
             var caller = threads.currentIdentity();
             var original = Thread.currentThread();
-            var callerPoll = threads.pollState$org_intelligence_thc(original);
-            var callerStack = callerPoll.getAstStack$org_intelligence_thc();
+            var callerPoll = threads.pollState(original);
+            var callerStack = callerPoll.getAstStack();
             try {
                 var submitted = new AtomicReference<AsyncRequest>();
                 var sender = new Thread(() -> submitted.set(threads.send(caller, "external")));
@@ -310,14 +310,14 @@ class GuestThreadsTest {
                     try {
                         assertNotEquals(caller, callback);
                         assertEquals(caller.getJavaId(), callback.getJavaId());
-                        assertSame(original, callback.getCarrier$org_intelligence_thc().get());
+                        assertSame(original, callback.getCarrier().get());
                         assertTrue(threads.isCurrentBound());
                         assertEquals(MaskingState.UNMASKED, masks.get());
-                        assertNotSame(callerStack, callerPoll.getAstStack$org_intelligence_thc());
+                        assertNotSame(callerStack, callerPoll.getAstStack());
                         assertNull(threads.poll(node, true), "The callback has a separate mailbox");
                         assertEquals(GuestThreadStatus.FOREIGN, threads.status(caller));
                         callerFromCallback = threads.send(caller, "caller from callback");
-                        assertFalse(callerFromCallback.getForceSelf$org_intelligence_thc(), "Same carrier does not mean self throwTo");
+                        assertFalse(callerFromCallback.getForceSelf(), "Same carrier does not mean self throwTo");
                         assertEquals(callback.getLogicalId(), threads.enterCurrent(null, false, true, null), "Ordinary nesting retains identity");
                         try { assertSame(callback, threads.currentIdentity()); } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
                         var self = threads.send(callback, "callback self");
@@ -341,10 +341,10 @@ class GuestThreadsTest {
                         } finally { threads.leaveForeign(nestedForeign); }
                     } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
                     assertSame(caller, threads.currentIdentity());
-                    assertSame(callerStack, callerPoll.getAstStack$org_intelligence_thc());
+                    assertSame(callerStack, callerPoll.getAstStack());
                     assertEquals(mask, masks.get());
                     assertEquals(GuestThreadStatus.FINISHED, threads.status(callback));
-                    assertNull(threads.liveJavaId$org_intelligence_thc(callback));
+                    assertNull(threads.liveJavaId(callback));
                     assertEquals(AsyncRequestState.TARGET_FINISHED, threads.send(callback, "retired").getState());
                     assertEquals(AsyncRequestState.PENDING, external.getState());
                     assertNull(threads.poll(node, true));
@@ -361,8 +361,8 @@ class GuestThreadsTest {
 
     @Test void callbackAllocationsAreChargedOnlyToTheirLogicalIdentity() {
         for (boolean crossContext : List.of(false, true)) {
-            var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
-            var callbacks = crossContext ? new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE) : outer;
+            var outer = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
+            var callbacks = crossContext ? new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {}) : outer;
             var retained = new ArrayList<byte[]>();
             outer.enterCurrent(null, false, true, null);
             var caller = outer.currentIdentity();
@@ -373,8 +373,8 @@ class GuestThreadsTest {
                     callbacks.enterCurrent(null, false, true, null);
                     var first = callbacks.currentIdentity();
                     try {
-                        assertTrue(caller.getAllocationSuspended$org_intelligence_thc());
-                        assertEquals(-1L, caller.getAllocationBaseline$org_intelligence_thc());
+                        assertTrue(caller.getAllocationSuspended());
+                        assertEquals(-1L, caller.getAllocationBaseline());
                         callbacks.setAllocationCounter(10_000_000L, callbacks.currentIdentity());
                         retained.add(new byte[2_000_000]);
                         assertTrue(callbacks.allocationCounter() < 8_000_000L);
@@ -382,32 +382,32 @@ class GuestThreadsTest {
                         try {
                             callbacks.enterCurrent(null, false, true, null);
                             try {
-                                assertTrue(first.getAllocationSuspended$org_intelligence_thc());
+                                assertTrue(first.getAllocationSuspended());
                                 callbacks.setAllocationCounter(9_000_000L, first);
-                                assertEquals(-1L, first.getAllocationBaseline$org_intelligence_thc(), "Resetting a suspended counter must not restart charging");
+                                assertEquals(-1L, first.getAllocationBaseline(), "Resetting a suspended counter must not restart charging");
                                 callbacks.setAllocationCounter(10_000_000L, callbacks.currentIdentity());
                                 retained.add(new byte[2_000_000]);
                                 assertTrue(callbacks.allocationCounter() < 8_000_000L);
-                                assertEquals(9_000_000L, first.getAllocationRemaining$org_intelligence_thc());
+                                assertEquals(9_000_000L, first.getAllocationRemaining());
                                 outer.setAllocationCounter(11_000_000L, caller);
-                                assertEquals(-1L, caller.getAllocationBaseline$org_intelligence_thc());
+                                assertEquals(-1L, caller.getAllocationBaseline());
                             } finally { callbacks.leaveCurrent(GuestThreadStatus.FINISHED); }
                         } finally { callbacks.leaveForeign(nestedForeign); }
-                        assertFalse(first.getAllocationSuspended$org_intelligence_thc());
+                        assertFalse(first.getAllocationSuspended());
                         long counter = callbacks.allocationCounter();
                         assertTrue(counter >= 8_900_000L && counter <= 9_000_000L,
                             "The nested callback's two megabytes belong only to that callback");
                         retained.add(new byte[2_000_000]);
-                        assertEquals(11_000_000L, caller.getAllocationRemaining$org_intelligence_thc());
+                        assertEquals(11_000_000L, caller.getAllocationRemaining());
                     } finally { callbacks.leaveCurrent(GuestThreadStatus.FINISHED); }
                 } finally { outer.leaveForeign(foreign); }
-                assertFalse(caller.getAllocationSuspended$org_intelligence_thc());
+                assertFalse(caller.getAllocationSuspended());
                 long counter = outer.allocationCounter();
                 assertTrue(counter >= 10_900_000L && counter <= 11_000_000L,
                     "Neither nested callback is charged to the suspended caller");
                 assertEquals(6_000_000, retained.stream().mapToInt(bytes -> bytes.length).sum());
                 // Missing accounting evidence stays missing across a callback.
-                caller.setAllocationUnavailable$org_intelligence_thc(true);
+                caller.setAllocationUnavailable(true);
                 var again = outer.enterForeign(ForeignSafety.SAFE);
                 try { callbacks.enterCurrent(null, false, true, null); callbacks.leaveCurrent(GuestThreadStatus.FINISHED); }
                 finally { outer.leaveForeign(again); }
@@ -417,7 +417,7 @@ class GuestThreadsTest {
     }
 
     @Test void foreignScopeBeforeRegistrationAndExceptionalCallbackExitRestorePermission() {
-        var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var threads = new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), CpuAffinity.Companion.discover(false), target -> {});
         var prior = threads.enterForeign(ForeignSafety.SAFE);
         try {
             assertNull(threads.poll(node, false));
@@ -449,8 +449,8 @@ class GuestThreadsTest {
     @Test void foreignOriginCrossesContextsWithoutSharingTheirMailboxesOrMasks() {
         var outerMask = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
         var innerMask = ThreadLocal.withInitial(() -> MaskingState.UNMASKED);
-        var outer = new GuestThreads(outerMask, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
-        var inner = new GuestThreads(innerMask, CpuAffinity.Companion.discover(false), target -> Unit.INSTANCE);
+        var outer = new GuestThreads(outerMask, CpuAffinity.Companion.discover(false), target -> {});
+        var inner = new GuestThreads(innerMask, CpuAffinity.Companion.discover(false), target -> {});
         outer.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
         try {
             var previous = outer.enterForeign(ForeignSafety.SAFE);
@@ -529,7 +529,7 @@ class GuestThreadsTest {
 
     @Test void interruptedSenderPausesOnlyUnclaimedOutboundAndResumesSameToken() {
         var masks = ThreadLocal.withInitial(() -> MaskingState.UNMASKED); var wakes = new AtomicInteger();
-        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); return Unit.INSTANCE; });
+        var threads = new GuestThreads(masks, CpuAffinity.Companion.discover(false), target -> { wakes.incrementAndGet(); });
         long id = threads.enterCurrent(null, false, true, null);
         try {
             var submitted = new AtomicReference<AsyncRequest>();
@@ -537,12 +537,12 @@ class GuestThreadsTest {
             sender.start(); join(sender);
             assertFalse(sender.isAlive());
             var request = submitted.get();
-            assertTrue(threads.pause$org_intelligence_thc(request));
+            assertTrue(threads.pause(request));
             assertEquals(AsyncRequestState.PAUSED, request.getState());
             assertNull(threads.poll(node, false), "Native throwTo removes an uncommitted send during sender unwind");
-            threads.resume$org_intelligence_thc(request);
+            threads.resume(request);
             assertSame(request, threads.poll(node, false));
-            assertFalse(threads.pause$org_intelligence_thc(request), "A claimed send cannot be revoked");
+            assertFalse(threads.pause(request), "A claimed send cannot be revoked");
             request.acknowledge();
             assertEquals(AsyncRequestState.ACKNOWLEDGED, request.getState());
             assertEquals(2, wakes.get());
@@ -577,7 +577,6 @@ class GuestThreadsTest {
                     pollAllowed.countDown(); assertTrue(await(claimed));
                     throw new IllegalStateException("Wake failed after target claim");
                 }
-                return Unit.INSTANCE;
             });
             var id = new AtomicLong();
             var target = new Thread(() -> {
@@ -592,7 +591,7 @@ class GuestThreadsTest {
                 assertTrue(await(ready));
                 AsyncRequest request;
                 if (resumed) {
-                    request = threads.send(id.get(), "resumed"); assertTrue(threads.pause$org_intelligence_thc(request)); threads.resume$org_intelligence_thc(request);
+                    request = threads.send(id.get(), "resumed"); assertTrue(threads.pause(request)); threads.resume(request);
                 } else request = threads.send(id.get(), "sent");
                 assertSame(request, seen.get());
                 assertEquals(AsyncRequestState.CLAIMED, request.getState());

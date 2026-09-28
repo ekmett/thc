@@ -309,7 +309,7 @@ class DelimitedContinuationsTest {
                         return stack.resume(site, frame, action)
                     }
                 }
-                threads.enterCurrent(externalAsync = false)
+                threads.enterCurrent(null, false, false)
                 try {
                     val self = threads.currentIdentity()
                     deliveryTarget.set(self)
@@ -383,7 +383,7 @@ class DelimitedContinuationsTest {
                     // Its external send must not enter the caller's mailbox or handler.
                     val foreign = threads.enterForeign(ForeignSafety.SAFE)
                     try {
-                        threads.enterCurrent(externalAsync = false)
+                        threads.enterCurrent(null, false, false)
                         try {
                             assertNotSame(self, threads.currentIdentity())
                             assertThrows(UnsupportedCore::class.java) { Calls.target(root.callTarget, arrayOf(0L)) }

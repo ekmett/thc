@@ -328,7 +328,7 @@ internal object GuestThreadOps {
             var outcome = GuestThreadStatus.FINISHED
             var affinity: AutoCloseable? = null
             try {
-                threads.enterCurrent(inheritedMask, forked = true, externalAsync = asyncEnabled, capability = capability)
+                threads.enterCurrent(inheritedMask, true, asyncEnabled, capability)
                 registered = true
                 affinity = if (capability == null) threads.cpuAffinity.resetCurrent()
                     else threads.cpuAffinity.bindCurrent(threads.currentIdentity().capability)

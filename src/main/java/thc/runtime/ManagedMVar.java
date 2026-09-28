@@ -136,7 +136,7 @@ public final class ManagedMVar {
                         check(cancel());
                         throw new AsyncBlocked(interruption, checkpoint);
                     }
-                    try (var blocked = GuestThreads.Companion.blocking$org_intelligence_thc(
+                    try (var blocked = GuestThreads.blocking(
                         operation == Operation.READ ? GuestThreadStatus.MVAR_READ : GuestThreadStatus.MVAR)) {
                         completed.await();
                     }

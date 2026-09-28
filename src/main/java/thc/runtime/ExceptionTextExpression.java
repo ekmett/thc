@@ -35,7 +35,7 @@ final class ExceptionTextExpression extends Expr {
         }
         long value = access.text(address, key, item, state.execute(frame));
         FrameAccess.INSTANCE.writeLong(frame, slots[offset], value);
-        AstForeignCompleted.INSTANCE.poll(this);
+        AstForeignCompleted.poll(this);
         return null;
     }
 
