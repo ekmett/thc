@@ -28,6 +28,20 @@ module THC.Prim
 import Data.Kind (Type)
 import GHC.Exts
 
+-- TODO: Expose the remaining JDK Vector API operations through THC.Prim.
+-- Add element-indexed Vec# e, VecMask# e, VecShuffle# e and VecSpecies# e,
+-- each of kind UnliftedType, carrying raw Vector<E>, VectorMask<E>,
+-- VectorShuffle<E> and VectorSpecies<E> references without extra THC wrappers.
+-- Include SPECIES_* constants (including preferred species), species queries,
+-- masked operations, shuffles, conversions, reductions and memory operations,
+-- so Haskell code can compose the Java SIMD intrinsics and let the JIT lower
+-- them. Preserve effects for memory operations and exact element/species/signedness
+-- semantics at the boundary.
+-- Build fixed-shape types such as Int32X8# as unlifted newtypes over Vec# e,
+-- fixing the element mapping and species without another allocated carrier.
+-- Specify the lane mapping explicitly: GHC Int# is machine-sized, whereas
+-- IntVector lanes are 32-bit.
+
 -- | An arbitrary raw Java reference. Not every object is an interop receiver.
 type Object# :: Type -> TYPE UnliftedRep
 type role Object# nominal
