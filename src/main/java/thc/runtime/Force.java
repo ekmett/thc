@@ -41,23 +41,28 @@ public final class Force extends Node {
     }
     public Object execute(VirtualFrame frame, Object value) {
         if (!(value instanceof Thunk original)) return value;
+        Metrics invocationMetrics = metrics;
+        if (invocationMetrics == null) {
+            if (!(getRootNode() instanceof FunctionRoot root)) throw fault("Missing reusable force owner");
+            invocationMetrics = root.invocationMetrics(frame);
+        }
         if (!seenThunk) {
             // An untouched compiled demand has no target/profile history. Keep its
             // real thunk execution cold without training or retiring the caller.
-            if (CompilerDirectives.inCompiledCode()) return executeCold(original);
+            if (CompilerDirectives.inCompiledCode()) return executeCold(original, invocationMetrics);
             CompilerDirectives.transferToInterpreterAndInvalidate();
             seenThunk = true;
         }
-        return executeThunk(original);
+        return executeThunk(original, invocationMetrics);
     }
     @TruffleBoundary(transferToInterpreterOnException = false)
-    private Object executeCold(Thunk original) { return executeThunk(original); }
+    private Object executeCold(Thunk original, Metrics invocationMetrics) { return executeThunk(original, invocationMetrics); }
 
-    private Object executeThunk(Thunk original) {
+    private Object executeThunk(Thunk original, Metrics invocationMetrics) {
         // Successful updates already verified WHNF before publishing state 2.
         while (true) {
             switch (original.getState()) {
-                case 2 -> { if (metrics.getEnabled()) metrics.incrementThunkHits(); return original.getValue(); }
+                case 2 -> { if (invocationMetrics.getEnabled()) invocationMetrics.incrementThunkHits(); return original.getValue(); }
                 case 3 -> throw rethrowFailure(original);
                 case 4 -> throw fault("Interrupted thunk has no resumable continuation");
             }
@@ -68,7 +73,7 @@ public final class Force extends Node {
             }
             // The continuation owns its callee frame; never materialize this caller.
             if (suspendedChild(observed) != null) return resumeChain(original, false, false);
-            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE);
+            Object result = executeOne(original, observed, thc.runtime.Unit.INSTANCE, invocationMetrics);
             if (result != RETRY) return result;
         }
     }
@@ -164,6 +169,9 @@ public final class Force extends Node {
     }
 
     private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue) {
+        return executeOne(original, observed, resumeValue, metrics);
+    }
+    private Object executeOne(Thunk original, SavedGuestContinuation observed, Object resumeValue, Metrics metrics) {
         while (true) {
             switch (original.getState()) {
                 case 2 -> { if (metrics.getEnabled()) metrics.incrementThunkHits(); return original.getValue(); }
@@ -195,7 +203,7 @@ public final class Force extends Node {
                     }
                 }
                 switch (claim) {
-                    case 0 -> { return evaluateOwned(original, continuation, resumeValue); }
+                    case 0 -> { return evaluateOwned(original, continuation, resumeValue, metrics); }
                     case 1 -> awaitOwner(original);
                     case 2 -> {
                         if (metrics.getEnabled()) metrics.incrementBlackholes();
@@ -492,6 +500,9 @@ public final class Force extends Node {
     }
 
     private Object evaluateOwned(Thunk thunk, SavedGuestContinuation continuation, Object resumeValue) {
+        return evaluateOwned(thunk, continuation, resumeValue, metrics);
+    }
+    private Object evaluateOwned(Thunk thunk, SavedGuestContinuation continuation, Object resumeValue, Metrics metrics) {
         try {
             if (metrics.getEnabled() && continuation == null) {
                 RootCallTarget target = thunk.getTarget();
@@ -503,7 +514,7 @@ public final class Force extends Node {
                 try {
                     RootCallTarget target = thunk.getTarget();
                     if (target == null) throw fault("Unevaluated thunk has no body");
-                    returned = calls.call(target, thunk.getEnvironment());
+                    returned = calls.call(target, thunk.getEnvironment(), metrics);
                 } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail); }
             } else {
                 // A saved logical activation may move between host carrier threads.

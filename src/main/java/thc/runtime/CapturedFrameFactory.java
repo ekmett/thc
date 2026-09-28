@@ -5,4 +5,5 @@ package thc.runtime;
 /** Matches the generated capture storage superclass constructor exactly. */
 public interface CapturedFrameFactory {
     CapturedFrame create(CaptureLayout layout, Object allocationKey);
+    CapturedFrame create(CaptureLayout layout, Object allocationKey, ExecutableProgram program);
 }

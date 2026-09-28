@@ -8,7 +8,7 @@ import thc.Language;
 import static thc.runtime.RuntimeServiceStatus.fault;
 
 /** The IO newtype is an erased State# transformer, not a native process. */
-public final class IoMainRoot extends RootNode {
+public final class IoMainRoot extends ContextRoot {
     private static final String UNIT_CONSTRUCTOR_ID = "ghc-internal:GHC.Internal.Tuple.()";
     @Child private Force force = new Force(new Metrics(false));
     @Child private Force unitForce = new Force(new Metrics(false));

@@ -94,8 +94,11 @@ public final class CaptureLayout {
         return null;
     }
     @ExplodeLoop public CapturedFrame capture(VirtualFrame frame, int[] sourceSlots) {
+        return capture(frame, sourceSlots, null);
+    }
+    @ExplodeLoop public CapturedFrame capture(VirtualFrame frame, int[] sourceSlots, ExecutableProgram program) {
         if (sourceSlots.length != getStorageSize()) throw new IllegalStateException("Check failed.");
-        CapturedFrame environment = shape.getFactory().create(this, allocationKey);
+        CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         for (int i = 0; i < fields.length; i++) {
             CaptureField field = fields[i];
             if (field.vector != null) { field.vector.initialize(environment, frame, sourceSlots, offsets[i]); continue; }
@@ -133,15 +136,22 @@ public final class CaptureLayout {
         return environment;
     }
     @ExplodeLoop public CapturedFrame captureValues(Object[] values) {
+        return captureValues(values, null);
+    }
+    @ExplodeLoop public CapturedFrame captureValues(Object[] values, ExecutableProgram program) {
         for (CaptureField field : fields) if (field.vector != null) throw new IllegalStateException("Vector captures require typed local sources");
         if (values.length != fields.length) throw new IllegalStateException("Check failed.");
-        CapturedFrame environment = shape.getFactory().create(this, allocationKey);
+        CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         for (int i = 0; i < fields.length; i++) fields[i].initialize(environment, values[i]);
         return environment;
     }
     @ExplodeLoop public CapturedFrame captureLocals(BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] sourceSlots) {
+        return captureLocals(bytecode, frame, sourceSlots, null);
+    }
+    @ExplodeLoop public CapturedFrame captureLocals(BytecodeNode bytecode, VirtualFrame frame, LocalAccessor[] sourceSlots,
+                                                  ExecutableProgram program) {
         if (sourceSlots.length != getStorageSize()) throw new IllegalStateException("Check failed.");
-        CapturedFrame environment = shape.getFactory().create(this, allocationKey);
+        CapturedFrame environment = shape.getFactory().create(this, allocationKey, program);
         try { for (int i = 0; i < fields.length; i++) {
             CaptureField field = fields[i];
             int offset = offsets[i];

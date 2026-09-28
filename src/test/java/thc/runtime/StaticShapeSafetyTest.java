@@ -82,7 +82,8 @@ class StaticShapeSafetyTest {
                     for (var constructor : CapturedFrame.class.getConstructors())
                         frameConstructors.add(constructor.getParameterCount());
                     assertEquals(List.of(2), dataConstructors);
-                    assertEquals(List.of(2), frameConstructors);
+                    frameConstructors.sort(Integer::compareTo);
+                    assertEquals(List.of(2, 3), frameConstructors);
                     if (strategy.equals("array-based")) {
                         if (value instanceof LayoutDataValue)
                             assertSame(value.getClass(), otherValue.getClass(),
@@ -96,8 +97,10 @@ class StaticShapeSafetyTest {
                     for (var fake : Arrays.asList(null, new Object(), box, value, captures, environment)) {
                         assertThrows(RuntimeFault.class, () -> new DataValue(box, fake));
                         assertThrows(RuntimeFault.class, () -> new CapturedFrame(captures, fake));
+                        assertThrows(RuntimeFault.class, () -> new CapturedFrame(captures, fake, null));
                         assertThrows(RuntimeFault.class, () -> new DataValue(box, fake) {});
                         assertThrows(RuntimeFault.class, () -> new CapturedFrame(captures, fake) {});
+                        assertThrows(RuntimeFault.class, () -> new CapturedFrame(captures, fake, null) {});
                     }
                     // A caller can build another public factory, but cannot authorize
                     // its foreign shape to claim either of our private layout links.
@@ -106,6 +109,7 @@ class StaticShapeSafetyTest {
                         StaticShape.newBuilder(language).build(CapturedFrame.class, CapturedFrameFactory.class);
                     assertThrows(RuntimeFault.class, () -> foreignData.getFactory().create(box, new Object()));
                     assertThrows(RuntimeFault.class, () -> foreignCapture.getFactory().create(captures, new Object()));
+                    assertThrows(RuntimeFault.class, () -> foreignCapture.getFactory().create(captures, new Object(), null));
                     var frameLayout = new FrameLayout();
                     int[] slots = {frameLayout.bind("reference"), frameLayout.bind("primitive")};
                     var frame = Truffle.getRuntime().createVirtualFrame(new Object[0], frameLayout.build());

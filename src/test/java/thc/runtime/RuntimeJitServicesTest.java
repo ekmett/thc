@@ -44,13 +44,15 @@ class RuntimeJitServicesTest {
 
     private static Language language() { return TruffleLanguage.LanguageReference.create(Language.class).get(null); }
 
-    private static List<ExecutableProgram> programs(Language language) {
+    private static Map<String, Object> module() {
         var integer = Map.of("kind", "long", "primReps", List.of("IntRep"), "evaluated", true);
         var closure = Map.of("kind", "closure", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", true);
-        Map<String, Object> module = Map.of("instrument", true, "bindings", List.of(Map.of("id", "identity", "name", "identity",
+        return Map.of("instrument", true, "bindings", List.of(Map.of("id", "identity", "name", "identity",
             "lifted", true, "expr", List.of("lam", List.of(Map.of("id", "n", "lifted", false, "rep", integer)),
                 List.of("var", "n", Map.of("rep", integer)), Map.of("rep", closure, "resultRep", integer)))));
-        return List.of(new Program(language, module, false, false), new BytecodeProgram(language, module, false));
+    }
+    private static List<ExecutableProgram> programs(Language language) {
+        return List.of(new Program(language, module(), false, false), new BytecodeProgram(language, module(), false));
     }
 
     private static Object call(ExecutableProgram program, long value) {
@@ -59,12 +61,187 @@ class RuntimeJitServicesTest {
 
     private static long count(RuntimeJitServices service, int selector) { return service.query(selector, 0, 0); }
 
+    private static final class OneIteration extends com.oracle.truffle.api.nodes.Node implements com.oracle.truffle.api.nodes.RepeatingNode {
+        int effects;
+        @Override public boolean executeRepeating(VirtualFrame frame) { effects++; return false; }
+    }
+
+    private static final class OsrOwnerRoot extends ContextRoot {
+        @Child com.oracle.truffle.runtime.OptimizedOSRLoopNode loop;
+        OsrOwnerRoot(Language language) {
+            super(language, null);
+            loop = (com.oracle.truffle.runtime.OptimizedOSRLoopNode) Truffle.getRuntime().createLoopNode(new OneIteration());
+        }
+        @Override public Object execute(VirtualFrame frame) { loop.execute(frame); return 47L; }
+    }
+
+    @Test void actualOsrEventsBelongToTheOriginalRootsContext() throws Throwable {
+        try (var engine = engine(); var first = context(engine); var second = context(engine)) {
+            var firstState = entered(first, Language::currentState);
+            var secondState = entered(second, Language::currentState);
+            try (var firstService = new RuntimeJitServices(firstState); var secondService = new RuntimeJitServices(secondState)) {
+                assertEquals(0L, firstService.control(400, 1)); assertEquals(0L, secondService.control(400, 1));
+                entered(first, () -> {
+                    var root = new OsrOwnerRoot(language());
+                    root.getCallTarget();
+                    root.loop.forceOSR();
+                    var target = root.loop.getCompiledOSRLoop();
+                    assertNotNull(target); assertTrue(target.isValidLastTier());
+                    assertSame(root, ((com.oracle.truffle.runtime.BaseOSRRootNode) target.getRootNode()).getSourceRootNode());
+                    assertEquals(0, ((OneIteration) root.loop.getRepeatingNode()).effects);
+                    assertEquals(1L, count(firstService, 401)); assertEquals(1L, count(firstService, 402));
+                    assertTrue(target.invalidate("OSR telemetry control"));
+                    assertEquals(1L, count(firstService, 404));
+                    for (int selector = 401; selector <= 406; selector++) assertEquals(0L, count(secondService, selector));
+                    return null;
+                });
+            }
+        }
+    }
+
+    @Test void generatedCloneAndSourceReplayKeepOwnershipWithoutEnteringAContext() throws Throwable {
+        try (var engine = engine(); var context = context(engine)) {
+            var state = entered(context, Language::currentState);
+            var sourceReplays = new java.util.concurrent.atomic.AtomicInteger();
+            var root = entered(context, () -> BytecodeRootGen.create(language(), com.oracle.truffle.api.bytecode.BytecodeConfig.DEFAULT, b -> {
+                if (b.isParsingSources()) {
+                    sourceReplays.incrementAndGet();
+                    b.beginSource(com.oracle.truffle.api.source.Source.newBuilder("thc", "47", "owner-control").build());
+                    b.beginSourceSection(0, 2);
+                }
+                b.beginRoot(); b.beginReturn(); b.emitLoadConstant(47L); b.endReturn(); b.endRoot();
+                if (b.isParsingSources()) { b.endSourceSection(); b.endSource(); }
+            }).getNode(0));
+            try (var service = new RuntimeJitServices(state); var worker = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+                assertEquals(0L, service.control(400, 1));
+                var clone = worker.submit(() -> {
+                    var method = root.getClass().getDeclaredMethod("cloneUninitialized");
+                    method.setAccessible(true);
+                    var copied = (BytecodeRoot) method.invoke(root);
+                    root.getBytecodeNode().ensureSourceInformation();
+                    return copied;
+                }).get(30, java.util.concurrent.TimeUnit.SECONDS);
+                assertNotSame(root, clone); assertSame(root.compilationOwner(), clone.compilationOwner());
+                assertEquals(1, sourceReplays.get());
+                com.oracle.truffle.api.CallTarget target = clone.getCallTarget();
+                // Source-bearing target initialization belongs to the context. The
+                // worker above cloned and replayed sources without entering it.
+                entered(context, () -> { ((OptimizedCallTarget) target).compile(true); return null; });
+                assertTrue(((OptimizedCallTarget) target).isValidLastTier());
+                assertEquals(1L, count(service, 401)); assertEquals(1L, count(service, 402));
+                entered(context, () -> {
+                    assertEquals(47L, Calls.target(clone.getCallTarget(), new Object[]{0L}));
+                    return null;
+                });
+            }
+        }
+    }
+
+    @Test void generatedContinuationEventsBelongToItsSourceRootsContext() throws Throwable {
+        try (var engine = engine(); var first = context(engine); var second = context(engine)) {
+            var firstState = entered(first, Language::currentState);
+            var secondState = entered(second, Language::currentState);
+            try (var firstService = new RuntimeJitServices(firstState); var secondService = new RuntimeJitServices(secondState)) {
+                assertEquals(0L, firstService.control(400, 1)); assertEquals(0L, secondService.control(400, 1));
+                entered(first, () -> {
+                    var root = BytecodeRootGen.create(language(), com.oracle.truffle.api.bytecode.BytecodeConfig.DEFAULT, b -> {
+                        b.beginRoot(); b.beginYield(); b.emitLoadConstant(Unit.INSTANCE); b.endYield();
+                        b.beginReturn(); b.emitLoadConstant(47L); b.endReturn(); b.endRoot();
+                    }).getNode(0);
+                    var firstCut = (com.oracle.truffle.api.bytecode.ContinuationResult) Calls.target(root.getCallTarget(), new Object[]{0L});
+                    var continuation = firstCut.getContinuationRootNode();
+                    assertSame(root, continuation.getSourceRootNode());
+                    assertEquals(47L, firstCut.continueWith(Unit.INSTANCE));
+                    var fresh = (com.oracle.truffle.api.bytecode.ContinuationResult) Calls.target(root.getCallTarget(), new Object[]{0L});
+                    assertSame(continuation, fresh.getContinuationRootNode());
+                    var target = (OptimizedCallTarget) continuation.getCallTarget();
+                    target.compile(true); assertTrue(target.isValidLastTier());
+                    assertEquals(1L, count(firstService, 401)); assertEquals(1L, count(firstService, 402));
+                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(target);
+                    assertEquals(47L, fresh.continueWith(Unit.INSTANCE));
+                    assertTrue(target.isValidLastTier());
+                    assertTrue(target.invalidate("generated continuation telemetry control"));
+                    assertEquals(1L, count(firstService, 404));
+                    for (int selector = 401; selector <= 406; selector++) assertEquals(0L, count(secondService, selector));
+                    return null;
+                });
+            }
+        }
+    }
+
+    @Test void reusableTargetsRetainNoContextTokenAndChargeNeitherContext() throws Throwable {
+        try (var engine = engine(); var first = context(engine); var second = context(engine)) {
+            var firstState = entered(first, Language::currentState);
+            var secondState = entered(second, Language::currentState);
+            try (var firstService = new RuntimeJitServices(firstState); var secondService = new RuntimeJitServices(secondState)) {
+                assertEquals(0L, firstService.control(400, 1)); assertEquals(0L, secondService.control(400, 1));
+                var code = entered(first, () -> Program.prepareCode(language(), module(), List.of("identity")));
+                com.oracle.truffle.api.CallTarget target = entered(first, () -> {
+                    var program = code.newInstance(language());
+                    var entry = (Closure) program.entryValue("identity");
+                    assertNull(((ContextRoot) entry.target.getRootNode()).compilationOwner());
+                    // One declared first-owner call prepares ordinary JIT profiles, not AOT training.
+                    assertEquals(17L, Calls.target(entry.target, new Object[]{0L, entry.environment, 17L}));
+                    var compiled = (OptimizedCallTarget) entry.target;
+                    compiled.compile(true); assertTrue(compiled.isValidLastTier());
+                    return (com.oracle.truffle.api.CallTarget) compiled;
+                });
+                first.close();
+                entered(second, () -> {
+                    var fresh = code.newInstance(language());
+                    var entry = (Closure) fresh.entryValue("identity");
+                    var compiled = (OptimizedCallTarget) target;
+                    assertSame(target, entry.target);
+                    assertTrue(compiled.isValidLastTier());
+                    ((OptimizedTruffleRuntime) Truffle.getRuntime()).bypassedInstalledCode(compiled);
+                    assertEquals(29L, Calls.target(target, new Object[]{0L, entry.environment, 29L}));
+                    assertTrue(compiled.isValidLastTier(), "Fresh owner's first call preserves the shared installed target");
+                    assertEquals(1L, ((Number) fresh.diagnostics().get("compiledEntries")).longValue());
+                    assertTrue(compiled.invalidate("shared target telemetry control"));
+                    return null;
+                });
+                for (int selector = 401; selector <= 406; selector++) {
+                    assertEquals(0L, count(firstService, selector), "shared code is not charged to its preparation context");
+                    assertEquals(0L, count(secondService, selector), "shared code is not charged to its latest caller");
+                }
+            }
+        }
+    }
+
+    @Test void clonedRootKeepsItsOwnerWhenCompiledWithoutAnEnteredContext() throws Throwable {
+        try (var engine = engine(); var first = context(engine); var second = context(engine)) {
+            var firstState = entered(first, Language::currentState);
+            var secondState = entered(second, Language::currentState);
+            try (var firstService = new RuntimeJitServices(firstState); var secondService = new RuntimeJitServices(secondState)) {
+                assertEquals(0L, firstService.control(400, 1)); assertEquals(0L, secondService.control(400, 1));
+                var clone = (OptimizedCallTarget) entered(first, () -> {
+                    var original = new ContextRoot(language(), com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
+                        @Override public Object execute(VirtualFrame frame) { return 31L; }
+                    };
+                    var copied = com.oracle.truffle.api.nodes.NodeUtil.cloneNode(original);
+                    assertNotSame(original, copied);
+                    assertSame(original.compilationOwner(), copied.compilationOwner());
+                    var target = (OptimizedCallTarget) copied.getCallTarget();
+                    assertEquals(31L, target.call());
+                    return (com.oracle.truffle.api.CallTarget) target;
+                });
+                // No context is entered here, just as on an asynchronous compiler thread.
+                clone.compile(true); assertTrue(clone.isValidLastTier());
+                assertEquals(1L, count(firstService, 401)); assertEquals(1L, count(firstService, 402));
+                assertTrue(clone.invalidate("cloned owner control"));
+                assertEquals(1L, count(firstService, 404));
+                for (int selector = 401; selector <= 406; selector++) assertEquals(0L, count(secondService, selector));
+            }
+        }
+    }
+
     @Test void realCompilationsAndInvalidationsAreAttributedToTheirContextWithSharedEngine() throws Throwable {
         try (var engine = engine(); var first = context(engine); var second = context(engine)) {
             var firstLanguage = entered(first, RuntimeJitServicesTest::language);
             var secondLanguage = entered(second, RuntimeJitServicesTest::language);
-            assertNotSame(firstLanguage, secondLanguage, "EXCLUSIVE language identity is the attribution boundary");
-            try (var firstService = new RuntimeJitServices(firstLanguage); var secondService = new RuntimeJitServices(secondLanguage)) {
+            assertSame(firstLanguage, secondLanguage, "Shared language identity must not merge context event ownership");
+            try (var firstService = entered(first, () -> new RuntimeJitServices(Language.currentState()));
+                 var secondService = entered(second, () -> new RuntimeJitServices(Language.currentState()))) {
                 assertEquals(0L, count(firstService, 400));
                 assertEquals(RuntimeServiceStatus.DISABLED, count(firstService, 401));
                 assertEquals(0L, firstService.control(400, 1));
@@ -119,7 +296,7 @@ class RuntimeJitServicesTest {
     @Test void disabledWindowsAreExcludedAndClosePermanentlyRejectsQueriesAndControls() throws Throwable {
         try (var engine = engine(); var context = context(engine)) {
             entered(context, () -> {
-                var service = new RuntimeJitServices(language());
+                var service = new RuntimeJitServices(Language.currentState());
                 try (service) {
                     var program = programs(language()).getFirst();
                     assertEquals(3L, call(program, 3L));
@@ -157,7 +334,7 @@ class RuntimeJitServicesTest {
     @Test void unavailableProvidersAndMalformedRequestsAreNotMisreportedAsCounters() throws Throwable {
         try (var engine = engine(); var context = context(engine)) {
             entered(context, () -> {
-                var owner = language();
+                var owner = Language.currentState();
                 try (var service = new RuntimeJitServices(owner, () -> null)) {
                     for (int selector = 400; selector <= 406; selector++) assertEquals(RuntimeServiceStatus.UNSUPPORTED, count(service, selector));
                     assertEquals(RuntimeServiceStatus.UNSUPPORTED, service.control(400, 1));
@@ -183,9 +360,9 @@ class RuntimeJitServicesTest {
         try (var engine = engine("Silent"); var context = context(engine)) {
             entered(context, () -> {
                 var owner = language();
-                try (var service = new RuntimeJitServices(owner)) {
+                try (var service = new RuntimeJitServices(Language.currentState())) {
                     assertEquals(0L, service.control(400, 1));
-                    var deoptimizing = (OptimizedCallTarget) new RootNode(owner) {
+                    var deoptimizing = (OptimizedCallTarget) new ContextRoot(owner, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
                         @Override public Object execute(VirtualFrame frame) {
                             if ((Boolean) frame.getArguments()[0]) CompilerDirectives.transferToInterpreterAndInvalidate();
                             return CompilerDirectives.inCompiledCode() ? 17L : 19L;
@@ -212,7 +389,7 @@ class RuntimeJitServicesTest {
                         .onCompilationDeoptimized(deoptimizing, null, "controlled telemetry callback");
                     assertEquals(1L, count(service, 405));
 
-                    var rejected = (OptimizedCallTarget) new RootNode(owner) {
+                    var rejected = (OptimizedCallTarget) new ContextRoot(owner, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
                         @Override public Object execute(VirtualFrame frame) {
                             CompilerAsserts.neverPartOfCompilation("intentional JIT telemetry test bailout");
                             return 23L;
@@ -233,7 +410,7 @@ class RuntimeJitServicesTest {
     @Test void concurrentQueriesAndControlDoNotDuplicateRegistrationOrReviveClosedService() throws Throwable {
         try (var engine = engine(); var context = context(engine)) {
             entered(context, () -> {
-                try (var service = new RuntimeJitServices(language())) {
+                try (var service = new RuntimeJitServices(Language.currentState())) {
                     var start = new CountDownLatch(1);
                     var failure = new AtomicReference<Throwable>();
                     var threads = new ArrayList<Thread>();

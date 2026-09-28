@@ -9,7 +9,7 @@ import java.util.List;
 import thc.Language;
 import static thc.runtime.RuntimeFault.fault;
 
-public final class EntryRoot extends RootNode {
+public final class EntryRoot extends ContextRoot {
     private final int arity;
     private final Metrics metrics;
     private final boolean typedResult;

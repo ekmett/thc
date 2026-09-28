@@ -139,6 +139,7 @@ result; use matched measurements and actual compiler output for that question.
   [residual call boundaries](call-boundaries.md).
 * [Dense scalar handoff](handoff-slabs.md), [laziness and thunk updates](thunk-updates.md),
   [boxed-value controls](boxed-values.md) and [caller-demand controls](demand-probe.md).
+* [Experimental reusable AST code and per-load ownership](reusable-code.md), separate from persisted guest AOT.
 * [Bytecode backend](bytecode.md), [source locations](debug-locations.md) and
   [graph inspection tooling and captures](graph-inspection.md).
 * [Current architecture and planned work](architecture.md) and

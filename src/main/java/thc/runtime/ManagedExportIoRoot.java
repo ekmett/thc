@@ -7,7 +7,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import thc.Language;
 
-public final class ManagedExportIoRoot extends RootNode {
+public final class ManagedExportIoRoot extends ContextRoot {
     private static final class ManagedExportDestination extends TupleDestination {
         private final Language language;
         ManagedExportDestination(TupleShape shape, Language language) { super(shape); this.language = language; }

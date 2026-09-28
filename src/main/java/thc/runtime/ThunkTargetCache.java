@@ -10,4 +10,7 @@ public final class ThunkTargetCache extends Node {
     @Child private DispatchThunkTarget dispatch = DispatchThunkTargetNodeGen.create();
     public ThunkTargetCache(Metrics metrics) { this.metrics = metrics; }
     public Object call(RootCallTarget target, CapturedFrame environment) { return dispatch.execute(this, target, environment, metrics); }
+    Object call(RootCallTarget target, CapturedFrame environment, Metrics invocationMetrics) {
+        return dispatch.execute(this, target, environment, invocationMetrics);
+    }
 }

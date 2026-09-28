@@ -181,6 +181,14 @@ succeeded and failed callbacks, invalidations and deoptimizations attributed to
 this context. Counter queries are `Disabled` while off. Unsupported runtime
 integrations remain explicit rather than producing an all-zero success.
 
+Ordinary execution roots and their clones retain an opaque context-ownership
+token. Compiler callbacks use that token, not a compiler thread's current context
+or the shared Language object. Generated continuations and OSR wrappers are
+attributed through their actual source root, including nested wrappers.
+Reusable code and cached load factories have no
+single context owner, so their compilation events are not charged to any context.
+This does not suppress per-program guest-entry or thunk-evaluation metrics.
+
 Counters include all compilation tiers and repeated compilations, observe only
 callbacks while enabled, and survive disable/re-enable. A start may happen while
 disabled and its completion while enabled, so starts and completions need not
