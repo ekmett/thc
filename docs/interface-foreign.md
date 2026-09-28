@@ -105,6 +105,15 @@ LLVM shared library (ELF on Linux, Mach-O on Darwin); Sulong loads its ordinary
 native dependencies. Components without native externals retain raw bitcode. Missing
 symbols or libraries are native linker errors. Haskell archives and the GHC
 RTS are not loaded as a substitute for executing their Core in THC.
+Native dependencies also receive a separate native-only companion rooted by
+the component's unresolved symbols, so ordinary static archives are materialized
+as callable native code. The companion contains no component code: component
+globals and constructors execute only in LLVM. Its bytes and digest travel in
+the package link receipt and participate in loaded-library identity. Sulong's
+existing file-backed native loader owns the companion's library handle. Reverse
+references from a native archive into component-defined functions still require
+an actual callback boundary; no duplicate native component or guessed shim is
+created to satisfy them.
 C++ `.cc`, `.cpp`
 and `.cxx` sources retain their actual Cabal compiler arguments, including
 `-optcxx` options, and replay through GHC's C++ compiler phase. Verified LLVM

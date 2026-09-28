@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.lang.ref.Reference;
+import java.nio.file.Files;
 import static thc.runtime.RuntimeFault.fault;
 
 /** Component C globals and entrypoints belong to one Truffle context. */
@@ -65,6 +66,19 @@ public final class PackageScalarLibraries {
                 if (!selected.link().same(link)) throw fault("Conflicting package C component identity: " + link.getUnit());
             } else {
                 selected = new Loaded(link, new FutureTask<>(() -> {
+                    if (link.getNativeLibrary().length != 0) {
+                        var file = Files.createTempFile("thc-package-native-", link.getFormat().equals("llvm-embedded-mach-o") ? ".dylib" : ".so");
+                        try {
+                            Files.write(file, link.getNativeLibrary());
+                            // File-backed Sulong loading uses its existing native
+                            // context and retains the library handle. The component
+                            // itself is never loaded as native machine code.
+                            env.parseInternal(Source.newBuilder("llvm", env.getInternalTruffleFile(file.toUri()))
+                                .content(ByteSequence.create(link.getNativeLibrary())).canonicalizePath(false)
+                                .mimeType(link.getFormat().equals("llvm-embedded-mach-o") ? "application/x-mach-binary" : "application/x-sharedlib")
+                                .build()).call();
+                        } finally { Files.deleteIfExists(file); }
+                    }
                     Object library = env.parseInternal(Source.newBuilder("llvm", ByteSequence.create(link.getBytes()),
                         link.getComponentSha256() + switch (link.getFormat()) {
                             case "llvm-embedded-elf" -> ".so";
