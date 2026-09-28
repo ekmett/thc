@@ -175,7 +175,9 @@ def validate_graph_cases(entry, native):
 
 
 def snapshot(root, java_home):
-    sources = [root / 'build.gradle.kts', root / 'tools/GraphInspect.java']
+    sources = [ root / 'tools/GraphInspect.java']
+    sources += [root / name for name in ('build.gradle', 'build.gradle.kts', 'settings.gradle', 'settings.gradle.kts', 'buildSrc/build.gradle') if (root / name).is_file()]
+    sources += sorted((root / 'gradle').glob('*.gradle*')) + sorted((root / 'buildSrc/src').rglob('*.java'))
     sources += [path for path in sorted((root / 'src/main').rglob('*')) if path.is_file()]
     sources += [path for path in sorted((root / 'bench/experiments/word32x4-bytearray').iterdir())
                 if path.suffix in ('.py', '.sh', '.java')]

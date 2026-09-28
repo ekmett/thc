@@ -3,10 +3,10 @@
 import org.gradle.api.tasks.SourceSetContainer
 
 // Separate javac invocations prove that stock serialized events retain their IDs.
-val protocolMain = extensions.getByType<SourceSetContainer>().named("main")
-val protocolChecks = layout.buildDirectory.dir("protocol-processor/checks")
-val protocolRuntime = files(protocolMain.map { it.output }, protocolMain.map { it.runtimeClasspath })
-val compileLegacyProtocol = tasks.register<JavaCompile>("compileLegacyProtocolControl") {
+def protocolMain = extensions.getByType(SourceSetContainer).named("main")
+def protocolChecks = layout.buildDirectory.dir("protocol-processor/checks")
+def protocolRuntime = files(protocolMain.map { it.output }, protocolMain.map { it.runtimeClasspath })
+def compileLegacyProtocol = tasks.register("compileLegacyProtocolControl", JavaCompile) {
     source("tools/truffle-protocol/tests/BranchRoot.java", "tools/truffle-protocol/tests/LegacyProducer.java")
     classpath = protocolRuntime
     options.annotationProcessorPath = configurations.getByName("protocolProcessorUpstream") + protocolRuntime
@@ -15,23 +15,23 @@ val compileLegacyProtocol = tasks.register<JavaCompile>("compileLegacyProtocolCo
     destinationDirectory.set(protocolChecks.map { it.dir("legacy") })
     options.generatedSourceOutputDirectory.set(protocolChecks.map { it.dir("legacy-generated") })
 }
-val serializeLegacyProtocol = tasks.register<JavaExec>("serializeLegacyProtocolControl") {
+def serializeLegacyProtocol = tasks.register("serializeLegacyProtocolControl", JavaExec) {
     classpath = files(compileLegacyProtocol.flatMap { it.destinationDirectory }) + protocolRuntime
     mainClass.set("protocolprobe.LegacyProducer")
-    val output = protocolChecks.map { it.file("stock-serialized.bin") }
+    def output = protocolChecks.map { it.file("stock-serialized.bin") }
     outputs.file(output)
-    doFirst { args = listOf(output.get().asFile.absolutePath) }
+    doFirst { args = [output.get().asFile.absolutePath] }
 }
-val compileProtocolControl = tasks.register<JavaCompile>("compileProtocolControl") {
+def compileProtocolControl = tasks.register("compileProtocolControl", JavaCompile) {
     source("tools/truffle-protocol/tests/BranchRoot.java", "tools/truffle-protocol/tests/BranchProbe.java")
     classpath = protocolRuntime
-    options.annotationProcessorPath = files(tasks.named<Jar>("protocolProcessorJar").flatMap { it.archiveFile }) + protocolRuntime
+    options.annotationProcessorPath = files(tasks.named("protocolProcessorJar", Jar).flatMap { it.archiveFile }) + protocolRuntime
     options.release.set(21)
     options.compilerArgs.add("-proc:full")
     destinationDirectory.set(protocolChecks.map { it.dir("extended") })
     options.generatedSourceOutputDirectory.set(protocolChecks.map { it.dir("extended-generated") })
 }
-val testProtocolProcessor = tasks.register<JavaExec>("testProtocolProcessor") {
+def testProtocolProcessor = tasks.register("testProtocolProcessor", JavaExec) {
     group = "verification"
     description = "Check explicit protocol branches against legacy serialization and ordinary branch profiling."
     dependsOn(serializeLegacyProtocol)
@@ -39,6 +39,6 @@ val testProtocolProcessor = tasks.register<JavaExec>("testProtocolProcessor") {
     mainClass.set("protocolprobe.BranchProbe")
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-modules=jdk.incubator.vector")
     maxHeapSize = "1g"
-    doFirst { args = listOf(protocolChecks.get().file("stock-serialized.bin").asFile.absolutePath) }
+    doFirst { args = [protocolChecks.get().file("stock-serialized.bin").asFile.absolutePath] }
 }
 tasks.named("check") { dependsOn(testProtocolProcessor) }

@@ -33,7 +33,7 @@ def main():
     if not args.collect_only:
         out.mkdir(parents=True,exist_ok=False);classes.mkdir()
         revision=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
-        paths=subprocess.check_output(['git','ls-files','src/main','build.gradle.kts','settings.gradle.kts','gradle.properties','gradle','gradlew','gradlew.bat'],cwd=ROOT,text=True).splitlines()
+        paths=subprocess.check_output(['git','ls-files','src/main','build.gradle', 'build.gradle.kts', 'buildSrc','settings.gradle', 'settings.gradle.kts','gradle.properties','gradle','gradlew','gradlew.bat'],cwd=ROOT,text=True).splitlines()
         sources={p:digest(ROOT/p) for p in paths}
         for path,sha in sources.items():
             require(hashlib.sha256(subprocess.check_output(['git','show',revision+':'+path],cwd=ROOT)).hexdigest()==sha,'Commit source before graph capture: '+path)

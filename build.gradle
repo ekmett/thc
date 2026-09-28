@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+import static thc.buildlogic.BuildChecks.*
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
@@ -9,16 +10,16 @@ import org.gradle.process.JavaForkOptions
 import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
-    application
-    kotlin("jvm") version "2.4.20"
-    kotlin("kapt") version "2.4.20"
+    id "application"
+    id "org.jetbrains.kotlin.jvm" version "2.4.20"
+    id "org.jetbrains.kotlin.kapt" version "2.4.20"
     id("org.jetbrains.dokka") version "2.2.0"
 }
 repositories { mavenCentral() }
 
-val windowsHost = System.getProperty("os.name").startsWith("Windows")
+def windowsHost = System.getProperty("os.name").startsWith("Windows")
 // Existing Python generators remain until their Haskell/Kotlin migrations land.
-val python = providers.environmentVariable("THC_PYTHON").orElse(if (windowsHost) "python" else "python3")
+def python = providers.environmentVariable("THC_PYTHON").orElse(windowsHost ? "python" : "python3")
 
 kapt {
     javacOptions { option("--add-modules", "jdk.incubator.vector") }
@@ -37,7 +38,7 @@ tasks.processResources {
 
 // Documentation reads handwritten sources; it does not compile the runtime,
 // generate Truffle DSL classes, or prepare native/Core fixtures.
-val docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
+def docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
     providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
 dokka {
     moduleName.set("THC")
@@ -57,36 +58,44 @@ dokka {
         suppressGeneratedFiles.set(true)
         sourceLink {
             localDirectory.set(file("src/main"))
-            remoteUrl.set(docsRevision.map { URI("https://github.com/ekmett/thc/blob/$it/src/main") })
+            remoteUrl.set(docsRevision.map { URI.create("https://github.com/ekmett/thc/blob/$it/src/main") })
             remoteLineSuffix.set("#L")
         }
     }
     dokkaSourceSets.configureEach {
-        if (name in setOf("diagnostics", "examples")) suppress.set(true)
+        if (name in ["diagnostics", "examples"].toSet()) suppress.set(true)
     }
 }
 // The checked family table generates typed nodes with fixed Vector API species.
 // BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
 // never rewritten by a build. Refresh them explicitly with the generator --write.
-val generateSimdFamilies = tasks.register<Exec>("generateSimdFamilies") {
+def bytecodeCompilerSource = providers.provider {
+    def javaSource = file("src/main/java/thc/runtime/BytecodeProgram.java")
+    def kotlinSource = file("src/main/kotlin/thc/runtime/BytecodeProgram.kt")
+    checkBuild(javaSource.isFile() != kotlinSource.isFile()) {
+        "Expected exactly one Java or transitional Kotlin BytecodeProgram source"
+    }
+    javaSource.isFile() ? javaSource : kotlinSource
+}
+def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
     inputs.files("scripts/generate-simd-families.py", "scripts/simd-families.json",
-        "src/main/java/thc/runtime/BytecodeRoot.java", "src/main/kotlin/thc/runtime/BytecodeProgram.kt")
+        "src/main/java/thc/runtime/BytecodeRoot.java", bytecodeCompilerSource)
     outputs.dir(layout.buildDirectory.dir("generated/simd"))
     commandLine(python.get(), "scripts/generate-simd-families.py", "--check")
 }
 sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
-tasks.matching { it.name in setOf("compileKotlin", "compileJava", "kaptGenerateStubsKotlin") }.configureEach {
+tasks.matching { it.name in ["compileKotlin", "compileJava", "kaptGenerateStubsKotlin"].toSet() }.configureEach {
     dependsOn(generateSimdFamilies)
 }
-val graalVersion = "25.3.4.1"
-apply(from = "gradle/protocol-processor.gradle.kts")
-apply(from = "gradle/materializable-api.gradle.kts")
-apply(from = "gradle/protocol-runtime.gradle.kts")
-val protocolProcessor = tasks.named<Jar>("protocolProcessorJar")
+def graalVersion = "25.3.4.1"
+apply(from: "gradle/protocol-processor.gradle")
+apply(from: "gradle/materializable-api.gradle")
+apply(from: "gradle/protocol-runtime.gradle")
+def protocolProcessor = tasks.named("protocolProcessorJar", Jar)
 // Additional languages are opt-in; the ordinary runtime stays language-neutral.
-val polyglotDemoRuntime by configurations.creating
+def polyglotDemoRuntime = configurations.create("polyglotDemoRuntime")
 dependencies {
-    implementation(kotlin("stdlib"))
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.4.20")
     implementation("org.graalvm.polyglot:polyglot:$graalVersion")
     implementation("org.graalvm.truffle:truffle-api:$graalVersion")
     // Affinity reset deliberately targets the pinned compiler-listener API.
@@ -98,10 +107,10 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testImplementation("org.graalvm.truffle:truffle-runtime:$graalVersion")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-    polyglotDemoRuntime("org.graalvm.polyglot:js:$graalVersion")
+    add(polyglotDemoRuntime.name, "org.graalvm.polyglot:js:$graalVersion")
 }
-if (windowsHost) apply(from = "gradle/windows-sulong.gradle.kts")
-apply(from = "gradle/bytecode-metadata.gradle.kts")
+if (windowsHost) apply(from: "gradle/windows-sulong.gradle")
+apply(from: "gradle/bytecode-metadata.gradle")
 kotlin {
     jvmToolchain(25)
     // Kotlin's generated null-check failures inline stack-trace sanitization into
@@ -111,83 +120,63 @@ kotlin {
     }
 }
 // Tests and benchmark controls can opt out explicitly; ordinary launches use compact headers.
-val compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").orElse("true").get()
-require(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
-val compactHeaderOption = "-XX:${if (compactObjectHeaders == "true") "+" else "-"}UseCompactObjectHeaders"
+def compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").orElse("true").get()
+requireBuild(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
+def compactHeaderOption = "-XX:${compactObjectHeaders == "true" ? "+" : "-"}UseCompactObjectHeaders"
 application {
     mainClass.set("thc.MainKt")
-    applicationDefaultJvmArgs = listOf("--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption) +
+    applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
         // The Linux standalone guest owns GHC's supported process handlers.
         // Embedders do not inherit these launcher JVM arguments.
-        if (System.getProperty("os.name") == "Linux") listOf("-Xrs") else emptyList()
+        (System.getProperty("os.name") == "Linux" ? ["-Xrs"] : [])
 }
 // An explicit oop or RAM-sizing choice belongs to the caller. In particular,
 // forcing compressed oops can cap an otherwise explicit MaxRAMPercentage heap.
 // Defer to opaque @argument files too, without opening or parsing them here.
-val inheritedJvmOptions = listOf("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS")
-val memoryOptionNames = listOf("UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", "@")
-fun defaultCompressedOops(options: JavaForkOptions): List<String> {
-    val explicit = options.jvmArgs.orEmpty() + inheritedJvmOptions.map { options.environment[it]?.toString().orEmpty() }
-    return if (explicit.any { option -> memoryOptionNames.any(option::contains) }) emptyList()
-        else listOf("-XX:+UseCompressedOops")
+def inheritedJvmOptions = ["JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"]
+def memoryOptionNames = ["UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", "@"]
+def defaultCompressedOops = { JavaForkOptions options ->
+    def explicit = (options.jvmArgs ?: []) + inheritedJvmOptions.collect { options.environment[it]?.toString() ?: "" }
+    return explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
 }
-tasks.withType<JavaExec>().configureEach {
-    jvmArgumentProviders.add(CommandLineArgumentProvider { defaultCompressedOops(this) })
+tasks.withType(JavaExec).configureEach { task ->
+    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
 }
-tasks.withType<Test>().configureEach {
-    jvmArgumentProviders.add(CommandLineArgumentProvider { defaultCompressedOops(this) })
+tasks.withType(Test).configureEach { task ->
+    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
 }
 tasks.startScripts {
     // This must happen before Java starts. HotSpot's suspend handler cannot be
     // chained behind the guest's USR2 handler; reserve Linux signal 64 for it.
-    val policy = """
-        case "${'$'}(uname -s)" in
-          Linux)
-            if [ "${'$'}{_JAVA_SR_SIGNUM+x}" = x ] && [ "${'$'}_JAVA_SR_SIGNUM" != 64 ]; then
-              die "thc: Linux launcher requires _JAVA_SR_SIGNUM=64; incompatible setting was preserved"
-            fi
-            _JAVA_SR_SIGNUM=64
-            export _JAVA_SR_SIGNUM
-            ;;
-        esac
-
-    """.trimIndent()
+    def policy = "case \"\$(uname -s)\" in\n  Linux)\n    if [ \"\${_JAVA_SR_SIGNUM+x}\" = x ] && [ \"\$_JAVA_SR_SIGNUM\" != 64 ]; then\n      die \"thc: Linux launcher requires _JAVA_SR_SIGNUM=64; incompatible setting was preserved\"\n    fi\n    _JAVA_SR_SIGNUM=64\n    export _JAVA_SR_SIGNUM\n    ;;\nesac\n"
     // Decide on the user's machine, not when the distribution is built. Java
     // reads JAVA_TOOL_OPTIONS and JDK_JAVA_OPTIONS before command-line defaults.
-    val unixMemoryPolicy = """
-        case "${'$'}{JAVA_TOOL_OPTIONS-} ${'$'}{JDK_JAVA_OPTIONS-} ${'$'}{_JAVA_OPTIONS-} ${'$'}{JAVA_OPTS-} ${'$'}{THC_OPTS-}" in
-          *UseCompressedOops*|*MaxRAM*|*MinRAM*|*InitialRAM*|*@*) ;;
-          *) DEFAULT_JVM_OPTS="${'$'}DEFAULT_JVM_OPTS \"-XX:+UseCompressedOops\"" ;;
-        esac
-    """.trimIndent()
+    def unixMemoryPolicy = "case \"\${JAVA_TOOL_OPTIONS-} \${JDK_JAVA_OPTIONS-} \${_JAVA_OPTIONS-} \${JAVA_OPTS-} \${THC_OPTS-}\" in\n  *UseCompressedOops*|*MaxRAM*|*MinRAM*|*InitialRAM*|*@*) ;;\n  *) DEFAULT_JVM_OPTS=\"\$DEFAULT_JVM_OPTS \\\"-XX:+UseCompressedOops\\\"\" ;;\nesac"
     // Query these variables rather than expanding their contents into cmd syntax:
     // an otherwise valid quoted -D property can contain shell metacharacters.
-    val windowsMemoryPolicy = """
-        (set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | "%SystemRoot%\System32\findstr.exe" /L /C:"UseCompressedOops" /C:"MaxRAM" /C:"MinRAM" /C:"InitialRAM" /C:"@" >nul
-        if errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% "-XX:+UseCompressedOops"
-    """.trimIndent()
+    def windowsMemoryPolicy = "(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | \"%SystemRoot%\\System32\\findstr.exe\" /L /C:\"UseCompressedOops\" /C:\"MaxRAM\" /C:\"MinRAM\" /C:\"InitialRAM\" /C:\"@\" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% \"-XX:+UseCompressedOops\""
     inputs.property("linuxSignalPolicy", policy)
     inputs.property("unixMemoryPolicy", unixMemoryPolicy)
     inputs.property("windowsMemoryPolicy", windowsMemoryPolicy)
     doLast {
-        val unixMarker = "# Collect all arguments for the java command:"
-        val unix = unixScript.readText()
-        check(unix.contains(unixMarker)) { "Missing Gradle Unix launcher insertion point" }
-        unixScript.writeText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n\n" + unixMarker))
-        val windowsMarker = "@rem Execute thc"
-        val windows = windowsScript.readText()
-        check(windows.contains(windowsMarker)) { "Missing Gradle Windows launcher insertion point" }
-        windowsScript.writeText(windows.replace(windowsMarker, windowsMemoryPolicy.replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker))
+        def unixMarker = "# Collect all arguments for the java command:"
+        def unix = unixScript.getText("UTF-8")
+        checkBuild(unix.contains(unixMarker)) { "Missing Gradle Unix launcher insertion point" }
+        unixScript.setText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n\n" + unixMarker), "UTF-8")
+        def windowsMarker = "@rem Execute thc"
+        def windows = windowsScript.getText("UTF-8")
+        checkBuild(windows.contains(windowsMarker)) { "Missing Gradle Windows launcher insertion point" }
+        windowsScript.setText(windows.replace(windowsMarker, windowsMemoryPolicy.replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker), "UTF-8")
     }
 }
-tasks.named<JavaExec>("run") {
+tasks.named("run", JavaExec) {
     if (System.getProperty("os.name") == "Linux") doFirst {
-        val setting = environment["_JAVA_SR_SIGNUM"]
-        check(setting == null || setting == "64") { "Linux launcher requires _JAVA_SR_SIGNUM=64" }
+        def setting = environment["_JAVA_SR_SIGNUM"]
+        checkBuild(setting == null || setting == "64") { "Linux launcher requires _JAVA_SR_SIGNUM=64" }
         environment("_JAVA_SR_SIGNUM", "64")
     }
 }
-tasks.withType<Test>().configureEach {
+tasks.withType(Test).configureEach {
     useJUnitPlatform()
     dependsOn(tasks.startScripts)
     // Isolated native-signal controls need a child JVM with the actual test
@@ -196,7 +185,7 @@ tasks.withType<Test>().configureEach {
     // Exported Core and native expectations are test inputs even when JVM sources
     // are unchanged. Source inputs also make stale corpus fingerprints observable.
     inputs.files(fileTree(layout.buildDirectory) {
-        include("core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
+        include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
             "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
             "word-floating/**/*.json", "word-floating/oracle.tsv",
             "fused-floating/**/*.json", "fused-floating/oracle.tsv",
@@ -409,7 +398,7 @@ tasks.withType<Test>().configureEach {
             "simd-word32x4-bytearray/prepare-run-*/commands/*", "simd-word32x4-bytearray/prepare-run-*/retained-original-source.hs",
             "simd-floatx4-bytearray/prepare-run-*/commands/*", "simd-doublex2-bytearray/prepare-run-*/commands/*",
             "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
-            "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv")
+            "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv"])
     })
     inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
     inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
@@ -465,12 +454,12 @@ tasks.test {
 // Both forks consume the same testClasses/runtimeClasspath task graph. Native
 // compilation and ABI probes remain fresh, but execute only once per invocation.
 // Keep `test` compatible with existing JAVA_TOOL_OPTIONS-based single-mode runs.
-val handoffModeTests = listOf("testDefault" to false, "testDense" to true).map { (taskName, dense) ->
-    tasks.register<Test>(taskName) {
+def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
-        description = "Runs the ordinary test inventory with ${if (dense) "dense" else "default"} handoffs."
-        testClassesDirs = sourceSets.test.get().output.classesDirs
-        classpath = sourceSets.test.get().runtimeClasspath
+        description = "Runs the ordinary test inventory with ${dense ? "dense" : "default"} handoffs."
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
         useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
         systemProperty("thc.expectedHandoffSlabs", dense.toString())
@@ -488,15 +477,15 @@ tasks.register("testHandoffModes") {
 // Actual private boot-library FCallId proofs require installed full Core. Keep
 // this named suite independent of stock/thin default fixture groups; selecting
 // it without preparing its real fixture is an error, never a skipped test.
-val fullCoreTests = sourceSets.create("fullCoreTest")
-configurations[fullCoreTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
-configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
-fullCoreTests.compileClasspath += sourceSets.test.get().output
-fullCoreTests.runtimeClasspath += sourceSets.test.get().output
+def fullCoreTests = sourceSets.create("fullCoreTest")
+configurations[fullCoreTests.implementationConfigurationName].extendsFrom(configurations.testImplementation)
+configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly)
+fullCoreTests.compileClasspath += sourceSets.test.output
+fullCoreTests.runtimeClasspath += sourceSets.test.output
 
 // Explicitly prepared converter/native controls, separate from ordinary models.
-val compactInteropTests = listOf("compactCoreInteropTest" to false, "compactCoreInteropDenseTest" to true).map { (taskName, dense) ->
-    tasks.register<Test>(taskName) {
+def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInteropDenseTest", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests genuine compact Core conversion against native GHC and immediate compiled calls."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -507,17 +496,17 @@ val compactInteropTests = listOf("compactCoreInteropTest" to false, "compactCore
             includeTestsMatching("thc.CoreCompactDebugInteropTest")
             includeTestsMatching("thc.CoreCompactHeaderInteropTest")
         }
-        for ((property, fallback) in listOf("thc.compactInteropManifest" to "packages.json",
-            "thc.compactInteropReference" to "reference-packages.json",
-            "thc.compactInteropDebugManifest" to "debug-packages.json",
-            "thc.compactInteropOracle" to "native.tsv")) {
-            val input = providers.gradleProperty(property).map { file(it) }
+        [["thc.compactInteropManifest", "packages.json"],[
+            "thc.compactInteropReference", "reference-packages.json"],[
+            "thc.compactInteropDebugManifest", "debug-packages.json"],[
+            "thc.compactInteropOracle", "native.tsv"]].each { property, fallback ->
+            def input = providers.gradleProperty(property).map { file(it) }
                 .orElse(layout.buildDirectory.file("compact-core-interop/$fallback").map { it.asFile })
             inputs.file(input)
             systemProperty(property, input.get().absolutePath)
         }
-        providers.gradleProperty("thc.compactInteropHeaders").orNull?.let { paths ->
-            inputs.files(paths.split(',').map(::file))
+        providers.gradleProperty("thc.compactInteropHeaders").orNull?.with { paths ->
+            inputs.files(paths.split(',').collect { file(it) })
             systemProperty("thc.compactInteropHeaders", paths)
         }
         systemProperty("thc.handoffSlabs", dense.toString())
@@ -528,8 +517,8 @@ val compactInteropTests = listOf("compactCoreInteropTest" to false, "compactCore
 }
 compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
 
-for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalTimeClockDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["originalTimeClockDefault", false],[ "originalTimeClockDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests the original time CAPI clock module with native and first-compiled controls."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -540,13 +529,13 @@ for ((taskName, dense) in listOf("originalTimeClockDefault" to false, "originalT
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
-        doFirst { check(file("build/original-time-clock/manifest.json").isFile) {
+        doFirst { checkBuild(file("build/original-time-clock/manifest.json").isFile()) {
             "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
     }
 }
 
-for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["rtsEventFullCoreTest", false],[ "rtsEventFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original GHC event prerequisites and context-local logical capabilities."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -557,11 +546,11 @@ for ((taskName, dense) in listOf("rtsEventFullCoreTest" to false, "rtsEventFullC
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
-        doFirst { check(file("build/rts-event/manifest.json").isFile) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
+        doFirst { checkBuild(file("build/rts-event/manifest.json").isFile()) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
     }
 }
-for ((taskName, dense) in listOf("gcStatsFullCoreTest" to false, "gcStatsFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["gcStatsFullCoreTest", false],[ "gcStatsFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original GHC GC/statistics/clock declarations and honest JVM behavior."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -572,11 +561,11 @@ for ((taskName, dense) in listOf("gcStatsFullCoreTest" to false, "gcStatsFullCor
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original GC/statistics native and first-entry checks require a fresh process") { true }
-        doFirst { check(file("build/gc-stats/manifest.json").isFile) { "Run thc-fixtures gc-stats with complete installed GHC Core" } }
+        doFirst { checkBuild(file("build/gc-stats/manifest.json").isFile()) { "Run thc-fixtures gc-stats with complete installed GHC Core" } }
     }
 }
-for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRtsFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["compilerRtsFullCoreTest", false],[ "compilerRtsFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests genuine compiler RTS declarations and unique cells against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -587,11 +576,11 @@ for ((taskName, dense) in listOf("compilerRtsFullCoreTest" to false, "compilerRt
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
-        doFirst { check(file("build/compiler-rts/manifest.json").isFile) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
+        doFirst { checkBuild(file("build/compiler-rts/manifest.json").isFile()) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
     }
 }
-for ((taskName, dense) in listOf("floatForeignFullCoreTest" to false, "floatForeignFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["floatForeignFullCoreTest", false],[ "floatForeignFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original GHC Float/Double C declarations against native raw-bit controls."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -602,11 +591,11 @@ for ((taskName, dense) in listOf("floatForeignFullCoreTest" to false, "floatFore
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
-        doFirst { check(file("build/float-foreign/manifest.json").isFile) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
+        doFirst { checkBuild(file("build/float-foreign/manifest.json").isFile()) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
     }
 }
-for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregateHeapFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["aggregateHeapFullCoreTest", false],[ "aggregateHeapFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests genuine boxed tuple/sum fields, including GHC BoxedRep, against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -617,11 +606,11 @@ for ((taskName, dense) in listOf("aggregateHeapFullCoreTest" to false, "aggregat
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Aggregate heap native/first-entry checks require a fresh process") { true }
-        doFirst { check(file("build/aggregate-heap/manifest.json").isFile) { "Run thc-fixtures aggregate-heap" } }
+        doFirst { checkBuild(file("build/aggregate-heap/manifest.json").isFile()) { "Run thc-fixtures aggregate-heap" } }
     }
 }
-for ((taskName, dense) in listOf("fourwayAggregateFullCoreTest" to false, "fourwayAggregateFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["fourwayAggregateFullCoreTest", false],[ "fourwayAggregateFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original GHC four-way sums and nested tuple transport against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -636,11 +625,11 @@ for ((taskName, dense) in listOf("fourwayAggregateFullCoreTest" to false, "fourw
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original four-way aggregate native/first-entry checks require a fresh process") { true }
-        doFirst { check(file("build/fourway-aggregate/manifest.json").isFile) { "Run thc-fixtures fourway-aggregate" } }
+        doFirst { checkBuild(file("build/fourway-aggregate/manifest.json").isFile()) { "Run thc-fixtures fourway-aggregate" } }
     }
 }
-for ((taskName, dense) in listOf("narrowIntegerTransportFullCoreTest" to false, "narrowIntegerTransportFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["narrowIntegerTransportFullCoreTest", false],[ "narrowIntegerTransportFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests exact narrow integer carriers against native GHC across calls and storage."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -651,12 +640,12 @@ for ((taskName, dense) in listOf("narrowIntegerTransportFullCoreTest" to false, 
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Exact first-installed carrier checks require a fresh process") { true }
-        doFirst { check(file("build/narrow-integer-transport/manifest.json").isFile) { "Run thc-fixtures narrow-integer-transport" } }
+        doFirst { checkBuild(file("build/narrow-integer-transport/manifest.json").isFile()) { "Run thc-fixtures narrow-integer-transport" } }
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
-for ((taskName, dense) in listOf("genericSumTransportFullCoreTest" to false, "genericSumTransportFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["genericSumTransportFullCoreTest", false],[ "genericSumTransportFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests managed-address, nested and vector sum transport against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -667,11 +656,11 @@ for ((taskName, dense) in listOf("genericSumTransportFullCoreTest" to false, "ge
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Generic sum native/first-installed checks require a fresh process") { true }
-        doFirst { check(file("build/generic-sum-transport/manifest.json").isFile) { "Run thc-fixtures generic-sum-transport" } }
+        doFirst { checkBuild(file("build/generic-sum-transport/manifest.json").isFile()) { "Run thc-fixtures generic-sum-transport" } }
     }
 }
-for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["tupleJoinFullCoreTest", false],[ "tupleJoinFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original roundTo tuple joins and bottoming empty tuple cases against native GHC."
         maxHeapSize = "6g"
@@ -683,12 +672,12 @@ for ((taskName, dense) in listOf("tupleJoinFullCoreTest" to false, "tupleJoinFul
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
-        doFirst { check(file("build/tuple-join-input/manifest.json").isFile) { "Run thc-fixtures tuple-join" } }
+        doFirst { checkBuild(file("build/tuple-join-input/manifest.json").isFile()) { "Run thc-fixtures tuple-join" } }
     }
 }
 kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
-for ((taskName, dense) in listOf("sumInputFullCoreTest" to false, "sumInputFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["sumInputFullCoreTest", false],[ "sumInputFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original sum arguments, PAP prefixes and captures against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -699,11 +688,11 @@ for ((taskName, dense) in listOf("sumInputFullCoreTest" to false, "sumInputFullC
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled sum checks require a fresh process") { true }
-        doFirst { check(file("build/sum-input/manifest.json").isFile) { "Run thc-fixtures sum-input" } }
+        doFirst { checkBuild(file("build/sum-input/manifest.json").isFile()) { "Run thc-fixtures sum-input" } }
     }
 }
-for ((taskName, dense) in listOf("tupleCaptureFullCoreTest" to false, "tupleCaptureFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["tupleCaptureFullCoreTest", false],[ "tupleCaptureFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original tuple closure/thunk captures against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -714,11 +703,11 @@ for ((taskName, dense) in listOf("tupleCaptureFullCoreTest" to false, "tupleCapt
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled tuple capture checks require a fresh process") { true }
-        doFirst { check(file("build/tuple-capture/manifest.json").isFile) { "Run thc-fixtures tuple-capture" } }
+        doFirst { checkBuild(file("build/tuple-capture/manifest.json").isFile()) { "Run thc-fixtures tuple-capture" } }
     }
 }
-for ((taskName, dense) in listOf("sumJoinInputFullCoreTest" to false, "sumJoinInputFullCoreDenseTest" to true)) {
-    tasks.register<Test>(taskName) {
+[["sumJoinInputFullCoreTest", false],[ "sumJoinInputFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original sum join inputs/captures against native GHC."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -729,10 +718,10 @@ for ((taskName, dense) in listOf("sumJoinInputFullCoreTest" to false, "sumJoinIn
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }
-        doFirst { check(file("build/sum-join-input/manifest.json").isFile) { "Run thc-fixtures sum-join-input" } }
+        doFirst { checkBuild(file("build/sum-join-input/manifest.json").isFile()) { "Run thc-fixtures sum-join-input" } }
     }
 }
-tasks.register<Test>("graphWorkloadTest") {
+tasks.register("graphWorkloadTest", Test) {
     group = "verification"
     description = "Checks the real containers BFS example against native GHC and an independent shortest-distance model."
     testClassesDirs = fullCoreTests.output.classesDirs
@@ -745,12 +734,12 @@ tasks.register<Test>("graphWorkloadTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Graph native/compiled evidence requires a fresh test process") { true }
     doFirst {
-        check(file("build/graph-bfs/manifest.json").isFile) {
+        checkBuild(file("build/graph-bfs/manifest.json").isFile()) {
             "Missing graph proof: run cabal run exe:thc-fixtures -- graph-bfs (docs/graph-example.md)"
         }
     }
 }
-tasks.register<Test>("originalIconvFullCoreTest") {
+tasks.register("originalIconvFullCoreTest", Test) {
     group = "verification"
     description = "Tests original locale/iconv imports using the explicitly prepared full-Core GHC fixture."
     testClassesDirs = fullCoreTests.output.classesDirs
@@ -760,12 +749,12 @@ tasks.register<Test>("originalIconvFullCoreTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
     doFirst {
-        check(file("build/original-iconv/manifest.json").isFile) {
+        checkBuild(file("build/original-iconv/manifest.json").isFile()) {
             "Missing original-iconv fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-iconv (docs/original-iconv.md)"
         }
     }
 }
-tasks.register<Test>("fileWaitFullCoreTest") {
+tasks.register("fileWaitFullCoreTest", Test) {
     group = "verification"
     description = "Tests original GHC descriptor waits using explicitly prepared Linux full Core."
     maxHeapSize = "4g"
@@ -776,12 +765,12 @@ tasks.register<Test>("fileWaitFullCoreTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Original descriptor-wait evidence requires a fresh test process") { true }
     doFirst {
-        check(file("build/file-wait/manifest.json").isFile) {
+        checkBuild(file("build/file-wait/manifest.json").isFile()) {
             "Missing file-wait fixture: use selected complete-Core GHC9.14.1 on Linux and run cabal run exe:thc-fixtures -- file-wait"
         }
     }
 }
-tasks.register<Test>("originalStackDecoderFullCoreTest") {
+tasks.register("originalStackDecoderFullCoreTest", Test) {
     group = "verification"
     description = "Tests the original stack decoder/formatter using the explicitly prepared full-Core GHC fixture."
     testClassesDirs = fullCoreTests.output.classesDirs
@@ -794,12 +783,12 @@ tasks.register<Test>("originalStackDecoderFullCoreTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
     doFirst {
-        check(file("build/original-stack-decoder/manifest.json").isFile) {
+        checkBuild(file("build/original-stack-decoder/manifest.json").isFile()) {
             "Missing original-stack-decoder fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-stack-decoder"
         }
     }
 }
-tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
+tasks.register("arithmeticExceptionsFullCoreTest", Test) {
     group = "verification"
     description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
     testClassesDirs = fullCoreTests.output.classesDirs
@@ -812,16 +801,16 @@ tasks.register<Test>("arithmeticExceptionsFullCoreTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
     doFirst {
-        check(file("build/arithmetic-exceptions/manifest.json").isFile) {
+        checkBuild(file("build/arithmetic-exceptions/manifest.json").isFile()) {
             "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
         }
     }
 }
-for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "compactRegionsFullCoreDense" to true,
-        "compactSerializedFullCoreDefault" to false, "compactSerializedFullCoreDense" to true)) {
-    val serialized = taskName.startsWith("compactSerialized")
-    val fixtureDirectory = if (serialized) "compact-serialization" else "compact-regions"
-    tasks.register<Test>(taskName) {
+[["compactRegionsFullCoreDefault", false],[ "compactRegionsFullCoreDense", true],[
+        "compactSerializedFullCoreDefault", false],[ "compactSerializedFullCoreDense", true]].each { taskName, dense ->
+    def serialized = taskName.startsWith("compactSerialized")
+    def fixtureDirectory = serialized ? "compact-serialization" : "compact-regions"
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original ghc-compact with explicitly prepared complete GHC Core."
         maxHeapSize = "4g"
@@ -831,18 +820,18 @@ for ((taskName, dense) in listOf("compactRegionsFullCoreDefault" to false, "comp
             include("**/*.json", "oracle.tsv", "installed/bundles/*.zip", "native/oracle")
         })
         useJUnitPlatform()
-        filter { includeTestsMatching("thc.runtime.${if (serialized) "CompactSerializedNativeTest" else "CompactRegionsNativeTest"}") }
+        filter { includeTestsMatching("thc.runtime.${serialized ? "CompactSerializedNativeTest" : "CompactRegionsNativeTest"}") }
         systemProperty("thc.handoffSlabs", dense.toString())
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original compact-region evidence requires a fresh process") { true }
         doFirst {
-            check(file("build/$fixtureDirectory/manifest.json").isFile) {
+            checkBuild(file("build/$fixtureDirectory/manifest.json").isFile()) {
                 "Select full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- $fixtureDirectory"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("stmFullCoreTest" to false, "stmDenseFullCoreTest" to true)) tasks.register<Test>(taskName) {
+[["stmFullCoreTest", false],[ "stmDenseFullCoreTest", true]].each { taskName, dense -> tasks.register(taskName, Test) {
     group = "verification"
     description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."
     maxHeapSize = "4g"
@@ -857,12 +846,12 @@ for ((taskName, dense) in listOf("stmFullCoreTest" to false, "stmDenseFullCoreTe
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Original STM native/first-entry evidence requires a fresh process") { true }
     doFirst {
-        check(file("build/stm/manifest.json").isFile) {
+        checkBuild(file("build/stm/manifest.json").isFile()) {
             "Missing STM fixture: select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- stm (docs/stm.md)"
         }
     }
-}
-tasks.register<Test>("packageScalarFullCoreTest") {
+} }
+tasks.register("packageScalarFullCoreTest", Test) {
     group = "verification"
     description = "Tests genuine package-owned scalar C calls from ordinary Cabal acquisitions."
     testClassesDirs = fullCoreTests.output.classesDirs
@@ -873,13 +862,13 @@ tasks.register<Test>("packageScalarFullCoreTest") {
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("Native package C/compiled evidence requires a fresh test process") { true }
     doFirst {
-        check(file("build/package-scalar-cbits/manifest.json").isFile) {
+        checkBuild(file("build/package-scalar-cbits/manifest.json").isFile()) {
             "Missing scalar cbits fixture: select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- package-scalar-cbits"
         }
     }
 }
-for ((taskName, dense) in listOf("signalDispatchFullCoreDefault" to false, "signalDispatchFullCoreDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["signalDispatchFullCoreDefault", false],[ "signalDispatchFullCoreDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original GHC signal handler lookup and forked dispatch on both backends."
         maxHeapSize = "4g"
@@ -892,14 +881,14 @@ for ((taskName, dense) in listOf("signalDispatchFullCoreDefault" to false, "sign
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Original signal delivery requires a fresh test process") { true }
         doFirst {
-            check(file("build/signal-dispatch/manifest.json").isFile) {
+            checkBuild(file("build/signal-dispatch/manifest.json").isFile()) {
                 "Select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- signal-dispatch"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stablePtrFfiFullCoreDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["stablePtrFfiFullCoreDefault", false],[ "stablePtrFfiFullCoreDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests ordinary Foreign.StablePtr through genuine package-owned ccall/capi imports."
         maxHeapSize = "4g"
@@ -912,14 +901,14 @@ for ((taskName, dense) in listOf("stablePtrFfiFullCoreDefault" to false, "stable
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native StablePtr C and compiled evidence requires a fresh process") { true }
         doFirst {
-            check(file("build/stableptr-ffi/manifest.json").isFile) {
+            checkBuild(file("build/stableptr-ffi/manifest.json").isFile()) {
                 "Select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- stableptr-ffi"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("packageNativeArchivesDefault" to false, "packageNativeArchivesDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["packageNativeArchivesDefault", false],[ "packageNativeArchivesDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Checks real mixed native imports and archive-only rejection before effects."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -930,14 +919,14 @@ for ((taskName, dense) in listOf("packageNativeArchivesDefault" to false, "packa
         filter { includeTestsMatching("thc.runtime.PackageNativeArchiveFullCoreTest") }
         outputs.upToDateWhen { false }
         doFirst {
-            check(file("build/native-archive/manifest.json").isFile) {
+            checkBuild(file("build/native-archive/manifest.json").isFile()) {
                 "Run cabal run exe:thc-fixtures -- package-native-archives with the selected full-Core GHC"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "packageNativeOriginalsDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["packageNativeOriginalsDefault", false],[ "packageNativeOriginalsDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Checks original digest, safe erf/libm and primitive integer setters against native Haskell observations."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -948,46 +937,46 @@ for ((taskName, dense) in listOf("packageNativeOriginalsDefault" to false, "pack
         filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
         outputs.upToDateWhen { false }
         doFirst {
-            check(file("build/original-native/manifest.json").isFile) {
+            checkBuild(file("build/original-native/manifest.json").isFile()) {
                 "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
             }
         }
     }
 }
-for ((taskName, dense, format) in listOf(
-    Triple("libyamlNativeDefault", false, "zip"), Triple("libyamlNativeDense", true, "zip"),
-    Triple("libyamlJsonDefault", false, "json"), Triple("libyamlJsonDense", true, "json"),
-    Triple("libyamlCompactDefault", false, "compact"), Triple("libyamlCompactDense", true, "compact"))) {
-    tasks.register<Test>(taskName) {
+[
+    ["libyamlNativeDefault", false, "zip"], ["libyamlNativeDense", true, "zip"],
+    ["libyamlJsonDefault", false, "json"], ["libyamlJsonDense", true, "json"],
+    ["libyamlCompactDefault", false, "compact"], ["libyamlCompactDense", true, "compact"]].each { taskName, dense, format ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Checks genuine libyaml C-only dependency products, retained input, cleanup and native encoder buffers."
         testClassesDirs = fullCoreTests.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
-        val fixture = providers.gradleProperty("thc.libyamlFixture").orElse("build/libyaml-native")
+        def fixture = providers.gradleProperty("thc.libyamlFixture").orElse("build/libyaml-native")
         systemProperty("thc.libyamlFixture", file(fixture.get()).absolutePath)
         systemProperty("thc.libyamlBundle", file("${fixture.get()}/libyaml.zip").absolutePath)
         inputs.dir(fixture)
         if (format != "zip") {
-            val property = if (format == "compact") "thc.libyamlCompactPackages" else "thc.libyamlJsonPackages"
-            val packages = providers.gradleProperty(property).orElse("${fixture.get()}/$format-packages.json")
+            def property = format == "compact" ? "thc.libyamlCompactPackages" : "thc.libyamlJsonPackages"
+            def packages = providers.gradleProperty(property).orElse("${fixture.get()}/$format-packages.json")
             inputs.file(packages)
             systemProperty("thc.libyamlPackages", file(packages.get()).absolutePath)
             systemProperty("thc.libyamlFormat", format)
-            doFirst { check(file(packages.get()).isFile) { "Supply the genuine $format package manifest with -P$property" } }
+            doFirst { checkBuild(file(packages.get()).isFile()) { "Supply the genuine $format package manifest with -P$property" } }
         }
         useJUnitPlatform()
         filter { includeTestsMatching("thc.runtime.LibyamlNativeProductsTest") }
         outputs.upToDateWhen { false }
         doFirst {
-            check(file("${fixture.get()}/manifest.json").isFile) {
+            checkBuild(file("${fixture.get()}/manifest.json").isFile()) {
                 "Set THC_LIBYAML_CAPTURE_STAGE to a genuine retained Cabal acquisition; run thc-fixtures libyaml-native"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("wcwidthDefault" to false, "wcwidthDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["wcwidthDefault", false],[ "wcwidthDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Checks Tasty's exact wcwidth declaration and fallback against native locale-sensitive results."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -998,14 +987,14 @@ for ((taskName, dense) in listOf("wcwidthDefault" to false, "wcwidthDense" to tr
         filter { includeTestsMatching("thc.runtime.WcwidthTest") }
         outputs.upToDateWhen { false }
         doFirst {
-            check(file("build/wcwidth/manifest.json").isFile) {
+            checkBuild(file("build/wcwidth/manifest.json").isFile()) {
                 "Set THC_TASTY_SOURCE and run cabal run exe:thc-fixtures -- wcwidth"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("getEntropyDefault" to false, "getEntropyDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["getEntropyDefault", false],[ "getEntropyDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Checks original splitmix initialization and native libc getentropy status/bounds."
         testClassesDirs = fullCoreTests.output.classesDirs
@@ -1016,14 +1005,14 @@ for ((taskName, dense) in listOf("getEntropyDefault" to false, "getEntropyDense"
         filter { includeTestsMatching("thc.runtime.GetEntropyTest") }
         outputs.upToDateWhen { false }
         doFirst {
-            check(file("build/getentropy/manifest.json").isFile) {
+            checkBuild(file("build/getentropy/manifest.json").isFile()) {
                 "Set THC_SPLITMIX_SOURCE and run cabal run exe:thc-fixtures -- getentropy"
             }
         }
     }
 }
-for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashableFfiFullCoreDense" to true)) {
-    tasks.register<Test>(taskName) {
+[["hashableFfiFullCoreDefault", false],[ "hashableFfiFullCoreDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
         description = "Tests original Hashable byte-backed instances against native GHC, including first compiled entries."
         // The genuine manifest includes full original boot-library Core.
@@ -1037,29 +1026,29 @@ for ((taskName, dense) in listOf("hashableFfiFullCoreDefault" to false, "hashabl
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Native Hashable FFI and first-compiled evidence requires a fresh process") { true }
         doFirst {
-            check(file("build/hashable-ffi/manifest.json").isFile) {
+            checkBuild(file("build/hashable-ffi/manifest.json").isFile()) {
                 "Select full-Core GHC 9.14.1/configured Clang and run cabal run exe:thc-fixtures -- hashable-ffi"
             }
         }
     }
 }
-tasks.register<Test>("simdFamiliesExperimentTest") {
+tasks.register("simdFamiliesExperimentTest", Test) {
     group = "verification"
     description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform { includeTags("simd-families-experiment") }
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("SIMD evidence must be checked in a fresh test process") { true }
 }
 // Keep optional language tests outside the ordinary test inventory and classpath.
-val polyglotTests = sourceSets.create("polyglotTest")
-configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation.get())
-configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly.get())
-polyglotTests.compileClasspath += sourceSets.test.get().output
-polyglotTests.runtimeClasspath += sourceSets.test.get().output
+def polyglotTests = sourceSets.create("polyglotTest")
+configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation)
+configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly)
+polyglotTests.compileClasspath += sourceSets.test.output
+polyglotTests.runtimeClasspath += sourceSets.test.output
 kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
-tasks.register<Test>("polyglotTest") {
+tasks.register("polyglotTest", Test) {
     group = "verification"
     description = "Tests THC's optional interop boundary against GraalJS."
     maxHeapSize = "4g"
@@ -1068,10 +1057,10 @@ tasks.register<Test>("polyglotTest") {
     useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
 }
 // Optional languages retain their separate classpath in both handoff forks.
-val polyglotModeTests = listOf("polyglotTestDefault" to false, "polyglotTestDense" to true).map { (taskName, dense) ->
-    tasks.register<Test>(taskName) {
+def polyglotModeTests = [["polyglotTestDefault", false],[ "polyglotTestDense", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
-        description = "Tests optional interop with ${if (dense) "dense" else "default"} handoffs."
+        description = "Tests optional interop with ${dense ? "dense" : "default"} handoffs."
         maxHeapSize = "4g"
         testClassesDirs = polyglotTests.output.classesDirs
         classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
@@ -1085,12 +1074,12 @@ val polyglotModeTests = listOf("polyglotTestDefault" to false, "polyglotTestDens
 }
 polyglotModeTests[1].configure { mustRunAfter(polyglotModeTests[0]) }
 // Genuine automatic exception boxing uses the selected full-Core support unit.
-val foreignExceptionTests = listOf("foreignExceptionTest" to false, "foreignExceptionDenseTest" to true).map { (taskName, dense) ->
-    tasks.register<Test>(taskName) {
+def foreignExceptionTests = [["foreignExceptionTest", false],[ "foreignExceptionDenseTest", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
         group = "verification"
-        description = "Tests genuine automatic foreign exceptions with ${if (dense) "dense" else "default"} handoffs."
+        description = "Tests genuine automatic foreign exceptions with ${dense ? "dense" : "default"} handoffs."
         maxHeapSize = "4g"
-        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs
+        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.output.classesDirs
         classpath = fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime
         useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
         systemProperty("thc.handoffSlabs", dense.toString())
@@ -1099,31 +1088,31 @@ val foreignExceptionTests = listOf("foreignExceptionTest" to false, "foreignExce
         outputs.upToDateWhen { false }
         outputs.doNotCacheIf("Foreign exception evidence requires a fresh test process") { true }
         doFirst {
-            check(file("build/foreign-exceptions/manifest.json").isFile) {
+            checkBuild(file("build/foreign-exceptions/manifest.json").isFile()) {
                 "Select full-Core GHC 9.14.1/configured source and run cabal run exe:thc-fixtures -- foreign-exceptions"
             }
         }
     }
 }
 foreignExceptionTests[1].configure { mustRunAfter(foreignExceptionTests[0]) }
-tasks.register<Test>("jitStabilityTest") {
+tasks.register("jitStabilityTest", Test) {
     group = "verification"
     description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
     useJUnitPlatform { includeTags("jit-stability") }
     outputs.upToDateWhen { false }
     outputs.doNotCacheIf("JIT stability must be measured in a fresh test process") { true }
 }
 // Development entrypoints have their own output; installDist and the runtime
 // JAR contain only main. Tool scripts explicitly add this separate tools JAR.
-val diagnostics = sourceSets.create("diagnostics")
-configurations[diagnostics.implementationConfigurationName].extendsFrom(configurations.implementation.get())
-configurations[diagnostics.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
-diagnostics.compileClasspath += sourceSets.main.get().output
-diagnostics.runtimeClasspath += sourceSets.main.get().output
+def diagnostics = sourceSets.create("diagnostics")
+configurations[diagnostics.implementationConfigurationName].extendsFrom(configurations.implementation)
+configurations[diagnostics.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly)
+diagnostics.compileClasspath += sourceSets.main.output
+diagnostics.runtimeClasspath += sourceSets.main.output
 kotlin.target.compilations.getByName("diagnostics").associateWith(kotlin.target.compilations.getByName("main"))
-tasks.register<Jar>("toolsJar") {
+tasks.register("toolsJar", Jar) {
     group = "build"
     description = "Packages development checks and benchmark entrypoints separately from the runtime."
     archiveFileName.set("thc-tools.jar")
@@ -1131,14 +1120,14 @@ tasks.register<Jar>("toolsJar") {
     from(diagnostics.output)
 }
 
-val examples = sourceSets.create("examples")
-configurations[examples.implementationConfigurationName].extendsFrom(configurations.implementation.get())
-configurations[examples.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly.get())
-examples.compileClasspath += sourceSets.main.get().output
-examples.runtimeClasspath += sourceSets.main.get().output
+def examples = sourceSets.create("examples")
+configurations[examples.implementationConfigurationName].extendsFrom(configurations.implementation)
+configurations[examples.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly)
+examples.compileClasspath += sourceSets.main.output
+examples.runtimeClasspath += sourceSets.main.output
 kotlin.target.compilations.getByName("examples").associateWith(kotlin.target.compilations.getByName("main"))
 
-tasks.register<JavaExec>("probe") {
+tasks.register("probe", JavaExec) {
     group = "verification"
     classpath = diagnostics.runtimeClasspath
     mainClass.set("thc.Probe")
@@ -1146,7 +1135,7 @@ tasks.register<JavaExec>("probe") {
     workingDir(projectDir)
 }
 
-tasks.register<JavaExec>("polyglotDemo") {
+tasks.register("polyglotDemo", JavaExec) {
     group = "application"
     description = "Runs exported Haskell against GraalJS through THC.Polyglot."
     classpath = examples.runtimeClasspath + polyglotDemoRuntime
@@ -1156,11 +1145,11 @@ tasks.register<JavaExec>("polyglotDemo") {
 }
 
 // Vector intrinsics are isolated in Java; floating vectors retain fixed species.
-tasks.withType<JavaCompile>().configureEach { options.compilerArgs.addAll(listOf("--add-modules", "jdk.incubator.vector")) }
+tasks.withType(JavaCompile).configureEach { options.compilerArgs.addAll(["--add-modules", "jdk.incubator.vector"]) }
 
 // Compile the unchanged pinned GHC cbits for this host. The resulting bitcode
 // remains an optional execution path; no native pointer is exposed to Core.
-val compileCbits by tasks.registering(Exec::class) {
+def compileCbits = tasks.register("compileCbits", Exec) {
     inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
         "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
         "compiler/pinned-ghc-internal/cbits/strerror.c",
@@ -1180,24 +1169,24 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits"))
 tasks.processResources { dependsOn(compileCbits) }
 
 // Exact-width byte/short atomics, which JDK segment handles do not implement.
-val compileNativeAtomics by tasks.registering {
+def compileNativeAtomics = tasks.register("compileNativeAtomics") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-atomic-api.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-atomics")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-atomic-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-atomics")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
-        val darwin = host["system"] == "Darwin" && host["architecture"] in setOf("x86_64", "aarch64")
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def darwin = host["system"] == "Darwin" && host["architecture"] in ["x86_64", "aarch64"].toSet()
         if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
-            val extension = if (darwin) ".dylib" else ".so"
-            val destination = output.get().asFile.resolve("thc/native/native-atomic-api$extension")
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-atomic-api$extension").toFile()
             destination.parentFile.mkdirs()
-            val compiler = listOf(clang.get()) + if (darwin) emptyList() else listOf("--target=${host["target"]}")
-            providers.exec { commandLine(compiler + listOf("-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
-                "-fPIC", if (darwin) "-dynamiclib" else "-shared", source.asFile.path, "-o", destination.path)) }.result.get()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            providers.exec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
         }
     }
 }
@@ -1205,18 +1194,18 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-a
 tasks.processResources { dependsOn(compileNativeAtomics) }
 
 // Optional Linux opened-resource provider; not original fstat admission.
-val compileNativeFiles by tasks.registering {
+def compileNativeFiles = tasks.register("compileNativeFiles") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-file-api.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-files")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-file-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-files")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-file-api.so")
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-file-api.so").toFile()
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
@@ -1227,18 +1216,18 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-f
 tasks.processResources { dependsOn(compileNativeFiles) }
 
 // Directory authority is callable from FileSystem SPI outside an entered context.
-val compileNativeDirectories by tasks.registering {
+def compileNativeDirectories = tasks.register("compileNativeDirectories") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-directory-api.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-directories")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-directory-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-directories")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-directory-api.so")
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-directory-api.so").toFile()
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
@@ -1249,18 +1238,18 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-d
 tasks.processResources { dependsOn(compileNativeDirectories) }
 
 // Context-owned process transport needs libc posix_spawn and Linux pidfds.
-val compileNativeProcesses by tasks.registering {
+def compileNativeProcesses = tasks.register("compileNativeProcesses") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-process-api.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-processes")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-processes")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-process-api.so")
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-api.so").toFile()
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
@@ -1270,45 +1259,45 @@ val compileNativeProcesses by tasks.registering {
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-processes")) }
 tasks.processResources { dependsOn(compileNativeProcesses) }
 
-val prepareProcessLifecycleOracle by tasks.registering {
-    val source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
-    val policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
-    val transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
-    val output = layout.buildDirectory.dir("process-lifecycle/native")
-    val ghc = providers.environmentVariable("GHC").orElse("ghc")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+def prepareProcessLifecycleOracle = tasks.register("prepareProcessLifecycleOracle") {
+    def source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
+    def policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
+    def transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    def output = layout.buildDirectory.dir("process-lifecycle/native")
+    def ghc = providers.environmentVariable("GHC").orElse("ghc")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.property("ghc", ghc)
     inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang)
     outputs.dir(output)
-    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in listOf("amd64", "x86_64") }
+    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in ["amd64", "x86_64"] }
     doLast {
-        val version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
-        check(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
-        val destination = output.get().asFile
+        def version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
+        checkBuild(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
+        def destination = output.get().asFile
         destination.mkdirs()
         providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
-            "-outputdir", destination.path, source.asFile.path, "-o", destination.resolve("process-oracle").path) }.result.get()
+            "-outputdir", destination.path, source.asFile.path, "-o", destination.toPath().resolve("process-oracle").toFile().path) }.result.get()
         // Signal dispositions belong to this standalone control, never the test JVM.
         providers.exec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
             policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
-            "-o", destination.resolve("sigchld-policy").path) }.result.get()
+            "-o", destination.toPath().resolve("sigchld-policy").toFile().path) }.result.get()
     }
 }
-tasks.withType<Test>().configureEach { dependsOn(prepareProcessLifecycleOracle) }
+tasks.withType(Test).configureEach { dependsOn(prepareProcessLifecycleOracle) }
 
 // Owned native workers and asynchronous syscall guard must run as machine code.
-val compileNativeOpenRequests by tasks.registering {
+def compileNativeOpenRequests = tasks.register("compileNativeOpenRequests") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-open-request.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-open-requests")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-open-request.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-open-requests")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-open-request.so")
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-open-request.so").toFile()
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-pthread", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
@@ -1319,18 +1308,18 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-o
 tasks.processResources { dependsOn(compileNativeOpenRequests) }
 
 // Partial original sigprocmask, loaded only with explicit native authority.
-val compileNativeSignals by tasks.registering {
+def compileNativeSignals = tasks.register("compileNativeSignals") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-signal-api.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-signals")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-signal-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-signals")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-signal-api.so")
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-signal-api.so").toFile()
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
@@ -1341,18 +1330,18 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-s
 tasks.processResources { dependsOn(compileNativeSignals) }
 
 // POSIX asynchronous capture must execute machine code, never LLVM guest code.
-val compileNativeProcessSignals by tasks.registering {
+def compileNativeProcessSignals = tasks.register("compileNativeProcessSignals") {
     dependsOn("generateStdioAbi")
-    val source = layout.projectDirectory.file("src/main/c/native-process-signal-api.c")
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/native-process-signals")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/native-process-signal-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-process-signals")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output)
     doLast {
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
         if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
-            val destination = output.get().asFile.resolve("thc/native/native-process-signal-api.so")
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-signal-api.so").toFile()
             destination.parentFile.mkdirs()
             providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                 "-fPIC", "-shared", source.asFile.path, "-o", destination.path, "-ldl") }.result.get()
@@ -1363,173 +1352,173 @@ sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-p
 tasks.processResources { dependsOn(compileNativeProcessSignals) }
 
 // Probe the genuine Windows search-buffer ABI with the native target headers.
-val generateWindowsDirectoryAbi by tasks.registering {
-    val source = layout.projectDirectory.file("src/main/c/windows-directory-abi.c").asFile
-    val output = layout.buildDirectory.dir("generated/windows-directory-abi")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+def generateWindowsDirectoryAbi = tasks.register("generateWindowsDirectoryAbi") {
+    def source = layout.projectDirectory.file("src/main/c/windows-directory-abi.c").asFile
+    def output = layout.buildDirectory.dir("generated/windows-directory-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source)
     inputs.property("clang", clang)
     inputs.property("host", System.getProperty("os.name") + "/" + System.getProperty("os.arch"))
     outputs.dir(output)
     onlyIf { windowsHost }
     doLast {
-        fun run(command: List<String>): String = providers.exec { commandLine(command) }.standardOutput.asText.get()
-        val target = run(listOf(clang.get(), "-dumpmachine")).trim()
-        require(System.getProperty("os.arch") in setOf("amd64", "x86_64") &&
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def target = run([clang.get(), "-dumpmachine"]).trim()
+        requireBuild(System.getProperty("os.arch") in ["amd64", "x86_64"].toSet() &&
             target.startsWith("x86_64-") && (target.contains("windows") || target.contains("mingw"))) {
             "Windows directory probing requires a native x86_64 Windows compiler: " + target
         }
-        val executable = temporaryDir.resolve("windows-directory-abi.exe")
-        run(listOf(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path))
-        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        val document = linkedMapOf("schema" to 1, "architecture" to "x86_64", "target" to target,
-            "compilerVersion" to run(listOf(clang.get(), "--version")),
-            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
-                .joinToString("") { "%02x".format(it) }, "layout" to probe)
-        val destination = output.get().asFile.resolve("thc/native/windows-directory-abi.json")
+        def executable = temporaryDir.toPath().resolve("windows-directory-abi.exe").toFile()
+        run([clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def document = ["schema": 1, "architecture": "x86_64", "target": target,
+            "compilerVersion": run([clang.get(), "--version"]),
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes)
+                .encodeHex().toString(), "layout": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/windows-directory-abi.json").toFile()
         destination.parentFile.mkdirs()
-        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(document)) + "\n")
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(document)) + "\n", "UTF-8")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/windows-directory-abi")) }
 tasks.processResources { dependsOn(generateWindowsDirectoryAbi) }
 
 // Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
-val generateStdioAbi by tasks.registering {
-    val source = layout.projectDirectory.file(if (windowsHost) "src/main/c/windows-stdio-abi-probe.c" else "src/main/c/stdio-abi-probe.c").asFile
-    val output = layout.buildDirectory.dir("generated/stdio-abi")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+def generateStdioAbi = tasks.register("generateStdioAbi") {
+    def source = layout.projectDirectory.file(windowsHost ? "src/main/c/windows-stdio-abi-probe.c" : "src/main/c/stdio-abi-probe.c").asFile
+    def output = layout.buildDirectory.dir("generated/stdio-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source)
     inputs.property("clang", clang)
     outputs.dir(output)
     outputs.upToDateWhen { false }
     doLast {
-        fun run(command: List<String>): String = providers.exec { commandLine(command) }.standardOutput.asText.get()
-        fun architecture(value: String) = when (value.lowercase()) {
-            "amd64" -> "x86_64"
-            "arm64" -> "aarch64"
-            else -> value.lowercase()
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def architecture = { String value ->
+            def lower = value.toLowerCase(java.util.Locale.ROOT)
+            lower == "amd64" ? "x86_64" : lower == "arm64" ? "aarch64" : lower
         }
-        val system = System.getProperty("os.name").let { if (it.startsWith("Mac")) "Darwin" else if (windowsHost) "Windows" else it }
-        val arch = architecture(System.getProperty("os.arch"))
-        val compiler = clang.get()
-        val defaultTarget = run(listOf(compiler, "-dumpmachine")).trim()
-        val parts = defaultTarget.split('-')
-        require(system in setOf("Linux", "Darwin", "Windows") && arch in (if (windowsHost) setOf("x86_64") else setOf("x86_64", "aarch64")) &&
-            parts.size >= 3 && architecture(parts[0]) == arch &&
-            (if (system == "Linux") parts.drop(2) == listOf("linux", "gnu")
-             else if (windowsHost) parts.drop(2) == listOf("windows", "gnu") else parts[2].startsWith("darwin"))) {
+        def osName = System.getProperty("os.name")
+        def system = osName.startsWith("Mac") ? "Darwin" : windowsHost ? "Windows" : osName
+        def arch = architecture(System.getProperty("os.arch"))
+        def compiler = clang.get()
+        def defaultTarget = run([compiler, "-dumpmachine"]).trim()
+        def parts = defaultTarget.split('-').toList()
+        requireBuild(system in ["Linux", "Darwin", "Windows"].toSet() && arch in (windowsHost ? ["x86_64"].toSet() : ["x86_64", "aarch64"].toSet()) &&
+            parts.size() >= 3 && architecture(parts[0]) == arch &&
+            (system == "Linux" ? parts.drop(2) == ["linux", "gnu"]
+             : windowsHost ? parts.drop(2) == ["windows", "gnu"] : parts[2].startsWith("darwin"))) {
             "Stdio probing requires a native supported C compiler: $system/$arch, clang=$defaultTarget"
         }
-        val target = if (system == "Linux") "$arch-unknown-linux-gnu" else defaultTarget
-        val command = listOf(compiler) + if (system == "Linux") listOf("--target=$target") else emptyList()
-        require(run(command + "-dumpmachine").trim() == target) { "Clang did not select the native stdio target $target" }
-        val executable = temporaryDir.resolve(if (windowsHost) "stdio-abi-probe.exe" else "stdio-abi-probe")
-        run(command + listOf("-std=c11", source.path, "-o", executable.path))
-        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        require(probe.keys == (if (windowsHost) setOf("widths", "errno", "seek") else setOf("widths", "errno", "seek", "open", "at", "siginfoBytes"))) { "Malformed native stdio ABI probe" }
+        def target = system == "Linux" ? "$arch-unknown-linux-gnu" : defaultTarget
+        def command = [compiler] + (system == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Clang did not select the native stdio target $target" }
+        def executable = new File(temporaryDir, windowsHost ? "stdio-abi-probe.exe" : "stdio-abi-probe")
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes"].toSet())) { "Malformed native stdio ABI probe" }
         // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
-        val manifest = linkedMapOf<String, Any?>("schema" to (if (windowsHost) 2 else 1), "system" to system,
-            "architecture" to arch, "target" to target, "compilerDefaultTarget" to defaultTarget,
-            "compilerVersion" to run(listOf(compiler, "--version")),
-            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes())
-                .joinToString("") { "%02x".format(it) },
-            "widths" to probe["widths"], "errno" to probe["errno"], "seek" to probe["seek"])
+        def manifest = ["schema": (windowsHost ? 2 : 1), "system": system,
+            "architecture": arch, "target": target, "compilerDefaultTarget": defaultTarget,
+            "compilerVersion": run([compiler, "--version"]),
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes)
+                .encodeHex().toString(),
+            "widths": probe["widths"], "errno": probe["errno"], "seek": probe["seek"]]
         if (windowsHost) manifest["profile"] = "windows-managed-descriptors"
         else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"] }
-        val destination = output.get().asFile.resolve("thc/native/stdio-host-abi.json")
+        def destination = output.get().asFile.toPath().resolve("thc/native/stdio-host-abi.json").toFile()
         destination.parentFile.mkdirs()
-        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
         logger.lifecycle("Probed original stdio ABI and errno values for $target")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/stdio-abi")) }
 tasks.processResources { dependsOn(generateStdioAbi) }
 
-val generatePosixStatAbi by tasks.registering {
+def generatePosixStatAbi = tasks.register("generatePosixStatAbi") {
     dependsOn(generateStdioAbi)
-    val source = layout.projectDirectory.file("src/main/c/posix-stat-abi-probe.c").asFile
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/posix-stat-abi")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/posix-stat-abi-probe.c").asFile
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/posix-stat-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output); outputs.upToDateWhen { false }
     doLast {
-        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
         // Share the already validated native compiler target, not another list
         // of target triples or guessed ABI sizes.
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
-        val target = host["target"] as String
-        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
-        require(run(command + "-dumpmachine").trim() == target) { "Stat compiler target changed" }
-        val executable = temporaryDir.resolve("posix-stat-abi-probe")
-        run(command + listOf("-std=c11", source.path, "-o", executable.path))
-        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
-            "architecture" to host["architecture"], "target" to target,
-            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
-            "stat" to probe)
-        val destination = output.get().asFile.resolve("thc/native/posix-stat-abi.json")
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def target = host["target"] as String
+        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Stat compiler target changed" }
+        def executable = temporaryDir.toPath().resolve("posix-stat-abi-probe").toFile()
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def manifest = ["schema": 1, "system": host["system"],
+            "architecture": host["architecture"], "target": target,
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
+            "stat": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/posix-stat-abi.json").toFile()
         destination.parentFile.mkdirs()
-        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/posix-stat-abi")) }
 tasks.processResources { dependsOn(generatePosixStatAbi) }
 
-val generateTermiosAbi by tasks.registering {
+def generateTermiosAbi = tasks.register("generateTermiosAbi") {
     dependsOn(generateStdioAbi)
-    val source = layout.projectDirectory.file("src/main/c/termios-abi-probe.c").asFile
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/termios-abi")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/termios-abi-probe.c").asFile
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/termios-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output); outputs.upToDateWhen { false }
     doLast {
-        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
-        val target = host["target"] as String
-        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
-        require(run(command + "-dumpmachine").trim() == target) { "Termios compiler target changed" }
-        val executable = temporaryDir.resolve("termios-abi-probe")
-        run(command + listOf("-std=c11", source.path, "-o", executable.path))
-        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
-            "architecture" to host["architecture"], "target" to target,
-            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
-            "termios" to probe)
-        val destination = output.get().asFile.resolve("thc/native/termios-abi.json")
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def target = host["target"] as String
+        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Termios compiler target changed" }
+        def executable = temporaryDir.toPath().resolve("termios-abi-probe").toFile()
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def manifest = ["schema": 1, "system": host["system"],
+            "architecture": host["architecture"], "target": target,
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
+            "termios": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/termios-abi.json").toFile()
         destination.parentFile.mkdirs()
-        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/termios-abi")) }
 tasks.processResources { dependsOn(generateTermiosAbi) }
 
-val generateSigsetAbi by tasks.registering {
+def generateSigsetAbi = tasks.register("generateSigsetAbi") {
     dependsOn(generateStdioAbi)
-    val source = layout.projectDirectory.file("src/main/c/sigset-abi-probe.c").asFile
-    val stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
-    val output = layout.buildDirectory.dir("generated/sigset-abi")
-    val clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    def source = layout.projectDirectory.file("src/main/c/sigset-abi-probe.c").asFile
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/sigset-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
     inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
     outputs.dir(output); outputs.upToDateWhen { false }
     doLast {
-        fun run(command: List<String>) = providers.exec { commandLine(command) }.standardOutput.asText.get()
-        val host = JsonSlurper().parse(stdio.get().asFile) as Map<*, *>
-        val target = host["target"] as String
-        val command = listOf(clang.get()) + if (host["system"] == "Linux") listOf("--target=$target") else emptyList()
-        require(run(command + "-dumpmachine").trim() == target) { "Sigset compiler target changed" }
-        val executable = temporaryDir.resolve("sigset-abi-probe")
-        run(command + listOf("-std=c11", source.path, "-o", executable.path))
-        val probe = JsonSlurper().parseText(run(listOf(executable.path))) as Map<*, *>
-        val manifest = linkedMapOf<String, Any?>("schema" to 1, "system" to host["system"],
-            "architecture" to host["architecture"], "target" to target,
-            "sourceSha256" to MessageDigest.getInstance("SHA-256").digest(source.readBytes()).joinToString("") { "%02x".format(it) },
-            "sigset" to probe)
-        val destination = output.get().asFile.resolve("thc/native/sigset-abi.json")
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def target = host["target"] as String
+        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Sigset compiler target changed" }
+        def executable = temporaryDir.toPath().resolve("sigset-abi-probe").toFile()
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def manifest = ["schema": 1, "system": host["system"],
+            "architecture": host["architecture"], "target": target,
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
+            "sigset": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/sigset-abi.json").toFile()
         destination.parentFile.mkdirs()
-        destination.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n")
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
     }
 }
 sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/sigset-abi")) }
@@ -1539,13 +1528,13 @@ tasks.processResources { dependsOn(generateSigsetAbi) }
 // Windows must not publish guessed POSIX ABI receipts. Managed Core and portable
 // original C resources are independent of these optional providers.
 if (windowsHost) {
-    listOf("generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
-        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals")
-        .forEach { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
+    ["generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals"]
+        .each { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
     tasks.processResources {
         // Reject stale resources copied from a build for a different host, too.
-        exclude { !it.isDirectory && it.path.startsWith("thc/native/") &&
-            it.path !in setOf("thc/native/windows-directory-abi.json", "thc/native/stdio-host-abi.json") }
+        exclude { !it.isDirectory() && it.path.startsWith("thc/native/") &&
+            it.path !in ["thc/native/windows-directory-abi.json", "thc/native/stdio-host-abi.json"].toSet() }
         exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
         exclude("thc/cbits/windows-malloc-probe.exe")
     }
@@ -1555,19 +1544,19 @@ if (windowsHost) {
 
 // Native Windows checkpoint: the default test task keeps its complete contract.
 // Both tasks consume fresh thc-fixtures windows-smoke and native MD5 inputs.
-for ((name, dense) in listOf("windowsSmokeTest" to false, "windowsDenseSmokeTest" to true)) {
-    tasks.register<Test>(name) {
+[["windowsSmokeTest", false],[ "windowsDenseSmokeTest", true]].each { name, dense ->
+    tasks.register(name, Test) {
         group = "verification"
         description = "Native-oracle runtime and C ABI smoke checks (dense handoff=$dense)."
-        testClassesDirs = sourceSets.test.get().output.classesDirs
-        classpath = sourceSets.test.get().runtimeClasspath
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
         systemProperty("thc.handoffSlabs", dense.toString())
         filter {
-            listOf("thc.FastSmokeTest", "thc.RuntimeTest", "thc.BytecodeBackendTest",
+            ["thc.FastSmokeTest", "thc.RuntimeTest", "thc.BytecodeBackendTest",
                 "thc.CoreRequestTest", "thc.FramesTest", "thc.CStringTest",
                 "thc.runtime.ManagedMd5Test", "thc.WindowsDistributionTest",
                 "thc.runtime.WindowsSulongLibraryLookupTest",
-                "thc.runtime.NarrowReturnedPointerTest").forEach(::includeTestsMatching)
+                "thc.runtime.NarrowReturnedPointerTest"].each { includeTestsMatching(it) }
         }
         inputs.files("build/windows-smoke/provenance.json", "build/windows-driver/provenance.json")
         dependsOn(tasks.installDist)
@@ -1576,4 +1565,4 @@ for ((name, dense) in listOf("windowsSmokeTest" to false, "windowsDenseSmokeTest
 }
 tasks.named("windowsDenseSmokeTest") { mustRunAfter("windowsSmokeTest") }
 
-apply(from = "gradle/protocol-processor-tests.gradle.kts")
+apply(from: "gradle/protocol-processor-tests.gradle")
