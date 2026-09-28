@@ -16,7 +16,7 @@ or installation tree is hashed. The test does not assert an actual newly
 GHC-inlined Backtrace caller: the moved-body case is explicitly synthetic.
 
 The embedded original GHC source and exported body retain the GHC licensing
-terms in `third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE` (including the University of
+terms in `nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE` (including the University of
 Glasgow copyright notice and BSD conditions/disclaimer).
 
 This validates local managed diagnostic capture only. No native GHC stack

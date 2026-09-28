@@ -54,7 +54,7 @@ checks.each { name, runCheck ->
         } else if (name == 'testBytecodeSourceModeAccessor') {
             description = "Check the pinned generated builder's read-only lazy source-mode accessor."
         }
-        inputs.files('gradle/bytecode-metadata.gradle', fileTree('buildSrc/src/main/java/thc/buildlogic'))
+        inputs.files('src/gradle/bytecode-metadata.gradle', fileTree('src/build/java/thc/buildlogic'))
         doLast { runCheck(delegate) }
     }
 }
@@ -63,7 +63,7 @@ tasks.named('check') { dependsOn(checks.keySet()) }
 // Normalize proc:only output before the separate proc:none compilation. Keep
 // all passes in their pinned order; none may be deferred until javac.
 tasks.matching { it.name == 'processMainJava' }.configureEach {
-    inputs.files('gradle/bytecode-metadata.gradle', fileTree('buildSrc/src/main/java/thc/buildlogic'))
+    inputs.files('src/gradle/bytecode-metadata.gradle', fileTree('src/build/java/thc/buildlogic'))
     doLast {
         def dependencies = configurations.getByName('protocolProcessorSources').dependencies.findAll {
             it.group == 'org.graalvm.truffle' && it.name == 'truffle-dsl-processor'

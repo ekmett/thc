@@ -8,7 +8,7 @@ focuses, `partsOf`, filtering and a type-changing traversal. The opaque
 input-dependent check function keeps these applications in exported Core.
 
 Use the complete-Core GHC 9.14.1 installation, Cabal 3.16 and matching Graal
-runtime described in [the driver guide](../../../docs/driver.md). The Cabal index
+runtime described in [the driver guide](../../../../docs/driver.md). The Cabal index
 state is pinned in `cabal.project`. Acquire the original source archive from this
 directory:
 

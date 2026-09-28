@@ -210,7 +210,7 @@ validateNativeWidthIR target source = do
 -- no heap buffer is copied or projected into native memory.
 zlibChecksumSources :: FilePath -> IO [(String, String)]
 zlibChecksumSources repository = do
-  let directory = repository </> "third-party/pinned/zlib-1.2.11"
+  let directory = repository </> "nih/pinned/zlib-1.2.11"
       hashes =
         [ ("adler32.c", "d7f1b6e44fee20ab41cef1d650776a039a2348935eb96bcbd294a4096139be3a")
         , ("crc32.c", "a04af273e83ecc351bf3794974ab2098d8d960df4044b7b44734c41443ee26d0")

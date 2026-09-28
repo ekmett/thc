@@ -98,7 +98,7 @@ class CompilerTargetTest(unittest.TestCase):
     def test_main_records_effective_target_command_and_source_hashes(self):
         with tempfile.TemporaryDirectory(prefix="thc-cbits-test-") as temporary:
             root = Path(temporary) / "repo with spaces"
-            reference = root / "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+            reference = root / "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
             reference.mkdir(parents=True)
             for name in build.PINNED:
                 path = reference / ("cbits" if name.endswith(".c") else "include") / name
@@ -110,21 +110,21 @@ class CompilerTargetTest(unittest.TestCase):
             for name in ("iconv-api.c", "gmp-api.c", "strerror-locale.c", "libdw-unavailable.c", "package-pointer-api.c",
                          "text-api.c", "wait-status-api.c", "bytestring-utf8-api.c"):
                 (source.parent / name).write_bytes(b"/* synthetic ABI wrapper */\n")
-            text_source = root / "third-party/pinned/text-2.1.3"
+            text_source = root / "nih/pinned/text-2.1.3"
             for name in build.TEXT_SHA256:
-                path = root / "third-party/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name
+                path = root / "nih/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes((build.ROOT / path.relative_to(root)).read_bytes())
-            utf8 = root / "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
+            utf8 = root / "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
             utf8.parent.mkdir(parents=True)
             utf8.write_bytes((build.ROOT / utf8.relative_to(root)).read_bytes())
-            libdw = root / "third-party/pinned/ghc-9.14.1/rts"
+            libdw = root / "nih/pinned/ghc-9.14.1/rts"
             libdw.mkdir(parents=True)
             for name in build.LIBDW_SHA256:
-                (libdw / name).write_bytes((build.ROOT / "third-party/pinned/ghc-9.14.1/rts" / name).read_bytes())
-            original = root / "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
+                (libdw / name).write_bytes((build.ROOT / "nih/pinned/ghc-9.14.1/rts" / name).read_bytes())
+            original = root / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
             original.parent.mkdir(parents=True, exist_ok=True)
-            original.write_bytes((build.ROOT / "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c").read_bytes())
+            original.write_bytes((build.ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c").read_bytes())
             libdir = root / "ghc-lib"
             libdir.mkdir()
             (libdir / "HsFFI.h").write_bytes(b"/* synthetic GHC header */\n")

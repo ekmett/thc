@@ -104,9 +104,9 @@
         "test/haskell-fixtures/TextCbitsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/core_original_foreign.py",
         "bin/audit-core.py", "bin/core-capabilities.json", "bin/build-cbits.py",
-        "src/main/c/text-api.c", "third-party/pinned/text-2.1.3/cbits/utils.c",
-        "third-party/pinned/text-2.1.3/cbits/measure_off.c", "third-party/pinned/text-2.1.3/cbits/reverse.c",
-        "third-party/pinned/text-2.1.3/LICENSE", "third-party/pinned/openbsd-memchr-1.8.c"]
+        "src/main/c/text-api.c", "nih/pinned/text-2.1.3/cbits/utils.c",
+        "nih/pinned/text-2.1.3/cbits/measure_off.c", "nih/pinned/text-2.1.3/cbits/reverse.c",
+        "nih/pinned/text-2.1.3/LICENSE", "nih/pinned/openbsd-memchr-1.8.c"]
     },
     "proxy-void": {
       "junit": ["thc.runtime.ProxyVoidTest"],
@@ -179,7 +179,7 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "boxed-cas"]}],
       "outputs": ["build/boxed-cas"],
       "sources": ["test/fixtures/compiler/BoxedCasAudit.hs", "test/fixtures/compiler/BoxedCasNative.hs",
-        "examples/THC/BoxedCasCounter.hs", "test/haskell-fixtures/BoxedCasFixtures.hs",
+        "src/examples/THC/BoxedCasCounter.hs", "test/haskell-fixtures/BoxedCasFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "scalar-memory-utilities": {
@@ -194,7 +194,7 @@
       "junit": ["thc.runtime.GhcBCOTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "ghc-bco"]}],
       "outputs": ["build/ghc-bco"],
-      "sources": ["examples/GhcBCO.hs", "test/fixtures/compiler/GhcBCONative.hs",
+      "sources": ["src/examples/GhcBCO.hs", "test/fixtures/compiler/GhcBCONative.hs",
         "test/haskell-fixtures/GhcBCOFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
@@ -202,7 +202,7 @@
       "junit": ["thc.runtime.DelimitedContinuationsTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "delimited-continuations"]}],
       "outputs": ["build/delimited-continuations"],
-      "sources": ["examples/DelimitedContinuations.hs", "test/fixtures/compiler/DelimitedContinuationsNative.hs",
+      "sources": ["src/examples/DelimitedContinuations.hs", "test/fixtures/compiler/DelimitedContinuationsNative.hs",
         "test/haskell-fixtures/DelimitedContinuationsFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
@@ -210,7 +210,7 @@
       "junit": ["thc.runtime.ThreadSchedulingTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-scheduling"]}],
       "outputs": ["build/thread-scheduling"],
-      "sources": ["examples/ThreadScheduling.hs", "test/fixtures/compiler/ThreadSchedulingNative.hs",
+      "sources": ["src/examples/ThreadScheduling.hs", "test/fixtures/compiler/ThreadSchedulingNative.hs",
         "test/haskell-fixtures/ThreadSchedulingFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
@@ -218,7 +218,7 @@
       "junit": ["thc.runtime.ThreadInventoryNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "thread-inventory"]}],
       "outputs": ["build/thread-inventory"],
-      "sources": ["examples/ThreadInventory.hs", "test/fixtures/compiler/ThreadInventoryNative.hs",
+      "sources": ["src/examples/ThreadInventory.hs", "test/fixtures/compiler/ThreadInventoryNative.hs",
         "test/fixtures/compiler/CallbackIdentityNative.hs", "test/fixtures/compiler/callback-identity.c",
         "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
@@ -416,7 +416,7 @@
       "outputs": ["build/bytestring-utf8"],
       "sources": ["test/fixtures/compiler/ByteStringUtf8Audit.hs", "test/fixtures/compiler/ByteStringUtf8Native.hs",
         "test/haskell-fixtures/ByteStringUtf8Fixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
-        "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c", "src/main/c/bytestring-utf8-api.c", "bin/build-cbits.py",
+        "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c", "src/main/c/bytestring-utf8-api.c", "bin/build-cbits.py",
         "test/haskell-fixtures/Main.hs", "thc.cabal"]
     },
     "original-memset": {
@@ -612,7 +612,7 @@
       "junit": ["thc.runtime.StableNamesTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "stable-names"]}],
       "outputs": ["build/stable-names"],
-      "sources": ["examples/StableNames.hs", "test/fixtures/compiler/StableNamesNative.hs",
+      "sources": ["src/examples/StableNames.hs", "test/fixtures/compiler/StableNamesNative.hs",
         "test/haskell-fixtures/StableNameFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/core-capabilities.json", "bin/audit-core.py"]
     },
@@ -732,14 +732,14 @@
       "sources": ["test/haskell-fixtures/BigNatLiteralFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/BigNatLiteralAudit.hs",
         "test/fixtures/compiler/BigNatLiteralAuditNative.hs", "bin/export-boot.py",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
     },
     "floating-remainder": {
       "junit": ["thc.runtime.FloatingRemainderTest"],
@@ -747,7 +747,7 @@
       "outputs": ["build/floating-remainder"],
       "sources": ["test/haskell-fixtures/FloatingRemainderFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatingRemainderAudit.hs",
-        "test/fixtures/compiler/FloatingRemainderNative.hs", "examples/THC/InverseHyperbolic.hs"]
+        "test/fixtures/compiler/FloatingRemainderNative.hs", "src/examples/THC/InverseHyperbolic.hs"]
     },
     "float-decode": {
       "junit": ["thc.runtime.FloatDecodeTest"],
@@ -755,15 +755,15 @@
       "outputs": ["build/float-decode"],
       "sources": ["test/haskell-fixtures/FloatDecodeFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatDecodeAudit.hs",
-        "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "examples/THC/FloatDecode.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
+        "test/fixtures/compiler/FloatDecodeNative.hs", "bin/export-boot.py", "src/examples/THC/FloatDecode.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/BigNat.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Integer.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/Natural.hs-boot"]
     },
     "scalar-bitcasts": {
       "junit": ["thc.runtime.ScalarBitCastTest"],
@@ -1004,11 +1004,11 @@
         "test/fixtures/compiler/OriginalStackAudit.hs",
         "test/fixtures/compiler/OriginalStackAuditNative.hs",
         "test/fixtures/compiler/OriginalStackProof.json",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/CloneStack.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Stack/Decode.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc",
         "test/haskell-fixtures/StackFixtures.hs",
         "test/haskell-fixtures/FixtureSupport.hs",
         "test/haskell-fixtures/Main.hs",
@@ -1091,7 +1091,7 @@
         "test/haskell-fixtures/AlignedScalarMemoryFixtures.hs",
         "test/fixtures/compiler/AlignedScalarMemoryAudit.hs",
         "test/fixtures/compiler/AlignedScalarMemoryNative.hs",
-        "examples/StableWideCells.hs"
+        "src/examples/StableWideCells.hs"
       ]
     },
     "wide-char-address": {
@@ -1266,7 +1266,7 @@
         "thc.SelfTailProfileTest"
       ],
       "commands": [
-        {"argv": ["bin/export-core.sh", "examples/THC/Fixtures.hs"]},
+        {"argv": ["bin/export-core.sh", "src/examples/THC/Fixtures.hs"]},
         {"argv": ["bin/native-oracle.sh"], "stdout": "build/native/oracle.tsv"}
       ],
       "outputs": [
@@ -1275,10 +1275,10 @@
         "build/native/oracle.tsv"
       ],
       "sources": [
-        "examples/THC/Prim.hs",
-        "examples/THC/Fixtures.hs",
-        "examples/NativeOracle.hs",
-        "examples/THC/MapWorkload.hs",
+        "src/examples/THC/Prim.hs",
+        "src/examples/THC/Fixtures.hs",
+        "src/examples/NativeOracle.hs",
+        "src/examples/THC/MapWorkload.hs",
         "bin/native-oracle.sh"
       ]
     },
@@ -1404,14 +1404,14 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "bytearray"]}],
       "outputs": ["build/bytearray"],
       "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/ByteArrayAudit.hs", "bin/export-boot.py",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot"]
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot"]
     },
     "mutable-bytearrays": {
       "junit": ["thc.runtime.MutableByteArrayTest"],
@@ -1424,50 +1424,50 @@
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "compare-byte-arrays"]}],
       "outputs": ["build/compare-byte-arrays"],
       "sources": ["test/haskell-fixtures/ByteArrayFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs", "test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/CompareByteArraysAudit.hs", "bin/export-boot.py",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot"]
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot"]
     },
     "int8-arrays": {
       "junit": ["thc.runtime.Int8ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int8-arrays"]}],
       "outputs": ["build/int8-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int8ArrayAudit.hs", "examples/THC/Unboxed8Arrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int8ArrayAudit.hs", "src/examples/THC/Unboxed8Arrays.hs"]
     },
     "int16-arrays": {
       "junit": ["thc.runtime.Int16ArrayNativeTest", "thc.runtime.Int16BoundaryCompilationTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int16-arrays"]}],
       "outputs": ["build/int16-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int16ArrayAudit.hs", "examples/THC/Unboxed16Arrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int16ArrayAudit.hs", "src/examples/THC/Unboxed16Arrays.hs"]
     },
     "int32-arrays": {
       "junit": ["thc.runtime.Int32ArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int32-arrays"]}],
       "outputs": ["build/int32-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int32ArrayAudit.hs", "examples/THC/Unboxed32Arrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/Int32ArrayAudit.hs", "src/examples/THC/Unboxed32Arrays.hs"]
     },
     "int-arrays": {
       "junit": ["thc.runtime.IntArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "int-arrays"]}],
       "outputs": ["build/int-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/IntArrayAudit.hs", "examples/THC/UnboxedArrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/IntArrayAudit.hs", "src/examples/THC/UnboxedArrays.hs"]
     },
     "double-arrays": {
       "junit": ["thc.runtime.DoubleArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "double-arrays"]}],
       "outputs": ["build/double-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/DoubleArrayAudit.hs", "examples/THC/UnboxedDoubleArrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/DoubleArrayAudit.hs", "src/examples/THC/UnboxedDoubleArrays.hs"]
     },
     "float-word-arrays": {
       "junit": ["thc.runtime.FloatWordArrayNativeTest"],
       "commands": [{"argv": ["cabal", "run", "exe:thc-fixtures", "--offline", "--", "float-word-arrays"]}],
       "outputs": ["build/float-word-arrays"],
-      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatArrayAudit.hs", "test/fixtures/compiler/WordArrayAudit.hs", "examples/THC/UnboxedFloatArrays.hs", "examples/THC/UnboxedWordArrays.hs"]
+      "sources": ["test/haskell-fixtures/Main.hs", "thc.cabal", "test/fixtures/compiler/FloatArrayAudit.hs", "test/fixtures/compiler/WordArrayAudit.hs", "src/examples/THC/UnboxedFloatArrays.hs", "src/examples/THC/UnboxedWordArrays.hs"]
     },
     "live-async": {
       "junit": ["thc.runtime.LiveAsyncNativeTest", "thc.runtime.AsyncStrictEntryNativeTest"],

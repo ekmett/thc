@@ -19,7 +19,7 @@ main = do
     pure ()
 ```
 
-The [complete example](../examples/THC/RuntimeServices.hs) also shows thread,
+The [complete example](../src/examples/THC/RuntimeServices.hs) also shows thread,
 affinity, allocation and collector queries. The `THC` facade re-exports runtime
 identity/capabilities and the original [affinity API](cpu-affinity-api.md), but
 does not re-export hazardous internal diagnostics.
@@ -206,7 +206,7 @@ deopt counts, and zero does not establish code liveness or absence of deopts.
 cabal test runtime-services-api cpu-affinity-api -fdevelopment
 bash test/haskell-runtime/check-safe-haskell.sh
 ghc --make -XHaskell2010 -threaded -Wall -Werror -isrc/runtime \
-  examples/THC/RuntimeServices.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c \
+  src/examples/THC/RuntimeServices.hs src/runtime/cpu-affinity.c src/runtime/runtime-services.c \
   -main-is THC.RuntimeServices
 ```
 

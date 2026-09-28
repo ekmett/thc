@@ -33,7 +33,7 @@ dynamic-index probe still reaches unresolved cold error-formatting definitions
 including `GHC.Internal.Ix.$w$sindexError`. This slice does not claim arbitrary
 array programs, nor discard cold branches to accept a program.
 
-[The public examples](../examples/THC/UnboxedArrays.hs) cover duplicate
+[The public examples](../src/examples/THC/UnboxedArrays.hs) cover duplicate
 accumulations, ST read-after-write feedback, and an empty array. Two primitive
 fixtures additionally test independent allocations, repeated writes, and byte
 overwrites straddling adjacent Int elements. Their 393 inputs include both

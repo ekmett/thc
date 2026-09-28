@@ -140,8 +140,8 @@ The pinned Truffle 25.3.4.1 processor emits one large
 exceed the JVM's 64 KiB method limit there. This is instruction introspection,
 not one giant primop executor. The processor offers no option to split it.
 
-[`gradle/bytecode-metadata.gradle`](../gradle/bytecode-metadata.gradle) runs the
-[Java normalizers](../buildSrc/src/main/java/thc/buildlogic/BytecodeNormalizers.java).
+[`src/gradle/bytecode-metadata.gradle`](../src/gradle/bytecode-metadata.gradle) runs the
+[Java normalizers](../src/build/java/thc/buildlogic/BytecodeNormalizers.java).
 The metadata pass splits complete case/return groups into bounded private helpers at the end of
 `processMainJava`, before Gradle snapshots that task's output. Every argument
 description is retained verbatim; the interpreter and primop implementations are
@@ -158,7 +158,8 @@ and malformed-input controls. Add
 argument description in an existing generated source without modifying it.
 The check is also part of Gradle's `check` task.
 
-Build configuration uses Groovy, with Java build logic in `buildSrc`.
+Build configuration uses Groovy, with Java build logic in the included Gradle
+build at `src/build` and its helper sources under `src/build/java`.
 `processMainJava` runs the pinned annotation processor with `-proc:only`,
 then the pinned normalizers transform its generated sources in order.
 `compileJava` consumes original and normalized sources with `-proc:none`;

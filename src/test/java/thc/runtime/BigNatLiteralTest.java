@@ -36,8 +36,8 @@ class BigNatLiteralTest {
     private static final List<Long> SEEDS = seeds();
     private static List<Long> seeds() { var seeds = new ArrayList<>(list(Long.MIN_VALUE, Long.MAX_VALUE, -1000L, -17L, -1L)); for (long i = 0; i <= 16; i++) seeds.add(i); seeds.addAll(list(31L, 1L << 32)); return seeds; }
     private static List<String> vendorSources() {
-        var result = new ArrayList<String>(); for (var name : MODULES) for (var suffix : list(".hs", ".hs-boot")) result.add("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
-        result.addAll(list("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE")); return result;
+        var result = new ArrayList<String>(); for (var name : MODULES) for (var suffix : list(".hs", ".hs-boot")) result.add("nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Bignum/" + name + suffix);
+        result.addAll(list("nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/WordSize.h", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE")); return result;
     }
     private static <T> List<T> concat(List<T> first, List<T> second) { var result = new ArrayList<>(first); result.addAll(second); return result; }
     private Map<String, Object> evidence() throws Exception { return report(DIRECTORY + "/manifest.json"); }

@@ -8,8 +8,16 @@ import java.security.MessageDigest
 import org.gradle.process.JavaForkOptions
 import org.gradle.process.CommandLineArgumentProvider
 
+buildscript {
+    dependencies { classpath 'thc:build-logic' }
+}
+
 plugins {
     id "application"
+}
+
+tasks.named('wrapper') {
+    jarFile = file('src/gradle/wrapper/gradle-wrapper.jar')
 }
 repositories { mavenCentral() }
 
@@ -20,9 +28,9 @@ def python = providers.environmentVariable("THC_PYTHON").orElse(windowsHost ? "p
 // The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
 tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
 // The Windows runtime validates HSC receipts against the producer's same pinned catalog.
-tasks.processResources { from("config/ghc/9.14.1/windows-ghc-internal.json") { into("thc") } }
+tasks.processResources { from("etc/ghc/9.14.1/windows-ghc-internal.json") { into("thc") } }
 tasks.processResources {
-    from("third-party/licenses") {
+    from("nih/licenses") {
         include("*.txt")
         into("META-INF/licenses")
     }
@@ -44,9 +52,9 @@ def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
 }
 sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
 def graalVersion = "25.3.4.1"
-apply(from: "gradle/protocol-processor.gradle")
-apply(from: "gradle/materializable-api.gradle")
-apply(from: "gradle/protocol-runtime.gradle")
+apply(from: "src/gradle/protocol-processor.gradle")
+apply(from: "src/gradle/materializable-api.gradle")
+apply(from: "src/gradle/protocol-runtime.gradle")
 def protocolProcessor = tasks.named("protocolProcessorJar", Jar)
 // Additional languages are opt-in; the ordinary runtime stays language-neutral.
 def polyglotDemoRuntime = configurations.create("polyglotDemoRuntime")
@@ -64,9 +72,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     add(polyglotDemoRuntime.name, "org.graalvm.polyglot:js:$graalVersion")
 }
-apply(from: "gradle/windows-sulong.gradle")
-apply(from: "gradle/bytecode-metadata.gradle")
-apply(from: "gradle/java-build-tests.gradle")
+apply(from: "src/gradle/windows-sulong.gradle")
+apply(from: "src/gradle/bytecode-metadata.gradle")
+apply(from: "src/gradle/java-build-tests.gradle")
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
 
 // Process original sources once. The five pinned generated-source transforms
@@ -399,12 +407,12 @@ tasks.withType(Test).configureEach {
     inputs.files(fileTree("test/fixtures/compiler") { include("**/*.hs", "**/*.hsc") })
     inputs.file("test/fixtures/compiler/OriginalStackProof.json")
     inputs.files("src/driver/THC/Driver/Wired.hs", "src/driver/cbits/target-layout.c")
-    inputs.files(fileTree("third-party/pinned/ghc-9.14.1/libraries/ghc-internal") {
+    inputs.files(fileTree("nih/pinned/ghc-9.14.1/libraries/ghc-internal") {
         include("**/*.hs", "**/*.hs-boot", "**/*.hsc", "include/WordSize.h", "LICENSE")
     })
-    inputs.files("thc.cabal", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc")
+    inputs.files("thc.cabal", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/InfoProv/Types.hsc",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Heap/InfoTable.hsc")
     inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
     inputs.file("src/tools/primops/PrimopTools.hs")
     inputs.files(fileTree("bench/experiments") {
@@ -415,7 +423,7 @@ tasks.withType(Test).configureEach {
             "doublex2-bytearray/evidence-x86_64/captures/doublex2/input-provenance.json.gz")
     })
     inputs.file("thc.cabal")
-    inputs.files(fileTree("third-party/pinned/ghc-9.14.1/libraries/ghc-internal") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
+    inputs.files(fileTree("nih/pinned/ghc-9.14.1/libraries/ghc-internal") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
     inputs.files(fileTree("bin") {
         include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
             "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
@@ -1148,16 +1156,16 @@ tasks.withType(JavaCompile).configureEach { options.compilerArgs.addAll(["--add-
 def compileCbits = tasks.register("compileCbits", Exec) {
     inputs.files("bin/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
         "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c",
         "src/main/c/gmp-api.c", "src/main/c/windows-malloc.c",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/md5.c",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/include/md5.h")
-    inputs.files("third-party/pinned/ghc-9.14.1/rts/BeginPrivate.h", "third-party/pinned/ghc-9.14.1/rts/EndPrivate.h", "third-party/pinned/ghc-9.14.1/rts/Libdw.c", "third-party/pinned/ghc-9.14.1/rts/Libdw.h", "third-party/pinned/ghc-9.14.1/rts/LibdwPool.c", "third-party/pinned/ghc-9.14.1/rts/LibdwPool.h", "third-party/pinned/ghc-9.14.1/rts/RtsUtils.h")
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/md5.c",
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/include/md5.h")
+    inputs.files("nih/pinned/ghc-9.14.1/rts/BeginPrivate.h", "nih/pinned/ghc-9.14.1/rts/EndPrivate.h", "nih/pinned/ghc-9.14.1/rts/Libdw.c", "nih/pinned/ghc-9.14.1/rts/Libdw.h", "nih/pinned/ghc-9.14.1/rts/LibdwPool.c", "nih/pinned/ghc-9.14.1/rts/LibdwPool.h", "nih/pinned/ghc-9.14.1/rts/RtsUtils.h")
     inputs.files("src/main/c/text-api.c", "src/main/c/wait-status-api.c")
     inputs.files("src/main/c/bytestring-utf8-api.c")
-    inputs.file("third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c")
-    inputs.files("third-party/pinned/text-2.1.3/cbits/utils.c", "third-party/pinned/text-2.1.3/cbits/measure_off.c",
-        "third-party/pinned/text-2.1.3/cbits/reverse.c", "third-party/pinned/text-2.1.3/LICENSE", "third-party/pinned/openbsd-memchr-1.8.c")
+    inputs.file("nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c")
+    inputs.files("nih/pinned/text-2.1.3/cbits/utils.c", "nih/pinned/text-2.1.3/cbits/measure_off.c",
+        "nih/pinned/text-2.1.3/cbits/reverse.c", "nih/pinned/text-2.1.3/LICENSE", "nih/pinned/openbsd-memchr-1.8.c")
     outputs.dir(layout.buildDirectory.dir("generated/cbits"))
     outputs.upToDateWhen { false }
     commandLine(python.get(), "bin/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
@@ -1562,4 +1570,4 @@ if (windowsHost) {
 }
 tasks.named("windowsDenseSmokeTest") { mustRunAfter("windowsSmokeTest") }
 
-apply(from: "gradle/protocol-processor-tests.gradle")
+apply(from: "src/gradle/protocol-processor-tests.gradle")

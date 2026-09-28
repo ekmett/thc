@@ -28,7 +28,7 @@ prepareGhcBCO :: FilePath -> IO ()
 prepareGhcBCO root = do
   let directory = "build/ghc-bco"
       output = root </> directory
-      source = "examples/GhcBCO.hs"
+      source = "src/examples/GhcBCO.hs"
       driver = "test/fixtures/compiler/GhcBCONative.hs"
       entries = ["bcoConstant", "bcoApply", "bcoApplyTwo", "bcoFunction", "bcoArithmetic", "bcoBranch", "bcoLargeOperand", "bcoSharing"]
       stages = ["pre", "post"]
@@ -39,7 +39,7 @@ prepareGhcBCO root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "BCO format requires GHC 9.14.1")
   compiled <- runLogged 120 root logs "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-iexamples",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-isrc/examples",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   let values = map (read . BSC.unpack) (BSC.lines (commandStdout observations)) :: [Integer]

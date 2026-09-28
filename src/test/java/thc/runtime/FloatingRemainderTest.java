@@ -58,7 +58,7 @@ class FloatingRemainderTest {
         var manifest = json(DIR + "/manifest.json");
         assertEquals(1L, manifest.get("schema")); assertEquals("9.14.1", manifest.get("ghc")); assertEquals(NAMES, manifest.get("entries"));
         var inputs = new HashSet<>(list("test/fixtures/compiler/FloatingRemainderAudit.hs", "test/fixtures/compiler/FloatingRemainderNative.hs",
-            "examples/THC/InverseHyperbolic.hs", "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
+            "src/examples/THC/InverseHyperbolic.hs", "thc.cabal", "test/haskell-fixtures/Main.hs", "test/haskell-fixtures/FixtureSupport.hs",
             "test/haskell-fixtures/FloatingRemainderFixtures.hs", "bin/build-compiler.sh", "bin/export-core.sh", "bin/toolchain.sh", "bin/plugin.py",
             "bin/audit-core.py", "bin/core-capabilities.json", "src/main/resources/thc/scalar-primop-signatures.json"));
         for (var file : Objects.requireNonNull(new File(root, "src/compiler/THC").listFiles())) if (file.getName().endsWith(".hs")) inputs.add(root.toPath().relativize(file.toPath()).toString());

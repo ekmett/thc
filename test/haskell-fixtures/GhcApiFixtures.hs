@@ -87,7 +87,7 @@ prepareRecordFields root = do
 prepareGhcApi :: FilePath -> [String] -> IO ()
 prepareGhcApi root requested = do
   (auditRequested, probes) <- either die pure (ghcApiOptions requested)
-  let fixture = root </> "examples/standard-apps/ghc-api"
+  let fixture = root </> "src/examples/standard-apps/ghc-api"
       nativeDist = root </> "build/ghc-api/native-control"
       common = "build/ghc-api/logs"
       execute = runLogged 3600 root
@@ -138,7 +138,7 @@ prepareGhcApi root requested = do
     let commands = [built, located, native, managed]
     inputs <- hashes root (["test/haskell-fixtures/GhcApiFixtures.hs", "test/haskell-fixtures/GhcApiAudit.hs",
       "test/haskell-fixtures/FixtureSupport.hs"] ++
-      ["examples/standard-apps/ghc-api" </> path | path <-
+      ["src/examples/standard-apps/ghc-api" </> path | path <-
        ["cabal.project", "ghc-api-thc-check.cabal", probe </> "Main.hs", "subjects/Probe.hs"]])
     artifacts <- hashes root (auditArtifacts ++ [acquired </> "packages.json",
       acquired </> "native/cache/plan.json"] ++ concatMap commandArtifacts commands)

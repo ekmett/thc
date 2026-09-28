@@ -963,9 +963,9 @@ wiredGhcInternal :: ExportContext -> FilePath -> IO Value
 wiredGhcInternal context thcRoot = do
   when (Host.os == "mingw32") $ require (contextPlatform context == "x86_64-windows")
     "The pinned native Windows source recipe requires x86_64-windows"
-  windowsSpec <- if Host.os == "mingw32" then Just <$> readJson (thcRoot </> "config/ghc/9.14.1/windows-ghc-internal.json") else pure Nothing
+  windowsSpec <- if Host.os == "mingw32" then Just <$> readJson (thcRoot </> "etc/ghc/9.14.1/windows-ghc-internal.json") else pure Nothing
   names <- maybe (pure (map snd moduleSources)) (`field` "modules") windowsSpec
-  let packagePath = "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+  let packagePath = "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
   sources <- maybe (pure [(name, packagePath </> pinnedSourcePath name, digest) | (name, digest) <- sourceHashes]) (\spec -> do
     files <- field spec "files"
     forM files $ \item -> do

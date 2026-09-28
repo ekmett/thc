@@ -11,7 +11,7 @@ are different claims; each report identifies which it establishes.
 
 | Area | Reports |
 | --- | --- |
-| Core corpus | [Lazy lists, streams, sharing, trees and application](coverage.md); inputs in [coverage.json](../examples/coverage.json) |
+| Core corpus | [Lazy lists, streams, sharing, trees and application](coverage.md); inputs in [coverage.json](../src/examples/coverage.json) |
 | Containers | [IntMap, IntSet and Sequence](library-coverage.md); [breadth-first graph example](graph-example.md); [Map example and its diagnostic frontier](map-example.md); [Set source-binding audit](set-source-binding-audit.md) |
 | Formatting | [Int formatting](show-int.md), [Word and list formatting](show-word-list.md) |
 | Integer and Natural | [BigNat literals and original conversion workers](bignat-literals.md); this does not imply general large-integer arithmetic |

@@ -1,16 +1,16 @@
 [submodule "ghc-9.14.1"]
-	path = third-party/pinned/ghc-9.14.1
+	path = nih/pinned/ghc-9.14.1
 	url = https://github.com/ghc/ghc.git
 	shallow = true
 [submodule "bytestring-0.12.2.0"]
-	path = third-party/pinned/bytestring-0.12.2.0
+	path = nih/pinned/bytestring-0.12.2.0
 	url = https://github.com/haskell/bytestring.git
 	shallow = true
 [submodule "text-2.1.3"]
-	path = third-party/pinned/text-2.1.3
+	path = nih/pinned/text-2.1.3
 	url = https://github.com/haskell/text.git
 	shallow = true
 [submodule "zlib-1.2.11"]
-	path = third-party/pinned/zlib-1.2.11
+	path = nih/pinned/zlib-1.2.11
 	url = https://github.com/madler/zlib.git
 	shallow = true

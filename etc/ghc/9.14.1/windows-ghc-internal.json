@@ -35,7 +35,7 @@
     },
     {
       "path": "include/HsBaseConfig.h.in",
-      "source": "third-party/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in",
+      "source": "nih/pinned/ghc-9.14.1-generated/include/HsBaseConfig.h.in",
       "sha256": "45ab1cf2ee1b8c226941e0c084cf01f44f9f418a65483b336e847aae6459f4da"
     },
     {

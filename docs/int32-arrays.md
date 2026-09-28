@@ -18,7 +18,7 @@ scaling, so incomplete final elements and overflowed indices cannot be accessed.
 State is evaluated and validated before memory access, and failed reads do not
 publish their primitive Int result. Accesses are not atomic/concurrent APIs.
 
-`examples/THC/Unboxed32Arrays.hs` uses installed, unmodified `array-0.5.8.0`
+`src/examples/THC/Unboxed32Arrays.hs` uses installed, unmodified `array-0.5.8.0`
 public `accumArray`, `runSTUArray`, `newArray`, `readArray`, `writeArray`, and
 checked `(!)`. Bounds `(-3,4)` and observed indices `-3,0,4` are constants; GHC
 discharges those bounds checks. Duplicate accumulation and state-ordered

@@ -30,10 +30,10 @@ SIMD_ADDITIVE = {CAPABILITIES, BYTECODE_PROGRAM, BYTECODE_ROOT, SIMD_SPEC}
 POLYGLOT_TEST_ROOT = "src/polyglotTest/"
 HASKELL_TESTS = {"driver-tests": "test/haskell-driver/Main.hs", "primop-tools": "test/primop-tools/Main.hs",
                  "compact-core-tests": "test/compact-core/Main.hs"}
-DOCUMENTATION_PATHS = {"third-party/licenses/succinctly-MIT.txt"}
+DOCUMENTATION_PATHS = {"nih/licenses/succinctly-MIT.txt"}
 POLYGLOT_EXACT_INPUTS = {
     "build.gradle", "settings.gradle", "gradle.properties", "gradlew",
-    "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
+    "src/gradle/wrapper/gradle-wrapper.jar", "src/gradle/wrapper/gradle-wrapper.properties",
     "Makefile", "thc.cabal", "cabal.project", "Setup.hs", "bin/plugin.py",
     "bin/toolchain.sh", "bin/audit-core.py",
     "bin/polyglot-demo.sh", "bin/javascript-demo.sh",
@@ -45,8 +45,8 @@ POLYGLOT_EXACT_INPUTS = {
     "src/test/resources/thc/polyglot-abi.json",
 }
 POLYGLOT_INPUT_PREFIXES = (
-    POLYGLOT_TEST_ROOT, "buildSrc/", "gradle/", "src/compiler/THC/", "examples/THC/Polyglot",
-    "examples/THC/JavaScript", "src/main/java/thc/runtime/",
+    POLYGLOT_TEST_ROOT, "src/build/", "src/gradle/", "src/compiler/THC/", "src/examples/THC/Polyglot",
+    "src/examples/THC/JavaScript", "src/main/java/thc/runtime/",
 )
 TEST_ANNOTATION = r"@\s*(?:org\.junit\.(?:jupiter\.api|jupiter\.params)\.)?(?:Test|TestFactory|TestTemplate|ParameterizedTest|RepeatedTest)\b"
 LIFECYCLE = r"@\s*(?:org\.junit\.jupiter\.api\.)?(?:BeforeEach|AfterEach|BeforeAll|AfterAll)\b"

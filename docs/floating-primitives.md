@@ -91,7 +91,7 @@ JAVA_TOOL_OPTIONS=-Dthc.handoffSlabs=true ./gradlew --no-daemon test --rerun --t
 
 The Haskell producer records 22,520 ordered native rows: 936 binary32 and 4,694
 binary64 encodings across direct, opaque-worker, genuine public `exponent`
-and [command-line example](../examples/THC/FloatDecode.hs) entries.
+and [command-line example](../src/examples/THC/FloatDecode.hs) entries.
 Inputs cover both signs, every exponent code, every leading subnormal
 bit and neighbors, boundary fractions and deterministic integer-generated cases.
 Java independently derives fields with unbounded integer arithmetic and checks
@@ -132,7 +132,7 @@ from `GHC.Prim`, since GHC 9.14.1's `GHC.Exts` does not export them.
 
 `cabal run exe:thc-fixtures --offline -- floating-remainder` records 8,876
 argument-fed native rows and 26 strict pre/post Core audits, including the
-[runnable inverse-hyperbolic example](../examples/THC/InverseHyperbolic.hs).
+[runnable inverse-hyperbolic example](../src/examples/THC/InverseHyperbolic.hs).
 `FloatingRemainderTest` covers every leading subnormal bit, formula-switch
 neighbors, domain endpoints, finite extremes and deterministic bit patterns.
 Both backends and inlining modes check every interpreted/compiled row, exact

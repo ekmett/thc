@@ -284,7 +284,7 @@ class FastSelectionTest(unittest.TestCase):
                 self.assertEqual(junit, selected["junit"]["classes"])
 
     def test_retained_attribution_retains_only_smoke(self):
-        for path in ("third-party/licenses/succinctly-MIT.txt",):
+        for path in ("nih/licenses/succinctly-MIT.txt",):
             with self.subTest(path=path):
                 before = self.git("rev-parse", "HEAD")
                 self.write(path, "Documentation or license update\n")
@@ -316,8 +316,9 @@ class FastSelectionTest(unittest.TestCase):
                      "src/compiler/THC/Plugin.hs", "src/main/java/thc/runtime/Calls.java",
                      "src/main/java/thc/runtime/WindowsMalloc.java", "src/main/java/thc/runtime/StdioHostAbi.java",
                      "bin/audit-core.py", "build.gradle", "Makefile",
-                     "buildSrc/src/main/java/thc/buildlogic/BytecodeNormalizers.java", "gradle/bytecode-metadata.gradle",
-                     "bin/plugin.py", "gradlew", "gradle/wrapper/gradle-wrapper.properties"):
+                     "src/build/build.gradle", "src/build/settings.gradle",
+                     "src/build/java/thc/buildlogic/BytecodeNormalizers.java", "src/gradle/bytecode-metadata.gradle",
+                     "bin/plugin.py", "gradlew", "src/gradle/wrapper/gradle-wrapper.properties"):
             with self.subTest(path=path):
                 self.write(path, "changed\n")
                 self.commit()
@@ -954,9 +955,9 @@ private String text = "class FakeString { @Test }";
         changed = ["test/fixtures/compiler/CBVCoercionAudit.hs",
                    "test/fixtures/compiler/DataToTagAudit.hs",
                    "test/fixtures/compiler/MutableByteArraySizeAudit.hs",
-                   "examples/THC/Unboxed8Arrays.hs",
-                   "examples/THC/Unboxed16Arrays.hs",
-                   "examples/THC/Unboxed32Arrays.hs"]
+                   "src/examples/THC/Unboxed8Arrays.hs",
+                   "src/examples/THC/Unboxed16Arrays.hs",
+                   "src/examples/THC/Unboxed32Arrays.hs"]
         for path in changed:
             self.write(path, "fixture before\n")
         base = self.commit()
@@ -1065,7 +1066,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_thread_inventory_lowering_and_example_keep_native_and_structural_owners(self):
         self.assertEqual({"thc.runtime.GuestThreadInventoryTest", "thc.runtime.ThreadInventoryNativeTest"},
                          set(self.family("ThreadObservation")["junit"]))
-        for path in ("examples/ThreadInventory.hs", "test/fixtures/compiler/ThreadInventoryNative.hs",
+        for path in ("src/examples/ThreadInventory.hs", "test/fixtures/compiler/ThreadInventoryNative.hs",
                      "test/fixtures/compiler/CallbackIdentityNative.hs", "test/fixtures/compiler/callback-identity.c",
                      "test/haskell-fixtures/ThreadInventoryFixtures.hs", "test/haskell-fixtures/Main.hs"):
             self.assertIn("thc.runtime.ThreadInventoryNativeTest", self.policy["owners"][path]["junit"])
@@ -1100,7 +1101,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_fixture_owners_match_the_preparation_manifest(self):
         fixture = json.loads(Path(__file__).with_name("fast-fixtures.json").read_text())
         owners = self.policy["owners"]
-        native_only = {"examples/NativeOracle.hs", "examples/THC/MapWorkload.hs",
+        native_only = {"src/examples/NativeOracle.hs", "src/examples/THC/MapWorkload.hs",
                        "bin/native-oracle.sh"}
         source_groups = {}
         for group in fixture["groups"].values():
@@ -1249,7 +1250,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
         for path in ("src/test/java/thc/runtime/Int16ArrayNativeTest.java",
                      "src/test/java/thc/runtime/ArrayCoreEvidence.java",
                      "test/fixtures/compiler/Int16ArrayAudit.hs",
-                     "examples/THC/Unboxed16Arrays.hs", "test/haskell-fixtures/Main.hs"):
+                     "src/examples/THC/Unboxed16Arrays.hs", "test/haskell-fixtures/Main.hs"):
             self.assertTrue(expected <= set(self.policy["owners"][path]["junit"]), path)
         self.assertTrue(expected <= self.classes)
 

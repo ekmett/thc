@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Edward Kmett <ekmett@gmail.com>
 // SPDX-License-Identifier: BSD-2-Clause
 // Adapted from Everett include/everett/rank.h at
-// eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca. See third-party/licenses/everett-BSD-2-Clause.txt.
+// eaa5ff3ccdb970cd684d8a01fe5fcea2d3bc23ca. See nih/licenses/everett-BSD-2-Clause.txt.
 package thc;
 
 public final class CoreJsonRank {

@@ -84,7 +84,7 @@ prepareOriginalStack root = do
         "test/haskell-fixtures/Main.hs", "thc.cabal", proofResource,
         "bin/export-core.sh", "bin/build-compiler.sh", "bin/toolchain.sh", "src/compiler/THC/Plugin.hs",
         "src/compiler/THC/CBV.hs", "src/compiler/THC/Demands.hs", "src/compiler/THC/Sources.hs", "src/compiler/THC/Wired.hs", "bin/plugin.py",
-        "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"] ++ map ("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" ++)
+        "nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE"] ++ map ("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" ++)
         ["GHC/Internal/Stack/CloneStack.hs", "GHC/Internal/Stack/Decode.hs",
          "GHC/Internal/InfoProv/Types.hsc", "GHC/Internal/Heap/InfoTable.hsc"]
   proofHash <- hashFile (root </> proofResource)
@@ -109,7 +109,7 @@ exportOriginalStackSource :: FilePath -> FilePath -> IO ()
 exportOriginalStackSource root directory = do
   ghc <- maybe "ghc" id <$> lookupEnv "GHC"
   ghcPkg <- maybe "ghc-pkg" id <$> lookupEnv "GHC_PKG"
-  let sourceRoot = root </> "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+  let sourceRoot = root </> "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
   mapM_ (\(path, expected) -> do
     observed <- hashFile (sourceRoot </> path)
     unless (observed == expected) (die ("Changed pinned original source: " ++ path))) Wired.sourceHashes
@@ -185,7 +185,7 @@ prepareOriginalStackFormatter root = do
         "bin/export-core.sh","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/CBV.hs","src/compiler/THC/Demands.hs","src/compiler/THC/Sources.hs","src/compiler/THC/Wired.hs",
         "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        map (("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/" ++) . fst) Wired.sourceHashes ++
+        map (("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" ++) . fst) Wired.sourceHashes ++
         ["bin" </> name | name <- sort scriptNames, "core_" `isPrefixOf` name, ".py" `isSuffixOf` name]
       artifacts = originals ++ [path | (_,path,_) <- stages] ++ [binary] ++ map fst audits ++
         concatMap commandArtifacts commands ++ generatedSources ++ [layout, directory </> "originals/generated.json"]

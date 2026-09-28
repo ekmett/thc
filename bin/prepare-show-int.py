@@ -99,7 +99,7 @@ def main():
         sources = [*FIXTURES, Path(__file__).resolve(), ROOT/'bin/show_int_model.py', ROOT/'bin/export-boot.py',
                    ROOT/'bin/build-compiler.sh', ROOT/'bin/export-core.sh', ROOT/'bin/toolchain.sh',
                    *sorted((ROOT/'src/compiler/THC').glob('*.hs')), *audit_inputs(),
-                   ROOT/'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Show.hs', ROOT/'third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE']
+                   ROOT/'nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Show.hs', ROOT/'nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE']
         artifacts = [OUT/'requests.tsv', OUT/'oracle.tsv', OUT/'boot/boot-provenance.json', *sorted(OUT.glob('*.audit.json'))]
         artifacts += [p for folder in ('pre-core', 'post-core', 'boot/core', 'native') for p in sorted((OUT/folder).rglob('*')) if p.is_file()]
         installed = Path(subprocess.check_output([ghc_pkg, 'field', 'ghc-internal', 'import-dirs', '--simple-output'], text=True).strip())/'GHC/Internal/Show.dyn_hi'

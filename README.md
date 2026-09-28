@@ -255,10 +255,10 @@ describe implemented protocols and opt-in experiments.
   command-line driver; [`test/`](test/) contains its Cabal fixtures and checks.
 * [`src/cbd/`](src/cbd/) implements compact Core storage and inspection.
 * [`src/runtime/`](src/runtime/) provides the public Haskell runtime API.
-* [`third-party/pinned/`](third-party/pinned/) pins upstream Git submodules; [`third-party/licenses/`](third-party/licenses/) collects notices.
+* [`nih/pinned/`](nih/pinned/) pins upstream Git submodules; [`nih/licenses/`](nih/licenses/) collects notices.
 * [`src/main/`](src/main/) and [`src/test/`](src/test/) contain the Truffle
   runtime and its tests.
-* [`examples/`](examples/) contains Haskell programs and the native oracle.
+* [`src/examples/`](src/examples/) contains Haskell programs and the native oracle.
 * [`bin/`](bin/) contains build, audit, benchmark and graph drivers.
 * [The architecture guide](docs/architecture.md) describes the current system
   and planned work. [The documentation index](docs/README.md) groups coverage

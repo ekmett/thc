@@ -30,7 +30,7 @@ resolve a layout through the global class registry on the tag-reading path.
 
 Run `bin/try.sh` from a fresh checkout. It builds the exporter, prepares the
 native oracles and runs the JVM tests. The additional corpus is described in
-[`examples/coverage.json`](../examples/coverage.json); it currently has 28 entries
+[`src/examples/coverage.json`](../src/examples/coverage.json); it currently has 28 entries
 and 507 distinct entry/input pairs, alongside the original fixtures and Map.
 
 `GHC=ghc cabal run exe:thc-primops -- coverage` writes `build/primop-coverage.json`

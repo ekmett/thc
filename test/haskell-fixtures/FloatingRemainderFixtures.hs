@@ -75,7 +75,7 @@ prepareFloatingRemainder root = do
   let dir = "build/floating-remainder"
       source = "test/fixtures/compiler/FloatingRemainderAudit.hs"
       driver = "test/fixtures/compiler/FloatingRemainderNative.hs"
-      example = "examples/THC/InverseHyperbolic.hs"
+      example = "src/examples/THC/InverseHyperbolic.hs"
       binary = dir </> "native/oracle"
       logs = dir </> "commands"
       input = dir </> "inputs.tsv"
@@ -95,7 +95,7 @@ prepareFloatingRemainder root = do
     _ -> die "Floating remainder requires native 64-bit GHC"
   writeFile (root </> input) (unlines [unwords [name,show a,show b] | (name,a,b) <- requests])
   compiled <- runLogged 300 root logs "native-build" [] ghc
-    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-iexamples",
+    ["--make","-O2","-fforce-recomp","-dcore-lint","-dstg-lint","-itest/fixtures/compiler","-isrc/examples",
      "-odir",root </> dir </> "native","-hidir",root </> dir </> "native",driver,"-o",root </> binary]
   executed <- runLoggedWithInput input 120 root logs "native-oracle" [] (root </> binary) []
   let parse line = case words line of

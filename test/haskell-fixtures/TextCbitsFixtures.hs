@@ -100,8 +100,8 @@ prepareTextCbits root = do
     pure ()
   inputs <- hashes root [source,nativeSource,"test/haskell-fixtures/TextCbitsFixtures.hs",
     "bin/core_original_foreign.py","bin/audit-core.py","bin/core-capabilities.json",
-    "third-party/pinned/text-2.1.3/cbits/utils.c","third-party/pinned/text-2.1.3/cbits/measure_off.c","third-party/pinned/text-2.1.3/cbits/reverse.c",
-    "third-party/pinned/text-2.1.3/LICENSE","third-party/pinned/openbsd-memchr-1.8.c",
+    "nih/pinned/text-2.1.3/cbits/utils.c","nih/pinned/text-2.1.3/cbits/measure_off.c","nih/pinned/text-2.1.3/cbits/reverse.c",
+    "nih/pinned/text-2.1.3/LICENSE","nih/pinned/openbsd-memchr-1.8.c",
     "src/main/c/text-api.c","bin/build-cbits.py"]
   artifacts <- hashes root [directory </> file | file <- ["inputs.tsv","oracle.tsv",
     "pre-core/TextCbitsAudit.json","post-core/TextCbitsAudit.json","pre-audit.json","post-audit.json","exposed-text.conf",

@@ -31,7 +31,7 @@ parser.add_argument('--pretty-diagnostics', action='store_true',
 args = parser.parse_args()
 build = args.build_dir.resolve()
 (build / 'core').mkdir(parents=True, exist_ok=True)
-source_root = root / 'third-party/pinned/ghc-9.14.1/libraries/ghc-internal'
+source_root = root / 'nih/pinned/ghc-9.14.1/libraries/ghc-internal'
 module_root = source_root / 'src'
 package_url = 'https://raw.githubusercontent.com/ghc/ghc/ghc-9.14.1-release/libraries/ghc-internal/'
 base_url = package_url + 'src/'

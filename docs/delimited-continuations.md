@@ -30,7 +30,7 @@ comparisons, pool cleanup and code-validity assertions.
 
 ## Established slice and remaining work
 
-The [Haskell examples](../examples/DelimitedContinuations.hs) cover plain prompts,
+The [Haskell examples](../src/examples/DelimitedContinuations.hs) cover plain prompts,
 aborting a suffix, two resumes with shared state and an unrepeated prefix,
 nonmatching and same-tag nested prompts, captured catch/mask boundaries, an
 escaped continuation resumed twice, and ambient masking. These are synchronous

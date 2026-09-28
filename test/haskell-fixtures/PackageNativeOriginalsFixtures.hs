@@ -218,13 +218,13 @@ preparePackageNativeOriginals root = do
   unless ("requires the configured zlib 1.2.11 header" `BSC.isInfixOf` commandStderr badHeader)
     (fail "configured zlib version negative control did not reach the provider's rejection")
   let altered = output </> "negative-source"
-      sourceTree = root </> "third-party/pinned/zlib-1.2.11"
+      sourceTree = root </> "nih/pinned/zlib-1.2.11"
   pinned <- files sourceTree
   forM_ pinned $ \path -> do
     let destination = altered </> makeRelative root path
     createDirectoryIfMissing True (takeDirectory destination)
     copyFile path destination
-  appendFile (altered </> "third-party/pinned/zlib-1.2.11/adler32.c") "\n/* altered negative-control source */\n"
+  appendFile (altered </> "nih/pinned/zlib-1.2.11/adler32.c") "\n/* altered negative-control source */\n"
   rejected <- tryIOError (zlibChecksumSources altered)
   case rejected of
     Left problem | "pinned zlib checksum source differs" `isInfixOf` show problem -> pure ()

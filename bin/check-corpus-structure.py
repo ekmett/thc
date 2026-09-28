@@ -126,7 +126,7 @@ class CorpusChecks:
         self.root = root
         self.build = root / "build/corpus"
         self.facts = facts
-        manifest = read_json(root / "examples/coverage.json")
+        manifest = read_json(root / "src/examples/coverage.json")
         require(manifest.get("schema") == 1, "Expected coverage manifest schema 1")
         self.groups = {}
         self.modules = {}

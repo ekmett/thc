@@ -1,6 +1,6 @@
 # Executable Haskell fixtures
 
-The broader [coverage corpus](../docs/coverage.md) is described by
+The broader [coverage corpus](../../docs/coverage.md) is described by
 [`coverage.json`](coverage.json), with separate ordinary list/function/tree and
 numeric modules. `bin/prepare-corpus.py` generates its native driver and
 strict Core bundles; `bin/try.sh` runs both backends through interpreted,
@@ -20,12 +20,12 @@ THC_BACKEND=ast build/install/thc/bin/thc build/floating-remainder/post-core/THC
 ```
 
 Both commands return `1`: the smallest positive subnormal is unchanged at
-binary64 precision. See the [floating guide](../docs/floating-primitives.md)
+binary64 precision. See the [floating guide](../../docs/floating-primitives.md)
 for the inverse functions, min/max operand rules and four-field decomposition.
 
 [`THC.FloatDecode`](THC/FloatDecode.hs) exposes the ordinary `Float` and `Double`
 `exponent` methods through integer-bit-pattern inputs, matching THC's scalar CLI.
-The [floating guide](../docs/floating-primitives.md#integer-decomposition-and-public-exponent)
+The [floating guide](../../docs/floating-primitives.md#integer-decomposition-and-public-exponent)
 describes the native-backed corpus, decomposition primops and exact scope.
 
 ```sh
@@ -168,4 +168,4 @@ necessary before making performance claims.
 
 [`StableWideCells.hs`](StableWideCells.hs) stores a caller-owned StablePtr and a
 supplementary-plane character in aligned array slots. See the
-[storage contract and native/compiled checks](../docs/aligned-scalar-memory.md).
+[storage contract and native/compiled checks](../../docs/aligned-scalar-memory.md).

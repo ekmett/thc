@@ -1,6 +1,8 @@
 .gradle/
 .gradle-user-home/
 build/
+!src/build/
+/src/build/build/
 work/
 *.hi
 *.o

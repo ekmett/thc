@@ -560,7 +560,7 @@ public class BoxedCasTest {
         assertEquals(false, manifest.get("installedArtifactsHashed"));
         assertEquals(false, manifest.get("runtimeVerified"));
         var inputs = new HashSet<>(List.of("test/fixtures/compiler/BoxedCasAudit.hs",
-            "test/fixtures/compiler/BoxedCasNative.hs", "examples/THC/BoxedCasCounter.hs",
+            "test/fixtures/compiler/BoxedCasNative.hs", "src/examples/THC/BoxedCasCounter.hs",
             "test/haskell-fixtures/BoxedCasFixtures.hs", "test/haskell-fixtures/FixtureSupport.hs",
             "test/haskell-fixtures/Main.hs", "thc.cabal", "bin/export-core.sh", "bin/build-compiler.sh",
             "bin/toolchain.sh", "bin/plugin.py", "bin/audit-core.py", "bin/core-capabilities.json",

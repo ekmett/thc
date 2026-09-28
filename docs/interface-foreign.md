@@ -279,7 +279,7 @@ zero. Checked writable output and read-only input views borrow both allocation
 owners under the existing ordered locks; out-of-range, immutable, pointer-bearing
 or aliased output storage is rejected before C access. Empty slices write nothing.
 
-The original sources and license are under `third-party/pinned/text-2.1.3`.
+The original sources and license are under `nih/pinned/text-2.1.3`.
 Their supported non-atomic configuration selects the original SSE/word/tail
 code, avoiding a native CPUID/AVX dispatcher inside Sulong. This is not generic
 installed-package C acquisition. The original portable OpenBSD `memchr` is

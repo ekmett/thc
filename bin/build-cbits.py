@@ -77,7 +77,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    reference = ROOT / "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+    reference = ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
     md5_sources = {name: reference / ("cbits" if name.endswith(".c") else "include") / name for name in PINNED}
     for name, expected in PINNED.items():
         data = md5_sources[name].read_bytes()
@@ -99,19 +99,19 @@ def main():
     config = list(libdir.rglob("HsBaseConfig.h"))
     if len(config) != 1:
         raise SystemExit(f"Expected one pinned ghc-internal HsBaseConfig.h, got {config}")
-    strerror = ROOT / "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
+    strerror = ROOT / "nih/pinned/ghc-9.14.1/libraries/ghc-internal/cbits/strerror.c"
     if hashlib.sha256(strerror.read_bytes()).hexdigest() != STRERROR_SHA256:
         raise SystemExit("Original GHC 9.14.1 strerror.c changed")
-    libdw = ROOT / "third-party/pinned/ghc-9.14.1/rts"
+    libdw = ROOT / "nih/pinned/ghc-9.14.1/rts"
     for name, expected in LIBDW_SHA256.items():
         if hashlib.sha256((libdw / name).read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original GHC 9.14.1 {name} changed")
-    text_source = ROOT / "third-party/pinned/text-2.1.3"
-    text_sources = {name: ROOT / "third-party/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name for name in TEXT_SHA256}
+    text_source = ROOT / "nih/pinned/text-2.1.3"
+    text_sources = {name: ROOT / "nih/pinned/openbsd-memchr-1.8.c" if name == "openbsd-memchr.c" else text_source / name for name in TEXT_SHA256}
     for name, expected in TEXT_SHA256.items():
         if hashlib.sha256(text_sources[name].read_bytes()).hexdigest() != expected:
             raise SystemExit(f"Original text 2.1.3 {name} changed")
-    bytestring_source = ROOT / "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
+    bytestring_source = ROOT / "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c"
     if hashlib.sha256(bytestring_source.read_bytes()).hexdigest() != BYTESTRING_UTF8_SHA256:
         raise SystemExit("Original ByteString 0.12.2.0 is-valid-utf8.c changed")
     output = args.output.resolve() / "thc/cbits"

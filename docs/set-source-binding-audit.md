@@ -74,7 +74,7 @@ for mode in pre post; do
     bin/export-core.sh -i"$PWD/vendor/containers-0.8/src" \
       -I"$PWD/vendor/containers-0.8/include" \
       -fplugin-opt=Thc.Plugin:closure=setAggregate "${flags[@]}" \
-      examples/THC/SetWorkload.hs || exit
+      src/examples/THC/SetWorkload.hs || exit
   python3 bin/audit-core.py --entry setAggregate \
     --output "build/set-identity-$mode/audit.json" \
     "build/set-identity-$mode/core" build/libraries/boot/core

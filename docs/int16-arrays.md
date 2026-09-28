@@ -53,7 +53,7 @@ contradictory positive contracts still fail during loading.
 
 ## Genuine public examples
 
-`examples/THC/Unboxed16Arrays.hs` uses installed, unmodified `array-0.5.8.0`
+`src/examples/THC/Unboxed16Arrays.hs` uses installed, unmodified `array-0.5.8.0`
 with GHC 9.14.1: public `accumArray`, `runSTUArray`, `newArray`, `readArray`,
 `writeArray`, and checked `(!)`. Bounds `(-3,4)` and observed indices `-3,0,4`
 are constants, so GHC discharges their bounds checks naturally. Duplicate

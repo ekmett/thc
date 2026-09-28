@@ -346,5 +346,5 @@ registered primop cannot make an otherwise unsupported whole program runnable.
 
 When changing a behavior above, update this page, its detailed guide and the
 machine-readable [capability notes](../bin/core-capabilities.json) together.
-Keep concrete counterexamples/rejections separate from coverage percentages and
+Keep concrete countersrc/examples/rejections separate from coverage percentages and
 from historical validation reports.

@@ -102,7 +102,7 @@ prepareByteStringUtf8 root = do
   scripts <- listDirectory (root </> "bin")
   let commands = [version,registration,initialized,registered,compiled,observed] ++ concat [exported:map snd audits | (_,_,exported,audits) <- stages]
       inputs = sort $ [source,driver,"thc.cabal","test/haskell-fixtures/Main.hs",
-        "third-party/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c","src/main/c/bytestring-utf8-api.c","bin/build-cbits.py",
+        "nih/pinned/bytestring-0.12.2.0/cbits/is-valid-utf8.c","src/main/c/bytestring-utf8-api.c","bin/build-cbits.py",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/ByteStringUtf8Fixtures.hs",
         "bin/audit-core.py","bin/core-capabilities.json","bin/build-compiler.sh","bin/export-core.sh",
         "bin/toolchain.sh","bin/plugin.py","src/main/resources/thc/scalar-primop-signatures.json"] ++

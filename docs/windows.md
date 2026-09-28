@@ -42,7 +42,7 @@ real Cabal-registered plugin archive; it does not invent a Unix shared-library
 manifest or request an unavailable dynamic library way.
 
 ~~~powershell
-./bin/export-core.ps1 examples/THC/Fixtures.hs
+./bin/export-core.ps1 src/examples/THC/Fixtures.hs
 $modules = 'build/core/THC.Prim.json,build/core/THC.Fixtures.json'
 $env:THC_BACKEND = 'ast'
 ./build/install/thc/bin/thc.bat $modules sumLoop 100
@@ -79,9 +79,9 @@ application Core, avoiding the batch launcher's command-length limit.
 
 Stock Windows GHC interfaces do not contain all executable Core needed by this
 support library. On a cold cache, THC checks the GHC 9.14.1 submodule's selected
-source files against `config/ghc/9.14.1/windows-ghc-internal.json` and builds a
+source files against `etc/ghc/9.14.1/windows-ghc-internal.json` and builds a
 private source graph. The one release-generated header absent from upstream Git
-is retained unchanged under `third-party/pinned/ghc-9.14.1-generated`. Native
+is retained unchanged under `nih/pinned/ghc-9.14.1-generated`. Native
 `hsc2hs` uses the selected Windows headers; GHC orders 211 modules and 24 boot
 interfaces. The compiler-provided virtual `GHC.Internal.Prim` has no source body
 in this graph. The selected x86_64 Windows compiler must use its GMP backend.

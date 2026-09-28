@@ -36,10 +36,10 @@ final class ByteArrayFixtureEvidence {
     private static final Map<String, String> drivers = Map.of("bytearray", "NativeByteArray.hs", "mutable-bytearrays",
         "NativeMutableByteArrays.hs", "compare-byte-arrays", "NativeCompareByteArrays.hs");
     private static final Set<String> originalSources =
-        Set.of("third-party/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
-            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
-            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
-            "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot", "third-party/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot");
+        Set.of("nih/pinned/ghc-9.14.1/libraries/ghc-internal/LICENSE", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Base.hs",
+            "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/List.hs", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Exception/Type.hs-boot",
+            "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/IO.hs-boot", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Num.hs-boot",
+            "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Enum.hs-boot", "nih/pinned/ghc-9.14.1/libraries/ghc-internal/src/GHC/Internal/Real.hs-boot");
     private static Map<String, Object> read(File root, String path) throws IOException {
         return (Map<String, Object>) Json.parse(Files.readString(new File(root, path).toPath()));
     }

@@ -110,7 +110,7 @@ prepareWindowsCodePages root = do
       modules = ["GHC.Internal.Windows","GHC.Internal.IO.Encoding.CodePage","GHC.Internal.IO.Encoding.CodePage.API"]
       relative name = map (\c -> if c == '.' then '/' else c) name
       sources = ["src/" ++ relative name ++ ".hs" | name <- modules]
-      upstream = root </> "third-party/pinned/ghc-9.14.1/libraries/ghc-internal"
+      upstream = root </> "nih/pinned/ghc-9.14.1/libraries/ghc-internal"
   createDirectoryIfMissing True overlay
   createDirectoryIfMissing True output
   stale <- doesFileExist (root </> directory </> "manifest.json")
@@ -118,7 +118,7 @@ prepareWindowsCodePages root = do
   version <- execute "version" [] ghc ["--numeric-version"]
   unless (oneLine version == "9.14.1") (die "Windows code pages require pinned GHC 9.14.1")
   library <- execute "libdir" [] ghc ["--print-libdir"]
-  catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "config/ghc/9.14.1/windows-ghc-internal.json")
+  catalog <- either die pure . eitherDecodeStrict =<< Bytes.readFile (root </> "etc/ghc/9.14.1/windows-ghc-internal.json")
   upstreamIdentity <- field "upstream" catalog :: IO Value
   inventory <- field "files" catalog :: IO [Value]
   moduleInputs <- forM sources $ \path -> do
@@ -224,7 +224,7 @@ prepareWindowsCodePages root = do
   afterHashes <- hashes root usedSources
   unless (sourceHashes == afterHashes) (die "Compiling declaration interfaces changed upstream sources")
   let commands = [version,library,registration,rtsRegistration] ++ compiled ++ audits
-      inputs = [source,"config/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
+      inputs = [source,"etc/ghc/9.14.1/windows-ghc-internal.json","thc.cabal","test/haskell-fixtures/Main.hs",
         "test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/WindowsCodePageFixtures.hs",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/Interface.hs","bin/audit-core.py","bin/core_original_foreign.py",
         "bin/core-capabilities.json","src/main/java/thc/runtime/CoreOriginalStdio.java", "src/main/java/thc/runtime/OriginalStdioOp.java","src/main/c/windows-directory-abi.c"]

@@ -28,7 +28,7 @@ prepareDelimitedContinuations :: FilePath -> IO ()
 prepareDelimitedContinuations root = do
   let directory = "build/delimited-continuations"
       output = root </> directory
-      source = "examples/DelimitedContinuations.hs"
+      source = "src/examples/DelimitedContinuations.hs"
       driver = "test/fixtures/compiler/DelimitedContinuationsNative.hs"
       entries = ["promptPure", "abortSuffix", "resumeTwice", "nestedPrompts", "sameTagNearest", "capturedCatch", "capturedMask", "escapedResume", "ambientMask", "resumedTail", "resumedJoin", "resumedScalar", "recapturedMask", "resumedApplication", "resumedScalarApplication", "polymorphicApplications", "polymorphicScalarApplications"]
       stages = ["pre", "post"]
@@ -39,7 +39,7 @@ prepareDelimitedContinuations root = do
   version <- runLogged 30 root logs "ghc-version" [] ghc ["--numeric-version"]
   unless (commandStdout version == "9.14.1\n") (die "Delimited continuations require GHC 9.14.1")
   compiled <- runLogged 120 root logs "native-build" [] ghc
-    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-iexamples",
+    ["--make", "-O2", "-dynamic", "-fforce-recomp", "-dcore-lint", "-dstg-lint", "-isrc/examples",
      "-odir", native, "-hidir", native, driver, "-o", native </> "oracle"]
   observations <- runLogged 30 root logs "native-run" [] (output </> "native/oracle") []
   let values = map (read . BSC.unpack) (BSC.lines (commandStdout observations)) :: [Integer]

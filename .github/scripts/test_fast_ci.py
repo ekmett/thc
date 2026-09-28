@@ -49,9 +49,9 @@ class FastRunnerTest(unittest.TestCase):
 
     def test_gradle_cache_identity_covers_groovy_and_java_build_logic_not_outputs(self):
         names = ("build.gradle", "settings.gradle", "gradle.properties", "gradlew",
-                 "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
-                 ".github/scripts/fast_ci.init.gradle", "gradle/bytecode-metadata.gradle",
-                 "buildSrc/build.gradle", "buildSrc/src/main/java/thc/buildlogic/Normalizer.java")
+                 "src/gradle/wrapper/gradle-wrapper.jar", "src/gradle/wrapper/gradle-wrapper.properties",
+                 ".github/scripts/fast_ci.init.gradle", "src/gradle/bytecode-metadata.gradle",
+                 "src/build/build.gradle", "src/build/settings.gradle", "src/build/java/thc/buildlogic/Normalizer.java")
         for name in names:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,16 +74,27 @@ class FastRunnerTest(unittest.TestCase):
                 self.assertNotEqual(original, key(), name)
                 path.write_text(before)
                 self.assertEqual(original, key(), name)
-            for name in ("buildSrc/build/generated/Ignore.java", "buildSrc/.gradle/Ignore.gradle"):
+            for name in ("src/build/build/generated/Ignore.java", "src/build/.gradle/Ignore.gradle"):
                 path = self.root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("not source")
                 self.assertEqual(original, key(), name)
-            extra = self.root / "buildSrc/src/main/java/thc/buildlogic/Added.java"
+            extra = self.root / "src/build/java/thc/buildlogic/Added.java"
             extra.write_text("new source")
             self.assertNotEqual(original, key())
             extra.unlink()
             self.assertEqual(original, key())
+
+    def test_wrapper_launchers_and_regeneration_use_relocated_jar(self):
+        root = Path(__file__).resolve().parents[2]
+        jar = "src/gradle/wrapper/gradle-wrapper.jar"
+        self.assertTrue((root / jar).is_file())
+        self.assertTrue((root / jar).with_suffix(".properties").is_file())
+        self.assertFalse((root / "gradle").exists())
+        self.assertIn(f'-jar "$APP_HOME/{jar}"', (root / "gradlew").read_text())
+        self.assertIn('-jar "%APP_HOME%\\src\\gradle\\wrapper\\gradle-wrapper.jar"',
+                      (root / "gradlew.bat").read_text())
+        self.assertIn(f"jarFile = file('{jar}')", (root / "build.gradle").read_text())
 
     def test_exact_fresh_suite_and_cases(self):
         self.suite()
