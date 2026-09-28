@@ -99,7 +99,7 @@ class ByteStringSortTest {
                     val base = when (kind) {
                         0 -> ManagedAddress.fromByteArray(ByteArray(input.size))
                         3 -> Language.currentState().nativeAllocations.malloc(input.size.toLong())
-                        else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(input.size.toLong(), 8, pinned = kind == 2))
+                        else -> ManagedAddress.fromAllocation(ManagedAllocation.mutable(input.size.toLong(), 8, kind == 2))
                     }
                     try {
                         input.forEachIndexed { index, byte -> base.writeWord8(index.toLong(), byte.toLong()) }
