@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,6 +19,7 @@ public final class CoreRepresentation {
     private final NarrowInteger narrowInteger;
     private final boolean evaluatedUnliftedObject;
     private final boolean emptyTuple;
+    private final int boxedLevity;
 
     public static final CoreRepresentation UNKNOWN = new CoreRepresentation(CoreKind.UNKNOWN);
 
@@ -47,6 +49,12 @@ public final class CoreRepresentation {
         this.alternatives = alternatives;
         this.tagSlot = tagSlot;
         this.alternativeSlots = alternativeSlots;
+        boxedLevity = boxedKind(kind) && primReps != null && primReps.size() == 1 ? switch (primReps.getFirst()) {
+            case "BoxedRep Nothing" -> 0;
+            case "BoxedRep (Just Lifted)" -> 1;
+            case "BoxedRep (Just Unlifted)" -> 2;
+            default -> -1;
+        } : -1;
         // Exact lowered PrimRep, not the broad exported kind, selects the carrier.
         narrowInteger = kind == CoreKind.LONG ? NarrowInteger.fromRep(
             primReps != null && primReps.size() == 1 ? primReps.getFirst() : null) : null;
@@ -70,6 +78,8 @@ public final class CoreRepresentation {
     public NarrowInteger getNarrowInteger() { return narrowInteger; }
     public boolean isInt() { return narrowInteger != null; }
     public boolean isEvaluatedUnliftedObject() { return evaluatedUnliftedObject; }
+    public boolean hasUnknownBoxedLevity() { return boxedLevity == 0; }
+    public boolean hasBoxedPointer() { return boxedLevity >= 0; }
     public boolean isVector() { return vector != null; }
     public boolean isTuple() { return components != null; }
     public boolean isSum() { return alternatives != null; }
@@ -131,10 +141,23 @@ public final class CoreRepresentation {
         // Unknown levity cannot erase an existing exact proof and hide a later contradiction.
         List<String> mergedReps = boxed != null && Objects.equals(other.primReps, List.of("BoxedRep Nothing")) ? primReps :
             other.primReps != null ? other.primReps : primReps;
+        List<CoreRepresentation> mergedComponents = refineChildren(components, other.components);
+        if (components != null && other.components != null) {
+            var reps = new ArrayList<String>();
+            for (CoreRepresentation component : mergedComponents) reps.addAll(Objects.requireNonNull(component.primReps));
+            mergedReps = List.copyOf(reps);
+        }
         return new CoreRepresentation(merged, evaluated || other.evaluated, present || other.present, mergedReps,
-            other.components != null ? other.components : components, other.vector != null ? other.vector : vector,
-            other.alternatives != null ? other.alternatives : alternatives, other.tagSlot != null ? other.tagSlot : tagSlot,
+            mergedComponents, other.vector != null ? other.vector : vector,
+            refineChildren(alternatives, other.alternatives), other.tagSlot != null ? other.tagSlot : tagSlot,
             other.alternativeSlots != null ? other.alternativeSlots : alternativeSlots);
+    }
+    private static List<CoreRepresentation> refineChildren(List<CoreRepresentation> left, List<CoreRepresentation> right) {
+        if (left == null) return right;
+        if (right == null) return left;
+        var merged = new ArrayList<CoreRepresentation>(left.size());
+        for (int i = 0; i < left.size(); i++) merged.add(left.get(i).refine(right.get(i)));
+        return List.copyOf(merged);
     }
     private static boolean boxedKind(CoreKind kind) {
         return kind == CoreKind.OBJECT || kind == CoreKind.DATA || kind == CoreKind.CLOSURE;

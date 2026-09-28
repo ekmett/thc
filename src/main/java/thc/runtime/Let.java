@@ -16,12 +16,12 @@ final class Let extends Expr {
     Let(int[] slots, Expr[] rhs, boolean[] primitiveEligible, Expr body, boolean recursive) {
         this(slots, rhs, primitiveEligible, body, recursive, new int[rhs.length][]);
     }
-    Let(int[] slots, Expr[] rhs, boolean[] primitiveEligible, Expr body, boolean recursive, int[][] vectorSlots) {
+    Let(int[] slots, Expr[] rhs, boolean[] primitiveEligible, Expr body, boolean recursive, int[][] typedSlots) {
         this.slots = slots; this.body = body; this.recursive = recursive;
         setRepresentation(body.getRepresentation());
         bindings = new LocalBinding[rhs.length];
         for (int i = 0; i < rhs.length; i++)
-            bindings[i] = new LocalBinding(slots[i], rhs[i], !recursive && primitiveEligible[i], vectorSlots[i]);
+            bindings[i] = new LocalBinding(slots[i], rhs[i], !recursive && primitiveEligible[i], typedSlots[i]);
     }
     @Override public Object execute(VirtualFrame frame) { initialize(frame, null, 0); return body.execute(frame); }
     @Override public int executeInt(VirtualFrame frame) throws UnexpectedResultException {

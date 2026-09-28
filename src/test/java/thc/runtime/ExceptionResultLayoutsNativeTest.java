@@ -124,12 +124,14 @@ public class ExceptionResultLayoutsNativeTest {
         }
     }
     private CoreRepresentation tuple(CoreRepresentation state, CoreRepresentation value) { return new CoreRepresentation(CoreKind.UNKNOWN, true, true, value.getPrimReps(), List.of(state, value)); }
-    @Test public void unknownIsNotAZeroWidthResultAndUnknownPayloadLevityIsRejected() {
+    @Test public void unknownIsNotAZeroWidthResultButUnknownBoxedResultHasPointerStorage() {
         var state = new CoreRepresentation(CoreKind.VOID, true, true, List.of());
         var closure = new CoreRepresentation(CoreKind.CLOSURE, true, true, List.of("BoxedRep (Just Lifted)"));
         var empty = new CoreRepresentation(CoreKind.UNKNOWN, true, true, List.of(), List.of());
         CoreSynchronousExceptions.validate("catch#", List.of(closure, closure, state), List.of(true, true, false), tuple(state, empty));
-        for (var value : List.of(CoreRepresentation.UNKNOWN, components(empty, null), new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep Nothing"))))
+        CoreSynchronousExceptions.validate("catch#", List.of(closure, closure, state), List.of(true, true, false),
+            tuple(state, new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep Nothing"))));
+        for (var value : List.of(CoreRepresentation.UNKNOWN, components(empty, null)))
             assertThrows(RuntimeFault.class, () -> CoreSynchronousExceptions.validate("catch#", List.of(closure, closure, state), List.of(true, true, false), tuple(state, value)));
         for (var payload : List.of(CoreRepresentation.UNKNOWN, new CoreRepresentation(CoreKind.LONG, true, true, List.of("IntRep")), new CoreRepresentation(CoreKind.OBJECT, false, true, List.of("BoxedRep Nothing"))))
             assertThrows(RuntimeFault.class, () -> CoreSynchronousExceptions.validate("raiseIO#", List.of(payload, state), List.of(false, false), tuple(state, empty)));

@@ -14,8 +14,10 @@ property, but their expressions still execute. Scalar fields after a zero-width
 or multi-register field retain their own positions. No boxed tuple/sum payload
 array or additional guest carrier is introduced.
 
-Lifted payloads remain lazy. Demanding an unboxed field does not demand its lifted
-children. Inactive sum reference slots are cleared null padding, not guest roots:
+Lifted payloads remain lazy. A `BoxedRep Nothing` field uses a traced Object
+property without claiming liftedness or evaluatedness. An explicit strict-field
+annotation still demands the field. Demanding an unboxed field does not demand its
+lifted children. Inactive sum reference slots are cleared null padding, not guest roots:
 closure inspection omits them from its pointer list, compact copying ignores
 them, and compact images preserve their inactive state. Active references retain
 ordinary reachability, sharing and existing compact-region evaluation semantics.
@@ -25,7 +27,7 @@ The supported tuple leaves and sum payloads are the existing
 sum tags/projections, scalar carriers, vector species and heap ownership remain
 checked. Families with two or more alternatives and sums inside recursive tuples
 are supported, including sums nested inside sum payloads, managed addresses and
-supported exact vector species. Ordinary aggregate lets remain unsupported.
+supported exact vector species. Nonrecursive unlifted tuple/sum lets use typed frame locals.
 [Tuple captures](tuple-captures.md), [sum inputs and captures](sum-inputs.md) and [tuple join inputs](tuple-joins.md)
 are supported separately. Constructors with aggregate fields currently require direct saturated
 applications; their unsaturated/PAP workers remain an explicit boundary.

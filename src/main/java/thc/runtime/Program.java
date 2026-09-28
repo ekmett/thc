@@ -380,8 +380,8 @@ public final class Program implements ExecutableProgram {
         return result;
     }
     private boolean representation(Map<String, Object> binding) {
-        if (!(binding.get("lifted") instanceof Boolean lifted)) throw new UnsupportedCore("Unknown levity for " + binding.get("id"));
-        return lifted;
+        if (binding.get("lifted") instanceof Boolean lifted) return lifted;
+        return CoreRepresentations.mayBeLazy(binding.get("lifted"), CoreRepresentations.binder(binding));
     }
     private FunctionSpec function(String label, List<Map<String, Object>> args, List<Object> expression, Scope outer) {
         return function(label, args, expression, outer, CoreRepresentations.expression(expression),
@@ -1054,9 +1054,7 @@ public final class Program implements ExecutableProgram {
         for (int i = 0; i < arity; i++) {
             if (!(strict.get(i) instanceof Boolean strictField)) throw new RuntimeFault("Unknown constructor field strictness: " + id);
             if (strictField) {
-                if (!(lifted.get(i) instanceof Boolean liftedField))
-                    throw new UnsupportedCore("Unknown strict constructor field levity: " + id + " field " + i);
-                result[i] = liftedField;
+                result[i] = CoreRepresentations.mayBeLazy(lifted.get(i), dataLayout(id).logicalProof(i));
             }
         }
         return result;
@@ -1136,22 +1134,22 @@ public final class Program implements ExecutableProgram {
         if (definitions != null) return compileJoins(expr, scope, tail, definitions);
         for (Map<String, Object> binding : group) {
             CoreRepresentation proof = CoreRepresentations.binder(binding);
-            if (proof.isVector()) {
-                if (recursive || representation(binding)) throw new UnsupportedCore("Vector let binding must be nonrecursive and unlifted");
+            if (proof.isTypedTransport()) {
+                if (recursive || representation(binding)) throw new UnsupportedCore("Aggregate/vector let binding must be nonrecursive and unlifted");
                 CoreRepresentations.requireInput(proof);
             } else CoreRepresentations.requireScalar(proof, "let binding");
         }
         Scope local = scope.child();
-        int[][] vectorSlots = new int[group.size()][];
+        int[][] typedSlots = new int[group.size()][];
         int[] slots = new int[group.size()];
         for (int index = 0; index < group.size(); index++) {
             Map<String, Object> binding = group.get(index);
             CoreRepresentation proof = CoreRepresentations.binder(binding);
-            if (proof.isVector()) {
+            if (proof.isTypedTransport()) {
                 List<CoreRepresentation> fields = TupleShape.flatten(proof);
                 int[] lanes = new int[fields.size()];
-                for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " vector let lane " + i);
-                vectorSlots[index] = lanes;
+                for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " let field " + i);
+                typedSlots[index] = lanes;
                 slots[index] = local.bindTuple((String) binding.get("id"), proof, lanes).slot;
             } else slots[index] = local.bind((String) binding.get("id"), !representation(binding),
                 evaluated(proof, false), recursive, CoreEntries.binding(binding),
@@ -1163,11 +1161,11 @@ public final class Program implements ExecutableProgram {
             rhs[i] = withSource(sources.binding(binding, currentSource), () -> {
                 List<Object> body = (List<Object>) binding.get("expr");
                 boolean lifted = representation(binding);
-                CoreRepresentations.requireNoSum(CoreRepresentations.expression(body), "let binding");
                 if (recursive && !lifted) throw new UnsupportedCore("Recursive unlifted binding unsupported");
                 Expr node = recursive && lifted && !Arrays.asList("lam", "lit", "con", "void").contains(body.get(0))
                     ? delay(body, local, String.valueOf(binding.get("name")))
-                    : argument(body, recursive ? local : scope, lifted, String.valueOf(binding.get("name")), false, lifted);
+                    : argument(body, recursive ? local : scope, lifted, String.valueOf(binding.get("name")),
+                        CoreRepresentations.binder(binding).isTypedTransport(), lifted);
                 return node.proven(node.getRepresentation().refine(evaluated(CoreRepresentations.binder(binding), false)));
             });
         }
@@ -1176,7 +1174,7 @@ public final class Program implements ExecutableProgram {
             local.publish((String) group.get(i).get("id"), rhs[i].getRepresentation());
             unlifted[i] = !representation(group.get(i));
         }
-        return new Let(slots, rhs, unlifted, compile((List<Object>) expr.get(3), local, tail), recursive, vectorSlots);
+        return new Let(slots, rhs, unlifted, compile((List<Object>) expr.get(3), local, tail), recursive, typedSlots);
     }
 
     private Expr compileCase(List<Object> expr, Scope scope, boolean tail) {
@@ -1363,7 +1361,7 @@ public final class Program implements ExecutableProgram {
     }
     private Expr[] argumentOperands(List<List<Object>> args, Scope scope, List<?> flags) {
         Expr[] result = new Expr[args.size()];
-        for (int i = 0; i < result.length; i++) result[i] = argument(args.get(i), scope, (Boolean) flags.get(i));
+        for (int i = 0; i < result.length; i++) result[i] = argument(args.get(i), scope, CoreRepresentations.argumentMayBeLazy(flags.get(i), args.get(i)));
         return result;
     }
     private Expr[] argumentOperands(List<List<Object>> args, Scope scope, boolean lifted) {
@@ -2011,7 +2009,7 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && PrefetchExpression.ARITIES.containsKey(fn.get(1))) {
             if (args.size() != PrefetchExpression.ARITIES.get(fn.get(1))) throw fault("Wrong prefetch arity");
-            return new PrefetchExpression(argument(args.get(0), scope, (Boolean) flags.get(0)),
+            return new PrefetchExpression(argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0))),
                 args.size() == 3 ? compile(args.get(1), scope, false) : null,
                 compile(args.getLast(), scope, false), tupleProof);
         }
@@ -2024,7 +2022,7 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && "touch#".equals(fn.get(1))) {
             CoreTouch.validateRaw(argumentMetadata(args), flags, metadataRepresentation(expr));
-            Expr kept = argument(args.get(0), scope, (Boolean) flags.get(0));
+            Expr kept = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             Expr state = compile(args.get(1), scope, false);
             CoreTouch.validate(List.of(kept.getRepresentation(), state.getRepresentation()), flags, tupleProof);
             return new TouchExpression(kept, state, tupleProof);
@@ -2034,7 +2032,7 @@ public final class Program implements ExecutableProgram {
             var signature = at(args, 2) != null ? CoreRepresentations.knownFunctionSignature(args.get(2), bindings) : null;
             CoreKeepAlive.validate(proofs, flags, tupleProof,
                 signature == null ? null : signature.getInputs(), signature == null ? null : signature.getResult());
-            Expr kept = argument(args.get(0), scope, (Boolean) flags.get(0));
+            Expr kept = argument(args.get(0), scope, CoreRepresentations.argumentMayBeLazy(flags.get(0), args.get(0)));
             Expr state = compile(args.get(1), scope, false);
             Expr function = compile(args.get(2), scope, false);
             Expr[] stateArgument = {new Literal(thc.runtime.Unit.INSTANCE)};
@@ -2152,7 +2150,7 @@ public final class Program implements ExecutableProgram {
                 if (field.isTypedTransport() && !Boolean.FALSE.equals(flags.get(i))) throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (field.isTypedTransport()) operands[i] = compile(args.get(i), scope, false);
                 else {
-                    if (!(flags.get(i) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown tuple field levity");
+                    boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.get(i), args.get(i));
                     operands[i] = argument(args.get(i), scope, lifted);
                 }
             }
@@ -2172,7 +2170,7 @@ public final class Program implements ExecutableProgram {
         if (entryStrict != null && args.size() < entryStrict.length) entryStrict = null;
         Expr[] nodes = new Expr[args.size()];
         for (int i = 0; i < nodes.length; i++) {
-            if (!(flags.get(i) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown argument levity");
+            boolean lifted = CoreRepresentations.argumentMayBeLazy(flags.get(i), args.get(i));
             CoreRepresentation field = layout != null ? layout.logicalProof(i) : null;
             if (field != null && field.isAggregate()) {
                 if (lifted) throw new RuntimeFault("Aggregate constructor operand must be unlifted");
