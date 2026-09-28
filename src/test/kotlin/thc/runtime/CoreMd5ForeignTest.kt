@@ -45,7 +45,7 @@ class CoreMd5ForeignTest {
     }
 
     @Test fun exactThreeContractsAndActualEvaluationFacts() {
-        for (operation in Md5ForeignOp.entries) {
+        for (operation in Md5ForeignOp.values()) {
             val input = fixture(operation)
             assertEquals(operation, input.validate())
             input.arguments.forEach { (it as MutableMap<String, Any?>)["evaluated"] = false }
@@ -93,7 +93,7 @@ class CoreMd5ForeignTest {
         val changes = listOf("primReps" to listOf("IntRep"), "primReps" to listOf("Word32Rep"), "primReps" to null,
             "kind" to "unknown", "evaluated" to 1, "aggregate" to "unboxed-tuple", "components" to emptyList<Any?>(),
             "vector" to null, "alternatives" to emptyList<Any?>(), "tagSlot" to 0)
-        for (operation in Md5ForeignOp.entries) for (declared in listOf(false, true)) for (i in 0 until operation.arity) {
+        for (operation in Md5ForeignOp.values()) for (declared in listOf(false, true)) for (i in 0 until operation.arity) {
             for ((field, value) in changes) fixture(operation).also { input ->
                 val proof = if (declared) input.declared[i] else input.arguments[i] as MutableMap<String, Any?>
                 proof[field] = value; reject(input)
@@ -124,7 +124,7 @@ class CoreMd5ForeignTest {
     }
 
     @Test fun ActualArityAndEveryUnliftedFlagAreExact() {
-        for (operation in Md5ForeignOp.entries) {
+        for (operation in Md5ForeignOp.values()) {
             for (i in 0 until operation.arity) for (value in listOf(true, 0, null, "false"))
                 fixture(operation).also { it.flags[i] = value; reject(it) }
             fixture(operation).also { it.arguments.removeAt(0); reject(it) }

@@ -1,0 +1,1568 @@
+// SPDX-FileCopyrightText: 2026 Edward Kmett
+// SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
+import static thc.buildlogic.BuildChecks.*
+
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import java.net.URI
+import org.gradle.process.JavaForkOptions
+import org.gradle.process.CommandLineArgumentProvider
+
+plugins {
+    id "application"
+    id "org.jetbrains.kotlin.jvm" version "2.4.20"
+    id "org.jetbrains.kotlin.kapt" version "2.4.20"
+    id("org.jetbrains.dokka") version "2.2.0"
+}
+repositories { mavenCentral() }
+
+def windowsHost = System.getProperty("os.name").startsWith("Windows")
+// Existing Python generators remain until their Haskell/Kotlin migrations land.
+def python = providers.environmentVariable("THC_PYTHON").orElse(windowsHost ? "python" : "python3")
+
+kapt {
+    javacOptions { option("--add-modules", "jdk.incubator.vector") }
+}
+
+// The pinned GHC signature table belongs to fixture/audit tooling, not runtime loading.
+tasks.processResources { exclude("thc/scalar-primop-signatures.json") }
+// The Windows runtime validates HSC receipts against the producer's same pinned catalog.
+tasks.processResources { from("compiler/windows-ghc-internal.json") { into("thc") } }
+tasks.processResources {
+    from("third-party-licenses") {
+        include("*.txt")
+        into("META-INF/licenses")
+    }
+}
+
+// Documentation reads handwritten sources; it does not compile the runtime,
+// generate Truffle DSL classes, or prepare native/Core fixtures.
+def docsRevision = providers.gradleProperty("thc.docsRevision").orElse(
+    providers.exec { commandLine("git", "rev-parse", "HEAD") }.standardOutput.asText.map { it.trim() })
+dokka {
+    moduleName.set("THC")
+    moduleVersion.set(docsRevision.map { it.take(12) })
+    dokkaPublications.html {
+        outputDirectory.set(layout.buildDirectory.dir("docs/jvm"))
+        includes.from("docs/site/jvm.md")
+        failOnWarning.set(false)
+        suppressInheritedMembers.set(true)
+    }
+    dokkaSourceSets.named("main") {
+        includes.from("docs/site/jvm.md")
+        sourceRoots.setFrom("src/main/kotlin", "src/main/java")
+        classpath.setFrom(configurations.compileClasspath)
+        jdkVersion.set(25)
+        reportUndocumented.set(false)
+        suppressGeneratedFiles.set(true)
+        sourceLink {
+            localDirectory.set(file("src/main"))
+            remoteUrl.set(docsRevision.map { URI.create("https://github.com/ekmett/thc/blob/$it/src/main") })
+            remoteLineSuffix.set("#L")
+        }
+    }
+    dokkaSourceSets.configureEach {
+        if (name in ["diagnostics", "examples"].toSet()) suppress.set(true)
+    }
+}
+// The checked family table generates typed nodes with fixed Vector API species.
+// BytecodeRoot's DSL requires nested declarations; its marked regions are checked,
+// never rewritten by a build. Refresh them explicitly with the generator --write.
+def bytecodeCompilerSource = providers.provider {
+    def javaSource = file("src/main/java/thc/runtime/BytecodeProgram.java")
+    def kotlinSource = file("src/main/kotlin/thc/runtime/BytecodeProgram.kt")
+    checkBuild(javaSource.isFile() != kotlinSource.isFile()) {
+        "Expected exactly one Java or transitional Kotlin BytecodeProgram source"
+    }
+    javaSource.isFile() ? javaSource : kotlinSource
+}
+def generateSimdFamilies = tasks.register("generateSimdFamilies", Exec) {
+    inputs.files("scripts/generate-simd-families.py", "scripts/simd-families.json",
+        "src/main/java/thc/runtime/BytecodeRoot.java", bytecodeCompilerSource)
+    outputs.dir(layout.buildDirectory.dir("generated/simd"))
+    commandLine(python.get(), "scripts/generate-simd-families.py", "--check")
+}
+sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/simd/java")) }
+tasks.matching { it.name in ["compileKotlin", "compileJava", "kaptGenerateStubsKotlin"].toSet() }.configureEach {
+    dependsOn(generateSimdFamilies)
+}
+def graalVersion = "25.3.4.1"
+apply(from: "gradle/protocol-processor.gradle")
+apply(from: "gradle/materializable-api.gradle")
+apply(from: "gradle/protocol-runtime.gradle")
+def protocolProcessor = tasks.named("protocolProcessorJar", Jar)
+// Additional languages are opt-in; the ordinary runtime stays language-neutral.
+def polyglotDemoRuntime = configurations.create("polyglotDemoRuntime")
+dependencies {
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:2.4.20")
+    implementation("org.graalvm.polyglot:polyglot:$graalVersion")
+    implementation("org.graalvm.truffle:truffle-api:$graalVersion")
+    // Affinity reset deliberately targets the pinned compiler-listener API.
+    compileOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    runtimeOnly("org.graalvm.polyglot:llvm-community:$graalVersion")
+    kapt(files(protocolProcessor.flatMap { it.archiveFile }))
+    testAnnotationProcessor(files(protocolProcessor.flatMap { it.archiveFile }))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
+    testImplementation("org.graalvm.truffle:truffle-runtime:$graalVersion")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    add(polyglotDemoRuntime.name, "org.graalvm.polyglot:js:$graalVersion")
+}
+if (windowsHost) apply(from: "gradle/windows-sulong.gradle")
+apply(from: "gradle/bytecode-metadata.gradle")
+kotlin {
+    jvmToolchain(25)
+    // Kotlin's generated null-check failures inline stack-trace sanitization into
+    // Truffle partial evaluation. Guest/host validation remains explicit.
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xno-param-assertions", "-Xno-call-assertions", "-Xno-receiver-assertions")
+    }
+}
+// Tests and benchmark controls can opt out explicitly; ordinary launches use compact headers.
+def compactObjectHeaders = providers.gradleProperty("thc.compactObjectHeaders").orElse("true").get()
+requireBuild(compactObjectHeaders == "true" || compactObjectHeaders == "false") { "thc.compactObjectHeaders must be true or false" }
+def compactHeaderOption = "-XX:${compactObjectHeaders == "true" ? "+" : "-"}UseCompactObjectHeaders"
+application {
+    mainClass.set("thc.MainKt")
+    applicationDefaultJvmArgs = ["--add-modules=jdk.incubator.vector", "--enable-native-access=ALL-UNNAMED", "-Xss2m", compactHeaderOption] +
+        // The Linux standalone guest owns GHC's supported process handlers.
+        // Embedders do not inherit these launcher JVM arguments.
+        (System.getProperty("os.name") == "Linux" ? ["-Xrs"] : [])
+}
+// An explicit oop or RAM-sizing choice belongs to the caller. In particular,
+// forcing compressed oops can cap an otherwise explicit MaxRAMPercentage heap.
+// Defer to opaque @argument files too, without opening or parsing them here.
+def inheritedJvmOptions = ["JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS", "_JAVA_OPTIONS"]
+def memoryOptionNames = ["UseCompressedOops", "MaxRAM", "MinRAM", "InitialRAM", "@"]
+def defaultCompressedOops = { JavaForkOptions options ->
+    def explicit = (options.jvmArgs ?: []) + inheritedJvmOptions.collect { options.environment[it]?.toString() ?: "" }
+    return explicit.any { option -> memoryOptionNames.any { option.contains(it) } } ? [] : ["-XX:+UseCompressedOops"]
+}
+tasks.withType(JavaExec).configureEach { task ->
+    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
+}
+tasks.withType(Test).configureEach { task ->
+    jvmArgumentProviders.add({ defaultCompressedOops(task) } as CommandLineArgumentProvider)
+}
+tasks.startScripts {
+    // This must happen before Java starts. HotSpot's suspend handler cannot be
+    // chained behind the guest's USR2 handler; reserve Linux signal 64 for it.
+    def policy = "case \"\$(uname -s)\" in\n  Linux)\n    if [ \"\${_JAVA_SR_SIGNUM+x}\" = x ] && [ \"\$_JAVA_SR_SIGNUM\" != 64 ]; then\n      die \"thc: Linux launcher requires _JAVA_SR_SIGNUM=64; incompatible setting was preserved\"\n    fi\n    _JAVA_SR_SIGNUM=64\n    export _JAVA_SR_SIGNUM\n    ;;\nesac\n"
+    // Decide on the user's machine, not when the distribution is built. Java
+    // reads JAVA_TOOL_OPTIONS and JDK_JAVA_OPTIONS before command-line defaults.
+    def unixMemoryPolicy = "case \"\${JAVA_TOOL_OPTIONS-} \${JDK_JAVA_OPTIONS-} \${_JAVA_OPTIONS-} \${JAVA_OPTS-} \${THC_OPTS-}\" in\n  *UseCompressedOops*|*MaxRAM*|*MinRAM*|*InitialRAM*|*@*) ;;\n  *) DEFAULT_JVM_OPTS=\"\$DEFAULT_JVM_OPTS \\\"-XX:+UseCompressedOops\\\"\" ;;\nesac"
+    // Query these variables rather than expanding their contents into cmd syntax:
+    // an otherwise valid quoted -D property can contain shell metacharacters.
+    def windowsMemoryPolicy = "(set JAVA_TOOL_OPTIONS & set JDK_JAVA_OPTIONS & set _JAVA_OPTIONS & set JAVA_OPTS & set THC_OPTS) 2>nul | \"%SystemRoot%\\System32\\findstr.exe\" /L /C:\"UseCompressedOops\" /C:\"MaxRAM\" /C:\"MinRAM\" /C:\"InitialRAM\" /C:\"@\" >nul\nif errorlevel 1 set DEFAULT_JVM_OPTS=%DEFAULT_JVM_OPTS% \"-XX:+UseCompressedOops\""
+    inputs.property("linuxSignalPolicy", policy)
+    inputs.property("unixMemoryPolicy", unixMemoryPolicy)
+    inputs.property("windowsMemoryPolicy", windowsMemoryPolicy)
+    doLast {
+        def unixMarker = "# Collect all arguments for the java command:"
+        def unix = unixScript.getText("UTF-8")
+        checkBuild(unix.contains(unixMarker)) { "Missing Gradle Unix launcher insertion point" }
+        unixScript.setText(unix.replace(unixMarker, policy + "\n" + unixMemoryPolicy + "\n\n" + unixMarker), "UTF-8")
+        def windowsMarker = "@rem Execute thc"
+        def windows = windowsScript.getText("UTF-8")
+        checkBuild(windows.contains(windowsMarker)) { "Missing Gradle Windows launcher insertion point" }
+        windowsScript.setText(windows.replace(windowsMarker, windowsMemoryPolicy.replace("\n", "\r\n") + "\r\n\r\n" + windowsMarker), "UTF-8")
+    }
+}
+tasks.named("run", JavaExec) {
+    if (System.getProperty("os.name") == "Linux") doFirst {
+        def setting = environment["_JAVA_SR_SIGNUM"]
+        checkBuild(setting == null || setting == "64") { "Linux launcher requires _JAVA_SR_SIGNUM=64" }
+        environment("_JAVA_SR_SIGNUM", "64")
+    }
+}
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+    dependsOn(tasks.startScripts)
+    // Isolated native-signal controls need a child JVM with the actual test
+    // classpath; modern Gradle workers need not use URLClassLoader.
+    doFirst { systemProperty("thc.testRuntimeClasspath", classpath.asPath) }
+    // Exported Core and native expectations are test inputs even when JVM sources
+    // are unchanged. Source inputs also make stale corpus fingerprints observable.
+    inputs.files(fileTree(layout.buildDirectory) {
+        include(["core/**/*.json", "source-core/**/*.json", "cbv-post-core/**/*.json",
+            "floating/core/**/*.json", "floating/checks.json", "floating/oracle.tsv",
+            "word-floating/**/*.json", "word-floating/oracle.tsv",
+            "fused-floating/**/*.json", "fused-floating/oracle.tsv",
+            "floating-tuple/**/*.json", "floating-tuple/*.tsv", "floating-tuple/native/**",
+            "tuple-input/**/*.json", "tuple-input/*.tsv", "tuple-input/native/**",
+            "io-main-pap/**/*.json", "io-main-pap/*.tsv", "io-main-pap/native/**",
+            "addr-identity/**/*.json", "addr-identity/oracle.txt", "addr-identity/native",
+            "empty-join-input/**/*.json", "empty-join-input/*.tsv", "empty-join-input/native/**",
+            "empty-tuple-input/**/*.json", "empty-tuple-input/*.tsv", "empty-tuple-input/native/**",
+            "sqrt/**/*.json", "sqrt/*.tsv", "sqrt/native/**",
+            "tag-to-enum/**/*.json", "tag-to-enum/*.tsv", "tag-to-enum/native/**",
+            "show-int/**/*.json", "show-int/*.tsv", "show-int/native/**",
+            "narrow-literal-proofs/**/*.json", "narrow-literal-proofs/*.tsv", "narrow-literal-proofs/native/**",
+            "bignat-literals/**/*.json", "bignat-literals/*.tsv", "bignat-literals/native/**", "bignat-literals/commands/**",
+            "show-word-list/**/*.json", "show-word-list/*.tsv", "show-word-list/native/**",
+            "short-bytes-slices/**/*.json", "short-bytes-slices/*.tsv", "short-bytes-slices/native/**",
+            "bytestring-sort/*.json", "bytestring-sort/logs/*.stdout", "bytestring-sort/logs/*.stderr", "bytestring-sort/logs/*.command.json",
+            "bytestring-decimal/*.json", "bytestring-decimal/logs/*.stdout", "bytestring-decimal/logs/*.stderr", "bytestring-decimal/logs/*.command.json",
+            "unix-libc/*.json", "unix-libc/logs/*.stdout", "unix-libc/logs/*.stderr", "unix-libc/logs/*.command.json",
+            "proxy-void/**/*.json", "proxy-void/*.tsv", "proxy-void/native/**", "proxy-void/api/**", "proxy-void/commands/**",
+            "unsafe-equality/**/*.json", "unsafe-equality/*.tsv", "unsafe-equality/native/**", "unsafe-equality/api/**",
+            "aggregate-core/**/*.json", "aggregate-post-core/**/*.json", "map/boot-core/**/*.json",
+            "aggregate-layout/pre-core/**/*.json", "aggregate-layout/post-core/**/*.json",
+            "sum-layout/**/*.json", "sum-layout/*.tsv", "sum-layout/native/**",
+            "sum-result/**/*.json", "sum-result/*.tsv", "sum-result/native/**",
+            "tuple-return/pre-core/**/*.json", "tuple-return/post-core/**/*.json", "tuple-return/oracle.tsv",
+            "state-tuple/pre-core/**/*.json", "state-tuple/post-core/**/*.json", "state-tuple/oracle.tsv",
+            "state-tuple/provenance.json", "state-tuple/*-audit.json", "state-tuple/native/**",
+            "tuple-join/pre-core/**/*.json", "tuple-join/post-core/**/*.json", "tuple-join/oracle.tsv",
+            "sum-join/**/*.json", "sum-join/*.tsv", "sum-join/commands/**",
+            "tuple-arithmetic/pre-core/**/*.json", "tuple-arithmetic/post-core/**/*.json",
+            "tuple-arithmetic/manifest.json", "tuple-arithmetic/oracle.tsv", "tuple-arithmetic/call-oracle.tsv",
+            "integer-completion/**/*.json", "integer-completion/*.tsv", "integer-completion/*.hs",
+            "integer-completion/native/**", "integer-completion/commands/**",
+            "integer-primops/core/**/*.json", "integer-primops/manifest.json", "integer-primops/oracle.tsv",
+            "mutvar/**/*.json", "mutvar/oracle.tsv", "mutvar/NativeMutVar.hs",
+            "stm/**/*.json", "stm/*.tsv", "stm/installed/bundles/*.zip", "stm/native/**",
+            "stable-pointers/**/*.json", "stable-pointers/oracle.tsv", "stable-pointers/NativeStablePointer.hs",
+            "stable-names/**/*.json", "stable-names/commands/**",
+            "weak-explicit/**/*.json", "weak-explicit/oracle.tsv", "weak-explicit/NativeWeak.hs",
+            "shrink-bytearrays/**/*.json", "shrink-bytearrays/oracle.tsv", "shrink-bytearrays/NativeShrinkByteArrays.hs",
+            "fetch-add-int-array/**/*.json", "fetch-add-int-array/oracle.tsv", "fetch-add-int-array/NativeFetchAddIntArray.hs",
+            "atomic-int-arrays/**/*.json", "atomic-int-arrays/*.tsv", "atomic-int-arrays/NativeAtomicIntArrays.hs", "atomic-int-arrays/commands/*",
+            "managed-mvars/**/*.json", "managed-mvars/*.tsv", "managed-mvars/native/**",
+            "synchronous-exceptions/**/*.json", "synchronous-exceptions/*.tsv", "synchronous-exceptions/native/**",
+            "core-continuation/**/*.json", "core-continuation/native-output.txt",
+            "thread-status/**/*.json", "thread-status/oracle.txt",
+            "thread-inventory/**/*.json", "thread-inventory/oracle.txt",
+            "thread-scheduling/**/*.json", "thread-scheduling/oracle.txt",
+            "scalar-memory-utilities/**/*.json", "scalar-memory-utilities/oracle.tsv",
+            "scalar-memory-utilities/native/oracle", "scalar-memory-utilities/commands/*.stdout", "scalar-memory-utilities/commands/*.stderr",
+            "delimited-continuations/**/*.json", "delimited-continuations/commands/**",
+            "thread-label/**/*.json", "thread-label/oracle.txt",
+            "hint-trace/**/*.json", "hint-trace/oracle.tsv", "hint-trace/native/**",
+            "closure-inspection/**/*.json", "closure-inspection/oracle.tsv", "closure-inspection/native/oracle",
+            "uncaught-self/**/*.json", "uncaught-self/native/oracle",
+            "mask-functions/**/*.json", "mask-functions/logs/*.stdout", "mask-functions/logs/*.stderr",
+            "mask-functions/native/oracle",
+            "scalar-exception-results/**/*.json", "scalar-exception-results/logs/*.stdout",
+            "scalar-exception-results/logs/*.stderr", "scalar-exception-results/native/oracle",
+            "exception-result-layouts/**/*.json", "exception-result-layouts/oracle.tsv",
+            "exception-result-layouts/logs/*.stdout", "exception-result-layouts/logs/*.stderr",
+            "exception-result-layouts/native/oracle",
+            "deep-evaluation/**/*.json", "deep-evaluation/logs/*.stdout", "deep-evaluation/logs/*.stderr",
+            "deep-evaluation/native/oracle",
+            "interface-core/**/*.json", "interface-core/logs/*.stdout", "interface-core/logs/*.stderr",
+            "interface-core/**/*.hi", "interface-core/**/*.dyn_hi", "interface-core/native/oracle",
+            "interface-core/**/*.zip",
+            "interface-core/source/*.saved",
+            "interface-core/cache-controls/helper-calls",
+            "interface-core/cache-controls/logs/*.stdout", "interface-core/cache-controls/logs/*.stderr",
+            "original-stdio/**/*.json", "original-stdio/results/*.txt", "original-stdio/native/**",
+            "original-stdio/logs/*.stdout", "original-stdio/logs/*.stderr",
+            "original-stdio-read/**/*.json", "original-stdio-read/results/*.txt", "original-stdio-read/native/**",
+            "original-stdio-read/logs/*.stdout", "original-stdio-read/logs/*.stderr",
+            "original-stdio-read/input.bin",
+            "original-handle-readiness/**/*.json", "original-handle-readiness/native/**",
+            "original-handle-readiness/logs/*.stdout", "original-handle-readiness/logs/*.stderr",
+            "original-posix-stat/**/*.json", "original-posix-stat/native/oracle",
+            "original-posix-stat/logs/*.stdout", "original-posix-stat/logs/*.stderr",
+            "libdw-unavailable/manifest.json", "libdw-unavailable/oracle.json", "libdw-unavailable/foreign-labels.json",
+            "native-addresses/manifest.json", "native-addresses/oracle.json",
+            "native-malloc/manifest.json", "native-malloc/oracle.txt",
+            "process-signals/manifest.json", "process-signals/oracle.txt", "process-signals/native-controls.txt",
+            "process-lifecycle/core/*.json", "process-lifecycle/core/logs/*.json",
+            "process-lifecycle/core/logs/*.stdout", "process-lifecycle/core/logs/*.stderr",
+            "process-lifecycle/native/process-oracle", "process-lifecycle/native/sigchld-policy",
+            "original-gmp/**/*.json", "original-gmp/native/oracle", "original-gmp/exposed-ghc-internal.conf",
+            "bytestring-utf8/**/*.json", "bytestring-utf8/native/oracle",
+            "bytestring-utf8/logs/*.stdout", "bytestring-utf8/logs/*.stderr",
+            "original-memset/**/*.json", "original-memset/native/oracle",
+            "original-memset/logs/*.stdout", "original-memset/logs/*.stderr",
+            "original-memory-search/**/*.json", "original-memory-search/native/oracle",
+            "original-memory-search/logs/*.stdout", "original-memory-search/logs/*.stderr",
+            "original-gmp/logs/*.stdout", "original-gmp/logs/*.stderr",
+            "original-stdio-close/**/*.json", "original-stdio-close/results/*.txt", "original-stdio-close/results/*.private",
+            "original-stdio-close/native/**", "original-stdio-close/logs/*.stdout", "original-stdio-close/logs/*.stderr",
+            "original-posix-dup/**/*.json", "original-posix-dup/results/*.txt", "original-posix-dup/results/*.private",
+            "original-posix-dup/results/*.other", "original-posix-dup/native/oracle",
+            "original-posix-dup/logs/*.stdout", "original-posix-dup/logs/*.stderr",
+            "original-stdio-seek/**/*.json", "original-stdio-seek/results/*.txt", "original-stdio-seek/results/*.private",
+            "original-stdio-seek/native/**", "original-stdio-seek/logs/*.stdout", "original-stdio-seek/logs/*.stderr",
+            "original-stdio-truncate/**/*.json", "original-stdio-truncate/results/*.txt", "original-stdio-truncate/results/*.private",
+            "original-stdio-truncate/native/**", "original-stdio-truncate/logs/*.stdout", "original-stdio-truncate/logs/*.stderr",
+            "original-fd-ready/**/*.json", "original-fd-ready/native/oracle", "original-fd-ready/native/private-file",
+            "rts-diagnostics/**/*.json", "rts-diagnostics/logs/*.stdout", "rts-diagnostics/logs/*.stderr",
+            "rts-shutdown/*.json", "rts-shutdown/logs/*.stdout", "rts-shutdown/logs/*.stderr",
+            "original-rts-locks/**/*.json", "original-rts-locks/logs/*.stdout", "original-rts-locks/logs/*.stderr",
+            "original-open/**/*.json", "original-open/logs/*.stdout", "original-open/logs/*.stderr", "original-open/native/oracle",
+            "original-fcntl/**/*.json", "original-fcntl/logs/*.stdout", "original-fcntl/logs/*.stderr", "original-fcntl/native/oracle",
+            "original-errno/**/*.json", "original-errno/logs/*.stdout", "original-errno/logs/*.stderr",
+            "original-errno/native/oracle", "original-errno/native/observations.txt",
+            "original-process-identity/**/*.json", "original-process-identity/logs/*.stdout",
+            "original-process-identity/logs/*.stderr", "original-process-identity/native/oracle",
+            "original-process-identity/native/observations.txt",
+            "original-termios/**/*.json", "original-termios/logs/*.stdout", "original-termios/logs/*.stderr", "original-termios/native/oracle",
+            "original-tcsetattr/**/*.json", "original-tcsetattr/logs/*.stdout", "original-tcsetattr/logs/*.stderr", "original-tcsetattr/native/oracle",
+            "original-sigprocmask/**/*.json", "original-sigprocmask/logs/*.stdout", "original-sigprocmask/logs/*.stderr", "original-sigprocmask/native/oracle",
+            "original-tcgetattr/**/*.json", "original-tcgetattr/logs/*.stdout", "original-tcgetattr/logs/*.stderr", "original-tcgetattr/native/oracle",
+            "original-sigset/**/*.json", "original-sigset/logs/*.stdout", "original-sigset/logs/*.stderr", "original-sigset/native/oracle",
+            "original-termios/saved/native/oracle",
+            "original-fd-ready/logs/*.stdout", "original-fd-ready/logs/*.stderr",
+            "original-iconv/**/*.json", "original-iconv/native/oracle",
+            "original-iconv/logs/*.stdout", "original-iconv/logs/*.stderr",
+            "managed-md5-native/**",
+            "text-cbits/**/*.json", "text-cbits/*.tsv", "text-cbits/logs/*.stdout", "text-cbits/logs/*.stderr",
+            "unix-wait-status/**/*.json", "unix-wait-status/*.tsv", "unix-wait-status/logs/*.stdout", "unix-wait-status/logs/*.stderr",
+            "original-stack/manifest.json", "original-stack/run-*/**",
+            "original-stack-formatter/manifest.json", "original-stack-formatter/run-*/logs/*",
+            "original-stack-formatter/run-*/pre-core/*.json", "original-stack-formatter/run-*/post-core/*.json",
+            "original-stack-formatter/run-*/*-audit.json", "original-stack-formatter/run-*/native/formatter",
+            "original-stack-formatter/run-*/originals/core/*.json",
+            "original-stack-formatter/run-*/originals/generated/**/*.hs",
+            "original-stack-formatter/run-*/originals/generated.json",
+            "original-stack-formatter/run-*/originals/target-layout.json",
+            "pinned-addresses/**/*.json", "pinned-addresses/*.tsv", "pinned-addresses/native/**", "pinned-addresses/commands/**",
+            "pinned-pointer-cells/**/*.json", "pinned-pointer-cells/*.tsv", "pinned-pointer-cells/native/**",
+            "address-array-copy/**/*.json", "address-array-copy/*.tsv", "address-array-copy/native/**", "address-array-copy/commands/**",
+            "aligned-scalar-memory/**/*.json", "aligned-scalar-memory/*.tsv", "aligned-scalar-memory/*.txt", "aligned-scalar-memory/logs/**",
+            "wide-char-address/**/*.json", "wide-char-address/logs/*.stdout", "wide-char-address/native/**",
+            "floating-address/**/*.json", "floating-address/*.tsv", "floating-address/native/**",
+            "atomic-address/**/*.json", "atomic-address/*.tsv", "atomic-address/*.txt", "atomic-address/native/**", "atomic-address/logs/**",
+            "explicit64-arrays/**/*.json", "explicit64-arrays/*.tsv", "explicit64-arrays/native/**",
+            "managed-address-reads/**/*.json", "managed-address-reads/*.tsv", "managed-address-reads/native/**",
+            "scalar-bitcasts/**/*.json", "scalar-bitcasts/*.tsv", "scalar-bitcasts/native/**", "scalar-bitcasts/commands/**",
+            "float-decode/**/*.json", "float-decode/*.tsv", "float-decode/native/**", "float-decode/commands/**",
+            "floating-remainder/**/*.json", "floating-remainder/*.tsv", "floating-remainder/native/**", "floating-remainder/commands/**",
+            "compare-byte-arrays/**/*.json", "compare-byte-arrays/*.tsv", "compare-byte-arrays/NativeCompareByteArrays.hs", "compare-byte-arrays/native/**",
+            "unaligned-scalar-memory/**/*.json", "unaligned-scalar-memory/*.tsv", "unaligned-scalar-memory/*.txt",
+            "unaligned-scalar-memory/logs/**",
+            "bytearray/**/*.json", "bytearray/*.tsv", "bytearray/NativeByteArray.hs", "bytearray/native/**",
+            "bytearray/commands/**", "mutable-bytearrays/commands/**", "resize-bytearrays/commands/**",
+            "mutable-bytearray-size/commands/**", "compare-byte-arrays/commands/**",
+            "mutable-bytearray-size/**/*.json", "mutable-bytearray-size/*.tsv", "mutable-bytearray-size/native/**",
+            "resize-bytearrays/**/*.json", "resize-bytearrays/*.tsv", "resize-bytearrays/native/**",
+            "mutable-bytearrays/**/*.json", "mutable-bytearrays/*.tsv", "mutable-bytearrays/NativeMutableByteArrays.hs", "mutable-bytearrays/native/**",
+            "array-slices/**/*.json", "array-slices/*.tsv", "array-slices/NativeArraySlices.hs", "array-slices/native/**",
+            "boxed-arrays/**/*.json", "boxed-arrays/*.tsv", "boxed-arrays/NativeBoxedArray.hs", "boxed-arrays/native/**",
+            "small-arrays/**/*.json", "small-arrays/*.tsv", "small-arrays/native/**",
+            "boxed-array-extensions/manifest.json", "boxed-array-extensions/run-*/**",
+            "boxed-cas/manifest.json", "boxed-cas/run-*/**",
+            "address-fields/**/*.json", "address-fields/*.tsv", "address-fields/NativeAddressFields.hs", "address-fields/native/**",
+            "data-to-tag/**/*.json", "data-to-tag/*.tsv", "data-to-tag/NativeDataToTag.hs", "data-to-tag/native/**",
+            "int-arrays/**/*.json", "int-arrays/oracle.tsv", "int-arrays/expected.tsv",
+            "int-arrays/NativeIntArray.hs", "int-arrays/native/int-array-oracle",
+            "double-arrays/**/*.json", "double-arrays/oracle.tsv", "double-arrays/expected.tsv",
+            "double-arrays/NativeDoubleArray.hs", "double-arrays/native/double-array-oracle",
+            "int32-arrays/**/*.json", "int32-arrays/oracle.tsv", "int32-arrays/expected.tsv",
+            "int32-arrays/literal-oracle.tsv",
+            "int32-arrays/NativeInt32Array.hs", "int32-arrays/native/int32-array-oracle",
+            "float-word-arrays/**/*.json", "float-word-arrays/oracle.tsv", "float-word-arrays/expected.tsv",
+            "float-word-arrays/NativeFloatWordArray.hs", "float-word-arrays/native/float-word-array-oracle",
+            "int8-arrays/**/*.json", "int8-arrays/*.tsv", "int8-arrays/NativeInt8Array.hs", "int8-arrays/native/**",
+            "int16-arrays/**/*.json", "int16-arrays/oracle.tsv", "int16-arrays/expected.tsv", "int16-arrays/literal-oracle.tsv",
+            "int16-arrays/NativeInt16Array.hs", "int16-arrays/native/int16-array-oracle",
+            "bit-primops/**/*.json", "bit-primops/oracle.tsv", "bit-primops/NativeBitPrimops.hs",
+            "simd/pre-core/**/*.json", "simd/post-core/**/*.json", "simd/oracle.tsv",
+            "simd-families/**/*.json", "simd-families/*.tsv", "simd-families/native/**",
+            "simd-capability-smoke/**/*.json", "simd-capability-smoke/*.tsv", "simd-capability-smoke/native/**", "generated/simd/fixtures/*.hs",
+            "explicit64-primops/core/**/*.json", "explicit64-primops/manifest.json", "explicit64-primops/oracle.tsv",
+            "simd-int32x4/pre-core/**/*.json", "simd-int32x4/post-core/**/*.json", "simd-int32x4/oracle.tsv",
+            "simd-floatx4/**/*.json", "simd-floatx4/*.tsv",
+            "simd-floatx4-fma/**/*.json", "simd-floatx4-fma/oracle.txt",
+            "simd-wide-floating-fma/**/*.json", "simd-wide-floating-fma/oracle.txt",
+            "simd-doublex2/**/*.json", "simd-doublex2/*.tsv",
+            "simd-int16x8/**/*.json", "simd-int16x8/*.tsv", "simd-int16x8/native/int16x8-oracle",
+            "simd-wide-arrays/manifest.json", "simd-wide-arrays/*.tsv", "simd-wide-arrays/*-core/*.json",
+            "simd-wide-arrays/*-audit.json", "simd-wide-arrays/native/oracle", "simd-wide-arrays/commands/*",
+            "simd128-addresses/manifest.json", "simd128-addresses/*.tsv", "simd128-addresses/*-core/*.json",
+            "simd128-addresses/*-audit.json", "simd128-addresses/native/oracle", "simd128-addresses/commands/*",
+            "simd-arithmetic/manifest.json", "simd-arithmetic/*.tsv", "simd-arithmetic/pre-core/*.json",
+            "simd-arithmetic/*-audit.json", "simd-arithmetic/native/oracle", "simd-arithmetic/commands/*", "simd-arithmetic/sources/*.hs",
+            "simd128-arrays/manifest.json", "simd128-arrays/*.tsv", "simd128-arrays/*-core/*.json",
+            "simd-address-families/manifest.json", "simd-address-families/*.tsv", "simd-address-families/source/*.hs",
+            "simd-address-families/*-core/*.json", "simd-address-families/*-audit.json", "simd-address-families/commands/*",
+            "simd-address-families/scalar/oracle", "simd-address-families/vector128/oracle",
+            "simd128-arrays/*-audit.json", "simd128-arrays/native/oracle", "simd128-arrays/commands/*",
+            "simd-int8x16/**/*.json", "simd-int8x16/*.tsv", "simd-int8x16/native/int8x16-oracle",
+            "simd-word8x16/**/*.json", "simd-word8x16/*.tsv", "simd-word8x16/native/word8x16-oracle",
+            "simd-word16x8/**/*.json", "simd-word16x8/*.tsv", "simd-word16x8/native/word16x8-oracle",
+            "simd-word32x4/**/*.json", "simd-word32x4/*.tsv", "simd-word32x4/native/word32x4-oracle",
+            "simd-int8x16/commands/*", "simd-int16x8/commands/*",
+            "simd-word16x8/commands/*", "simd-word32x4/commands/*",
+            "simd-int32x4-multiply/**/*.json", "simd-int32x4-multiply/*.tsv", "simd-int32x4-multiply/native/int32x4-multiply-oracle",
+            "simd-int32x4-bytearray/**/*.json", "simd-int32x4-bytearray/*.tsv", "simd-int32x4-bytearray/native/int32x4-bytearray-oracle",
+            "simd-word32x4-bytearray/**/*.json", "simd-word32x4-bytearray/*.tsv", "simd-word32x4-bytearray/native/word32x4-bytearray-oracle",
+            "simd-floatx4-bytearray/**/*.json", "simd-floatx4-bytearray/*.tsv", "simd-floatx4-bytearray/native/floatx4-bytearray-oracle",
+            "simd-doublex2-bytearray/**/*.json", "simd-doublex2-bytearray/*.tsv", "simd-doublex2-bytearray/native/doublex2-bytearray-oracle",
+            "simd-int32x4-bytearray/prepare-run-*/commands/*", "simd-int32x4-bytearray/prepare-run-*/retained-original-source.hs",
+            "simd-word32x4-bytearray/prepare-run-*/commands/*", "simd-word32x4-bytearray/prepare-run-*/retained-original-source.hs",
+            "simd-floatx4-bytearray/prepare-run-*/commands/*", "simd-doublex2-bytearray/prepare-run-*/commands/*",
+            "signed-narrow-primops/core/**/*.json", "signed-narrow-primops/manifest.json", "signed-narrow-primops/oracle.tsv",
+            "corpus/**/*.json", "corpus/oracle.tsv", "native/oracle.tsv"])
+    })
+    inputs.files(fileTree("examples") { include("**/*.hs", "coverage.json") })
+    inputs.files(fileTree("compiler") { include("**/*.hs", "*.sh", "*.py") })
+    inputs.file("compiler/test-fixtures/OriginalStackProof.json")
+    inputs.files("src/THC/Driver/Wired.hs", "compiler/target-layout.c")
+    inputs.files(fileTree("compiler/pinned-ghc-internal") {
+        include("**/*.hs", "**/*.hs-boot", "**/*.hsc", "include/WordSize.h", "LICENSE")
+    })
+    inputs.files("thc.cabal", "compiler/pinned-ghc-internal/LICENSE",
+        "compiler/pinned-ghc-internal/GHC/Internal/InfoProv/Types.hsc",
+        "compiler/pinned-ghc-internal/GHC/Internal/Heap/InfoTable.hsc")
+    inputs.files(fileTree("test/haskell-fixtures") { include("**/*.hs") })
+    inputs.file("tools/primops/PrimopTools.hs")
+    inputs.files(fileTree("bench/experiments") {
+        include("int32x4-bytearray/evidence-x86_64/*-core.json.gz", "int32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
+            "word32x4-bytearray/evidence-x86_64/*-core.json.gz", "word32x4-bytearray/evidence-x86_64/native/provenance.json.gz",
+            "floatx4-bytearray/evidence-x86_64/*-core.json.gz", "floatx4-bytearray/evidence-x86_64/input-provenance.json.gz",
+            "doublex2-bytearray/evidence-x86_64/captures/doublex2/*-core.json.gz",
+            "doublex2-bytearray/evidence-x86_64/captures/doublex2/input-provenance.json.gz")
+    })
+    inputs.file("thc.cabal")
+    inputs.files(fileTree("vendor/ghc-9.14.1") { include("**/*.hs", "**/*.hs-boot", "LICENSE") })
+    inputs.files(fileTree("scripts") {
+        include("simd-families.json", "generate-simd-families.py", "prepare-simd-families.py",
+            "prepare-simd-capability-smoke.py", "simd_family_model.py", "test-simd-families.py")
+        include("prepare-corpus.py", "prepare-floating-audit.py", "prepare-floating-tuples.py", "prepare-tag-to-enum-audit.py", "prepare-show-int.py", "show_int_model.py", "test-show-int-model.py", "prepare-narrow-literal-proofs.py", "test-narrow-literal-proofs.py", "prepare-show-word-list.py", "show_word_list_model.py", "test-show-word-list-model.py", "prepare-short-bytes-slices.py", "short_bytes_slice_model.py", "test-short-bytes-slices-model.py", "test-core-enums.py", "prepare-boxed-arrays.py", "prepare-array-slices.py", "test-array-slice-model.py",
+            "prepare-simd-audit.py", "prepare-floatx4-audit.py", "prepare-doublex2-audit.py", "doublex2_model.py", "test-doublex2-model.py", "core_vectors.py",
+            "prepare-state-tuple-audit.py", "prepare-empty-tuple-input-audit.py", "prepare-tuple-input-audit.py", "prepare-io-main-pap.py", "test-tuple-inputs.py", "prepare-empty-join-input.py", "test-empty-join-inputs.py", "core_*.py",
+            "prepare-managed-mvars.py", "test-managed-mvar-fixtures.py", "test-managed-mvars.py",
+            "prepare-synchronous-exceptions.py", "test-synchronous-exception-fixtures.py",
+            "prepare-managed-md5.py",
+            "prepare-address-fields.py", "test-address-fields.py", "prepare-address-identity.sh",
+            "prepare-managed-address-reads.py",
+            "prepare-data-to-tag.py", "test-core-data-tags.py",
+            "prepare-word8x16-audit.py", "word8x16_model.py", "test-word8x16-model.py",
+            "prepare-int32x4-multiply-audit.py", "int32x4_multiply_model.py", "test-int32x4-multiply-model.py",
+            "test-core-vector-memory.py",
+            "test-core-word32-vector-memory.py",
+            "test-core-float-vector-memory.py",
+            "test-core-double-vector-memory.py",
+            "audit-core.py", "core-capabilities.json", "check-corpus-structure.py",
+            "check-sum-layout.py", "sum_layout_model.py", "test-sum-layout.py", "prepare-sum-result-audit.py", "test-core-sums.py")
+    })
+    jvmArgs(application.applicationDefaultJvmArgs)
+    systemProperty("thc.projectRoot", projectDir.absolutePath)
+    // Keep the default tests independent of THC_BACKEND; bytecode tests select their backend explicitly.
+    systemProperty("thc.backend", "ast")
+    testLogging { events("failed", "skipped", "passed") }
+}
+tasks.test {
+    useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
+}
+// Both forks consume the same testClasses/runtimeClasspath task graph. Native
+// compilation and ABI probes remain fresh, but execute only once per invocation.
+// Keep `test` compatible with existing JAVA_TOOL_OPTIONS-based single-mode runs.
+def handoffModeTests = [["testDefault", false],[ "testDense", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Runs the ordinary test inventory with ${dense ? "dense" : "default"} handoffs."
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        useJUnitPlatform { excludeTags("jit-stability", "simd-families-experiment", "foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Handoff mode evidence requires a fresh test process") { true }
+    }
+}
+handoffModeTests[1].configure { mustRunAfter(handoffModeTests[0]) }
+tasks.register("testHandoffModes") {
+    group = "verification"
+    description = "Runs fresh default and dense test forks from one compilation (use --continue to collect both failures)."
+    dependsOn(handoffModeTests)
+}
+// Actual private boot-library FCallId proofs require installed full Core. Keep
+// this named suite independent of stock/thin default fixture groups; selecting
+// it without preparing its real fixture is an error, never a skipped test.
+def fullCoreTests = sourceSets.create("fullCoreTest")
+configurations[fullCoreTests.implementationConfigurationName].extendsFrom(configurations.testImplementation)
+configurations[fullCoreTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly)
+fullCoreTests.compileClasspath += sourceSets.test.output
+fullCoreTests.runtimeClasspath += sourceSets.test.output
+
+// Explicitly prepared converter/native controls, separate from ordinary models.
+def compactInteropTests = [["compactCoreInteropTest", false],[ "compactCoreInteropDenseTest", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests genuine compact Core conversion against native GHC and immediate compiled calls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter {
+            includeTestsMatching("thc.CoreCompactInteropTest")
+            includeTestsMatching("thc.CoreCompactDebugInteropTest")
+            includeTestsMatching("thc.CoreCompactHeaderInteropTest")
+        }
+        [["thc.compactInteropManifest", "packages.json"],[
+            "thc.compactInteropReference", "reference-packages.json"],[
+            "thc.compactInteropDebugManifest", "debug-packages.json"],[
+            "thc.compactInteropOracle", "native.tsv"]].each { property, fallback ->
+            def input = providers.gradleProperty(property).map { file(it) }
+                .orElse(layout.buildDirectory.file("compact-core-interop/$fallback").map { it.asFile })
+            inputs.file(input)
+            systemProperty(property, input.get().absolutePath)
+        }
+        providers.gradleProperty("thc.compactInteropHeaders").orNull?.with { paths ->
+            inputs.files(paths.split(',').collect { file(it) })
+            systemProperty("thc.compactInteropHeaders", paths)
+        }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Compact interop needs fresh native/first-entry evidence") { true }
+    }
+}
+compactInteropTests[1].configure { mustRunAfter(compactInteropTests[0]) }
+
+[["originalTimeClockDefault", false],[ "originalTimeClockDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests the original time CAPI clock module with native and first-compiled controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.OriginalTimeClockTest") }
+        inputs.files(fileTree("build/original-time-clock") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original clock native and first-entry checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/original-time-clock/manifest.json").isFile()) {
+            "Run thc-fixtures original-time-clock with complete installed GHC Core" } }
+    }
+}
+
+[["rtsEventFullCoreTest", false],[ "rtsEventFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original GHC event prerequisites and context-local logical capabilities."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.RtsEventNativeTest") }
+        inputs.files(fileTree("build/rts-event") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original event prerequisites require fresh first-compiled-entry checks") { true }
+        doFirst { checkBuild(file("build/rts-event/manifest.json").isFile()) { "Run thc-fixtures rts-event with complete installed GHC Core" } }
+    }
+}
+[["gcStatsFullCoreTest", false],[ "gcStatsFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original GHC GC/statistics/clock declarations and honest JVM behavior."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GcStatsNativeTest") }
+        inputs.files(fileTree("build/gc-stats") { include("*.json") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original GC/statistics native and first-entry checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/gc-stats/manifest.json").isFile()) { "Run thc-fixtures gc-stats with complete installed GHC Core" } }
+    }
+}
+[["compilerRtsFullCoreTest", false],[ "compilerRtsFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests genuine compiler RTS declarations and unique cells against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.CompilerRtsNativeTest") }
+        inputs.files(fileTree("build/compiler-rts") { include("*.json", "*.tsv", "UniqueOracle.hs", "unique-oracle") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original compiler RTS native/first-entry checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/compiler-rts/manifest.json").isFile()) { "Run thc-fixtures compiler-rts with complete installed GHC Core" } }
+    }
+}
+[["floatForeignFullCoreTest", false],[ "floatForeignFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original GHC Float/Double C declarations against native raw-bit controls."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.FloatForeignNativeTest") }
+        inputs.files(fileTree("build/float-foreign") { include("*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original floating FFI native/first-entry checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/float-foreign/manifest.json").isFile()) { "Run thc-fixtures float-foreign with complete installed GHC Core" } }
+    }
+}
+[["aggregateHeapFullCoreTest", false],[ "aggregateHeapFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests genuine boxed tuple/sum fields, including GHC BoxedRep, against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.AggregateHeapNativeTest") }
+        inputs.files(fileTree("build/aggregate-heap") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Aggregate heap native/first-entry checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/aggregate-heap/manifest.json").isFile()) { "Run thc-fixtures aggregate-heap" } }
+    }
+}
+[["fourwayAggregateFullCoreTest", false],[ "fourwayAggregateFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original GHC four-way sums and nested tuple transport against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter {
+            includeTestsMatching("thc.runtime.FourWayAggregateNativeTest")
+            includeTestsMatching("thc.runtime.FourWayAggregateStorageTest")
+            includeTestsMatching("thc.runtime.FourWayAggregateProtocolTest")
+        }
+        inputs.files(fileTree("build/fourway-aggregate") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original four-way aggregate native/first-entry checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/fourway-aggregate/manifest.json").isFile()) { "Run thc-fixtures fourway-aggregate" } }
+    }
+}
+[["narrowIntegerTransportFullCoreTest", false],[ "narrowIntegerTransportFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests exact narrow integer carriers against native GHC across calls and storage."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.NarrowIntegerTransportTest") }
+        inputs.files(fileTree("build/narrow-integer-transport") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Exact first-installed carrier checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/narrow-integer-transport/manifest.json").isFile()) { "Run thc-fixtures narrow-integer-transport" } }
+    }
+}
+kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("main"))
+[["genericSumTransportFullCoreTest", false],[ "genericSumTransportFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests managed-address, nested and vector sum transport against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GenericSumTransportTest") }
+        inputs.files(fileTree("build/generic-sum-transport") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Generic sum native/first-installed checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/generic-sum-transport/manifest.json").isFile()) { "Run thc-fixtures generic-sum-transport" } }
+    }
+}
+[["tupleJoinFullCoreTest", false],[ "tupleJoinFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original roundTo tuple joins and bottoming empty tuple cases against native GHC."
+        maxHeapSize = "6g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.TupleJoinNativeTest") }
+        inputs.files(fileTree("build/tuple-join-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled tuple join checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/tuple-join-input/manifest.json").isFile()) { "Run thc-fixtures tuple-join" } }
+    }
+}
+kotlin.target.compilations.getByName("fullCoreTest").associateWith(kotlin.target.compilations.getByName("test"))
+[["sumInputFullCoreTest", false],[ "sumInputFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original sum arguments, PAP prefixes and captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SumInputNativeTest") }
+        inputs.files(fileTree("build/sum-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled sum checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/sum-input/manifest.json").isFile()) { "Run thc-fixtures sum-input" } }
+    }
+}
+[["tupleCaptureFullCoreTest", false],[ "tupleCaptureFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original tuple closure/thunk captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.TupleCaptureNativeTest") }
+        inputs.files(fileTree("build/tuple-capture") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled tuple capture checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/tuple-capture/manifest.json").isFile()) { "Run thc-fixtures tuple-capture" } }
+    }
+}
+[["sumJoinInputFullCoreTest", false],[ "sumJoinInputFullCoreDenseTest", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original sum join inputs/captures against native GHC."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SumJoinInputNativeTest") }
+        inputs.files(fileTree("build/sum-join-input") { include("**/*.json", "*.tsv") })
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native and first-compiled sum join checks require a fresh process") { true }
+        doFirst { checkBuild(file("build/sum-join-input/manifest.json").isFile()) { "Run thc-fixtures sum-join-input" } }
+    }
+}
+tasks.register("graphWorkloadTest", Test) {
+    group = "verification"
+    description = "Checks the real containers BFS example against native GHC and an independent shortest-distance model."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    maxHeapSize = "8g"
+    // Only this optional proof consumes the graph manifest. Its test validates
+    // every recorded artifact; unrelated Test tasks need not hash these exports.
+    inputs.file("build/graph-bfs/manifest.json")
+    filter { includeTestsMatching("thc.GraphWorkloadTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Graph native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        checkBuild(file("build/graph-bfs/manifest.json").isFile()) {
+            "Missing graph proof: run cabal run exe:thc-fixtures -- graph-bfs (docs/graph-example.md)"
+        }
+    }
+}
+tasks.register("originalIconvFullCoreTest", Test) {
+    group = "verification"
+    description = "Tests original locale/iconv imports using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.OriginalIconvNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        checkBuild(file("build/original-iconv/manifest.json").isFile()) {
+            "Missing original-iconv fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-iconv (docs/original-iconv.md)"
+        }
+    }
+}
+tasks.register("fileWaitFullCoreTest", Test) {
+    group = "verification"
+    description = "Tests original GHC descriptor waits using explicitly prepared Linux full Core."
+    maxHeapSize = "4g"
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.FileWaitFullCoreTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original descriptor-wait evidence requires a fresh test process") { true }
+    doFirst {
+        checkBuild(file("build/file-wait/manifest.json").isFile()) {
+            "Missing file-wait fixture: use selected complete-Core GHC9.14.1 on Linux and run cabal run exe:thc-fixtures -- file-wait"
+        }
+    }
+}
+tasks.register("originalStackDecoderFullCoreTest", Test) {
+    group = "verification"
+    description = "Tests the original stack decoder/formatter using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/original-stack-decoder") {
+        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.OriginalStackDecoderTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        checkBuild(file("build/original-stack-decoder/manifest.json").isFile()) {
+            "Missing original-stack-decoder fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- original-stack-decoder"
+        }
+    }
+}
+tasks.register("arithmeticExceptionsFullCoreTest", Test) {
+    group = "verification"
+    description = "Tests original arithmetic exception payloads using the explicitly prepared full-Core GHC fixture."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/arithmetic-exceptions") {
+        include("**/*.json", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.ArithmeticExceptionsNativeTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Full-Core native/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        checkBuild(file("build/arithmetic-exceptions/manifest.json").isFile()) {
+            "Missing arithmetic-exceptions fixture: select a full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- arithmetic-exceptions"
+        }
+    }
+}
+[["compactRegionsFullCoreDefault", false],[ "compactRegionsFullCoreDense", true],[
+        "compactSerializedFullCoreDefault", false],[ "compactSerializedFullCoreDense", true]].each { taskName, dense ->
+    def serialized = taskName.startsWith("compactSerialized")
+    def fixtureDirectory = serialized ? "compact-serialization" : "compact-regions"
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original ghc-compact with explicitly prepared complete GHC Core."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/$fixtureDirectory") {
+            include("**/*.json", "oracle.tsv", "installed/bundles/*.zip", "native/oracle")
+        })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.${serialized ? "CompactSerializedNativeTest" : "CompactRegionsNativeTest"}") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original compact-region evidence requires a fresh process") { true }
+        doFirst {
+            checkBuild(file("build/$fixtureDirectory/manifest.json").isFile()) {
+                "Select full-Core GHC9.14.1 and run cabal run exe:thc-fixtures -- $fixtureDirectory"
+            }
+        }
+    }
+}
+[["stmFullCoreTest", false],[ "stmDenseFullCoreTest", true]].each { taskName, dense -> tasks.register(taskName, Test) {
+    group = "verification"
+    description = "Tests original STM transactions and nestedAtomically using explicitly prepared complete GHC Core."
+    maxHeapSize = "4g"
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/stm") {
+        include("**/*.json", "*.tsv", "installed/bundles/*.zip", "logs/*.stdout", "logs/*.stderr", "native/stm-oracle")
+    })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.STMFullCoreTest") }
+    systemProperty("thc.handoffSlabs", dense.toString())
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Original STM native/first-entry evidence requires a fresh process") { true }
+    doFirst {
+        checkBuild(file("build/stm/manifest.json").isFile()) {
+            "Missing STM fixture: select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- stm (docs/stm.md)"
+        }
+    }
+} }
+tasks.register("packageScalarFullCoreTest", Test) {
+    group = "verification"
+    description = "Tests genuine package-owned scalar C calls from ordinary Cabal acquisitions."
+    testClassesDirs = fullCoreTests.output.classesDirs
+    classpath = fullCoreTests.runtimeClasspath
+    inputs.files(fileTree("build/package-scalar-cbits") { include("**/*.json", "**/library.zip", "logs/*.stdout", "logs/*.stderr") })
+    useJUnitPlatform()
+    filter { includeTestsMatching("thc.runtime.PackageScalarCbitsTest") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("Native package C/compiled evidence requires a fresh test process") { true }
+    doFirst {
+        checkBuild(file("build/package-scalar-cbits/manifest.json").isFile()) {
+            "Missing scalar cbits fixture: select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- package-scalar-cbits"
+        }
+    }
+}
+[["signalDispatchFullCoreDefault", false],[ "signalDispatchFullCoreDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original GHC signal handler lookup and forked dispatch on both backends."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/signal-dispatch") { include("**/*.json", "oracle.txt", "installed/bundles/*.zip") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.SignalDispatchFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Original signal delivery requires a fresh test process") { true }
+        doFirst {
+            checkBuild(file("build/signal-dispatch/manifest.json").isFile()) {
+                "Select full-Core GHC 9.14.1 and run cabal run exe:thc-fixtures -- signal-dispatch"
+            }
+        }
+    }
+}
+[["stablePtrFfiFullCoreDefault", false],[ "stablePtrFfiFullCoreDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests ordinary Foreign.StablePtr through genuine package-owned ccall/capi imports."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/stableptr-ffi") { include("**/*.json", "logs/*.stdout", "logs/*.stderr") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.StablePtrFfiFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native StablePtr C and compiled evidence requires a fresh process") { true }
+        doFirst {
+            checkBuild(file("build/stableptr-ffi/manifest.json").isFile()) {
+                "Select full-Core GHC9.14.1/configured Clang and run cabal run exe:thc-fixtures -- stableptr-ffi"
+            }
+        }
+    }
+}
+[["packageNativeArchivesDefault", false],[ "packageNativeArchivesDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Checks real mixed native imports and archive-only rejection before effects."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/native-archive") { include("linked/**/*.json", "*.json") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.PackageNativeArchiveFullCoreTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("build/native-archive/manifest.json").isFile()) {
+                "Run cabal run exe:thc-fixtures -- package-native-archives with the selected full-Core GHC"
+            }
+        }
+    }
+}
+[["packageNativeOriginalsDefault", false],[ "packageNativeOriginalsDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Checks original digest, safe erf/libm and primitive integer setters against native Haskell observations."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/original-native") { include("linked/**/*.json", "*-native.tsv", "erf-entry/**/*.json", "primitive-entry/**/*.json", "*-audit.json", "manifest.json", "sources/**") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.PackageNativeOriginalsTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("build/original-native/manifest.json").isFile()) {
+                "Missing original package fixtures: set THC_DIGEST_SOURCE, THC_ERF_SOURCE and THC_PRIMITIVE_SOURCE; run cabal run exe:thc-fixtures -- package-native-originals"
+            }
+        }
+    }
+}
+[
+    ["libyamlNativeDefault", false, "zip"], ["libyamlNativeDense", true, "zip"],
+    ["libyamlJsonDefault", false, "json"], ["libyamlJsonDense", true, "json"],
+    ["libyamlCompactDefault", false, "compact"], ["libyamlCompactDense", true, "compact"]].each { taskName, dense, format ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Checks genuine libyaml C-only dependency products, retained input, cleanup and native encoder buffers."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        def fixture = providers.gradleProperty("thc.libyamlFixture").orElse("build/libyaml-native")
+        systemProperty("thc.libyamlFixture", file(fixture.get()).absolutePath)
+        systemProperty("thc.libyamlBundle", file("${fixture.get()}/libyaml.zip").absolutePath)
+        inputs.dir(fixture)
+        if (format != "zip") {
+            def property = format == "compact" ? "thc.libyamlCompactPackages" : "thc.libyamlJsonPackages"
+            def packages = providers.gradleProperty(property).orElse("${fixture.get()}/$format-packages.json")
+            inputs.file(packages)
+            systemProperty("thc.libyamlPackages", file(packages.get()).absolutePath)
+            systemProperty("thc.libyamlFormat", format)
+            doFirst { checkBuild(file(packages.get()).isFile()) { "Supply the genuine $format package manifest with -P$property" } }
+        }
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.LibyamlNativeProductsTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("${fixture.get()}/manifest.json").isFile()) {
+                "Set THC_LIBYAML_CAPTURE_STAGE to a genuine retained Cabal acquisition; run thc-fixtures libyaml-native"
+            }
+        }
+    }
+}
+[["wcwidthDefault", false],[ "wcwidthDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Checks Tasty's exact wcwidth declaration and fallback against native locale-sensitive results."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/wcwidth") { include("**/*.json", "*.tsv", "ConsoleReporter.hs", "TASTY-LICENSE") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.WcwidthTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("build/wcwidth/manifest.json").isFile()) {
+                "Set THC_TASTY_SOURCE and run cabal run exe:thc-fixtures -- wcwidth"
+            }
+        }
+    }
+}
+[["getEntropyDefault", false],[ "getEntropyDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Checks original splitmix initialization and native libc getentropy status/bounds."
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        inputs.files(fileTree("build/getentropy") { include("**/*.json", "native.tsv", "control.so", "sources/**") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.GetEntropyTest") }
+        outputs.upToDateWhen { false }
+        doFirst {
+            checkBuild(file("build/getentropy/manifest.json").isFile()) {
+                "Set THC_SPLITMIX_SOURCE and run cabal run exe:thc-fixtures -- getentropy"
+            }
+        }
+    }
+}
+[["hashableFfiFullCoreDefault", false],[ "hashableFfiFullCoreDense", true]].each { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests original Hashable byte-backed instances against native GHC, including first compiled entries."
+        // The genuine manifest includes full original boot-library Core.
+        maxHeapSize = "8g"
+        testClassesDirs = fullCoreTests.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath
+        inputs.files(fileTree("build/hashable-ffi") { include("**/*.json", "bundles/*.zip", "logs/*.stdout", "logs/*.stderr") })
+        useJUnitPlatform()
+        filter { includeTestsMatching("thc.runtime.HashableFfiFullCoreTest") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Native Hashable FFI and first-compiled evidence requires a fresh process") { true }
+        doFirst {
+            checkBuild(file("build/hashable-ffi/manifest.json").isFile()) {
+                "Select full-Core GHC 9.14.1/configured Clang and run cabal run exe:thc-fixtures -- hashable-ffi"
+            }
+        }
+    }
+}
+tasks.register("simdFamiliesExperimentTest", Test) {
+    group = "verification"
+    description = "Runs the prepared generated SIMD Core, native-oracle, and compiled-path experiment."
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags("simd-families-experiment") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("SIMD evidence must be checked in a fresh test process") { true }
+}
+// Keep optional language tests outside the ordinary test inventory and classpath.
+def polyglotTests = sourceSets.create("polyglotTest")
+configurations[polyglotTests.implementationConfigurationName].extendsFrom(configurations.testImplementation)
+configurations[polyglotTests.runtimeOnlyConfigurationName].extendsFrom(configurations.testRuntimeOnly)
+polyglotTests.compileClasspath += sourceSets.test.output
+polyglotTests.runtimeClasspath += sourceSets.test.output
+kotlin.target.compilations.getByName("polyglotTest").associateWith(kotlin.target.compilations.getByName("main"))
+tasks.register("polyglotTest", Test) {
+    group = "verification"
+    description = "Tests THC's optional interop boundary against GraalJS."
+    maxHeapSize = "4g"
+    testClassesDirs = polyglotTests.output.classesDirs
+    classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+    useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
+}
+// Optional languages retain their separate classpath in both handoff forks.
+def polyglotModeTests = [["polyglotTestDefault", false],[ "polyglotTestDense", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests optional interop with ${dense ? "dense" : "default"} handoffs."
+        maxHeapSize = "4g"
+        testClassesDirs = polyglotTests.output.classesDirs
+        classpath = polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        useJUnitPlatform { excludeTags("foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Interop evidence requires a fresh test process") { true }
+    }
+}
+polyglotModeTests[1].configure { mustRunAfter(polyglotModeTests[0]) }
+// Genuine automatic exception boxing uses the selected full-Core support unit.
+def foreignExceptionTests = [["foreignExceptionTest", false],[ "foreignExceptionDenseTest", true]].collect { taskName, dense ->
+    tasks.register(taskName, Test) {
+        group = "verification"
+        description = "Tests genuine automatic foreign exceptions with ${dense ? "dense" : "default"} handoffs."
+        maxHeapSize = "4g"
+        testClassesDirs = fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.output.classesDirs
+        classpath = fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime
+        useJUnitPlatform { includeTags("foreign-exceptions-full-core") }
+        systemProperty("thc.handoffSlabs", dense.toString())
+        systemProperty("thc.expectedHandoffSlabs", dense.toString())
+        maxParallelForks = 1
+        outputs.upToDateWhen { false }
+        outputs.doNotCacheIf("Foreign exception evidence requires a fresh test process") { true }
+        doFirst {
+            checkBuild(file("build/foreign-exceptions/manifest.json").isFile()) {
+                "Select full-Core GHC 9.14.1/configured source and run cabal run exe:thc-fixtures -- foreign-exceptions"
+            }
+        }
+    }
+}
+foreignExceptionTests[1].configure { mustRunAfter(foreignExceptionTests[0]) }
+tasks.register("jitStabilityTest", Test) {
+    group = "verification"
+    description = "Runs advisory JIT code-retention checks; failures remain visible to local callers."
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform { includeTags("jit-stability") }
+    outputs.upToDateWhen { false }
+    outputs.doNotCacheIf("JIT stability must be measured in a fresh test process") { true }
+}
+// Development entrypoints have their own output; installDist and the runtime
+// JAR contain only main. Tool scripts explicitly add this separate tools JAR.
+def diagnostics = sourceSets.create("diagnostics")
+configurations[diagnostics.implementationConfigurationName].extendsFrom(configurations.implementation)
+configurations[diagnostics.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly)
+diagnostics.compileClasspath += sourceSets.main.output
+diagnostics.runtimeClasspath += sourceSets.main.output
+kotlin.target.compilations.getByName("diagnostics").associateWith(kotlin.target.compilations.getByName("main"))
+tasks.register("toolsJar", Jar) {
+    group = "build"
+    description = "Packages development checks and benchmark entrypoints separately from the runtime."
+    archiveFileName.set("thc-tools.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("diagnostics"))
+    from(diagnostics.output)
+}
+
+def examples = sourceSets.create("examples")
+configurations[examples.implementationConfigurationName].extendsFrom(configurations.implementation)
+configurations[examples.runtimeOnlyConfigurationName].extendsFrom(configurations.runtimeOnly)
+examples.compileClasspath += sourceSets.main.output
+examples.runtimeClasspath += sourceSets.main.output
+kotlin.target.compilations.getByName("examples").associateWith(kotlin.target.compilations.getByName("main"))
+
+tasks.register("probe", JavaExec) {
+    group = "verification"
+    classpath = diagnostics.runtimeClasspath
+    mainClass.set("thc.Probe")
+    jvmArgs(application.applicationDefaultJvmArgs)
+    workingDir(projectDir)
+}
+
+tasks.register("polyglotDemo", JavaExec) {
+    group = "application"
+    description = "Runs exported Haskell against GraalJS through THC.Polyglot."
+    classpath = examples.runtimeClasspath + polyglotDemoRuntime
+    mainClass.set("thc.PolyglotDemo")
+    jvmArgs(application.applicationDefaultJvmArgs)
+    workingDir(projectDir)
+}
+
+// Vector intrinsics are isolated in Java; floating vectors retain fixed species.
+tasks.withType(JavaCompile).configureEach { options.compilerArgs.addAll(["--add-modules", "jdk.incubator.vector"]) }
+
+// Compile the unchanged pinned GHC cbits for this host. The resulting bitcode
+// remains an optional execution path; no native pointer is exposed to Core.
+def compileCbits = tasks.register("compileCbits", Exec) {
+    inputs.files("scripts/build-cbits.py", "src/main/c/md5-api.c", "src/main/c/iconv-api.c",
+        "src/main/c/strerror-locale.c", "src/main/c/libdw-unavailable.c", "src/main/c/package-pointer-api.c",
+        "compiler/pinned-ghc-internal/cbits/strerror.c",
+        "src/main/c/gmp-api.c", "src/main/c/windows-malloc.c",
+        "bench/experiments/pinned-addresses/reference/md5.c",
+        "bench/experiments/pinned-addresses/reference/md5.h")
+    inputs.files(fileTree("compiler/pinned-ghc-rts") { include("*.c", "*.h") })
+    inputs.files("src/main/c/text-api.c", "src/main/c/wait-status-api.c")
+    inputs.files("src/main/c/bytestring-utf8-api.c")
+    inputs.files(fileTree("compiler/pinned-bytestring/0.12.2.0"))
+    inputs.files(fileTree("compiler/pinned-text/2.1.3"))
+    outputs.dir(layout.buildDirectory.dir("generated/cbits"))
+    outputs.upToDateWhen { false }
+    commandLine(python.get(), "scripts/build-cbits.py", "--output", layout.buildDirectory.dir("generated/cbits").get().asFile)
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/cbits")) }
+tasks.processResources { dependsOn(compileCbits) }
+
+// Exact-width byte/short atomics, which JDK segment handles do not implement.
+def compileNativeAtomics = tasks.register("compileNativeAtomics") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-atomic-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-atomics")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def darwin = host["system"] == "Darwin" && host["architecture"] in ["x86_64", "aarch64"].toSet()
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64" || darwin) {
+            def extension = darwin ? ".dylib" : ".so"
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-atomic-api$extension").toFile()
+            destination.parentFile.mkdirs()
+            def compiler = [clang.get()] + (darwin ? [] : ["--target=${host["target"]}"])
+            providers.exec { commandLine(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", darwin ? "-dynamiclib" : "-shared", source.asFile.path, "-o", destination.path]) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-atomics")) }
+tasks.processResources { dependsOn(compileNativeAtomics) }
+
+// Optional Linux opened-resource provider; not original fstat admission.
+def compileNativeFiles = tasks.register("compileNativeFiles") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-file-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-files")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-file-api.so").toFile()
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-files")) }
+tasks.processResources { dependsOn(compileNativeFiles) }
+
+// Directory authority is callable from FileSystem SPI outside an entered context.
+def compileNativeDirectories = tasks.register("compileNativeDirectories") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-directory-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-directories")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-directory-api.so").toFile()
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-directories")) }
+tasks.processResources { dependsOn(compileNativeDirectories) }
+
+// Context-owned process transport needs libc posix_spawn and Linux pidfds.
+def compileNativeProcesses = tasks.register("compileNativeProcesses") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-processes")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-api.so").toFile()
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-processes")) }
+tasks.processResources { dependsOn(compileNativeProcesses) }
+
+def prepareProcessLifecycleOracle = tasks.register("prepareProcessLifecycleOracle") {
+    def source = layout.projectDirectory.file("test/fixtures/process-lifecycle/Main.hs")
+    def policySource = layout.projectDirectory.file("test/fixtures/process-lifecycle/sigchld-policy.c")
+    def transportSource = layout.projectDirectory.file("src/main/c/native-process-api.c")
+    def output = layout.buildDirectory.dir("process-lifecycle/native")
+    def ghc = providers.environmentVariable("GHC").orElse("ghc")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.property("ghc", ghc)
+    inputs.file(policySource); inputs.file(transportSource); inputs.property("clang", clang)
+    outputs.dir(output)
+    onlyIf { System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in ["amd64", "x86_64"] }
+    doLast {
+        def version = providers.exec { commandLine(ghc.get(), "--numeric-version") }.standardOutput.asText.get().trim()
+        checkBuild(version == "9.14.1") { "Process oracle requires GHC 9.14.1, found $version" }
+        def destination = output.get().asFile
+        destination.mkdirs()
+        providers.exec { commandLine(ghc.get(), "-O1", "-threaded", "-package", "process", "-package", "unix",
+            "-outputdir", destination.path, source.asFile.path, "-o", destination.toPath().resolve("process-oracle").toFile().path) }.result.get()
+        // Signal dispositions belong to this standalone control, never the test JVM.
+        providers.exec { commandLine(clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+            policySource.asFile.path, transportSource.asFile.path, "-Wl,--wrap=posix_spawn",
+            "-o", destination.toPath().resolve("sigchld-policy").toFile().path) }.result.get()
+    }
+}
+tasks.withType(Test).configureEach { dependsOn(prepareProcessLifecycleOracle) }
+
+// Owned native workers and asynchronous syscall guard must run as machine code.
+def compileNativeOpenRequests = tasks.register("compileNativeOpenRequests") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-open-request.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-open-requests")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-open-request.so").toFile()
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-pthread", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-open-requests")) }
+tasks.processResources { dependsOn(compileNativeOpenRequests) }
+
+// Partial original sigprocmask, loaded only with explicit native authority.
+def compileNativeSignals = tasks.register("compileNativeSignals") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-signal-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-signals")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-signal-api.so").toFile()
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-fembed-bitcode", "-shared", source.asFile.path, "-o", destination.path) }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-signals")) }
+tasks.processResources { dependsOn(compileNativeSignals) }
+
+// POSIX asynchronous capture must execute machine code, never LLVM guest code.
+def compileNativeProcessSignals = tasks.register("compileNativeProcessSignals") {
+    dependsOn("generateStdioAbi")
+    def source = layout.projectDirectory.file("src/main/c/native-process-signal-api.c")
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/native-process-signals")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output)
+    doLast {
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        if (host["system"] == "Linux" && host["architecture"] == "x86_64") {
+            def destination = output.get().asFile.toPath().resolve("thc/native/native-process-signal-api.so").toFile()
+            destination.parentFile.mkdirs()
+            providers.exec { commandLine(clang.get(), "--target=${host["target"]}", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                "-fPIC", "-shared", source.asFile.path, "-o", destination.path, "-ldl") }.result.get()
+        }
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/native-process-signals")) }
+tasks.processResources { dependsOn(compileNativeProcessSignals) }
+
+// Probe the genuine Windows search-buffer ABI with the native target headers.
+def generateWindowsDirectoryAbi = tasks.register("generateWindowsDirectoryAbi") {
+    def source = layout.projectDirectory.file("src/main/c/windows-directory-abi.c").asFile
+    def output = layout.buildDirectory.dir("generated/windows-directory-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source)
+    inputs.property("clang", clang)
+    inputs.property("host", System.getProperty("os.name") + "/" + System.getProperty("os.arch"))
+    outputs.dir(output)
+    onlyIf { windowsHost }
+    doLast {
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def target = run([clang.get(), "-dumpmachine"]).trim()
+        requireBuild(System.getProperty("os.arch") in ["amd64", "x86_64"].toSet() &&
+            target.startsWith("x86_64-") && (target.contains("windows") || target.contains("mingw"))) {
+            "Windows directory probing requires a native x86_64 Windows compiler: " + target
+        }
+        def executable = temporaryDir.toPath().resolve("windows-directory-abi.exe").toFile()
+        run([clang.get(), "-std=c11", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def document = ["schema": 1, "architecture": "x86_64", "target": target,
+            "compilerVersion": run([clang.get(), "--version"]),
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes)
+                .encodeHex().toString(), "layout": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/windows-directory-abi.json").toFile()
+        destination.parentFile.mkdirs()
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(document)) + "\n", "UTF-8")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/windows-directory-abi")) }
+tasks.processResources { dependsOn(generateWindowsDirectoryAbi) }
+
+// Original stdio FCalls use target C widths/errno, not JVM or private-ABI values.
+def generateStdioAbi = tasks.register("generateStdioAbi") {
+    def source = layout.projectDirectory.file(windowsHost ? "src/main/c/windows-stdio-abi-probe.c" : "src/main/c/stdio-abi-probe.c").asFile
+    def output = layout.buildDirectory.dir("generated/stdio-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source)
+    inputs.property("clang", clang)
+    outputs.dir(output)
+    outputs.upToDateWhen { false }
+    doLast {
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def architecture = { String value ->
+            def lower = value.toLowerCase(java.util.Locale.ROOT)
+            lower == "amd64" ? "x86_64" : lower == "arm64" ? "aarch64" : lower
+        }
+        def osName = System.getProperty("os.name")
+        def system = osName.startsWith("Mac") ? "Darwin" : windowsHost ? "Windows" : osName
+        def arch = architecture(System.getProperty("os.arch"))
+        def compiler = clang.get()
+        def defaultTarget = run([compiler, "-dumpmachine"]).trim()
+        def parts = defaultTarget.split('-').toList()
+        requireBuild(system in ["Linux", "Darwin", "Windows"].toSet() && arch in (windowsHost ? ["x86_64"].toSet() : ["x86_64", "aarch64"].toSet()) &&
+            parts.size() >= 3 && architecture(parts[0]) == arch &&
+            (system == "Linux" ? parts.drop(2) == ["linux", "gnu"]
+             : windowsHost ? parts.drop(2) == ["windows", "gnu"] : parts[2].startsWith("darwin"))) {
+            "Stdio probing requires a native supported C compiler: $system/$arch, clang=$defaultTarget"
+        }
+        def target = system == "Linux" ? "$arch-unknown-linux-gnu" : defaultTarget
+        def command = [compiler] + (system == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Clang did not select the native stdio target $target" }
+        def executable = new File(temporaryDir, windowsHost ? "stdio-abi-probe.exe" : "stdio-abi-probe")
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        requireBuild(probe.keySet() == (windowsHost ? ["widths", "errno", "seek"].toSet() : ["widths", "errno", "seek", "open", "at", "siginfoBytes"].toSet())) { "Malformed native stdio ABI probe" }
+        // The C probe asserts widths; runtime Kotlin validates all exact fields and errno values.
+        def manifest = ["schema": (windowsHost ? 2 : 1), "system": system,
+            "architecture": arch, "target": target, "compilerDefaultTarget": defaultTarget,
+            "compilerVersion": run([compiler, "--version"]),
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes)
+                .encodeHex().toString(),
+            "widths": probe["widths"], "errno": probe["errno"], "seek": probe["seek"]]
+        if (windowsHost) manifest["profile"] = "windows-managed-descriptors"
+        else { manifest["open"] = probe["open"]; manifest["at"] = probe["at"]; manifest["siginfoBytes"] = probe["siginfoBytes"] }
+        def destination = output.get().asFile.toPath().resolve("thc/native/stdio-host-abi.json").toFile()
+        destination.parentFile.mkdirs()
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
+        logger.lifecycle("Probed original stdio ABI and errno values for $target")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/stdio-abi")) }
+tasks.processResources { dependsOn(generateStdioAbi) }
+
+def generatePosixStatAbi = tasks.register("generatePosixStatAbi") {
+    dependsOn(generateStdioAbi)
+    def source = layout.projectDirectory.file("src/main/c/posix-stat-abi-probe.c").asFile
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/posix-stat-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        // Share the already validated native compiler target, not another list
+        // of target triples or guessed ABI sizes.
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def target = host["target"] as String
+        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Stat compiler target changed" }
+        def executable = temporaryDir.toPath().resolve("posix-stat-abi-probe").toFile()
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def manifest = ["schema": 1, "system": host["system"],
+            "architecture": host["architecture"], "target": target,
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
+            "stat": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/posix-stat-abi.json").toFile()
+        destination.parentFile.mkdirs()
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/posix-stat-abi")) }
+tasks.processResources { dependsOn(generatePosixStatAbi) }
+
+def generateTermiosAbi = tasks.register("generateTermiosAbi") {
+    dependsOn(generateStdioAbi)
+    def source = layout.projectDirectory.file("src/main/c/termios-abi-probe.c").asFile
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/termios-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def target = host["target"] as String
+        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Termios compiler target changed" }
+        def executable = temporaryDir.toPath().resolve("termios-abi-probe").toFile()
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def manifest = ["schema": 1, "system": host["system"],
+            "architecture": host["architecture"], "target": target,
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
+            "termios": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/termios-abi.json").toFile()
+        destination.parentFile.mkdirs()
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/termios-abi")) }
+tasks.processResources { dependsOn(generateTermiosAbi) }
+
+def generateSigsetAbi = tasks.register("generateSigsetAbi") {
+    dependsOn(generateStdioAbi)
+    def source = layout.projectDirectory.file("src/main/c/sigset-abi-probe.c").asFile
+    def stdio = layout.buildDirectory.file("generated/stdio-abi/thc/native/stdio-host-abi.json")
+    def output = layout.buildDirectory.dir("generated/sigset-abi")
+    def clang = providers.environmentVariable("THC_CLANG").orElse("clang")
+    inputs.file(source); inputs.file(stdio); inputs.property("clang", clang)
+    outputs.dir(output); outputs.upToDateWhen { false }
+    doLast {
+        def run = { List<String> command -> providers.exec { commandLine(command) }.standardOutput.asText.get() }
+        def host = new JsonSlurper().parse(stdio.get().asFile) as Map
+        def target = host["target"] as String
+        def command = [clang.get()] + (host["system"] == "Linux" ? ["--target=$target"] : [])
+        requireBuild(run(command + "-dumpmachine").trim() == target) { "Sigset compiler target changed" }
+        def executable = temporaryDir.toPath().resolve("sigset-abi-probe").toFile()
+        run(command + ["-std=c11", source.path, "-o", executable.path])
+        def probe = new JsonSlurper().parseText(run([executable.path])) as Map
+        def manifest = ["schema": 1, "system": host["system"],
+            "architecture": host["architecture"], "target": target,
+            "sourceSha256": MessageDigest.getInstance("SHA-256").digest(source.bytes).encodeHex().toString(),
+            "sigset": probe]
+        def destination = output.get().asFile.toPath().resolve("thc/native/sigset-abi.json").toFile()
+        destination.parentFile.mkdirs()
+        destination.setText(JsonOutput.prettyPrint(JsonOutput.toJson(manifest)) + "\n", "UTF-8")
+    }
+}
+sourceSets.main { resources.srcDir(layout.buildDirectory.dir("generated/sigset-abi")) }
+tasks.processResources { dependsOn(generateSigsetAbi) }
+
+// These providers implement POSIX contracts, including LP64 CLong and termios.
+// Windows must not publish guessed POSIX ABI receipts. Managed Core and portable
+// original C resources are independent of these optional providers.
+if (windowsHost) {
+    ["generatePosixStatAbi", "generateTermiosAbi", "generateSigsetAbi",
+        "compileNativeAtomics", "compileNativeFiles", "compileNativeDirectories", "compileNativeProcesses", "compileNativeOpenRequests", "compileNativeSignals", "compileNativeProcessSignals"]
+        .each { name -> tasks.named(name) { onlyIf("POSIX provider is unavailable on Windows") { false } } }
+    tasks.processResources {
+        // Reject stale resources copied from a build for a different host, too.
+        exclude { !it.isDirectory() && it.path.startsWith("thc/native/") &&
+            it.path !in ["thc/native/windows-directory-abi.json", "thc/native/stdio-host-abi.json"].toSet() }
+        exclude("thc/cbits/strerror*.bc", "thc/cbits/iconv.bc", "thc/cbits/*.so")
+        exclude("thc/cbits/windows-malloc-probe.exe")
+    }
+} else {
+    tasks.processResources { exclude("thc/native/windows-directory-abi.json") }
+}
+
+// Native Windows checkpoint: the default test task keeps its complete contract.
+// Both tasks consume fresh thc-fixtures windows-smoke and native MD5 inputs.
+[["windowsSmokeTest", false],[ "windowsDenseSmokeTest", true]].each { name, dense ->
+    tasks.register(name, Test) {
+        group = "verification"
+        description = "Native-oracle runtime and C ABI smoke checks (dense handoff=$dense)."
+        testClassesDirs = sourceSets.test.output.classesDirs
+        classpath = sourceSets.test.runtimeClasspath
+        systemProperty("thc.handoffSlabs", dense.toString())
+        filter {
+            ["thc.FastSmokeTest", "thc.RuntimeTest", "thc.BytecodeBackendTest",
+                "thc.CoreRequestTest", "thc.FramesTest", "thc.CStringTest",
+                "thc.runtime.ManagedMd5Test", "thc.WindowsDistributionTest",
+                "thc.runtime.WindowsSulongLibraryLookupTest",
+                "thc.runtime.NarrowReturnedPointerTest"].each { includeTestsMatching(it) }
+        }
+        inputs.files("build/windows-smoke/provenance.json", "build/windows-driver/provenance.json")
+        dependsOn(tasks.installDist)
+        maxParallelForks = 1
+    }
+}
+tasks.named("windowsDenseSmokeTest") { mustRunAfter("windowsSmokeTest") }
+
+apply(from: "gradle/protocol-processor-tests.gradle")

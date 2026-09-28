@@ -71,10 +71,12 @@ class AstTailSpillTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val metrics = Metrics(true)
-                fun root(label: String, body: Expr, side: Boolean = false) = FunctionRoot(language,
-                    FrameLayout().build(), label, null, intArrayOf(), intArrayOf(), intArrayOf(),
-                    body, metrics, resultProof = proof, role = if (side) FunctionRootRole.PASS_THROUGH else FunctionRootRole.FUNCTION,
-                    stackCapture = true)
+                fun root(label: String, body: Expr, side: Boolean = false) = FunctionRoot(language, FrameLayout().build(), label, null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    metrics, emptyArray(), proof, body.coreSourceLocation,
+                    booleanArrayOf(), null, null, intArrayOf(),
+                    null, false, emptyArray(), false,
+                    if (side) FunctionRootRole.PASS_THROUGH else FunctionRootRole.FUNCTION, true)
                 fun sides(label: String, last: Expr): RootCallTarget {
                     var target = root("$label-final", last, true).callTarget
                     repeat(128) { index ->
@@ -236,9 +238,12 @@ class AstTailSpillTest {
                             }
                         }
                     }
-                    next = FunctionRoot(language, FrameLayout().build(), "side-$index", null, intArrayOf(),
-                        intArrayOf(), intArrayOf(), body, metrics, resultProof = proof,
-                        role = FunctionRootRole.PASS_THROUGH, stackCapture = true).callTarget
+                    next = FunctionRoot(language, FrameLayout().build(), "side-$index", null,
+                        intArrayOf(), intArrayOf(), intArrayOf(), body,
+                        metrics, emptyArray(), proof, body.coreSourceLocation,
+                        booleanArrayOf(), null, null, intArrayOf(),
+                        null, false, emptyArray(), false,
+                        FunctionRootRole.PASS_THROUGH, true).callTarget
                 }
                 val first = next!!
                 val body = object : Expr() {
@@ -250,8 +255,12 @@ class AstTailSpillTest {
                             null, true)
                     }
                 }
-                owner = FunctionRoot(language, FrameLayout().build(), "retained owner", null, intArrayOf(),
-                    intArrayOf(), intArrayOf(), body, metrics, resultProof = proof, stackCapture = true)
+                owner = FunctionRoot(language, FrameLayout().build(), "retained owner", null,
+                    intArrayOf(), intArrayOf(), intArrayOf(), body,
+                    metrics, emptyArray(), proof, body.coreSourceLocation,
+                    booleanArrayOf(), null, null, intArrayOf(),
+                    null, false, emptyArray(), false,
+                    FunctionRootRole.FUNCTION, true)
                 val scope = AstStackKt.astStackScope(owner)
                 val target = if (!nonTail) owner.callTarget else {
                     val outer = object : Expr() {
@@ -268,8 +277,12 @@ class AstTailSpillTest {
                             outerSuffixes++; return if (kind == CoreKind.LONG) (answer as Long) + 4L else answer
                         }
                     }
-                    FunctionRoot(language, FrameLayout().build(), "non-tail outer", null, intArrayOf(),
-                        intArrayOf(), intArrayOf(), outer, metrics, resultProof = proof, stackCapture = true).callTarget
+                    FunctionRoot(language, FrameLayout().build(), "non-tail outer", null,
+                        intArrayOf(), intArrayOf(), intArrayOf(), outer,
+                        metrics, emptyArray(), proof, outer.coreSourceLocation,
+                        booleanArrayOf(), null, null, intArrayOf(),
+                        null, false, emptyArray(), false,
+                        FunctionRootRole.FUNCTION, true).callTarget
                 }
                 if (compiled) {
                     target.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(target, true)

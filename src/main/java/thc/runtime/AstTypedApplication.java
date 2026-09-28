@@ -140,7 +140,7 @@ public final class AstTypedApplication extends Expr {
             ((FunctionRoot) getRootNode()).getRole$org_intelligence_thc() != FunctionRootRole.PASS_THROUGH &&
             function.arity == operands.getLayout().getLogicalArity() && function.suppliedCount == 0 &&
             function.supplied.length == 0 && function.typedSupplied == null && selfTarget.matches(function.target)) {
-            ((FunctionRoot) getRootNode()).transferTypedSelf$org_intelligence_thc(frame, function, operands.getSource(), this);
+            ((FunctionRoot) getRootNode()).transferTypedSelf(frame, function, operands.getSource(), this);
             throw AstSelfCall.INSTANCE;
         }
     }

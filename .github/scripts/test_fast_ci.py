@@ -49,6 +49,44 @@ class FastRunnerTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Haskell"):
             ci.haskell_suites(self.selection() | {"haskell": {"suites": ["other"], "count": 1}})
 
+    def test_gradle_cache_identity_covers_groovy_and_java_build_logic_not_outputs(self):
+        names = ("build.gradle", "settings.gradle", "gradle.properties", "gradlew",
+                 "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties",
+                 ".github/scripts/fast_ci.init.gradle", "gradle/bytecode-metadata.gradle",
+                 "buildSrc/build.gradle", "buildSrc/src/main/java/thc/buildlogic/Normalizer.java")
+        for name in names:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(name)
+        java = self.root / "jdk"
+        java.mkdir()
+        (java / "release").write_text('GRAALVM_VERSION="25.3.4.1"\nJAVA_VERSION="25"\n')
+        with patch.object(ci, "git", return_value="a" * 40):
+            recorder = ci.Recorder(self.root, self.root / "receipts")
+        with patch.dict(os.environ, {"JAVA_HOME": str(java), "GITHUB_OUTPUT": ""}), \
+                patch.object(recorder, "command", return_value=(0, "thc-fast-inputs-v1-" + "b" * 64)):
+            def key():
+                ci.identify(recorder, self.root / "identity.json")
+                return recorder.data["gradlePrefix"]
+            original = key()
+            for name in names:
+                path = self.root / name
+                before = path.read_text()
+                path.write_text(before + " changed")
+                self.assertNotEqual(original, key(), name)
+                path.write_text(before)
+                self.assertEqual(original, key(), name)
+            for name in ("buildSrc/build/generated/Ignore.java", "buildSrc/.gradle/Ignore.gradle"):
+                path = self.root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("not source")
+                self.assertEqual(original, key(), name)
+            extra = self.root / "buildSrc/src/main/java/thc/buildlogic/Added.java"
+            extra.write_text("new source")
+            self.assertNotEqual(original, key())
+            extra.unlink()
+            self.assertEqual(original, key())
+
     def test_exact_fresh_suite_and_cases(self):
         self.suite()
         result = ci.validate_xml(self.root, ["example.Test"])
@@ -398,9 +436,9 @@ class FastRunnerTest(unittest.TestCase):
 
     def test_genuine_foreign_exceptions_remain_in_required_complete_core_build(self):
         root = Path(__file__).parents[2]
-        gradle = (root / "build.gradle.kts").read_text()
-        dedicated = gradle.split('val foreignExceptionTests =', 1)[1].split('tasks.register<Test>("jitStabilityTest")', 1)[0]
-        self.assertIn('fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.get().output.classesDirs', dedicated)
+        gradle = (root / "build.gradle").read_text()
+        dedicated = gradle.split('def foreignExceptionTests =', 1)[1].split('tasks.register("jitStabilityTest", Test)', 1)[0]
+        self.assertIn('fullCoreTests.output.classesDirs + polyglotTests.output.classesDirs + sourceSets.test.output.classesDirs', dedicated)
         self.assertIn('fullCoreTests.runtimeClasspath + polyglotTests.runtimeClasspath + polyglotDemoRuntime', dedicated)
         self.assertIn('includeTags("foreign-exceptions-full-core")', dedicated)
         self.assertTrue((root / "src/fullCoreTest/kotlin/thc/runtime/ForeignExceptionTest.kt").is_file())

@@ -50,7 +50,7 @@ public final class DelimitedActionSite extends Node {
             AsyncRequest request = saved.asyncRequest();
             if (request != null) throw new AsyncDelivery(request, this);
             if (!AsyncContinuations.isYieldMarker(saved.getYielded())) throw fault("Unsupported delimited invocation cut");
-            answer = force.drainStack$org_intelligence_thc(saved, shape, true, false);
+            answer = force.drainStack(saved, shape, true, false);
             DelimitedControl.asyncResult(answer, this);
         }
         return shape == null ? answer : ownedTupleResult(answer, shape);
@@ -69,10 +69,10 @@ public final class DelimitedActionSite extends Node {
         try { return force.execute(frame, action); }
         catch (ThunkSuspended cut) {
             if (cut.getAsyncRequest() != null) throw new AsyncDelivery(cut.getAsyncRequest(), this);
-            return force.drainDelimitedBoundary$org_intelligence_thc(cut.getThunk());
+            return force.drainDelimitedBoundary(cut.getThunk());
         } catch (CallSegmentSuspended cut) {
             if (cut.getAsyncRequest() != null) throw new AsyncDelivery(cut.getAsyncRequest(), this);
-            return force.drainDelimitedBoundary$org_intelligence_thc(cut.getSegment());
+            return force.drainDelimitedBoundary(cut.getSegment());
         }
     }
     public Object invoke(VirtualFrame frame, Object action, Object[] arguments, TupleShape shape) {

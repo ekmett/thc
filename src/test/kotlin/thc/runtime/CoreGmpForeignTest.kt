@@ -3,6 +3,8 @@
 
 package thc.runtime
 
+import thc.runtime.CoreGmpForeign.GMP_ARRAY_REP
+
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
@@ -30,8 +32,8 @@ class CoreGmpForeignTest {
         "arity" to operation.arguments.size.toLong(), "suppliedArity" to operation.arguments.size.toLong(),
         "argumentReps" to operation.arguments.map { scalar(it, false) }, "resultRep" to result(operation, false))
     @Test fun allTwentyFourExactContractsIncludeOriginalStateAndLogicalTuple() {
-        assertEquals(24, GmpForeignOp.entries.size)
-        for (operation in GmpForeignOp.entries) {
+        assertEquals(24, GmpForeignOp.values().size)
+        for (operation in GmpForeignOp.values()) {
             val proof = result(operation, true)
             assertEquals(operation, CoreGmpForeign.validate(mapOf("rep" to proof, "foreignCall" to descriptor(operation)),
                 operation.arguments.map { scalar(it, true) }, operation.arguments.map { false }, proof))
@@ -42,7 +44,7 @@ class CoreGmpForeignTest {
         assertNull(CoreGmpForeign.validate(emptyMap<String, Any>(), emptyList<Any>(), emptyList<Any>(), null))
     }
     @Test fun malformedDescriptorsAndOccurrenceProofsCannotChangeTheAbi() {
-        for (operation in GmpForeignOp.entries) {
+        for (operation in GmpForeignOp.values()) {
             val good = descriptor(operation)
             val arguments = operation.arguments.map { scalar(it, true) }
             val flags = operation.arguments.map { false }
@@ -76,7 +78,7 @@ class CoreGmpForeignTest {
         CoreGmpForeign.validateHead(head, false)
         assertThrows(RuntimeFault::class.java) { CoreGmpForeign.validateHead(head, true) }
         assertThrows(RuntimeFault::class.java) { CoreGmpForeign.validateHead(listOf("var", ""), false) }
-        for (operation in GmpForeignOp.entries) for (index in operation.arguments.indices) {
+        for (operation in GmpForeignOp.values()) for (index in operation.arguments.indices) {
             val primitive = operation.arguments[index]
             val kind = when (primitive) { null -> CoreKind.VOID; GMP_ARRAY_REP -> CoreKind.OBJECT; else -> CoreKind.LONG }
             val proof = CoreRepresentation(kind, true, true, listOfNotNull(primitive))

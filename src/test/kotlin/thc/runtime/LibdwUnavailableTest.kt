@@ -17,7 +17,7 @@ import java.io.File
 
 /** Genuine declaration certificates in explicitly synthetic scalar consumers. */
 class LibdwUnavailableTest {
-    @Test fun brokenOperandArrayRetainsItsHelperNullDiagnostic() {
+    @Test fun brokenOperandArrayRetainsItsJavaNullDiagnostic() {
         val expression = OriginalLibdwExpression(LibdwForeignOp.CLEAR, emptyArray(),
             CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep")))
         val operands = OriginalLibdwExpression::class.java.getDeclaredField("operands").also { it.isAccessible = true }
@@ -28,7 +28,7 @@ class LibdwUnavailableTest {
             val failure = assertThrows(NullPointerException::class.java) {
                 expression.executeTuple(frame, intArrayOf(), 0)
             }
-            assertEquals("Parameter specified as non-null is null: method kotlin.collections.ArraysKt___ArraysKt.getLastIndex, parameter <this>", failure.message)
+            assertEquals("Cannot read the array length because \"firstOperands\" is null", failure.message)
         } finally { operands.set(expression, original) }
     }
 
@@ -305,7 +305,7 @@ class LibdwUnavailableTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val program = load(language, backend, module())
-                val targets = LibdwForeignOp.entries.associate { it.symbol to program.entryTarget(it.symbol) }
+                val targets = LibdwForeignOp.values().associate { it.symbol to program.entryTarget(it.symbol) }
                 var compiled = false
                 fun call(name: String, vararg args: Any?): Any? {
                     val before = (program.diagnostics().getValue("compiledEntries") as Number).toLong()
@@ -326,11 +326,11 @@ class LibdwUnavailableTest {
                     assertTrue((call("libdwPoolTake", Unit) as ManagedAddress).sameLocation(nil))
                     for (session in listOf(nil, pointer)) {
                         assertTrue((call("libdwGetBacktrace", session, Unit) as ManagedAddress).sameLocation(nil))
-                        assertEquals(1L, call("libdwLookupLocation", session, pointer, session, Unit))
+                        assertEquals(1, call("libdwLookupLocation", session, pointer, session, Unit))
                         assertEquals(List(64) { 165L }, (0L until 64L).map(bytes::readByte))
                     }
                     // Failure does not require a writable Location, or dereference any pointer.
-                    assertEquals(1L, call("libdwLookupLocation", nil, nil, nil, Unit))
+                    assertEquals(1, call("libdwLookupLocation", nil, nil, nil, Unit))
                     assertEquals(23L, call("libdwPoolClear", Unit))
                 }
                 repeat(3) { exercise() }

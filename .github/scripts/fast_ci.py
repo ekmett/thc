@@ -289,8 +289,12 @@ def identify(recorder, identity_path):
     require(len(keys) == 1, "Input helper did not return exactly one cache key")
     # Gradle itself validates task inputs. This prefix prevents reuse across tool,
     # dependency, compiler-plugin, wrapper or cache-policy changes.
-    paths = [root / name for name in ("build.gradle.kts", "settings.gradle.kts", "gradle.properties",
+    paths = [root / name for name in ("build.gradle", "settings.gradle", "gradle.properties",
              "gradlew", "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties")]
+    paths.extend(sorted((root / "gradle").glob("*.gradle")))
+    paths.extend(sorted(path for path in (root / "buildSrc").rglob("*")
+                        if path.is_file() and path.suffix in (".java", ".gradle")
+                        and not any(part in ("build", ".gradle") for part in path.relative_to(root / "buildSrc").parts)))
     paths.extend([release, Path(__file__), root / ".github/scripts/fast_ci.init.gradle"])
     h = hashlib.sha256()
     for path in paths:
