@@ -20,6 +20,7 @@ final class Application extends Expr {
         for (int i = 0; i < arguments.length; i++) {
             CoreRepresentation proof = arguments[i].getRepresentation();
             proofs.add(proof);
+            if (proof.isEmptyTuple()) arguments[i].prepareTuple(ArgumentLayout.EMPTY_TUPLE_SLOTS, 0);
             evaluated[i] = proof.getEvaluated();
         }
         inputLayout = ArgumentLayout.fromProofs(proofs);

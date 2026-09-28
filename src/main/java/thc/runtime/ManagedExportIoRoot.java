@@ -11,17 +11,17 @@ public final class ManagedExportIoRoot extends ContextRoot {
     private static final class ManagedExportDestination extends TupleDestination {
         private final Language language;
         ManagedExportDestination(TupleShape shape, Language language) { super(shape); this.language = language; }
-        @Override public void consume(VirtualFrame frame, Node node, Object result) {
+        @Override public void consume(VirtualFrame frame, Node node, Object result) { consumeFrom(frame, node, result, getShape()); }
+        @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape shape) {
             AsyncContinuations.publicResult(result, node);
             Object raw;
-            var shape = getShape();
             if (result == TupleComplete.INSTANCE) {
                 var pool = language.getHandoffState().get().getResults();
                 var storage = pool.completed();
                 try {
                     if (storage.getLayout() != shape.getLayout()) throw RuntimeFault.fault("Managed export returned the wrong IO tuple layout");
                     raw = shape.getLayout().getObject(storage, 0);
-                } finally { pool.releaseChecked(storage, shape.getLayout()); }
+                } finally { pool.releaseChecked(storage, getShape().getLayout()); }
             } else {
                 if (!(result instanceof HandoffStorage storage)) throw RuntimeFault.fault("Managed export returned no IO tuple");
                 if (storage.getLayout() != shape.getLayout()) throw RuntimeFault.fault("Managed export returned the wrong IO tuple layout");

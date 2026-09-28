@@ -21,6 +21,7 @@ public final class AstInputOperands extends Node {
         for (int i = 0; i < slots.length; i++) slots[i] = frameLayout.bind("<typed input " + i + ">",
             FrameLayout.carrierKind(layout.getPhysicalProofs()[i]));
         source = new AstInputSource(layout, slots);
+        for (int i = 0; i < arguments.length; i++) if (layout.isTyped(i)) arguments[i].prepareTuple(slots, layout.offset(i));
     }
     public ArgumentLayout getLayout() { return layout; }
     public AstInputSource getSource() { return source; }

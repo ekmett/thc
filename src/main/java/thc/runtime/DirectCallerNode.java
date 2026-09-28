@@ -33,13 +33,16 @@ public final class DirectCallerNode extends Node {
     }
     public RootCallTarget getTarget() { return target; }
     public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall) {
+        return call(frame, arguments, tailCall, null);
+    }
+    public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
         if (AstControl.captures(this)) {
             try { entryArguments.executeCaptured(frame, arguments); }
-            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall)); }
+            catch (AstCapture cut) { throw cut.append((saved, input) -> callEntered(saved, arguments, tailCall, tupleResult)); }
         } else entryArguments.execute(frame, arguments);
-        return callEntered(frame, arguments, tailCall);
+        return callEntered(frame, arguments, tailCall, tupleResult);
     }
-    private Object callEntered(VirtualFrame frame, Object[] arguments, boolean tailCall) {
+    private Object callEntered(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
         if (leadingCaseReturn != null) { Object result = leadingCaseReturn.execute(arguments); if (result != null) return result; }
         Object result;
         if (tailCall) {
@@ -52,9 +55,9 @@ public final class DirectCallerNode extends Node {
                 arguments[0] = 0L;
                 result = handoff != null ? handoff.call(frame, arguments, callNode, false) : Calls.direct(callNode, arguments);
                 normalProfile.enter();
-            } catch (TailCall tail) { tailProfile.enter(); result = loop.execute(tail); }
+            } catch (TailCall tail) { if (tupleResult != null) throw tail; tailProfile.enter(); result = loop.execute(tail); }
         }
-        return AstControl.captures(this) ? AstControl.complete(this, result, target) : result;
+        return AstControl.captures(this) ? AstControl.complete(this, result, target, tupleResult) : result;
     }
     public static DirectCallerNode create(RootCallTarget target, Metrics metrics) { return new DirectCallerNode(target, metrics); }
 }

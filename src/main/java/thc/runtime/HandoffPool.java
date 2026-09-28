@@ -9,6 +9,8 @@ import java.util.Arrays;
 public final class HandoffPool {
     private HandoffStorage[] slots = new HandoffStorage[4];
     private HandoffStorage active;
+    // Prepared code retains descriptors from another context whose numeric IDs may collide.
+    private java.util.IdentityHashMap<HandoffLayout, HandoffStorage> sharedLayouts;
     private long allocations;
     public int getDepth() { return active == null ? 0 : 1; }
     public long getAllocations() { return allocations; }
@@ -17,6 +19,7 @@ public final class HandoffPool {
         HandoffStorage[] alternatives = layout.getId() < slots.length ? slots : grow(layout.getId());
         HandoffStorage storage = alternatives[layout.getId()];
         if (storage == null) storage = allocate(layout, alternatives);
+        else if (storage.getLayout() != layout) storage = shared(layout);
         if (storage.getLive()) throw new IllegalStateException("Check failed.");
         storage.setLive(true);
         storage.setGeneration(storage.getGeneration() + 1);
@@ -30,6 +33,10 @@ public final class HandoffPool {
         allocations++;
         return storage;
     }
+    @TruffleBoundary private HandoffStorage shared(HandoffLayout layout) {
+        if (sharedLayouts == null) sharedLayouts = new java.util.IdentityHashMap<>();
+        return sharedLayouts.computeIfAbsent(layout, key -> { allocations++; return key.create(); });
+    }
     public void release(HandoffStorage storage) { release(storage, storage.getLayout()); }
     public void release(HandoffStorage storage, HandoffLayout layout) {
         if (active != storage || !storage.getLive()) throw new IllegalStateException("Check failed.");
@@ -39,6 +46,10 @@ public final class HandoffPool {
     public int retainedReferences() {
         int count = 0;
         for (HandoffStorage storage : slots) if (storage != null) {
+            HandoffLayout layout = storage.getLayout();
+            for (int i = 0; i < layout.getReps().size(); i++) if (layout.isObject(i) && layout.getObject(storage, i) != null) count++;
+        }
+        if (sharedLayouts != null) for (HandoffStorage storage : sharedLayouts.values()) {
             HandoffLayout layout = storage.getLayout();
             for (int i = 0; i < layout.getReps().size(); i++) if (layout.isObject(i) && layout.getObject(storage, i) != null) count++;
         }

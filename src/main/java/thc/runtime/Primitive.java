@@ -24,7 +24,17 @@ final class Primitive extends Expr {
         bitShift = BitPrimitives.scalarBitPrimitiveShift(name);
         bitMask = -1L >>> bitShift;
         setRepresentation(new CoreRepresentation(CoreKind.LONG, true, false, null, null, null, null, null, null));
-        int arity = switch (operation) {
+        int arity = arity(name);
+        if (arity < 0) throw new UnsupportedCore("Unsupported primitive " + name);
+        if (arguments.length != arity) throw new RuntimeFault("Primitive arity mismatch: " + name);
+        if (operation.equals("mulIntMayOflo#")) {
+            for (Expr argument : arguments) {
+                if (!argument.getRepresentation().isLong()) throw new RuntimeFault("Primitive requires Long operands: " + name);
+            }
+        }
+    }
+    static int arity(String name) {
+        return switch (Scalar64Primitives.scalar64PrimitiveOperation(name)) {
             case "popCnt8#", "popCnt16#", "popCnt32#", "popCnt64#",
                  "clz8#", "clz16#", "clz32#", "clz64#",
                  "ctz8#", "ctz16#", "ctz32#", "ctz64#",
@@ -40,14 +50,8 @@ final class Primitive extends Expr {
                  "==#", "eqWord#", "eqChar#", "/=#", "neWord#", "neChar#", "<#", "ltWord#", "ltChar#", "<=#", "leWord#", "leChar#",
                  ">#", "gtChar#", ">=#", "geChar#", "and#", "andI#", "or#", "orI#", "xor#", "xorI#",
                  "uncheckedIShiftL#", "uncheckedShiftL#", "uncheckedIShiftRA#", "uncheckedIShiftRL#", "uncheckedShiftRL#" -> 2;
-            default -> throw new UnsupportedCore("Unsupported primitive " + name);
+            default -> -1;
         };
-        if (arguments.length != arity) throw new RuntimeFault("Primitive arity mismatch: " + name);
-        if (operation.equals("mulIntMayOflo#")) {
-            for (Expr argument : arguments) {
-                if (!argument.getRepresentation().isLong()) throw new RuntimeFault("Primitive requires Long operands: " + name);
-            }
-        }
     }
     @Override public Object execute(VirtualFrame frame) { return executeLong(frame); }
     @Override public long executeLong(VirtualFrame frame) {

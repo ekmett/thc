@@ -91,6 +91,30 @@ public final class TupleShape {
             copyFrom(frame, storage, slots, offset);
         }
     }
+    public void consume(VirtualFrame frame, Object result, int[] slots, int offset, TupleShape producer) {
+        if (producer.layout == layout) { consume(frame, result, slots, offset); return; }
+        if (result == TupleComplete.INSTANCE) {
+            TupleResultPool pool = language.getHandoffState().get().getResults();
+            HandoffStorage output = pool.completed();
+            try { copyFromProducer(frame, output, slots, offset, producer.layout); }
+            finally { pool.releaseChecked(output, layout); }
+        } else {
+            if (!(result instanceof HandoffStorage storage)) throw fault("Invalid tuple result carrier");
+            copyFromProducer(frame, storage, slots, offset, producer.layout);
+        }
+    }
+    // The consumer owns the fixed frame slots and loop bound; the authenticated
+    // producer owns the exact StaticShape properties used to read its storage.
+    @ExplodeLoop private void copyFromProducer(VirtualFrame frame, HandoffStorage storage, int[] slots, int offset, HandoffLayout producer) {
+        if (storage.getLayout() != producer) throw new IllegalStateException("Check failed.");
+        for (int i = 0; i < leaves.length; i++) {
+            if (layout.isInt(i)) FrameAccess.writeInt(frame, slots[offset + i], producer.getInt(storage, i));
+            else if (layout.isLong(i)) FrameAccess.writeLong(frame, slots[offset + i], producer.getLong(storage, i));
+            else if (layout.isFloat(i)) FrameAccess.writeFloat(frame, slots[offset + i], producer.getFloat(storage, i));
+            else if (layout.isDouble(i)) FrameAccess.writeDouble(frame, slots[offset + i], producer.getDouble(storage, i));
+            else FrameAccess.write(frame, slots[offset + i], checkedReference(i, producer.getObject(storage, i)));
+        }
+    }
     public boolean inlineResult() { return CompilerDirectives.inCompiledCode() && !CompilerDirectives.inCompilationRoot(); }
     public static List<CoreRepresentation> flatten(CoreRepresentation proof) {
         if (proof.getComponents() != null) {
