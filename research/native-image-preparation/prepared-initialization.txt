@@ -13,6 +13,13 @@ thc.HostReferenceGen
 thc.HostReferenceGen$InteropLibraryExports
 thc.HostReferenceGen$InteropLibraryExports$Cached
 thc.HostReferenceGen$InteropLibraryExports$Uncached
+# Generated native-callback export metadata only: class literals, assertion flags
+# and two fieldless/unadoptable libraries. No receiver, callback registry, context,
+# native signature or handle is created; actual callback admission is unchanged.
+thc.runtime.DynamicGen
+thc.runtime.DynamicGen$InteropLibraryExports
+thc.runtime.DynamicGen$InteropLibraryExports$Cached
+thc.runtime.DynamicGen$InteropLibraryExports$Uncached
 # The unique fieldless guest state/void value; no guest context is captured.
 thc.runtime.Unit
 thc.runtime.Applications
