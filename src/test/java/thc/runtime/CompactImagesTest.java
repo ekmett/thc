@@ -41,6 +41,11 @@ class CompactImagesTest {
         }
         return blocks;
     }
+    private static <T> T single(List<T> values) {
+        if (values.isEmpty()) throw new java.util.NoSuchElementException("List is empty.");
+        if (values.size() != 1) throw new IllegalArgumentException("List has more than one element.");
+        return values.getFirst();
+    }
     private ManagedAddress copyBlocks(CompactImages images, List<byte[]> bytes) {
         var first = ManagedAddress.Companion.nullAddress(); var previous = first;
         for (var block : bytes) {
@@ -127,7 +132,7 @@ class CompactImagesTest {
     @Test void corruptTruncatedAndForeignImagesFailWithoutPublishingAResult() throws Exception {
         withLanguage((language, state) -> {
             var layout = new DataLayout(language, "test:Leaf", "Leaf", new String[]{"IntRep"}); var value = layout.create(new Object[]{71L});
-            var region = newRegion(state, value); var pointer = state.heapAddresses.address(value); var bytes = snapshot(state.compactImages, region).getFirst();
+            var region = newRegion(state, value); var pointer = state.heapAddresses.address(value); var bytes = single(snapshot(state.compactImages, region));
             var corrupt = bytes.clone(); corrupt[0] = (byte) (corrupt[0] ^ 1);
             for (var bad : List.of(corrupt, Arrays.copyOf(bytes, bytes.length - 1), malformed(bytes, it -> it.putInt(24, Integer.MAX_VALUE)),
                 malformed(bytes, it -> it.put(36, (byte) 99)), malformed(bytes, it -> it.putLong(37, -1L)))) {
@@ -141,7 +146,7 @@ class CompactImagesTest {
             assertThrows(RuntimeFault.class, () -> state.compactImages.next(newRegion(state, value), state.compactImages.first(region)));
             var first = state.compactImages.first(region); region.resize(8192); assertThrows(RuntimeFault.class, () -> state.compactImages.next(region, first));
             var typed = new DataLayout(language, "test:Typed", "Typed", new String[]{"LiftedRep"}, new Class<?>[]{DataValue.class});
-            var holder = typed.create(new Object[]{value}); var wrongCarrier = snapshot(state.compactImages, newRegion(state, holder, value, new byte[]{1})).getFirst();
+            var holder = typed.create(new Object[]{value}); var wrongCarrier = single(snapshot(state.compactImages, newRegion(state, holder, value, new byte[]{1})));
             // Header 28, old identity 8, node tag 1, layout id 8; the first field's
             // node index is at 45. Point it at ByteArray instead of DataValue.
             var payload = ByteBuffer.wrap(wrongCarrier); payload.putInt(45, 2); var crc = new CRC32(); crc.update(wrongCarrier, 0, wrongCarrier.length - 8);
