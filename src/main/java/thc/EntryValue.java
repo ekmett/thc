@@ -20,6 +20,7 @@ import thc.runtime.*;
 /** Signature-driven host entry or one-shot executable IO lifecycle. */
 @ExportLibrary(InteropLibrary.class)
 public final class EntryValue implements TruffleObject {
+    private final Language.State owner;
     private final ExecutableProgram program;
     private final String entry, hostResultFault;
     private final int argumentCount;
@@ -39,6 +40,8 @@ public final class EntryValue implements TruffleObject {
             CoreRepresentation ioResult, Language language, String shutdownEntry,
             CoreRepresentation shutdownResult, boolean processSignals,
             List<CoreRepresentation> hostInputs, CoreRepresentation hostResult) {
+        // Load factories create entries per context, including when their prepared code is shared.
+        owner = Language.currentState();
         this.program = program; this.entry = entry; this.argumentCount = argumentCount;
         this.hostResultFault = hostResultFault; this.processSignals = processSignals;
         var untypedTarget = program.hostEntryTarget(argumentCount);
@@ -65,10 +68,14 @@ public final class EntryValue implements TruffleObject {
         if ((shutdownValue == null) != (shutdownTarget == null)) throw new IllegalArgumentException("Failed requirement.");
     }
 
+    private void requireOwner(HostDispatch dispatch) {
+        if (Language.currentState(dispatch) != owner) throw new IllegalArgumentException("Host entry belongs to another context");
+    }
     @ExportMessage public boolean isExecutable() { return ioTarget == null; }
     @ExportMessage public Object execute(Object[] arguments,
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) {
-        var threads = Language.currentState(dispatch).getThreads();
+        requireOwner(dispatch);
+        var threads = owner.getThreads();
         if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         if (ioTarget != null) throw new RuntimeFault("IO main must be invoked through runIO");
         if (hostResultFault != null) throw new RuntimeFault("Diagnostic unsupported path reached: " + hostResultFault);
@@ -78,7 +85,6 @@ public final class EntryValue implements TruffleObject {
         }
         Closure closure = guestEntry instanceof Closure value ? value : null;
         GuestRoot signature = closure != null && closure.target.getRootNode() instanceof GuestRoot root ? root : null;
-        var owner = Language.currentState(dispatch);
         Object[] normalized;
         if (hostInputs != null) normalized = HostAbi.arguments(owner, hostInputs, arguments);
         else {
@@ -166,12 +172,11 @@ public final class EntryValue implements TruffleObject {
     @ExportMessage @TruffleBoundary public Object invokeMember(String member, Object[] arguments,
             @Cached(value = "create()", uncached = "create()", neverDefault = true) HostDispatch dispatch) throws UnknownIdentifierException {
         if ("runIO".equals(member) && ioTarget != null) {
-            var hosting = Language.currentState(dispatch).getThreads();
-            if (hosting.needsHosting()) return hosting.hostEntry(dispatch, () -> invokeMember(member, arguments, dispatch));
+            requireOwner(dispatch);
+            var threads = owner.getThreads();
+            if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> invokeMember(member, arguments, dispatch));
             if (arguments.length != 0) throw new IllegalArgumentException("runIO takes no arguments");
             if (lifecycleStarted != null && !lifecycleStarted.compareAndSet(false, true)) throw new RuntimeFault("Executable IO lifecycle already started");
-            var owner = Language.currentState(dispatch);
-            var threads = owner.getThreads();
             threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
             var outcome = GuestThreadStatus.FINISHED;
             try {
@@ -195,6 +200,7 @@ public final class EntryValue implements TruffleObject {
             return true;
         }
         if (!"compile".equals(member) || ioTarget != null) throw UnknownIdentifierException.create(member);
+        requireOwner(dispatch);
         if (arguments.length != 0) throw new IllegalArgumentException("compile takes no arguments");
         installedCompilation = null;
         var original = program.entryTarget(entry);
