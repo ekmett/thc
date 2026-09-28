@@ -348,6 +348,65 @@ public final class CoreModules {
             require(Objects.equals(input.get("foreignExceptionBridgeUnit"), directory.getForeignExceptionBridgeUnit()), "Package bridge selection changed after request"); return directory;
         } catch (Exception failure) { throw rethrow(failure); }
     }
+    /** Store-time selection through the normal lazy readers. Serialize while the
+     * readers are open; no path, capability, mapping or deferred body survives. */
+    static String detachedRequest(Map<String,Object> input, String entry) {
+        var directory = unitDirectory(input);
+        if (directory == null) {
+            require(input.containsKey("modules"), "Cached preparation requires inline modules or a package directory");
+            return Json.stringify(input);
+        }
+        require(input.get("consumerModules") == null && input.get("indexedModuleFiles") == null,
+            "Cached package selection requires a qualified entry in its package directory");
+        try (var sources = directory.open(Boolean.TRUE.equals(input.get("verifyArtifacts")), false)) {
+            var selected = new LinkedHashMap<CoreUnitDirectory.ModuleRecord,List<Map<String,Object>>>();
+            var admissions = new LinkedHashMap<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission>();
+            var visited = new LinkedHashSet<String>();
+            var pending = new ArrayDeque<String>(); pending.add(entry);
+            while (!pending.isEmpty()) {
+                String id = pending.removeFirst();
+                if (!visited.add(id)) continue;
+                var owner = directory.owner(id);
+                require(owner != null, "Unlinked cached Core global: " + id);
+                admissions.computeIfAbsent(owner, module -> new CoreModuleAdmission(sources.metadata(module), sources::binding));
+                var binding = sources.binding(id);
+                require(binding != null, "Missing cached Core binding: " + id);
+                selected.computeIfAbsent(owner, ignored -> new ArrayList<>()).add(binding);
+                pending.addAll(CoreFreeVariables.coreFreeVariables((List<Object>) binding.get("expr")));
+            }
+            var modules = new ArrayList<Map<String,Object>>();
+            var merger = new Merger();
+            selected.forEach((owner, bindings) -> {
+                var admission = admissions.get(owner);
+                merger.addSelected(admission, bindings);
+                modules.add(admission.selected(bindings));
+            });
+            // The ordinary linker still checks implicit dependencies and metadata;
+            // unsupported/foreign code is not made admissible by detachment.
+            reachable(merger.finish(), entry, true);
+            var result = without(input, "packageManifest", "packageManifestSha256", "packageCapability");
+            result.put("modules", modules);
+            if (directory.getTargetLayout() != null) result.put("targetLayout", directory.getTargetLayout().document());
+            return Json.stringify(detachedValue(result));
+        }
+    }
+    private static Object detachedValue(Object value) {
+        if (value instanceof Map<?,?> fields) {
+            var result = new LinkedHashMap<String,Object>();
+            fields.forEach((key, field) -> {
+                // Optional lazy debug origins own a container reader. Cached
+                // executable requests deliberately omit source-note resources.
+                if (!key.equals("compactOrigin")) result.put((String) key, detachedValue(field));
+            });
+            return result;
+        }
+        if (value instanceof List<?> values) {
+            var result = new ArrayList<Object>(values.size());
+            for (Object field : values) result.add(detachedValue(field));
+            return result;
+        }
+        return value;
+    }
     /** Replay only explicit consumers; package definitions stay in their directory. */
     public static void visitUnitConsumers(Map<String,Object> input, BiConsumer<CoreJsonIndex,CoreJsonBindings> indexed, Consumer<Map<String,Object>> accept) {
         Object files = input.get("indexedModuleFiles"), consumers = input.get("consumerModules");

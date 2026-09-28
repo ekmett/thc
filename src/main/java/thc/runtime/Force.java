@@ -530,14 +530,14 @@ public final class Force extends Node {
                     RootCallTarget target = thunk.getTarget();
                     if (target == null) throw fault("Unevaluated thunk has no body");
                     returned = calls.call(target, thunk.getEnvironment(), metrics);
-                } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail); }
+                } catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
             } else {
                 // A saved logical activation may move between host carrier threads.
                 MaskingState ambient = SynchronousMasking.current(this);
                 StackAnnotationState annotations = StackAnnotations.current(this);
                 try {
                     try { returned = continuation.continueWith(resumeValue); }
-                    catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail); }
+                    catch (TailCall tail) { tailCallProfile.enter(); returned = trampoline.execute(tail, metrics); }
                 } finally {
                     SynchronousMasking.set(this, ambient); StackAnnotations.set(this, annotations);
                 }

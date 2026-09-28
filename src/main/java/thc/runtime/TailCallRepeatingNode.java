@@ -23,8 +23,9 @@ public final class TailCallRepeatingNode extends Node implements RepeatingNode {
         frame.setObject(FrameLayout.TAIL_ARGUMENTS, call);
     }
     @Override public boolean executeRepeating(VirtualFrame frame) {
+        Metrics invocation = metrics != null ? metrics : (Metrics) frame.getArguments()[0];
         try {
-            if (metrics.getEnabled()) metrics.incrementTrampolineIterations();
+            if (invocation.getEnabled()) invocation.incrementTrampolineIterations();
             RootCallTarget target = ColdCallChecks.target(frame.getObject(FrameLayout.TAIL_FUNCTION));
             TailCall transfer = ColdCallChecks.transfer(frame.getObject(FrameLayout.TAIL_ARGUMENTS));
             Object[] arguments = transfer.getArgs();
@@ -37,11 +38,11 @@ public final class TailCallRepeatingNode extends Node implements RepeatingNode {
                 TypedInputLayout layout = ColdCallChecks.guestRoot(target.getRootNode()).getTypedInput();
                 if (layout == null) throw fault("Target has no typed input entry");
                 long generation = input.getGeneration();
-                try { result = dispatch.call(target, new Object[] {input}); }
+                try { result = dispatch.call(target, new Object[] {input}, invocation); }
                 finally { GenericTypedInputs.releaseGenericInput(layout, input, generation); }
             } else {
                 arguments[0] = 0L;
-                result = dispatch.call(target, arguments);
+                result = dispatch.call(target, arguments, invocation);
             }
             if (result instanceof ContinuationResult saved) result = new TailYield(saved, target);
             else if (result instanceof SavedGuestContinuation saved) result = new AstTailYield(saved, target);

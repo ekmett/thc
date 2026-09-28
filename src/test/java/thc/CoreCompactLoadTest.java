@@ -107,6 +107,28 @@ class CoreCompactLoadTest {
         return CoreFormatTestSupport.request(List.of("@" + path), "unit:A.entry", backend, false, false, false, verify);
     }
     private long count(Value entry, String key) { return ((Number) document(entry.getMember("diagnostics").asString()).get(key)).longValue(); }
+    @Test void cachedSelectionDetachesOnlyReachableCompactBodiesBeforeReadersClose() throws Exception {
+        var path = fixture();
+        String selected = NativeCache.request(List.of("@" + path), "unit:A.entry");
+        var request = document(selected);
+        assertFalse(request.containsKey("packageManifest"));
+        assertEquals(false, request.get("verifyArtifacts"));
+        assertFalse(selected.contains("unit:A.untouched"));
+        assertTrue(selected.contains("unit:B.entry"));
+        assertTrue(assertThrows(RuntimeException.class,
+            () -> NativeCache.request(List.of("@" + path), "unit:A.entry", true))
+            .getMessage().contains("Invalid compact Core expression tag"));
+        CoreFileMappings.shared.evictIdleBelow(directory);
+        Files.delete(directory.resolve("A.cbd"));
+        Files.delete(directory.resolve("B.cbd"));
+        Files.delete(path);
+        // This fixture's case and minimal binders test detachment, not the
+        // admitted reusable AST family; the genuine exporter exercises both.
+        request.remove("prepareCode");
+        try (var context = Main.executionContext(false)) {
+            assertEquals(6L, context.eval("thc", Json.stringify(request)).execute(5L).asLong());
+        }
+    }
     @Test void selectedBindingAndCrossModuleDemandLeaveColdBodiesFilesAndDebugUnread() throws Exception {
         var path = fixture();
         for (String backend : List.of("ast", "bytecode")) try (var context = Main.executionContext(false)) {

@@ -10,4 +10,5 @@ public final class TargetCache extends Node {
     @Child private DispatchCallTarget dispatch = DispatchCallTargetNodeGen.create();
     public TargetCache(Metrics metrics) { this.metrics = metrics; }
     public Object call(RootCallTarget target, Object[] arguments) { return dispatch.execute(this, target, arguments, metrics); }
+    public Object call(RootCallTarget target, Object[] arguments, Metrics invocation) { return dispatch.execute(this, target, arguments, invocation); }
 }

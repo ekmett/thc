@@ -19,16 +19,17 @@ public final class TailCheck extends Node {
         unrollProfile = coldGeneric ? BranchProfile.getUncached() : BranchProfile.create();
     }
     public void check(VirtualFrame frame, RootCallTarget target, Object[] arguments) {
-        if (!(getRootNode() instanceof GuestRoot source)) { bounce(target, arguments); return; }
+        Metrics invocation = metrics != null ? metrics : ((FunctionRoot) getRootNode()).invocationMetrics(frame);
+        if (!(getRootNode() instanceof GuestRoot source)) { bounce(target, arguments, invocation); return; }
         long mask = source.bloom(frame);
         if (!(target.getRootNode() instanceof GuestRoot destination))
             throw new RuntimeFault("Tail call target does not use the THC calling convention");
-        if ((mask & destination.mask) == destination.mask) bounce(target, arguments);
+        if ((mask & destination.mask) == destination.mask) bounce(target, arguments, invocation);
         else { unrollProfile.enter(); arguments[0] = coldGeneric ? Long.valueOf(mask) : bloomValue.execute(mask); }
     }
-    private void bounce(RootCallTarget target, Object[] arguments) {
+    private void bounce(RootCallTarget target, Object[] arguments, Metrics invocation) {
         bounceProfile.enter();
-        if (metrics.getEnabled()) metrics.incrementTailBounces();
+        if (invocation.getEnabled()) invocation.incrementTailBounces();
         throw new TailCall(target, arguments);
     }
 }
