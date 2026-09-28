@@ -185,7 +185,7 @@ prepareOriginalStackFormatter root = do
         "bin/export-core.sh","bin/build-compiler.sh","bin/toolchain.sh","bin/plugin.py",
         "src/compiler/THC/Plugin.hs","src/compiler/THC/CBV.hs","src/compiler/THC/Demands.hs","src/compiler/THC/Sources.hs","src/compiler/THC/Wired.hs",
         "bin/audit-core.py","bin/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
-        map (("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" ++) . fst) Wired.sourceHashes ++
+        map (("nih/pinned/ghc-9.14.1/libraries/ghc-internal/" ++) . Wired.pinnedSourcePath . fst) Wired.sourceHashes ++
         ["bin" </> name | name <- sort scriptNames, "core_" `isPrefixOf` name, ".py" `isSuffixOf` name]
       artifacts = originals ++ [path | (_,path,_) <- stages] ++ [binary] ++ map fst audits ++
         concatMap commandArtifacts commands ++ generatedSources ++ [layout, directory </> "originals/generated.json"]
