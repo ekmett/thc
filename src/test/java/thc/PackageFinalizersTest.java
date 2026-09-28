@@ -62,6 +62,35 @@ class PackageFinalizersTest {
         assertEquals(List.of(), ((Map<?,?>) original.get("staticForeignImports")).get("expectedCalls"));
     }
 
+    @Test void ordinaryCallProofCannotAuthorizeAMarkedFinalizer() throws Exception {
+        var original = module(address(type(pointer, io)));
+        var proof = (Map<?,?>) original.get("staticForeignImports");
+        var call = map("binder", map("unit", "package", "module", "Finalizers", "occurrence", "callCleanup", "namespace", "value"),
+            "header", null, "symbol", "cleanup", "unit", "package", "isFunction", true, "convention", "ccall", "safety", "unsafe",
+            "declaredType", function(pointer, io), "normalizedType", function(pointer, io), "normalizationRole", "representational",
+            "emitted", map("symbol", "cleanup", "unit", "package", "convention", "ccall", "safety", "unsafe",
+                "arguments", list("AddrRep", "void"), "result", list("void")));
+        var ordinary = with(original, "staticForeignImports", with(without(proof, "addresses"), "schema", 1L, "imports", list(call)));
+        assertEquals(Set.of(), Objects.requireNonNull(PackageScalarLinks.read(ordinary)).getProved());
+        assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(ordinary)));
+
+        var link = (Map<?,?>) ordinary.get("packageNativeLink");
+        var unmarked = with(ordinary, "packageNativeLink", with(without(link, "finalizers"), "schema", 1L));
+        var expected = Set.of("thc_native_" + "a".repeat(64) + "_0");
+        assertEquals(expected, Objects.requireNonNull(PackageScalarLinks.read(unmarked)).getProved());
+        assertEquals(1, ((List<?>) CoreModules.merge(List.of(unmarked)).get("packageScalarLinks")).size());
+
+        var declaration = address(type(pointer, io));
+        var typed = with(original, "module", "Callbacks", "staticForeignImports", with(proof, "module", "Callbacks", "addresses",
+            list(with(declaration, "binder", with((Map<?,?>) declaration.get("binder"), "module", "Callbacks")))));
+        assertEquals(expected, Objects.requireNonNull(PackageScalarLinks.read(typed)).getProved());
+        var mismatch = with(typed, "staticForeignImports", with((Map<?,?>) typed.get("staticForeignImports"), "addresses",
+            list(with(declaration, "binder", with((Map<?,?>) declaration.get("binder"), "module", "Callbacks"), "symbol", "different_finalizer"))));
+        assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(ordinary, mismatch)));
+        for (var modules : List.of(List.of(ordinary, typed), List.of(typed, ordinary)))
+            assertEquals(1, ((List<?>) CoreModules.merge(modules).get("packageScalarLinks")).size());
+    }
+
     @Test void callbackMetadataCannotReplaceNormalizedNominalTypeOrOwnership() throws Exception {
         assertEquals(Set.of("cleanup"), PackageFinalizers.declarations(module(address(type(pointer, io)))));
         var integer = named("GHC.Internal.Int", "Int32");

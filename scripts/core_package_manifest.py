@@ -253,9 +253,8 @@ def managed_registration(module):
     return ids
 
 
-def package_address_declarations(module, typ, identity):
+def package_address_declarations(module, proof, typ, identity):
     """Stock typed labels alone are inert; only linked callback entries execute."""
-    proof = module.get('staticForeignImports', module.get('staticForeignImportStubs', {}))
     if proof.get('schema') != 2: return set()
     def require(valid, detail):
         if not valid: raise ValueError('Invalid package address provenance: ' + detail)
@@ -354,7 +353,7 @@ def managed_import_stubs(module):
         require(proof['status'] in ('unclassified', 'rejected'), 'status'); text(proof['reason'])
         return False
     require(type(proof['wordBits']) is int and proof['wordBits'] == 64, 'word width')
-    package_address_declarations(module, typ, identity)
+    package_address_declarations(module, proof, typ, identity)
     require(exact(proof['expectedForeign'], module.get('foreign')), 'retained foreign product differs')
     foreign = record(module.get('foreign'), 'schema execution stubs files')
     require(type(foreign['schema']) is int and foreign['schema'] == 1 and foreign['execution'] == 'not-linked', 'foreign schema/execution')
@@ -536,7 +535,7 @@ def package_native_archive(module):
     else:
         record(proof, 'schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls' +
             (' addresses' if proof.get('schema') == 2 else ''))
-        package_address_declarations(module, typ, identity)
+        package_address_declarations(module, proof, typ, identity)
         proof_identity(proof)
         require(proof['status'] == 'verified' and type(proof['wordBits']) is int and proof['wordBits'] == 64, 'verified import profile')
         product = record(proof['expectedForeign'], 'schema execution stubs files')
@@ -761,7 +760,7 @@ def package_scalar_link(module, validate_archive=True):
                 stub['initializers'] == [] and stub['finalizers'] == [], 'nonempty foreign products')
         require(not native or 'foreign' in module or stub['source'] == '', 'missing retained C stubs')
     require(isinstance(proof['imports'], list) and (native or proof['imports']), 'empty import inventory')
-    address_symbols = package_address_declarations(module, typ, identity)
+    address_symbols = package_address_declarations(module, proof, typ, identity)
     binders, proved = [], {entry['entry'] for entry in link['abi'] if entry['entry'] in finalizers and entry['symbol'] in address_symbols}
     for item in proof['imports']:
         record(item, 'binder header symbol unit isFunction convention safety declaredType normalizedType normalizationRole emitted')
@@ -788,7 +787,8 @@ def package_scalar_link(module, validate_archive=True):
                 dict(symbol=name, unit=unit, convention=convention, safety=entry.get('safety', 'unsafe'), arguments=entry['arguments'] + ['void'],
                      result=['void'] if entry['result'] == 'void' else ['void', entry['result']]))]
         require(len(variants) == 1, 'emitted ABI differs from compiled C')
-        proved.add(variants[0]['entry'])
+        # A callable import is not authority to publish a typed CLabel finalizer.
+        if variants[0]['entry'] not in finalizers: proved.add(variants[0]['entry'])
     require(exact(proof['expectedCalls'], calls(module.get('bindings'))), 'retained Core foreign inventory differs')
     return selected_link, proved & available
 

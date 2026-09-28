@@ -195,7 +195,8 @@ public final class PackageScalarLinks {
             if (matches.size() != 1) throw new IllegalArgumentException("Unlinked typed package C import variant: " + name);
             var signature = matches.getFirst();
             check(Objects.equals(emitted.get("symbol"), name) && Objects.equals(emitted.get("unit"), unit) && Objects.equals(emitted.get("convention"), signature.convention()) && Objects.equals(convention, signature.convention()) && Objects.equals(emitted.get("safety"), signature.safety()) && Objects.equals(emitted.get("arguments"), arguments(signature)) && Objects.equals(emitted.get("result"), result(signature)), "emitted ABI differs from compiled C");
-            proved.add(signature.entry());
+            // A callable import is not authority to publish a typed CLabel finalizer.
+            if (!finalizers.contains(signature.entry())) proved.add(signature.entry());
         }
         CoreCallInventory.check(proof.get("expectedCalls"), calls(module.get("bindings")), completeBindings);
         var admittedEntries = new ArrayList<String>();
