@@ -46,9 +46,14 @@ class FullHostAbiTest {
         } finally { context.leave(); }
     }
     private static Context context() {
-        return Context.newBuilder("thc").allowExperimentalOptions(true).allowHostAccess(HostAccess.ALL)
+        return context(false);
+    }
+    private static Context context(boolean hosted) {
+        var builder = Context.newBuilder("thc").allowExperimentalOptions(true).allowHostAccess(HostAccess.ALL)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
-            .option("engine.CompilationFailureAction", "Throw").build();
+            .option("engine.CompilationFailureAction", "Throw");
+        if (hosted) builder.allowCreateThread(true).option("thc.ThreadHosting", "loom");
+        return builder.build();
     }
     private static void compiled(Value entry) {
         assertTrue(entry.invokeMember("compile").asBoolean());
@@ -125,7 +130,7 @@ class FullHostAbiTest {
         var binding = map("id", "host:Host.function", "name", "function", "arity", 1, "lifted", true, "rep", CLOSURE, "expr", outer);
         var module = map("schema", 1, "ghc", "9.14.1", "unit", "host", "module", "Host", "bindings", list(binding), "constructors", list());
         var source = Json.stringify(map("backend", backend, "entry", "host:Host.function", "asyncExceptions", false, "modules", list(module)));
-        try (var context = context(); var other = context()) {
+        for (boolean hosted : new boolean[]{false, true}) try (var context = context(hosted); var other = context()) {
             var entry = context.eval("thc", source);
             var function = entry.execute(0L);
             assertTrue(function.canExecute());
@@ -144,14 +149,18 @@ class FullHostAbiTest {
         try (var context = context()) {
             for (int bits : new int[]{8, 16, 32, 64}) {
                 var signed = context.eval("thc", identity(backend, scalar("long", "Int" + bits + "Rep")));
+                compiled(signed);
                 long minimum = bits == 64 ? Long.MIN_VALUE : -(1L << (bits - 1));
                 long maximum = bits == 64 ? Long.MAX_VALUE : (1L << (bits - 1)) - 1;
-                assertEquals(minimum, signed.execute(minimum).asLong()); assertEquals(maximum, signed.execute(maximum).asLong());
+                assertEquals(minimum, signed.execute(minimum).asLong()); firstEntry(signed);
+                assertEquals(maximum, signed.execute(maximum).asLong());
                 if (bits != 64) { assertThrows(PolyglotException.class, () -> signed.execute(minimum - 1)); assertThrows(PolyglotException.class, () -> signed.execute(maximum + 1)); }
                 var unsigned = context.eval("thc", identity(backend, scalar("long", "Word" + bits + "Rep")));
+                compiled(unsigned);
                 var max = java.math.BigInteger.ONE.shiftLeft(bits).subtract(java.math.BigInteger.ONE);
                 Object input = bits == 64 ? max : max.longValueExact();
                 assertEquals(max, unsigned.execute(input).asBigInteger());
+                firstEntry(unsigned);
                 assertThrows(PolyglotException.class, () -> unsigned.execute(-1L));
                 assertThrows(PolyglotException.class, () -> unsigned.execute(max.add(java.math.BigInteger.ONE)));
             }
@@ -235,7 +244,7 @@ class FullHostAbiTest {
         }
     }
     @ParameterizedTest @ValueSource(strings = {"ast", "bytecode"})
-    void independentLoadGraphConstructorIdentitiesRemainDistinct(String backend) {
+    void independentlyLoadedNominalDataRoundTripsOnlyWithinMatchingContextAndContract(String backend) {
         var integer = scalar("long", "IntRep"); var data = scalar("data", "BoxedRep (Just Lifted)");
         var constructor = map("id", "host:Host.Box", "name", "Box", "kind", "boxed", "arity", 1, "tag", 1,
             "fieldReps", list(list("IntRep")), "fieldLifted", list(false), "strictFields", list(false), "fieldTypes", list(integer));
@@ -247,13 +256,19 @@ class FullHostAbiTest {
             map("rep", integer, "binder", map("id", "box", "lifted", true, "rep", data)));
         var unboxRequest = object(Json.parse(unary(backend, data, integer, extract)));
         object(((List<?>) unboxRequest.get("modules")).getFirst()).put("constructors", list(constructor));
-        try (var context = context()) {
+        try (var context = context(); var other = context()) {
             var boxed = context.eval("thc", Json.stringify(boxedRequest)).execute(Long.MIN_VALUE);
             assertFalse(boxed.isNumber()); assertFalse(boxed.isHostObject());
             var unbox = context.eval("thc", Json.stringify(unboxRequest));
-            // Independent loads intentionally own distinct constructor layouts, even in one context.
-            var failure = assertThrows(PolyglotException.class, () -> unbox.execute(boxed));
+            assertEquals(Long.MIN_VALUE, unbox.execute(boxed).asLong());
+            String opposite = backend.equals("ast") ? "bytecode" : "ast";
+            unboxRequest.put("backend", opposite);
+            assertEquals(Long.MIN_VALUE, context.eval("thc", Json.stringify(unboxRequest)).execute(boxed).asLong());
+            var wrongContract = context.eval("thc", Json.stringify(unboxRequest).replace("IntRep", "WordRep"));
+            var failure = assertThrows(PolyglotException.class, () -> wrongContract.execute(boxed));
             assertTrue(failure.getMessage().contains("Non-exhaustive Core case"));
+            var foreign = other.eval("thc", Json.stringify(unboxRequest));
+            assertThrows(RuntimeException.class, () -> foreign.execute(boxed));
             assertThrows(PolyglotException.class, () -> unbox.execute(Long.MIN_VALUE));
         }
     }

@@ -36,6 +36,7 @@ public final class HostReference implements TruffleObject {
         if (Language.currentState(dispatch) != owner) throw new IllegalArgumentException("Host function belongs to another context");
         if (!isExecutable()) throw UnsupportedMessageException.create();
         var threads = owner.getThreads();
+        if (threads.needsHosting()) return threads.hostEntry(dispatch, () -> execute(arguments, dispatch));
         threads.enterCurrent(null, false, program.getAsynchronousExceptions(), null);
         var outcome = GuestThreadStatus.FINISHED;
         try {

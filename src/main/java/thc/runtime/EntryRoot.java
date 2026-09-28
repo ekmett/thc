@@ -32,7 +32,7 @@ public final class EntryRoot extends RootNode {
         forceResult = result.isInt() || result.isLong() || result.isFloat() || result.isDouble();
         force = new Force(metrics);
         TupleDestination destination = typedResult ? new HostDestination(new TupleShape(result, language)) : null;
-        typedDispatch = new GenericInputCall(new HostInputSource(ArgumentLayout.fromProofs(inputs)), arity, false, metrics, destination, 0);
+        typedDispatch = new GenericInputCall(new HostInputSource(ArgumentLayout.fromProofs(inputs)), arity, false, metrics, destination, 0, true);
     }
     @Override public Object execute(VirtualFrame frame) {
         frame.setLong(FrameLayout.BLOOM_FILTER, 0L);

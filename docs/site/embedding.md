@@ -118,11 +118,11 @@ or used after their context closes. Host marshalling does not force references
 or inspect their fields; the guest's own evaluation rules still apply. Calling a returned function checks its remaining logical
 signature, including any already supplied partial-application prefix.
 
-Constructor identities belong to a linked program. Independently loading the
-same nominal data declaration twice does not make their constructor layouts
-interchangeable. Return data together with its consumer functions from one
-linked program when building a host-facing bundle; the host transport does not
-copy or rebox data into another program's layouts.
+Qualified constructor identities and their complete field contracts are shared
+across independent loads in one context, including between AST and bytecode
+entries. Different field contracts, unqualified synthetic constructors and
+separate contexts remain distinct. The host transport preserves the original
+data identity; it does not copy or rebox values to fit a different layout.
 
 Use an entry whose retained signature matches the supplied arguments. Missing
 legacy scalar evidence does not authorize guessing an aggregate or function
