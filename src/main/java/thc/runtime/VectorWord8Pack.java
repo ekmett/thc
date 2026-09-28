@@ -15,7 +15,7 @@ public final class VectorWord8Pack extends Expr {
     public VectorWord8Pack(Expr argument, int[] slots) {
         this.argument = argument;
         this.slots = slots;
-        setRepresentation(CoreVectors.INSTANCE.getProofWord8());
+        setRepresentation(CoreVectors.proofWord8);
     }
 
     @Override public ByteVector execute(VirtualFrame frame) {

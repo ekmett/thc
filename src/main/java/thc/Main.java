@@ -41,8 +41,8 @@ public final class Main {
     public static Context executionContext() { return executionContext(false); }
     public static Context executionContext(boolean fileIO) { return executionContext(fileIO, FfiMode.configured()); }
     public static Context executionContext(boolean fileIO, FfiMode ffiMode) {
-        if (fileIO && NativeIO.INSTANCE.supportedHost$org_intelligence_thc())
-            return NativeIO.INSTANCE.commandLineContext$org_intelligence_thc(ffiMode);
+        if (fileIO && NativeIO.supportedHost())
+            return NativeIO.commandLineContext(ffiMode);
         return ffiMode.configure(withContextProfile(Context.newBuilder("thc").allowNativeAccess(true)
             .allowIO(fileIO ? IOAccess.ALL : IOAccess.NONE), ContextProfile.LAUNCHER)).build();
     }
@@ -86,7 +86,7 @@ public final class Main {
         catch (PolyglotException exit) {
             if (!exit.isExit()) throw exit;
             // All owning contexts have closed before process termination.
-            if (exit.getExitStatus() < 0) NativeSignalTransport.Companion.exitBySignal(-exit.getExitStatus());
+            if (exit.getExitStatus() < 0) NativeSignalTransport.exitBySignal(-exit.getExitStatus());
             System.exit(exit.getExitStatus());
         }
     }

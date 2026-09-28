@@ -3,6 +3,7 @@
 
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
+import thc.runtime.SumEvidence.verifySumEvidence
 
 import com.oracle.truffle.api.CompilerDirectives
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal

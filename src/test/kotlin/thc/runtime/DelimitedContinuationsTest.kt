@@ -229,10 +229,9 @@ class DelimitedContinuationsTest {
                 }
                 other.callTarget
                 assertFalse(DelimitedControl.enabled(other), "Unrecognized roots do not gain continuation authority")
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 val cut = DelimitedCut(PromptTag(Language.currentState(null)), null, shape,
                     MaskingState.UNMASKED, other)
                 val continuation = DelimitedStack(cut, shape).closure(language, Metrics(false)).target.rootNode as GuestRoot
@@ -249,10 +248,9 @@ class DelimitedContinuationsTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val threads = Language.currentState().threads
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 val payload = Thunk(object : GuestRoot(language, FrameLayout().build()) {
                     override fun bloom(frame: VirtualFrame): Long = 0L
                     override fun execute(frame: VirtualFrame): Any = error("Delimited catch forced the payload")
@@ -311,7 +309,7 @@ class DelimitedContinuationsTest {
                         return stack.resume(site, frame, action)
                     }
                 }
-                threads.enterCurrent(externalAsync = false)
+                threads.enterCurrent(null, false, false)
                 try {
                     val self = threads.currentIdentity()
                     deliveryTarget.set(self)
@@ -385,7 +383,7 @@ class DelimitedContinuationsTest {
                     // Its external send must not enter the caller's mailbox or handler.
                     val foreign = threads.enterForeign(ForeignSafety.SAFE)
                     try {
-                        threads.enterCurrent(externalAsync = false)
+                        threads.enterCurrent(null, false, false)
                         try {
                             assertNotSame(self, threads.currentIdentity())
                             assertThrows(UnsupportedCore::class.java) { Calls.target(root.callTarget, arrayOf(0L)) }
@@ -407,10 +405,9 @@ class DelimitedContinuationsTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val threads = Language.currentState().threads
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 val payload = Any()
                 val requests = ArrayList<AsyncRequest>()
                 val children = ArrayList<AstContinuation>()
@@ -514,10 +511,9 @@ class DelimitedContinuationsTest {
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 val threads = Language.currentState().threads
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 val payload = Any()
                 val children = ArrayList<AstContinuation>()
                 val requests = ArrayList<AsyncRequest>()
@@ -632,10 +628,9 @@ class DelimitedContinuationsTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 val marker = Any()
                 val answer = shape.layout.create().also { shape.layout.setObject(it, 0, marker) }
                 val owner = object : GuestRoot(language, FrameLayout().build()) {
@@ -892,10 +887,9 @@ class DelimitedContinuationsTest {
             context.initialize("thc"); context.enter()
             try {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), FrameDescriptor.newBuilder().build())
                 fun operands(): Array<Expr> = Array(3) {
                     object : Expr() {
@@ -917,12 +911,11 @@ class DelimitedContinuationsTest {
     }
 
     @Test fun continuationLoweringRejectsWrongCarrierAndTupleContracts() {
-        val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-        val tag = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Unlifted)"))
-        val closure = CoreRepresentation(CoreKind.CLOSURE, primReps = listOf("BoxedRep (Just Lifted)"))
-        val integer = CoreRepresentation(CoreKind.LONG, primReps = listOf("IntRep"))
-        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN,
-            primReps = fields.flatMap { it.primReps!! }, components = fields.toList())
+        val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+        val tag = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Unlifted)"))
+        val closure = CoreRepresentation(CoreKind.CLOSURE, false, false, listOf("BoxedRep (Just Lifted)"))
+        val integer = CoreRepresentation(CoreKind.LONG, false, false, listOf("IntRep"))
+        fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, false, false, fields.flatMap { it.primReps!! }, fields.toList())
         DelimitedControl.validate("newPromptTag#", listOf(state), listOf(false), tuple(state, tag))
         assertThrows(RuntimeFault::class.java) {
             DelimitedControl.validate("newPromptTag#", listOf(state), listOf(false), tuple(state, integer))
@@ -950,10 +943,9 @@ class DelimitedContinuationsTest {
                 val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
                 foreignTag = PromptTag(Language.currentState(null))
                 assertNotSame(foreignTag, PromptTag(Language.currentState(null)))
-                val state = CoreRepresentation(CoreKind.VOID, primReps = emptyList())
-                val value = CoreRepresentation(CoreKind.OBJECT, primReps = listOf("BoxedRep (Just Lifted)"))
-                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, primReps = value.primReps,
-                    components = listOf(state, value)), language)
+                val state = CoreRepresentation(CoreKind.VOID, false, false, emptyList())
+                val value = CoreRepresentation(CoreKind.OBJECT, false, false, listOf("BoxedRep (Just Lifted)"))
+                val shape = TupleShape(CoreRepresentation(CoreKind.UNKNOWN, false, false, value.primReps, listOf(state, value)), language)
                 foreignStack = DelimitedStack(DelimitedCut(foreignTag, null, shape,
                     MaskingState.UNMASKED, object : Node() {}), shape)
             } finally { first.leave() }

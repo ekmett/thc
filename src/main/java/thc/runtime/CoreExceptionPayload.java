@@ -14,7 +14,7 @@ public final class CoreExceptionPayload {
     public static final String TYPE = "ghc-internal:GHC.Internal.Exception.Type.SomeException";
 
     public static boolean validate(List<?> expression) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(expression);
+        var metadata = CoreRepresentations.metadata(expression);
         var proof = metadata == null ? null : metadata.get("exceptionPayload");
         if (proof == null) return false;
         if (!(proof instanceof Map<?, ?> record)) throw fault("Invalid exception payload provenance");

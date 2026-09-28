@@ -37,7 +37,7 @@ public final class SumConstruct extends Expr {
         emptyReferences = new Object[shape.getLeaves().length];
         for (int i = 0; i < emptyReferences.length; i++) {
             CoreRepresentation field = shape.getLeaves()[i];
-            emptyReferences[i] = field.getKind() == CoreKind.ADDRESS ? ManagedAddress.Companion.nullAddress() :
+            emptyReferences[i] = field.getKind() == CoreKind.ADDRESS ? ManagedAddress.nullAddress() :
                 field.isVector() ? new VectorLayout(field).getSpecies().zero() : null;
         }
         if (proof.isTypedTransport()) for (int i = 0; i < integers.length; i++) if (integers[i] != null && (intSlots.length != integers.length || intSlots[i] < 0))

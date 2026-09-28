@@ -122,14 +122,14 @@ class SimdFamiliesTest {
             val index = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
             CoreVectors.validate("insert$name#", listOf(vector, lane, index), vector)
             assertThrows(RuntimeFault::class.java) {
-                CoreVectors.validate("insert$name#", listOf(vector, lane, index.copy(primReps = listOf("WordRep"))), vector)
+                CoreVectors.validate("insert$name#", listOf(vector, lane, index.withPrimReps(listOf("WordRep"))), vector)
             }
             assertThrows(RuntimeFault::class.java) {
-                CoreVectors.validate("insert$name#", listOf(vector, lane.copy(primReps = listOf("IntRep")), index), vector)
+                CoreVectors.validate("insert$name#", listOf(vector, lane.withPrimReps(listOf("IntRep")), index), vector)
             }
             for (index in tuple.components!!.indices) {
-                val wrong = tuple.copy(components = tuple.components.mapIndexed { i, proof ->
-                    if (i == index) proof.copy(primReps = listOf("WordRep")) else proof })
+                val wrong = tuple.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, tuple.components.mapIndexed { i, proof ->
+                    if (i == index) proof.withPrimReps(listOf("WordRep")) else proof }, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
                 assertThrows(RuntimeFault::class.java) { CoreVectors.validate("pack$name#", listOf(wrong), vector) }
             }
             for (wrong in listOf(CoreVectors.proof32, CoreVectors.proof16, CoreVectors.proofFloat, tuple)

@@ -146,7 +146,7 @@ class CpuAffinityApiTest {
                         for (long capability : new long[]{0L, -1L, Long.MAX_VALUE}) {
                             var buffer = new byte[]{-1, -1, -1, -1};
                             var child = (GuestThreadId) Calls.target(guest.entryTarget("fork"), new Object[]{0L, capability, buffer, Unit.INSTANCE});
-                            var carrier = child.getCarrier$org_intelligence_thc().get();
+                            var carrier = child.getCarrier().get();
                             if (carrier != null) { carrier.join(5000); assertFalse(carrier.isAlive()); }
                             assertEquals(GuestThreadStatus.FINISHED, threads.status(child));
                             assertEquals(child.getAffinityApplied() ? 1 : 0, ManagedByteArray.readInt32(buffer, 0));

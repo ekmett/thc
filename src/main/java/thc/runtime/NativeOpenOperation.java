@@ -49,7 +49,7 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
         var request = request();
         TruffleSafepoint.InterruptibleFunction<MemorySegment, Void> action = pending -> {
             while (!Api.done(pending)) {
-                if (interruptible && threads.interruptibleForeignPending$org_intelligence_thc()) Api.cancel(pending);
+                if (interruptible && threads.interruptibleForeignPending()) Api.cancel(pending);
                 if (interrupted.get()) throw new InterruptedException();
                 Api.await(pending);
                 if (interrupted.get()) throw new InterruptedException();
@@ -80,7 +80,7 @@ public final class NativeOpenOperation implements AutoCloseable, TruffleSafepoin
         private static final Linker LINKER = Linker.nativeLinker();
         private static final SymbolLookup LIBRARY = library();
         private static SymbolLookup library() {
-            if (!NativeIO.INSTANCE.supportedHost$org_intelligence_thc())
+            if (!NativeIO.supportedHost())
                 throw new IllegalStateException("Interruptible open requires Linux x86_64");
             try {
                 var file = Files.createTempFile("thc-open-", ".so");

@@ -21,7 +21,7 @@ public final class CoreCallDemands {
     public static boolean[] application(List<?> expression) {
         if (expression.size() <= 2 || !(expression.get(2) instanceof List<?> arguments))
             throw new RuntimeFault("Application lacks arguments");
-        var metadata = CoreRepresentations.INSTANCE.metadata(expression);
+        var metadata = CoreRepresentations.metadata(expression);
         Object raw = metadata == null ? null : metadata.get("callDemand");
         if (raw == null) return new boolean[arguments.size()];
         if (!(raw instanceof Map<?, ?> demand)) throw new RuntimeFault("Invalid Core call demand");

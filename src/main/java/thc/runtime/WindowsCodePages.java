@@ -21,7 +21,6 @@ import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import kotlin.Unit;
 import thc.Json;
 import thc.Language;
 
@@ -91,10 +90,10 @@ public final class WindowsCodePages {
      * Native owners retain their existing ordered lifetime borrows. */
     private <T> T buffers(List<ManagedAddress> addresses, Supplier<List<Region>> describe,
             BiFunction<Arena, List<MemorySegment>, T> action) {
-        return ManagedAddress.Companion.withNativeBorrows$org_intelligence_thc(addresses, () -> {
+        return ManagedAddress.withNativeBorrows(addresses, () -> {
             var owners = new ArrayList<ManagedAllocation>();
             for (var address : addresses) {
-                var owner = address.cbitsOwner$org_intelligence_thc();
+                var owner = address.cbitsOwner();
                 if (owner != null && !owners.contains(owner)) owners.add(owner);
             }
             owners.sort((a, b) -> Integer.compareUnsigned(System.identityHashCode(a), System.identityHashCode(b)));
@@ -103,9 +102,9 @@ public final class WindowsCodePages {
                 var images = new ArrayList<Image>();
                 var selected = new ArrayList<Image>();
                 for (var region : regions) {
-                    if (region.address == ManagedAddress.Companion.nullAddress()) { selected.add(null); continue; }
-                    region.address.requireByteRegion$org_intelligence_thc(region.bytes, region.writable);
-                    long offset = region.address.cbitsOffset$org_intelligence_thc();
+                    if (region.address == ManagedAddress.nullAddress()) { selected.add(null); continue; }
+                    region.address.requireByteRegion(region.bytes, region.writable);
+                    long offset = region.address.cbitsOffset();
                     var base = region.address.plus(-offset);
                     Image image = null;
                     for (var candidate : images) if (candidate.base.sameLocation(base)) { image = candidate; break; }
@@ -121,7 +120,7 @@ public final class WindowsCodePages {
                         var region = regions.get(index);
                         var image = selected.get(index);
                         if (image == null) { pointers.add(MemorySegment.NULL); continue; }
-                        var pointer = image.segment.asSlice(region.address.cbitsOffset$org_intelligence_thc() - image.first);
+                        var pointer = image.segment.asSlice(region.address.cbitsOffset() - image.first);
                         bytes(region.address, region.bytes, storage -> pointer.asSlice(0, region.bytes).copyFrom(storage));
                         pointers.add(pointer);
                     }
@@ -144,12 +143,12 @@ public final class WindowsCodePages {
         });
     }
     private static void bytes(ManagedAddress address, long count, Consumer<MemorySegment> action) {
-        if (address.hasNativeStorage$org_intelligence_thc()) {
-            address.withNativeSegment$org_intelligence_thc(segment -> { action.accept(segment.asSlice(0, count)); return Unit.INSTANCE; });
-        } else action.accept(address.cbitsSegment$org_intelligence_thc().asSlice(address.cbitsOffset$org_intelligence_thc(), count));
+        if (address.hasNativeStorage()) {
+            address.withNativeSegment(segment -> { action.accept(segment.asSlice(0, count)); return null; });
+        } else action.accept(address.cbitsSegment().asSlice(address.cbitsOffset(), count));
     }
     private long inputBytes(ManagedAddress address, int count, int width) {
-        if (address == ManagedAddress.Companion.nullAddress()) ProgramKt.fault("Windows conversion requires an input buffer");
+        if (address == ManagedAddress.nullAddress()) ProgramKt.fault("Windows conversion requires an input buffer");
         if (count < -1) ProgramKt.fault("Windows conversion input length must be nonnegative or -1");
         if (count != -1) return Math.max(0L, count) * width;
         // A -1 count includes the terminator. Never scan beyond the guest allocation.
@@ -166,7 +165,7 @@ public final class WindowsCodePages {
     }
     @TruffleBoundary public long info(long codePage, ManagedAddress output) {
         current();
-        if (output == ManagedAddress.Companion.nullAddress()) ProgramKt.fault("GetCPInfo requires a writable CPINFO buffer");
+        if (output == ManagedAddress.nullAddress()) ProgramKt.fault("GetCPInfo requires a writable CPINFO buffer");
         return buffers(List.of(output), () -> List.of(new Region(output, Abi.getFieldBytes(), true)), (arena, pointers) -> {
             // GHC allocates18 field bytes; native CPINFO is20 with tail padding.
             var data = arena.allocate(Abi.getInfoBytes(), Abi.getInfoAlignment());
@@ -200,8 +199,8 @@ public final class WindowsCodePages {
             if ((int) capacity < 0) ProgramKt.fault("Windows conversion output capacity must be nonnegative");
             long sourceBytes = inputBytes(input, (int) count, 2);
             long defaultBytes = 0;
-            if (defaultChar != ManagedAddress.Companion.nullAddress()) {
-                defaultChar.requireByteRegion$org_intelligence_thc(1, false);
+            if (defaultChar != ManagedAddress.nullAddress()) {
+                defaultChar.requireByteRegion(1, false);
                 defaultBytes = leadByte(codePage, defaultChar.readWord8(0)) != 0 ? 2 : 1;
             }
             return List.of(new Region(input, sourceBytes, false), new Region(output, Math.max(0L, (int) capacity), true),
@@ -240,7 +239,7 @@ public final class WindowsCodePages {
     }
     @TruffleBoundary public void setErrno() {
         current();
-        context.getStdio().captureForeignErrno$org_intelligence_thc(mapErrno(lastError.get()));
+        context.getStdio().captureForeignErrno(mapErrno(lastError.get()));
     }
     @TruffleBoundary public ManagedAddress message(long errorCode) {
         current();
@@ -250,7 +249,7 @@ public final class WindowsCodePages {
             int count = foreign(() -> (int) Api.message.invokeExact(error, (int) Abi.getMessageFlags(), MemorySegment.NULL,
                 (int) errorCode, (int) Abi.getLanguage(), resultPointer, 0, MemorySegment.NULL));
             lastError.set(Api.error(error));
-            if (count == 0) return ManagedAddress.Companion.nullAddress();
+            if (count == 0) return ManagedAddress.nullAddress();
             var pointer = resultPointer.get(ADDRESS, 0);
             // Adoption consumes the allocation, including cleanup on publication failure.
             return context.getNativeAllocations().adoptWindowsLocal(pointer,
@@ -260,7 +259,7 @@ public final class WindowsCodePages {
     @TruffleBoundary public ManagedAddress localFree(ManagedAddress address) {
         current();
         context.getNativeAllocations().free(address, ManagedNativeAllocations.Allocator.WINDOWS_LOCAL);
-        return ManagedAddress.Companion.nullAddress();
+        return ManagedAddress.nullAddress();
     }
 
     public static final AbiValues Abi = new AbiValues();

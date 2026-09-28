@@ -84,7 +84,7 @@ class ManagedExportAsyncPolicyTest {
                     importer.enter()
                     try {
                         val owner = Language.currentState()
-                        owner.threads.enterCurrent(externalAsync = true)
+                        owner.threads.enterCurrent(null, false, true)
                         val caller = owner.threads.currentIdentity()
                         try {
                             val foreign = owner.threads.enterForeign(ForeignSafety.SAFE)

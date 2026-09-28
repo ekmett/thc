@@ -124,7 +124,7 @@ class StateTupleTest {
         }
     }
     private static TupleShape shape(List<Map<String, Object>> bindings, String name, Language language) {
-        return new TupleShape(CoreRepresentations.INSTANCE.parse(((Map<?, ?>) ((List<?>) named(bindings, name).get("expr")).get(3)).get("resultRep")), language);
+        return new TupleShape(CoreRepresentations.parse(((Map<?, ?>) ((List<?>) named(bindings, name).get("expr")).get(3)).get("resultRep")), language);
     }
     @Test void logicalStateAndNestedEmptyTupleFieldsHaveNoPhysicalSlots() throws Exception {
         try (var context = context(true)) {

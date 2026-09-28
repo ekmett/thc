@@ -27,7 +27,7 @@ public final class CoreCapiForeign {
         var previous = state.getThreads().enterForeign(ForeignSafety.UNSAFE);
         try {
             var result = state.cbits().capiWordAddress(call, word, address);
-            if (result.getValue() < 0) state.getStdio().captureForeignErrno$org_intelligence_thc(result.getErrno());
+            if (result.getValue() < 0) state.getStdio().captureForeignErrno(result.getErrno());
             return result.getValue();
         } finally { state.getThreads().leaveForeign(previous); }
     }
@@ -100,7 +100,7 @@ public final class CoreCapiForeign {
     }
 
     public static void validateHead(List<?> function, boolean defined) {
-        var metadata = CoreRepresentations.INSTANCE.metadata(function);
+        var metadata = CoreRepresentations.metadata(function);
         var proof = metadata != null && metadata.get("rep") instanceof Map<?, ?> map ? map : null;
         if (function.size() != 3 || !"var".equals(function.get(0)) || !(function.get(1) instanceof String name) ||
             name.isEmpty() || defined || proof == null || !proof.keySet().equals(SCALAR_KEYS) ||

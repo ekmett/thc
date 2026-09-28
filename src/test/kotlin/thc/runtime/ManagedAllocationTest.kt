@@ -445,7 +445,7 @@ class ManagedAllocationTest {
         assertThrows(RuntimeFault::class.java) { ManagedAllocation.immutable(byteArrayOf(0), 8).writeByte(0, 1) }
         val immutableAddress = ManagedAddress.fromAllocation(ManagedAllocation.immutable(byteArrayOf(0), 8))
         assertFalse(immutableAddress.cbitsWritable())
-        assertThrows(RuntimeFault::class.java) { immutableAddress.requireRange(0, 1, writable = true) }
+        assertThrows(RuntimeFault::class.java) { immutableAddress.requireRange(0, 1, true) }
         val narrow = ManagedAllocation.mutable(12, 4)
         narrow.writeAddressByteOffset(4, nullAddress)
         assertSame(nullAddress, narrow.readAddressByteOffset(4))

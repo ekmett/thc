@@ -30,7 +30,7 @@ public final class GuestEnvironment {
     }
 
     private static byte[] snapshot(ManagedAddress address) {
-        var owner = address.nativeAllocation$org_intelligence_thc();
+        var owner = address.nativeAllocation();
         try (var borrow = owner == null ? null : owner.borrow()) {
             long size = address.cStringLength();
             if (size >= Integer.MAX_VALUE) throw fault("Environment string exceeds managed byte capacity");
@@ -51,7 +51,7 @@ public final class GuestEnvironment {
             for (var entry : env.getEnvironment().entrySet()) {
                 var bytes = (entry.getKey() + "=" + entry.getValue()).getBytes(StandardCharsets.UTF_8);
                 var address = allocations.malloc((long) bytes.length + 1);
-                if (address == ManagedAddress.Companion.nullAddress()) throw new OutOfMemoryError("Unable to allocate environment");
+                if (address == ManagedAddress.nullAddress()) throw new OutOfMemoryError("Unable to allocate environment");
                 created.add(address);
                 for (int index = 0; index < bytes.length; index++) address.writeWord8(index, bytes[index]);
                 address.writeWord8(bytes.length, 0);
@@ -83,9 +83,9 @@ public final class GuestEnvironment {
     public synchronized ManagedAddress get(ManagedAddress name) {
         current();
         var bytes = snapshot(name);
-        if (bytes.length == 0 || equalsIndex(bytes) >= 0) return ManagedAddress.Companion.nullAddress();
+        if (bytes.length == 0 || equalsIndex(bytes) >= 0) return ManagedAddress.nullAddress();
         for (var entry : contents()) if (matches(entry, bytes)) return entry.plus((long) bytes.length + 1);
-        return ManagedAddress.Companion.nullAddress();
+        return ManagedAddress.nullAddress();
     }
 
     @TruffleBoundary
@@ -113,7 +113,7 @@ public final class GuestEnvironment {
 
     private long remove(byte[] name) {
         if (name.length == 0 || equalsIndex(name) >= 0) {
-            Language.currentState(null).getStdio().nativeError$org_intelligence_thc(22); // Linux EINVAL.
+            Language.currentState(null).getStdio().nativeError(22); // Linux EINVAL.
             return -1;
         }
         var values = contents();
@@ -138,10 +138,10 @@ public final class GuestEnvironment {
         if (vector != null) return vector;
         var values = contents();
         var address = allocations.malloc(((long) values.size() + 1) * 8);
-        if (address == ManagedAddress.Companion.nullAddress()) throw new OutOfMemoryError("Unable to allocate environment vector");
+        if (address == ManagedAddress.nullAddress()) throw new OutOfMemoryError("Unable to allocate environment vector");
         try {
             for (int index = 0; index < values.size(); index++) address.writeAddressElementIndex(index, values.get(index));
-            address.writeAddressElementIndex(values.size(), ManagedAddress.Companion.nullAddress());
+            address.writeAddressElementIndex(values.size(), ManagedAddress.nullAddress());
             vector = address;
             return address;
         } catch (Throwable failure) {

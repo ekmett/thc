@@ -162,7 +162,7 @@ public final class CoreUnitDirectory {
                         "Core source metadata differs from original module");
                 CoreForeignArtifacts.INSTANCE.validateArchive(original, true);
                 CoreModules.admission(original, null);
-                thc.runtime.CoreForeignExceptionBridge.INSTANCE.read(original);
+                thc.runtime.CoreForeignExceptionBridge.read(original);
             });
             verified.add(module);
         }
@@ -269,7 +269,7 @@ public final class CoreUnitDirectory {
                         flag(module, "packageScalarDeclarations", "Missing package declaration summary")));
             }
             if (unit.get("targetLayout") != null) {
-                var candidate = TargetLayout.Companion.fromDocument(unit.get("targetLayout"));
+                var candidate = TargetLayout.fromDocument(unit.get("targetLayout"));
                 require(layout == null || layout.equals(candidate), "Conflicting GHC target layouts");
                 layout = candidate;
             }

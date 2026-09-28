@@ -260,7 +260,7 @@ class OriginalFdReadyNativeTest {
                     valid.forEachIndexed { index, rep ->
                         assertDoesNotThrow { CoreOriginalStdio.validateScalarOperand(operation, index, rep, rep) }
                         assertThrows(RuntimeFault::class.java) { CoreOriginalStdio.validateScalarOperand(operation, index, rep,
-                            rep.copy(kind = CoreKind.ADDRESS, primReps = listOf("AddrRep"))) }
+                            rep.let { originalProof -> originalProof.copy(CoreKind.ADDRESS, originalProof.evaluated, originalProof.present, listOf("AddrRep"), originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }) }
                     }
                     released(language)
                 } finally { context.leave() }

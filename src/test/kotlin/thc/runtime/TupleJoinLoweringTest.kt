@@ -80,9 +80,7 @@ class TupleJoinLoweringTest {
                 }.build()
                 val frame = Truffle.getRuntime().createVirtualFrame(emptyArray(), descriptor)
                 val marker = Any()
-                val shape = CoreRepresentation(CoreKind.UNKNOWN, true, true,
-                    listOf("WordRep", "BoxedRep (Just Lifted)", "WordRep"),
-                    alternatives = listOf(reference, long), tagSlot = 0, alternativeSlots = listOf(listOf(1), listOf(2)))
+                val shape = CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("WordRep", "BoxedRep (Just Lifted)", "WordRep"), null, null, listOf(reference, long), 0, listOf(listOf(1), listOf(2)))
                 FrameAccess.writeLong(frame, 0, 1); FrameAccess.write(frame, 1, marker); FrameAccess.writeLong(frame, 2, 0)
                 FrameAccess.writeLong(frame, 3, 2); FrameAccess.write(frame, 4, null); FrameAccess.writeLong(frame, 5, Long.MIN_VALUE)
                 val target = LocalJoinTarget(Any(), 1, intArrayOf(-1, -1), arrayOf(shape, shape),

@@ -55,7 +55,7 @@ class WindowsCodePagesTest {
         return backend.equals("ast") ? new Program(language, module, false, false) : new BytecodeProgram(language, module);
     }
     private ManagedAddress buffer(int size, long fill, boolean pinned) {
-        var address = ManagedAddress.Companion.fromAllocation(ManagedAllocation.mutable(size, 8, pinned, 8));
+        var address = ManagedAddress.fromAllocation(ManagedAllocation.mutable(size, 8, pinned, 8));
         address.fill(size, fill);
         return address;
     }
@@ -92,10 +92,10 @@ class WindowsCodePagesTest {
     }
     private OriginalStdioOp validate(List<Object> call) {
         var reps = ((List<List<Object>>) call.get(2)).stream().map(argument -> {
-            var metadata = CoreRepresentations.INSTANCE.metadata(argument);
+            var metadata = CoreRepresentations.metadata(argument);
             return metadata == null ? null : metadata.get("rep");
         }).toList();
-        return CoreOriginalStdio.INSTANCE.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
+        return CoreOriginalStdio.validate(call.get(6), reps, (List<?>) call.get(3), ((Map<?, ?>) call.get(6)).get("rep"));
     }
 
     @Test void genuineDeclarationsMatchNativeEncodingAndErrorsOnEveryFirstCompiledCall() throws Exception {
@@ -190,7 +190,7 @@ class WindowsCodePagesTest {
                                 for (int i = 0; i < values.size(); i++) input.writeWord8(i, values.get(i));
                                 var label = row.get("case").toString();
                                 assertEquals(row.get("result"), invoke("multiByte", row.get("page"), row.get("flags"), input, row.get("count"),
-                                    Boolean.TRUE.equals(row.get("sizing")) ? ManagedAddress.Companion.nullAddress() : output, row.get("capacity")), label);
+                                    Boolean.TRUE.equals(row.get("sizing")) ? ManagedAddress.nullAddress() : output, row.get("capacity")), label);
                                 if (Long.valueOf(0).equals(row.get("result"))) assertEquals(row.get("error"), invoke("windowsError", 0L), label);
                                 assertEquals(row.get("bytes"), bytes(output), label);
                             }
@@ -200,13 +200,13 @@ class WindowsCodePagesTest {
                                 var values = (List<Long>) row.get("input");
                                 for (int i = 0; i < values.size(); i++) input.writeNativeScalar(i, 2, values.get(i));
                                 var def = (List<Long>) row.get("default");
-                                var defaultChar = def.isEmpty() ? ManagedAddress.Companion.nullAddress() : buffer(4, 0);
+                                var defaultChar = def.isEmpty() ? ManagedAddress.nullAddress() : buffer(4, 0);
                                 for (int i = 0; i < def.size(); i++) defaultChar.writeWord8(i, def.get(i));
                                 var used = buffer(4, 90);
                                 var label = row.get("case").toString();
                                 assertEquals(row.get("result"), invoke("wideChar", row.get("page"), row.get("flags"), input, row.get("count"),
-                                    Boolean.TRUE.equals(row.get("sizing")) ? ManagedAddress.Companion.nullAddress() : output, row.get("capacity"),
-                                    defaultChar, Boolean.TRUE.equals(row.get("used")) ? used : ManagedAddress.Companion.nullAddress()), label);
+                                    Boolean.TRUE.equals(row.get("sizing")) ? ManagedAddress.nullAddress() : output, row.get("capacity"),
+                                    defaultChar, Boolean.TRUE.equals(row.get("used")) ? used : ManagedAddress.nullAddress()), label);
                                 if (Long.valueOf(0).equals(row.get("result"))) assertEquals(row.get("error"), invoke("windowsError", 0L), label);
                                 assertEquals(row.get("bytes"), bytes(output), label);
                                 assertEquals(row.get("usedValue"), used.readWord8(0) | (used.readWord8(1) << 8) |
@@ -214,8 +214,8 @@ class WindowsCodePagesTest {
                             }
                             for (var row : (List<Map<String, Object>>) oracle.get("messages")) {
                                 var address = (ManagedAddress) invoke("errorMessage", row.get("error"));
-                                assertEquals(row.get("null"), address == ManagedAddress.Companion.nullAddress());
-                                if (address != ManagedAddress.Companion.nullAddress()) {
+                                assertEquals(row.get("null"), address == ManagedAddress.nullAddress());
+                                if (address != ManagedAddress.nullAddress()) {
                                     var expected = new ArrayList<>((List<Long>) row.get("units"));
                                     assertEquals((expected.size() + 1L) * 2, address.availableBytes());
                                     expected.add(0L);
@@ -223,7 +223,7 @@ class WindowsCodePagesTest {
                                     for (int i = 0; i < expected.size(); i++) actual.add(address.readWord8(i * 2L) | (address.readWord8(i * 2L + 1) << 8));
                                     assertEquals(expected, actual);
                                 }
-                                assertSame(ManagedAddress.Companion.nullAddress(), invoke("localFree", address));
+                                assertSame(ManagedAddress.nullAddress(), invoke("localFree", address));
                             }
                             assertEquals(0, Language.currentState(null).getNativeAllocations().liveCount());
                         }
@@ -256,25 +256,25 @@ class WindowsCodePagesTest {
                 allocations = Language.currentState(null).getNativeAllocations();
                 var output = buffer(18);
                 assertNotEquals(0L, service.info(932, output));
-                for (var invalid : List.of(buffer(17), ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.fromHex("0000"), ManagedAddress.Companion.unownedNumeric$org_intelligence_thc(1)))
+                for (var invalid : List.of(buffer(17), ManagedAddress.nullAddress(), ManagedAddress.fromHex("0000"), ManagedAddress.unownedNumeric(1)))
                     assertThrows(RuntimeFault.class, () -> service.info(932, invalid));
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, buffer(1, 65), -1, output, 4));
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, buffer(1), 2, output, 4));
-                assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, ManagedAddress.Companion.nullAddress(), 1, output, 4));
+                assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, ManagedAddress.nullAddress(), 1, output, 4));
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, buffer(1), -2, output, 4));
                 assertThrows(RuntimeFault.class, () -> service.multiByte(1252, 0, buffer(1), 1, output, -1));
-                assertThrows(RuntimeFault.class, () -> service.wideChar(1252, 0, buffer(2), 1, buffer(1), 2, ManagedAddress.Companion.nullAddress(), buffer(3)));
+                assertThrows(RuntimeFault.class, () -> service.wideChar(1252, 0, buffer(2), 1, buffer(1), 2, ManagedAddress.nullAddress(), buffer(3)));
                 var message = service.message(2);
                 var alias = message.plus(2);
                 assertThrows(RuntimeFault.class, () -> allocations.free(message));
                 assertThrows(RuntimeFault.class, () -> allocations.realloc(message, 4));
                 assertThrows(RuntimeFault.class, () -> allocations.requireFreeTarget(message));
                 assertThrows(RuntimeFault.class, () -> service.localFree(alias));
-                message.withNativeBorrow$org_intelligence_thc(() -> assertThrows(RuntimeFault.class, () -> service.localFree(message)));
+                message.withNativeBorrow(() -> assertThrows(RuntimeFault.class, () -> service.localFree(message)));
                 assertTrue(message.availableBytes() > 2);
                 // A context-owned native message may also be a conversion input.
-                assertTrue(service.wideChar(65001, 0, message, -1, ManagedAddress.Companion.nullAddress(), 0,
-                    ManagedAddress.Companion.nullAddress(), ManagedAddress.Companion.nullAddress()) > 0);
+                assertTrue(service.wideChar(65001, 0, message, -1, ManagedAddress.nullAddress(), 0,
+                    ManagedAddress.nullAddress(), ManagedAddress.nullAddress()) > 0);
                 service.localFree(message);
                 assertThrows(RuntimeFault.class, () -> alias.readWord8(0));
                 assertThrows(RuntimeFault.class, () -> service.localFree(message));
@@ -304,7 +304,7 @@ class WindowsCodePagesTest {
             try {
                 var service = Language.currentState(null).getWindowsCodePages();
                 var address = service.message(2);
-                var borrow = address.nativeAllocation$org_intelligence_thc().borrow();
+                var borrow = address.nativeAllocation().borrow();
                 var executor = Executors.newSingleThreadExecutor();
                 try {
                     var started = new CountDownLatch(1);

@@ -41,10 +41,10 @@ class CoreFunctionIdentityTest {
                             ((GuestRoot) entry.getRootNode()).getCoreIdentity());
                         var alias = program.entryTarget(unit + ":Shared.alias");
                         if (alias != entry) assertNull(((GuestRoot) alias.getRootNode()).getCoreIdentity());
-                        assertEquals(unit + ":Shared.entry", ((GuestRoot) entry.getRootNode()).getCoreIdentity().getBindingId(),
+                        assertEquals(unit + ":Shared.entry", ((GuestRoot) entry.getRootNode()).getCoreIdentity().bindingId(),
                             "An alias must not claim another binding's target");
                         var worker = program.entryTarget(unit + ":Shared.$wentry_r1");
-                        assertEquals("$wentry_r1", ((GuestRoot) worker.getRootNode()).getCoreIdentity().getOccurrence(),
+                        assertEquals("$wentry_r1", ((GuestRoot) worker.getRootNode()).getCoreIdentity().occurrence(),
                             "Post-Tidy local worker IDs retain their unique suffix");
                     }
                 }

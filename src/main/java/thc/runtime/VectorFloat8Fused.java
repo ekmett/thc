@@ -13,7 +13,7 @@ public final class VectorFloat8Fused extends Expr {
     @Children private Expr[] arguments;
 
     public VectorFloat8Fused(String name, Expr[] arguments) {
-        this.operation = CoreVectors.INSTANCE.getFusedFloat8().indexOf(name);
+        this.operation = CoreVectors.fusedFloat8.indexOf(name);
         this.arguments = arguments;
         setRepresentation(GeneratedVectors.proofFloatX8);
     }

@@ -122,7 +122,7 @@ class SumJoinResultTest {
                 lambda.set(2, List.of("let", false, List.of(zero), List.of("var", "zero-sum", Map.of("rep", proof)), Map.of("rep", proof)));
                 var program = program(language, CoreModules.reachable(module, "forwardCase"), backend);
                 var target = program.entryTarget((String) source.get("id"));
-                var shape = new TupleShape(CoreRepresentations.INSTANCE.parse(proof), language);
+                var shape = new TupleShape(CoreRepresentations.parse(proof), language);
                 var layout = new FrameLayout();
                 var slots = new int[shape.getWidth()];
                 for (int i = 0; i < slots.length; i++) slots[i] = layout.bind("sum result " + i);

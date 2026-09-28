@@ -112,7 +112,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         var admission = consumerAdmissions.get(module);
         if (admission == null) {
             if (Objects.equals(input.get("verifyArtifacts"), true)) {
-                CoreForeignArtifacts.validateArchive(module); CoreModules.admission(module, null); CoreForeignExceptionBridge.INSTANCE.read(module);
+                CoreForeignArtifacts.validateArchive(module); CoreModules.admission(module, null); CoreForeignExceptionBridge.read(module);
             }
             var projected = new LinkedHashMap<>(module); projected.put("bindings", List.of());
             admission = new CoreModuleAdmission(projected, this::binding); consumerAdmissions.put(module, admission);

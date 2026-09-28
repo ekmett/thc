@@ -3,6 +3,7 @@
 
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
+import thc.runtime.SumEvidence.verifySumEvidence
 
 import com.oracle.truffle.api.RootCallTarget
 import com.oracle.truffle.api.nodes.DirectCallNode

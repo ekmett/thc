@@ -47,7 +47,7 @@ class ManagedMVarContractTest {
         assertNull(MVarOp.named("newMutVar#"));
     }
     @Test void malformedArgumentProofsAndFlagsAreRejected() {
-        var bad = List.of(CoreRepresentation.Companion.getUNKNOWN(), integer, scalar(CoreKind.OBJECT, List.of("BoxedRep Nothing")),
+        var bad = List.of(CoreRepresentation.UNKNOWN, integer, scalar(CoreKind.OBJECT, List.of("BoxedRep Nothing")),
             scalar(CoreKind.ADDRESS, List.of("AddrRep")), tuple(), tuple(state), tuple(integer));
         for (var op : MVarOp.values()) {
             var args = arguments(op, lifted);
@@ -71,7 +71,7 @@ class ManagedMVarContractTest {
     @Test void resultTuplesRequireExactLogicalFieldsAndFlattenedRepresentations() {
         for (var op : MVarOp.values()) {
             var args = arguments(op, lifted); var expected = result(op, lifted);
-            for (var forged : List.of(CoreRepresentation.Companion.getUNKNOWN(), integer, tuple(),
+            for (var forged : List.of(CoreRepresentation.UNKNOWN, integer, tuple(),
                 new CoreRepresentation(expected.getKind(), false, true, List.of("WordRep"), expected.getComponents(), null, null, null, null)))
                 assertThrows(RuntimeFault.class, () -> op.validate(args, flags(args), forged));
             if (!op.getTuple()) continue;

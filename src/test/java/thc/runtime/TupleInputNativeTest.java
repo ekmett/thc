@@ -104,7 +104,7 @@ class TupleInputNativeTest {
                 try {
                     var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
                     var linked = new LinkedHashMap<>(CoreModules.reachable(module, name)); linked.put("instrument", true);
-                    var retainedPath = name.equals("stateCase") ? new ArrayCoreEvidence(module, name).loweredStateFunctionPath("consumeState") : null;
+                    var retainedPath = name.equals("stateCase") ? new ArrayCoreEvidence(module, name).loweredStateFunctionPath("consumeState", name, List.of(2)) : null;
                     long expectedEntries = retainedPath == null ? entries.get(name) : retainedPath.size();
                     ExecutableProgram program = backend.equals("ast") ? new Program(language, linked) : new BytecodeProgram(language, linked);
                     var host = program.hostEntryTarget(arity); var original = program.entryTarget(name); var closure = program.entryValue(name);
@@ -113,7 +113,7 @@ class TupleInputNativeTest {
                     var active = targets(host); assertTrue(active.size() > 1, label + " missing observed guest call target");
                     if (retainedPath != null) {
                         var guestIds = new ArrayList<String>();
-                        for (var target : active) if (target != host) { var identity = ((GuestRoot) target.getRootNode()).getCoreIdentity(); guestIds.add(identity == null ? null : identity.getBindingId()); }
+                        for (var target : active) if (target != host) { var identity = ((GuestRoot) target.getRootNode()).getCoreIdentity(); guestIds.add(identity == null ? null : identity.bindingId()); }
                         assertEquals(retainedPath.size(), guestIds.size(), label + " retained guest roots");
                         assertEquals(new LinkedHashSet<>(retainedPath), new LinkedHashSet<>(guestIds), label + " source root identities");
                     }

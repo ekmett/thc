@@ -161,7 +161,7 @@ class CoreContinuationNativeTest {
                     var driver = new Driver();
                     assertSame(thunk, assertThrows(ThunkSuspended.class, () -> driver.force(thunk)).getThunk());
                     assertEquals(AsyncRequestState.CLAIMED, request.getState());
-                    assertTrue(request.getCompiledCapture(), "Installed bytecode must notice the request before its cold mailbox call");
+                    assertTrue(request.compiledCapture, "Installed bytecode must notice the request before its cold mailbox call");
                     assertSame(request, AsyncContinuations.request((ContinuationResult) thunk.getValue()));
                     request.acknowledge();
                     var answer = (DataValue) driver.force(thunk);

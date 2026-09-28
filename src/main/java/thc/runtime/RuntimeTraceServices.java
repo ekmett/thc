@@ -153,11 +153,11 @@ public final class RuntimeTraceServices implements AutoCloseable {
     private static String decode(ManagedAddress address, long length) {
         if (length == 0L) return "";
         byte[] bytes = new byte[(int) length];
-        var nativeAllocation = address.nativeAllocation$org_intelligence_thc();
+        var nativeAllocation = address.nativeAllocation();
         // Keep the complete checked copy inside one native lifetime, without
         // a capturing callback for the borrow body.
         try (var borrow = nativeAllocation == null ? null : nativeAllocation.borrow()) {
-            address.requireByteRegion$org_intelligence_thc(length, false);
+            address.requireByteRegion(length, false);
             address.copyToByteArray(bytes, 0L, length);
         }
         try {

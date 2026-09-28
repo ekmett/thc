@@ -209,7 +209,7 @@ class OriginalStackDecoderCallTest {
                         assertEquals(snapshot.frames.size.toLong(), call("getStackFieldszh", 0, snapshot))
                         for (offset in snapshot.frames.indices) {
                             val key = ManagedStackRuntime.frameInfo(snapshot, offset.toLong(),
-                                StackInfoTestLayout.layout()).second
+                                StackInfoTestLayout.layout()).key
                             val bits = call("getWordzh", 0, snapshot, offset.toLong()) as Long
                             assertEquals(key.toNativeBits(), bits)
                             assertTrue(key.sameLocation(NativeAddresses.current(null).recover(bits)))

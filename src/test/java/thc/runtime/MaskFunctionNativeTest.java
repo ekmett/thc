@@ -14,7 +14,6 @@ import thc.CoreModules;
 import thc.Json;
 import thc.Language;
 import thc.Main;
-import thc.UnsupportedCore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -90,7 +89,7 @@ class MaskFunctionNativeTest {
     }
     private static List<CoreRepresentation> proofs(List<List<Object>> arguments) {
         var result = new ArrayList<CoreRepresentation>();
-        for (var argument : arguments) result.add(CoreRepresentations.INSTANCE.expression(argument));
+        for (var argument : arguments) result.add(CoreRepresentations.expression(argument));
         return result;
     }
     @Test void genuinePartialMasksBecomeTypedLambdasWithSaturatedBodies() throws Exception {
@@ -103,14 +102,14 @@ class MaskFunctionNativeTest {
                 var lambda = ((List<List<Object>>) opaque.get(2)).get(0);
                 assertEquals("lam", lambda.get(0), stage + "/" + name + " passes the mask as a function");
                 var binder = single((List<Map<String, Object>>) lambda.get(1));
-                assertEquals(CoreKind.VOID, CoreRepresentations.INSTANCE.binder(binder).getKind());
-                assertEquals(List.of(), CoreRepresentations.INSTANCE.binder(binder).getPrimReps());
+                assertEquals(CoreKind.VOID, CoreRepresentations.binder(binder).getKind());
+                assertEquals(List.of(), CoreRepresentations.binder(binder).getPrimReps());
                 var body = (List<Object>) lambda.get(2); assertEquals(primitive, ((List<?>) body.get(1)).get(1));
                 var arguments = (List<List<Object>>) body.get(2);
                 assertEquals(binder.get("id"), arguments.get(1).get(1), "The state parameter is applied later");
-                assertEquals(CoreKind.CLOSURE, CoreRepresentations.INSTANCE.expression(arguments.get(0)).getKind());
-                assertEquals(CoreRepresentations.INSTANCE.expression(body), CoreRepresentations.INSTANCE.lambdaResult(lambda));
-                CoreSynchronousExceptions.validate(primitive, proofs(arguments), (List<?>) body.get(3), CoreRepresentations.INSTANCE.expression(body));
+                assertEquals(CoreKind.CLOSURE, CoreRepresentations.expression(arguments.get(0)).getKind());
+                assertEquals(CoreRepresentations.expression(body), CoreRepresentations.lambdaResult(lambda));
+                CoreSynchronousExceptions.validate(primitive, proofs(arguments), (List<?>) body.get(3), CoreRepresentations.expression(body));
                 // This is only evidence about the retained GHC dump; execution
                 // and proofs above consume the structural export exclusively.
                 assertTrue(Pattern.compile("applyLater\\s+\\(" + Pattern.quote(primitive) + "\\s+@LiftedRep\\s+@Payload")
@@ -197,7 +196,7 @@ class MaskFunctionNativeTest {
         for (var stage : List.of("pre", "post")) for (var entryPrimitive : primitives.entrySet()) {
             var entry = entryPrimitive.getKey(); var primitive = entryPrimitive.getValue();
             var linked = CoreModules.reachable(source(stage), entry, true); var app = single(calls(linked, "prim", primitive));
-            var arguments = proofs((List<List<Object>>) app.get(2)); var flags = (List<?>) app.get(3); var result = CoreRepresentations.INSTANCE.expression(app);
+            var arguments = proofs((List<List<Object>>) app.get(2)); var flags = (List<?>) app.get(3); var result = CoreRepresentations.expression(app);
             assertThrows(RuntimeFault.class, () -> CoreSynchronousExceptions.validate(primitive, arguments.subList(0, Math.min(1, arguments.size())), List.of(true), result));
             assertThrows(RuntimeFault.class, () -> {
                 var extraArguments = new ArrayList<>(arguments); extraArguments.add(arguments.getLast()); var extraFlags = new ArrayList<Object>(flags); extraFlags.add(false);

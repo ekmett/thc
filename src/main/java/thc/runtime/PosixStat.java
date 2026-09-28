@@ -27,7 +27,7 @@ public final class PosixStat {
     }
     public long getSize() { return size; }
     public long field(String name, ManagedAddress address) {
-        var nativeOwner = address.nativeAllocation$org_intelligence_thc();
+        var nativeOwner = address.nativeAllocation();
         try (var ignored = nativeOwner == null ? null : nativeOwner.borrow()) {
             var field = required(fields, name);
             address.requireRange(field.offset, field.width, false);

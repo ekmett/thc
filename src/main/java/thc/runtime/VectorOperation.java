@@ -15,7 +15,7 @@ public final class VectorOperation extends Expr {
     public VectorOperation(String name, Expr[] arguments) {
         this.operation = name;
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProof());
+        setRepresentation(CoreVectors.proof);
     }
 
     @Override public LongVector execute(VirtualFrame frame) {

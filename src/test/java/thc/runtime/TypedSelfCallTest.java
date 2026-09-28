@@ -134,8 +134,8 @@ class TypedSelfCallTest {
     @Test void vectorArithmeticAndWideScalarArgumentsUseParallelSelfMoves() throws Exception { exercise(false); }
     @Test void vectorResultsRetainTheirOriginalDestinationAcrossSelfMoves() throws Exception { exercise(true); }
     @Test void strictColdScalarsDoNotQualifyForTypedSelfMoves() {
-        var vectorProof = CoreRepresentations.INSTANCE.parse(vector);
-        var cold = CoreRepresentations.INSTANCE.parse(Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false));
+        var vectorProof = CoreRepresentations.parse(vector);
+        var cold = CoreRepresentations.parse(Map.of("kind", "object", "primReps", List.of("BoxedRep (Just Lifted)"), "evaluated", false));
         var formal = Objects.requireNonNull(ArgumentLayout.fromProofs(List.of(vectorProof, cold)));
         assertFalse(TypedInputsKt.supportsTypedSelf(formal, new boolean[]{false, true}, formal));
         var evaluated = cold.copy(cold.getKind(), true, cold.getPresent(), cold.getPrimReps(), cold.getComponents(),

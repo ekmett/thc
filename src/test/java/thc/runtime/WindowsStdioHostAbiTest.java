@@ -111,7 +111,7 @@ class WindowsStdioHostAbiTest {
                 var stdio = Language.currentState(null).getStdio();
                 var bytes = new byte[6];
                 Arrays.fill(bytes, (byte) 91);
-                var alias = ManagedAddress.Companion.fromByteArray(bytes).plus(2);
+                var alias = ManagedAddress.fromByteArray(bytes).plus(2);
                 assertEquals(-1L, stdio.close(-1));
                 assertEquals(parse(document()).error(4), stdio.errno());
                 var error = stdio.errno();

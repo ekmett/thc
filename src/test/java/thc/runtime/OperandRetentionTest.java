@@ -49,7 +49,7 @@ class OperandRetentionTest {
         var frame = frame(7);
         var first = new Object(); var second = new Object(); var unused = new Object();
         int[] temporaries = {3, 4, 5, 6};
-        var unknown = CoreRepresentation.Companion.getUNKNOWN();
+        var unknown = CoreRepresentation.UNKNOWN;
         var layout = new AstSelfLayout(null, new int[0], new int[]{0, 1, 2, -1},
             new CoreRepresentation[]{unknown, unknown, integral, unknown}, new boolean[4]);
         var target = new RootNode(null) {
@@ -75,7 +75,7 @@ class OperandRetentionTest {
         var failure = new RuntimeFault("join operand failure");
         boolean[] fail = {false};
         var order = new ArrayList<Integer>();
-        var unknown = CoreRepresentation.Companion.getUNKNOWN();
+        var unknown = CoreRepresentation.UNKNOWN;
         var target = new LocalJoinTarget(new Object(), 0, new int[]{0, 1, 2}, new CoreRepresentation[]{unknown, unknown, integral});
         int[] temporaries = {3, 4, 5};
         var metrics = new Metrics(true);

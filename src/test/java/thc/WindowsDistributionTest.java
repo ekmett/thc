@@ -130,13 +130,13 @@ class WindowsDistributionTest {
             assertEquals("IO ()", main.get("type"));
             var bindings = new ArrayList<>(original);
             bindings.addAll(host);
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.ioUnitMainResult(main, bindings));
+            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.ioUnitMainResult(main, bindings));
             var entry = single(host, "id", "main:THC.WindowsRunMain.thcRunMain");
-            var result = CoreRepresentations.INSTANCE.ioUnitMainResult(entry, bindings);
+            var result = CoreRepresentations.ioUnitMainResult(entry, bindings);
             assertEquals(2, result.getComponents().size());
             var invalid = new LinkedHashMap<>(entry);
             invalid.put("type", "IO Int");
-            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.INSTANCE.ioUnitMainResult(invalid, bindings));
+            assertThrows(UnsupportedCore.class, () -> CoreRepresentations.ioUnitMainResult(invalid, bindings));
             if (audited.contains(manifest)) {
                 var audit = document(output.resolve("audit.json"));
                 assertEquals(true, audit.get("accepted"));
@@ -290,7 +290,7 @@ class WindowsDistributionTest {
                 try {
                     var bytes = new byte[88];
                     Arrays.fill(bytes, (byte) 0xa5);
-                    var address = ManagedAddress.Companion.fromByteArray(bytes);
+                    var address = ManagedAddress.fromByteArray(bytes);
                     if (!nativeAccess) {
                         assertThrows(RuntimeFault.class, () -> ManagedMd5.init(address));
                         var untouched = new byte[88];
@@ -299,8 +299,8 @@ class WindowsDistributionTest {
                     } else {
                         ManagedMd5.init(address);
                         var output = new byte[16];
-                        ManagedMd5.update(address, ManagedAddress.Companion.fromHex("616263"), 3);
-                        ManagedMd5.finish(ManagedAddress.Companion.fromByteArray(output), address);
+                        ManagedMd5.update(address, ManagedAddress.fromHex("616263"), 3);
+                        ManagedMd5.finish(ManagedAddress.fromByteArray(output), address);
                         assertArrayEquals(MessageDigest.getInstance("MD5").digest("abc".getBytes(StandardCharsets.UTF_8)), output);
                         assertArrayEquals(new byte[88], bytes);
                     }

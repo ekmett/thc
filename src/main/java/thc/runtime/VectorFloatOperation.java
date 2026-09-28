@@ -19,13 +19,13 @@ public final class VectorFloatOperation extends Expr {
             case "minusFloatX4#" -> 2;
             case "timesFloatX4#" -> 3;
             default -> {
-                int fused = CoreVectors.INSTANCE.getFusedFloat().indexOf(name);
+                int fused = CoreVectors.fusedFloat.indexOf(name);
                 if (fused < 0) throw new RuntimeFault("Invalid FloatX4 operation");
                 yield 4 + fused;
             }
         };
         this.arguments = arguments;
-        setRepresentation(CoreVectors.INSTANCE.getProofFloat());
+        setRepresentation(CoreVectors.proofFloat);
     }
 
     @Override public FloatVector execute(VirtualFrame frame) {

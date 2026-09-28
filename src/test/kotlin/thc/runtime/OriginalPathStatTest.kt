@@ -69,7 +69,7 @@ class OriginalPathStatTest {
     @Test fun originalNativePathImagesMatchBothBackendsAndFirstInstalledCalls() {
         val manifest = json("$prefix/manifest.json")
         assertEquals(operations.keys.toList(), manifest["entries"])
-        assertTrue(isOriginalUnixUnit(manifest["unixUnit"]))
+        assertTrue(CoreOriginalStdio.isOriginalUnixUnit(manifest["unixUnit"]))
         OriginalStdioChecks.hashes(root, manifest["inputHashes"], setOf("compiler/test-fixtures/OriginalPathStatAudit.hs",
             "test/haskell-fixtures/OriginalPathStatFixtures.hs", "scripts/core_original_foreign.py", "scripts/core-capabilities.json"))
         OriginalStdioChecks.hashes(root, manifest["artifactHashes"], setOf("$prefix/oracle.json") +

@@ -27,8 +27,8 @@ class TailCallFrameTest {
             });
             var failure = assertThrows(NullPointerException.class, () -> loop.execute(transfer));
             assertEquals("null cannot be cast to non-null type thc.runtime.TailCallRepeatingNode", failure.getMessage());
-            assertArrayEquals(new Object[]{23L}, transfer.args);
-            assertSame(target, transfer.target);
+            assertArrayEquals(new Object[]{23L}, transfer.getArgs());
+            assertSame(target, transfer.getTarget());
         } finally { field.set(loop, original); }
     }
 

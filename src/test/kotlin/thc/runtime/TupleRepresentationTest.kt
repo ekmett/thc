@@ -34,16 +34,16 @@ class TupleRepresentationTest {
         assertEquals(1, nonempty.components!!.size)
         assertTrue(empty.isEmptyTuple)
         assertTrue(empty.primReps!!.isEmpty()); assertTrue(empty.components!!.isEmpty())
-        assertFalse(empty.copy(components = listOf(empty)).isEmptyTuple, "nested empty tuple has one logical component")
-        assertFalse(empty.copy(primReps = null).isEmptyTuple)
-        assertFalse(empty.copy(components = null).isEmptyTuple)
-        assertFalse(empty.copy(present = false).isEmptyTuple)
-        assertFalse(empty.copy(kind = CoreKind.VOID).isEmptyTuple)
-        assertTrue(nonempty.copy(primReps = emptyList(), components = emptyList()).isEmptyTuple)
+        assertFalse(empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(empty), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }.isEmptyTuple, "nested empty tuple has one logical component")
+        assertFalse(empty.withPrimReps(null).isEmptyTuple)
+        assertFalse(empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, null, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }.isEmptyTuple)
+        assertFalse(empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, false, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }.isEmptyTuple)
+        assertFalse(empty.let { originalProof -> originalProof.copy(CoreKind.VOID, originalProof.evaluated, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }.isEmptyTuple)
+        assertTrue(nonempty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, emptyList(), emptyList(), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }.isEmptyTuple)
         assertTrue(CoreRepresentation.UNKNOWN.refine(empty).isEmptyTuple)
         assertTrue(empty.refine(CoreRepresentation.UNKNOWN).isEmptyTuple)
         assertEquals(empty, empty.copy(), "derived proof does not change structural equality")
-        assertTrue(empty.copy(evaluated = false).isEmptyTuple)
+        assertTrue(empty.withEvaluated(false).isEmptyTuple)
     }
 
     private val root = File(System.getProperty("thc.projectRoot"))
@@ -62,22 +62,19 @@ class TupleRepresentationTest {
     @Test fun canonicalShapeKeysPreserveLogicalIdentityWithoutSharingContextLayouts() {
         val state = CoreRepresentation(CoreKind.VOID, true, true, emptyList())
         val integer = CoreRepresentation(CoreKind.LONG, true, true, listOf("IntRep"))
-        val word = integer.copy(primReps = listOf("WordRep"))
+        val word = integer.withPrimReps(listOf("WordRep"))
         val lifted = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
-        val unlifted = lifted.copy(evaluated = true, primReps = listOf("BoxedRep (Just Unlifted)"))
+        val unlifted = lifted.let { originalProof -> originalProof.copy(originalProof.kind, true, originalProof.present, listOf("BoxedRep (Just Unlifted)"), originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         val float = CoreRepresentation(CoreKind.FLOAT, true, true, listOf("FloatRep"))
         val double = CoreRepresentation(CoreKind.DOUBLE, true, true, listOf("DoubleRep"))
         fun tuple(vararg fields: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, true, true,
             fields.flatMap { it.primReps!! }, fields.toList())
-        fun vector(lanes: Int, element: String) = CoreRepresentation(CoreKind.VECTOR, true, true,
-            listOf("VecRep $lanes $element"), vector = CoreVector(lanes, element))
-        fun sum(first: CoreRepresentation, second: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, true, true,
-            listOf("WordRep", "WordRep"), alternatives = listOf(first, second), tagSlot = 0,
-            alternativeSlots = listOf(listOf(1), listOf(1))).also(SumShape::validate)
+        fun vector(lanes: Int, element: String) = CoreRepresentation(CoreKind.VECTOR, true, true, listOf("VecRep $lanes $element"), null, CoreVector(lanes, element))
+        fun sum(first: CoreRepresentation, second: CoreRepresentation) = CoreRepresentation(CoreKind.UNKNOWN, true, true, listOf("WordRep", "WordRep"), null, null, listOf(first, second), 0, listOf(listOf(1), listOf(1))).also(SumShape::validate)
         val floatVector = vector(4, "FloatElemRep")
         val proofs = listOf(tuple(), tuple(state), tuple(tuple()), tuple(integer), tuple(word),
             tuple(state, integer), tuple(integer, state), tuple(tuple(integer)), tuple(integer, word), tuple(word, integer),
-            tuple(lifted), tuple(lifted.copy(kind = CoreKind.DATA, evaluated = true)), tuple(unlifted),
+            tuple(lifted), tuple(lifted.let { originalProof -> originalProof.copy(CoreKind.DATA, true, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }), tuple(unlifted),
             tuple(float), tuple(double), floatVector, tuple(floatVector), vector(2, "DoubleElemRep"),
             vector(4, "Int32ElemRep"), vector(4, "Word32ElemRep"), sum(integer, word), sum(word, integer),
             sum(integer, integer), sum(tuple(integer), integer))
@@ -125,13 +122,13 @@ class TupleRepresentationTest {
         }
         val empty = CoreRepresentations.parse(mapOf("kind" to "unknown", "primReps" to emptyList<String>(),
             "evaluated" to true, "aggregate" to "unboxed-tuple", "components" to emptyList<Any>()))
-        val nested = empty.copy(components = listOf(empty))
+        val nested = empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, originalProof.primReps, listOf(empty), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }
         assertFalse(TupleShape.compatible(empty, nested))
         assertFalse(TupleShape.compatible(empty, CoreRepresentation(CoreKind.VOID, true, true, emptyList())))
         assertThrows(RuntimeFault::class.java) { empty.refine(nested) }
         val generic = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))
-        assertTrue(TupleShape.compatible(empty.copy(primReps = generic.primReps, components = listOf(generic)),
-            empty.copy(primReps = generic.primReps, components = listOf(generic.copy(kind = CoreKind.DATA, evaluated = true)))))
+        assertTrue(TupleShape.compatible(empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, generic.primReps, listOf(generic), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) },
+            empty.let { originalProof -> originalProof.copy(originalProof.kind, originalProof.evaluated, originalProof.present, generic.primReps, listOf(generic.let { originalProof -> originalProof.copy(CoreKind.DATA, true, originalProof.present, originalProof.primReps, originalProof.components, originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }), originalProof.vector, originalProof.alternatives, originalProof.tagSlot, originalProof.alternativeSlots) }))
     }
     @Test fun completedReferenceLoanIsReleasedEvenWhenTheConsumerShapeIsWrong() = withLanguage { language ->
         val reference = CoreRepresentation(CoreKind.OBJECT, false, true, listOf("BoxedRep (Just Lifted)"))

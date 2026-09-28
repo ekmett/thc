@@ -24,18 +24,18 @@ public final class SigsetImage {
     public long apply(OriginalStdioOp operation, ManagedAddress address, long signal, ManagedStdio stdio) {
         if (!operation.getSigset()) throw fault("Invalid sigset image operation");
         if (signal != (long) (int) signal) throw fault("Original sigaddset requires a canonical signed CInt");
-        var owner = address.cbitsOwner$org_intelligence_thc();
+        var owner = address.cbitsOwner();
         if (owner == null) return checked(operation, address, signal, stdio);
         synchronized (owner) { return checked(operation, address, signal, stdio); }
     }
     private long checked(OriginalStdioOp operation, ManagedAddress address, long signal, ManagedStdio stdio) {
-        address.requireByteRegion$org_intelligence_thc(size, true);
+        address.requireByteRegion(size, true);
         if (operation == OriginalStdioOp.SIGEMPTYSET) {
             for (long offset : clearBytes) address.writeWord8(offset, 0);
             return 0;
         }
         long bit = signal >= 1 && signal <= signalBits.length ? signalBits[(int) signal - 1] : -1;
-        if (bit < 0) { stdio.nativeError$org_intelligence_thc(invalidErrno); return -1; }
+        if (bit < 0) { stdio.nativeError(invalidErrno); return -1; }
         long offset = bit / 8;
         address.writeWord8(offset, address.readWord8(offset) | (1L << ((int) bit % 8)));
         return 0;

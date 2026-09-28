@@ -25,7 +25,7 @@ public final class NativePollApi {
     private static final MethodHandle CLOSE = function("close", ValueLayout.JAVA_INT, ValueLayout.JAVA_INT);
 
     private static MethodHandle function(String name, ValueLayout result, MemoryLayout... arguments) {
-        if (!NativeIO.INSTANCE.supportedHost$org_intelligence_thc())
+        if (!NativeIO.supportedHost())
             throw new IllegalStateException("Native readiness currently requires Linux x86_64");
         return LINKER.downcallHandle(LINKER.defaultLookup().find(name).orElseThrow(),
             FunctionDescriptor.of(result, arguments), Linker.Option.captureCallState("errno"));

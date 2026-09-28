@@ -130,13 +130,13 @@ class OriginalStdioCloseNativeTest {
                                             assertEquals(-1L, files.size(fd), "the original close retired the managed descriptor")
                                             assertEquals("keep", Files.readString(privateFile))
                                         }
-                                        if (compiled) assertEquals(before + 2,
+                                        if (compiled) assertEquals(before + 1,
                                             (program.diagnostics().getValue("compiledEntries") as Number).toLong())
                                     }
                                 }
                                 exercise(false)
                                 val active = targets(entry)
-                                assertEquals(2, active.size, "entry and runRW State lambda")
+                                assertEquals(1, active.size, "entry contains the inlined runRW State body")
                                 active.forEach { it.javaClass.getMethod("compile", Boolean::class.javaPrimitiveType).invoke(it, true); valid(it) }
                                 exercise(true)
                                 assertEquals(active, targets(entry)); active.forEach(::valid)

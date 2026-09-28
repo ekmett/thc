@@ -44,12 +44,12 @@ public final class AstContinuation implements SavedGuestContinuation {
     @Override @TruffleBoundary public Object continueWith(Object input) {
         if (!claimed.compareAndSet(false, true)) throw fault("AST continuation was already resumed");
         MaskingState ambient = SynchronousMasking.current(sourceRoot);
-        StackAnnotationState ambientAnnotations = StackAnnotations.INSTANCE.current(sourceRoot);
+        StackAnnotationState ambientAnnotations = StackAnnotations.current(sourceRoot);
         AstStackScope stack = AstStackKt.astStackScope(sourceRoot);
         stack.setDepth(stack.getDepth() + 1);
         try {
             SynchronousMasking.set(sourceRoot, logicalMask);
-            StackAnnotations.INSTANCE.set(sourceRoot, annotations);
+            StackAnnotations.set(sourceRoot, annotations);
             try { return AstContinuationKt.resumeAstSteps(frame, steps, input); }
             catch (AstCapture cut) {
                 return sourceRoot instanceof FunctionRoot root ? root.finishCapture(cut, frame) : cut.freeze(sourceRoot, frame);
@@ -57,7 +57,7 @@ public final class AstContinuation implements SavedGuestContinuation {
         } finally {
             stack.setDepth(stack.getDepth() - 1);
             SynchronousMasking.set(sourceRoot, ambient);
-            StackAnnotations.INSTANCE.set(sourceRoot, ambientAnnotations);
+            StackAnnotations.set(sourceRoot, ambientAnnotations);
         }
     }
 }

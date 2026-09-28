@@ -474,7 +474,7 @@ public final class Force extends Node {
                         AsyncRequest request = GuestThreads.pollCurrent(this, true);
                         if (request != null) throw new AsyncBlocked(request, this);
                     }
-                    try (var blocked = GuestThreads.Companion.blocking$org_intelligence_thc(GuestThreadStatus.BLACK_HOLE)) {
+                    try (var blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE)) {
                         waiting.getMonitor().wait();
                     }
                 }
@@ -594,7 +594,7 @@ public final class Force extends Node {
                         AsyncRequest request = GuestThreads.pollCurrent(this, true);
                         if (request != null) throw new AsyncBlocked(request, this);
                     }
-                    try (var blocked = GuestThreads.Companion.blocking$org_intelligence_thc(GuestThreadStatus.BLACK_HOLE)) {
+                    try (var blocked = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE)) {
                         waiting.getMonitor().wait();
                     }
                 }

@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @Timeout(20)
 class GuestThreadStatusTest {
     private GuestThreads registry() {
-        return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), new CpuAffinity(null, 2), ignored -> Unit.INSTANCE);
+        return new GuestThreads(ThreadLocal.withInitial(() -> MaskingState.UNMASKED), new CpuAffinity(null, 2), ignored -> {});
     }
     @Test void hostReentryKeepsJavaIdentityCapabilityAndForeignStatus() throws Exception {
         var threads = registry();
@@ -35,7 +35,7 @@ class GuestThreadStatusTest {
                     assertEquals(id.getJavaId(), callback.getJavaId());
                     assertEquals(GuestThreadStatus.RUNNING, threads.status(callback));
                     assertEquals(GuestThreadStatus.FOREIGN, threads.status(id));
-                    try (var extent = GuestThreads.Companion.blocking$org_intelligence_thc(GuestThreadStatus.BLACK_HOLE)) {
+                    try (var extent = GuestThreads.blocking(GuestThreadStatus.BLACK_HOLE)) {
                         assertEquals(GuestThreadStatus.BLACK_HOLE, threads.status(callback));
                         assertEquals(GuestThreadStatus.FOREIGN, threads.status(id));
                     }
@@ -53,7 +53,7 @@ class GuestThreadStatusTest {
         try {
             assertSame(id, threads.currentIdentity());
             assertEquals(GuestThreadStatus.RUNNING, threads.status(id));
-            assertEquals(2L, threads.capabilityCount$org_intelligence_thc());
+            assertEquals(2L, threads.capabilityCount());
             var other = registry(); other.enterCurrent(null, false, true, null);
             try {
                 assertEquals(id.getJavaId(), other.currentIdentity().getJavaId());
@@ -70,7 +70,7 @@ class GuestThreadStatusTest {
             var retained = new ArrayList<GuestThreadId>();
             for (boolean read : new boolean[]{false, true}) {
                 var cell = new ManagedMVar();
-                var request = read ? cell.beginRead$org_intelligence_thc() : cell.beginTake$org_intelligence_thc();
+                var request = read ? cell.beginRead() : cell.beginTake();
                 var identity = new AtomicReference<GuestThreadId>();
                 var failure = new AtomicReference<Throwable>();
                 var ready = new CountDownLatch(1);
@@ -78,7 +78,7 @@ class GuestThreadStatusTest {
                     threads.enterCurrent(null, true, true, null);
                     try {
                         identity.set(threads.currentIdentity()); ready.countDown();
-                        assertEquals(42L, request.await$org_intelligence_thc());
+                        assertEquals(42L, request.await());
                         assertEquals(GuestThreadStatus.RUNNING, threads.status(identity.get()));
                     } catch (Throwable error) { failure.set(error); }
                     finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
@@ -87,8 +87,8 @@ class GuestThreadStatusTest {
                 try {
                     assertTrue(ready.await(5, TimeUnit.SECONDS));
                     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-                    while (!request.hasWaitingThread$org_intelligence_thc() && System.nanoTime() < deadline) Thread.yield();
-                    assertTrue(request.hasWaitingThread$org_intelligence_thc());
+                    while (!request.hasWaitingThread() && System.nanoTime() < deadline) Thread.yield();
+                    assertTrue(request.hasWaitingThread());
                     var id = identity.get();
                     assertEquals(worker.threadId(), id.getJavaId());
                     assertEquals((retained.size() + 1L) % 2L, id.getCapability());
@@ -101,7 +101,7 @@ class GuestThreadStatusTest {
             }
             assertEquals(1L, retained.getFirst().getCapability());
             assertEquals(parent.getCapability(), retained.get(1).getCapability(), "More threads do not invent more CPUs");
-            assertEquals(2L, threads.capabilityCount$org_intelligence_thc());
+            assertEquals(2L, threads.capabilityCount());
         } finally { threads.leaveCurrent(GuestThreadStatus.FINISHED); }
     }
     @Test void forkedFailureAndHostCarrierTerminationAreDistinct() throws Exception {
@@ -120,7 +120,7 @@ class GuestThreadStatusTest {
         var id = threads.currentIdentity(); threads.close(); threads.leaveCurrent(GuestThreadStatus.FINISHED);
         assertThrows(RuntimeFault.class, () -> threads.status(id));
         // Closing an active context must unwind its process-wide observation extent.
-        try (var extent = GuestThreads.Companion.blocking$org_intelligence_thc(GuestThreadStatus.MVAR)) {}
+        try (var extent = GuestThreads.blocking(GuestThreadStatus.MVAR)) {}
     }
     @Test void exactThreadStatusTupleRejectsWrongLanesFlagsAndRepresentations() {
         var state = new CoreRepresentation(CoreKind.VOID, false, false, List.of(), null, null, null, null, null);
@@ -129,13 +129,13 @@ class GuestThreadStatusTest {
         var reps = List.of("IntRep", "IntRep", "IntRep");
         var fields = List.of(state, integer, integer, integer);
         var result = new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, fields, null, null, null, null);
-        CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(thread, state), List.of(false, false), result);
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(thread, state), List.of(true, false), result));
-        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(integer, state), List.of(false, false), result));
+        CoreGuestThreads.validate("threadStatus#", List.of(thread, state), List.of(false, false), result);
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("threadStatus#", List.of(thread, state), List.of(true, false), result));
+        assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("threadStatus#", List.of(integer, state), List.of(false, false), result));
         for (var bad : List.of(
             new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, List.of(state, integer, thread, integer), null, null, null, null),
             new CoreRepresentation(CoreKind.UNKNOWN, false, false, List.of("IntRep"), fields, null, null, null, null),
             new CoreRepresentation(CoreKind.UNKNOWN, false, false, reps, List.of(state, integer), null, null, null, null)))
-            assertThrows(RuntimeFault.class, () -> CoreGuestThreads.INSTANCE.validate("threadStatus#", List.of(thread, state), List.of(false, false), bad));
+            assertThrows(RuntimeFault.class, () -> CoreGuestThreads.validate("threadStatus#", List.of(thread, state), List.of(false, false), bad));
     }
 }

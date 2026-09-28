@@ -20,7 +20,7 @@ final class CoreDataTags {
             Map<String, ? extends Map<String, ?>> constructors) {
         if (expression.size() <= 1 || !(expression.get(1) instanceof List<?> function))
             throw bad("Missing primitive function");
-        CoreRepresentations.INSTANCE.expression(function);
+        CoreRepresentations.expression(function);
         Object name = function.size() > 1 ? function.get(1) : null;
         if (!"dataToTagSmall#".equals(name) && !"dataToTagLarge#".equals(name))
             throw bad("Unknown primitive variant");
@@ -34,7 +34,7 @@ final class CoreDataTags {
         if (!operand.getPresent() || operand.getKind() != CoreKind.DATA || operand.isAggregate() || operand.isVector())
             throw bad("Exact algebraic data operand required");
         if (expression.size() <= 3 || !List.of(lifted).equals(expression.get(3))) throw bad("Operand levity mismatch");
-        CoreRepresentation result = CoreRepresentations.INSTANCE.expression(expression);
+        CoreRepresentation result = CoreRepresentations.expression(expression);
         if (!result.getPresent() || result.getKind() != CoreKind.LONG
                 || !List.of("IntRep").equals(result.getPrimReps()) || result.isAggregate() || result.isVector())
             throw bad("Exact IntRep result required");

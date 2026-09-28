@@ -107,7 +107,7 @@ class InterfaceCoreNativeTest {
             context.initialize("thc"); context.enter();
             try {
                 var cbits = Language.currentState().cbits(); cbits.link(link); long clock = cbits.capiZero(link.getUnit(), "fixture_clock_id", false);
-                var bytes = bytes(); var address = ManagedAddress.Companion.fromByteArray(bytes).plus(5);
+                var bytes = bytes(); var address = ManagedAddress.fromByteArray(bytes).plus(5);
                 assertEquals(0L, cbits.capiWordAddress(link.getUnit(), "fixture_clock_time", clock, address).getValue());
                 var view = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder()); assertTrue(view.getLong(5) >= 0);
                 long nanos = view.getLong(13); assertTrue(nanos >= 0 && nanos < 1_000_000_000L);
@@ -149,13 +149,13 @@ class InterfaceCoreNativeTest {
                 var target = program.entryTarget("clock"); var cbits = Language.currentState().cbits(); long clock = cbits.capiZero(link.getUnit(), "fixture_clock_id", false);
                 checkClock(program, target, clock, false); target.getClass().getMethod("compile", boolean.class).invoke(target, true); valid(target); checkClock(program, target, clock, true);
                 var unchanged = bytes();
-                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, clock, ManagedAddress.Companion.fromByteArray(unchanged).plus(20), kotlin.Unit.INSTANCE}));
+                assertThrows(RuntimeFault.class, () -> Calls.target(target, new Object[]{0L, clock, ManagedAddress.fromByteArray(unchanged).plus(20), kotlin.Unit.INSTANCE}));
                 assertArrayEquals(bytes(), unchanged);
             } finally { context.leave(); }
         }
     }
     private static void checkClock(ExecutableProgram program, RootCallTarget target, long clock, boolean compiled) throws Exception {
-        var bytes = bytes(); var address = ManagedAddress.Companion.fromByteArray(bytes).plus(5);
+        var bytes = bytes(); var address = ManagedAddress.fromByteArray(bytes).plus(5);
         long before = ((Number) program.diagnostics().get("compiledEntries")).longValue();
         assertEquals(0, Calls.target(target, new Object[]{0L, clock, address, kotlin.Unit.INSTANCE}));
         if (compiled) { assertEquals(before + 1, ((Number) program.diagnostics().get("compiledEntries")).longValue()); valid(target); }
@@ -172,7 +172,7 @@ class InterfaceCoreNativeTest {
         assertEquals("ghc-id", original.get("entryStrictSource")); assertEquals("ghc-id", hydrated.get("entryStrictSource"));
         assertEquals(((Map<?, ?>) original.get("info")).get("cbvMarks"), ((Map<?, ?>) hydrated.get("info")).get("cbvMarks"));
         var parameters = (List<Map<String, Object>>) ((List<?>) hydrated.get("expr")).get(1);
-        assertEquals(true, parameters.get(0).get("coercion")); assertEquals(List.of(), CoreRepresentations.INSTANCE.binder(parameters.get(0)).getPrimReps());
+        assertEquals(true, parameters.get(0).get("coercion")); assertEquals(List.of(), CoreRepresentations.binder(parameters.get(0)).getPrimReps());
         assertEquals(true, parameters.get(2).get("lifted"));
         var missing = read("logs/helper-thin.stdout"); assertEquals("unavailable", missing.get("status"));
         assertEquals("complete-interface-core", missing.get("capability")); assertFalse(missing.containsKey("core"));
@@ -253,13 +253,13 @@ class InterfaceCoreNativeTest {
                         assertEquals(1, memoized.size(), "The original lifted Spine CAF was evaluated once"); assertNull(single(memoized).thunk().getTarget());
                         boolean observed = false; for (var current : active) if (current == single(memoized).target()) { observed = true; break; }
                         assertTrue(observed); assertEquals(2, perCall.size()); var occurrences = new LinkedHashSet<String>();
-                        for (var current : perCall) { var identity = ((GuestRoot) current.getRootNode()).getCoreIdentity(); occurrences.add(identity == null ? null : identity.getOccurrence()); }
+                        for (var current : perCall) { var identity = ((GuestRoot) current.getRootNode()).getCoreIdentity(); occurrences.add(identity == null ? null : identity.occurrence()); }
                         assertEquals(Set.of("coercionEntry", "$wwitnessed"), occurrences);
                     } else assertEquals(active, perCall);
                     if (entry.equals("opaqueEntry")) assertTrue(active.size() >= 2, "Keep the opaque private call");
                     if (entry.equals("wrapperEntry")) {
                         boolean wrapper = false;
-                        for (var current : active) { var identity = ((GuestRoot) current.getRootNode()).getCoreIdentity(); if (identity != null && "$WToken".equals(identity.getOccurrence())) { wrapper = true; break; } }
+                        for (var current : active) { var identity = ((GuestRoot) current.getRootNode()).getCoreIdentity(); if (identity != null && "$WToken".equals(identity.occurrence())) { wrapper = true; break; } }
                         assertTrue(wrapper, "Compile and enter the recovered original constructor wrapper");
                     }
                     for (var current : active) { current.getClass().getMethod("compile", boolean.class).invoke(current, true); valid(current); }
