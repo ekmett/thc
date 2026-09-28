@@ -34,14 +34,16 @@ public class SignalDispatchFullCoreTest {
         for (String stage : List.of("pre", "post")) { assertEquals(true, document(stage + "/audit.json").get("accepted")); assertEquals(List.of(), document(stage + "/audit.json").get("missingGlobals")); }
         return manifest;
     }
-    @Test public void astOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("ast"); }
-    @Test public void bytecodeOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("bytecode"); }
+    @Test public void astOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("ast", false); }
+    @Test public void bytecodeOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("bytecode", false); }
+    @Test public void loomAstOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("ast", true); }
+    @Test public void loomBytecodeOriginalHandlersSelectSignalAndInheritNativeMasking() throws Exception { dispatch("bytecode", true); }
     private long call(ExecutableProgram program, String entry, long argument) {
         var target = program.entryTarget(entry); var shape = Objects.requireNonNull(((GuestRoot) target.getRootNode()).getTupleResult());
         var result = Calls.target(target, new Object[] {0L, argument, thc.runtime.Unit.INSTANCE}); return shape.getLayout().getLong(TupleResults.ownedTupleResult(result, shape), 0);
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable, T> T rethrow(Throwable failure) throws E { throw (E) failure; }
-    private void dispatch(String backend) throws Exception {
+    private void dispatch(String backend, boolean loom) throws Exception {
         var manifest = fixture(); var originals = new ArrayList<Map<String, Object>>();
         var layout = Objects.requireNonNull(CorePackageManifest.visitModules(new File(root, (String) manifest.get("packageManifest")).getPath(), (module, path) -> originals.add(module)).getTargetLayout());
         var lines = Files.readAllLines(new File(directory, "oracle.txt").toPath(), StandardCharsets.UTF_8); var nativeRows = new LinkedHashMap<Long, Long>();
@@ -51,6 +53,7 @@ public class SignalDispatchFullCoreTest {
             var combined = new LinkedHashMap<>(CoreModules.merge(modules)); combined.put("targetLayout", layout);
             var linked = new LinkedHashMap<>(CoreModules.reachable(combined, (List<String>) manifest.get("entries"), true)); linked.put("instrument", true);
             try (Context context = Context.newBuilder("thc", "llvm").allowNativeAccess(true).allowIO(IOAccess.ALL).allowCreateThread(true).allowExperimentalOptions(true)
+                .option("thc.ThreadHosting", loom ? "loom" : "platform")
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false").option("engine.CompilationFailureAction", "Throw").build()) {
                 context.initialize("thc"); context.enter();
                 try {
@@ -69,6 +72,8 @@ public class SignalDispatchFullCoreTest {
                     };
                     var service = new ManagedSignals(owner, language, true, () -> NativeSignalTransport.userSignalAvailable(), () -> transport);
                     service.bind(program); service.authorizeLauncher(); // Test-only transport, never changes host process handlers.
+                    owner.getThreads().setCapabilityCount(1);
+                    java.util.concurrent.Callable<Void> exercise = () -> {
                     owner.getThreads().enterCurrent(null, false, true, null);
                     try {
                         for (var row : nativeRows.entrySet()) {
@@ -84,6 +89,9 @@ public class SignalDispatchFullCoreTest {
                         }
                         assertEquals(0L, ((Number) program.diagnostics().get("unsupportedTraps")).longValue());
                     } finally { try { service.close(); } finally { owner.getThreads().leaveCurrent(GuestThreadStatus.FINISHED); } }
+                    return null;
+                    };
+                    if (loom) owner.getThreads().hostEntry(null, exercise); else exercise.call();
                     assertEquals(1, closed.get(), "native restoration must run exactly once");
                 } finally { context.leave(); }
             }

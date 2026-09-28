@@ -35,7 +35,8 @@ In platform hosting, a live host carrier outside all guest entries is in foreign
 execution, and subsequent host calls reuse its logical identity and capability.
 Nested callbacks temporarily restore running status and restore the enclosing
 foreign/blocking status on return. Loom creates a fresh virtual-thread identity
-for each outer public entry; nested entries retain it, and callbacks reject.
+for each outer public entry; nested entries retain it. Foreign reverse entries
+use distinct bound identities on their native origin thread in either mode.
 A forked guest thread publishes its terminal outcome when its action unwinds.
 For host carriers, termination is observed through the weak Java thread reference
 and uses the last guest outcome. Host exceptions outside guest execution do not

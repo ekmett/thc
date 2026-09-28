@@ -53,10 +53,12 @@ public final class AsyncRequest {
             if (snapshot != AsyncRequestState.PENDING && snapshot != AsyncRequestState.CLAIMED && snapshot != AsyncRequestState.PAUSED) return snapshot;
             var incoming = owner.poll(node, true);
             if (incoming != null) { owner.pause(this); throw new AsyncBlocked(incoming, node); }
-            synchronized (monitor) {
-                if (state == AsyncRequestState.PENDING || state == AsyncRequestState.CLAIMED || state == AsyncRequestState.PAUSED)
-                    try (var blocked = GuestThreads.blocking(GuestThreadStatus.THROW_TO)) { monitor.wait(); }
-            }
+            GuestThreadExtent blocked = null;
+            try { synchronized (monitor) {
+                if (state == AsyncRequestState.PENDING || state == AsyncRequestState.CLAIMED || state == AsyncRequestState.PAUSED) {
+                    blocked = GuestThreads.blocking(GuestThreadStatus.THROW_TO); monitor.wait();
+                }
+            } } finally { if (blocked != null) blocked.close(); }
         }
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException propagate(Throwable failure) throws E { throw (E) failure; }
