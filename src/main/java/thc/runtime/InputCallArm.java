@@ -56,9 +56,9 @@ final class InputCallArm extends Node {
         Object result;
         try {
             Object answer;
-            if (input == null) answer = legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity, -1), isTail);
-            else {
-                try {
+            try {
+                if (input == null) answer = legacy.call(frame, scalarPacket(frame, this, function, source, values, start, arity, -1), isTail, arity == count && destination != null ? root.getTupleResult() : null);
+                else {
                     HandoffStorage loan = prepareInput(frame, this, function, input, source, values, start, arity, force, prefixCount, strictPositions);
                     long generation = loan.getGeneration();
                     boolean transferred = false;
@@ -72,16 +72,19 @@ final class InputCallArm extends Node {
                         try { answer = Calls.direct(direct, new Object[] {loan}); }
                         finally { input.releaseIfOwned(loan, invokedGeneration); }
                     } finally { if (!transferred) input.releaseIfOwned(loan, generation); }
-                } catch (TailCall transfer) {
-                    if (isTail) throw transfer;
-                    if (arity == count && tupleBounce != null && !AstControl.captures(this)) {
-                        tupleBounce.execute(frame, transfer); return null;
-                    }
-                    answer = loop.execute(transfer);
                 }
+            } catch (TailCall transfer) {
+                if (isTail || arity == count && tupleBounce != null) throw transfer;
+                answer = loop.execute(transfer);
             }
             result = AstControl.captures(this) ? AstControl.complete(this, answer, target,
-                arity == count && destination != null ? destination.getShape() : null) : answer;
+                arity == count && destination != null ? root.getTupleResult() : null) : answer;
+        } catch (TailCall transfer) {
+            if (isTail) throw transfer;
+            if (arity == count && tupleBounce != null) {
+                tupleBounce.execute(frame, transfer); return null;
+            }
+            throw transfer;
         } catch (AstCapture cut) {
             CompilerDirectives.transferToInterpreter();
             Object[] savedValues = values == null ? null : values.clone();
@@ -102,7 +105,7 @@ final class InputCallArm extends Node {
             if (rest == null) CompilerDirectives.transferToInterpreter();
             return java.util.Objects.requireNonNull(rest).execute(frame, closure, values);
         }
-        if (destination != null) { destination.consume(frame, this, result); return null; }
+        if (destination != null) { destination.consume(frame, this, result, root.getTupleResult()); return null; }
         return result;
     }
 }

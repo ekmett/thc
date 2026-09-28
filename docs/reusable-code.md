@@ -35,7 +35,18 @@ layout and owner checks intact. Shared code uses the invoking instance's metrics
 Fresh contexts keep their own handoff pools; imported prepared layouts are
 distinguished by identity even when their numeric layout IDs collide with local
 layouts. Logical shape, vector species, ownership, generation and loan-release
-checks remain in place.
+checks remain in place. Destinations authenticate the final callee's logical proof
+and read through that producer's exact storage descriptor, including forced
+CAFs/aliases/PAPs, overapplication, and tail bounces. Independently prepared and
+ordinary functions can therefore compose in one fresh context. The consumer keeps
+its own fixed frame slots; cross-descriptor pool release crosses a boundary.
+
+Cold generic calls use the public location-aware `CallTarget.call(Node, ...)`
+entry without a cached indirect-node exception profile. Successful AOT preparation
+also initializes the pinned runtime overlay's root exception profile to generic.
+This is an explicit overlay dependency: stock Truffle still invalidates on the
+first escaping exception. Ordinary non-AOT exception profiling remains unchanged;
+no guest calls or throws train the prepared code.
 
 Prepared code can be instantiated only with its original language in that
 language's currently entered context. Its preparation context may already be
@@ -71,7 +82,12 @@ execution, inlining off/on, and two fresh contexts: 4,320 comparisons. All 18 pr
 untouched before compilation after the preparation context closed; compiled calls
 retain installed code, instances perform no lowering, and loans are released.
 GHC eliminates the candidate unlifted lets, so separate structural tests cover
-that form. Existing scalar/reference Native Image cache evidence remains
+that form. Direct public-host tests additionally cover forced CAF/alias/PAP
+signatures, independently prepared and ordinary higher-order functions, all mixed
+leaf families and deterministic final-target bounces. Malformed result proofs
+are rejected in interpreted negative checks. Preparation contexts close before
+untouched compilation; lawful calls in two fresh contexts retain installed code
+without runtime lowering or retained loans. Existing scalar/reference Native Image cache evidence remains
 separate: the new typed family still needs fresh-process image store/load
 validation. These JVM checks establish neither allocation freedom nor emitted
 SIMD instructions.

@@ -42,17 +42,20 @@ public final class BytecodeTupleSlots extends TupleDestination {
         try { write(frame, node, output); return pool.complete(output); }
         catch (Throwable failure) { pool.release(output, shape.getLayout()); throw failure; }
     }
-    @ExplodeLoop public void copyFrom(VirtualFrame frame, BytecodeNode node, HandoffStorage receiver) {
-        HandoffLayout layout = getShape().getLayout();
+    public void copyFrom(VirtualFrame frame, BytecodeNode node, HandoffStorage receiver) { copyFrom(frame, node, receiver, getShape()); }
+    @ExplodeLoop private void copyFrom(VirtualFrame frame, BytecodeNode node, HandoffStorage receiver, TupleShape producer) {
+        HandoffLayout layout = producer.getLayout();
+        if (receiver.getLayout() != layout) throw new IllegalStateException("Check failed.");
         for (int i = 0; i < slots.length; i++) {
             if (layout.isInt(i)) slots[i].setInt(node, frame, layout.getInt(receiver, i));
             else if (layout.isLong(i)) slots[i].setLong(node, frame, layout.getLong(receiver, i));
             else if (layout.isFloat(i)) slots[i].setFloat(node, frame, layout.getFloat(receiver, i));
             else if (layout.isDouble(i)) slots[i].setDouble(node, frame, layout.getDouble(receiver, i));
-            else slots[i].setObject(node, frame, getShape().checkedReference(i, layout.getObject(receiver, i)));
+            else slots[i].setObject(node, frame, producer.checkedReference(i, layout.getObject(receiver, i)));
         }
     }
-    @Override public void consume(VirtualFrame frame, Node node, Object result) {
+    @Override public void consume(VirtualFrame frame, Node node, Object result) { consumeFrom(frame, node, result, getShape()); }
+    @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape producer) {
         var rootValue = node.getRootNode();
         if (rootValue == null) {
             CompilerDirectives.transferToInterpreter();
@@ -60,16 +63,16 @@ public final class BytecodeTupleSlots extends TupleDestination {
         }
         BytecodeRoot root = (BytecodeRoot) rootValue;
         if (result == TupleComplete.INSTANCE) {
-            TupleResultPool pool = getShape().getLanguage().getHandoffState().get().getResults();
+            TupleResultPool pool = producer.getLanguage().getHandoffState().get().getResults();
             HandoffStorage output = pool.completed();
             try {
-                if (output.getLayout() != getShape().getLayout()) throw new IllegalStateException("Check failed.");
-                copyFrom(frame, root.getBytecodeNode(), output);
+                if (output.getLayout() != producer.getLayout()) throw new IllegalStateException("Check failed.");
+                copyFrom(frame, root.getBytecodeNode(), output, producer);
             } finally { pool.releaseChecked(output, getShape().getLayout()); }
         } else {
             if (!(result instanceof HandoffStorage carrier)) throw fault("Invalid tuple result carrier");
-            if (carrier.getLayout() != getShape().getLayout()) throw new IllegalStateException("Check failed.");
-            copyFrom(frame, root.getBytecodeNode(), carrier);
+            if (carrier.getLayout() != producer.getLayout()) throw new IllegalStateException("Check failed.");
+            copyFrom(frame, root.getBytecodeNode(), carrier, producer);
         }
     }
     @SuppressWarnings("unchecked") private static <E extends Throwable> RuntimeException rethrow(Throwable failure) throws E { throw (E) failure; }

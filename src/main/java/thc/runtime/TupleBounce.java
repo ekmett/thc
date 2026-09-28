@@ -41,13 +41,13 @@ public final class TupleBounce extends Node {
                     TypedInputLayout inputLayout = ((GuestRoot) targetRoot).getTypedInput();
                     if (inputLayout == null) throw fault("Target has no typed input entry");
                     long generation = input.getGeneration();
-                    try { result = Calls.indirect(call, next.getTarget(), new Object[]{input}); }
+                    try { result = (this.metrics == null ? next.getTarget().call(this, new Object[]{input}) : Calls.indirect(call, next.getTarget(), new Object[]{input})); }
                     finally { GenericTypedInputs.releaseGenericInput(inputLayout, input, generation); }
                 } else {
                     next.getArgs()[0] = 0L;
-                    result = Calls.indirect(call, next.getTarget(), next.getArgs());
+                    result = (this.metrics == null ? next.getTarget().call(this, next.getArgs()) : Calls.indirect(call, next.getTarget(), next.getArgs()));
                 }
-                destination.consume(frame, this, result instanceof SavedGuestContinuation continuation ? new AstTailYield(continuation, next.getTarget()) : result);
+                destination.consume(frame, this, result instanceof SavedGuestContinuation continuation ? new AstTailYield(continuation, next.getTarget()) : result, root.getTupleResult());
                 return;
             } catch (TailCall transfer) { next = transfer; }
         }

@@ -8,14 +8,15 @@ public final class AstTupleDestination extends TupleDestination {
     @CompilationFinal(dimensions = 1) private final int[] slots;
     private final int offset;
     public AstTupleDestination(TupleShape shape, int[] slots, int offset) { super(shape); this.slots = slots; this.offset = offset; }
-    @Override public void consume(VirtualFrame frame, Node node, Object result) {
+    @Override public void consume(VirtualFrame frame, Node node, Object result) { consumeFrom(frame, node, result, getShape()); }
+    @Override protected void consumeFrom(VirtualFrame frame, Node node, Object result, TupleShape producer) {
         Object answer;
-        try { answer = AstControl.complete(node, result, null, getShape()); }
+        try { answer = AstControl.complete(node, result, null, producer); }
         catch (AstCapture cut) {
             throw cut.append(new AstResumeStep() {
-                @Override public Object resume(VirtualFrame frame, Object input) { getShape().consume(frame, input, slots, offset); return null; }
+                @Override public Object resume(VirtualFrame frame, Object input) { getShape().consume(frame, input, slots, offset, producer); return null; }
             });
         }
-        getShape().consume(frame, answer, slots, offset);
+        getShape().consume(frame, answer, slots, offset, producer);
     }
 }

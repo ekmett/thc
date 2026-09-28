@@ -33,6 +33,9 @@ public final class DirectCallerNode extends Node {
     }
     public RootCallTarget getTarget() { return target; }
     public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall) {
+        return call(frame, arguments, tailCall, null);
+    }
+    public Object call(VirtualFrame frame, Object[] arguments, boolean tailCall, TupleShape tupleResult) {
         entryArguments.execute(frame, arguments);
         if (leadingCaseReturn != null) { Object result = leadingCaseReturn.execute(arguments); if (result != null) return result; }
         Object result;
@@ -46,9 +49,9 @@ public final class DirectCallerNode extends Node {
                 arguments[0] = 0L;
                 result = handoff != null ? handoff.call(frame, arguments, callNode, false) : Calls.direct(callNode, arguments);
                 normalProfile.enter();
-            } catch (TailCall tail) { tailProfile.enter(); result = loop.execute(tail); }
+            } catch (TailCall tail) { if (tupleResult != null) throw tail; tailProfile.enter(); result = loop.execute(tail); }
         }
-        return AstControl.captures(this) ? AstControl.complete(this, result, target) : result;
+        return AstControl.captures(this) ? AstControl.complete(this, result, target, tupleResult) : result;
     }
     public static DirectCallerNode create(RootCallTarget target, Metrics metrics) { return new DirectCallerNode(target, metrics); }
 }

@@ -84,6 +84,167 @@ class ReusableTypedTest {
             "constructors", list(map("id", "Pair", "name", "Pair", "kind", "unboxed-tuple", "arity", 2),
                 map("id", "Left", "name", "Left", "kind", "unboxed-sum", "arity", 1, "sumArity", 2, "tag", 1)), "bindings", bindings);
     }
+    private static Map<String,Object> compositionModule() {
+        var input = module();
+        var bindings = (List<Map<String,Object>>)input.get("bindings");
+        bindings.add(function("applyPair", list(parameter("f", CLOSURE), parameter("x", INT)),
+            let("answer", PAIR, call(variable("f", CLOSURE), list(variable("x", INT)), PAIR), variable("answer", PAIR), PAIR), PAIR));
+        for (var entry : List.of(Map.entry("sum", SUM), Map.entry("vector", VECTOR), Map.entry("empty", EMPTY), Map.entry("mixed", MIXED))) {
+            var proof = entry.getValue();
+            bindings.add(function("apply" + entry.getKey(), list(parameter("f", CLOSURE), parameter("x", proof)),
+                let("answer", proof, call(variable("f", CLOSURE), list(variable("x", proof)), proof), variable("answer", proof), proof), proof));
+        }
+        bindings.add(function("forwardPair", list(parameter("f", CLOSURE), parameter("x", INT)),
+            call(variable("f", CLOSURE), list(variable("x", INT)), PAIR), PAIR));
+        bindings.add(function("selectPair", list(parameter("ignored", INT)), variable("makePair", CLOSURE), CLOSURE));
+        bindings.add(function("overapplyPair", list(parameter("f", CLOSURE), parameter("x", INT)),
+            call(variable("f", CLOSURE), list(number(0), variable("x", INT)), PAIR), PAIR));
+        bindings.add(function("pairPrefix", list(parameter("ignored", INT), parameter("n", INT)),
+            call("makePair", list(variable("n", INT)), PAIR), PAIR));
+        bindings.add(map("id", "pairCaf", "name", "pairCaf", "lifted", true, "rep", CLOSURE,
+            "expr", call("selectPair", list(number(0)), CLOSURE)));
+        bindings.add(map("id", "pairAlias", "name", "pairAlias", "lifted", true, "rep", CLOSURE,
+            "expr", variable("pairCaf", CLOSURE)));
+        bindings.add(map("id", "pairPap", "name", "pairPap", "lifted", true, "rep", CLOSURE,
+            "expr", call("pairPrefix", list(number(0)), CLOSURE)));
+        return input;
+    }
+    private static Program.PreparedCode prepare(Engine engine, List<String> entries) {
+        try (var context = Context.newBuilder("thc").engine(engine).allowAllAccess(true).build()) {
+            context.initialize("thc"); context.enter();
+            try { return Program.prepareCode(TruffleLanguage.LanguageReference.create(Language.class).get(null), compositionModule(), entries); }
+            finally { context.leave(); }
+        }
+    }
+    private static void pair(org.graalvm.polyglot.Value result, long first) {
+        assertEquals(first, result.getArrayElement(0).asLong()); assertEquals(7L, result.getArrayElement(1).asLong());
+    }
+    private static Engine engine(boolean compiled) {
+        return Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", Boolean.toString(compiled))
+            .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
+            .option("compiler.Inlining", "false").option("engine.CompilationFailureAction", "Throw").build();
+    }
+    @SuppressWarnings("unchecked") private static void compileUntouched(Program.PreparedCode code) throws Exception {
+        var field = Program.PreparedCode.class.getDeclaredField("targets"); field.setAccessible(true);
+        var type = Class.forName("com.oracle.truffle.runtime.OptimizedCallTarget");
+        for (var target : (List<RootCallTarget>)field.get(code)) {
+            assertEquals(false, type.getMethod("wasExecuted").invoke(target));
+            assertEquals(true, type.getMethod("prepareForAOT").invoke(target));
+            type.getMethod("compile", boolean.class).invoke(target, true);
+            assertEquals(false, type.getMethod("wasExecuted").invoke(target));
+            Truffle.getRuntime().getClass().getMethod("bypassedInstalledCode", type).invoke(Truffle.getRuntime(), target);
+        }
+        code.requireInstalledCode();
+    }
+    private static void released(Language language) {
+        var state = language.getHandoffState().get();
+        assertNull(state.getPending()); assertEquals(0, state.getArguments().getDepth()); assertEquals(0, state.getResults().getDepth());
+        assertEquals(0, state.getArguments().retainedReferences()); assertEquals(0, state.getResults().retainedReferences());
+    }
+    private void checkForcedSignatures(boolean compiled) throws Exception {
+        try (var engine = engine(compiled)) {
+            var code = prepare(engine, List.of("pairCaf", "pairAlias", "pairPap"));
+            if (compiled) compileUntouched(code);
+            for (int instance = 0; instance < 2; instance++) try (var context = Context.newBuilder("thc").engine(engine).allowAllAccess(true).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var program = code.newInstance(language);
+                    for (String name : List.of("pairCaf", "pairAlias", "pairPap")) {
+                        var entry = new EntryValue(program, name, 1, null, null, language, null, null, false,
+                            List.of(CoreRepresentations.parse(INT)), CoreRepresentations.parse(PAIR));
+                        pair(context.asValue(entry).execute(41L + instance), 41L + instance);
+                        if (compiled) code.requireInstalledCode();
+                        released(language);
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+    private void checkComposition(boolean compiled) throws Exception {
+        try (var engine = engine(compiled)) {
+            var callerCode = prepare(engine, List.of("applyPair", "forwardPair", "overapplyPair", "applysum", "applyvector", "applyempty", "applymixed"));
+            var calleeCode = prepare(engine, List.of("makePair", "selectPair", "makeSum", "sumIdentity", "vectorIdentity", "emptyIdentity", "mixedIdentity"));
+            if (compiled) { compileUntouched(callerCode); compileUntouched(calleeCode); }
+            for (int instance = 0; instance < 2; instance++) try (var context = Context.newBuilder("thc").engine(engine).allowAllAccess(true).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var caller = callerCode.newInstance(language);
+                    for (var callee : List.of(calleeCode.newInstance(language), new Program(language, compositionModule()))) {
+                        var make = context.asValue(new HostReference(Language.currentState(), callee.entryValue("makePair"), CoreRepresentations.parse(CLOSURE), callee));
+                        var select = context.asValue(new HostReference(Language.currentState(), callee.entryValue("selectPair"), CoreRepresentations.parse(CLOSURE), callee));
+                        for (String name : List.of("applyPair", "forwardPair")) {
+                            pair(context.asValue(new EntryValue(caller, name, 2)).execute(make, 42L), 42L);
+                            if (compiled) callerCode.requireInstalledCode();
+                        }
+                        pair(context.asValue(new EntryValue(caller, "overapplyPair", 2)).execute(select, 43L), 43L);
+                        if (compiled) callerCode.requireInstalledCode();
+                        for (String kind : List.of("sum", "vector", "empty", "mixed")) {
+                            var identity = context.asValue(new HostReference(Language.currentState(), callee.entryValue(kind + "Identity"),
+                                CoreRepresentations.parse(CLOSURE), callee));
+                            Object x = switch (kind) {
+                                case "sum" -> new Object[]{1L, new Object[]{45L, 7L}};
+                                case "vector" -> LongVector.fromArray(LongVector.SPECIES_128, new long[]{45L, 7L}, 0);
+                                case "empty" -> new Object[0];
+                                default -> new Object[]{null, new Object[0], -32768L, 1.25f, -2.5d, null, LongVector.zero(LongVector.SPECIES_128)};
+                            };
+                            var value = context.asValue(new EntryValue(caller, "apply" + kind, 2)).execute(identity, x);
+                            switch (kind) {
+                                case "sum" -> { assertEquals(1L, value.getArrayElement(0).asLong()); pair(value.getArrayElement(1), 45L); }
+                                case "vector" -> assertEquals(45L, ((LongVector)value.asHostObject()).lane(0));
+                                case "empty" -> assertEquals(0, value.getArraySize());
+                                default -> {
+                                    assertTrue(value.getArrayElement(0).isNull()); assertEquals(0, value.getArrayElement(1).getArraySize());
+                                    assertEquals(-32768L, value.getArrayElement(2).asLong()); assertEquals(1.25f, value.getArrayElement(3).asFloat());
+                                    assertEquals(-2.5d, value.getArrayElement(4).asDouble()); assertEquals(0L, ((LongVector)value.getArrayElement(6).asHostObject()).lane(0));
+                                }
+                            }
+                            if (compiled) { callerCode.requireInstalledCode(); calleeCode.requireInstalledCode(); }
+                            released(language);
+                        }
+                        if (!compiled) {
+                            var wrongResult = context.asValue(new HostReference(Language.currentState(), callee.entryValue("makeSum"),
+                                CoreRepresentations.parse(CLOSURE), callee));
+                            assertThrows(org.graalvm.polyglot.PolyglotException.class,
+                                () -> context.asValue(new EntryValue(caller, "applyPair", 2)).execute(wrongResult, 45L));
+                            released(language);
+                        }
+                        // Force the real tail-transfer protocol to a differently
+                        // prepared final root, independent of bloom collisions.
+                        var finalClosure = (Closure)callee.entryValue("makePair");
+                        var transfer = new GuestRoot(language, new FrameLayout().build()) {
+                            @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0L; }
+                            @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) {
+                                Object x = frame.getArguments()[1];
+                                throw new TailCall(finalClosure.target, finalClosure.environment == null ? new Object[]{0L, x} :
+                                    new Object[]{0L, finalClosure.environment, x});
+                            }
+                        };
+                        transfer.configureInputProofs(List.of(CoreRepresentations.parse(INT)));
+                        transfer.configureTupleResult(new TupleShape(CoreRepresentations.parse(PAIR), language));
+                        var bounce = context.asValue(new HostReference(Language.currentState(), new Closure(null, 1, transfer.getCallTarget()),
+                            CoreRepresentations.parse(CLOSURE), callee));
+                        for (String name : List.of("applyPair", "forwardPair")) {
+                            pair(context.asValue(new EntryValue(caller, name, 2)).execute(bounce, 44L), 44L);
+                            if (compiled) callerCode.requireInstalledCode();
+                        }
+                        assertTrue(((Number)caller.diagnostics().get("trampolineIterations")).longValue() >= 2L);
+                        if (compiled) { callerCode.requireInstalledCode(); calleeCode.requireInstalledCode(); }
+                        assertEquals(0, caller.diagnostics().get("loweredRootCount"));
+                        released(language);
+                    }
+                } finally { context.leave(); }
+            }
+        }
+    }
+    @Test void typedHostSignaturesForcePreparedCafsAliasesAndPaps() throws Exception { checkForcedSignatures(false); }
+    @Test void independentPreparedAndOrdinaryTypedFunctionsCompose() throws Exception { checkComposition(false); }
+    @Test void untouchedTypedCafsAndIndependentFunctionsCompose() throws Exception {
+        String before = System.getProperty("thc.requireCompiledCode"); System.setProperty("thc.requireCompiledCode", "true");
+        try { checkForcedSignatures(true); checkComposition(true); }
+        finally { if (before == null) System.clearProperty("thc.requireCompiledCode"); else System.setProperty("thc.requireCompiledCode", before); }
+    }
     @SuppressWarnings("unchecked") private void check(boolean compiled) throws Exception {
         try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", Boolean.toString(compiled))
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
