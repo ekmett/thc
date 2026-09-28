@@ -56,14 +56,21 @@ class PackageScalarLinksTest {
         var merger = new CoreModules.Merger(); merger.addSelected(admission, List.of(first)); assertEquals(list(first), merger.finish().get("bindings"));
         for (var bad : List.of(binding("altered", list(with(call, "safety", "safe"))), binding("duplicated", list(call, call, call))))
             assertThrows(IllegalArgumentException.class, () -> admission.selected(List.of(bad)));
-        // Selected inlined bodies cannot invent a missing original ABI provider.
+        // Installed native components retain a compiled ABI even when their
+        // original source annotations are absent from an older interface.
         var scalar = object(original, "packageScalarLink"); var entry = single(scalar, "abi");
         var nativeLink = with(scalar, "profile", "thc-package-c-ffi-v1", "abi", list(with(entry, "entry", nativeEntry, "convention", "ccall", "safety", "unsafe")));
         var nativeModule = with(without(original, "packageScalarLink"), "packageNativeLink", nativeLink);
         var declaration = new CoreModuleAdmission(with(nativeModule, "bindings", List.of()), id -> { throw new IllegalStateException("No exports"); });
         var inlined = with(without(nativeModule, "staticForeignImports"), "module", "Inline", "bindings", List.of());
         var inlineAdmission = new CoreModuleAdmission(inlined, id -> { throw new IllegalStateException("No exports"); });
-        assertThrows(IllegalArgumentException.class, () -> { var m = new CoreModules.Merger(); m.addSelected(inlineAdmission, List.of()); m.finish(); });
+        var installed = new CoreModules.Merger(); installed.addSelected(inlineAdmission, List.of()); installed.finish();
+        assertTrue(PackageFinalizers.hasDeclarations(inlined));
+        var stubs = map("header", "", "source", "int capi_wrapper(void) { return 7; }", "initializers", List.of(), "finalizers", List.of());
+        var product = map("schema", 1L, "execution", "not-linked", "stubs", stubs, "files", List.of());
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(with(inlined, "foreign", product))).getProved());
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(with(inlined, "foreign",
+            with(product, "stubs", with(stubs, "initializers", list("register_callback"))))));
         var complete = new CoreModules.Merger(); complete.addSelected(inlineAdmission, List.of()); complete.addPackageProvenance(Objects.requireNonNull(declaration.getPackageLink())); complete.finish();
     }
     private Map<String, Object> foreignCall(Map<?, ?> base, String symbol) {
@@ -186,8 +193,8 @@ class PackageScalarLinksTest {
         assertNotNull(PackageScalarLinks.read(with(nativeModule, "packageNativeLink", with(link, "buildInputs", Map.of()))));
         assertEquals(1, ((List<?>) CoreModules.merge(List.of(nativeModule)).get("packageScalarLinks")).size());
         var inlined = with(without(base, "packageScalarLink", "staticForeignImports"), "module", "Inlined", "packageNativeLink", link);
-        assertEquals(Set.of(), Objects.requireNonNull(PackageScalarLinks.read(inlined)).getProved());
-        assertThrows(IllegalArgumentException.class, () -> CoreModules.merge(List.of(inlined)));
+        assertEquals(Set.of(nativeEntry), Objects.requireNonNull(PackageScalarLinks.read(inlined)).getProved());
+        assertEquals(1, ((List<?>) CoreModules.merge(List.of(inlined)).get("packageScalarLinks")).size());
         assertEquals(1, ((List<?>) CoreModules.merge(List.of(nativeModule, inlined)).get("packageScalarLinks")).size());
         var bad = List.of(without(nativeModule, "foreign"), without(nativeModule, "staticForeignImports"),
             with(nativeModule, "staticForeignImportStubs", with(proof, "imports", List.of())), with(nativeModule, "foreign", with(foreign, "files", list("unlinked.c"))),
