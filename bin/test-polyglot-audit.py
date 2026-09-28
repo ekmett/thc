@@ -121,7 +121,14 @@ class PolyglotAuditTest(unittest.TestCase):
                 mutate(expression)
                 auditor = self.audit(expression, bound)
                 self.assertTrue(any(issue['code'] == 'foreign-call' for issue in auditor.issues))
-                self.assertIn('ffi:external', auditor.missing)
+                if expression[6]['foreignCall']['target']['kind'] == 'dynamic':
+                    # A dynamic target has no missing named symbol; its invalid
+                    # prim convention is rejected by the dynamic-call ABI gate.
+                    self.assertEqual({}, auditor.missing)
+                    self.assertTrue(any('dynamic synchronous C ABI' in issue['detail']
+                                        for issue in auditor.issues))
+                else:
+                    self.assertIn('ffi:external', auditor.missing)
                 self.assertEqual([], auditor.foreign_calls)
 
     def test_exact_javascript_abi_still_requires_genuine_exception_runtime(self):
