@@ -146,7 +146,7 @@ public final class Main {
             try (Context context = executionContext(true, ffiMode)) {
                 initializeArguments(context, guest);
                 Boolean async = configuredAsyncExceptions();
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, false, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, args[3], async == null ? true : async, true, verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "Executable IO did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -157,7 +157,7 @@ public final class Main {
             var guest = launcherArguments(args, 3);
             try (Context context = executionContext(true, ffiMode)) {
                 initializeArguments(context, guest);
-                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), false, verifyArtifacts);
+                var action = loadEntry(context, modules(args[1]), args[2], true, defaultBackend(), true, null, configuredAsyncExceptions(), true, verifyArtifacts);
                 check(action.invokeMember("runIO").asBoolean(), "IO main did not complete");
                 if (Boolean.getBoolean("thc.diagnostics")) System.err.println(action.getMember("diagnostics").asString());
             }
@@ -166,7 +166,7 @@ public final class Main {
         require(args.length >= 3, "Usage: thc MODULE.json[,MODULE.json...] ENTRY INTEGER [--compile]");
         long input = Long.parseLong(args[2]);
         try (Context context = executionContext(false, ffiMode)) {
-            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), false, verifyArtifacts);
+            var function = loadEntry(context, modules(args[0]), args[1], true, defaultBackend(), false, null, configuredAsyncExceptions(), true, verifyArtifacts);
             Long before = null;
             if (Arrays.asList(args).subList(3, args.length).contains("--compile")) {
                 // Training precedes installation; never settle or retry the first installed call.
