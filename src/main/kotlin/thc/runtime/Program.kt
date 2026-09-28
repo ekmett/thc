@@ -271,7 +271,7 @@ class Program(private val language: TruffleLanguage<*>?, moduleData: Map<String,
         CoreSignalForeign.validateHeads(requested)
         if (!diagnosticUnsupported) {
             CoreRepresentations.validateAggregates(requested, constructors)
-            checkNotNull(validateInputs).invoke(requested)
+            checkNotNull(validateInputs).accept(requested)
         }
     }
 
