@@ -1418,6 +1418,7 @@
     }
   },
   "owners": {
+    "bin/run.sh": {"junit": ["thc.LauncherDiagnosticsTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropLibraryTest.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/ExplicitInteropProbeRoot.java": {"junit": ["thc.runtime.ExplicitInteropLibraryTest"], "python": []},
     "src/test/java/thc/runtime/SumEvidence.java": {"junit": ["thc.runtime.SumProtocolTest", "thc.runtime.SumResultTest"], "python": []},
@@ -2540,7 +2541,7 @@
       ],
       "python": []
     },
-    "src/examples/THC/ExamplePrim.hs": {
+    "t/fixtures/compiler/THC/Prim/Test.hs": {
       "junit": [
         "thc.FastSmokeTest",
         "thc.RuntimeTest",

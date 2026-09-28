@@ -12,7 +12,7 @@ import static thc.CoreBackendTestSupport.*;
 /** Semantic parity at the public backend boundary, including cold compiled paths. */
 class BytecodeBackendTest {
     private final Path project = Path.of(System.getProperty("thc.projectRoot"));
-    private final List<String> modules = list(project.resolve("build/core/THC.ExamplePrim.json").toString(), project.resolve("build/core/THC.Fixtures.json").toString());
+    private final List<String> modules = list(project.resolve("build/core/THC.Prim.Test.json").toString(), project.resolve("build/core/THC.Fixtures.json").toString());
     private record Example(String entry, long input, long expected) {}
     private List<Example> oracle() throws Exception {
         var rows = new ArrayList<Example>(); for (var line : Files.readAllLines(project.resolve("build/native/oracle.tsv"))) if (!line.isBlank()) {

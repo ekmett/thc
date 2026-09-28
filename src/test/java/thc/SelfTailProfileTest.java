@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SelfTailProfileTest {
     private final Path project = Path.of(System.getProperty("thc.projectRoot"));
-    private final List<String> modules = List.of("THC.ExamplePrim", "THC.Fixtures").stream()
+    private final List<String> modules = List.of("THC.Prim.Test", "THC.Fixtures").stream()
         .map(name -> project.resolve("build/core/" + name + ".json").toString()).toList();
     private long count(Value function, String name) {
         return ((Number) ((Map<?, ?>) Json.parse(function.getMember("diagnostics").asString())).get(name)).longValue();

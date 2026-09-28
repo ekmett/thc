@@ -4,15 +4,15 @@
 {-# LANGUAGE MagicHash, NoImplicitPrelude #-}
 
 -- |
--- Module      : THC.ExamplePrim
+-- Module      : THC.Prim.Test
 -- Copyright   : (C) 2026 Edward Kmett
 -- License     : UPL-1.0 AND BSD-3-Clause
 -- Maintainer  : Edward Kmett <ekmett@gmail.com>
 -- Stability   : experimental
 -- Portability : GHC-specific primitive types and operations
 --
--- Small separately compiled module: no custom JVM builtins for these functions.
-module THC.ExamplePrim (Box(..), Pair(..), List(..), addBox, mulBox, applyBox, ignoreBox, firstBox, chooseFunction, moduleAdd, Unary(..), pickUnary) where
+-- Private test support: ordinary separately compiled Haskell, not JVM builtins.
+module THC.Prim.Test (Box(..), Pair(..), List(..), addBox, mulBox, applyBox, ignoreBox, firstBox, chooseFunction, moduleAdd, Unary(..), pickUnary) where
 
 import GHC.Exts (Int#, (+#), (*#), (<=#))
 
@@ -59,7 +59,7 @@ moduleAdd :: Int# -> Int#
 moduleAdd n = n +# 29#
 
 -- Five distinct arity-one targets at a shared unknown-call site exceed the
--- prototype's three-target direct-call cache.
+-- runtime's three-target direct-call cache.
 {-# OPAQUE increment1 #-}
 increment1 :: Box -> Box
 increment1 (Box n) = Box (n +# 1#)

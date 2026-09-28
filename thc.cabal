@@ -721,6 +721,17 @@ flag full-core-tests
   default: False
   manual: True
 
+-- Private helpers for native/Core smoke fixtures; not an application API.
+library tests
+  visibility: private
+  hs-source-dirs: t/fixtures/compiler
+  exposed-modules: THC.Prim.Test
+  build-depends: base >= 4.22 && < 4.23
+  default-language: Haskell2010
+  ghc-options: -Wall
+  if flag(development)
+    ghc-options: -Werror
+
 -- Public application API; no GHC API or JVM dependency for native callers.
 library runtime
   visibility: public

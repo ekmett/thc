@@ -10,6 +10,6 @@ mkdir -p "$BUILD"
 cd "$ROOT/src/examples"
 "$GHC" --make -O2 -fforce-recomp -dcore-lint -dstg-lint \
   -ddump-simpl -ddump-to-file -dsuppress-all -dsuppress-uniques \
-  -i. -odir "$BUILD" -hidir "$BUILD" -dumpdir "$BUILD/" \
+  -i. -i"$ROOT/t/fixtures/compiler" -odir "$BUILD" -hidir "$BUILD" -dumpdir "$BUILD/" \
   NativeOracle.hs -o "$BUILD/native-oracle" >&2
 exec "$BUILD/native-oracle" "$@"
