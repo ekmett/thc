@@ -184,7 +184,11 @@ the child, then resumed by its parent after interruption. `UncaughtSelfAudit.hs`
 checks public execution and `runIO` failure boundaries without exposing internal
 continuation markers. `ThreadAsyncNativeTest` and `AsyncStrictEntryNativeTest`
 pass in both default and dense handoff modes; the latter preserves a demanded
-PAP prefix and its caller across interruption.
+PAP prefix and its caller across interruption. Its compiled control installs
+the strict entry and strict worker before either executes, then checks their
+original target identities and validity before delivery, after delivery, and
+after the saved shared thunk completes. The request must have been captured in
+compiled code, and the completed prefix must still execute only once.
 
 `LiveAsyncAudit.hs` exposes a gated shared thunk. Tests deliver into its running
 compiled loop, its blocked MVar, a second evaluator waiting for the owner, and
@@ -192,7 +196,7 @@ a previously saved continuation. These checks assert that the effectful prefix
 executes once after repeated interruption and that the running-loop request was
 claimed from compiled code. The same checks run against AST and bytecode in
 both default and dense handoff modes without relaxing first-installed-code
-retention assertions.
+retention assertions, including after delivery and saved completion.
 
 The focused fixtures are prepared with:
 

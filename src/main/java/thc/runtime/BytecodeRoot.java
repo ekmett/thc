@@ -2644,6 +2644,16 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
         @Specialization public static long read(Closure function) { return function.arity; }
     }
 
+    /** The saved-call protocol compares arity before consuming a logical prefix. */
+    @Operation
+    @ConstantOperand(type = int.class, name = "count")
+    @ConstantOperand(type = boolean.class, name = "less")
+    public static final class SavedCallArity {
+        @Specialization public static boolean test(int count, boolean less, Closure function) {
+            return less ? function.arity < count : function.arity == count;
+        }
+    }
+
     /** Checked reference identities give restored formals a concrete Graal stamp. */
     @Operation
     public static final class RequireData {
@@ -2716,8 +2726,9 @@ public abstract class BytecodeRoot extends GuestRoot implements BytecodeRootNode
 
     /** Internal control result of a matching-root tail bounce, never a guest value. */
     @Operation
+    @ConstantOperand(type = boolean.class, name = "yielded")
     public static final class IsTailReentry {
-        @Specialization public static boolean test(Object value, boolean yielded) {
+        @Specialization public static boolean test(boolean yielded, Object value) {
             return yielded ? value instanceof TailYield : value instanceof TailCall;
         }
     }

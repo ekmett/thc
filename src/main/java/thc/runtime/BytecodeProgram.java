@@ -895,24 +895,30 @@ public final class BytecodeProgram implements ExecutableProgram {
                 for (var argument : context.typedArguments) locals.add(argument.local);
             else for (var local : context.arguments) if (local != null) locals.add(local);
             for (var local : locals) {
-                // Loops, captures and deferred demands keep adaptive locals.
+                // Every resumable tail restore checks the same exact scalar carrier.
+                // Deferred boxed demands likewise keep both ingress and WHNF as references.
                 int argumentIndex = argumentIndices.getOrDefault(local.id, -1);
                 boolean typedFormal = context.typedInput != null && typedFormals.contains(local.id) && !enableAsync;
-                boolean singleWrite = !context.mayLoop
+                boolean fixedLoopCarrier = resumable && context.typedInput == null && local.proof.getEvaluated()
+                    && (local.proof.isInt() || local.proof.isLong() || local.proof.isFloat() || local.proof.isDouble());
+                boolean strictReference = enableAsync && context.typedInput == null && argumentIndex >= 0
+                    && context.entryStrict[argumentIndex] && !context.mayLoop && !local.cell
+                    && context.captures.isEmpty() && context.vectorCaptures.isEmpty() && staticBoxedReference(local.proof);
+                boolean fixedCarrier = (!context.mayLoop || fixedLoopCarrier)
                     && context.captures.isEmpty() && context.vectorCaptures.isEmpty() && !local.cell
                     && (typedFormal || context.typedInput == null && argumentIndex >= 0
                         && !(enableAsync && context.entryStrict[argumentIndex]));
                 Object info;
-                if (singleWrite && (staticWideLong(local.proof)
+                if (fixedCarrier && (staticWideLong(local.proof)
                         || typedFormal && local.proof.isLong() && local.proof.getEvaluated())) {
                     e.staticLocals.add(local.id);
                     info = FrameSlotKind.Long;
-                } else if (singleWrite && local.proof.getEvaluated() && !local.proof.isTypedTransport() &&
+                } else if (fixedCarrier && local.proof.getEvaluated() && !local.proof.isTypedTransport() &&
                         (local.proof.isInt() || local.proof.isFloat() || local.proof.isDouble())) {
                     var kind = FrameLayout.carrierKind(local.proof);
                     e.staticScalars.put(local.id, kind);
                     info = kind;
-                } else if (singleWrite && (staticBoxedReference(local.proof)
+                } else if (strictReference || fixedCarrier && (staticBoxedReference(local.proof)
                         || typedFormal && FrameLayout.carrierKind(local.proof) == FrameSlotKind.Object)) {
                     e.staticObjectLocals.add(local.id);
                     info = FrameSlotKind.Object;
@@ -976,7 +982,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 }
             }
             if (context.mayLoop) {
-                b.beginWhile();
+                if (resumable) b.beginUnprofiledWhile(); else b.beginWhile();
                 b.emitLoadConstant(true);
                 b.beginBlock();
                 e.continueLabel = b.createLabel();
@@ -1003,7 +1009,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.emitLabel(Objects.requireNonNull(e.continueLabel));
                 if (enableAsync) emitAsyncPoll(e);
                 b.endBlock();
-                b.endWhile();
+                if (resumable) b.endUnprofiledWhile(); else b.endWhile();
                 // The loop condition is true; retain a terminating operation for the builder.
                 b.beginReturn(); b.emitFailCase(); b.endReturn();
             }
@@ -1166,7 +1172,6 @@ public final class BytecodeProgram implements ExecutableProgram {
         var reference = local.cell || deferStrictDemand ? null : local.proof.referenceCarrier();
         boolean staticObject = e.staticObjectLocals.contains(local.id);
         if (staticObject) {
-            if (deferStrictDemand) throw new IllegalStateException("Check failed.");
             b.beginStaticStoreObject(Objects.requireNonNull(e.locals.get(local.id)));
         } else b.beginStoreLocal(Objects.requireNonNull(e.locals.get(local.id)));
         if (local.directInt()) { b.beginToInt(); value.run(); b.endToInt(); }
@@ -3094,20 +3099,25 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
     }
 
+    private void loadSavedInput(Emission e, BytecodeLocal value) {
+        if (e.staticResults.get(value) == FrameSlotKind.Object) e.builder.emitStaticLoadObject(value);
+        else e.builder.emitLoadLocal(value); // Typed aggregate leaves retain their exact primitive carriers.
+    }
+
     private void savedApply(Emission e, BytecodeLocal fn, List<BytecodeLocal> values,
             ArgumentLayout layout, boolean[] evaluatedArguments, int arity, boolean tail) {
         var b = e.builder;
         var typedSource = layout != null && layout.getRequiresTyped() ? new BytecodeInputSource(layout, accessors(values)) : null;
         if (typedSource != null) {
             b.beginApplyTypedInput(typedSource, tail, metrics);
-            b.emitLoadLocal(fn); b.endApplyTypedInput();
+            b.emitStaticLoadObject(fn); b.endApplyTypedInput();
         } else if (layout != null) {
             b.beginApplyCompact(layout, tail, metrics, evaluatedArguments);
-            b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
+            b.emitStaticLoadObject(fn); for (var value : values) loadSavedInput(e, value);
             b.endApplyCompact();
         } else {
             b.beginApply(arity, tail, metrics, evaluatedArguments);
-            b.emitLoadLocal(fn); for (var value : values) b.emitLoadLocal(value);
+            b.emitStaticLoadObject(fn); for (var value : values) loadSavedInput(e, value);
             b.endApply();
         }
     }
@@ -3117,38 +3127,38 @@ public final class BytecodeProgram implements ExecutableProgram {
             ArgumentLayout layout, boolean[] evaluatedArguments, int arity, BytecodeLocal callerMask) {
         var b = e.builder;
         b.beginBlock();
-        var result = b.createLocal("captured application result", "object");
-        var suspended = b.createLocal("captured application suspension", "object");
+        var result = b.createLocal("captured application result", FrameSlotKind.Object);
+        var suspended = b.createLocal("captured application suspension", FrameSlotKind.Object);
         b.beginTryCatch();
-        b.beginStoreLocal(result);
+        b.beginStaticStoreObject(result);
         b.beginCaptureApplicationResult(arity);
-        b.emitLoadLocal(fn);
+        b.emitStaticLoadObject(fn);
         savedApply(e, fn, values, layout, evaluatedArguments, arity, false);
-        b.emitLoadLocal(callerMask);
+        b.emitStaticLoadObject(callerMask);
         b.endCaptureApplicationResult();
-        b.endStoreLocal();
+        b.endStaticStoreObject();
         b.beginBlock();
-        b.beginStoreLocal(suspended);
+        b.beginStaticStoreObject(suspended);
         b.beginCallSuspensionOnly(); b.emitLoadException(); b.endCallSuspensionOnly();
-        b.endStoreLocal();
-        b.beginStoreLocal(result);
+        b.endStaticStoreObject();
+        b.beginStaticStoreObject(result);
         b.beginResumeApplication();
-        b.emitLoadLocal(suspended);
+        b.emitStaticLoadObject(suspended);
         b.beginReenterCallMask();
         beginAnnotationYield(e);
         b.beginParkCallMask();
-        b.emitLoadLocal(suspended);
+        b.emitStaticLoadObject(suspended);
         b.emitStaticLoadObject(Objects.requireNonNull(e.checkpointRootEntry));
-        b.emitLoadLocal(callerMask);
+        b.emitStaticLoadObject(callerMask);
         b.endParkCallMask();
         endAnnotationYield(e);
-        b.emitLoadLocal(callerMask);
+        b.emitStaticLoadObject(callerMask);
         b.endReenterCallMask();
         b.endResumeApplication();
-        b.endStoreLocal();
+        b.endStaticStoreObject();
         b.endBlock();
         b.endTryCatch();
-        b.emitLoadLocal(result);
+        b.emitStaticLoadObject(result);
         b.endBlock();
     }
 
@@ -3163,7 +3173,6 @@ public final class BytecodeProgram implements ExecutableProgram {
             BytecodeLocal result, int count, boolean tail, FinishTuple finishTuple) {
         var b = e.builder;
         b.beginBlock();
-        var arity = b.createLocal("remaining closure arity", "primitive");
         var stages = new ArrayList<BytecodeLabel>();
         for (int i = 0; i < count; ++i) stages.add(b.createLabel());
         var complete = b.createLabel();
@@ -3172,24 +3181,21 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.emitLabel(stages.get(start));
             if (enableAsync) emitAsyncPoll(e);
             // A zero-arity closure consumes no arguments; its backward edge needs a structured loop.
-            b.beginWhile();
-            b.beginMatchLiteral(0L);
-            b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity();
-            b.endMatchLiteral();
+            b.beginUnprofiledWhile();
+            b.beginSavedCallArity(0, false); b.emitStaticLoadObject(fn); b.endSavedCallArity();
             b.beginBlock();
             if (enableAsync) emitAsyncPoll(e);
-            b.beginStoreLocal(result);
+            b.beginStaticStoreObject(result);
             checkpointedCall(e, fn, List.of(), null, new boolean[0], 0, callerMask);
-            b.endStoreLocal();
-            b.beginStoreLocal(fn);
-            requireClosure(emission -> emission.builder.emitLoadLocal(result)).emit(e);
-            b.endStoreLocal();
-            b.endBlock(); b.endWhile();
-            b.beginStoreLocal(arity); b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity(); b.endStoreLocal();
+            b.endStaticStoreObject();
+            b.beginStaticStoreObject(fn);
+            requireClosure(emission -> emission.builder.emitStaticLoadObject(result)).emit(e);
+            b.endStaticStoreObject();
+            b.endBlock(); b.endUnprofiledWhile();
             int remaining = count - start;
             for (int take = 1; take < remaining; ++take) {
-                b.beginIfThen();
-                b.beginMatchLiteral((long) take); b.emitLoadLocal(arity); b.endMatchLiteral();
+                b.beginUnprofiledIfThen();
+                b.beginSavedCallArity(take, false); b.emitStaticLoadObject(fn); b.endSavedCallArity();
                 b.beginBlock();
                 int from = ArgumentLayout.offset(layout, start);
                 int until = ArgumentLayout.offset(layout, start + take);
@@ -3199,16 +3205,16 @@ public final class BytecodeProgram implements ExecutableProgram {
                     for (int i = start; i < start + take; ++i) proofs.add(layout.proof(i));
                     input = ArgumentLayout.fromProofs(proofs);
                 }
-                b.beginStoreLocal(result);
+                b.beginStaticStoreObject(result);
                 checkpointedCall(e, fn, values.subList(from, until), input,
                     java.util.Arrays.copyOfRange(evaluatedArguments, start, start + take), take, callerMask);
-                b.endStoreLocal();
+                b.endStaticStoreObject();
                 // Resume a yielded force from its saved result, never from the original call.
-                b.beginStoreLocal(fn);
-                requireClosure(emission -> emission.builder.emitLoadLocal(result)).emit(e);
-                b.endStoreLocal();
+                b.beginStaticStoreObject(fn);
+                requireClosure(emission -> emission.builder.emitStaticLoadObject(result)).emit(e);
+                b.endStaticStoreObject();
                 b.emitBranch(stages.get(start + take));
-                b.endBlock(); b.endIfThen();
+                b.endBlock(); b.endUnprofiledIfThen();
             }
             int from = ArgumentLayout.offset(layout, start);
             ArgumentLayout input = null;
@@ -3220,16 +3226,16 @@ public final class BytecodeProgram implements ExecutableProgram {
             var suffix = values.subList(from, values.size());
             if (finishTuple != null) finishTuple.emit(suffix, input, remaining);
             else {
-                b.beginStoreLocal(result);
+                b.beginStaticStoreObject(result);
                 var evaluatedSuffix = java.util.Arrays.copyOfRange(evaluatedArguments, start, count);
                 if (tail) savedApply(e, fn, suffix, input, evaluatedSuffix, remaining, true);
                 else checkpointedCall(e, fn, suffix, input, evaluatedSuffix, remaining, callerMask);
-                b.endStoreLocal();
+                b.endStaticStoreObject();
             }
             b.emitBranch(complete);
         }
         b.emitLabel(complete);
-        if (finishTuple == null) b.emitLoadLocal(result);
+        if (finishTuple == null) b.emitStaticLoadObject(result);
         b.endBlock();
     }
 
@@ -3238,10 +3244,10 @@ public final class BytecodeProgram implements ExecutableProgram {
             boolean[] evaluatedArguments, ArgumentLayout layout, boolean tail) {
         var b = e.builder;
         b.beginBlock();
-        var fn = b.createLocal("captured application function", "object");
-        var callerMask = b.createLocal("captured application caller mask", "object");
-        var result = b.createLocal("captured application result", "object");
-        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal();
+        var fn = b.createLocal("captured application function", FrameSlotKind.Object);
+        var callerMask = b.createLocal("captured application caller mask", FrameSlotKind.Object);
+        var result = b.createLocal("captured application result", FrameSlotKind.Object);
+        b.beginStaticStoreObject(fn); requireClosure(function).emit(e); b.endStaticStoreObject();
         var values = new ArrayList<BytecodeLocal>();
         if (layout != null && layout.getRequiresTyped()) {
             for (int i = 0; i < layout.getPhysicalArity(); ++i) values.add(b.createLocal("captured typed input " + i, null));
@@ -3256,29 +3262,31 @@ public final class BytecodeProgram implements ExecutableProgram {
                 var argument = arguments.get(i);
                 if (layout != null && layout.isEmpty(i)) argument.emitTuple(e, List.of());
                 else {
-                    var local = b.createLocal("captured application operand " + i, null);
-                    b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal();
+                    var local = b.createLocal("captured application operand " + i, FrameSlotKind.Object);
+                    e.staticResults.put(local, FrameSlotKind.Object);
+                    b.beginStaticStoreObject(local); argument.emit(e); b.endStaticStoreObject();
                     values.add(local);
                 }
             }
         }
-        b.beginStoreLocal(callerMask); b.emitCurrentMask(); b.endStoreLocal();
+        b.beginStaticStoreObject(callerMask); b.emitCurrentMask(); b.endStaticStoreObject();
         if (arguments.isEmpty()) {
             if (tail) savedApply(e, fn, values, layout, evaluatedArguments, 0, true);
             else checkpointedCall(e, fn, values, layout, evaluatedArguments, 0, callerMask);
             b.endBlock();
             return;
         }
-        b.beginConditional();
-        b.beginMatchLiteral(1L);
-        b.beginLessThan();
-        b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity();
-        b.emitLoadConstant((long) arguments.size());
-        b.endLessThan(); b.endMatchLiteral();
+        var complete = b.createLabel();
+        b.beginUnprofiledIfThen();
+        b.beginSavedCallArity(arguments.size(), true); b.emitStaticLoadObject(fn); b.endSavedCallArity();
+        b.beginBlock(); b.beginStaticStoreObject(result);
         stagedOverapplication(e, fn, values, layout, evaluatedArguments, callerMask, result, arguments.size(), tail, null);
+        b.endStaticStoreObject(); b.emitBranch(complete); b.endBlock(); b.endUnprofiledIfThen();
+        b.beginStaticStoreObject(result);
         if (tail) savedApply(e, fn, values, layout, evaluatedArguments, arguments.size(), true);
         else checkpointedCall(e, fn, values, layout, evaluatedArguments, arguments.size(), callerMask);
-        b.endConditional();
+        b.endStaticStoreObject();
+        b.emitLabel(complete); b.emitStaticLoadObject(result);
         b.endBlock();
     }
 
@@ -3494,8 +3502,8 @@ public final class BytecodeProgram implements ExecutableProgram {
             BytecodeLocal reentryResult = null;
             if (catchesTail) {
                 b.beginBlock();
-                reentryResult = b.createLocal("tail result", null);
-                b.beginStoreLocal(reentryResult);
+                reentryResult = b.createLocal("tail result", resumable ? FrameSlotKind.Object : null);
+                if (resumable) b.beginStaticStoreObject(reentryResult); else b.beginStoreLocal(reentryResult);
             }
             if (resumable && !loop) checkpointedApplication(e, function, arguments, evaluatedArguments, inputLayout, tail);
             else if (inputLayout != null && inputLayout.getRequiresTyped())
@@ -3593,16 +3601,18 @@ public final class BytecodeProgram implements ExecutableProgram {
                 b.endBlock();
             }
             if (reentryResult != null) {
-                b.endStoreLocal();
-                b.beginConditional();
-                b.beginIsTailReentry(); b.emitLoadLocal(reentryResult); b.emitLoadConstant(false); b.endIsTailReentry();
+                if (resumable) { b.endStaticStoreObject(); b.beginUnprofiledIfThen(); }
+                else { b.endStoreLocal(); b.beginConditional(); }
+                b.beginIsTailReentry(false);
+                if (resumable) b.emitStaticLoadObject(reentryResult); else b.emitLoadLocal(reentryResult);
+                b.endIsTailReentry();
                 b.beginBlock();
                 restoreTailArguments(e, context, reentryResult);
                 b.emitBranch(Objects.requireNonNull(e.continueLabel));
-                b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
+                if (!resumable) b.emitLoadConstant(thc.runtime.Unit.INSTANCE);
                 b.endBlock();
-                b.emitLoadLocal(reentryResult);
-                b.endConditional();
+                if (resumable) { b.endUnprofiledIfThen(); b.emitStaticLoadObject(reentryResult); }
+                else { b.emitLoadLocal(reentryResult); b.endConditional(); }
                 b.endBlock();
             }
             if (enableAsync) b.endBlock();
@@ -4411,13 +4421,13 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (resumable) {
                     // A first saved tail is a normal control result, not an unseen guest branch.
                     b.beginUnprofiledIfThen();
-                    b.beginIsTailReentry(); b.emitStaticLoadObject(result); b.emitLoadConstant(true); b.endIsTailReentry();
+                    b.beginIsTailReentry(true); b.emitStaticLoadObject(result); b.endIsTailReentry();
                     b.beginBlock(); b.beginReturn(); b.emitStaticLoadObject(result); b.endReturn(); b.endBlock();
                     b.endUnprofiledIfThen();
                 }
                 if (!context.passThrough) {
                     b.beginIfThenElse();
-                    b.beginIsTailReentry(); b.emitStaticLoadObject(result); b.emitLoadConstant(false); b.endIsTailReentry();
+                    b.beginIsTailReentry(false); b.emitStaticLoadObject(result); b.endIsTailReentry();
                     b.beginBlock();
                     restoreTailArguments(e, context, result);
                     b.emitBranch(Objects.requireNonNull(e.continueLabel));
@@ -4495,8 +4505,8 @@ public final class BytecodeProgram implements ExecutableProgram {
         var b = e.builder;
         var slots = tupleSlots(shape, destination, true);
         b.beginBlock();
-        var fn = b.createLocal("captured tuple function", "object");
-        b.beginStoreLocal(fn); requireClosure(function).emit(e); b.endStoreLocal();
+        var fn = b.createLocal("captured tuple function", FrameSlotKind.Object);
+        b.beginStaticStoreObject(fn); requireClosure(function).emit(e); b.endStaticStoreObject();
         var values = new ArrayList<BytecodeLocal>();
         if (inputLayout != null && inputLayout.getRequiresTyped()) {
             for (int i = 0; i < inputLayout.getPhysicalArity(); ++i) values.add(b.createLocal("captured typed tuple input " + i, null));
@@ -4510,8 +4520,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             var argument = arguments.get(i);
             if (inputLayout != null && inputLayout.isEmpty(i)) argument.emitTuple(e, List.of());
             else {
-                var local = b.createLocal("captured tuple operand " + i, null);
-                b.beginStoreLocal(local); argument.emit(e); b.endStoreLocal();
+                var local = b.createLocal("captured tuple operand " + i, FrameSlotKind.Object);
+                e.staticResults.put(local, FrameSlotKind.Object);
+                b.beginStaticStoreObject(local); argument.emit(e); b.endStaticStoreObject();
                 values.add(local);
             }
         }
@@ -4531,7 +4542,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             b.beginClosureArity(); b.emitLoadLocal(fn); b.endClosureArity();
             b.emitLoadConstant((long) arguments.size()); b.endLessThan(); b.endMatchLiteral();
             b.beginBlock();
-            var result = b.createLocal("tuple prefix result", "object");
+            var result = b.createLocal("tuple prefix result", FrameSlotKind.Object);
             var evaluatedArguments = new boolean[arguments.size()];
             for (int i = 0; i < arguments.size(); ++i) evaluatedArguments[i] = arguments.get(i).proof().getEvaluated();
             stagedOverapplication(e, fn, values, inputLayout, evaluatedArguments, callerMask, result,
@@ -5298,7 +5309,7 @@ public final class BytecodeProgram implements ExecutableProgram {
         }
         if (tail && context.mayLoop) {
             b.beginUnprofiledIfThen();
-            b.beginIsTailReentry(); b.emitStaticLoadObject(result); b.emitLoadConstant(false); b.endIsTailReentry();
+            b.beginIsTailReentry(false); b.emitStaticLoadObject(result); b.endIsTailReentry();
             b.beginBlock(); restoreTailArguments(e, context, result);
             b.emitBranch(Objects.requireNonNull(e.continueLabel)); b.endBlock(); b.endUnprofiledIfThen();
         }
