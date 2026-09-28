@@ -12,7 +12,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /** Executable root and fixed calling convention shared by AST and bytecode. */
-public abstract class GuestRoot extends RootNode {
+public abstract class GuestRoot extends ContextRoot {
     static {
         com.oracle.truffle.api.Truffle.getRuntime();
         if (com.oracle.truffle.runtime.OptimizedCallTarget.declaredReturnPolicyVersion() != 1)

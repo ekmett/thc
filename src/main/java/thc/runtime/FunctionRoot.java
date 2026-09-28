@@ -151,6 +151,7 @@ public final class FunctionRoot extends GuestRoot {
         if (slot < 0 || programSlot >= 0 || metrics != null) throw new IllegalStateException("Invalid reusable root configuration");
         programSlot = slot;
         programCodeIdentity = java.util.Objects.requireNonNull(codeIdentity);
+        shareCompilationOwnership();
     }
     Metrics invocationMetrics(VirtualFrame frame) {
         return metrics != null ? metrics : Program.instance(frame, programSlot).instanceMetrics();
@@ -220,7 +221,7 @@ public final class FunctionRoot extends GuestRoot {
         if (layout == null) throw fault("Missing capture layout");
         if (programSlot >= 0) {
             if (environment.getLayout() != layout || !(environment.getProgram() instanceof Program program) ||
-                    !program.usesCode(programCodeIdentity))
+                    !program.usesCode(programCodeIdentity) || !program.belongsToCurrentContext(this))
                 throw fault("Invalid explicit program environment");
             frame.setObject(programSlot, program);
         }

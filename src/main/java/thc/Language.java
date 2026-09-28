@@ -18,7 +18,7 @@ import thc.runtime.*;
 
 @TruffleLanguage.Registration(id = "thc", name = "Turbo Haskell Compiler", version = "0.1-experiment",
     characterMimeTypes = "application/x-thc-core", defaultMimeType = "application/x-thc-core",
-    dependentLanguages = "llvm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE)
+    dependentLanguages = "llvm", contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
 public final class Language extends TruffleLanguage<Language.State> {
     @Option(name = "ThreadHosting", help = "Guest thread host: platform (default) or experimental loom (pinned JDK 25).", category = OptionCategory.USER)
     static final OptionKey<String> THREAD_HOSTING = new OptionKey<>("platform");
@@ -51,6 +51,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         private final ContextThreadLocal<CarrierLocal.Cell<MaskingState>> threadMaskingState;
         private final ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> threadAnnotations;
         private final RuntimeTraceServices runtimeTrace;
+        private final Object compilationOwner = new Object();
         private final RuntimeJitServices runtimeJit;
         public final ManagedSTM stm;
         private final ManagedFiles files;
@@ -101,7 +102,7 @@ public final class Language extends TruffleLanguage<Language.State> {
             threadMaskingState = language.threadMaskingState;
             threadAnnotations = language.threadAnnotations;
             runtimeTrace = new RuntimeTraceServices(env.err());
-            runtimeJit = new RuntimeJitServices(language);
+            runtimeJit = new RuntimeJitServices(this);
             stm = new ManagedSTM();
             files = new ManagedFiles(env, threads);
             rtsFileLocks = new RtsFileLocks();
@@ -160,6 +161,7 @@ public final class Language extends TruffleLanguage<Language.State> {
         public ContextThreadLocal<CarrierLocal.Cell<StackAnnotationState>> getThreadAnnotations() { return threadAnnotations; }
         public RuntimeTraceServices getRuntimeTrace() { return runtimeTrace; }
         public RuntimeJitServices getRuntimeJit() { return runtimeJit; }
+        public Object getCompilationOwner() { return compilationOwner; }
         public ManagedFiles getFiles() { return files; }
         public RtsFileLocks getRtsFileLocks() { return rtsFileLocks; }
         public NativeFileProvider getNativeFiles() { return nativeFiles; }

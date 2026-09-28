@@ -7,11 +7,13 @@ import com.oracle.truffle.api.Truffle;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import thc.runtime.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static thc.CoreExecutionTestSupport.*;
 
-/** Real AST lowerer ownership checks; not persisted-code or cross-context acceptance. */
+/** Real lowerer ownership checks; auxiliary-cache persistence remains a separate acceptance. */
 class ReusableProgramTest {
     private Map<String, Object> binding(String id, List<Object> body, boolean lifted) {
         return map("id", id, "name", id, "type", "Synthetic", "lifted", lifted, "expr", body);
@@ -22,7 +24,11 @@ class ReusableProgramTest {
         return list("app", list("prim", "+#"), list(a, b), list(false, false));
     }
     private List<Object> lambda(List<Object> body) {
-        return list("lam", list(map("id", "x", "name", "x", "type", "Int#", "lifted", false, "coercion", false)), body);
+        return list("lam", list(wordParameter("x")), body);
+    }
+    private Map<String, Object> wordParameter(String id) {
+        return map("id", id, "name", id, "type", "Int#", "lifted", false, "coercion", false,
+            "rep", map("kind", "long", "evaluated", true, "primReps", list("IntRep")));
     }
     private Object call(ExecutableProgram program, Object value, Object... arguments) {
         return Calls.target(program.hostEntryTarget(arguments.length), new Object[]{value, arguments});
@@ -31,6 +37,157 @@ class ReusableProgramTest {
     private Map<String, Object> module(List<Map<String, Object>> bindings) {
         return map("schema", 1, "ghc", "9.14.1", "module", "Synthetic.Reusable", "instrument", true,
             "constructors", list(), "bindings", bindings);
+    }
+
+    @Test void cachedPublicSourcesCreateFreshProgramsWithinAndAcrossContexts() {
+        var longRep = map("kind", "long", "evaluated", true, "primReps", list("IntRep"));
+        var closureRep = map("kind", "closure", "evaluated", true, "primReps", list("BoxedRep (Just Lifted)"));
+        var caf = binding("shared", plus(literal(17), literal(25)), true);
+        caf.put("arity", 0);
+        var reader = binding("read", list("lam", list(wordParameter("x")), plus(variable("shared"), variable("x")),
+            map("rep", closureRep, "resultRep", longRep)), true);
+        reader.put("arity", 1); reader.put("rep", closureRep);
+        for (String backend : List.of("ast", "bytecode")) {
+            var request = Json.stringify(map("modules", list(module(list(caf, reader))), "entry", "read",
+                "backend", backend, "asyncExceptions", false));
+            var source = org.graalvm.polyglot.Source.newBuilder("thc", request, "owned-load-" + backend).cached(true).buildLiteral();
+            try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build();
+                 var first = Context.newBuilder("thc").engine(engine).build();
+                 var second = Context.newBuilder("thc").engine(engine).build()) {
+                var firstReader = first.eval(source);
+                var sameContextReader = first.eval(source);
+                var secondReader = second.eval(source);
+                assertEquals(0L, publicCount(firstReader, "thunkEvaluations"));
+                assertEquals(0L, publicCount(sameContextReader, "thunkEvaluations"));
+                assertEquals(0L, publicCount(secondReader, "thunkEvaluations"));
+                assertEquals(47L, firstReader.execute(5L).asLong());
+                assertEquals(1L, publicCount(firstReader, "thunkEvaluations"));
+                assertEquals(0L, publicCount(sameContextReader, "thunkEvaluations"));
+                assertEquals(0L, publicCount(secondReader, "thunkEvaluations"));
+                assertEquals(49L, sameContextReader.execute(7L).asLong());
+                assertEquals(1L, publicCount(sameContextReader, "thunkEvaluations"));
+                first.close();
+                assertEquals(51L, secondReader.execute(9L).asLong());
+                assertEquals(1L, publicCount(secondReader, "thunkEvaluations"));
+            }
+        }
+    }
+    private long publicCount(org.graalvm.polyglot.Value entry, String key) {
+        return ((Number) ((Map<?, ?>) Json.parse(entry.getMember("diagnostics").asString())).get(key)).longValue();
+    }
+
+    @Test void preparationRejectsStrictGuestBodiesAndMissingInputProofs() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var arithmetic = module(list(binding("strict", plus(literal(17), literal(25)), false)));
+                var force = module(list(binding("caf", plus(literal(17), literal(25)), true),
+                    binding("strict", variable("caf"), false)));
+                var unknown = wordParameter("x"); unknown.remove("rep");
+                var missingProof = module(list(binding("read", list("lam", list(unknown), plus(variable("x"), literal(1))), true)));
+                assertAll(
+                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, arithmetic, List.of("strict"))),
+                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, force, List.of("strict"))),
+                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(language, missingProof, List.of("read"))));
+                var literalCode = Program.prepareCode(language, module(list(binding("strict", literal(42), false))), List.of("strict"));
+                assertEquals(42L, literalCode.newInstance(language).entryValue("strict"));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void admittedInputsRejectNonLongAndThunkBeforeEffects() {
+        try (var context = Main.executionContext(false)) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = Program.prepareCode(language, module(list(binding("shared", plus(literal(17), literal(25)), true),
+                    binding("read", lambda(plus(variable("shared"), variable("x"))), true))), List.of("read")).newInstance(language);
+                var effects = new AtomicInteger();
+                var external = new Thunk(new GuestRoot(language, com.oracle.truffle.api.frame.FrameDescriptor.newBuilder().build()) {
+                    @Override public long bloom(com.oracle.truffle.api.frame.VirtualFrame frame) { return 0; }
+                    @Override public Object execute(com.oracle.truffle.api.frame.VirtualFrame frame) { effects.incrementAndGet(); return 9L; }
+                }.getCallTarget(), null);
+                var reader = (Closure) program.entryValue("read");
+                for (Object invalid : List.of("9", Integer.valueOf(9), external)) {
+                    assertThrows(RuntimeFault.class, () -> Calls.target(reader.target, new Object[]{0L, reader.environment, invalid}));
+                    assertEquals(0, effects.get());
+                    assertEquals(0, external.getState());
+                    assertEquals(0, ((Thunk) program.entryValue("shared")).getState());
+                    assertEquals(0L, count(program, "thunkEvaluations"));
+                }
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void preparedCodeRejectsForeignLanguageBeforeInstanceCreation() {
+        Program.PreparedCode code;
+        Language preparedLanguage;
+        var data = module(list(binding("read", lambda(variable("x")), true)));
+        try (var first = Main.executionContext(false)) {
+            first.initialize("thc"); first.enter();
+            try {
+                preparedLanguage = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                code = Program.prepareCode(preparedLanguage, data, List.of("read"));
+            } finally { first.leave(); }
+        }
+        try (var second = Main.executionContext(false)) {
+            second.initialize("thc"); second.enter();
+            try {
+                var currentLanguage = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                assertNotSame(preparedLanguage, currentLanguage);
+                assertAll(
+                    () -> assertThrows(UnsupportedCore.class, () -> code.newInstance(currentLanguage)),
+                    () -> assertThrows(UnsupportedCore.class, () -> code.newInstance(preparedLanguage)),
+                    () -> assertThrows(UnsupportedCore.class, () -> Program.prepareCode(preparedLanguage, data, List.of("read"))));
+            } finally { second.leave(); }
+        }
+    }
+
+    @Test void reusableRootsOutlivePreparationContextButInstancesDoNotCrossContexts() {
+        var data = module(list(binding("shared", plus(literal(17), literal(25)), true),
+            binding("read", lambda(plus(variable("shared"), variable("x"))), true),
+            binding("bottom", variable("bottom"), true)));
+        try (var engine = Engine.newBuilder().allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            Program.PreparedCode code;
+            Program first;
+            Closure firstReader;
+            RuntimeFault firstFailure;
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    code = Program.prepareCode(language, data, List.of("read", "bottom"));
+                    first = code.newInstance(language);
+                    firstReader = (Closure) first.entryValue("read");
+                    assertEquals(47L, call(first, firstReader, 5L));
+                    firstFailure = assertThrows(RuntimeFault.class, () -> call(first, first.entryValue("bottom")));
+                } finally { context.leave(); }
+            }
+            // The preparation context is closed. Only code may be reused; its values remain owned.
+            try (var context = Context.newBuilder("thc").engine(engine).build()) {
+                context.initialize("thc"); context.enter();
+                try {
+                    var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                    var second = code.newInstance(language);
+                    var secondReader = (Closure) second.entryValue("read");
+                    assertSame(firstReader.target, secondReader.target);
+                    assertEquals(0, ((Thunk) second.entryValue("shared")).getState());
+                    assertEquals(51L, call(second, secondReader, 9L));
+                    assertEquals(1L, count(second, "thunkEvaluations"));
+                    long secondEntries = count(second, "compiledEntries");
+                    assertThrows(RuntimeFault.class, () -> Calls.target(secondReader.target,
+                        new Object[]{0L, firstReader.environment, 1L}), "a closed context's instance cannot enter shared code elsewhere");
+                    assertEquals(secondEntries, count(second, "compiledEntries"));
+                    var failure = assertThrows(RuntimeFault.class, () -> call(second, second.entryValue("bottom")));
+                    assertNotSame(firstFailure, failure);
+                    assertSame(failure, assertThrows(RuntimeFault.class, () -> call(second, second.entryValue("bottom"))));
+                    assertEquals(2L, count(second, "thunkEvaluations"));
+                    assertEquals(2L, count(first, "thunkEvaluations"));
+                    assertEquals(0L, count(second, "loweredRootCount"));
+                } finally { context.leave(); }
+            }
+        }
     }
 
     @Test void admissionRejectsUnconvertedOwnershipAndConflictingCarrierProofs() {
@@ -91,8 +248,8 @@ class ReusableProgramTest {
     }
 
     @Test void realLoweredPapRetainsItsOwnerAcrossOtherInstanceCalls() {
-        var x = map("id", "x", "name", "x", "type", "Int#", "lifted", false, "coercion", false);
-        var y = map("id", "y", "name", "y", "type", "Int#", "lifted", false, "coercion", false);
+        var x = wordParameter("x");
+        var y = wordParameter("y");
         try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {

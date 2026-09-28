@@ -24,6 +24,8 @@ import static thc.runtime.Scalar64Primitives.word64Literal;
  * This holder is not a Truffle node or guest closure. */
 @SuppressWarnings("unchecked")
 public final class Program implements ExecutableProgram {
+    private static final TruffleLanguage.LanguageReference<thc.Language> LANGUAGES =
+        TruffleLanguage.LanguageReference.create(thc.Language.class);
     private final TruffleLanguage<?> language;
     private final boolean enableAsync;
     private final boolean outlineCaseArms;
@@ -39,6 +41,7 @@ public final class Program implements ExecutableProgram {
     private final Metrics metrics;
     private final boolean reusableCode;
     private final Object codeIdentity;
+    private final thc.Language.State contextOwner;
     private final Set<String> codeDependencies = new LinkedHashSet<>();
     private final Supplier<Map<String, Object>> loadingStatistics;
     private final boolean delimited;
@@ -79,6 +82,7 @@ public final class Program implements ExecutableProgram {
         this.language = language; this.enableAsync = enableAsync; this.outlineCaseArms = outlineCaseArms;
         this.reusableCode = reusableCode;
         this.codeIdentity = prepared == null ? new Object() : prepared.identity;
+        this.contextOwner = reusableCode ? thc.Language.currentState() : null;
         this.deferDefaultArm = deferDefaultArm;
         capturesContinuations = enableAsync || outlineCaseArms || deferDefaultArm;
         thc.CoreForeignArtifacts.INSTANCE.requireExecutableInput(moduleData);
@@ -153,7 +157,12 @@ public final class Program implements ExecutableProgram {
                 continue;
             }
             required(globals, (String) binding.get("id")).defer(preparationLock, () -> {
-                if (reusableCode) requireReusableBody((List<Object>) binding.get("expr"), true);
+                if (reusableCode) {
+                    List<Object> body = (List<Object>) binding.get("expr");
+                    if (!representation(binding) && !Arrays.asList("lit", "void").contains(body.getFirst()))
+                        throw new UnsupportedCore("Reusable AST preparation cannot execute strict global bodies");
+                    requireReusableBody(body, true);
+                }
                 validateBindings(List.of(binding));
                 Scope scope = new Scope(new FrameLayout());
                 if (reusableCode) scope.programSlot = scope.layout.bind("<program instance>", FrameSlotKind.Object);
@@ -183,6 +192,7 @@ public final class Program implements ExecutableProgram {
     /** Explicit experimental admission using the ordinary AST lowerer, without executing guest bodies.
      * Unselected definitions stay unprepared. Context sharing and AOT preparation remain separate. */
     public static PreparedCode prepareCode(TruffleLanguage<?> language, Map<String, Object> module, List<String> entries) {
+        if (language != LANGUAGES.get(null)) throw new UnsupportedCore("Reusable AST preparation requires the current language");
         if (module.containsKey("demandBindings") || module.containsKey("foreignLinks") || module.containsKey("packageScalarLinks") ||
                 module.containsKey("selectedForeignExceptionBridge") || module.get("constructors") instanceof List<?> cs && !cs.isEmpty())
             throw new UnsupportedCore("Reusable AST admission currently requires a constructor- and foreign-free module");
@@ -204,16 +214,19 @@ public final class Program implements ExecutableProgram {
                 "lifted", builder.representation(binding), "expr", List.of("void")));
         }
         return new PreparedCode(Map.of("bindings", List.copyOf(headers), "constructors", List.of(),
-            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), builder.codeIdentity);
+            "instrument", builder.metrics.getEnabled()), Map.copyOf(values), builder.codeIdentity, language);
     }
     public static final class PreparedCode {
         private final Map<String, Object> module;
         private final Map<String, CodeValue> values;
         private final Object identity;
-        private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, Object identity) {
-            this.module = module; this.values = values; this.identity = identity;
+        private final TruffleLanguage<?> language;
+        private PreparedCode(Map<String, Object> module, Map<String, CodeValue> values, Object identity, TruffleLanguage<?> language) {
+            this.module = module; this.values = values; this.identity = identity; this.language = language;
         }
         public Program newInstance(TruffleLanguage<?> language) {
+            if (language != this.language || language != LANGUAGES.get(null))
+                throw new UnsupportedCore("Reusable AST instance requires its prepared and current language");
             return new Program(language, module, false, false, false, true, this);
         }
     }
@@ -244,8 +257,7 @@ public final class Program implements ExecutableProgram {
                 if (!outerLambda) throw new UnsupportedCore("Nested reusable AST closures are not yet admitted");
                 for (Map<String, Object> argument : (List<Map<String, Object>>) expression.get(1)) {
                     CoreRepresentation proof = CoreRepresentations.binder(argument);
-                    if (representationLifted(argument) || !(proof.isLong() ||
-                            !proof.getPresent() && "Int#".equals(argument.get("type"))))
+                    if (representationLifted(argument) || !proof.getPresent() || !proof.isLong())
                         throw new UnsupportedCore("Reusable AST input requires a machine-word proof");
                 }
                 requireReusableBody((List<Object>) expression.get(2), false);
@@ -267,6 +279,9 @@ public final class Program implements ExecutableProgram {
     Metrics instanceMetrics() { return metrics; }
     Object readGlobal(int index) { return indexedGlobals[index].read(); }
     boolean usesCode(Object identity) { return codeIdentity == identity; }
+    boolean belongsToCurrentContext(com.oracle.truffle.api.nodes.Node node) {
+        return contextOwner == thc.Language.currentState(node);
+    }
     static Program instance(VirtualFrame frame, int slot) {
         if (slot < 0 || !(frame.getObject(slot) instanceof Program program))
             throw fault("Missing explicit program instance");

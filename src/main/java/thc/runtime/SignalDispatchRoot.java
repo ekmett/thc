@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import java.util.List;
 import thc.Language;
 /** Exact program-owned Ptr/Int32 layouts preserve constructor case identity. */
-public final class SignalDispatchRoot extends RootNode {
+public final class SignalDispatchRoot extends ContextRoot {
     private final Object action;
     private final DataLayout pointer, signal;
     private final CoreRepresentation result;

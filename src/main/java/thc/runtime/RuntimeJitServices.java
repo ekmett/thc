@@ -20,10 +20,10 @@ import java.util.function.Supplier;
  * Graal implementation API. This observes events; it does not request compilation,
  * change compilation thresholds, or enable JVM-wide diagnostic instrumentation.
  *
- * Attribution relies on Language's EXCLUSIVE context policy. Cloned roots and
- * continuation roots retain their language, unlike the compiler worker's current
- * context (which cannot identify the compiled target's owner). A future SHARED
- * policy must replace this attribution before enabling the service.
+ * Attribution uses an explicit per-context token retained by ordinary execution
+ * roots and their clones, never the compiler worker's current context. Reusable
+ * code and shared load factories have no single owner and are not charged to any
+ * context's event counters. Per-instance guest-entry metrics remain independent.
  *
  * Counters count callbacks during enabled periods, not live compiled targets or
  * resident machine code. For example, a compilation started while disabled can
@@ -39,17 +39,17 @@ import java.util.function.Supplier;
 public final class RuntimeJitServices implements AutoCloseable {
     private static final Supplier<TruffleRuntime> JVM_RUNTIME = Truffle::getRuntime;
     private final Supplier<? extends TruffleRuntime> runtimeProvider;
-    private final WeakReference<Language> language;
+    private final WeakReference<Object> ownership;
     private OptimizedTruffleRuntime runtime;
     private Long availability;
     private Listener observer;
     private boolean closed;
     private final long[] counters = new long[6];
 
-    public RuntimeJitServices(Language language) { this(language, JVM_RUNTIME); }
+    public RuntimeJitServices(Language.State owner) { this(owner, JVM_RUNTIME); }
 
-    public RuntimeJitServices(Language language, Supplier<? extends TruffleRuntime> runtimeProvider) {
-        this.language = new WeakReference<>(language);
+    public RuntimeJitServices(Language.State owner, Supplier<? extends TruffleRuntime> runtimeProvider) {
+        this.ownership = new WeakReference<>(owner.getCompilationOwner());
         this.runtimeProvider = runtimeProvider;
     }
 
@@ -88,7 +88,7 @@ public final class RuntimeJitServices implements AutoCloseable {
     }
 
     private long status() {
-        if (closed || language.get() == null) return RuntimeServiceStatus.UNAVAILABLE;
+        if (closed || ownership.get() == null) return RuntimeServiceStatus.UNAVAILABLE;
         if (availability != null) return availability;
         long status;
         try {
@@ -106,11 +106,17 @@ public final class RuntimeJitServices implements AutoCloseable {
     private synchronized void record(Listener source, OptimizedCallTarget target, int index) {
         // Also reject callbacks already in flight from a removed registration.
         if (closed || observer != source) return;
-        var owner = language.get();
+        var owner = ownership.get();
         if (owner == null) return;
-        var root = target.getRootNode();
-        var info = root.getLanguageInfo();
-        if (info == null || !"thc".equals(info.getId()) || root.getLanguage(Language.class) != owner) return;
+        Object sourceRoot = target.getRootNode();
+        while (true) {
+            if (sourceRoot instanceof com.oracle.truffle.api.bytecode.ContinuationRootNode continuation)
+                sourceRoot = continuation.getSourceRootNode();
+            else if (sourceRoot instanceof com.oracle.truffle.runtime.BaseOSRRootNode osr)
+                sourceRoot = osr.getSourceRootNode();
+            else break;
+        }
+        if (!(sourceRoot instanceof ContextRoot root) || root.compilationOwner() != owner) return;
         if (counters[index] != Long.MAX_VALUE) counters[index]++;
     }
 
@@ -127,7 +133,7 @@ public final class RuntimeJitServices implements AutoCloseable {
         if (closed) return;
         closed = true;
         removeObserver();
-        language.clear();
+        ownership.clear();
     }
 
     /** The process-wide listener registry must not keep a context, its language,

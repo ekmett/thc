@@ -8,7 +8,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import thc.Language;
 
 /** One child owns its dispatch tree; no parent frame or handoff loan crosses threads. */
-final class ForkActionRoot extends RootNode {
+final class ForkActionRoot extends ContextRoot {
     private final Language language;
     private final boolean asyncEnabled;
     @Child private Force force;
