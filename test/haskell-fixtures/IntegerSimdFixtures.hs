@@ -347,7 +347,8 @@ prepareIntegerSimd root family options = do
   compiler <- sort . filter (".hs" `isSuffixOf`) <$> listDirectory (root </> "compiler/THC")
   let commands = [version,info,build] ++ concat [cs | (_,_,_,_,cs,_) <- stageResults] ++ fst native
       sources = [fixture,nativeSource,"test/haskell-fixtures/IntegerSimdFixtures.hs","test/haskell-fixtures/FixtureSupport.hs","test/haskell-fixtures/Main.hs","thc.cabal",
-        "src/test/kotlin/thc/runtime/IntegerSimdModelTest.kt","scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
+        "src/test/java/thc/runtime/IntegerSimdModelTest.java","src/test/java/thc/runtime/IntegerSimdModel.java",
+        "scripts/audit-core.py","scripts/core-capabilities.json","src/main/resources/thc/scalar-primop-signatures.json"] ++
         map ("scripts" </>) scripts ++ map ("compiler/THC" </>) compiler ++ map ("compiler" </>) ["build.sh","export.sh","toolchain.sh"]
       artifacts = [out </> "expected.tsv",out </> "requests.tsv"] ++ concat [ps | (_,_,_,_,_,ps) <- stageResults] ++ snd native ++ concatMap commandArtifacts commands
   sourceRecords <- mapM record sources
