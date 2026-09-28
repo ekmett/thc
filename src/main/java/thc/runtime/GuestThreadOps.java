@@ -165,7 +165,7 @@ public final class GuestThreadOps {
         throw new AsyncDelivery(sent, node);
     }
     @TruffleBoundary public static void finishKill(Node node, AsyncRequest request) {
-        if (request.getTarget() == Thread.currentThread()) return;
+        if (request.getForceSelf()) return;
         switch (request.await(node)) {
             case ACKNOWLEDGED, TARGET_FINISHED -> { }
             case FAILED -> throw RuntimeFault.fault("killThread# delivery failed");

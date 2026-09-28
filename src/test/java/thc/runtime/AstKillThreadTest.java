@@ -97,6 +97,45 @@ public class AstKillThreadTest {
             }
         }
     }
+    @Test void callbackSendToItsSuspendedCallerWaitsForLogicalDelivery() {
+        try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).option("engine.Compilation", "false").build()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var threads = Language.currentState().getThreads();
+                var root = new Program(language, directKillModule(), true).entryTarget("direct").getRootNode();
+                threads.enterCurrent(MaskingState.MASKED_UNINTERRUPTIBLE, false, true, null);
+                try {
+                    var caller = threads.currentIdentity();
+                    AsyncRequest sent;
+                    var foreign = threads.enterForeign(ForeignSafety.SAFE);
+                    try {
+                        threads.enterCurrent(null, false, true, null);
+                        try {
+                            var callback = threads.currentIdentity();
+                            assertNotSame(caller, callback); assertEquals(caller.getJavaId(), callback.getJavaId());
+                            sent = GuestThreadOps.beginKill(root, caller, "outbound");
+                            assertFalse(sent.getForceSelf());
+                            var incoming = threads.send(callback, "interrupt sender");
+                            var blocked = assertThrows(AsyncBlocked.class, () -> GuestThreadOps.finishKill(root, sent));
+                            assertSame(incoming, blocked.getRequest());
+                            assertEquals(AsyncRequestState.CLAIMED, incoming.getState());
+                            assertEquals(AsyncRequestState.PAUSED, sent.getState());
+                            incoming.acknowledge(); threads.resume(sent);
+                            assertEquals(AsyncRequestState.PENDING, sent.getState());
+                        } finally { threads.leaveCurrent(); }
+                    } finally { threads.leaveForeign(foreign); }
+                    assertSame(caller, threads.currentIdentity());
+                    assertNull(threads.poll(root, true), "The caller's uninterruptible mask still defers delivery");
+                    SynchronousMasking.set(root, MaskingState.UNMASKED);
+                    assertSame(sent, threads.poll(root)); sent.acknowledge();
+                    GuestThreadOps.finishKill(root, sent);
+                    assertEquals(AsyncRequestState.ACKNOWLEDGED, sent.getState());
+                    assertNull(threads.poll(root), "Resumption kept the original outbound token");
+                } finally { threads.leaveCurrent(); }
+            } finally { context.leave(); }
+        }
+    }
     @Test void completedExternalSendCapturesAnIncomingRequestWithoutResending() throws Exception {
         try (var context = Context.newBuilder("thc").allowExperimentalOptions(true).allowCreateThread(true).build()) {
             context.initialize("thc"); context.enter(); final GuestThreads threads; final Program program;
