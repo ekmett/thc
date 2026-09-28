@@ -97,7 +97,7 @@ internal class PolyglotAccess : Node() {
         Language.currentState(this).env.parsePublic(Source.newBuilder(language.utf8(), source.utf8(), name.utf8()).build())
 
     fun eval(language: ManagedAddress, source: ManagedAddress, name: ManagedAddress, state: Any?): ForeignValue {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         val owner = Language.currentState(this)
         return foreign {
             val value = evalCall.call(parse(language, source, name))
@@ -112,7 +112,7 @@ internal class PolyglotAccess : Node() {
     }
 
     fun readMember(frame: VirtualFrame, value: Any?, name: ManagedAddress, state: Any?): ForeignValue {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         val receiver = receiver(frame, value)
         return foreign {
             try { ForeignValue(Language.currentState(this), members.readMember(receiver, name.utf8())) }
@@ -121,7 +121,7 @@ internal class PolyglotAccess : Node() {
     }
 
     fun executeInt(frame: VirtualFrame, value: Any?, argument: Long, state: Any?): Long {
-        requireVoidCarrier(state)
+        TupleResultsKt.requireVoidCarrier(state)
         val receiver = receiver(frame, value)
         // This first scalar bridge uses the integer range shared by Int# and JS
         // Number. A separate BigInt conversion is needed for all 64-bit inputs.

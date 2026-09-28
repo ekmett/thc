@@ -678,7 +678,7 @@ public final class Program implements ExecutableProgram {
                 fallback = index;
             } else {
                 if (!"data".equals(alt.getFirst()) || ids.size() != 1) throw new RuntimeFault("Invalid sum alternative");
-                int tag = SumShape.INSTANCE.constructor(proof, constructors.get(alt.get(1)), ids.size());
+                int tag = SumShape.constructor(proof, constructors.get(alt.get(1)), ids.size());
                 if (!tags.add(tag)) throw new RuntimeFault("Duplicate sum alternative tag");
                 CoreRepresentation component = Objects.requireNonNull(proof.getAlternatives()).get(tag - 1);
                 List<Map<String, Object>> metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
@@ -686,10 +686,10 @@ public final class Program implements ExecutableProgram {
                     throw new RuntimeFault("Missing sum payload binder proof");
                 CoreRepresentation actual = CoreRepresentations.INSTANCE.binder(metadata.getFirst());
                 if (!(metadata.getFirst().get("lifted") instanceof Boolean lifted)) throw new RuntimeFault("Unknown sum payload binder levity");
-                SumShape.INSTANCE.payload(component, actual, lifted);
+                SumShape.payload(component, actual, lifted);
                 CoreRepresentation field = evaluated(component.refine(actual), component.getEvaluated());
-                List<CoreRepresentation> leaves = TupleShape.Companion.flatten(field);
-                List<Integer> physical = SumShape.INSTANCE.projection(proof, tag - 1);
+                List<CoreRepresentation> leaves = TupleShape.flatten(field);
+                List<Integer> physical = SumShape.projection(proof, tag - 1);
                 int[] projection = new int[physical.size()];
                 for (int i = 0; i < physical.size(); i++) {
                     CoreRepresentation leaf = leaves.get(i);
@@ -734,7 +734,7 @@ public final class Program implements ExecutableProgram {
         Scope local = scope.child();
         local.bindVoid(read.getStateBinder(), CoreVectorMemory.INSTANCE.getStateProof());
         CoreRepresentation proof = read.getOperation().getVectorProof();
-        int[] lanes = new int[TupleShape.Companion.flatten(proof).size()];
+        int[] lanes = new int[TupleShape.flatten(proof).size()];
         for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind("<vector read lane " + i + ">");
         local.bindTuple(read.getVectorBinder(), proof, lanes);
         Expr[] operands = new Expr[read.getArguments().size()];
@@ -751,7 +751,7 @@ public final class Program implements ExecutableProgram {
         List<Object> only = alternatives.getFirst();
         if (!"default".equals(only.getFirst()) || !((List<?>) only.get(2)).isEmpty())
             throw new RuntimeFault("Vector case requires one default alternative");
-        int[] lanes = new int[TupleShape.Companion.flatten(proof).size()];
+        int[] lanes = new int[TupleShape.flatten(proof).size()];
         for (int i = 0; i < lanes.length; i++) lanes[i] = scope.layout.bind("<vector case lane " + i + ">");
         scope.bindTuple((String) expr.get(2), proof, lanes);
         return new Let(new int[] {-1}, new Expr[] {scrutinee}, new boolean[] {false},
@@ -777,9 +777,9 @@ public final class Program implements ExecutableProgram {
                 String id = ids.get(i);
                 CoreRepresentation component = shape.getComponents()[i];
                 CoreRepresentation raw = i < metadata.size() ? CoreRepresentations.INSTANCE.binder(metadata.get(i)) : component;
-                TupleShape.Companion.requireCompatible(component, raw, true);
+                TupleShape.requireCompatible(component, raw, true);
                 CoreRepresentation field = component.refine(raw);
-                int width = TupleShape.Companion.flatten(component).size(), offset = shape.getOffsets()[i];
+                int width = TupleShape.flatten(component).size(), offset = shape.getOffsets()[i];
                 if (component.isTypedTransport()) local.bindTuple(id, evaluated(component, true), Arrays.copyOfRange(slots, offset, offset + width));
                 else if (component.getKind() == CoreKind.VOID) local.bindVoid(id, field);
                 else local.bindSlot(id, new Local(slots[offset], component.isLong(), evaluated(field, component.isLong() || component.getEvaluated()), false, null, null, null));
@@ -891,7 +891,7 @@ public final class Program implements ExecutableProgram {
             }));
         }
         CoreRepresentation result = entry.getRepresentation().refine(evaluated(CoreRepresentations.INSTANCE.expression(expr), false));
-        for (Expr body : bodies) TupleShape.Companion.requireCompatible(result, body.getRepresentation(), false);
+        for (Expr body : bodies) TupleShape.requireCompatible(result, body.getRepresentation(), false);
         boolean allEvaluated = entry.getRepresentation().getEvaluated();
         for (Expr body : bodies) allEvaluated = allEvaluated && body.getRepresentation().getEvaluated();
         result = evaluated(result, allEvaluated);
@@ -910,7 +910,7 @@ public final class Program implements ExecutableProgram {
         if (info == null) throw new RuntimeFault("Missing constructor metadata " + id);
         CoreFields fields = new CoreFields(info);
         if (language == null) throw new RuntimeFault("Constructor layout requires a guest language");
-        layout = DataLayout.Companion.fromFields$org_intelligence_thc(language, id, (String) info.get("name"), fields);
+        layout = DataLayout.fromFields(language, id, (String) info.get("name"), fields);
         dataLayouts.put(id, layout);
         return layout;
     }
@@ -978,11 +978,11 @@ public final class Program implements ExecutableProgram {
         return result;
     }
     private int[][] constructorVectorSlots(DataLayout layout, FrameLayout frame) {
-        int[][] result = new int[layout.getLogicalArity$org_intelligence_thc()][];
+        int[][] result = new int[layout.getLogicalArity()][];
         for (int i = 0; i < result.length; i++) {
-            CoreRepresentation proof = layout.logicalProof$org_intelligence_thc(i);
-            if (proof != null && proof.isAggregate() || layout.isVector(layout.fieldOffset$org_intelligence_thc(i))) {
-                result[i] = new int[layout.logicalWidth$org_intelligence_thc(i)];
+            CoreRepresentation proof = layout.logicalProof(i);
+            if (proof != null && proof.isAggregate() || layout.isVector(layout.fieldOffset(i))) {
+                result[i] = new int[layout.logicalWidth(i)];
                 for (int j = 0; j < result[i].length; j++) result[i][j] = frame.bind("<constructor " + layout.getId() + " field " + i + " lane " + j + ">");
             }
         }
@@ -1064,7 +1064,7 @@ public final class Program implements ExecutableProgram {
             Map<String, Object> binding = group.get(index);
             CoreRepresentation proof = CoreRepresentations.INSTANCE.binder(binding);
             if (proof.isVector()) {
-                List<CoreRepresentation> fields = TupleShape.Companion.flatten(proof);
+                List<CoreRepresentation> fields = TupleShape.flatten(proof);
                 int[] lanes = new int[fields.size()];
                 for (int i = 0; i < lanes.length; i++) lanes[i] = local.layout.bind(binding.get("id") + " vector let lane " + i);
                 vectorSlots[index] = lanes;
@@ -1131,7 +1131,7 @@ public final class Program implements ExecutableProgram {
             } else value = kind.equals("data") ? dataLayout((String) alt.get(1)) : alt.get(1);
             List<String> ids = (List<String>) alt.get(2);
             DataLayout layout = value instanceof DataLayout found ? found : null;
-            if (layout != null && layout.getLogicalArity$org_intelligence_thc() != ids.size()) throw new RuntimeFault("Constructor field/binder mismatch");
+            if (layout != null && layout.getLogicalArity() != ids.size()) throw new RuntimeFault("Constructor field/binder mismatch");
             var metadata = CoreRepresentations.INSTANCE.alternativeBinders(alt);
             boolean[] strict = kind.equals("data") ? strictConstructorFields((String) alt.get(1), ids.size()) : null;
             int[][] vectorFields = new int[layout != null ? layout.getArity() : ids.size()][];
@@ -1140,16 +1140,16 @@ public final class Program implements ExecutableProgram {
                 String id = ids.get(index);
                 Map<String, Object> meta = at(metadata, index);
                 CoreRepresentation raw = meta != null ? CoreRepresentations.INSTANCE.binder(meta) : CoreRepresentation.Companion.getUNKNOWN();
-                int physical = layout != null ? layout.fieldOffset$org_intelligence_thc(index) : index;
-                CoreRepresentation aggregate = layout != null ? layout.logicalProof$org_intelligence_thc(index) : null;
+                int physical = layout != null ? layout.fieldOffset(index) : index;
+                CoreRepresentation aggregate = layout != null ? layout.logicalProof(index) : null;
                 if (aggregate != null && !aggregate.isAggregate()) aggregate = null;
-                CoreRepresentation vector = aggregate == null && layout != null ? layout.vectorProof$org_intelligence_thc(physical) : null;
+                CoreRepresentation vector = aggregate == null && layout != null ? layout.vectorProof(physical) : null;
                 if (aggregate != null) {
                     if (!raw.getPresent() || meta == null || !Boolean.FALSE.equals(meta.get("lifted")))
                         throw new RuntimeFault("Aggregate constructor binder requires an unlifted shape");
-                    TupleShape.Companion.requireCompatible(aggregate, raw, true);
+                    TupleShape.requireCompatible(aggregate, raw, true);
                     CoreRepresentation proof = aggregate.refine(raw);
-                    int[] lanes = new int[layout.logicalWidth$org_intelligence_thc(index)];
+                    int[] lanes = new int[layout.logicalWidth(index)];
                     for (int i = 0; i < lanes.length; i++) lanes[i] = child.layout.bind(id + " constructor aggregate " + i);
                     child.bindTuple(id, proof, lanes);
                     for (int i = 0; i < lanes.length; i++) {
@@ -1211,7 +1211,7 @@ public final class Program implements ExecutableProgram {
         if (arity == 0) return construct(id, new Expr[0], scope.layout);
         FrameLayout layout = new FrameLayout();
         DataLayout constructor = dataLayout(id);
-        if (constructor.getHasAggregateFields$org_intelligence_thc()) throw new UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs");
+        if (constructor.getHasAggregateFields()) throw new UnsupportedCore("Unsaturated aggregate-field constructor requires aggregate inputs");
         Object fieldData = required(constructors, id).get("fieldTypes");
         List<?> fieldTypes = fieldData instanceof List<?> found ? found : null;
         List<CoreRepresentation> proofs = new ArrayList<>();
@@ -1222,14 +1222,14 @@ public final class Program implements ExecutableProgram {
         List<CoreRepresentation> argumentProofs = new ArrayList<>();
         Expr[] fields = new Expr[arity];
         for (int index = 0; index < arity; index++) {
-            CoreRepresentation vector = constructor.vectorProof$org_intelligence_thc(index);
+            CoreRepresentation vector = constructor.vectorProof(index);
             if (vector == null) {
                 int slot = layout.bind("field" + index);
                 slots.add(slot); indices.add(ArgumentLayout.offset(inputLayout, index)); argumentProofs.add(proofs.get(index));
                 fields[index] = new LocalRead(slot, false).proven(proofs.get(index));
             } else {
                 int[] lanes = {layout.bind("field" + index + " vector")};
-                List<CoreRepresentation> leaves = TupleShape.Companion.flatten(vector);
+                List<CoreRepresentation> leaves = TupleShape.flatten(vector);
                 for (int lane = 0; lane < leaves.size(); lane++) {
                     slots.add(lanes[lane]); indices.add(ArgumentLayout.offset(inputLayout, index) + lane); argumentProofs.add(leaves.get(lane));
                 }
@@ -2040,17 +2040,18 @@ public final class Program implements ExecutableProgram {
     }
     private Expr compileOrdinaryApplication(List<Object> expr, List<Object> fn, List<List<Object>> args, List<?> flags,
                                             CoreRepresentation tupleProof, boolean[] callStrict, Scope scope, boolean tail) {
-        var constructor = constructors.get(fn.get(1));
+        var constructor = (tupleProof.isSum() || tupleProof.isTuple()) && "con".equals(fn.get(0))
+            ? constructors.get(fn.get(1)) : null;
         if (tupleProof.isSum() && "con".equals(fn.get(0)) && constructor != null && "unboxed-sum".equals(constructor.get("kind"))) {
-            int tag = SumShape.INSTANCE.constructor(tupleProof, constructor, fn.get(2));
+            int tag = SumShape.constructor(tupleProof, constructor, fn.get(2));
             if (args.size() != 1) throw new RuntimeFault("Sum constructor must be saturated");
             CoreRepresentation selected = Objects.requireNonNull(tupleProof.getAlternatives()).get(tag - 1);
             if (!(single(flags) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown sum payload levity");
             Expr payload = selected.isTypedTransport() ? compile(single(args), scope, false) : argument(single(args), scope, lifted);
-            SumShape.INSTANCE.payload(selected, payload.getRepresentation(), lifted);
+            SumShape.payload(selected, payload.getRepresentation(), lifted);
             int[] intSlots = new int[0];
             if (selected.isTypedTransport()) {
-                var fields = TupleShape.Companion.flatten(selected);
+                var fields = TupleShape.flatten(selected);
                 intSlots = new int[fields.size()];
                 for (int i = 0; i < intSlots.length; i++) intSlots[i] = fields.get(i).isInt() ? scope.layout.bind("<narrow sum payload " + i + ">") : -1;
             }
@@ -2063,7 +2064,7 @@ public final class Program implements ExecutableProgram {
             Expr[] operands = new Expr[args.size()];
             for (int i = 0; i < operands.length; i++) {
                 CoreRepresentation field = shape.getComponents()[i];
-                TupleShape.Companion.requireCompatible(field, CoreRepresentations.INSTANCE.expression(args.get(i)), true);
+                TupleShape.requireCompatible(field, CoreRepresentations.INSTANCE.expression(args.get(i)), true);
                 if (field.isTypedTransport() && !Boolean.FALSE.equals(flags.get(i))) throw new RuntimeFault("Typed tuple field cannot be lifted");
                 if (field.isTypedTransport()) operands[i] = compile(args.get(i), scope, false);
                 else {
@@ -2088,11 +2089,11 @@ public final class Program implements ExecutableProgram {
         Expr[] nodes = new Expr[args.size()];
         for (int i = 0; i < nodes.length; i++) {
             if (!(flags.get(i) instanceof Boolean lifted)) throw new UnsupportedCore("Unknown argument levity");
-            CoreRepresentation field = layout != null ? layout.logicalProof$org_intelligence_thc(i) : null;
+            CoreRepresentation field = layout != null ? layout.logicalProof(i) : null;
             if (field != null && field.isAggregate()) {
                 if (lifted) throw new RuntimeFault("Aggregate constructor operand must be unlifted");
                 nodes[i] = compile(args.get(i), scope, false);
-                TupleShape.Companion.requireCompatible(field, nodes[i].getRepresentation(), true);
+                TupleShape.requireCompatible(field, nodes[i].getRepresentation(), true);
             } else nodes[i] = argument(args.get(i), scope, lifted && !callStrict[i] &&
                 !(constructorStrict != null && constructorStrict[i]) && !(entryStrict != null && i < entryStrict.length && entryStrict[i]),
                 "argument thunk", !"prim".equals(fn.get(0)) && !"con".equals(fn.get(0)), lifted);

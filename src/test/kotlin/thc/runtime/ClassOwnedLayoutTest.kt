@@ -16,7 +16,7 @@ import java.lang.reflect.Modifier
 
 class ClassOwnedLayoutTest {
     private fun options(owned: Boolean, unchecked: Boolean = false, action: () -> Unit) {
-        val settings = mapOf(CLASS_OWNED_LAYOUTS_PROPERTY to owned.toString(),
+        val settings = mapOf(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY to owned.toString(),
             FramesKt.STATIC_SHAPE_UNCHECKED_PROPERTY to unchecked.toString())
         val previous = settings.mapValues { System.getProperty(it.key) }
         try {
@@ -54,9 +54,9 @@ class ClassOwnedLayoutTest {
     }
 
     @Test fun defaultUsesClassOwnershipAndExplicitFalseKeepsLayoutCarriers() {
-        val previous = System.getProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
+        val previous = System.getProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY)
         try {
-            System.clearProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
+            System.clearProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY)
             context("field-based") { language ->
                 val owned = DataLayout(language, "DefaultOwner", "DefaultOwner", arrayOf("IntRep"))
                 val first = owned.create(arrayOf(Long.MIN_VALUE))
@@ -73,8 +73,8 @@ class ClassOwnedLayoutTest {
                 }
             }
         } finally {
-            if (previous == null) System.clearProperty(CLASS_OWNED_LAYOUTS_PROPERTY)
-            else System.setProperty(CLASS_OWNED_LAYOUTS_PROPERTY, previous)
+            if (previous == null) System.clearProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY)
+            else System.setProperty(ClassOwnedLayoutsKt.CLASS_OWNED_LAYOUTS_PROPERTY, previous)
         }
     }
 

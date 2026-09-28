@@ -17,11 +17,11 @@ final class Construct extends Expr {
         setRepresentation(new CoreRepresentation(CoreKind.DATA, true, false, null, null, null, null, null, null));
     }
     @ExplodeLoop @Override public DataValue execute(VirtualFrame frame) {
-        if (layout.getHasBoxedValueCache$org_intelligence_thc()) return layout.createLong$org_intelligence_thc(fields[0].executeRequiredLong(frame));
+        if (layout.getHasBoxedValueCache()) return layout.createLong(fields[0].executeRequiredLong(frame));
         DataValue value = layout.allocate();
         for (int i = 0; i < fields.length; i++) {
-            int physical = layout.fieldOffset$org_intelligence_thc(i);
-            CoreRepresentation proof = layout.logicalProof$org_intelligence_thc(i);
+            int physical = layout.fieldOffset(i);
+            CoreRepresentation proof = layout.logicalProof(i);
             if (proof != null && proof.isAggregate()) {
                 int[] slots = vectorSlots[i];
                 if (slots == null) throw fault("Missing aggregate constructor slots");

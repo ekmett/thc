@@ -204,7 +204,7 @@ class BytecodeProgram internal constructor(private val language: Language, modul
         ProvenExpression(ResultExpression { e, destination -> action(e, destination ?: throw RuntimeFault("Tuple result requires a destination")) }, proof.copy(evaluated = true))
     private fun tupleSlots(shape: TupleShape, locals: List<BytecodeLocal>, capturesYield: Boolean = false) =
         BytecodeTupleSlots(shape, locals.map(LocalAccessor::constantOf).toTypedArray(), capturesYield,
-            capturesFrame = resumable)
+            resumable)
     private class LocalExpression(val local: Local, val resolve: Boolean) : Expression {
         override val proof get() = local.proof
         override fun emit(emission: Emission) {
@@ -3903,7 +3903,7 @@ CoreStackForeign.validateHead(fn, defined)
                 if (shape.components.size != args.size || (fn[2] as Number).toInt() != args.size ||
                     (constructors[fn[1]]?.get("arity") as? Number)?.toInt() != args.size) throw RuntimeFault("Tuple constructor arity mismatch")
                 val operands = args.mapIndexed { index, arg ->
-                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), component = true)
+                    TupleShape.requireCompatible(shape.components[index], CoreRepresentations.expression(arg), true)
                     if (shape.components[index].isTypedTransport && flags[index] != false)
                         throw RuntimeFault("Typed tuple field cannot be lifted")
                     if (shape.components[index].isTypedTransport) compile(arg, scope, false)
@@ -3947,7 +3947,7 @@ CoreStackForeign.validateHead(fn, defined)
                 val vectorField = if (aggregate == null) constructor?.vectorProof(constructor.fieldOffset(index)) else null
                 if (aggregate != null && strict != null) {
                     if (lifted) throw RuntimeFault("Aggregate constructor operand must be unlifted")
-                    compile(arg, scope, false).also { TupleShape.requireCompatible(aggregate, it.proof, component = true) }
+                    compile(arg, scope, false).also { TupleShape.requireCompatible(aggregate, it.proof, true) }
                 } else argument(arg, scope, lifted && !callStrict[index] && strict?.get(index) != true && entryStrict?.getOrNull(index) != true,
                     allowEmpty = vectorField != null || fn[0] != "prim" && fn[0] != "con", declaredLifted = lifted).also { operand ->
                     if (vectorField != null) {
@@ -4082,7 +4082,7 @@ CoreStackForeign.validateHead(fn, defined)
                         val record = metadata.getOrNull(index) ?: throw RuntimeFault("Missing aggregate constructor binder proof")
                         if (record["lifted"] != false) throw RuntimeFault("Aggregate constructor binder must be unlifted")
                         val actual = CoreRepresentations.binder(record)
-                        TupleShape.requireCompatible(aggregate, actual, component = true)
+                        TupleShape.requireCompatible(aggregate, actual, true)
                         val proof = aggregate.refine(actual)
                         val leaves = if (proof.isSum) SumShape.storage(proof) else TupleShape.flatten(proof)
                         val lanes = leaves.mapIndexed { leaf, rep -> Local(nextLocal++, "$id aggregate $leaf", rep.isLong, rep) }
@@ -4105,7 +4105,7 @@ CoreStackForeign.validateHead(fn, defined)
             }
             val explicit = alternatives.filter { it.kind != "default" }
             val fallback = alternatives.lastOrNull { it.kind == "default" }
-            val category = caseCategory(binderProof, alternatives.map { when (it.kind) {
+            val category = CaseCategoriesKt.caseCategory(binderProof, alternatives.map { when (it.kind) {
                 "default" -> 0; "data" -> 1; else -> 2
             } }, alternatives.all { it.kind != "lit" || it.value is Long })
             // Disjoint integral labels can be partitioned without evaluating an
@@ -5031,7 +5031,7 @@ CoreStackForeign.validateHead(fn, defined)
             val metadata = CoreRepresentations.alternativeBinders(alt)
             ids.forEachIndexed { index, id ->
                 val component = shape.components[index]
-                metadata.getOrNull(index)?.let { TupleShape.requireCompatible(component, CoreRepresentations.binder(it), component = true) }
+                metadata.getOrNull(index)?.let { TupleShape.requireCompatible(component, CoreRepresentations.binder(it), true) }
                 val offset = shape.offsets[index]
                 val width = TupleShape.flatten(component).size
                 if (component.isTypedTransport) scope.bindTuple(id, component, fields.subList(offset, offset + width))

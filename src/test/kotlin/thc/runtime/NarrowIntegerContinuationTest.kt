@@ -111,7 +111,7 @@ class NarrowIntegerContinuationTest {
                 fun arguments(prefix: ManagedMVar, blocked: ManagedMVar) = arrayOf<Any?>(0L, prefix, blocked, *actualValues)
                 fun valid() = assertEquals(true, target.javaClass.getMethod("isValidLastTier").invoke(target))
                 fun checkResult(result: Any?) {
-                    val tuple = ownedTupleResult(result, shape)
+                    val tuple = TupleResultsKt.ownedTupleResult(result, shape)
                     assertEquals(6, shape.width)
                     for (i in actualValues.indices) {
                         assertEquals(narrow, shape.layout.isInt(i)); assertEquals(!narrow, shape.layout.isLong(i))

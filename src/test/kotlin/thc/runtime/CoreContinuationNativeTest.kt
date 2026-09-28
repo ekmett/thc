@@ -875,7 +875,7 @@ class CoreContinuationNativeTest {
                 entered(context) {
                     if (name == "catchActionAnswer") {
                         assertTrue(segment.value is HandoffStorage, "Published tuple must own its fields, not a thread-local completion token")
-                        assertNotSame(TupleComplete, segment.value)
+                        assertNotSame(TupleComplete.INSTANCE, segment.value)
                     }
                     SynchronousMasking.set(driver, MaskingState.MASKED_INTERRUPTIBLE)
                     try {

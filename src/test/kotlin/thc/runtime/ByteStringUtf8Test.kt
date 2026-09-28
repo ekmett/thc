@@ -291,7 +291,7 @@ class ByteStringUtf8Test {
                     pending!!.acknowledge()
                     result
                 }
-                assertEquals(1, shape.layout.getInt(ownedTupleResult(completed, shape), 0))
+                assertEquals(1, shape.layout.getInt(TupleResultsKt.ownedTupleResult(completed, shape), 0))
                 assertEquals(1, evaluated)
                 assertEquals(0, language.handoffState.get().results.depth)
                 assertEquals(0, language.handoffState.get().results.retainedReferences())
