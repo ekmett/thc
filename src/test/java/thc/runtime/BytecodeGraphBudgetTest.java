@@ -110,6 +110,100 @@ class BytecodeGraphBudgetTest {
         }
     }
 
+    @Test void capacitySideEntrySpillPreservesTheFirstInstalledCallerAndTransaction() throws Exception {
+        var input = new LinkedHashMap<>(decision(64,
+                List.of(binder("step", CLOSURE, true), binder("prefix", MUTABLE, false)), LONG,
+                arm -> capacityCalls(64, arm, variable("value63", LONG), LONG)));
+        var bindings = new ArrayList<Map<String, Object>>((List<Map<String, Object>>) input.get("bindings"));
+        var binding = new LinkedHashMap<>(bindings.getFirst());
+        var lambda = new ArrayList<>((List<Object>) binding.get("expr"));
+        lambda.set(2, afterTake("prefix", "prefixValue", (List<Object>) lambda.get(2), LONG));
+        binding.put("expr", lambda); bindings.set(0, binding); input.put("bindings", bindings);
+        constructors(input, tupleConstructor("Pair", 2));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            var owner = Language.currentState(); owner.getThreads().enterCurrent(null, false, true, null);
+            var transaction = owner.stm.begin();
+            var ambient = new ManagedSTM.Transaction();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true);
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                assertEquals(0, root.prepareGraphBudgetRetry(0));
+                var original = instructions(root);
+                assertTrue(compile(target)); assertTrue(valid(target)); bypass(target);
+                assertEquals(0, entries(program));
+                var calls = new java.util.concurrent.atomic.AtomicInteger();
+                var step = new Closure(null, 1, new RootNode(language) {
+                    @Override public Object execute(VirtualFrame frame) {
+                        assertSame(transaction, owner.stm.currentTransaction());
+                        assertEquals(MaskingState.MASKED_INTERRUPTIBLE, SynchronousMasking.current(this));
+                        calls.incrementAndGet(); return (Long) frame.getArguments()[1] + 1;
+                    }
+                }.getCallTarget());
+                var prefix = new ManagedMVar(); assertTrue(prefix.tryPut(new Object()));
+                owner.getMaskingState().set(MaskingState.MASKED_INTERRUPTIBLE);
+                var stack = owner.getThreadPollState().get().getAstStack();
+                long spills = stack.getSpills();
+                // The caller enters below the limit; the extracted side alone
+                // reaches it. This changes depth, not compilation/profile state.
+                stack.setDepth(AstStackScope.MAX_DEPTH - 2); stack.setDriving(true);
+                SavedGuestContinuation saved;
+                try {
+                    saved = SavedGuestContinuations.savedGuestContinuation(Calls.target(target,
+                            new Object[]{0L, program.entryValue("chosen"), step, prefix}));
+                } finally { stack.setDepth(0); stack.setDriving(false); }
+                assertNotNull(saved); assertTrue(saved.stackSpill()); assertNull(saved.asyncRequest());
+                assertSame(root, saved.getSourceRoot());
+                assertEquals(spills + 1, stack.getSpills());
+                assertTrue(prefix.isEmpty()); assertEquals(0, calls.get());
+                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertEquals(original, instructions(root), "parking must preserve the original instruction stream");
+                root.getRootNodes().ensureSourceInformation();
+                assertEquals(original, instructions(root), "source replay must preserve parked PCs and operands");
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(original, instructions(clone)); assertEquals(0, clone.getGraphBudgetGeneration());
+                assertTrue(valid(target)); assertEquals(1, entries(program));
+                owner.stm.restore(ambient);
+                var resume = new RootNode(language) {
+                    @Child private Force force = new Force(new Metrics(false), true);
+                    @Override public Object execute(VirtualFrame frame) {
+                        return force.drainStack((SavedGuestContinuation) frame.getArguments()[0]);
+                    }
+                }.getCallTarget();
+                assertEquals(63064L, Calls.target(resume, new Object[]{saved}));
+                assertEquals(64, calls.get()); assertTrue(prefix.isEmpty());
+                assertSame(ambient, owner.stm.currentTransaction());
+                assertTrue(transaction.active()); assertTrue(ambient.active());
+                assertEquals(0, stack.getDepth()); assertFalse(stack.getDriving());
+                assertSame(target, program.entryTarget("entry")); assertTrue(valid(target));
+                assertEquals(1, entries(program));
+                // First interpreter resumption specializes ChildResume and quickens
+                // its dead-result pop. These are adaptive bytes, not moved guest PCs.
+                // Assert exactly those two changes; do not normalize other operands.
+                var resumedInstructions = new LinkedHashMap<>(original);
+                var resumeSites = original.entrySet().stream()
+                        .filter(entry -> entry.getValue().equals("c.ResumeApplication[state_0(0)]")).toList();
+                assertEquals(1, resumeSites.size());
+                int resumeBci = resumeSites.getFirst().getKey();
+                int popBci = original.entrySet().stream()
+                        .filter(entry -> entry.getKey() > resumeBci && entry.getValue().equals("pop[child0(ffffffff)]"))
+                        .mapToInt(Map.Entry::getKey).findFirst().orElseThrow();
+                resumedInstructions.put(resumeBci, "c.ResumeApplication[state_0(2)]");
+                resumedInstructions.put(popBci, "pop$generic[child0(ffffffff)]");
+                assertEquals(resumedInstructions, instructions(root));
+                assertEquals(0, root.getGraphBudgetGeneration());
+                var handoff = language.getHandoffState().get(); assertNull(handoff.getPending());
+                assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
+                assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
+            } finally {
+                owner.stm.retire(transaction); owner.stm.retire(ambient); owner.stm.restore(null);
+                owner.getThreads().leaveCurrent(); context.leave();
+            }
+        }
+    }
+
     @ParameterizedTest @ValueSource(booleans = {false, true})
     void localEncodingCapacityNarrowsSidesBeforePublishingTheOriginalTarget(boolean parentOnly) throws Exception {
         int arms = parentOnly ? 256 : 64, repetitions = parentOnly ? 8 : 64;
