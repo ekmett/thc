@@ -45,4 +45,4 @@ exec "$native_image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --parallelism=2 \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
     --initialize-at-build-time="$initialization" \
-    -cp "$image_classpath" thc.MainKt "$output"
+    -cp "$image_classpath" thc.Main "$output"

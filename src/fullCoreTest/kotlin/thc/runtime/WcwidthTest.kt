@@ -3,6 +3,8 @@
 @file:Suppress("UNCHECKED_CAST")
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.TruffleLanguage
 import org.graalvm.polyglot.Context
 import org.junit.jupiter.api.Assertions.*
@@ -69,7 +71,7 @@ class WcwidthTest {
         for ((locale, rows) in observations) {
             for ((_, raw, fallback) in rows) assertEquals(if (raw == -1L) 1L else raw, fallback)
             for (backend in listOf("ast", "bytecode")) withLocale(locale) {
-                Context.newBuilder("thc").allowNativeAccess(true).withContextProfile(ContextProfile.SYNCHRONOUS_TEST)
+                Context.newBuilder("thc").allowNativeAccess(true).let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }
                     .build().use { context ->
                         context.initialize("thc"); context.enter()
                         try {

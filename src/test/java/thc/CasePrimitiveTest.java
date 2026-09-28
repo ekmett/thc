@@ -76,7 +76,7 @@ public final class CasePrimitiveTest {
         List<Object> throughLet = List.of("let", false, List.of(binding("saved", selected, false, 0)),
             caseOf(variable("saved"), "again", defaultArm(variable("again"))));
         var body = primitive("+#", throughLet, integer(1));
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             var function = context.eval("thc", request(body, List.of(), List.of()));
             compileWarmArm(function, 0, expectedNested(0));
             List<Long> inputs = List.of(1L, Long.MAX_VALUE, Long.MIN_VALUE, 3_000_000_000L, -3_000_000_000L, 128L, -129L, 0L);
@@ -98,7 +98,7 @@ public final class CasePrimitiveTest {
             dataArm("Pair", List.of("left", "right"), rematched), defaultArm(integer(7)));
         long mask = 0x5555_5555_5555_5555L;
         var body = primitive("xor#", selected, integer(mask));
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             var function = context.eval("thc", request(body, constructors, List.of()));
             compileWarmArm(function, 0, expectedConstructor(0, mask));
             List<Long> inputs = List.of(1L, 2L, Long.MIN_VALUE, Long.MAX_VALUE, 3_000_000_000L, -3_000_000_000L, 0L);
@@ -125,7 +125,7 @@ public final class CasePrimitiveTest {
         var failure = caseOf(variable("bottom"), "failedBox", dataArm("Box", List.of("failedValue"), variable("failedValue")));
         var selected = caseOf(variable("input"), "selector", literalArm(-1, failure), defaultArm(primitive("+#", first, second)));
         List<Object> body = List.of("let", false, List.of(binding("shared", delayed)), primitive("*#", selected, integer(2)));
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             var function = context.eval("thc", request(body, List.of(constructor("Box", 1, 1)), List.of(binding("bottom", variable("bottom")))));
             checkShared(function, 0, false);
             compileWarmArm(function, 0, 2);

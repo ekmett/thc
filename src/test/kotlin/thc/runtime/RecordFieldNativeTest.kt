@@ -44,7 +44,7 @@ class RecordFieldNativeTest {
                 val audit = json(File(directory, "$stage/$entry-audit.json"))
                 assertEquals(true, audit["accepted"])
                 assertEquals(emptyList<Any>(), audit["issues"])
-                val linked = CoreModules.reachable(CoreModules.merge(sources), entry, strictLink = true) +
+                val linked = CoreModules.reachable(CoreModules.merge(sources), entry, true) +
                     ("instrument" to true)
                 for (backend in listOf("ast", "bytecode"))
                     Context.newBuilder("thc").allowExperimentalOptions(true)

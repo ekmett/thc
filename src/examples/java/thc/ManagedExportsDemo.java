@@ -14,7 +14,7 @@ public final class ManagedExportsDemo {
     public static void main(String[] arguments) {
         if (arguments.length < 4) throw new IllegalArgumentException("CORE.json UNIT MODULE C_SYMBOL [INT32 ...]");
         try (Context context = Context.newBuilder("thc").build()) {
-            var units = MainKt.loadManagedExports(context, List.of(arguments[0]));
+            var units = Main.loadManagedExports(context, List.of(arguments[0]));
             var function = units.getMember(arguments[1]).getMember(arguments[2]).getMember(arguments[3]);
             Object[] inputs = new Object[arguments.length - 4];
             for (int index = 4; index < arguments.length; index++) inputs[index - 4] = Integer.parseInt(arguments[index]);

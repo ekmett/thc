@@ -1223,7 +1223,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_tcsetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcsetattrAudit.hs", "compiler/test-fixtures/OriginalTcsetattrNative.hs",
                      "test/haskell-fixtures/OriginalTcsetattrFixtures.hs", "src/main/c/native-file-api.c",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
                      "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
                      "test/haskell-fixtures/Main.hs"):
@@ -1238,7 +1238,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_tcgetattr_sources_select_the_original_native_comparison(self):
         for path in ("compiler/test-fixtures/OriginalTcgetattrAudit.hs", "compiler/test-fixtures/OriginalTcgetattrNative.hs",
                      "test/haskell-fixtures/OriginalTcgetattrFixtures.hs", "src/main/c/native-file-api.c",
-                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/kotlin/thc/runtime/NativeFileProvider.kt", "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/kotlin/thc/runtime/ManagedStdio.kt", "src/main/kotlin/thc/runtime/ManagedFiles.kt",
                      "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt", "src/main/kotlin/thc/runtime/OriginalStdioExpression.kt",
                      "test/haskell-fixtures/Main.hs"):
@@ -1251,7 +1251,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
-                     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/kotlin/thc/runtime/ManagedStdio.kt",
                      "src/main/kotlin/thc/runtime/ManagedFiles.kt",
                      "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
@@ -1268,7 +1268,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "test/haskell-fixtures/OriginalPosixStatFixtures.hs",
                      "src/main/c/native-file-api.c", "src/main/c/stdio-abi-probe.c",
                      "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
-                     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/kotlin/thc/runtime/ManagedStdio.kt",
                      "src/main/kotlin/thc/runtime/ManagedFiles.kt",
                      "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",
@@ -1287,7 +1287,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                      "src/main/kotlin/thc/runtime/NativeDirectoryOwner.kt",
                      "src/main/kotlin/thc/NativeFileSystem.kt",
                      "src/main/kotlin/thc/runtime/NativeFileProvider.kt",
-                     "src/main/kotlin/thc/runtime/NativeOpenRequest.kt",
+                     "src/main/java/thc/runtime/NativeOpenRequest.java", "src/main/java/thc/runtime/NativeFileResource.java", "src/main/java/thc/runtime/OpenedNativeFile.java",
                      "src/main/kotlin/thc/runtime/ManagedStdio.kt",
                      "src/main/kotlin/thc/runtime/ManagedFiles.kt",
                      "src/main/kotlin/thc/runtime/CoreOriginalStdio.kt",

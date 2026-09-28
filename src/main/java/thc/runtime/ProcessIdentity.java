@@ -22,7 +22,7 @@ public final class ProcessIdentity {
         // The host probe also asserts signed 32-bit pid_t and unsigned 32-bit uid_t.
         try { StdioHostAbi.load(); }
         catch (java.io.IOException failure) { throw propagate(failure); }
-        var threads = state.getThreads$org_intelligence_thc();
+        var threads = state.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
         try {
             return operation == OriginalStdioOp.GET_PID ? (long) (int) Libc.GET_PID.invokeExact()

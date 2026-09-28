@@ -49,7 +49,7 @@ public final class ThunkDiagnosticsTest {
     }
 
     @Test void actualUnnamedThunkRetainsOneEvaluationAndItsMemoizedValue() {
-        try (Context context = MainKt.executionContext(false)) {
+        try (Context context = Main.executionContext(false)) {
             context.initialize("thc");
             context.enter();
             try {

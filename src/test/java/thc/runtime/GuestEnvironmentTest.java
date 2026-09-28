@@ -40,7 +40,7 @@ class GuestEnvironmentTest {
 
     private static ManagedAddress string(String value) {
         var bytes = value.getBytes(StandardCharsets.UTF_8);
-        var address = Language.currentState(null).getNativeAllocations$org_intelligence_thc().malloc((long) bytes.length + 1);
+        var address = Language.currentState(null).getNativeAllocations().malloc((long) bytes.length + 1);
         for (int index = 0; index < bytes.length; index++) address.writeWord8(index, bytes[index]);
         address.writeWord8(bytes.length, 0);
         return address;
@@ -124,7 +124,7 @@ class GuestEnvironmentTest {
             for (var operation : EnvironmentOp.values()) targets.put(operation, program.entryTarget(operation.getSymbol()));
             var name = string("THC_LOCAL");
             var entry = string("THC_LOCAL=first");
-            var environment = Language.currentState(null).getEnvironment$org_intelligence_thc();
+            var environment = Language.currentState(null).getEnvironment();
             environment.environ(); // Materialize host-authorized initial state before compiling.
             class Caller {
                 boolean compiled;
@@ -139,7 +139,7 @@ class GuestEnvironmentTest {
                     assertEquals(before + (compiled ? 1 : 0),
                         ((Number) program.diagnostics().get("compiledEntries")).longValue(), backend);
                     if (compiled) assertEquals(true, target.getClass().getMethod("isValidLastTier").invoke(target));
-                    var handoff = language.getHandoffState$org_intelligence_thc().get();
+                    var handoff = language.getHandoffState().get();
                     assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
                     assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
                     assertNull(handoff.getPending());
@@ -170,7 +170,7 @@ class GuestEnvironmentTest {
 
     @Test void putenvRetainsCallerBytesAndEnumerationHasNativePointerIdentity() throws Exception {
         inside(language -> {
-            var environment = Language.currentState(null).getEnvironment$org_intelligence_thc();
+            var environment = Language.currentState(null).getEnvironment();
             var name = string("LOCAL");
             var entry = string("LOCAL=abc");
             assertEquals(0L, environment.put(entry));
@@ -188,7 +188,7 @@ class GuestEnvironmentTest {
             assertEquals(-1L, environment.unset(string("")));
             assertEquals(0L, environment.unset(name));
             assertSame(ManagedAddress.Companion.nullAddress(), environment.get(string("")));
-            var unterminated = Language.currentState(null).getNativeAllocations$org_intelligence_thc().malloc(1);
+            var unterminated = Language.currentState(null).getNativeAllocations().malloc(1);
             unterminated.writeWord8(0, 65);
             assertThrows(RuntimeFault.class, () -> environment.put(unterminated));
             assertEquals(List.of("THC_INITIAL=lambda-\u03bb"), entries(environment.environ()));
@@ -197,7 +197,7 @@ class GuestEnvironmentTest {
 
     @Test void contextIsolationEnvironmentPolicyAndDisposalArePreserved() throws Exception {
         inside(language -> {
-            var outer = Language.currentState(null).getEnvironment$org_intelligence_thc();
+            var outer = Language.currentState(null).getEnvironment();
             var name = string("THC_LOCAL");
             outer.put(string("THC_LOCAL=outer"));
             ManagedAddress escaped;
@@ -205,7 +205,7 @@ class GuestEnvironmentTest {
                 inner.initialize("thc"); inner.enter();
                 try {
                     assertThrows(RuntimeFault.class, outer::environ);
-                    var current = Language.currentState(null).getEnvironment$org_intelligence_thc();
+                    var current = Language.currentState(null).getEnvironment();
                     assertSame(ManagedAddress.Companion.nullAddress(), current.get(string("THC_LOCAL")));
                     assertEquals(List.of("THC_INITIAL=lambda-\u03bb"), entries(current.environ()));
                     escaped = current.get(string("THC_INITIAL"));

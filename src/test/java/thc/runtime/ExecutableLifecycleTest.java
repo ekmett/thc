@@ -12,7 +12,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.junit.jupiter.api.Test;
 import thc.EntryValue;
 import thc.Language;
-import thc.MainKt;
+import thc.Main;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExecutableLifecycleTest {
@@ -48,7 +48,7 @@ class ExecutableLifecycleTest {
         @Override public Map<String, Object> diagnostics() { return Map.of(); }
     }
     @Test void successfulExecutableSharesStateAndRunsShutdownOnce() {
-        try (var context = MainKt.executionContext(false)) {
+        try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -58,7 +58,7 @@ class ExecutableLifecycleTest {
                 var events = new ArrayList<String>();
                 var main = new ActionRoot(language, shape, boxedUnit, () -> { events.add("main"); state[0]++; }).getCallTarget();
                 var shutdown = new ActionRoot(language, shape, boxedUnit, () -> { events.add("shutdown:" + state[0]); state[0]++; }).getCallTarget();
-                var action = context.asValue(new EntryValue(new Actions(main, shutdown), "main", 0, null, result, language, "shutdown", result, false, null));
+                var action = context.asValue(new EntryValue(new Actions(main, shutdown), "main", 0, null, result, language, "shutdown", result, false, null, null));
                 assertTrue(action.invokeMember("runIO").asBoolean());
                 assertEquals(List.of("main", "shutdown:1"), events);
                 assertEquals(2, state[0]);
@@ -69,7 +69,7 @@ class ExecutableLifecycleTest {
         }
     }
     @Test void failedMainDoesNotRunShutdownOrRetryEffects() {
-        try (var context = MainKt.executionContext(false)) {
+        try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -78,7 +78,7 @@ class ExecutableLifecycleTest {
                 int[] mainCalls = {0}, shutdownCalls = {0};
                 var main = new ActionRoot(language, shape, boxedUnit, () -> { mainCalls[0]++; throw new RuntimeFault("main failed"); }).getCallTarget();
                 var shutdown = new ActionRoot(language, shape, boxedUnit, () -> shutdownCalls[0]++).getCallTarget();
-                var action = context.asValue(new EntryValue(new Actions(main, shutdown), "main", 0, null, result, language, "shutdown", result, false, null));
+                var action = context.asValue(new EntryValue(new Actions(main, shutdown), "main", 0, null, result, language, "shutdown", result, false, null, null));
                 assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO")).getMessage().contains("main failed"));
                 assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO")).getMessage().contains("already started"));
                 assertEquals(1, mainCalls[0]); assertEquals(0, shutdownCalls[0]);
@@ -86,7 +86,7 @@ class ExecutableLifecycleTest {
         }
     }
     @Test void failedShutdownDoesNotRepeatTheCompletedMain() {
-        try (var context = MainKt.executionContext(false)) {
+        try (var context = Main.executionContext(false)) {
             context.initialize("thc"); context.enter();
             try {
                 var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
@@ -95,7 +95,7 @@ class ExecutableLifecycleTest {
                 int[] mainCalls = {0}, shutdownCalls = {0};
                 var main = new ActionRoot(language, shape, boxedUnit, () -> mainCalls[0]++).getCallTarget();
                 var shutdown = new ActionRoot(language, shape, boxedUnit, () -> { shutdownCalls[0]++; throw new RuntimeFault("shutdown failed"); }).getCallTarget();
-                var action = context.asValue(new EntryValue(new Actions(main, shutdown), "main", 0, null, result, language, "shutdown", result, false, null));
+                var action = context.asValue(new EntryValue(new Actions(main, shutdown), "main", 0, null, result, language, "shutdown", result, false, null, null));
                 assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO")).getMessage().contains("shutdown failed"));
                 assertTrue(assertThrows(PolyglotException.class, () -> action.invokeMember("runIO")).getMessage().contains("already started"));
                 assertEquals(1, mainCalls[0]); assertEquals(1, shutdownCalls[0]);

@@ -125,8 +125,7 @@ class ThreadAsyncNativeTest {
             }
             try {
                 val core = File(root, "build/thread-async/$stage/core/$module.json")
-                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name,
-                    backend = backend, asyncExceptions = asyncExceptions))
+                val entry = context.eval("thc", CoreModules.request(listOf(core.path), name, true, false, backend, true, false, null, asyncExceptions))
                 val result = executor.submit<List<Long>> {
                     val interpreted = entry.execute(0L).asLong()
                     assertTrue(entry.invokeMember("compile").asBoolean())
@@ -209,7 +208,7 @@ class ThreadAsyncNativeTest {
             Context.newBuilder("thc").allowExperimentalOptions(true)
                 .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
                 .option("engine.CompilationFailureAction", "Throw").build().use { context ->
-                val request = CoreModules.request(listOf(core.path), "yieldProbe", backend = backend, asyncExceptions = mode)
+                val request = CoreModules.request(listOf(core.path), "yieldProbe", true, false, backend, true, false, null, mode)
                 val entry = context.eval("thc", request)
                 assertTrue(entry.invokeMember("compile").asBoolean())
                 assertEquals(37L, entry.execute(0L).asLong(), "$backend/$mode first installed entry")

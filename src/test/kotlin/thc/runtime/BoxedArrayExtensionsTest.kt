@@ -421,7 +421,7 @@ class BoxedArrayExtensionsTest {
                 context.initialize("thc"); context.enter()
                 try {
                     val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                    val program = program(language, CoreModules.reachable(merged, name, strictLink = true) + ("instrument" to true), backend)
+                    val program = program(language, CoreModules.reachable(merged, name, true) + ("instrument" to true), backend)
                     val entry = context.asValue(EntryValue(program, name, 5)); val host = program.hostEntryTarget(5)
                     val cases = rows.filter { it[0] == name }
                     fun check(row: List<String>) {

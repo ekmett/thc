@@ -44,5 +44,5 @@ public final class StableNames {
         closed = true; names.clear();
         while (queue.poll() != null) { /* Release queued keys too. */ }
     }
-    public static StableNames current(Node node) { return Language.currentState(node).getStableNames$org_intelligence_thc(); }
+    public static StableNames current(Node node) { return Language.currentState(node).getStableNames(); }
 }

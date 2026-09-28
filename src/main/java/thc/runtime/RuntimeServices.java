@@ -22,7 +22,7 @@ public final class RuntimeServices {
                 case 1 -> backend; // Actual lowering backend, not a context default.
                 case 2 -> state.getEnv().isNativeAccessAllowed() ? 1L : 0L;
                 case 3 -> state.getEnv().isCreateThreadAllowed() ? 1L : 0L;
-                case 4 -> state.getThreads$org_intelligence_thc().getCpuAffinity().getCount();
+                case 4 -> state.getThreads().getCpuAffinity().getCount();
                 case 5 -> {
                     var root = node.getRootNode();
                     var info = root == null ? null : root.getLanguageInfo();
@@ -40,8 +40,8 @@ public final class RuntimeServices {
         if (selector >= 100 && selector <= 199) return RuntimeThreadServices.query(state, selector, index, detail);
         if (selector >= 200 && selector <= 299) return RuntimeMemoryServices.query(state, selector, index, detail);
         if (selector >= 300 && selector <= 399) return RuntimeGCServices.query(state, selector, index, detail);
-        if (selector >= 400 && selector <= 499) return state.getRuntimeJit$org_intelligence_thc().query(selector, index, detail);
-        if (selector >= 500 && selector <= 599) return state.getRuntimeTrace$org_intelligence_thc().query(selector, index, detail);
+        if (selector >= 400 && selector <= 499) return state.getRuntimeJit().query(selector, index, detail);
+        if (selector >= 500 && selector <= 599) return state.getRuntimeTrace().query(selector, index, detail);
         throw fault("Unknown runtime service query " + selector);
     }
 
@@ -49,8 +49,8 @@ public final class RuntimeServices {
     public static long control(Node node, int selector, long setting) {
         var state = Language.currentState(node);
         return switch (selector) {
-            case 400 -> state.getRuntimeJit$org_intelligence_thc().control(selector, setting);
-            case 500 -> state.getRuntimeTrace$org_intelligence_thc().control(selector, setting);
+            case 400 -> state.getRuntimeJit().control(selector, setting);
+            case 500 -> state.getRuntimeTrace().control(selector, setting);
             default -> throw fault("Unknown runtime service control " + selector);
         };
     }
@@ -58,9 +58,9 @@ public final class RuntimeServices {
     @TruffleBoundary
     public static long trace(Node node, int operation, long token, ManagedAddress bytes, long length) {
         var state = Language.currentState(node);
-        var threads = state.getThreads$org_intelligence_thc();
+        var threads = state.getThreads();
         var previous = threads.enterForeign(ForeignSafety.UNSAFE);
-        try { return state.getRuntimeTrace$org_intelligence_thc().emit(operation, token, bytes, length); }
+        try { return state.getRuntimeTrace().emit(operation, token, bytes, length); }
         finally { threads.leaveForeign(previous); }
     }
 }

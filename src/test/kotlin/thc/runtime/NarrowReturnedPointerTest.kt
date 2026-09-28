@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: UPL-1.0 AND BSD-3-Clause
 package thc.runtime
 
+import thc.Main.withContextProfile
+
 import com.oracle.truffle.api.Truffle
 import com.oracle.truffle.api.TruffleLanguage
 import com.oracle.truffle.api.frame.VirtualFrame
@@ -51,7 +53,7 @@ class NarrowReturnedPointerTest {
         Context.newBuilder("thc").allowNativeAccess(true).allowExperimentalOptions(true)
             .option("engine.BackgroundCompilation", "false").option("engine.MultiTier", "false")
             .option("engine.CompilationFailureAction", "Throw").option("engine.SingleTierCompilationThreshold", "10000000")
-            .withContextProfile(ContextProfile.SYNCHRONOUS_TEST).build().use { context ->
+            .let { withContextProfile(it, ContextProfile.SYNCHRONOUS_TEST) }.build().use { context ->
                 context.initialize("thc"); context.enter()
                 try {
                     val owner = Language.currentState()

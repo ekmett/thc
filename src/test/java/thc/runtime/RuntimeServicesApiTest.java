@@ -122,7 +122,7 @@ class RuntimeServicesApiTest {
     private static long query(ExecutableProgram guest, long selector) { return query(guest, selector, 0, 0); }
     private static long query(ExecutableProgram guest, long selector, long index, long detail) { return call(guest, "query", selector, index, detail); }
     private static void released(Language language) {
-        var handoff = language.getHandoffState$org_intelligence_thc().get();
+        var handoff = language.getHandoffState().get();
         assertEquals(0, handoff.getArguments().getDepth()); assertEquals(0, handoff.getResults().getDepth());
         assertEquals(0, handoff.getArguments().retainedReferences()); assertEquals(0, handoff.getResults().retainedReferences());
         assertNull(handoff.getPending());

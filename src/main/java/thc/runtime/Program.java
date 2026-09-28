@@ -35,7 +35,7 @@ public final class Program implements ExecutableProgram {
     private final Object stackTargetLayout;
     private final boolean callDemandsEnabled = Boolean.getBoolean(CALL_DEMANDS_PROPERTY);
     private final Metrics metrics;
-    private final kotlin.jvm.functions.Function0<Map<String, Object>> loadingStatistics;
+    private final Supplier<Map<String, Object>> loadingStatistics;
     private final boolean delimited;
     private final boolean containsDelimited;
     private final CoreSources sources;
@@ -72,7 +72,7 @@ public final class Program implements ExecutableProgram {
         packageScalarLinks = moduleData.get("packageScalarLinks") instanceof List<?> found ? (List<thc.PackageScalarLink>) found : List.of();
         stackTargetLayout = moduleData.get("targetLayout");
         metrics = demand != null ? demand.getMetrics() : new Metrics(!Boolean.FALSE.equals(moduleData.get("instrument")));
-        loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof kotlin.jvm.functions.Function0<?> found ? (kotlin.jvm.functions.Function0<Map<String, Object>>) found : null;
+        loadingStatistics = moduleData.get("coreLoadingStatistics") instanceof Supplier<?> found ? (Supplier<Map<String, Object>>) found : null;
         boolean containsDelimited = false;
         if (moduleData.get("bindings") instanceof List<?> values) {
             for (Object binding : values) {
@@ -359,7 +359,7 @@ public final class Program implements ExecutableProgram {
             "tail-safe; non-tail calls and nested thunk forcing use host stack");
         result.put("threadPolicy", enableAsync ? "context-owned Java threads; captured asynchronous delivery" :
             "context-owned Java threads; external asynchronous delivery disabled");
-        if (loadingStatistics != null) result.putAll(loadingStatistics.invoke());
+        if (loadingStatistics != null) result.putAll(loadingStatistics.get());
         return result;
     }
     private boolean representation(Map<String, Object> binding) {

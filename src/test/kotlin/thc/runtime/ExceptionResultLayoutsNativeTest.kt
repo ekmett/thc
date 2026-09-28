@@ -95,7 +95,7 @@ class ExceptionResultLayoutsNativeTest {
     @Test fun genuineProofsKeepResultShapeAndIndependentPayloadLevity() {
         oracle()
         for (stage in stages) for (entry in entries) {
-            val linked = CoreModules.reachable(module(stage), entry, strictLink = true)
+            val linked = CoreModules.reachable(module(stage), entry, true)
             val primitives = calls(linked).filter { (it[1] as List<*>)[1] in setOf(
                 "catch#", "raiseIO#", "maskAsyncExceptions#", "maskUninterruptible#", "unmaskAsyncExceptions#") }
             assertTrue(primitives.isNotEmpty(), "$stage/$entry")
@@ -191,7 +191,7 @@ class ExceptionResultLayoutsNativeTest {
                     context.initialize("thc"); context.enter()
                     try {
                         val language = TruffleLanguage.LanguageReference.create(Language::class.java).get(null)
-                        val linked = CoreModules.reachable(module(stage), entry, strictLink = true) + ("instrument" to true)
+                        val linked = CoreModules.reachable(module(stage), entry, true) + ("instrument" to true)
                         val program: ExecutableProgram = if (backend == "ast") Program(language, linked, true)
                             else BytecodeProgram(language, linked, true)
                         val target = program.entryTarget(entry)

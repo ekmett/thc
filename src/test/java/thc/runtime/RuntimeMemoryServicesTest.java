@@ -86,7 +86,7 @@ class RuntimeMemoryServicesTest {
     @Test void ownedBytesFollowMallocReallocFreeAndContextIsolation() {
         nativePlatform();
         context(true, first -> {
-            var registry = first.getNativeAllocations$org_intelligence_thc();
+            var registry = first.getNativeAllocations();
             var a = registry.malloc(19);
             var b = registry.malloc(31);
             assertNotSame(ManagedAddress.Companion.nullAddress(), a);
@@ -96,7 +96,7 @@ class RuntimeMemoryServicesTest {
             context(true, second -> {
                 assertEquals(0L, query(second, 208));
                 assertEquals(0L, query(second, 209));
-                second.getNativeAllocations$org_intelligence_thc().malloc(7);
+                second.getNativeAllocations().malloc(7);
                 assertEquals(7L, query(second, 208));
                 assertEquals(1L, query(second, 209));
                 return null;
@@ -119,7 +119,7 @@ class RuntimeMemoryServicesTest {
     @Test void zeroSizedAllocationsAndFailureHaveHonestOwnershipCounts() {
         nativePlatform();
         context(true, state -> {
-            var registry = state.getNativeAllocations$org_intelligence_thc();
+            var registry = state.getNativeAllocations();
             var zero = registry.malloc(0);
             long expectedCount = zero == ManagedAddress.Companion.nullAddress() ? 0L : 1L;
             assertEquals(0L, query(state, 208));
@@ -136,9 +136,9 @@ class RuntimeMemoryServicesTest {
     @Test void contextDisposalReleasesRecordedAllocations() {
         nativePlatform();
         var registry = context(true, state -> {
-            state.getNativeAllocations$org_intelligence_thc().malloc(37);
+            state.getNativeAllocations().malloc(37);
             assertEquals(37L, query(state, 208));
-            return state.getNativeAllocations$org_intelligence_thc();
+            return state.getNativeAllocations();
         });
         assertEquals(0L, registry.liveBytes());
         assertEquals(0, registry.liveCount());

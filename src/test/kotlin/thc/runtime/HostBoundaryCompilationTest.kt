@@ -12,7 +12,7 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.Isolated
 import thc.EntryValue
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 
 /** A valid guest target does not imply that HotSpot's shared entry stub survived. */
 @Isolated("Retires the JVM-wide Truffle call-boundary stub")

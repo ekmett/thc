@@ -15,7 +15,7 @@ import com.oracle.truffle.api.bytecode.ContinuationResult
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import thc.Language
-import thc.executionContext
+import thc.Main.executionContext
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 

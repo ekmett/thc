@@ -10,7 +10,7 @@ import com.oracle.truffle.api.frame.VirtualFrame
 import com.oracle.truffle.api.nodes.RootNode
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import thc.executionContext
+import thc.Main.executionContext
 import thc.Language
 
 class SavedGuestContinuationTest {
