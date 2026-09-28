@@ -88,15 +88,15 @@ class ArithmeticExceptionLazinessTest {
             } finally { context.leave(); }
         }
     }
-    @Test void arithmeticRaisersStillRequireOneExactUnliftedEmptyTuple() {
+    @Test void arithmeticRaiserInputsMatchGhcUnboxedUnit() {
         var empty = CoreRepresentations.parse(tuple());
         var integer = new CoreRepresentation(CoreKind.LONG, true, true, list("IntRep"));
         var state = new CoreRepresentation(CoreKind.VOID, true, true, list());
         for (var name : list("raiseDivZero#", "raiseOverflow#", "raiseUnderflow#")) {
             for (var operands : List.of(List.<CoreRepresentation>of(), list(integer), list(state), list(empty, empty)))
-                assertThrows(RuntimeFault.class, () -> CoreArithmeticExceptions.validate(name, operands, list(false), integer));
+                assertThrows(RuntimeFault.class, () -> CoreArithmeticExceptions.validateArguments(name, operands, list(false)));
             for (var flags : List.of(list(true), List.of(), list(false, false)))
-                assertThrows(RuntimeFault.class, () -> CoreArithmeticExceptions.validate(name, list(empty), flags, integer));
+                assertThrows(RuntimeFault.class, () -> CoreArithmeticExceptions.validateArguments(name, list(empty), flags));
         }
     }
     @Test void implicitPayloadIsLazyAndFailureMemoizationSharesItInBothBackends() {

@@ -1442,6 +1442,17 @@ class AuditTest(unittest.TestCase):
                 self.assertEqual(['coldPayloadDependency'], [item['id'] for item in supplied['missingGlobals']])
                 self.assertIn(payload, [item['id'] for item in supplied['reachableBindings']])
                 self.assertNotIn('aggregate-boundary', {i['code'] for i in supplied['issues']})
+                vector = dict(kind='vector', evaluated=True, primReps=['VecRep 8 Int16ElemRep'],
+                              vector=dict(lanes=8, element='Int16ElemRep'))
+                summed = dict(kind='unknown', evaluated=True, aggregate='unboxed-sum', alternatives=[LONG, LONG],
+                              primReps=['WordRep', 'WordRep'], tagSlot=0, alternativeSlots=[[1], [1]])
+                for result in (vector, summed):
+                    bottom = copy.deepcopy(good)
+                    bottom[-1]['rep'] = result
+                    function = ['lam', [dict(id='input', lifted=False, rep=LONG)], bottom,
+                                dict(rep=CLOSURE, resultRep=result)]
+                    report = run(function, [bind(payload, var(payload))], [constructor])
+                    self.assertTrue(report['accepted'], report['issues'])
                 for argument, flags in [(['void', dict(rep=dict(kind='void', primReps=[], evaluated=True))], [False]),
                                         (good[2][0], [True]),
                                         ([*lit(0), dict(rep=LONG)], [False])]:

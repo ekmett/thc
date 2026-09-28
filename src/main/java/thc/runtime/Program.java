@@ -1070,6 +1070,9 @@ public final class Program implements ExecutableProgram {
     private Expr compileVectorCase(List<Object> expr, Expr scrutinee, CoreRepresentation proof, Scope scope, boolean tail) {
         CoreRepresentations.requireInput(proof);
         List<List<Object>> alternatives = (List<List<Object>>) expr.get(3);
+        if (alternatives.isEmpty()) return new TupleCase(scrutinee,
+            vectorSlots(scope, TupleShape.flatten(proof).size(), "<empty vector case lane "),
+            new EmptyCaseResult(CoreRepresentations.expression(expr)));
         if (alternatives.size() != 1) throw new RuntimeFault("Vector case requires one default alternative");
         List<Object> only = alternatives.getFirst();
         if (!"default".equals(only.getFirst()) || !((List<?>) only.get(2)).isEmpty())
@@ -1971,9 +1974,9 @@ public final class Program implements ExecutableProgram {
         }
         if (primitive && CoreArithmeticExceptions.payload((String) fn.get(1)) != null) {
             String name = (String) fn.get(1);
-            CoreArithmeticExceptions.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreArithmeticExceptions.validateArguments(name, argumentProofs(args), flags);
             Expr operand = argument(single(args), scope, false, "argument thunk", true, false);
-            CoreArithmeticExceptions.validate(name, List.of(operand.getRepresentation()), flags, tupleProof);
+            CoreArithmeticExceptions.validateArguments(name, List.of(operand.getRepresentation()), flags);
             String id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
             GlobalBinding payload = globals.get(id);
             if (payload == null) throw new UnsupportedCore("Unresolved implicit exception binding " + id);
@@ -2203,9 +2206,12 @@ public final class Program implements ExecutableProgram {
             Expr state = compile(args.get(1), scope, false);
             Expr function = compile(args.get(2), scope, false);
             Expr[] stateArgument = {new Literal(thc.runtime.Unit.INSTANCE)};
-            Expr action = tupleProof.isAggregate() ? new TupleApplication((thc.Language) language,
-                new TupleShape(tupleProof, (thc.Language) language), function, stateArgument, false, metrics, null) :
-                new Application(function, stateArgument, false, metrics);
+            Expr action;
+            if (tupleProof.isTypedTransport()) {
+                var shape = new TupleShape(tupleProof, (thc.Language) language);
+                int[] slots = tupleProof.isVector() ? vectorSlots(scope, shape.getWidth(), "<keepAlive vector result ") : null;
+                action = new TupleApplication((thc.Language) language, shape, function, stateArgument, false, metrics, slots);
+            } else action = new Application(function, stateArgument, false, metrics);
             return new KeepAliveExpression(kept, state, action, tupleProof);
         }
         if (primitive && AtomicAddressOp.named((String) fn.get(1)) != null) {

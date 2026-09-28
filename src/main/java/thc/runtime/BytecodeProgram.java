@@ -4937,7 +4937,7 @@ public final class BytecodeProgram implements ExecutableProgram {
             fields.add(new Local(nextLocal++, "tuple field " + fields.size(), field.isLong(), field));
         scope.bindTuple((String) expr.get(2), proof, fields);
         var alternatives = (List<List<Object>>) expr.get(3);
-        if (alternatives.isEmpty() && proof.isTuple()) return new ProvenExpression(new ResultExpression((e, destination) -> {
+        if (alternatives.isEmpty()) return new ProvenExpression(new ResultExpression((e, destination) -> {
             var b = e.builder;
             b.beginBlock();
             var slots = new ArrayList<BytecodeLocal>(fields.size());
@@ -6766,9 +6766,9 @@ public final class BytecodeProgram implements ExecutableProgram {
             return vectorPrimitive(name, operands, shuffle);
         }
         if (CoreArithmeticExceptions.payload(name) != null) {
-            CoreArithmeticExceptions.validate(name, argumentProofs(args), flags, tupleProof);
+            CoreArithmeticExceptions.validateArguments(name, argumentProofs(args), flags);
             var operand = argument(args.getFirst(), scope, false, "argument thunk", true, false);
-            CoreArithmeticExceptions.validate(name, List.of(operand.proof()), flags, tupleProof);
+            CoreArithmeticExceptions.validateArguments(name, List.of(operand.proof()), flags);
             var id = Objects.requireNonNull(CoreArithmeticExceptions.payload(name));
             var payload = globals.get(id);
             if (payload == null) throw new UnsupportedCore("Unresolved implicit exception binding " + id);
@@ -7559,7 +7559,7 @@ public final class BytecodeProgram implements ExecutableProgram {
                 if (result != null) b.endStoreLocal(); b.endTryFinally();
                 if (result != null) b.emitLoadLocal(result); b.endBlock();
             };
-            if (tupleProof.isAggregate()) return tupleExpression(tupleProof, emitKeepAlive);
+            if (tupleProof.isTypedTransport()) return tupleExpression(tupleProof, emitKeepAlive);
             return new ProvenExpression(e -> emitKeepAlive.accept(e, null), evaluatedProof(tupleProof, true));
         }
         if (AtomicAddressOp.named(name) != null) {

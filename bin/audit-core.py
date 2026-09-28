@@ -2080,8 +2080,6 @@ class Audit:
                             not self.is_empty_tuple(self.expression_rep(arguments[0]))):
                         self.issue('primitive-representation', owner, path,
                                    function[1] + ': expected one exact unlifted empty tuple argument')
-                    if contains_sum(proof):
-                        self.issue('aggregate-boundary', owner, path, 'arithmetic exception sum result')
                 if function[0] == 'prim':
                     self.scalar_primitive(function[1], arguments, proof, bound, owner, path)
                     if function[1] in ('waitRead#', 'waitWrite#'):
@@ -2184,7 +2182,7 @@ class Audit:
                              flags == [actual[0]['primReps'] == ['BoxedRep (Just Lifted)'], False, True])
                     if not valid:
                         self.issue('primitive-representation', owner, path, 'keepAlive#: exact reference, State and continuation required')
-                    if (not isinstance(proof, dict) or is_vector(proof) or
+                    if (not isinstance(proof, dict) or
                             ('aggregate' not in proof and (proof.get('primReps') is None or proof.get('kind') == 'unknown'))):
                         self.issue('primitive-representation', owner, path, 'keepAlive#: exact supported result required')
                     signature = self.known_function_signature(arguments[2]) if len(arguments) == 3 else None
@@ -2623,8 +2621,9 @@ class Audit:
                     if not vector_signature_matches(result, proof):
                         self.issue('vector-shape', owner, path + '/rep', 'Exact vector primitive result representation required')
                     self.compare_shapes(result, proof, owner, path + '/rep', component=True)
-                elif is_vector(proof) and not vector_memory and not (function[0] not in ('prim', 'con') and
-                        self.supported_vector(proof, 'join-results' if isinstance(target, dict) and '_join_arity' in target else 'results')):
+                elif (is_vector(proof) and not vector_memory and not arithmetic_exception and
+                        not (function[0] == 'prim' and function[1] in ('keepAlive#', 'raise#', 'raiseIO#')) and not (function[0] not in ('prim', 'con') and
+                        self.supported_vector(proof, 'join-results' if isinstance(target, dict) and '_join_arity' in target else 'results'))):
                     self.issue('vector-boundary', owner, path, 'vector call result')
                 if enum_application or data_tag:
                     self.expression_metadata(function, owner, path + '/function')
