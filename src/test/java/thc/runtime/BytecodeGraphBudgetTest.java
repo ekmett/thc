@@ -203,6 +203,108 @@ class BytecodeGraphBudgetTest {
         return value;
     }
 
+    private static Map<String, Object> defaultSuffix(int halfDepth, List<Object> scrutinee) {
+        var input = new LinkedHashMap<>(smallDecision(1));
+        List<Object> body = variable("selected", LONG);
+        for (int i = 2 * halfDepth - 1; i >= 0; i--) {
+            String value = "value" + i, next = "next" + i;
+            body = node("app", node("prim", "+#"), List.of(variable(value, LONG), body),
+                    List.of(false, false), false, false, Map.of("rep", LONG));
+            body = node("case", variable(i == 0 ? "list" : "next" + (i - 1), DATA), "link" + i,
+                    List.of(node("data", "Link", List.of(value, next), body,
+                            Map.of("binders", List.of(binder(value, LONG, false), binder(next, DATA, true))))),
+                    Map.of("rep", LONG, "binder", binder("link" + i, DATA, true)));
+            if (i == halfDepth) body = node("case", scrutinee, "selected",
+                    List.of(node("default", null, List.of(), body)),
+                    Map.of("rep", LONG, "binder", binder("selected", LONG, false)));
+        }
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        lambda.set(2, body); entry.put("expr", lambda); input.put("bindings", List.of(entry));
+        return input;
+    }
+
+    private static Map<String, Object> broadDefaultSuffix(int depth) {
+        var input = new LinkedHashMap<>(smallDecision(depth));
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var alternatives = (List<List<Object>>) ((List<Object>) lambda.get(2)).get(3);
+        var part = (List<Object>) alternatives.getFirst().get(3);
+        List<Object> prefix = number(0), suffix = variable("selected", LONG);
+        for (int i = 0; i < 2; i++) {
+            prefix = node("app", node("prim", "+#"), List.of(part, prefix), List.of(false, false), false, false, Map.of("rep", LONG));
+            suffix = node("app", node("prim", "+#"), List.of(part, suffix), List.of(false, false), false, false, Map.of("rep", LONG));
+        }
+        lambda.set(2, node("case", prefix, "selected", List.of(node("default", null, List.of(), suffix)),
+                Map.of("rep", LONG, "binder", binder("selected", LONG, false))));
+        entry.put("expr", lambda); input.put("bindings", List.of(entry));
+        return input;
+    }
+
+    @Test void defaultSuffixUsesTheExistingFiniteTransportWithoutReplayingItsScrutinee() throws Exception {
+        var input = defaultSuffix(24, afterTake("prefix", "before", variable("selector", LONG), LONG));
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        lambda.set(1, List.of(binder("selector", LONG, false), binder("list", DATA, true), binder("prefix", MUTABLE, false)));
+        lambda.set(3, Map.of("rep", CLOSURE, "resultRep", LONG, "entryStrict", List.of(false, false, false)));
+        entry.put("expr", lambda); input.put("bindings", List.of(entry)); constructors(input, tupleConstructor("Pair", 2));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input, true); var target = program.entryTarget("entry");
+                var root = (BytecodeRoot) target.getRootNode(); var original = instructions(root);
+                assertEquals(1, root.prepareGraphBudgetRetry(0), "transport control, not a synthetic compiler failure");
+                root.getRootNodes().ensureSourceInformation(); assertEquals(original, instructions(root));
+                var cloneMethod = root.getClass().getDeclaredMethod("cloneUninitialized"); cloneMethod.setAccessible(true);
+                var clone = (BytecodeRoot) cloneMethod.invoke(root);
+                assertEquals(1, clone.getGraphBudgetGeneration()); assertEquals(original, instructions(clone));
+                assertTrue(compile(target)); bypass(target); assertEquals(0, entries(program));
+                var prefix = new ManagedMVar(); assertTrue(prefix.tryPut(new Object()));
+                assertEquals(65L, Calls.target(target, new Object[]{0L, 17L, chain(program, 48), prefix}));
+                assertTrue(prefix.isEmpty()); assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertEquals(original, instructions(root)); assertSame(target, program.entryTarget("entry"));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void originalTargetRecoversARealDefaultSuffixGraphBeforeAnyGuestCall() throws Exception {
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, broadDefaultSuffix(96));
+                var target = program.entryTarget("entry"); var root = (BytecodeRoot) target.getRootNode();
+                var original = instructions(root);
+                assertEquals(0, root.getGraphBudgetGeneration()); assertEquals(0, entries(program));
+                assertTrue(compile(target));
+                assertEquals(1, root.getGraphBudgetGeneration(), "only the real compiler bailout selects the suffix");
+                assertEquals(0, entries(program)); assertEquals(original, instructions(root));
+                bypass(target);
+                assertEquals(384L, Calls.target(target, new Object[]{0L, 17L, chain(program, 96)}));
+                assertEquals(1, entries(program)); assertTrue(valid(target));
+                assertSame(target, program.entryTarget("entry")); assertEquals(1, root.prepareGraphBudgetRetry(1));
+            } finally { context.leave(); }
+        }
+    }
+
+    @Test void defaultSuffixRequiresALargeBodyNotJustALargeScrutinee() {
+        var input = broadDefaultSuffix(24);
+        var entry = new LinkedHashMap<>(((List<Map<String, Object>>) input.get("bindings")).getFirst());
+        var lambda = new ArrayList<>((List<Object>) entry.get("expr"));
+        var expression = new ArrayList<>((List<Object>) lambda.get(2));
+        expression.set(3, List.of(node("default", null, List.of(), number(73))));
+        lambda.set(2, expression); entry.put("expr", lambda); input.put("bindings", List.of(entry));
+        try (var context = context()) {
+            context.initialize("thc"); context.enter();
+            try {
+                var language = TruffleLanguage.LanguageReference.create(Language.class).get(null);
+                var program = new BytecodeProgram(language, input); var root = (BytecodeRoot) program.entryTarget("entry").getRootNode();
+                assertEquals(0, root.prepareGraphBudgetRetry(0)); assertEquals(0, entries(program));
+            } finally { context.leave(); }
+        }
+    }
+
     @Test void smallIntegralCaseRecoveryPreservesAllArmsAndTheOriginalTarget() throws Exception {
         try (var context = context()) {
             context.initialize("thc"); context.enter();
