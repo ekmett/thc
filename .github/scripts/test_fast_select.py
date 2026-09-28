@@ -1308,10 +1308,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_array_core_helper_selects_all_consuming_suites(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ArrayCoreEvidence.kt"]
         consumers = set()
-        for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
+        for path in (self.root / "src/test").glob("*/thc/runtime/*"):
+            if path.suffix not in (".kt", ".java"):
+                continue
             source = path.read_text()
-            if path.name != "ArrayCoreEvidence.kt" and "ArrayCoreEvidence(" in source:
-                consumers.update(select.junit_info(source)[0])
+            if path.stem != "ArrayCoreEvidence" and "ArrayCoreEvidence(" in source:
+                consumers.update(select.junit_info(source, java=path.suffix == ".java")[0])
         self.assertEqual(45, len(consumers))
         self.assertIn("thc.runtime.SumResultTest", consumers)
         self.assertIn("thc.runtime.TupleInputNativeTest", consumers)
@@ -1349,10 +1351,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_stack_info_layout_helper_selects_all_consumers(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ManagedStackInfoImageTest.kt"]
         consumers = set()
-        for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
+        for path in (self.root / "src/test").glob("*/thc/runtime/*"):
+            if path.suffix not in (".kt", ".java"):
+                continue
             source = path.read_text()
             if "StackInfoTestLayout" in source:
-                consumers.update(select.junit_info(source)[0])
+                consumers.update(select.junit_info(source, java=path.suffix == ".java")[0])
         self.assertEqual({"thc.runtime.ManagedStackInfoImageTest", "thc.runtime.OriginalStackInfoCallTest",
                           "thc.runtime.OriginalStackDecoderCallTest", "thc.runtime.RtsFlagsTest",
                           "thc.runtime.ReturnedForeignPointerTest"}, consumers)
@@ -1362,10 +1366,12 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
     def test_thread_inventory_evidence_helper_selects_all_consumers(self):
         group = self.policy["owners"]["src/test/kotlin/thc/runtime/ThreadInventoryCoreEvidence.kt"]
         consumers = set()
-        for path in (self.root / "src/test/kotlin/thc/runtime").glob("*.kt"):
+        for path in (self.root / "src/test").glob("*/thc/runtime/*"):
+            if path.suffix not in (".kt", ".java"):
+                continue
             source = path.read_text()
             if "ThreadInventoryCoreEvidence" in source:
-                consumers.update(select.junit_info(source)[0])
+                consumers.update(select.junit_info(source, java=path.suffix == ".java")[0])
         self.assertIn("thc.runtime.ProcessSignalsTest", consumers)
         self.assertEqual(consumers, set(group["junit"]))
         self.assertEqual([], group["python"])
@@ -1520,7 +1526,7 @@ class PrimitiveFamilyPolicyTest(unittest.TestCase):
                            "CompactImageOp", "CompactImageExpression", "CoreStablePointers", "StablePointerOp",
                            "MakeStablePointer", "DereferenceStablePointer", "EqualStablePointers", "FreeStablePointer",
                            "ManagedWeaks", "WeakResult", "WeakExpression", "WeakOp", "MainThreadWeakKey",
-                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "AtomicIntArrayOp", "AtomicIntArrayExpression")},
+                           "AstStackScope", "AstStackSpill", "AstStackContinuation", "AstChildSuspension", "AstStackKt", "ManagedSmallArray", "SmallArrayStorage", "SmallArrayOp", "ManagedMutVar", "ModifiedMutVar", "MutVarModifySite", "MutVarOp", "ManagedNativeAllocations", "NativeEventWait", "NativeEpoll", "AtomicIntArrayOp", "AtomicIntArrayExpression")},
                          {path for path in self.families if path.startswith("src/main/java/")})
 
     def test_file_and_stdio_owners_keep_native_and_lifecycle_controls(self):

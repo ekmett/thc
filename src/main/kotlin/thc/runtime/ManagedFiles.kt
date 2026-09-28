@@ -1217,7 +1217,7 @@ internal class ManagedFiles(private val env: TruffleLanguage.Env, private val th
     }
 
     private fun awaitReady(entry: Descriptor, fd: Long, writing: Boolean, milliseconds: Long,
-                           node: Node?, beforeBlock: (() -> Unit)? = null): Int {
+                           node: Node?, beforeBlock: Runnable? = null): Int {
         val native = synchronized(this) {
             if (disposed || entry.closed || descriptors[fd] !== entry) return -2
             if (entry.owner.readiness == Readiness.REGULAR_FILE) return 1
