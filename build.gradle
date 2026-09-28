@@ -64,7 +64,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     add(polyglotDemoRuntime.name, "org.graalvm.polyglot:js:$graalVersion")
 }
-if (windowsHost) apply(from: "gradle/windows-sulong.gradle")
+apply(from: "gradle/windows-sulong.gradle")
 apply(from: "gradle/bytecode-metadata.gradle")
 apply(from: "gradle/java-build-tests.gradle")
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
