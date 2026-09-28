@@ -33,8 +33,10 @@ primitive THC slots; the argument array at the Truffle interop boundary is
 still required by that API.
 
 Safety remains attached to each call site, independently of the source/arity
-cache. A `safe` call may re-enter an exposed managed Haskell entry; an `unsafe`
-call rejects that entry before creating a guest thread or changing its mask.
+cache. The safe transitions and reverse callbacks described here require platform
+hosting; Loom rejects them. Unsafe imports remain subject to the other language's
+virtual-thread access rules. In platform mode, a `safe` call may re-enter an exposed
+managed Haskell entry; an `unsafe` call rejects that entry before creating a guest thread or changing its mask.
 The lower-level `THC.Polyglot` operations are safe. Both backends save the exact
 typed result before polling for a queued async exception, so continuation resume
 does not repeat the foreign effect. Calls remain entered on the same carrier;

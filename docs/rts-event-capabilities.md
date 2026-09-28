@@ -15,17 +15,20 @@ context-local logical count. The original public Haskell wrapper retains its
 nonpositive-`Int` rejection. Direct zero or noncanonical foreign carriers also
 reject without changing the count. The `enabled_capabilities` read-only Word32
 data label observes the logical count; its ownership and address restrictions
-are unchanged. Updates and registry assignment are synchronized. A shrink
-normalizes retained live and finished guest thread capability indices modulo
-the new count. Queries are snapshots, not a transaction with a later query.
+are unchanged. Updates and registry assignment are synchronized. Platform hosting
+normalizes retained live and finished capability indices on shrink. Loom normalizes
+parked and queued routes immediately and mounted routes when they unmount; HEC
+workers are created on demand. Queries are snapshots, not a transaction with a
+later query.
 
-Ordinary new carriers share logical capabilities round-robin. `forkOn#` reduces
+Ordinary platform threads receive logical capabilities round-robin; unmounted,
+unlocked Loom threads can migrate between HECs. `forkOn#` reduces
 its request modulo the logical count, then maps that capability modulo the
 immutable eligible CPU count for its best-effort native affinity request.
-Changing the count does not repin existing carriers, change their historical
-affinity-acceptance report, create CPUs, resize JVM/compiler/GC pools, or provide
-GHC `-N` scheduling. Safe completion publishes the new count before an enabled
-async exception poll; resumption does not replay the setter. AST async capture
+Platform count changes do not repin existing carriers or change their initial
+affinity-acceptance report. Neither mode creates CPUs, resizes JVM/compiler/GC
+pools, or supplies GHC `-N` scheduling. Safe completion publishes the new count
+before an enabled async exception poll; resumption does not replay the setter. AST async capture
 remains explicitly opt-in and bytecode remains enabled by default.
 
 The following first-writer shared CAF stores use the existing context-owned
@@ -83,8 +86,8 @@ unregisters its logical identity before its number can be reused. Context shutdo
 writes GHC's eventfd wake value `0xff` and control-pipe die byte `0xfe`, then clears
 the registrations. Ordinary embedding streams cannot acquire this authority.
 The existing original process-signal dispatcher remains the only signal delivery
-path. Capability count changes do not create JVM schedulers or restart event
-manager threads automatically.
+path and requires platform hosting. Capability count changes update Loom HEC
+routing but do not reconfigure event-manager threads automatically.
 
 `cabal run exe:thc-fixtures -- rts-event` recovers the prerequisite and descriptor declarations from
 installed full Core, specializes typed consumers, records the original interface

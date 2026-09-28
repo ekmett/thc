@@ -58,16 +58,16 @@ public final class GuestThreadOps {
         CountDownLatch ready = new CountDownLatch(1);
         AtomicReference<Throwable> registrationFailure = new AtomicReference<>();
         AtomicReference<GuestThreadId> identity = new AtomicReference<>();
-        Thread child = state.getEnv().newTruffleThreadBuilder(() -> {
+        Thread child = threads.newThread(state.getEnv(), () -> {
             boolean registered = false;
             GuestThreadStatus outcome = GuestThreadStatus.FINISHED;
             AutoCloseable affinity = null;
             try {
                 threads.enterCurrent(inheritedMask, true, asyncEnabled, capability);
                 registered = true;
-                affinity = capability == null ? threads.getCpuAffinity().resetCurrent() : threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
+                if (!threads.isLoom()) affinity = capability == null ? threads.getCpuAffinity().resetCurrent() : threads.getCpuAffinity().bindCurrent(threads.currentIdentity().getCapability());
                 GuestThreadId current = threads.currentIdentity();
-                current.setAffinityApplied(capability != null && affinity != null);
+                if (!threads.isLoom()) current.setAffinityApplied(capability != null && affinity != null);
                 identity.set(current);
                 ready.countDown();
                 root.call(action);
@@ -89,9 +89,14 @@ public final class GuestThreadOps {
                     catch (Throwable failure) { GuestThreadOps.<RuntimeException, Object>rethrow(failure); }
                 }
             }
-        }).virtual(false).build();
+        }, capability, node);
+        var handler = child.getUncaughtExceptionHandler();
+        child.setUncaughtExceptionHandler((thread, failure) -> {
+            if (identity.get() == null) { registrationFailure.set(failure); ready.countDown(); }
+            if (handler != null) handler.uncaughtException(thread, failure);
+        });
         // pthreads inherit their creator's mask. Broaden even across Truffle entry.
-        try (AutoCloseable ignored = threads.getCpuAffinity().resetCurrent()) { child.start(); }
+        try { threads.startThread(child); }
         catch (Throwable failure) { return GuestThreadOps.<RuntimeException, GuestThreadId>rethrow(failure); }
         TruffleSafepoint.setBlockedThreadInterruptibleFunction(node, AWAIT_REGISTRATION, ready);
         Throwable failure = registrationFailure.get();

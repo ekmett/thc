@@ -3,6 +3,8 @@
 
 # Standalone process signals
 
+This bridge requires platform hosting; Loom rejects handler installation.
+
 On Linux x86_64, both backends translate original `stg_sig_install`
 for SIGHUP, SIGINT, SIGQUIT, SIGUSR1, SIGUSR2, SIGTERM, SIGXCPU and SIGXFSZ.
 Tasty installs six of these during ordinary startup. HUP/INT/QUIT/TERM are installed
