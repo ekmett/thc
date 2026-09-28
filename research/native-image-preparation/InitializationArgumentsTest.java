@@ -29,6 +29,11 @@ public final class InitializationArgumentsTest {
         for (String file : List.of("prepared-image.sh", "ClassInitializationInventory.java")) {
             Files.copy(recipe.resolve(file), root.resolve("recipe").resolve(file));
         }
+        Path foreign = recipe.resolve("process-identity/reachability-metadata.json");
+        if (Files.exists(foreign)) {
+            Files.createDirectories(root.resolve("recipe/process-identity"));
+            Files.copy(foreign, root.resolve("recipe/process-identity/reachability-metadata.json"));
+        }
         Files.writeString(root.resolve("scripts/native-image/pure-initialization.txt"), pure);
         Files.writeString(root.resolve("recipe/prepared-initialization.txt"), extra);
         Path compiled = root.resolve("classes");
@@ -61,9 +66,15 @@ public final class InitializationArgumentsTest {
     }
 
     private static int prepare(Path root) throws Exception {
+        return prepare(root, null);
+    }
+
+    private static int prepare(Path root, String processIdentity) throws Exception {
         var command = new ProcessBuilder("bash", root.resolve("recipe/prepared-image.sh").toString(),
             root.toString(), "prepare-only");
         command.environment().put("JAVA_HOME", javaHome.toString());
+        command.environment().remove("THC_NATIVE_IMAGE_PROCESS_IDENTITY");
+        if (processIdentity != null) command.environment().put("THC_NATIVE_IMAGE_PROCESS_IDENTITY", processIdentity);
         command.redirectErrorStream(true).redirectOutput(root.resolve("prepare.log").toFile());
         return command.start().waitFor();
     }
@@ -105,6 +116,19 @@ public final class InitializationArgumentsTest {
 
         Path invalid = fixture("invalid-manual", false, "thc.fixture.Plain\n", "thc.fixture.Tag,thc.fixture.Plain\n");
         check(prepare(invalid) == 2, "manual inventory must still reject comma-separated entries");
+
+        Path foreign = fixture("process-identity", false, "thc.fixture.Plain\n", "thc.fixture.Tag\n");
+        check(prepare(foreign, "1") == 0, "process-identity prepare failed");
+        Path foreignArgs = foreign.resolve("build/native-image/reproduction-inventory/foreign.args");
+        check(Files.exists(foreignArgs), "prepare-only must record the selected foreign-registration arguments");
+        check(Files.readString(foreignArgs).equals("\"-H:ConfigurationFileDirectories=" +
+            foreign.resolve("recipe/process-identity") + "\"\n"), "select only the process-identity configuration directory");
+        check(Files.readString(recipe.resolve("process-identity/reachability-metadata.json")).replaceAll("\\s+", "")
+            .equals("{\"foreign\":{\"downcalls\":[{\"returnType\":\"jint\",\"parameterTypes\":[]}]}}"),
+            "register precisely the observed jint() signature, no resources, upcalls or additional signatures");
+        check(prepare(foreign) == 0, "default prepare after opt-in failed");
+        check(Files.readString(foreignArgs).isEmpty(), "default preparation must clear a prior opt-in, not retain stale registration");
+        check(prepare(foreign, "true") == 2, "reject misspelled opt-in values");
         System.out.println("PASS " + checks + " initialization-argument checks; prepare-only, no image execution");
     }
 }

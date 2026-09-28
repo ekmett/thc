@@ -55,6 +55,13 @@ done < "$recipe_dir/prepared-initialization.txt"
 }
 initialization_args="$inventory_dir/prepared-initialization.args"
 printf '%s\n' "--initialize-at-build-time=$initialization" > "$initialization_args"
+foreign_args="$inventory_dir/foreign.args"
+: > "$foreign_args"
+if [[ -n "${THC_NATIVE_IMAGE_PROCESS_IDENTITY:-}" ]]; then
+    [[ "$THC_NATIVE_IMAGE_PROCESS_IDENTITY" == 1 ]] || exit 2
+    test -f "$recipe_dir/process-identity/reachability-metadata.json"
+    printf '"-H:ConfigurationFileDirectories=%s"\n' "$recipe_dir/process-identity" > "$foreign_args"
+fi
 [[ "$mode" == prepare-only ]] && exit 0
 builder_overlays=
 if [[ -n "${THC_NATIVE_IMAGE_DEOPT_LOOP_STAMPS:-}" ]]; then
@@ -91,7 +98,7 @@ exec "$JAVA_HOME/bin/native-image" -Ob -J-Xmx8g -J-XX:ActiveProcessorCount=2 --p
     --add-modules=jdk.incubator.vector \
     --enable-native-access=ALL-UNNAMED,org.graalvm.truffle \
     --add-exports=org.graalvm.truffle.runtime/com.oracle.truffle.runtime=ALL-UNNAMED \
-    "@$initialization_args" \
+    "@$initialization_args" "@$foreign_args" \
     -H:+UnlockExperimentalVMOptions -H:+PrintCanonicalGraphStrings \
     -H:DumpPath="${THC_NATIVE_IMAGE_DUMP_PATH:-$repo_dir/build/native-image/graphs/reproduction}" \
     "${diagnostics[@]}" -H:-UnlockExperimentalVMOptions \

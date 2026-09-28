@@ -1,0 +1,7 @@
+{
+  "foreign": {
+    "downcalls": [
+      {"returnType": "jint", "parameterTypes": []}
+    ]
+  }
+}
