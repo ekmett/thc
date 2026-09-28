@@ -23,7 +23,6 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
     private final Map<CoreUnitDirectory.ModuleRecord,Map<String,Object>> admittedModules = new HashMap<>();
     private final Map<CoreUnitDirectory.ModuleRecord,CoreModuleAdmission> admissions = new HashMap<>();
     private final Map<String,List<PackageScalarAdmission>> packageProvenance = new HashMap<>();
-    private final Set<CoreModuleAdmission> linkedAdmissions = Collections.newSetFromMap(new IdentityHashMap<>());
     private final List<CoreJsonIndex> consumerSources = new ArrayList<>();
     private final CoreJsonLoadingStatistics consumerStatistics = new CoreJsonLoadingStatistics();
     private final List<Map<String,Object>> consumers = new ArrayList<>();
@@ -163,7 +162,16 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         if (consumer != null) admitted = consumerAdmission(consumer);
         else { var module = directory.owner(id); if (module == null) throw new IllegalStateException("Missing Core module owner: " + id); admitted = admission(module); }
         var merger = new CoreModules.Merger(availableModules); merger.addSelected(admitted, List.of(binding));
-        if (admitted.getPackageLink() != null) packageProvenance((String) admitted.getModule().get("unit")).forEach(merger::addPackageProvenance);
+        // Optimized Core can inline an import into another package's binding.
+        // Resolve that package's compiled component from cold metadata, without
+        // demanding the source Haskell wrapper or any unrelated binding body.
+        var foreignUnits = new LinkedHashSet<String>();
+        if (admitted.getPackageLink() != null) foreignUnits.add((String) admitted.getModule().get("unit"));
+        for (var call : PackageNativeArchive.calls(binding)) {
+            if (call.get("target") instanceof Map<?, ?> target && "static".equals(target.get("kind"))
+                    && target.get("unit") instanceof String unit) foreignUnits.add(unit);
+        }
+        for (String unit : foreignUnits) packageProvenance(unit).forEach(merger::addPackageProvenance);
         var provenance = CoreCapiProvenance.supplement(merger.finish(), binding, this::capiProvenance);
         var linked = new LinkedHashMap<>(CoreModules.demanded(provenance, id, demand, this::bridge));
         linked.put("instrument", !Objects.equals(input.get("instrument"), false)); linked.put("diagnosticUnsupported", Objects.equals(input.get("diagnosticUnsupported"), true));
@@ -172,9 +180,7 @@ public final class CoreUnitProgram implements ExecutableProgram, AutoCloseable {
         // Another binding may demand a new original CAPI owner. The context
         // registry checks exact identity and links the component only once.
         for (var link : (List<ForeignBitcode>) linked.get("foreignLinks")) owner.cbits().link(link);
-        if (linkedAdmissions.add(admitted)) {
-            for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.getPackageCbits().link(link);
-        }
+        for (var link : (List<PackageScalarLink>) linked.get("packageScalarLinks")) owner.getPackageCbits().link(link);
         return backend.equals("ast") ? new Program(language, linked, async, false) : new BytecodeProgram(language, linked, async);
     }
     public List<ManagedExportAdmission> registerStartup() {

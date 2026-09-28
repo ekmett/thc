@@ -57,6 +57,7 @@ data InstalledContext = InstalledContext
   { installedHelper :: FilePath, installedLibdir :: FilePath
   , installedPackageTool :: FilePath, installedGlobalDb :: FilePath
   , installedDatabases :: [FilePath], installedCompiler :: Value
+  , installedGhc :: FilePath
   } deriving (Eq, Show)
 
 data InstalledUnit = InstalledUnit
@@ -118,7 +119,7 @@ installedContext ghc pkg helper databases compiler = do
   dbs <- mapM canonicalizePath databases
   unless (length dbs == length (nub dbs) && global `notElem` dbs)
     (fail "duplicate selected installed-Core package database")
-  pure (InstalledContext helper libdir pkg global dbs compiler)
+  pure (InstalledContext helper libdir pkg global dbs compiler ghc)
 
 -- | Cabal's parsed registration is authoritative, including hidden modules and
 -- exact reexport providers. Do not invent bodies for native-only/facade units.
