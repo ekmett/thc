@@ -82,7 +82,7 @@ class ConfigurationTest(unittest.TestCase):
                 '.github/workflows/performance.yml': b'workflow',
             }
             for name in ('object-sizes.py', 'ObjectSizes.java', 'ObjectSizesAgent.java'):
-                files['tools/object-sizes/' + name] = b'size tool'
+                files['src/diagnostics/object-sizes/' + name] = b'size tool'
             for name, content in files.items():
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)

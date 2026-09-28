@@ -161,7 +161,7 @@ def freeze(out, baseline, selection):
         copy_file(root / 'tools' / name, frozen / 'helpers' / name)
     copy_file(root / '.github/workflows/performance.yml', frozen / 'helpers/performance.yml')
     for name in ('object-sizes.py', 'ObjectSizes.java', 'ObjectSizesAgent.java'):
-        copy_file(root / 'tools/object-sizes' / name, frozen / 'helpers' / name)
+        copy_file(root / 'src/diagnostics/object-sizes' / name, frozen / 'helpers' / name)
     shutil.copytree(root / 'build/test-results/test', out / 'test-results/default')
     records = [{'path': str(path.relative_to(frozen)), 'sha256': sha(path)}
                for path in sorted(frozen.rglob('*')) if path.is_file()]
