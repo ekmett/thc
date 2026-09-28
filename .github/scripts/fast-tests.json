@@ -19,7 +19,7 @@
     "src/main/kotlin/thc/runtime/NativeEpoll.kt": {
       "junit": ["thc.runtime.NativeEpollTest"], "python": []
     },
-    "src/main/kotlin/thc/runtime/NativeEventWait.kt": {
+    "src/main/java/thc/runtime/NativeEventWait.java": {
       "junit": ["thc.runtime.NativeEventWaitTest"], "python": []
     },
     "src/main/java/thc/runtime/RubbishLiterals.java": {

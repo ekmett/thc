@@ -4,7 +4,7 @@
     "src/main/kotlin/thc/runtime/Program.kt",
     "src/main/kotlin/thc/runtime/DataValues.kt",
     "src/main/kotlin/thc/runtime/CoreVectors.kt",
-    "src/main/kotlin/thc/runtime/BytecodeProgram.kt",
+    "src/main/java/thc/runtime/BytecodeProgram.java",
     "src/main/java/thc/runtime/BytecodeRoot.java"
   ],
   "externalBindings": [],

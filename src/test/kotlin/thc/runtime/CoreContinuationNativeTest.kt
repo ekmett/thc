@@ -701,7 +701,7 @@ class CoreContinuationNativeTest {
                 assertSame(child, cell.value)
                 assertThrows(ThunkSuspended::class.java) { driver.force(child) }
                 val answer = driver.force(child)
-                updateForcedCell(cell, child, answer) // A second force publishes through the shared RecCell.
+                cell.updateForced(child, answer) // A second force publishes through the shared RecCell.
                 assertSame(answer, cell.value)
                 assertSame(answer, driver.force(caller))
                 assertEquals(2, caller.state)
