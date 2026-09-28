@@ -269,6 +269,11 @@ class PackageNativeVariantsTest(unittest.TestCase):
         call['declaredType'] = call['normalizedType'] = declaration['normalizedType']['arguments'][0]
         self.assertEqual(set(), core_package_manifest.package_scalar_link(ordinary)[1])
         self.assertFalse(audit.Audit([('ordinary', ordinary)], capabilities).run([])['accepted'])
+        retained = json.loads(json.dumps(ordinary))
+        retained['module'] = 'Internal'
+        del retained['staticForeignImports']
+        self.assertEqual(set(), core_package_manifest.package_scalar_link(retained)[1],
+                         'unit-wide link attachment cannot prove a finalizer')
 
         # Removing the finalizer role preserves ordinary call admission.
         unmarked = json.loads(json.dumps(ordinary))
@@ -284,7 +289,8 @@ class PackageNativeVariantsTest(unittest.TestCase):
         mismatch['staticForeignImports']['addresses'][0]['symbol'] = 'different_finalizer'
         with TemporaryDirectory() as directory:
             for index, (modules, accepted) in enumerate((([ordinary], False), ([ordinary, mismatch], False),
-                    ([ordinary, typed], True), ([typed, ordinary], True))):
+                    ([ordinary, typed], True), ([typed, ordinary], True), ([retained], False),
+                    ([retained, mismatch], False), ([retained, typed], True), ([typed, retained], True))):
                 inputs = [(str(position), module) for position, module in enumerate(modules)]
                 self.assertEqual(accepted, audit.Audit(inputs, capabilities).run([])['accepted'])
                 with audit.AuditStore(Path(directory) / (str(index) + '.sqlite'), {}) as store:

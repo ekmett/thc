@@ -91,6 +91,40 @@ class PackageFinalizersTest {
             assertEquals(1, ((List<?>) CoreModules.merge(modules).get("packageScalarLinks")).size());
     }
 
+    @Test void retainedUnitLinkNeedsItsDefiningFinalizerProofBeforeAssembly() throws Exception {
+        // The retained zlib Internal module is schema 1 with the full component
+        // but no source import proof; Stream owns the schema-2 typed CLabels.
+        var original = module(address(type(pointer, io)));
+        var proof = (Map<?,?>) original.get("staticForeignImports");
+        var foreign = with((Map<?,?>) proof.get("expectedForeign"), "stubs", map("header", "",
+            "source", "void retained_capi_wrapper(void *p) { cleanup(p); }", "initializers", List.of(), "finalizers", List.of()));
+        var streamProof = with(proof, "expectedForeign", foreign);
+        var stream = with(original, "schema", 2L, "foreign", foreign,
+            "staticForeignImports", streamProof, "staticForeignImportStubs", streamProof);
+        var link = (Map<?,?>) original.get("packageNativeLink");
+        String callEntry = "thc_native_" + "a".repeat(64) + "_1";
+        var abi = new ArrayList<Object>((List<?>) link.get("abi"));
+        abi.add(map("symbol", "version", "entry", callEntry, "arguments", List.of(), "result", "Int32Rep",
+            "convention", "ccall", "safety", "unsafe"));
+        var shared = with(link, "abi", abi);
+        stream = with(stream, "packageNativeLink", shared);
+        var internal = with(without(original, "staticForeignImports"), "module", "Internal", "packageNativeLink", shared);
+
+        var consumer = new CoreModuleAdmission(internal, id -> { throw new AssertionError("No exports"); });
+        assertEquals(Set.of(callEntry), consumer.getPackageLink().getProved(), "link attachment cannot prove a finalizer");
+        var merger = new CoreModules.Merger();
+        merger.addSelected(consumer, List.of());
+        assertThrows(IllegalArgumentException.class, merger::finish, "missing typed CLabel authority must still fail");
+        var defining = new CoreModuleAdmission(stream, id -> { throw new AssertionError("No exports"); });
+        assertEquals(Set.of("thc_native_" + "a".repeat(64) + "_0"), defining.getPackageLink().getProved());
+        merger.addPackageProvenance(defining.getPackageLink());
+        assertEquals(1, ((List<?>) merger.finish().get("packageScalarLinks")).size());
+
+        var retainedUnprovedStubs = with(internal, "schema", 2L, "foreign", foreign, "staticForeignImportStubs", streamProof);
+        assertThrows(IllegalArgumentException.class, () -> PackageScalarLinks.read(retainedUnprovedStubs),
+            "retained import obligations cannot use the ordinary link-only path");
+    }
+
     @Test void callbackMetadataCannotReplaceNormalizedNominalTypeOrOwnership() throws Exception {
         assertEquals(Set.of("cleanup"), PackageFinalizers.declarations(module(address(type(pointer, io)))));
         var integer = named("GHC.Internal.Int", "Int32");
