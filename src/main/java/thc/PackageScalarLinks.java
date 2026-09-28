@@ -166,8 +166,24 @@ public final class PackageScalarLinks {
         for (var item : abi) if (available == null || available.contains(item.entry())) selectedAbi.add(item);
         var link = new PackageScalarLink(unit, target, componentHash, bitcodeHash, bytes, Collections.unmodifiableList(selectedAbi), format, finalizers, nativeLibrary);
         if (nativeLink && !module.containsKey("staticForeignImports")) {
-            check(!module.containsKey("foreign") && !module.containsKey("staticForeignImportStubs"), "foreign products lack import provenance");
-            return new PackageScalarAdmission(link, Set.of());
+            check(!module.containsKey("staticForeignImportStubs") && finalizers.isEmpty(), "unproved retained import obligations");
+            if (module.containsKey("foreign")) {
+                var product = record(module.get("foreign"), "schema execution stubs files");
+                check(version(product.get("schema"), 1) && Objects.equals(product.get("execution"), "not-linked") &&
+                    Objects.equals(product.get("files"), List.of()), "foreign product");
+                if (product.get("stubs") != null) {
+                    var stubs = record(product.get("stubs"), "header source initializers finalizers");
+                    check(Objects.equals(stubs.get("header"), "") && stubs.get("source") instanceof String &&
+                        Objects.equals(stubs.get("initializers"), List.of()) && Objects.equals(stubs.get("finalizers"), List.of()),
+                        "foreign registration requires its managed protocol");
+                }
+            }
+            // The compiled component is the callable ABI contract. Installed
+            // FCallIds need no recreated source-import annotations; each reached
+            // call is still checked against this ABI by CorePackageScalarForeign.
+            var admitted = new HashSet<String>();
+            for (var signature : selectedAbi) admitted.add(signature.entry());
+            return new PackageScalarAdmission(link, admitted);
         }
         boolean addressProof = module.get("staticForeignImports") instanceof Map<?,?> m && version(m.get("schema"), 2);
         var proof = record(module.get("staticForeignImports"), "schema scope execution profile unit module status wordBits expectedForeign imports expectedCalls" + (addressProof ? " addresses" : ""));

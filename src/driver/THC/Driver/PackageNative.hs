@@ -16,6 +16,7 @@
 module THC.Driver.PackageNative
   ( captureNativeObject, captureNativeComponent, capturePackageNative, finishPackageNative
   , finishPackageNativeWithDependencies
+  , linkInstalledNative, installedNativeSignatures
   , nativeSignatures, nativeFinalizers, archiveNativeModule, archiveNativeModules, nativeWrapperSource, nativeCompilerArguments, nativeObjectOwned
   ) where
 
@@ -43,6 +44,83 @@ import THC.Driver.NativeDependencies (COnlyProduct, cOnlyProductProof, cOnlyProd
 
 -- (original emitted symbol, convention, safety, semantic carriers, result)
 type Signature = (String, String, String, [String], String)
+
+-- Installed interfaces often predate retained source-import annotations. Their
+-- FCallIds still carry the exact callable ABI. Unlifted heap pointers do not,
+-- by themselves, distinguish ByteArray# from MutableByteArray#.
+installedNativeSignatures :: String -> Value -> Either String [Signature]
+installedNativeSignatures unit value
+  | member value "staticForeignImports" /= Nothing = nativeSignatures unit [value]
+  | otherwise = pure . sort . nub $
+      [signature | call <- calls value, owned unit call,
+        Just signature <- [direct call], supportedSignature signature]
+  where
+    direct call = do
+      target <- member call "target"
+      symbol <- either (const Nothing) Just (field target "symbol")
+      convention <- either (const Nothing) Just (field call "convention")
+      safety <- either (const Nothing) Just (field call "safety")
+      arguments <- either (const Nothing) Just (field call "argumentReps")
+      result <- member call "resultRep"
+      components <- either (const Nothing) Just (field result "components")
+      carriers <- case member call "argumentTypes" of
+        Nothing -> mapM scalar arguments
+        Just raw -> do
+          types <- either (const Nothing) Just (parseValue raw)
+          if length types == length arguments then mapM typed (zip types arguments) else Nothing
+      returns <- mapM scalar components
+      returned <- case returns of
+        ["void"] -> Just "void"
+        ["void",r] | scalarCarrier r -> Just r
+        _ -> Nothing
+      if member call "schema" == Just (toJSON (if member call "argumentTypes" == Nothing then 1 else 2::Int)) &&
+          member target "kind" == Just "static" && member target "isFunction" == Just (Bool True) &&
+          identifier symbol && convention `elem` ["ccall","capi"] &&
+          member call "arity" == Just (toJSON (length arguments)) &&
+          member call "suppliedArity" == Just (toJSON (length arguments)) &&
+          not (null carriers) && last carriers == "void" && all inputCarrier (init carriers) &&
+          member result "aggregate" == Just "unboxed-tuple"
+        then Just (symbol,convention,safety,init carriers,returned) else Nothing
+    scalar rep = case member rep "primReps" >>= either (const Nothing) Just . parseValue of
+      Just [] | member rep "kind" == Just "void" -> Just "void"
+      Just [r] | scalarCarrier r -> Just r
+      _ -> Nothing
+    typed (Null,rep) = scalar rep
+    typed (String kind,rep) | kind `elem` ["ByteArray#","MutableByteArray#"],
+      member rep "kind" == Just "object",
+      member rep "primReps" == Just (toJSON (["BoxedRep (Just Unlifted)"]::[String])) = Just (T.unpack kind)
+    typed _ = Nothing
+
+-- One component per installed unit, never one differently linked component per
+-- module. Source products are reused only when their ordinary C obligations can
+-- be linked; foreign exports/registration remain owned by the managed runtime.
+linkInstalledNative :: FilePath -> FilePath -> [String] -> FilePath -> String ->
+  [(String,BS.ByteString)] -> IO [(String,BS.ByteString)]
+linkInstalledNative compiler libdir arguments directory unit modules = do
+  decoded <- mapM (either fail pure . eitherDecodeStrict' . snd) modules
+  -- Do not splice a second component into an already acquired unit.
+  let acquired = any (\value -> member value "packageNativeLink" /= Nothing) decoded
+      eligible value = not acquired && member value "unit" == Just (toJSON unit) &&
+        all (\key -> member value key == Nothing) ["packageNativeLink","staticForeignExports","staticForeignExportRegistration"] &&
+        case member value "foreign" >>= (`member` "stubs") of
+          Nothing -> True
+          Just Null -> True
+          Just stubs -> member stubs "header" == Just "" &&
+            all (\key -> member stubs key == Just (toJSON ([]::[Value]))) ["initializers","finalizers"]
+      selected = [(name,value) | ((name,_),value) <- zip modules decoded, eligible value]
+  perModule <- mapM (either fail pure . installedNativeSignatures unit . snd) selected
+  let signatures = sort (nub (concat perModule))
+  if null signatures then pure modules else do
+    createDirectoryIfMissing True directory
+    root <- canonicalizePath directory
+    configured <- either fail pure (nativeCompilerArguments arguments)
+    sources <- mapM (\((_,value),ownedSignatures) ->
+      if null ownedSignatures then pure "" else stubSource value) (zip selected perModule)
+    writeNativeWrappers compiler root (('-':'B':libdir):arguments) (('-':'B':libdir):configured)
+      unit root signatures [] sources perModule [] (const Nothing) True
+    let original = [(name,BL.toStrict (encode value)) | (name,value) <- selected]
+    linked <- finishPackageNative (root </> "pieces") root unit (Just []) original
+    pure [(name,maybe bytes id (lookup name linked)) | (name,bytes) <- modules]
 
 nativeSignatures :: String -> [Value] -> Either String [Signature]
 nativeSignatures unit modules = do
@@ -474,62 +552,80 @@ capturePackageNative repository helper libdir compiler arguments unit directory 
           pure (object ["provider" .= ("zlib-checksums-1.2.11"::String), "symbols" .= [symbol],
             "bitcode" .= bitcode,"bitcodeSha256" .= digest,"target" .= target,"inputs" .= inputs])
         else pure []
-      let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,
-            "sources" .= sources,"providers" .= providers,
-            "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers]
-          provisional = sha (BL.toStrict (encode inputIdentity))
-          makeEntries component = [(signature,"thc_native_" ++ component ++ "_" ++ show index) | (index,signature) <- zip [0::Int ..] signatures]
-          -- GHC compiles each module's CAPI stubs as its own translation unit.
-          -- Direct ccall adapters must not enter that CAPI header namespace:
-          -- GHC emits those calls independently, and a header may name struct
-          -- pointers or narrower C parameters than the emitted caller ABI.
-          -- Preserve private helpers, macros and header include boundaries.
-          -- Repeated direct ccall imports need just one component adapter.
-          compileUnits component = forM
-            [(index,convention,if convention == "capi" then source else "",entries) |
-              (index,(source,ownedSignatures)) <- zip [0::Int ..] (zip sources perModule),
-              convention <- ["ccall","capi"],
-              let earlier = concat (take index perModule),
-              let entries = [entry | entry@(signature@(_,callConvention,_,_,_),_) <- makeEntries component,
-                    callConvention == convention,
-                    signature `elem` ownedSignatures && signature `notElem` earlier],
-              not (null entries)] $ \(index,convention,source,entries) -> do
-                let output = nativeDirectory </> show index </> convention
-                createDirectoryIfMissing True output
-                wrappers <- either fail pure (nativeWrapperSource
-                  [(signature,entry,wrapperHeader symbol) | (signature@(symbol,_,_,_,_),entry) <- entries])
-                -- Direct ccall needs only the FFI scalar typedefs. Rts.h also
-                -- imports unrelated libc prototypes (FILE*, etc.), which can
-                -- conflict with GHC's otherwise valid opaque Addr# callers.
-                let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <HsFFI.h>\n"]
-                (bitcode,target,inputs) <- compileC compiler root configured output
-                  (Just (concat preamble ++ source ++ wrappers))
-                headers <- headerInputs (output </> "wrappers.c") inputs
-                pure (bitcode,target,inputs,headers)
-      createDirectoryIfMissing True nativeDirectory
-      discovered <- compileUnits provisional
-      let dependencies = [headers | (_,_,_,headers) <- discovered]
-      let component = sha (BL.toStrict (encode (inputIdentity, dependencies)))
-          entries = makeEntries component
-      compiled <- compileUnits component
-      let currentDependencies = [headers | (_,_,_,headers) <- compiled]
-          inputs = [input | (_,_,input,_) <- compiled]
-      check (currentDependencies == dependencies) "package native headers changed during acquisition"
-      target <- case nub [value | (_,value,_,_) <- compiled] of
-        [value] -> pure value
-        _ -> fail "package native wrapper targets differ"
-      linker <- tool "THC_LLVM_LINK" "llvm-link"
-      let bitcode = nativeDirectory </> "wrappers.bc"
-      _ <- command root linker ([path | (path,_,_,_) <- compiled] ++ ["-o",bitcode])
-      roots <- mapM canonicalizePath (nub [path | (flag,path) <- zip arguments (drop 1 arguments), flag `elem` ["-odir","-outputdir"]])
-      writeJson (directory </> "native.json") (object
-        ["unit" .= unit,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
-         "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
-         "finalizers" .= [entry | ((symbol,"ccall","unsafe",["AddrRep"],"void"),entry) <- entries,
-           symbol `elem` finalizers],
-         "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
-           "arguments" .= arguments',"result" .= result] |
-           ((symbol,convention,safety,arguments',result),entry) <- entries]])
+      writeNativeWrappers compiler root arguments configured unit directory signatures finalizers
+        sources perModule providers wrapperHeader False
+
+-- The adapter compiler is shared by source acquisition and installed FCallIds.
+-- Both paths carry the original declared ABI, actual CAPI source and headers.
+writeNativeWrappers :: FilePath -> FilePath -> [String] -> [String] -> String -> FilePath ->
+  [Signature] -> [String] -> [String] -> [[Signature]] -> [Value] -> (String -> Maybe String) -> Bool -> IO ()
+writeNativeWrappers compiler root arguments configured unit directory signatures finalizers sources perModule providers wrapperHeader installed = do
+  let nativeDirectory = directory </> "native"
+  let inputIdentity = object ["unit" .= unit,"compiler" .= compiler,"arguments" .= arguments,"installed" .= installed,
+        "sources" .= sources,"providers" .= providers,
+        "imports" .= map (\(a,b,c,d,e) -> toJSON (a,b,c,d,e)) signatures,"finalizers" .= finalizers]
+      provisional = sha (BL.toStrict (encode inputIdentity))
+      makeEntries component = [(signature,"thc_native_" ++ component ++ "_" ++ show index) | (index,signature) <- zip [0::Int ..] signatures]
+      -- GHC emits separate ccall prototypes. Keep different declared types of
+      -- one symbol in separate C translation units too; signedness variants
+      -- with the same native ABI do not need a retained source header.
+      insertEntry entry [] = [[entry]]
+      insertEntry entry@(signature@(symbol,_,_,_,_),_) (group:groups)
+        | any (\(other@(name,_,_,_,_),_) -> symbol == name && nativeCAbi id signature /= nativeCAbi id other) group =
+            group : insertEntry entry groups
+        | otherwise = (entry:group):groups
+      -- GHC compiles each module's CAPI stubs as its own translation unit.
+      -- Direct ccall adapters must not enter that CAPI header namespace:
+      -- GHC emits those calls independently, and a header may name struct
+      -- pointers or narrower C parameters than the emitted caller ABI.
+      -- Preserve private helpers, macros and header include boundaries.
+      -- Repeated direct ccall imports need just one component adapter.
+      compileUnits component = forM
+        [(index,variant,convention,if convention == "capi" then source else "",entries) |
+          (index,(source,ownedSignatures)) <- zip [0::Int ..] (zip sources perModule),
+          convention <- ["ccall","capi"],
+          let earlier = concat (take index perModule),
+          let selectedEntries = [entry | entry@(signature@(_,callConvention,_,_,_),_) <- makeEntries component,
+                callConvention == convention,
+                signature `elem` ownedSignatures && signature `notElem` earlier],
+          (variant,entries) <- zip [0::Int ..] (if installed then foldr insertEntry [] selectedEntries else [selectedEntries]),
+          not (null entries)] $ \(index,variant,convention,source,entries) -> do
+            let output = nativeDirectory </> show index </> convention </> if installed then show variant else ""
+            createDirectoryIfMissing True output
+            wrappers <- either fail pure (nativeWrapperSource
+              [(signature,entry,wrapperHeader symbol) | (signature@(symbol,_,_,_,_),entry) <- entries])
+            -- Direct ccall needs only the FFI scalar typedefs. Rts.h also
+            -- imports unrelated libc prototypes (FILE*, etc.), which can
+            -- conflict with GHC's otherwise valid opaque Addr# callers.
+            let preamble = ["#include <Rts.h>\n" | convention == "capi"] ++ ["#include <HsFFI.h>\n"]
+            (bitcode,target,inputs) <- compileC compiler root configured output
+              (Just (concat preamble ++ source ++ wrappers))
+            headers <- headerInputs (output </> "wrappers.c") inputs
+            pure (bitcode,target,inputs,headers)
+  createDirectoryIfMissing True nativeDirectory
+  discovered <- compileUnits provisional
+  let dependencies = [headers | (_,_,_,headers) <- discovered]
+  let component = sha (BL.toStrict (encode (inputIdentity, dependencies)))
+      entries = makeEntries component
+  compiled <- compileUnits component
+  let currentDependencies = [headers | (_,_,_,headers) <- compiled]
+      inputs = [input | (_,_,input,_) <- compiled]
+  check (currentDependencies == dependencies) "package native headers changed during acquisition"
+  target <- case nub [value | (_,value,_,_) <- compiled] of
+    [value] -> pure value
+    _ -> fail "package native wrapper targets differ"
+  linker <- tool "THC_LLVM_LINK" "llvm-link"
+  let bitcode = nativeDirectory </> "wrappers.bc"
+  _ <- command root linker ([path | (path,_,_,_) <- compiled] ++ ["-o",bitcode])
+  roots <- mapM canonicalizePath (nub [path | (flag,path) <- zip arguments (drop 1 arguments), flag `elem` ["-odir","-outputdir"]])
+  writeJson (directory </> "native.json") (object
+    ["unit" .= unit,"installed" .= installed,"root" .= root,"objectRoots" .= roots,"bitcode" .= bitcode,"target" .= target,
+     "componentSha256" .= component,"inputs" .= inputs,"sourceIdentity" .= inputIdentity,"providers" .= providers,
+     "finalizers" .= [entry | ((symbol,"ccall","unsafe",["AddrRep"],"void"),entry) <- entries,
+       symbol `elem` finalizers],
+     "abi" .= [object ["symbol" .= symbol,"entry" .= entry,"convention" .= convention,"safety" .= safety,
+       "arguments" .= arguments',"result" .= result] |
+       ((symbol,convention,safety,arguments',result),entry) <- entries]])
 
 hasFunctionAddress :: Value -> Bool
 hasFunctionAddress (Array values) = case foldr (:) [] values of
@@ -621,7 +717,9 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
           "native C-only dependency bitcode changed after selection"
     let native = ownedNative ++ concatMap cOnlyProductPieces cOnlyProducts
     forM_ native $ \value -> check (member value "target" == Just (toJSON (target::String))) "package C object target differs"
-    sourceInputs <- mapM (\value -> get value "inputs" :: IO Value) (record:native)
+    wrapperInputs <- get record "inputs" :: IO [Value]
+    nativeInputs <- mapM (\value -> get value "inputs" :: IO Value) native
+    let sourceInputs = wrapperInputs ++ nativeInputs
     bitcodes <- mapM (\value -> get value "bitcode") native
     abi <- get record "abi" :: IO [Value]
     finalizers <- maybe (pure []) (either fail pure . parseValue) (member record "finalizers") :: IO [String]
@@ -709,6 +807,12 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
     (artifact,format,libraries,nativeLibrary) <- if all ("llvm." `isPrefixOf`) externals
       then pure (final,"llvm-bitcode",[],Nothing) else do
         let darwin = "-darwin" `isInfixOf` target || "-apple-macosx" `isInfixOf` target
+            -- Installed Core can retain unused RTS calls. Do not pull native
+            -- RTS archives into the process to satisfy them: ordinary shared
+            -- library lazy resolution reports a missing target if reached.
+            resolution = if member record "installed" == Just (Bool True)
+              then ["-Wl,-undefined,dynamic_lookup" | darwin]
+              else [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined"]
             artifact = directory </> if darwin then "native/final.dylib" else "native/final.so"
             format = if darwin then "llvm-embedded-mach-o" else "llvm-embedded-elf"
             -- Current Apple ld ignores -fembed-bitcode's legacy bundle flag.
@@ -717,7 +821,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
               then concatMap (\argument -> ["-Xlinker",argument]) ["-sectcreate","__LLVM","__bundle",final]
               else ["-fembed-bitcode"]
             arguments = ["--target=" ++ target,"-shared","-fPIC",final] ++ embedding ++
-              linkArguments ++ [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined","-o",artifact]
+              linkArguments ++ resolution ++ ["-o",artifact]
         _ <- command directory clang arguments
         -- A container's machine code is not executed by Sulong. Materialize
         -- native dependencies separately, rooting archive extraction with the
@@ -727,7 +831,7 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
             nativeRoots = concatMap (\symbol -> ["-Xlinker","-u","-Xlinker",if darwin then '_' : symbol else symbol])
               (filter (not . ("llvm." `isPrefixOf`)) externals)
             dependencyArguments = ["--target=" ++ target,"-shared","-fPIC"] ++ nativeRoots ++ linkArguments ++
-              [if darwin then "-Wl,-undefined,error" else "-Wl,--no-undefined","-o",dependency]
+              resolution ++ ["-o",dependency]
         _ <- command directory clang dependencyArguments
         -- Native archives can themselves carry compiler-embedded LLVM. Keep
         -- their companion native-only, and the ELF component's LLVM section
@@ -769,7 +873,8 @@ finishPackageNativeWithDependencies cOnlyProducts pieces directory unit currentO
               unclassified = prior >>= (`member` "unclassifiedReason")
               ownsCalls = any (owned unit) (calls value) || hasFunctionAddress value
           let next = if not ownsCalls || maybe False (/= Null) unclassified then value
-                else Object (KM.insert "packageNativeLink" proof fields)
+                else Object (KM.insert "packageNativeLink" proof
+                  (if member record "installed" == Just (Bool True) then KM.delete "foreignLink" fields else fields))
           pure (name, BL.toStrict (encode next))
         _ -> fail "package native Core module is not an object"
 

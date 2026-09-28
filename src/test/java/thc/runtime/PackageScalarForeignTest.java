@@ -94,6 +94,10 @@ public class PackageScalarForeignTest {
                 "convention", "capi", "safety", "unsafe", "arity", 2L, "suppliedArity", 2L, "argumentReps", List.of(scalar(rep, false), scalar(null, false)), "resultRep", plus(output, "evaluated", false));
             var args = List.of(scalar(rep), scalar(null)); var flags = List.of(false, false);
             var call = Objects.requireNonNull(validate(descriptor, output, args, flags, output, link)); assertEquals("void", call.getResult());
+            var types = java.util.Arrays.asList(rep.equals("AddrRep") ? null : rep, null);
+            var typed = plus(plus(descriptor, "schema", 2L), "argumentTypes", types);
+            assertEquals("void", Objects.requireNonNull(validate(typed, output, args, flags, output, link)).getResult());
+            assertThrows(RuntimeFault.class, () -> validate(plus(typed, "argumentTypes", List.of("WrongType", "WrongState")), output, args, flags, output, link));
             var exact = exact(rep, true); CorePackageScalarForeign.validateOperand(call, 0, exact, exact);
             assertThrows(RuntimeFault.class, () -> validate(descriptor, output, List.of(scalar("Word64Rep"), scalar(null)), flags, output, link));
             assertThrows(RuntimeFault.class, () -> validate(descriptor, output, args, flags, result("Word64Rep"), link));

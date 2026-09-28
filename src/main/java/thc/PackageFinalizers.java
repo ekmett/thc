@@ -33,6 +33,7 @@ public final class PackageFinalizers {
     }
 
     public static boolean hasDeclarations(Map<?, ?> module) {
+        if (module.containsKey("packageNativeLink")) return true;
         if (!(module.get("staticForeignImports") instanceof Map<?, ?> proof)) return false;
         return proof.get("imports") instanceof List<?> calls && !calls.isEmpty() ||
             proof.get("addresses") instanceof List<?> addresses && !addresses.isEmpty();
